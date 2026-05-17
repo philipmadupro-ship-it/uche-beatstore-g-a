@@ -22,6 +22,7 @@ import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
 import { toast } from '@/hooks/useToast';
 import { LibraryMetadataGrid } from '@/components/library/LibraryMetadataGrid';
 import { LibraryVersionHistory, type TrackVersion } from '@/components/library/LibraryVersionHistory';
+import { StemUploader } from '@/components/tracks/StemUploader';
 // `analyzeAudio` is dynamically imported inside `handleReanalyze` so the
 // audio-decode worker chain doesn't break client/SSR bundling.
 
@@ -58,6 +59,16 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
   // Distinguish "track exists but failed to load" from "Track not found"
   // so the error fallback page can show the real reason + a retry.
   const [fetchError, setFetchError] = useState<string | null>(null);
+  // Stems URLs for the manual-upload UI. Fetched alongside the track
+  // so the StemUploader shows already-loaded stems as "Loaded" instead
+  // of empty dropzones on every reload. Null means "fetch hasn't
+  // completed yet" so we can withhold rendering until we know.
+  const [stems, setStems] = useState<{
+    vocals_url: string | null;
+    drums_url: string | null;
+    bass_url: string | null;
+    other_url: string | null;
+  } | null>(null);
 
   const { setTrack: setGlobalTrack } = usePlayer();
   const router = useRouter();
@@ -67,9 +78,10 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
     setLoading(true);
     setFetchError(null);
     try {
-      const [tRes, vRes] = await Promise.all([
+      const [tRes, vRes, sRes] = await Promise.all([
         fetch(`/api/tracks/${params.id}`),
         fetch(`/api/tracks/${params.id}/versions`),
+        fetch(`/api/stems?track_id=${params.id}`),
       ]);
       const tData = await tRes.json();
       if (!tRes.ok) throw new Error(tData?.error || `HTTP ${tRes.status}`);
@@ -79,6 +91,15 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
         setTempTitle(tData.title || '');
       }
       setVersions(vData.versions || []);
+      // Stems endpoint returns { stem: <row> | null }. Map the row's URL
+      // columns into the shape StemUploader's `initial` prop expects.
+      const stemRow = (await sRes.json().catch(() => null))?.stem ?? null;
+      setStems({
+        vocals_url: stemRow?.vocals_url ?? null,
+        drums_url:  stemRow?.drums_url  ?? null,
+        bass_url:   stemRow?.bass_url   ?? null,
+        other_url:  stemRow?.other_url  ?? null,
+      });
     } catch (err) {
       console.error('Fetch error:', err);
       setFetchError(err instanceof Error ? err.message : 'Failed to load track');
@@ -407,6 +428,24 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
 
             {/* Metadata — extracted to components/library/LibraryMetadataGrid. */}
             <LibraryMetadataGrid track={track} />
+
+            {/* Stems — manual upload UI. Producer / engineer flow:
+                attach your already-exported stems (vocals / drums /
+                bass / other) so a producer-variant share can expose
+                per-stem downloads. Each slot is independent so a
+                single-stem re-upload doesn't reset the others. */}
+            <div className="mb-10">
+              <StemUploader
+                trackId={track.id}
+                initial={stems ? {
+                  vocals: stems.vocals_url,
+                  drums:  stems.drums_url,
+                  bass:   stems.bass_url,
+                  other:  stems.other_url,
+                } : undefined}
+                onChange={fetchData}
+              />
+            </div>
 
         {/* Version history — extracted to components/library/LibraryVersionHistory. */}
         <LibraryVersionHistory track={track} versions={versions} />

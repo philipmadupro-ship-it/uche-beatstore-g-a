@@ -11,6 +11,7 @@ import { audioSrc } from '@/lib/audio/url';
 import { useWaveSurfer } from '@/hooks/useWaveSurfer';
 import { PlayerCanvas } from '@/components/player/PlayerCanvas';
 import { toast } from '@/hooks/useToast';
+import { ClientShareVariant } from '@/components/share/variants/ClientShareVariant';
 
 interface ShareInfo {
   token: string;
@@ -18,6 +19,29 @@ interface ShareInfo {
   allow_downloads: boolean;
   expires_at: string | null;
   label: string | null;
+  // Audience tag — drives which variant the share page renders.
+  // Defaults to 'client' for any pre-existing share that hasn't been
+  // re-saved since the migration landed.
+  recipient_kind: 'client' | 'producer' | 'rapper' | 'friend';
+}
+
+// Owner's creator profile — bio / hero / license / social fields shown
+// in the client variant. Optional; the API returns null when the user
+// hasn't filled out the settings form yet.
+interface CreatorProfile {
+  display_name: string | null;
+  bio: string | null;
+  hero_image_url: string | null;
+  credits: string | null;
+  license_lease_price_usd: number | null;
+  license_exclusive_price_usd: number | null;
+  license_notes: string | null;
+  instagram_handle: string | null;
+  twitter_handle: string | null;
+  spotify_url: string | null;
+  soundcloud_url: string | null;
+  website_url: string | null;
+  contact_email: string | null;
 }
 
 interface ShareTrack {
@@ -75,6 +99,10 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   const [project, setProject] = useState<ShareProject | null>(null);
   const [share, setShare] = useState<ShareInfo | null>(null);
   const [tracks, setTracks] = useState<ShareTrack[]>([]);
+  // Owner's creator profile (bio / hero / license / social). Powers
+  // the client variant; null in two cases: profile not filled out yet
+  // OR recipient_kind isn't 'client' so we don't need it.
+  const [creator, setCreator] = useState<CreatorProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requiresPassword, setRequiresPassword] = useState(false);
@@ -181,6 +209,10 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
       setProject(data.project);
       setShare(data.share);
       setTracks(data.tracks ?? []);
+      // Creator profile is optional — the API only returns it when the
+      // owner has filled out their settings form. Client variant
+      // degrades section-by-section when fields are missing.
+      setCreator(data.creator ?? null);
       setRequiresPassword(false);
       if (pw) passwordRef.current = pw;
     } catch {
@@ -403,6 +435,39 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   );
 
   const canComment = share?.role === 'commenter' || share?.role === 'editor';
+
+  // Client-variant short-circuit. When the share was created with
+  // `recipient_kind === 'client'`, the whole page is replaced with the
+  // editorial "intro to my universe" layout: hero photo, bio, curated
+  // tracks, license card, social links. Producer / rapper / friend
+  // variants continue through to the historical layout below (still
+  // the default for now; we'll specialise each variant in follow-ups).
+  if (share?.recipient_kind === 'client' && project) {
+    return (
+      <ClientShareVariant
+        project={project}
+        tracks={tracks}
+        creator={creator}
+        playingId={activeTrack?.id ?? null}
+        isPlaying={isPlaying}
+        onPlay={(t) => {
+          // Find the requested track's index, switch the player to
+          // it, and start playback. The same useWaveSurfer instance
+          // that the legacy layout drives still runs underneath via
+          // `activeTrack` — the variant is just chrome.
+          const idx = tracks.findIndex((x) => x.id === t.id);
+          if (idx >= 0) {
+            if (idx === activeIndex) {
+              setIsPlaying((p) => !p);
+            } else {
+              setActiveIndex(idx);
+              setIsPlaying(true);
+            }
+          }
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8] flex flex-col">

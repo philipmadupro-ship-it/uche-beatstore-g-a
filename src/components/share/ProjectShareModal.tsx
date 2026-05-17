@@ -37,6 +37,11 @@ const ROLE_INFO: Record<ProjectShare['role'], { label: string; help: string; ico
 export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }: Props) {
   // ── create-form state ────────────────────────────────────────────────
   const [role, setRole] = useState<ProjectShare['role']>('viewer');
+  // Audience tag — drives the share page layout. Independent of role
+  // (a "client" can still be a viewer; a "producer" can be a
+  // commenter, etc). Default 'client' matches what most existing
+  // shares look like in practice.
+  const [recipientKind, setRecipientKind] = useState<'client' | 'producer' | 'rapper' | 'friend'>('client');
   const [allowDownloads, setAllowDownloads] = useState(true);
   const [passwordProtect, setPasswordProtect] = useState(false);
   const [password, setPassword] = useState('');
@@ -77,6 +82,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           role,
+          recipient_kind: recipientKind,
           allow_downloads: allowDownloads,
           password: passwordProtect && password ? password : null,
           expires_days: expiryEnabled ? expiryDays : 0,
@@ -217,6 +223,39 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
           {/* Create-form */}
           <div className="p-6 border-b border-[#1f1a13] space-y-5">
             <p className="text-[10px] font-bold text-[#a08a6a] uppercase tracking-[0.2em]">New link</p>
+
+            {/* Audience picker — drives the layout of the share page.
+                Independent of permission: a client can still be a
+                viewer-only, a producer can still be a commenter.
+                Defaults to "client" because that's the most common
+                pitch send and matches the historical layout. */}
+            <div>
+              <p className="text-[10px] text-[#6a5d4a] uppercase tracking-wider mb-2">Audience</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {([
+                  { key: 'client',   label: 'Client / A&R',  help: 'Bio + curated tracks + license card' },
+                  { key: 'producer', label: 'Producer',      help: 'Stems + full metadata' },
+                  { key: 'rapper',   label: 'Rapper',        help: 'Vocal-friendly preview' },
+                  { key: 'friend',   label: 'Friend',        help: 'Minimal, just play' },
+                ] as const).map((k) => {
+                  const active = recipientKind === k.key;
+                  return (
+                    <button
+                      key={k.key}
+                      onClick={() => setRecipientKind(k.key)}
+                      className={`flex flex-col gap-1 px-3 py-3 rounded-lg border text-left transition-all ${
+                        active
+                          ? 'bg-[#2A2418] border-[#8A7A5C] text-[#E8D8B8]'
+                          : 'bg-[#0a0907] border-[#1a160f] text-[#a08a6a] hover:border-[#2d2620]'
+                      }`}
+                    >
+                      <span className="text-[11px] font-medium">{k.label}</span>
+                      <span className="text-[9px] text-[#5a5142] leading-tight">{k.help}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* Role picker */}
             <div>

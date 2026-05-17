@@ -70,12 +70,31 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       }
     }
 
-    // Hydrate project + tracks via the junction table.
+    // Hydrate project + tracks via the junction table. We also pull
+    // the project's `user_id` so we can find the owner's creator
+    // profile for the client-variant page (bio / hero / license card /
+    // social links). The owner column is private to the project; only
+    // the derived profile fields end up in the response.
     const { data: project } = await admin
       .from('projects')
-      .select('id, name, cover_url, description, bpm_target, key_target, status')
+      .select('id, name, cover_url, description, bpm_target, key_target, status, user_id')
       .eq('id', share.project_id)
       .maybeSingle();
+
+    // Creator profile — best-effort, optional. The client variant
+    // degrades gracefully when the row doesn't exist yet (no settings
+    // page form filled out). Service-role read because creator_profiles
+    // RLS only allows the owner themselves; recipients hold no auth
+    // session of their own, only a valid share token.
+    let creator: Record<string, unknown> | null = null;
+    if (project?.user_id) {
+      const { data: profile } = await admin
+        .from('creator_profiles')
+        .select('display_name, bio, hero_image_url, credits, license_lease_price_usd, license_exclusive_price_usd, license_notes, instagram_handle, twitter_handle, spotify_url, soundcloud_url, website_url, contact_email')
+        .eq('user_id', project.user_id)
+        .maybeSingle();
+      creator = profile ?? null;
+    }
 
     const { data: junction } = await admin
       .from('project_tracks')
@@ -105,10 +124,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       .eq('id', share.id)
       .then(() => {});
 
+    // Strip the project's user_id before returning — recipients should
+    // never see the owner's auth-user uuid. Profile data is what they
+    // get, not identity.
+    const projectPublic = project
+      ? (() => {
+          const { user_id: _ownerUserId, ...rest } = project;
+          return rest;
+        })()
+      : null;
+
     return NextResponse.json({
       share: redactShare(share),
-      project,
+      project: projectPublic,
       tracks,
+      creator,
     });
   } catch (error: any) {
     console.error('Project share read error:', error);
@@ -198,13 +228,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
 
 function redactShare(s: any) {
   // Never echo password_hash or created_by — recipients have no business
-  // seeing either.
+  // seeing either. `recipient_kind` is the new audience tag that drives
+  // the share page's variant: client / producer / rapper / friend.
   return {
     token: s.token,
     role: s.role,
     allow_downloads: s.allow_downloads,
     expires_at: s.expires_at,
     label: s.label,
+    recipient_kind: s.recipient_kind ?? 'client',
   };
 }
 
