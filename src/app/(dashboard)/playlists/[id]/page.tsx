@@ -10,6 +10,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { TrackCard } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { ShareModal } from '@/components/share/ShareModal';
+import { PlaylistOfflineSync } from '@/components/offline/PlaylistOfflineSync';
 import { Loader2, Camera, Check, X, Edit2, Play, Share2, Music, Plus, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
 import { Track } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -274,6 +275,14 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                 <Plus size={12} />
                 Add tracks
               </button>
+              {/* "Sync offline" — caches every track's audio blob in
+                  IndexedDB so the artist can play the curated set
+                  with no network. Hidden when the playlist is empty.
+                  Same per-track cache as the TrackCard's compact
+                  toggle — the playlist button is just a bulk loop. */}
+              <PlaylistOfflineSync
+                tracks={tracks.map((t) => ({ id: t.id, audio_url: t.audio_url, title: t.title }))}
+              />
             </div>
             </div>
             {/* end meta panel — track list follows inside the right column */}

@@ -3,6 +3,7 @@ import './globals.css';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { Toaster } from '@/components/ui/Toaster';
 import { CommandPalette } from '@/components/nav/CommandPalette';
+import { ServiceWorkerRegistrar } from '@/components/providers/ServiceWorkerRegistrar';
 
 // Akira Expanded, Synkopy, and Panchang are the primary UI fonts, loaded via @font-face in globals.css.
 
@@ -65,6 +66,7 @@ export default function RootLayout({
           {children}
           <CommandPalette />
           <Toaster />
+          <ServiceWorkerRegistrar />
         </QueryProvider>
       </body>
     </html>
