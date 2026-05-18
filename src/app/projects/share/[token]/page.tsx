@@ -12,6 +12,7 @@ import { useWaveSurfer } from '@/hooks/useWaveSurfer';
 import { PlayerCanvas } from '@/components/player/PlayerCanvas';
 import { toast } from '@/hooks/useToast';
 import { ClientShareVariant } from '@/components/share/variants/ClientShareVariant';
+import { ArrangementOverlay } from '@/components/tracks/ArrangementOverlay';
 import { ProducerShareVariant } from '@/components/share/variants/ProducerShareVariant';
 import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
@@ -703,6 +704,17 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                 </span>
               )}
             </div>
+
+            {/* Arrangement strip — shown above the player whether DAW
+                or inline mode. Driven by the producer's arrangement
+                state for this track; renders nothing when no
+                arrangement exists yet. Click a section to seek. */}
+            <ArrangementOverlay
+              trackId={activeTrack.id}
+              durationSeconds={activeTrack.duration_seconds || 0}
+              currentTime={currentTime}
+              onSeek={(s) => setSeekRequest({ time: s, nonce: Date.now() })}
+            />
 
             {useDawCanvas ? (
               // Editor mode → full DAW chrome with zoom, regions, and

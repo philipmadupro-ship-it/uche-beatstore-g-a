@@ -25,6 +25,7 @@ import { LibraryVersionHistory, type TrackVersion } from '@/components/library/L
 import { StemUploader } from '@/components/tracks/StemUploader';
 import { SimilarTracks } from '@/components/tracks/SimilarTracks';
 import { TrackHeatmap } from '@/components/tracks/TrackHeatmap';
+import { ArrangementOverlay } from '@/components/tracks/ArrangementOverlay';
 // `analyzeAudio` is dynamically imported inside `handleReanalyze` so the
 // audio-decode worker chain doesn't break client/SSR bundling.
 
@@ -430,6 +431,16 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
 
             {/* Metadata — extracted to components/library/LibraryMetadataGrid. */}
             <LibraryMetadataGrid track={track} />
+
+            {/* Arrangement strip — read-only map of song sections
+                (Intro / Verse / Chorus / …). Owner sets them up in
+                /studio's arrangement editor; here we render the
+                lightweight overview. Hidden when no arrangement
+                exists yet. */}
+            <ArrangementOverlay
+              trackId={track.id}
+              durationSeconds={track.duration_seconds || 0}
+            />
 
             {/* Audience Waveform retention analytics */}
             <div className="mb-10">
