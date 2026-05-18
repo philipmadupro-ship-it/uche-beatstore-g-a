@@ -23,6 +23,7 @@ import { toast } from '@/hooks/useToast';
 import { LibraryMetadataGrid } from '@/components/library/LibraryMetadataGrid';
 import { LibraryVersionHistory, type TrackVersion } from '@/components/library/LibraryVersionHistory';
 import { StemUploader } from '@/components/tracks/StemUploader';
+import { SimilarTracks } from '@/components/tracks/SimilarTracks';
 import { TrackHeatmap } from '@/components/tracks/TrackHeatmap';
 // `analyzeAudio` is dynamically imported inside `handleReanalyze` so the
 // audio-decode worker chain doesn't break client/SSR bundling.
@@ -434,6 +435,13 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
             <div className="mb-10">
               <TrackHeatmap trackId={track.id} durationSeconds={track.duration_seconds || 0} />
             </div>
+
+            {/* "Find Matches" — surface BPM/key/vibe-adjacent tracks from
+                the producer's own library. Drives the playlist-building
+                + send workflow. Lives near the metadata so the producer
+                sees the suggestion right next to "this beat is 140 bpm
+                in C minor — what else do I have like this?" */}
+            <SimilarTracks trackId={track.id} />
 
             {/* Stems — manual upload UI. Producer / engineer flow:
                 attach your already-exported stems (vocals / drums /
