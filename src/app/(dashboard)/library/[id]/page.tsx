@@ -26,6 +26,7 @@ import { StemUploader } from '@/components/tracks/StemUploader';
 import { SimilarTracks } from '@/components/tracks/SimilarTracks';
 import { TrackHeatmap } from '@/components/tracks/TrackHeatmap';
 import { ArrangementOverlay } from '@/components/tracks/ArrangementOverlay';
+import { TrackListingEditor } from '@/components/tracks/TrackListingEditor';
 // `analyzeAudio` is dynamically imported inside `handleReanalyze` so the
 // audio-decode worker chain doesn't break client/SSR bundling.
 
@@ -453,6 +454,12 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 sees the suggestion right next to "this beat is 140 bpm
                 in C minor — what else do I have like this?" */}
             <SimilarTracks trackId={track.id} />
+
+            {/* Per-track listing: description + lease/exclusive price
+                overrides. Empty fields inherit the producer's
+                profile-level defaults from /settings. Shown on the
+                Client variant share page. */}
+            <TrackListingEditor track={track} onSaved={fetchData} />
 
             {/* Stems — manual upload UI. Producer / engineer flow:
                 attach your already-exported stems (vocals / drums /

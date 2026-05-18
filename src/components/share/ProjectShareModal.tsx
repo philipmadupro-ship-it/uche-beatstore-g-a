@@ -2,7 +2,7 @@
 
 import {
   X, Lock, Link2, Download, Calendar, Check, Copy, Loader2,
-  Eye, MessageSquare, Edit3, Mail, Trash2, Send,
+  Eye, MessageSquare, Edit3, Mail, Trash2, Send, ShoppingBag,
 } from 'lucide-react';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { useEffect, useState } from 'react';
@@ -43,6 +43,12 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
   // commenter, etc). Default 'client' matches what most existing
   // shares look like in practice.
   const [recipientKind, setRecipientKind] = useState<'client' | 'producer' | 'rapper' | 'friend'>('client');
+  // When true, the share page's license card renders Buy Lease /
+  // Buy Exclusive buttons that route to Stripe Checkout. Defaults
+  // OFF so a casual "check this out" send doesn't accidentally
+  // become a storefront. Only meaningful for the `client` audience
+  // (the other variants don't render a license card).
+  const [salesEnabled, setSalesEnabled] = useState(false);
   const [allowDownloads, setAllowDownloads] = useState(true);
   const [passwordProtect, setPasswordProtect] = useState(false);
   const [password, setPassword] = useState('');
@@ -84,6 +90,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
         body: JSON.stringify({
           role,
           recipient_kind: recipientKind,
+          sales_enabled: salesEnabled,
           allow_downloads: allowDownloads,
           password: passwordProtect && password ? password : null,
           expires_days: expiryEnabled ? expiryDays : 0,
@@ -292,6 +299,18 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                 active={allowDownloads}
                 onToggle={() => setAllowDownloads((v) => !v)}
               />
+              {/* For sale — only relevant on the Client variant
+                  since it owns the license card. Hiding the toggle
+                  for the other audiences keeps the modal honest
+                  (no UI control without an effect). */}
+              {recipientKind === 'client' && (
+                <ToggleRow
+                  icon={<ShoppingBag size={12} />}
+                  label="For sale (enables Stripe checkout)"
+                  active={salesEnabled}
+                  onToggle={() => setSalesEnabled((v) => !v)}
+                />
+              )}
               <ToggleRow
                 icon={<Lock size={12} />}
                 label="Password protect"

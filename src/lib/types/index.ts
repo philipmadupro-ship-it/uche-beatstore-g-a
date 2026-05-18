@@ -28,6 +28,11 @@ export interface Track {
   lyrics?: string | null;
   lyrics_updated_at?: string | null;
   lyrics_history?: Array<{ at: string; content: string }> | null;
+  // Per-track listing fields (migration 021). NULL on each price
+  // = inherit the producer's profile-level default.
+  description?: string | null;
+  lease_price_usd?: number | null;
+  exclusive_price_usd?: number | null;
   created_at: string;
 }
 

@@ -27,6 +27,9 @@ interface ShareInfo {
   // Defaults to 'client' for any pre-existing share that hasn't been
   // re-saved since the migration landed.
   recipient_kind: 'client' | 'producer' | 'rapper' | 'friend';
+  // True when the producer flipped "For sale" on this share —
+  // surfaces Buy Lease / Buy Exclusive on the client variant.
+  sales_enabled?: boolean;
 }
 
 // Owner's creator profile — bio / hero / license / social fields shown
@@ -514,6 +517,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         project={project}
         tracks={tracks}
         creator={creator}
+        shareToken={share.sales_enabled ? token : undefined}
         playingId={activeTrack?.id ?? null}
         isPlaying={isPlaying}
         onPlay={(t) => {

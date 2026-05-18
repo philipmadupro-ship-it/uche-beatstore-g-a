@@ -4,8 +4,9 @@ import { useState } from 'react';
 import Image from 'next/image';
 import {
   Music, Mail, Globe, ExternalLink,
-  Play, Pause, ChevronRight, Mic2,
+  Play, Pause, ChevronRight, Mic2, Loader2, ShoppingCart,
 } from 'lucide-react';
+import { toast } from '@/hooks/useToast';
 
 // lucide-react removed brand icons in recent versions.
 // Small inline SVGs keep the social-pill row working.
@@ -74,6 +75,11 @@ interface Track {
   duration_seconds?: number | null;
   bpm?: number | null;
   key?: string | null;
+  // Per-track listing (migration 021). NULL on either field
+  // means "inherit profile default" for the display logic below.
+  description?: string | null;
+  lease_price_usd?: number | null;
+  exclusive_price_usd?: number | null;
 }
 
 interface Project {
@@ -87,6 +93,10 @@ interface Props {
   project: Project;
   tracks: Track[];
   creator: CreatorProfile | null;
+  /** Share token — needed by the license card to spin up a Stripe
+   *  Checkout session. When omitted, the buy buttons render in a
+   *  display-only state. */
+  shareToken?: string;
   /** Plays/pauses the given track in whatever audio shell the parent
    *  page owns (the share page already mounts a Wavesurfer instance;
    *  we just hand it the track to switch to). */
@@ -96,7 +106,43 @@ interface Props {
   isPlaying?: boolean;
 }
 
-export function ClientShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying }: Props) {
+export function ClientShareVariant({ project, tracks, creator, shareToken, onPlay, playingId, isPlaying }: Props) {
+  // Buy-button state for the license card. We collect the buyer's
+  // email inline (lighter-touch than a modal) and POST to
+  // /api/share/[token]/checkout to create a Stripe Checkout Session.
+  // The success_url on the session brings the buyer back to the
+  // share page with ?purchase=success.
+  const [buyerEmail, setBuyerEmail] = useState('');
+  const [checkoutLoading, setCheckoutLoading] = useState<null | 'lease' | 'exclusive'>(null);
+  const handleBuy = async (licenseType: 'lease' | 'exclusive') => {
+    if (!shareToken) return;
+    if (!buyerEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(buyerEmail)) {
+      toast.error('Email required', 'Add your email so we can send the license.');
+      return;
+    }
+    setCheckoutLoading(licenseType);
+    try {
+      const res = await fetch(`/api/share/${shareToken}/checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          license_type: licenseType,
+          track_ids: tracks.map((t) => t.id),
+          buyer_email: buyerEmail.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || `HTTP ${res.status}`);
+      }
+      const { url } = await res.json();
+      if (url) window.location.href = url;
+    } catch (err) {
+      toast.error('Checkout failed', err instanceof Error ? err.message : 'Unknown error');
+      setCheckoutLoading(null);
+    }
+  };
+
   // Defensive: every section guards on the presence of its specific
   // data so a half-filled creator_profile doesn't show empty boxes.
   const hasBio = !!creator?.bio?.trim();
@@ -221,8 +267,37 @@ export function ClientShareVariant({ project, tracks, creator, onPlay, playingId
                           {t.bpm ? ` · ${t.bpm} bpm` : ''}
                           {t.key ? ` · ${t.key}` : ''}
                         </p>
+                        {/* Per-track blurb. Producer fills this in the
+                            library detail page; preserves line breaks
+                            so multi-line descriptions read clean. */}
+                        {t.description && (
+                          <p className="text-[12px] text-[#a08a6a] mt-1.5 leading-relaxed whitespace-pre-wrap line-clamp-3">
+                            {t.description}
+                          </p>
+                        )}
                       </div>
-                      <ChevronRight size={14} className="text-[#3a3328] shrink-0 group-hover:text-[#E8DCC8] transition-colors" />
+                      {/* Right rail: per-track price chip if either
+                          override is set, otherwise the chevron. The
+                          chip shows the lower (lease) price as the
+                          headline number; clients shopping for
+                          exclusives will read the full pricing on
+                          the license card below. */}
+                      {(t.lease_price_usd != null || t.exclusive_price_usd != null) ? (
+                        <div className="shrink-0 flex flex-col items-end gap-0.5">
+                          {t.lease_price_usd != null && (
+                            <span className="text-[11px] font-mono font-bold text-[#E8D8B8] tabular-nums">
+                              ${Number(t.lease_price_usd).toLocaleString()}
+                            </span>
+                          )}
+                          {t.exclusive_price_usd != null && (
+                            <span className="text-[9px] font-mono text-[#6a5d4a] uppercase tracking-wider tabular-nums">
+                              ${Number(t.exclusive_price_usd).toLocaleString()} excl.
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <ChevronRight size={14} className="text-[#3a3328] shrink-0 group-hover:text-[#E8DCC8] transition-colors" />
+                      )}
                     </button>
                   </li>
                 );
@@ -267,6 +342,16 @@ export function ClientShareVariant({ project, tracks, creator, onPlay, playingId
                       ${creator.license_lease_price_usd.toLocaleString()}
                     </p>
                     <p className="text-[11px] text-[#a08a6a] mt-1">non-exclusive</p>
+                    {shareToken && (
+                      <button
+                        onClick={() => handleBuy('lease')}
+                        disabled={checkoutLoading !== null}
+                        className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] hover:border-white/[0.15] text-[11px] font-bold uppercase tracking-widest text-[#E8DCC8] transition-colors disabled:opacity-40"
+                      >
+                        {checkoutLoading === 'lease' ? <Loader2 size={12} className="animate-spin" /> : <ShoppingCart size={12} />}
+                        Buy lease
+                      </button>
+                    )}
                   </div>
                 )}
                 {creator?.license_exclusive_price_usd != null && (
@@ -276,9 +361,33 @@ export function ClientShareVariant({ project, tracks, creator, onPlay, playingId
                       ${creator.license_exclusive_price_usd.toLocaleString()}
                     </p>
                     <p className="text-[11px] text-[#a08a6a] mt-1">full transfer of rights</p>
+                    {shareToken && (
+                      <button
+                        onClick={() => handleBuy('exclusive')}
+                        disabled={checkoutLoading !== null}
+                        className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-[#D4BFA0] text-black hover:bg-[#E8D8B8] text-[11px] font-bold uppercase tracking-widest transition-colors disabled:opacity-40"
+                      >
+                        {checkoutLoading === 'exclusive' ? <Loader2 size={12} className="animate-spin text-black" /> : <ShoppingCart size={12} />}
+                        Buy exclusive
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
+              {shareToken && (creator?.license_lease_price_usd != null || creator?.license_exclusive_price_usd != null) && (
+                <div className="relative z-10 mt-6 pt-6 border-t border-[#1f1a13]">
+                  <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2 block">
+                    Your email for the license
+                  </label>
+                  <input
+                    type="email"
+                    value={buyerEmail}
+                    onChange={(e) => setBuyerEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="w-full bg-black/30 border border-white/[0.08] rounded-md py-2.5 px-3 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-white/[0.2] transition-colors"
+                  />
+                </div>
+              )}
               {creator?.license_notes && (
                 <p className="relative z-10 text-[12px] text-[#a08a6a] mt-6 pt-6 border-t border-[#1f1a13] leading-relaxed">
                   {creator.license_notes}

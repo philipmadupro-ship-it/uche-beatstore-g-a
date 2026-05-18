@@ -61,6 +61,11 @@ export const TrackPatchBodySchema = z.object({
   danceability: z.number().nullable().optional(),
   valence: z.number().nullable().optional(),
   acousticness: z.number().nullable().optional(),
+  // Per-track listing fields (migration 021). NULL on either price
+  // inherits the producer's profile default.
+  description: z.string().max(5000).nullable().optional(),
+  lease_price_usd: z.number().nonnegative().nullable().optional(),
+  exclusive_price_usd: z.number().nonnegative().nullable().optional(),
 }).strict();
 export type TrackPatchBody = z.infer<typeof TrackPatchBodySchema>;
 
@@ -114,6 +119,10 @@ export const ProjectShareCreateBodySchema = z.object({
   invited_email: z.string().email().optional().nullable(),
   label: z.string().max(200).optional().nullable(),
   recipient_kind: z.enum(['client', 'producer', 'rapper', 'friend']).optional(),
+  // When true the share page renders Buy buttons on the license
+  // card (Stripe Checkout). Off by default so a producer doesn't
+  // accidentally turn a casual send into a storefront.
+  sales_enabled: z.boolean().optional(),
 });
 export type ProjectShareCreateBody = z.infer<typeof ProjectShareCreateBodySchema>;
 

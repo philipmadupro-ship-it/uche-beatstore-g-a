@@ -48,7 +48,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       if (!owner.ok) return owner.res;
       const { data, error } = await owner.admin
         .from('project_shares')
-        .select('id, project_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, revoked_at, recipient_kind')
+        .select('id, project_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, revoked_at, recipient_kind, sales_enabled')
         .eq('project_id', id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -76,6 +76,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const invitedEmail = body.invited_email?.trim() || null;
   const label = body.label?.trim() || null;
   const recipientKind = body.recipient_kind || 'client';
+  // Default off — a share is closed-form unless the producer
+  // explicitly flips the For-sale toggle.
+  const salesEnabled = body.sales_enabled === true;
 
   const token = nanoid(12);
   const password_hash = password ? await bcrypt.hash(password, 10) : null;
@@ -104,8 +107,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           label,
           created_by: owner.userId,
           recipient_kind: recipientKind,
+          sales_enabled: salesEnabled,
         })
-        .select('id, project_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, recipient_kind')
+        .select('id, project_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, recipient_kind, sales_enabled')
         .single();
       if (error) throw error;
       return NextResponse.json({ share: data, url });
@@ -123,6 +127,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       plays: 0,
       created_by: null,
       recipient_kind: recipientKind,
+      sales_enabled: salesEnabled,
     });
     return NextResponse.json({ share, url });
   } catch (error) {
