@@ -5,9 +5,13 @@ import { X, User, Mail, Globe, Tag, Loader2, Phone, FileText } from 'lucide-reac
 import { toast } from '@/hooks/useToast';
 import { Dropdown } from '@/components/ui/Dropdown';
 
+// Order matters — the first five (after the blank) are the CRM
+// "segments" the /contacts page filters by (rappers / producers / a&r
+// / friends). The rest are legacy categories kept for back-compat
+// with imported CSVs and pre-segmentation contacts.
 const CONTACT_CATEGORIES = [
-  '', 'artist', 'producer', 'manager', 'label', 'a&r',
-  'dj', 'curator', 'engineer', 'press', 'other',
+  '', 'rapper', 'producer', 'a&r', 'label', 'friend',
+  'artist', 'manager', 'dj', 'curator', 'engineer', 'press', 'other',
 ] as const;
 
 interface AddContactModalProps {

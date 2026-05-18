@@ -145,7 +145,12 @@ const CATEGORY_RULES: Array<[RegExp, string]> = [
   [/\b(engineer|mix(?:er|ing)?|master(?:ing|er))\b/i, 'engineer'],
   [/\b(dj)\b/i, 'dj'],
   [/\b(curator|playlist|tastemaker|blogger|editor|journalist|press|publicist|pr)\b/i, 'curator'],
-  [/\b(rapper|singer|artist|songwriter|musician|vocalist|mc)\b/i, 'artist'],
+  // `rapper` lands in the new "rapper" segment so the segment chips
+  // light up after import. Generic vocal/songwriter terms fall through
+  // to the legacy "artist" bucket — the row dropdown lets the user
+  // promote them later.
+  [/\b(rapper|mc|emcee|topliner|top-?line)\b/i, 'rapper'],
+  [/\b(singer|songwriter|musician|vocalist|artist)\b/i, 'artist'],
 ];
 
 export function inferCategory(...sources: (string | null | undefined)[]): string | null {
