@@ -15,6 +15,7 @@ import {
   Sliders,
   CloudOff,
   Bell,
+  Megaphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
@@ -36,6 +37,7 @@ const NAV_ITEMS = [
   { label: 'Playlists', icon: ListMusic, href: '/playlists', description: 'Curated sets to send and play.' },
   { label: 'Studio',    icon: Sliders,   href: '/studio',    description: 'Sketch grooves. Loop, jam, record.' },
   { label: 'Contacts',  icon: Users,     href: '/contacts',  description: 'CRM + beat sends.' },
+  { label: 'Campaigns', icon: Megaphone, href: '/campaigns', description: 'Outreach batches and follow-ups.' },
   { label: 'Calendar',  icon: Calendar,  href: '/calendar',  description: 'Releases, sessions, deadlines.' },
   { label: 'Links',     icon: Link2,     href: '/links',     description: 'Share links you\'ve generated.' },
   { label: 'Offline',   icon: CloudOff,  href: '/offline',   description: 'Cached tracks for offline play.' },

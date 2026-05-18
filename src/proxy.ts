@@ -64,6 +64,7 @@ export async function proxy(request: NextRequest) {
   const protectedPaths = [
     '/library', '/projects', '/playlists', '/contacts',
     '/calendar', '/links', '/settings', '/studio', '/profile',
+    '/campaigns',
   ];
   const path = request.nextUrl.pathname;
   // /projects/share/[token] is a PUBLIC reader page (same shape as

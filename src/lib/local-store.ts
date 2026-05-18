@@ -23,6 +23,8 @@ interface DBSchema {
   rating_history: any[];
   project_shares: any[];
   project_comments: any[];
+  campaigns: any[];
+  campaign_targets: any[];
 }
 
 function getEmptyDB(): DBSchema {
@@ -45,6 +47,8 @@ function getEmptyDB(): DBSchema {
     rating_history: [],
     project_shares: [],
     project_comments: [],
+    campaigns: [],
+    campaign_targets: [],
   };
 }
 
