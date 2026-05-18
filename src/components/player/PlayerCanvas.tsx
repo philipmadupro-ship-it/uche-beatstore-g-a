@@ -21,7 +21,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Play, Pause, SkipBack, SkipForward, Volume2, VolumeX,
   ZoomIn, ZoomOut, Repeat, Square as StopIcon, Activity,
-  MessageSquare, Send, X as CloseIcon, User, Plus,
+  MessageSquare, Send, X as CloseIcon, User, Plus, Loader2,
 } from 'lucide-react';
 import { useWaveSurfer, type RegionInfo } from '@/hooks/useWaveSurfer';
 
