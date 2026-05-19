@@ -14,10 +14,11 @@ import { ProjectCommentsPanel } from '@/components/projects/ProjectCommentsPanel
 import { AddFromLibraryModal } from '@/components/projects/AddFromLibraryModal';
 import { ProjectDetailHeader } from '@/components/projects/ProjectDetailHeader';
 import { ProjectTrackList } from '@/components/projects/ProjectTrackList';
-import { Loader2, Camera } from 'lucide-react';
+import { Loader2, Camera, Send, ListPlus } from 'lucide-react';
 import { Track } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast, confirmToast } from '@/hooks/useToast';
+import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 
 const STATUSES = ['in_progress', 'final', 'archived'] as const;
 
@@ -38,6 +39,11 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
   const [editingTargets, setEditingTargets] = useState(false);
   const [targetBpm, setTargetBpm] = useState<string>('');
   const [targetKey, setTargetKey] = useState<string>('');
+  // Multi-select state — Set for O(1) toggle. Mirrors playlists +
+  // contacts patterns so the floating BatchActionBar feels the same
+  // across the app.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const { setTrack: setGlobalTrack, setQueue } = usePlayer();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -215,6 +221,58 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
 
   const totalDuration = filtered.reduce((acc, t) => acc + (t.duration_seconds || 0), 0);
 
+  // ── multi-select helpers ────────────────────────────────────────────
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) =>
+      prev.size === filtered.length && filtered.length > 0
+        ? new Set()
+        : new Set(filtered.map((t) => t.id)),
+    );
+  };
+  const handleBulkRemove = async () => {
+    const ok = await confirmToast(
+      `Remove ${selectedIds.size} track${selectedIds.size === 1 ? '' : 's'} from project?`,
+      'Tracks stay in your library — only the project links are removed.',
+      { confirmLabel: 'Remove', cancelLabel: 'Keep' },
+    );
+    if (!ok) return;
+    setBulkBusy(true);
+    const ids = Array.from(selectedIds);
+    const results = await Promise.allSettled(
+      ids.map((tid) =>
+        fetch(`/api/projects/${params.id}/tracks`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ track_id: tid }),
+        }).then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        }),
+      ),
+    );
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    setBulkBusy(false);
+    setSelectedIds(new Set());
+    await fetchData();
+    if (failed === 0) {
+      toast.success(`Removed ${ids.length} from project`);
+    } else {
+      toast.warning(`Removed ${ids.length - failed}, ${failed} failed`);
+    }
+  };
+  const handleBulkPlay = () => {
+    const sel = filtered.filter((t) => selectedIds.has(t.id));
+    if (!sel.length) return;
+    setQueue(sel);
+    handlePlayTrack(sel[0]);
+  };
+
   if (loading && !project) {
     return (
       <DashboardLayout>
@@ -317,6 +375,9 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           onDeleteTrack={(id) => handleDeleteTrack(id)}
           onAddFromLibrary={() => setShowAddFromLibrary(true)}
           onShowUpload={() => setShowUpload(true)}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelectOne}
+          onSelectAll={toggleSelectAll}
         />
             {/* end right column (min-w-0) */}
           </div>
@@ -369,6 +430,31 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           onClose={() => setShowShareModal(false)}
         />
       )}
+
+      {/* Floating bulk-action bar. Appears when ≥1 track is checked.
+          Play queues the selection; Remove unlinks (track stays in
+          library). Matches the playlist + contacts UX so the
+          floating-action vocabulary is consistent across the app. */}
+      <BatchActionBar
+        count={selectedIds.size}
+        noun={['track', 'tracks']}
+        onClear={() => setSelectedIds(new Set())}
+        busy={bulkBusy}
+        actions={[
+          {
+            label: `Play ${selectedIds.size}`,
+            icon: <ListPlus size={11} />,
+            intent: 'primary',
+            onClick: handleBulkPlay,
+          },
+          {
+            label: 'Remove',
+            icon: <DeleteIcon size={11} />,
+            intent: 'danger',
+            onClick: handleBulkRemove,
+          },
+        ]}
+      />
     </DashboardLayout>
   );
 }

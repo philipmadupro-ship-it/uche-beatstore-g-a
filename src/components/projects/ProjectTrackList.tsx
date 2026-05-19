@@ -17,6 +17,13 @@ interface Props {
   onDeleteTrack: (id: string) => void;
   onAddFromLibrary: () => void;
   onShowUpload: () => void;
+  // Multi-select. When selectedIds is provided, the rows render
+  // checkboxes (via TrackCard's selectable mode) and the header
+  // gets a select-all toggle. Parent owns the Set so it can wire
+  // bulk actions in a BatchActionBar at page level.
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onSelectAll?: () => void;
 }
 
 /**
@@ -31,7 +38,10 @@ export function ProjectTrackList({
   filtered,
   onSelectTrack, onPlayTrack, onRemoveTrack, onDeleteTrack,
   onAddFromLibrary, onShowUpload,
+  selectedIds, onToggleSelect, onSelectAll,
 }: Props) {
+  const selectable = !!(selectedIds && onToggleSelect);
+  const allSelected = selectable && filtered.length > 0 && filtered.every((t) => selectedIds!.has(t.id));
   return (
     <>
       {/* Tabs + Search */}
@@ -64,7 +74,19 @@ export function ProjectTrackList({
       {/* Track list */}
       <div className="border-t border-[#161310] border-b pb-1 mb-32">
         <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
-          <span className="text-center">#</span>
+          {selectable ? (
+            <span className="flex items-center justify-center">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={() => onSelectAll?.()}
+                aria-label="Select all visible tracks"
+                className="accent-[#D4BFA0] cursor-pointer"
+              />
+            </span>
+          ) : (
+            <span className="text-center">#</span>
+          )}
           <span />
           <span>Title</span>
           <span className="hidden sm:block">Type</span>
@@ -101,6 +123,9 @@ export function ProjectTrackList({
               onRemoveFromContext={(t) => onRemoveTrack(t.id)}
               removeLabel="Remove from project"
               onDelete={(t) => onDeleteTrack(t.id)}
+              selectable={selectable}
+              selected={selectable && selectedIds!.has(track.id)}
+              onSelectChange={(t) => onToggleSelect?.(t.id)}
             />
           ))
         )}
