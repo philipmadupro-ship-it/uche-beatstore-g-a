@@ -44,7 +44,10 @@ export async function GET() {
     },
     supabase: {
       configured: isSupabaseConfigured(),
-      license_purchases_table: false,
+      // `null` until we actually probe — distinguishes "not yet
+      // checked" (unauthenticated) from "checked and missing"
+      // (authenticated but migration 019 didn't run).
+      license_purchases_table: null as boolean | null,
       recent_purchases_count: 0,
     },
     seller: {
