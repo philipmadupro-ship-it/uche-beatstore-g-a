@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAppUrl } from '@/lib/env';
 import { isSupabaseConfigured, getById, update, requireRowOwnership } from '@/lib/db';
 import { extractPeaks } from '@/lib/audio/peaks';
 import { uploadPeaksSidecar } from '@/lib/storage/upload';
@@ -50,11 +51,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const rawUrl: string = track.audio_url;
     let absUrl = rawUrl;
     if (rawUrl.startsWith('/')) {
-      const base =
-        process.env.NEXT_PUBLIC_APP_URL ||
-        req.nextUrl.origin ||
-        'http://localhost:3000';
-      absUrl = `${base.replace(/\/$/, '')}${rawUrl}`;
+      const base = getAppUrl() || req.nextUrl.origin || 'http://localhost:3000';
+      absUrl = `${base}${rawUrl}`;
     }
 
     let upstream: Response;

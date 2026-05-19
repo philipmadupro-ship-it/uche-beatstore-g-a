@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAppUrl } from '@/lib/env';
 import { Resend } from 'resend';
 import { getStripe } from '@/lib/stripe/server';
 import { createServiceClient } from '@/lib/auth/ownership';
@@ -87,7 +88,7 @@ export async function POST(req: NextRequest) {
         if (process.env.RESEND_API_KEY && meta.buyer_email) {
           try {
             const resend = new Resend(process.env.RESEND_API_KEY);
-            const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://uche-beatstore-g.vercel.app';
+            const APP_URL = getAppUrl();
             const shareUrl = `${APP_URL}/projects/share/${meta.share_token}`;
             await resend.emails.send({
               from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',

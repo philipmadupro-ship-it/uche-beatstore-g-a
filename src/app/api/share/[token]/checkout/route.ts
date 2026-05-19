@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAppUrl } from '@/lib/env';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -134,7 +135,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       );
     }
 
-    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://uche-beatstore-g.vercel.app';
+    const APP_URL = getAppUrl();
     const stripe = getStripe();
 
     const session = await stripe.checkout.sessions.create({

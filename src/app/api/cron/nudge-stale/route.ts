@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAppUrl } from '@/lib/env';
 import { Resend } from 'resend';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -114,7 +115,7 @@ export async function GET(req: NextRequest) {
       if (days < milestone.days) continue;  // not yet ripe
 
       const copy = TONE_COPY[milestone.tone];
-      const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://uche-beatstore-g.vercel.app';
+      const APP_URL = getAppUrl();
       const shareUrl = `${APP_URL}/share/${s.share_token}`;
 
       try {

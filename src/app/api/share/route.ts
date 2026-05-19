@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAppUrl } from '@/lib/env';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured, insert, getAll, createServiceClient } from '@/lib/db';
 import { nanoid } from 'nanoid';
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
         ? new Date(Date.now() + expires_days * 86400000).toISOString()
         : null;
 
-    const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const APP_URL = getAppUrl();
 
     const payload = {
       token,

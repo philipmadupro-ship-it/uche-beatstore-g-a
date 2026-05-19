@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAppUrl } from '@/lib/env';
 import { Resend } from 'resend';
 import { nanoid } from 'nanoid';
 import { isSupabaseConfigured, insert, createServiceClient } from '@/lib/db';
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
       invite = insert('invites', { email, role, token, expires_at: expiresAt });
     }
 
-    const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/invite/${token}`;
+    const inviteUrl = `${getAppUrl()}/invite/${token}`;
 
     // Send email if Resend is configured
     const resendKey = process.env.RESEND_API_KEY;

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAppUrl } from '@/lib/env';
 import { Resend } from 'resend';
 import { isSupabaseConfigured, requireRowOwnership } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
@@ -79,7 +80,7 @@ export async function POST(
       .eq('id', id)
       .maybeSingle();
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const appUrl = getAppUrl();
     const shareUrl = `${appUrl}/projects/share/${share.token}`;
 
     const roleHuman = share.role === 'editor' ? 'edit'

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAppUrl } from '@/lib/env';
 import { isSupabaseConfigured, getById, update, requireRowOwnership } from '@/lib/db';
 import { analyzeAudio } from '@/lib/audio/analyze.server';
 import { getAuddFeatures } from '@/lib/audio/audd';
@@ -103,11 +104,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       } else {
         let absUrl = rawUrl;
         if (rawUrl.startsWith('/')) {
-          const base =
-            process.env.NEXT_PUBLIC_APP_URL ||
-            req.nextUrl.origin ||
-            'http://localhost:3000';
-          absUrl = `${base.replace(/\/$/, '')}${rawUrl}`;
+          const base = getAppUrl() || req.nextUrl.origin || 'http://localhost:3000';
+          absUrl = `${base}${rawUrl}`;
         }
         let upstream: Response;
         try {
@@ -161,8 +159,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         } else {
           let absUrl = rawUrl;
           if (rawUrl.startsWith('/')) {
-            const base = process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin || 'http://localhost:3000';
-            absUrl = `${base.replace(/\/$/, '')}${rawUrl}`;
+            const base = getAppUrl() || req.nextUrl.origin || 'http://localhost:3000';
+            absUrl = `${base}${rawUrl}`;
           }
           const upstream = await fetch(absUrl);
           if (upstream.ok) buf = Buffer.from(await upstream.arrayBuffer());

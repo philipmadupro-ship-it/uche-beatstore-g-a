@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAppUrl } from '@/lib/env';
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 import { isSupabaseConfigured, insert, query, requireRowOwnership } from '@/lib/db';
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ? new Date(Date.now() + expiresDays * 86400000).toISOString()
     : null;
 
-  const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const APP_URL = getAppUrl();
   const url = `${APP_URL}/projects/share/${token}`;
 
   try {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAppUrl } from '@/lib/env';
 import { Resend } from 'resend';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured, insert } from '@/lib/local-store';
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing email or shareToken' }, { status: 400 });
     }
 
-    const shareUrl = `${process.env.NEXT_PUBLIC_APP_URL}/share/${shareToken}`;
+    const shareUrl = `${getAppUrl()}/share/${shareToken}`;
 
     // 1. Send Email via Resend
     const { data: resendData, error: resendError } = await resend.emails.send({
