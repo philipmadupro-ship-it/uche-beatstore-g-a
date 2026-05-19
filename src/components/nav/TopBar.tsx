@@ -22,6 +22,11 @@ import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
 import { cn } from '@/lib/utils';
 
+// Settings is intentionally NOT in this list — it moved to a dedicated
+// gear button in the top-right (next to the activity bell) so the
+// horizontal nav is reserved for surfaces the user reaches every day.
+// Mobile drawer still has it for the same reason it has Offline:
+// long-tail destinations the user does want eventually.
 const NAV_ITEMS = [
   { label: 'Library',   icon: Disc3,     href: '/library'   },
   { label: 'Projects',  icon: Layers,    href: '/projects'  },
@@ -31,6 +36,11 @@ const NAV_ITEMS = [
   { label: 'Calendar',  icon: Calendar,  href: '/calendar'  },
   { label: 'Links',     icon: Link2,     href: '/links'     },
   { label: 'Offline',   icon: CloudOff,  href: '/offline'   },
+];
+
+// Mobile drawer keeps Settings reachable since there's no gear icon
+// in the cramped mobile header.
+const MOBILE_EXTRA_ITEMS = [
   { label: 'Settings',  icon: Settings,  href: '/settings'  },
 ];
 
@@ -119,6 +129,24 @@ export function TopBar() {
           <Bell size={14} />
         </button>
 
+        {/* Settings gear — moved out of the horizontal nav so it lives
+            next to the activity bell on every page. Desktop only;
+            mobile users reach it via the drawer below. The active
+            state ring makes it clear when the user IS on /settings. */}
+        <Link
+          href="/settings"
+          aria-label="Open settings"
+          title="Settings"
+          className={cn(
+            'hidden md:flex w-8 h-8 rounded-full items-center justify-center transition-colors shrink-0',
+            pathname === '/settings' || pathname.startsWith('/settings/')
+              ? 'bg-[#16130e] text-white'
+              : 'text-[#a08a6a] hover:text-white hover:bg-white/[0.04]',
+          )}
+        >
+          <Settings size={14} />
+        </Link>
+
         {/* User badge */}
         <div className="flex items-center gap-2 shrink-0">
           <div className="w-7 h-7 rounded-full bg-[#1a160f] border border-[#2d2620] flex items-center justify-center">
@@ -156,7 +184,7 @@ export function TopBar() {
               </button>
             </div>
             <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-              {NAV_ITEMS.map((item) => {
+              {[...NAV_ITEMS, ...MOBILE_EXTRA_ITEMS].map((item) => {
                 const active = pathname === item.href || pathname.startsWith(item.href + '/');
                 const Icon = item.icon;
                 return (
