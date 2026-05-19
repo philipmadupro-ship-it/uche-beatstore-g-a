@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
   Music, Mail, Globe, ExternalLink,
   Play, Pause, ChevronRight, Mic2, Loader2, ShoppingCart,
+  CheckCircle2, XCircle, X as CloseIcon,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 
@@ -107,6 +109,26 @@ interface Props {
 }
 
 export function ClientShareVariant({ project, tracks, creator, shareToken, onPlay, playingId, isPlaying }: Props) {
+  // Purchase-return banner. Stripe's success_url + cancel_url both
+  // land back on this page with a ?purchase= param. We surface a
+  // dismissible toast-row at the top so the buyer knows their
+  // payment landed; without this the redirect looks like a no-op.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const purchaseStatus = searchParams?.get('purchase');
+  const [bannerOpen, setBannerOpen] = useState(false);
+  useEffect(() => {
+    setBannerOpen(purchaseStatus === 'success' || purchaseStatus === 'cancelled');
+  }, [purchaseStatus]);
+  const dismissBanner = () => {
+    setBannerOpen(false);
+    // Strip the query so a refresh doesn't re-show the banner.
+    const url = new URL(window.location.href);
+    url.searchParams.delete('purchase');
+    url.searchParams.delete('session_id');
+    router.replace(url.pathname + (url.search ? url.search : ''), { scroll: false });
+  };
+
   // Buy-button state for the license card. We collect the buyer's
   // email inline (lighter-touch than a modal) and POST to
   // /api/share/[token]/checkout to create a Stripe Checkout Session.
@@ -169,6 +191,35 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
 
   return (
     <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8]">
+      {/* Purchase return banner — fixed at the top so it survives
+          the hero image. Dismissed by the X or by route-replace
+          when the user navigates away. */}
+      {bannerOpen && (
+        <div className={`sticky top-0 z-50 px-4 md:px-12 py-3 border-b ${
+          purchaseStatus === 'success'
+            ? 'bg-[#0e1f17] border-[#6DC6A4]/30 text-[#6DC6A4]'
+            : 'bg-[#1f1010] border-red-500/30 text-red-300'
+        }`}>
+          <div className="max-w-5xl mx-auto flex items-center gap-3">
+            {purchaseStatus === 'success'
+              ? <CheckCircle2 size={16} className="shrink-0" />
+              : <XCircle size={16} className="shrink-0" />}
+            <p className="text-[12px] font-medium flex-1">
+              {purchaseStatus === 'success'
+                ? 'Purchase complete — check your inbox for the receipt and download link.'
+                : 'Checkout cancelled. No payment was taken.'}
+            </p>
+            <button
+              onClick={dismissBanner}
+              className="text-current/60 hover:text-current shrink-0"
+              aria-label="Dismiss"
+            >
+              <CloseIcon size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Hero — full-bleed image with a dark overlay so the title
           stays readable regardless of the source photo. Tall but not
           full-viewport so the track list peeks above the fold. */}
