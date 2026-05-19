@@ -130,7 +130,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                     </span>
                     <div className="w-8 h-8 rounded bg-[#0a0907] border border-[#1f1a13] overflow-hidden shrink-0">
                       {t.cover_url ? (
-                        <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                        <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-[#3a3328]">
                           <Music size={11} />

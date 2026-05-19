@@ -173,7 +173,7 @@ export function AddFromLibraryModal({
                       </div>
                       <div className="w-9 h-9 rounded bg-[#14110d] border border-[#1a160f] flex items-center justify-center shrink-0 overflow-hidden">
                         {t.cover_url ? (
-                          <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                          <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" />
                         ) : (
                           <Music size={14} className="text-[#3a3328]" />
                         )}

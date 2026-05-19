@@ -307,7 +307,7 @@ export default function LibraryPage() {
             <div className="relative w-[140px] h-[140px] rounded-xl bg-[#14110d] border border-white/[0.06] shadow-[0_12px_36px_rgba(0,0,0,0.6)] overflow-hidden shrink-0 flex items-center justify-center group/hero bg-cover bg-center">
               {heroCoverUrl ? (
                 <>
-                  <img
+                  <img loading="lazy"
                     src={heroCoverUrl}
                     alt=""
                     className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm pointer-events-none"
@@ -319,7 +319,7 @@ export default function LibraryPage() {
                     <div className="absolute inset-5 rounded-full border border-white/[0.01]" />
                     <div className="absolute inset-7 rounded-full border border-white/[0.01]" />
                     <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-[#0a0907] relative animate-[spin_10s_linear_infinite]">
-                      <img
+                      <img loading="lazy"
                         src={heroCoverUrl}
                         alt=""
                         className="w-full h-full object-cover"

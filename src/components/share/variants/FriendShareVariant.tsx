@@ -81,7 +81,7 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
               isPlaying && playingId ? 'animate-[spin_12s_linear_infinite]' : ''
             }`}>
               {currentTrack?.cover_url || project.cover_url ? (
-                <img 
+                <img loading="lazy" 
                   src={currentTrack?.cover_url || project.cover_url || ''} 
                   alt="" 
                   className="w-full h-full object-cover"

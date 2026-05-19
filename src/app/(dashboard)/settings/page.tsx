@@ -203,7 +203,7 @@ export default function SettingsPage() {
                     <div className="flex gap-4 items-center">
                       {profile.hero_image_url ? (
                         <div className="w-12 h-12 rounded-lg overflow-hidden border border-[#1f1a13] shrink-0 bg-[#0c0a08]">
-                          <img src={profile.hero_image_url} alt="" className="w-full h-full object-cover" />
+                          <img loading="lazy" src={profile.hero_image_url} alt="" className="w-full h-full object-cover" />
                         </div>
                       ) : (
                         <div className="w-12 h-12 rounded-lg border border-[#1f1a13] border-dashed flex items-center justify-center text-[#3a3328] shrink-0 bg-[#0c0a08]">
@@ -511,7 +511,7 @@ export default function SettingsPage() {
                     
                     {profile.hero_image_url ? (
                       <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-[#D4BFA0] mx-auto bg-[#0a0907] shadow-xl">
-                        <img src={profile.hero_image_url} alt="" className="w-full h-full object-cover" />
+                        <img loading="lazy" src={profile.hero_image_url} alt="" className="w-full h-full object-cover" />
                       </div>
                     ) : (
                       <div className="w-20 h-20 rounded-full border-2 border-dashed border-[#2d2620] flex items-center justify-center text-[#3a3328] mx-auto bg-[#0a0907]">

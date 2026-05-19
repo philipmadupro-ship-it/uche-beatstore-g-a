@@ -167,7 +167,7 @@ export default function PlaylistsPage() {
                     selected ? 'border-[#D4BFA0]' : 'border-[#1a160f] group-hover:border-[#2d2620]',
                   )}>
                     {playlist.cover_url ? (
-                      <img src={playlist.cover_url} alt={playlist.name} className="w-full h-full object-cover" />
+                      <img loading="lazy" src={playlist.cover_url} alt={playlist.name} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
                         <Music size={28} className="text-[#1a160f]" />

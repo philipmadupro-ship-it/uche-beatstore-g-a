@@ -251,7 +251,7 @@ function Row({
     >
       <div className="w-9 h-9 bg-[#16130e] rounded-lg overflow-hidden shrink-0 border border-[#1f1a13] relative">
         {track.cover_url ? (
-          <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
+          <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-[#2d2620]">
             <Music size={14} />

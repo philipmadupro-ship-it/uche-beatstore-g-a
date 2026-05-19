@@ -181,7 +181,7 @@ export function TrackCard({
       {/* Thumbnail */}
       <div className="w-8 h-8 bg-[#16130e] rounded overflow-hidden border border-[#1a160f] shrink-0">
         {track.cover_url ? (
-          <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
+          <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-[#2d2620]">
             <Music size={12} />

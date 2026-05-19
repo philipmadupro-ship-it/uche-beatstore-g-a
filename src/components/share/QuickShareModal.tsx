@@ -212,7 +212,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
                             {selected && <Check size={9} className="text-black" strokeWidth={3} />}
                           </div>
                           <div className="w-8 h-8 rounded bg-[#14110d] border border-[#1f1a13] overflow-hidden shrink-0">
-                            {t.cover_url ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" /> :
+                            {t.cover_url ? <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" /> :
                               <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={10} /></div>}
                           </div>
                           <div className="min-w-0 flex-1">

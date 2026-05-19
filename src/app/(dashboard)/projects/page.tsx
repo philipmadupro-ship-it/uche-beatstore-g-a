@@ -268,7 +268,7 @@ export default function ProjectsPage() {
               <Link href={`/projects/${project.id}`} key={project.id} className="group">
                 <div className="aspect-square bg-[#14110d] rounded-lg mb-3 overflow-hidden border border-[#1a160f] group-hover:border-[#2d2620] transition-colors relative">
                   {project.cover_url ? (
-                    <img src={project.cover_url} alt={project.name} className="w-full h-full object-cover" />
+                    <img loading="lazy" src={project.cover_url} alt={project.name} className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <Music size={28} className="text-[#1a160f]" />

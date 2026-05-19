@@ -634,7 +634,7 @@ export function StudioWorkstation() {
               <div className="flex items-end justify-between border border-[#16130e] rounded-lg p-5 bg-[#0a0907]">
                 <div className="flex items-center gap-4 min-w-0">
                   {active.cover_url ? (
-                    <img
+                    <img loading="lazy"
                       src={audioSrc(active.cover_url) || active.cover_url}
                       alt=""
                       className="w-16 h-16 rounded-md object-cover border border-[#1a160f]"

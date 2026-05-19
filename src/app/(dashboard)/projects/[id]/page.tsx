@@ -300,7 +300,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
               onClick={() => fileInputRef.current?.click()}
             >
               {project?.cover_url ? (
-                <img src={project.cover_url} alt="" className="w-full h-full object-cover" />
+                <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-[120px] font-light text-[#1a160f] bg-gradient-to-br from-[#161520] to-[#0a0907]">
                   {project?.name?.[0] || 'P'}

@@ -90,7 +90,7 @@ export function ProjectDetailHeader(props: Props) {
           onClick={() => fileInputRef.current?.click()}
         >
           {project?.cover_url ? (
-            <img src={project.cover_url} alt="" className="w-full h-full object-cover" />
+            <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-5xl font-light text-[#1a160f]">
               {project?.name?.[0] || 'P'}

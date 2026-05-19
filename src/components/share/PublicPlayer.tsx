@@ -69,7 +69,7 @@ export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
       <div className="flex flex-col md:flex-row items-center md:items-end gap-8 border-b border-[#1f1a13] pb-12">
         <div className="w-48 h-48 bg-[#16130e] rounded-sm shadow-2xl flex items-center justify-center text-[#2d2620]">
           {activeTrack?.cover_url ? (
-            <img src={activeTrack.cover_url} alt="" className="w-full h-full object-cover rounded-sm" />
+            <img loading="lazy" src={activeTrack.cover_url} alt="" className="w-full h-full object-cover rounded-sm" />
           ) : (
             <Music size={64} />
           )}

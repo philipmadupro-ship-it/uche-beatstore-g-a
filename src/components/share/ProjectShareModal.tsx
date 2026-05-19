@@ -204,7 +204,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
           <div className="relative z-10 flex items-start gap-4">
             <div className="w-14 h-14 bg-[#1a160f] rounded-xl overflow-hidden shrink-0 border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
               {coverUrl ? (
-                <img src={coverUrl} alt="" className="w-full h-full object-cover" />
+                <img loading="lazy" src={coverUrl} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-[#4a4338] font-black text-xl uppercase bg-gradient-to-br from-[#2A2418] to-[#0a0907]">
                   {projectTitle.charAt(0)}

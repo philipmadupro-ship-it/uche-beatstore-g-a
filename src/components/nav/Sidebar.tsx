@@ -184,7 +184,7 @@ export function Sidebar() {
                       style={p.cover_url ? undefined : { background: `linear-gradient(135deg, ${a} 0%, ${b} 100%)` }}
                     >
                       {p.cover_url && (
-                        <img src={p.cover_url} alt="" className="w-full h-full object-cover" />
+                        <img loading="lazy" src={p.cover_url} alt="" className="w-full h-full object-cover" />
                       )}
                     </div>
                     <span className="font-medium tracking-tight truncate">{p.name}</span>

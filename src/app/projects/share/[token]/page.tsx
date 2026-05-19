@@ -625,7 +625,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           <div className="flex items-end gap-5">
             <div className="w-24 h-24 bg-[#16130e] rounded-xl overflow-hidden border border-[#1a160f] shrink-0">
               {project.cover_url
-                ? <img src={project.cover_url} alt="" className="w-full h-full object-cover" />
+                ? <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
                 : <div className="w-full h-full flex items-center justify-center text-[#3a3328] text-3xl font-black">{project.name.charAt(0)}</div>
               }
             </div>
@@ -691,7 +691,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-[#16130e] rounded border border-[#1a160f] overflow-hidden shrink-0">
                 {activeTrack.cover_url
-                  ? <img src={activeTrack.cover_url} alt="" className="w-full h-full object-cover" />
+                  ? <img loading="lazy" src={activeTrack.cover_url} alt="" className="w-full h-full object-cover" />
                   : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={14} /></div>
                 }
               </div>
@@ -869,7 +869,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
 
                   <div className="w-7 h-7 bg-[#16130e] rounded border border-[#1a160f] overflow-hidden shrink-0">
                     {t.cover_url
-                      ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                      ? <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" />
                       : <div className="w-full h-full flex items-center justify-center text-[#2d2620]"><Music size={11} /></div>
                     }
                   </div>

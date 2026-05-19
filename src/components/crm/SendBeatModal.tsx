@@ -504,7 +504,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                         >
                           <div className="w-5 h-5 bg-[#101010] rounded overflow-hidden shrink-0">
                             {t.cover_url ? (
-                              <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                              <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center text-[#444]"><Music size={8} /></div>
                             )}
@@ -551,7 +551,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                         </div>
                         <div className="w-7 h-7 bg-[#16130e] rounded border border-[#1a160f] overflow-hidden shrink-0">
                           {track.cover_url
-                            ? <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
+                            ? <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
                             : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={11} /></div>}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -584,7 +584,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                       </div>
                       <div className="w-7 h-7 bg-[#16130e] rounded border border-[#1a160f] overflow-hidden shrink-0">
                         {project.cover_url
-                          ? <img src={project.cover_url} alt="" className="w-full h-full object-cover" />
+                          ? <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
                           : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Disc3 size={11} /></div>}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -610,7 +610,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                   <div className="bg-[#16130e] border border-[#1f1a13] rounded-xl p-3 flex items-center gap-3">
                     <div className="w-10 h-10 bg-[#1a160f] rounded-lg overflow-hidden shrink-0 border border-[#2d2620]">
                       {summary.cover
-                        ? <img src={summary.cover} alt="" className="w-full h-full object-cover" />
+                        ? <img loading="lazy" src={summary.cover} alt="" className="w-full h-full object-cover" />
                         : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={14} /></div>}
                     </div>
                     <div className="min-w-0">
@@ -800,7 +800,7 @@ function buildPreview(opts: {
   return `
   <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fafafa;padding:32px 24px;">
     <div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #ececec;border-radius:14px;overflow:hidden;">
-      ${opts.cover ? `<img src="${escape(opts.cover)}" alt="" style="width:100%;display:block;max-height:240px;object-fit:cover;">` : ''}
+      ${opts.cover ? `<img loading="lazy" src="${escape(opts.cover)}" alt="" style="width:100%;display:block;max-height:240px;object-fit:cover;">` : ''}
       <div style="padding:28px 28px 24px;">
         <p style="font-size:11px;color:#6d52e6;text-transform:uppercase;letter-spacing:0.2em;margin:0 0 8px;font-weight:700;">${opts.isProject ? 'Project share' : 'New music'}</p>
         <h1 style="font-size:22px;font-weight:600;color:#14110d;margin:0 0 6px;">${safeTitle}</h1>

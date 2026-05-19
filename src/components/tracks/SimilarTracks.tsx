@@ -104,7 +104,7 @@ export function SimilarTracks({ trackId, onPick }: Props) {
                 {/* Cover thumb */}
                 <div className="relative w-10 h-10 rounded-md overflow-hidden bg-[#0a0907] border border-[#1f1a13] shrink-0">
                   {r.track.cover_url ? (
-                    <img src={r.track.cover_url} alt="" className="w-full h-full object-cover" />
+                    <img loading="lazy" src={r.track.cover_url} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-[#3a3328]">
                       <Music size={14} />

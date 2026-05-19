@@ -294,7 +294,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
               onClick={() => fileInputRef.current?.click()}
             >
               {track.cover_url ? (
-                <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
+                <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-[#1a160f] bg-gradient-to-br from-[#161520] to-[#0a0907]">
                   <Music size={64} strokeWidth={1.2} />

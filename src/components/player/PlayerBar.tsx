@@ -78,7 +78,7 @@ export function PlayerBar() {
           <div className="flex items-center gap-2 md:gap-3 pl-1 pr-2 md:pr-3 py-1 min-w-0">
             <div className="w-10 h-10 md:w-11 md:h-11 bg-[#14110d] rounded-full overflow-hidden flex-shrink-0 border border-white/[0.06] relative">
               {currentTrack.cover_url ? (
-                <img src={currentTrack.cover_url} alt="" className="w-full h-full object-cover" />
+                <img loading="lazy" src={currentTrack.cover_url} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-[#3a3328] bg-gradient-to-br from-[#2A2418] to-[#0a0907]">
                   <Music size={14} />

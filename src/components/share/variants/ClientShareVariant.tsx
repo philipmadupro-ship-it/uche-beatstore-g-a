@@ -313,7 +313,7 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
                     >
                       <div className="relative w-12 h-12 md:w-14 md:h-14 rounded-lg overflow-hidden bg-[#14110d] border border-[#1f1a13] shrink-0">
                         {t.cover_url ? (
-                          <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                          <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-[#3a3328]">
                             <Music size={18} />

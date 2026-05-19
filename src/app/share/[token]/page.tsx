@@ -360,7 +360,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
                   style={{ animationPlayState: isPlaying ? 'running' : 'paused' }}
                 >
                   {activeTrack.cover_url ? (
-                    <img src={activeTrack.cover_url} alt="" className="w-full h-full object-cover" draggable={false} />
+                    <img loading="lazy" src={activeTrack.cover_url} alt="" className="w-full h-full object-cover" draggable={false} />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-4xl font-light text-[#1f1a13] bg-gradient-to-br from-[#161520] to-[#0a0907]">
                       {activeTrack.title[0]}
@@ -489,7 +489,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
                   </div>
                   <div className="w-8 h-8 bg-[#16130e] rounded border border-[#1a160f] overflow-hidden shrink-0">
                     {track.cover_url
-                      ? <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
+                      ? <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
                       : <div className="w-full h-full flex items-center justify-center text-[#2d2620]"><Music size={11} /></div>
                     }
                   </div>

@@ -84,7 +84,7 @@ export function ShareWaveformVinyl({
             tiny spindle hole punched through. */}
         <div className={`${dim.inner} rounded-full overflow-hidden border-4 border-[#0a0907] relative`}>
           {cover ? (
-            <img src={cover} alt="" className="w-full h-full object-cover" />
+            <img loading="lazy" src={cover} alt="" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center text-[#a08a6a]">
               <Music size={32} />

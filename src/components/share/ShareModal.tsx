@@ -78,7 +78,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
         <div className="p-8 border-b border-[#1f1a13] bg-gradient-to-b from-[#16130e] to-[#0a0907] flex items-start gap-5">
           <div className="w-16 h-16 bg-[#1a160f] rounded-xl overflow-hidden shrink-0 border border-[#2d2620]">
             {coverUrl ? (
-              <img src={coverUrl} alt="" className="w-full h-full object-cover" />
+              <img loading="lazy" src={coverUrl} alt="" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-[#4a4338] font-black text-2xl uppercase">
                 {title[0] || '?'}

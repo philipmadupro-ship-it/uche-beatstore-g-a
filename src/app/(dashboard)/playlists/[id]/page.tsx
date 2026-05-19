@@ -207,7 +207,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               onClick={() => fileInputRef.current?.click()}
             >
               {playlist?.cover_url ? (
-                <img src={playlist.cover_url} alt="" className="w-full h-full object-cover" />
+                <img loading="lazy" src={playlist.cover_url} alt="" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-[120px] font-light text-[#1a160f] bg-gradient-to-br from-[#161520] to-[#0a0907]">
                   {playlist?.name?.[0] || 'P'}
@@ -414,7 +414,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                           {isSelected && <Check size={11} className="text-white" />}
                         </div>
                         <div className="w-8 h-8 bg-[#14110d] rounded border border-[#1a160f] overflow-hidden shrink-0">
-                          {t.cover_url ? <img src={t.cover_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Music size={12} className="text-[#3a3328]" /></div>}
+                          {t.cover_url ? <img loading="lazy" src={t.cover_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Music size={12} className="text-[#3a3328]" /></div>}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="text-[12px] text-[#E8DCC8] truncate">{t.title}</p>
