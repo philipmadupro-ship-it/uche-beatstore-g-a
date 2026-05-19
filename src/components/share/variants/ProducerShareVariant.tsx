@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Music, Sliders, Play, Pause, Download, Volume2, HardDrive, Info } from 'lucide-react';
 import { StemPlayer } from '@/components/stems/StemPlayer';
+import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 
 interface CreatorProfile {
   display_name?: string | null;
@@ -87,6 +88,24 @@ export function ProducerShareVariant({ project, tracks, creator, stems = [], onP
               </h2>
             </div>
           </div>
+
+          {/* Master vinyl + waveform — always shown so the producer
+              sees their beat at the top, even when stems exist. The
+              StemPlayer below operates on the same track but offers
+              per-channel mixing. */}
+          {currentTrack && (
+            <div className="mb-6 flex justify-center">
+              <ShareWaveformVinyl
+                track={currentTrack as any}
+                projectCover={project.cover_url}
+                caption={displayName}
+                isPlaying={isPlaying}
+                playingId={playingId ?? null}
+                onTogglePlay={onPlay}
+                size="compact"
+              />
+            </div>
+          )}
 
           {/* Stems player container */}
           {hasStems ? (

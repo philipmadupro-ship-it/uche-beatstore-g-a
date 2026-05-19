@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { Play, Pause, Music, Sliders, Disc, Plus, Edit3, Save } from 'lucide-react';
+import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
+import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
 
 interface CreatorProfile {
   display_name?: string | null;
@@ -57,10 +59,31 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
         }}
       />
 
+      {/* Top hero — vinyl + waveform of the active track. Replaces
+          the old static cover-art block on the right; the topliner
+          wants the beat AT the top so they can listen while their
+          eyes drop down to the lyric sheet underneath. */}
+      {currentTrack && (
+        <div className="w-full px-6 md:px-12 pt-12 pb-6 flex justify-center z-10">
+          <ShareWaveformVinyl
+            track={currentTrack as any}
+            projectCover={project.cover_url}
+            caption={displayName}
+            isPlaying={isPlaying}
+            playingId={playingId ?? null}
+            onTogglePlay={onPlay}
+            size="compact"
+          />
+        </div>
+      )}
+
       {/* Main layout */}
-      <div className="flex-1 max-w-6xl mx-auto w-full px-6 md:px-12 pt-16 pb-32 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-12 z-10">
-        
-        {/* Left Side: Centered Lyric Sheet */}
+      <div className="flex-1 max-w-6xl mx-auto w-full px-6 md:px-12 pb-32 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-12 z-10">
+
+        {/* Left Side: Full Lyrics Studio — same component used in /studio
+            so the rapper gets rhymes / syllable count / version history
+            without re-implementing any of it. Reads/writes the track's
+            lyrics column server-side. */}
         <div className="flex flex-col min-w-0">
           <div className="mb-6 flex items-center justify-between">
             <div>
@@ -79,61 +102,19 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
             ) : null}
           </div>
 
-          {/* Centered Scrolling Lyric Display */}
-          <div className="flex-1 min-h-[450px] bg-[#14110d]/40 border border-[#1f1a13] rounded-2xl p-8 relative overflow-hidden shadow-xl backdrop-blur-sm flex flex-col">
-            <div className="absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-[#14110d] to-transparent pointer-events-none z-10" />
-            <div className="flex-1 overflow-y-auto pr-2 space-y-6 scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent">
-              {currentTrack?.lyrics ? (
-                <div className="text-[15px] leading-[2.2] text-white/90 whitespace-pre-wrap font-sans font-medium select-text tracking-wide max-w-xl mx-auto py-6">
-                  {currentTrack.lyrics}
-                </div>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-center py-12 text-[#6a5d4a] max-w-sm mx-auto">
-                  <Sliders size={32} className="mb-4 opacity-50" />
-                  <p className="text-sm font-bold uppercase tracking-wider text-[#a08a6a] mb-2">No Lyrics Uploaded</p>
-                  <p className="text-xs leading-relaxed">The producer hasn't uploaded official lyrics for this track yet. Use the writer's notepad on the right to sketch out your bars in real-time!</p>
-                </div>
-              )}
+          {currentTrack ? (
+            <LyricsStudio trackId={currentTrack.id} />
+          ) : (
+            <div className="flex-1 min-h-[450px] bg-[#14110d]/40 border border-[#1f1a13] rounded-2xl p-8 flex items-center justify-center text-[#6a5d4a]">
+              <p className="text-sm font-bold uppercase tracking-wider text-[#a08a6a]">No track selected</p>
             </div>
-            <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-[#14110d] to-transparent pointer-events-none z-10" />
-          </div>
+          )}
         </div>
 
-        {/* Right Side: Writers Session Notepad & Tracks Drawer */}
+        {/* Right Side: Writers Session Notepad & Tracks Drawer.
+            The vinyl + player card moved to the top hero above —
+            no need to duplicate the cover art here. */}
         <div className="flex flex-col gap-8">
-          
-          {/* Active Player Card */}
-          <div className="bg-gradient-to-b from-[#14110d] to-[#0a0907] border border-[#1f1a13] rounded-2xl p-6 shadow-xl relative overflow-hidden">
-            <div className="flex gap-4 items-center mb-6">
-              <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-[#1f1a13] bg-[#0a0907] relative group">
-                {currentTrack?.cover_url || project.cover_url ? (
-                  <img src={currentTrack?.cover_url || project.cover_url || ''} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={20} /></div>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#a08a6a]">{displayName}</p>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider truncate mt-0.5">{currentTrack?.title}</h3>
-                <p className="text-[10px] font-mono text-[#6a5d4a] uppercase tracking-widest mt-1">{currentTrack?.type || 'Track'}</p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => onPlay(currentTrack)}
-              className="w-full flex items-center justify-center gap-3 bg-[#D4BFA0] hover:bg-[#8A7A5C] text-black font-bold uppercase tracking-[0.2em] text-[10px] py-3.5 rounded-xl transition-all shadow-lg shadow-[#D4BFA0]/10"
-            >
-              {isPlaying && playingId === currentTrack.id ? (
-                <>
-                  <Pause size={14} fill="currentColor" /> Pause Preview
-                </>
-              ) : (
-                <>
-                  <Play size={14} className="ml-0.5" fill="currentColor" /> Play Preview
-                </>
-              )}
-            </button>
-          </div>
 
           {/* Interactive Writers Notepad */}
           <div className="bg-[#14110d]/50 border border-[#1f1a13] rounded-2xl p-6 shadow-xl flex-1 flex flex-col">

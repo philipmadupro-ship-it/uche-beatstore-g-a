@@ -9,6 +9,7 @@ import {
   CheckCircle2, XCircle, X as CloseIcon,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 
 // lucide-react removed brand icons in recent versions.
 // Small inline SVGs keep the social-pill row working.
@@ -259,6 +260,23 @@ export function ClientShareVariant({ project, tracks, creator, shareToken, onPla
       </div>
 
       <div className="max-w-5xl mx-auto px-6 md:px-12 pt-12 pb-32">
+        {/* Now-playing vinyl + waveform. Sits between hero and bio
+            so the visitor lands on the music as the centerpiece;
+            bio and license card frame the listening experience. */}
+        {tracks.length > 0 && (
+          <section className="mb-16 flex justify-center">
+            <ShareWaveformVinyl
+              track={(tracks.find((t) => t.id === playingId) ?? tracks[0]) as any}
+              projectCover={project.cover_url}
+              caption={displayName}
+              isPlaying={isPlaying}
+              playingId={playingId ?? null}
+              onTogglePlay={onPlay}
+              size="large"
+            />
+          </section>
+        )}
+
         {/* Bio — single paragraph, generous line-height so it reads as
             "an introduction to me," not a bio data row. */}
         {hasBio && (
