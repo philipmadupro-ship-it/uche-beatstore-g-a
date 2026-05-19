@@ -186,3 +186,81 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }
+
+/**
+ * PATCH /api/share/[token]
+ *
+ * Owner-only edit for the link's mutable fields. Whitelisted body —
+ * passing anything outside the whitelist is silently dropped rather
+ * than 400'd so the client can post a partial update without
+ * tracking which keys are editable.
+ *
+ *   title             — display label (search/listing)
+ *   allow_downloads   — toggles the download CTA on the share page
+ *   expires_days      — 0 / null = clear expiry; positive int =
+ *                       set expires_at to now + N days
+ *   password          — null clears, string sets a new hash
+ */
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+  try {
+    const body = await req.json().catch(() => ({}));
+    const patch: Record<string, any> = {};
+    if (typeof body.title === 'string') patch.title = body.title.trim().slice(0, 200) || null;
+    if (typeof body.allow_downloads === 'boolean') patch.allow_downloads = body.allow_downloads;
+    if (body.expires_days != null) {
+      const days = Number(body.expires_days);
+      patch.expires_at = days > 0
+        ? new Date(Date.now() + days * 86400000).toISOString()
+        : null;
+    }
+    if (body.password === null) {
+      patch.password_hash = null;
+    } else if (typeof body.password === 'string' && body.password.length > 0) {
+      patch.password_hash = await bcrypt.hash(body.password, 10);
+    }
+    if (Object.keys(patch).length === 0) {
+      return NextResponse.json({ error: 'No editable fields in body' }, { status: 400 });
+    }
+
+    if (isSupabaseConfigured()) {
+      const cookieClient = await createServerClient();
+      const { data: { user } } = await cookieClient.auth.getUser();
+      if (!user) {
+        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      }
+      const supabase = createServiceClient();
+      const { data: existing } = await supabase
+        .from('share_links')
+        .select('id, user_id')
+        .eq('token', token)
+        .single();
+      if (!existing) {
+        return NextResponse.json({ error: 'Share link not found' }, { status: 404 });
+      }
+      if (existing.user_id && existing.user_id !== user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const { data, error } = await supabase
+        .from('share_links')
+        .update(patch)
+        .eq('token', token)
+        .select('*')
+        .single();
+      if (error) throw error;
+      const { password_hash: _hash, ...safe } = data;
+      return NextResponse.json({ share: safe });
+    }
+
+    // Local-store fallback
+    const all = getAll('share_links');
+    const link = all.find((l: any) => l.token === token);
+    if (!link) return NextResponse.json({ error: 'Share link not found' }, { status: 404 });
+    const updated = update('share_links', link.id, patch);
+    const { password_hash: _h, ...safe } = updated as any;
+    return NextResponse.json({ share: safe });
+  } catch (error) {
+    log.error('share PATCH failed', { token, error: errorMessage(error) });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+  }
+}

@@ -4,10 +4,14 @@ import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Link2, Copy, Trash2, Check, Loader2, ExternalLink, Lock, Clock,
-  X, Share2, Music,
+  X, Share2, Music, Pencil, Download, Save, Plus, Send,
 } from 'lucide-react';
+import { toast, confirmToast } from '@/hooks/useToast';
+import { Dropdown } from '@/components/ui/Dropdown';
 import { copyToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
+import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
+import { QuickShareModal } from '@/components/share/QuickShareModal';
 
 interface ShareLink {
   id: string;
@@ -38,6 +42,13 @@ export default function LinksPage() {
   // Mirrors the rest of the redesigned modals (Project share, drawer)
   // so the visual language stays consistent.
   const [active, setActive] = useState<ShareLink | null>(null);
+  // Multi-select state. Same Set<string> pattern as contacts/library
+  // so the floating BatchActionBar feels consistent.
+  const [selectedTokens, setSelectedTokens] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  // Quick-share modal: lets the user spin up an ad-hoc share over
+  // ANY library tracks without making a project or playlist first.
+  const [showQuickShare, setShowQuickShare] = useState(false);
 
   const fetchLinks = async () => {
     setLoading(true);
@@ -85,8 +96,35 @@ export default function LinksPage() {
       await fetch(`/api/share/${token}`, { method: 'DELETE' });
       setLinks((prev) => prev.filter((l) => l.token !== token));
       if (active?.token === token) setActive(null);
+      toast.success('Link deleted');
     } catch (err) {
       console.error('Delete error:', err);
+      toast.error('Couldn’t delete link');
+    }
+  };
+
+  const patchLink = async (token: string, patch: Record<string, any>): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/share/${token}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || `HTTP ${res.status}`);
+      }
+      const { share } = await res.json();
+      // Re-merge into local state so cards reflect the edit without
+      // a full refetch.
+      setLinks((prev) => prev.map((l) => (l.token === token ? { ...l, ...share } : l)));
+      if (active?.token === token) setActive((a) => (a ? { ...a, ...share } : a));
+      toast.success('Link updated');
+      return true;
+    } catch (err) {
+      console.error('Patch error:', err);
+      toast.error('Couldn’t update link', err instanceof Error ? err.message : 'Unknown error');
+      return false;
     }
   };
 
@@ -110,9 +148,18 @@ export default function LinksPage() {
               <h1 className="text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">Links</h1>
               <p className="text-[11px] text-[#a08a6a] max-w-md">Every share you&apos;ve sent. Tap a card to open and copy.</p>
             </div>
-            <span className="text-[11px] font-mono text-[#E8D8B8] uppercase tracking-wider mb-1">
-              {links.length} link{links.length !== 1 ? 's' : ''}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-mono text-[#E8D8B8] uppercase tracking-wider">
+                {links.length} link{links.length !== 1 ? 's' : ''}
+              </span>
+              <button
+                onClick={() => setShowQuickShare(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black hover:bg-[#E8DCC8] text-[11px] font-medium transition-colors active:scale-[0.98]"
+              >
+                <Plus size={13} />
+                New share
+              </button>
+            </div>
           </div>
         </div>
 
@@ -128,21 +175,49 @@ export default function LinksPage() {
           </div>
         ) : (
           // Card grid — 1 col on mobile, 2 on md, 3 on lg. Each card
-          // is a button that opens the glass popup.
+          // is a button that opens the glass popup. Top-left corner
+          // holds a checkbox for multi-select.
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {links.map((link) => {
               const expired = isExpired(link);
+              const selected = selectedTokens.has(link.token);
               return (
-                <button
+                <div
                   key={link.token}
                   onClick={() => setActive(link)}
                   className={cn(
-                    'group relative text-left rounded-2xl p-4 transition-all',
-                    'bg-gradient-to-br from-[#14110d] to-[#0a0907] border border-[#1f1a13]',
-                    'hover:border-[#2d2620] hover:from-[#1a160f] active:scale-[0.99]',
+                    'group relative text-left rounded-2xl p-4 transition-all cursor-pointer',
+                    'bg-gradient-to-br from-[#14110d] to-[#0a0907] border',
+                    selected
+                      ? 'border-[#D4BFA0]/40 from-[#2A2418]/40'
+                      : 'border-[#1f1a13] hover:border-[#2d2620] hover:from-[#1a160f]',
+                    'active:scale-[0.99]',
                     expired && 'opacity-40',
                   )}
                 >
+                  {/* Selection checkbox — click swallowed so it doesn't
+                      open the popup. Stays visible on hover even when
+                      the row isn't selected, so the user knows the
+                      affordance exists. */}
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedTokens((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(link.token)) next.delete(link.token);
+                        else next.add(link.token);
+                        return next;
+                      });
+                    }}
+                    className={cn(
+                      'absolute top-3 left-3 w-5 h-5 rounded border flex items-center justify-center transition-all z-10',
+                      selected
+                        ? 'bg-[#D4BFA0] border-[#E8D8B8]'
+                        : 'border-[#2d2620] bg-[#0a0907] opacity-0 group-hover:opacity-100 hover:border-[#4a4338]',
+                    )}
+                  >
+                    {selected && <Check size={11} className="text-black" strokeWidth={3} />}
+                  </div>
                   {/* Top row — title + kind + open-in-new shortcut. */}
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="min-w-0 flex-1">
@@ -190,7 +265,7 @@ export default function LinksPage() {
                       {link.allow_downloads !== false && <span className="text-[9px] uppercase">dl</span>}
                     </div>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -207,10 +282,59 @@ export default function LinksPage() {
           onCopy={copyLink}
           onShare={nativeShare}
           onDelete={deleteLink}
+          onPatch={patchLink}
           copied={copied === active.token}
           fullUrl={fullUrl(active.token)}
           expired={isExpired(active)}
           formatDate={formatDate}
+        />
+      )}
+
+      {/* Floating bulk-action bar — appears when ≥1 link is selected.
+          Fans out DELETEs in parallel so a 20-link cleanup doesn't
+          take 20 sequential round-trips. */}
+      <BatchActionBar
+        count={selectedTokens.size}
+        noun={['link', 'links']}
+        onClear={() => setSelectedTokens(new Set())}
+        busy={bulkBusy}
+        actions={[
+          {
+            label: 'Delete',
+            icon: <DeleteIcon size={11} />,
+            intent: 'danger',
+            onClick: async () => {
+              const tokens = Array.from(selectedTokens);
+              const ok = await confirmToast(
+                `Delete ${tokens.length} link${tokens.length === 1 ? '' : 's'}?`,
+                'Recipients with these URLs will get 404. This is permanent.',
+                { confirmLabel: 'Delete', cancelLabel: 'Keep', danger: true },
+              );
+              if (!ok) return;
+              setBulkBusy(true);
+              const results = await Promise.allSettled(
+                tokens.map((t) => fetch(`/api/share/${t}`, { method: 'DELETE' }).then((r) => {
+                  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                })),
+              );
+              const failed = results.filter((r) => r.status === 'rejected').length;
+              setBulkBusy(false);
+              setSelectedTokens(new Set());
+              setLinks((prev) => prev.filter((l) => !tokens.includes(l.token)));
+              if (failed === 0) toast.success(`Deleted ${tokens.length} link${tokens.length === 1 ? '' : 's'}`);
+              else toast.warning(`Deleted ${tokens.length - failed}, ${failed} failed`);
+            },
+          },
+        ]}
+      />
+
+      {/* Ad-hoc share — pick tracks from the library, generate a
+          share link without first needing to make a project or
+          playlist. The endpoint accepts a track_ids[] directly. */}
+      {showQuickShare && (
+        <QuickShareModal
+          onClose={() => setShowQuickShare(false)}
+          onCreated={() => { setShowQuickShare(false); fetchLinks(); }}
         />
       )}
     </DashboardLayout>
@@ -224,18 +348,75 @@ export default function LinksPage() {
  * when the platform supports it (iOS / Android / mobile Safari).
  */
 function LinkPopup({
-  link, onClose, onCopy, onShare, onDelete, copied, fullUrl, expired, formatDate,
+  link, onClose, onCopy, onShare, onDelete, onPatch, copied, fullUrl, expired, formatDate,
 }: {
   link: ShareLink;
   onClose: () => void;
   onCopy: (token: string) => void;
   onShare: (link: ShareLink) => void;
   onDelete: (token: string) => void;
+  onPatch: (token: string, patch: Record<string, any>) => Promise<boolean>;
   copied: boolean;
   fullUrl: string;
   expired: boolean;
   formatDate: (iso: string) => string;
 }) {
+  // Fetch the share's track titles on open. The card-grid endpoint
+  // only carries IDs to keep the list cheap; the popup is where the
+  // user looks for "wait, what tracks are on this link?"
+  const [tracks, setTracks] = useState<Array<{ id: string; title: string; type: string; cover_url?: string | null }>>([]);
+  const [tracksLoading, setTracksLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setTracksLoading(true);
+      try {
+        // The public share GET works without auth, no password needed
+        // since we're the owner viewing our own link.
+        const res = await fetch(`/api/share/${link.token}`);
+        if (!res.ok) throw new Error('failed');
+        const data = await res.json();
+        if (!cancelled) setTracks(data.tracks ?? []);
+      } catch {
+        // Leave empty list — the popup degrades gracefully.
+      } finally {
+        if (!cancelled) setTracksLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [link.token]);
+
+  // Edit mode: when on, the popup body swaps out for a form. Saving
+  // posts a PATCH and flips back to view mode. Title field carries
+  // a "(token)" placeholder so the user knows what gets used in the
+  // header when title is empty.
+  const [editing, setEditing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editTitle, setEditTitle] = useState(link.title ?? '');
+  const [editAllowDownloads, setEditAllowDownloads] = useState(link.allow_downloads !== false);
+  const [editExpiresDays, setEditExpiresDays] = useState<string>(
+    link.expires_at ? '7' : '0',
+  );
+  const [editPassword, setEditPassword] = useState('');
+  const [editClearPassword, setEditClearPassword] = useState(false);
+  const handleSave = async () => {
+    setSavingEdit(true);
+    const patch: Record<string, any> = {
+      title: editTitle.trim(),
+      allow_downloads: editAllowDownloads,
+      expires_days: Number(editExpiresDays || 0),
+    };
+    if (editClearPassword) patch.password = null;
+    else if (editPassword) patch.password = editPassword;
+    const ok = await onPatch(link.token, patch);
+    setSavingEdit(false);
+    if (ok) {
+      setEditing(false);
+      setEditPassword('');
+      setEditClearPassword(false);
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
@@ -291,7 +472,7 @@ function LinkPopup({
           </div>
 
           {/* Flag chips — what's true about this link at a glance. */}
-          <div className="flex items-center gap-2 flex-wrap mb-5">
+          <div className="flex items-center gap-2 flex-wrap mb-4">
             <FlagChip icon={<Music size={10} />} label={`${link.track_ids?.length ?? 0} track${(link.track_ids?.length ?? 0) === 1 ? '' : 's'}`} />
             {link.password_hash && <FlagChip icon={<Lock size={10} />} label="Password" tone="warn" />}
             {link.allow_downloads !== false && <FlagChip label="Downloads on" />}
@@ -303,6 +484,134 @@ function LinkPopup({
               <FlagChip icon={<Clock size={10} />} label="Never expires" />
             )}
           </div>
+
+          {/* Tracks on this link — small avatar + title row. Empty
+              state shown while loading or if the share is empty. */}
+          <div className="mb-5">
+            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Tracks on this link</p>
+            {tracksLoading ? (
+              <div className="flex items-center gap-2 text-[10px] font-mono text-[#5a5142]">
+                <Loader2 size={10} className="animate-spin" />
+                Loading…
+              </div>
+            ) : tracks.length === 0 ? (
+              <p className="text-[10px] text-[#3a3328] font-mono">No tracks resolved</p>
+            ) : (
+              <ul className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                {tracks.map((t) => (
+                  <li key={t.id} className="flex items-center gap-2.5 text-[11px] text-[#a08a6a]">
+                    <div className="w-6 h-6 rounded bg-[#0a0907] border border-[#1f1a13] overflow-hidden shrink-0">
+                      {t.cover_url ? (
+                        <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[#3a3328]">
+                          <Music size={10} />
+                        </div>
+                      )}
+                    </div>
+                    <span className="truncate flex-1 text-[#E8DCC8]">{t.title}</span>
+                    <span className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] shrink-0">{t.type}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Edit-mode form. Toggled by the Edit button in the
+              secondary action row. */}
+          {editing && (
+            <div className="mb-5 p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8]">Edit link</p>
+
+              <div>
+                <label className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] mb-1 block">Title</label>
+                <input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder={link.token}
+                  className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-md px-2.5 py-2 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#8A7A5C]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] mb-1 block">Expires in</label>
+                  <Dropdown
+                    value={editExpiresDays}
+                    onChange={(v) => setEditExpiresDays(v)}
+                    options={[
+                      { value: '0', label: 'Never' },
+                      { value: '1', label: '1 day' },
+                      { value: '3', label: '3 days' },
+                      { value: '7', label: '7 days' },
+                      { value: '14', label: '14 days' },
+                      { value: '30', label: '30 days' },
+                    ]}
+                    className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-md px-2.5 py-2 text-[11px] text-[#E8DCC8] focus:outline-none focus:border-[#8A7A5C]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] mb-1 block">Downloads</label>
+                  <button
+                    type="button"
+                    onClick={() => setEditAllowDownloads((v) => !v)}
+                    className={cn(
+                      'w-full px-2.5 py-2 text-[11px] font-medium rounded-md border transition-colors flex items-center justify-center gap-1.5',
+                      editAllowDownloads
+                        ? 'bg-[#2A2418] border-[#8A7A5C]/50 text-[#E8D8B8]'
+                        : 'bg-[#0a0907] border-[#1f1a13] text-[#5a5142] hover:border-[#2d2620]',
+                    )}
+                  >
+                    <Download size={11} />
+                    {editAllowDownloads ? 'Allowed' : 'Off'}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] mb-1 flex items-center justify-between">
+                  <span>Password {link.password_hash && <span className="text-[#5a5142] normal-case">(currently set)</span>}</span>
+                  {link.password_hash && (
+                    <button
+                      type="button"
+                      onClick={() => setEditClearPassword((v) => !v)}
+                      className={cn(
+                        'text-[9px] uppercase tracking-wider transition-colors',
+                        editClearPassword ? 'text-red-400' : 'text-[#6a5d4a] hover:text-red-400',
+                      )}
+                    >
+                      {editClearPassword ? 'Will clear' : 'Clear it'}
+                    </button>
+                  )}
+                </label>
+                <input
+                  type="password"
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  disabled={editClearPassword}
+                  placeholder={link.password_hash ? '••••••' : 'No password'}
+                  className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-md px-2.5 py-2 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#8A7A5C] disabled:opacity-40"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  onClick={handleSave}
+                  disabled={savingEdit}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-[#D4BFA0] hover:bg-[#E8D8B8] disabled:opacity-40 text-black text-[11px] font-bold uppercase tracking-wider transition-colors"
+                >
+                  {savingEdit ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
+                  Save
+                </button>
+                <button
+                  onClick={() => { setEditing(false); setEditPassword(''); setEditClearPassword(false); }}
+                  className="px-4 py-2.5 rounded-md border border-[#1f1a13] hover:border-[#2d2620] text-[#6a5d4a] hover:text-white text-[11px] uppercase tracking-wider transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Primary actions — Copy + Share. Open + Delete sit below
               as quieter secondary affordances. */}
@@ -323,8 +632,8 @@ function LinkPopup({
             </button>
           </div>
 
-          {/* Secondary row — open / delete. Delete is destructive but
-              quiet; matching pattern from the project share modal. */}
+          {/* Secondary row — open / edit / delete. Edit is the middle
+              affordance; delete is destructive but quiet. */}
           <div className="flex items-center justify-between gap-2 pt-3 border-t border-white/[0.04]">
             <a
               href={`/share/${link.token}`}
@@ -333,8 +642,15 @@ function LinkPopup({
               className="inline-flex items-center gap-1.5 text-[11px] text-[#a08a6a] hover:text-white transition-colors px-2 py-1"
             >
               <ExternalLink size={11} />
-              Open share page
+              Open
             </a>
+            <button
+              onClick={() => setEditing((v) => !v)}
+              className="inline-flex items-center gap-1.5 text-[11px] text-[#a08a6a] hover:text-white transition-colors px-2 py-1"
+            >
+              <Pencil size={11} />
+              {editing ? 'Close edit' : 'Edit'}
+            </button>
             <button
               onClick={() => onDelete(link.token)}
               className="inline-flex items-center gap-1.5 text-[11px] text-[#6a5d4a] hover:text-red-400 transition-colors px-2 py-1"
