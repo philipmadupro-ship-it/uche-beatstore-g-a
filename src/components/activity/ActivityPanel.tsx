@@ -47,10 +47,17 @@ const KIND_META: Record<ActivityItem['kind'], { icon: React.ElementType; color: 
  *    user's intent signal, so we don't need to keep it warm in the
  *    background.
  */
+type ActivityFilter = 'all' | ActivityItem['kind'];
+
 export function ActivityPanel({ open, onClose }: Props) {
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Local-only filter chip. `all` shows everything; the others narrow
+  // by ActivityItem.kind. Counts are derived from the unfiltered list
+  // so the chips advertise scope honestly even when the active chip
+  // is hiding rows.
+  const [filter, setFilter] = useState<ActivityFilter>('all');
 
   useEffect(() => {
     if (!open) return;
@@ -112,6 +119,39 @@ export function ActivityPanel({ open, onClose }: Props) {
           </button>
         </div>
 
+        {/* Filter chips — All + one per kind. Each carries the count
+            of matching rows so the user knows what's hiding behind a
+            chip before clicking. The strip stays mounted even while
+            loading; rendering chips with zero counts is fine. */}
+        <div className="px-3 pt-3 pb-2 border-b border-white/[0.04] overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-1.5">
+            {(['all', 'upload', 'version', 'comment', 'send', 'rating'] as const).map((k) => {
+              const count = k === 'all' ? items.length : items.filter((i) => i.kind === k).length;
+              const active = filter === k;
+              const meta = k === 'all' ? null : KIND_META[k];
+              const Icon = meta?.icon;
+              return (
+                <button
+                  key={k}
+                  onClick={() => setFilter(k)}
+                  className={cn(
+                    'shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider transition-colors border',
+                    active
+                      ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/60'
+                      : 'bg-transparent text-[#6a5d4a] border-white/[0.06] hover:text-[#E8DCC8] hover:border-white/[0.12]',
+                  )}
+                >
+                  {Icon && <Icon size={9} className={active ? 'text-[#E8D8B8]' : meta!.color} />}
+                  <span>{k === 'all' ? 'All' : k}</span>
+                  <span className={cn('font-bold tabular-nums', active ? 'text-[#E8D8B8]' : 'text-[#5a5142]')}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div className="flex-1 overflow-y-auto px-2 py-3">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-[#4a4338]">
@@ -127,13 +167,29 @@ export function ActivityPanel({ open, onClose }: Props) {
               <p className="text-[12px]">Nothing yet in the last 7 days.</p>
               <p className="text-[10px] mt-1.5 text-[#3a3328]">Uploads, comments, sends and ratings will land here.</p>
             </div>
-          ) : (
-            <ul className="space-y-0.5">
-              {items.map((item) => (
-                <ActivityRow key={item.id} item={item} onNavigate={onClose} />
-              ))}
-            </ul>
-          )}
+          ) : (() => {
+            const visible = filter === 'all' ? items : items.filter((i) => i.kind === filter);
+            if (visible.length === 0) {
+              return (
+                <div className="px-3 py-16 text-center text-[#4a4338]">
+                  <p className="text-[12px]">No {filter} activity in the last 7 days.</p>
+                  <button
+                    onClick={() => setFilter('all')}
+                    className="text-[10px] mt-2 text-[#E8D8B8] hover:text-white transition-colors underline underline-offset-2"
+                  >
+                    Show all
+                  </button>
+                </div>
+              );
+            }
+            return (
+              <ul className="space-y-0.5">
+                {visible.map((item) => (
+                  <ActivityRow key={item.id} item={item} onNavigate={onClose} />
+                ))}
+              </ul>
+            );
+          })()}
         </div>
       </aside>
     </>,
