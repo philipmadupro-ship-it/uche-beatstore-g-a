@@ -369,7 +369,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           filtered={filtered}
-          onSelectTrack={(t) => setSelectedTrack(t)}
+          onSelectTrack={(t) => { setSelectedTrack(t); handlePlayTrack(t); }}
           onPlayTrack={(t) => handlePlayTrack(t)}
           onRemoveTrack={(id) => handleRemoveFromProject(id)}
           onDeleteTrack={(id) => handleDeleteTrack(id)}

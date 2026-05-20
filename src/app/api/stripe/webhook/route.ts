@@ -57,9 +57,23 @@ export async function POST(req: NextRequest) {
       case 'checkout.session.completed': {
         const session = event.data.object as any;
         const meta = session.metadata ?? {};
-        const trackIds = (() => {
-          try { return JSON.parse(meta.track_ids ?? '[]'); } catch { return []; }
+
+        // cart_items is a JSON-stringified array of {track_id, license_id}
+        // set by the checkout route. This is the source of truth for what
+        // was purchased.
+        const cartItems = (() => {
+          try { return JSON.parse(meta.cart_items ?? '[]'); } catch { return []; }
         })();
+
+        const trackIds = cartItems.map((i: any) => i.track_id);
+
+        // Map cart license_id → DB-valid license_type.
+        // DB CHECK constraint: license_type IN ('lease', 'exclusive').
+        const rawLicenseId = cartItems.length > 0 ? cartItems[0].license_id : '';
+        const licenseType =
+          rawLicenseId === 'basic-lease' || rawLicenseId === 'lease' ? 'lease'
+          : rawLicenseId === 'exclusive-rights' || rawLicenseId === 'exclusive' ? 'exclusive'
+          : 'lease'; // safe fallback
 
         // UPSERT on stripe_session_id — handles redelivery cleanly.
         const { error } = await admin
@@ -71,7 +85,7 @@ export async function POST(req: NextRequest) {
               buyer_stripe_customer: session.customer || null,
               share_token: meta.share_token || null,
               track_ids: trackIds,
-              license_type: meta.license_type || 'lease',
+              license_type: licenseType,
               amount_usd: (session.amount_total ?? 0) / 100,
               stripe_session_id: session.id,
               stripe_payment_intent: session.payment_intent || null,
@@ -82,6 +96,31 @@ export async function POST(req: NextRequest) {
           );
         if (error) throw error;
 
+        // CRM Integration: Automatically add buyer to the contacts list
+        if (meta.seller_user_id && meta.buyer_email) {
+          const { data: existingContact } = await admin
+            .from('contacts')
+            .select('id')
+            .eq('user_id', meta.seller_user_id)
+            .eq('email', meta.buyer_email)
+            .maybeSingle();
+
+          if (!existingContact) {
+            try {
+              await admin.from('contacts').insert({
+                user_id: meta.seller_user_id,
+                name: session.customer_details?.name || 'Customer',
+                email: meta.buyer_email,
+                role: 'artist',
+                label: 'buyer',
+                notes: 'Added automatically from Stripe Cart Checkout'
+              });
+            } catch (err) {
+              log.warn('Failed to add contact to CRM', { error: errorMessage(err) });
+            }
+          }
+        }
+
         // Receipt email — Stripe sends its own payment receipt; this
         // one is the U2C-branded "thanks for your purchase, here's
         // your access" message with the share link.
@@ -89,15 +128,18 @@ export async function POST(req: NextRequest) {
           try {
             const resend = new Resend(process.env.RESEND_API_KEY);
             const APP_URL = getAppUrl();
-            const shareUrl = `${APP_URL}/projects/share/${meta.share_token}`;
+            const isProjShare = meta.is_project_share !== 'false';
+            const shareUrl = isProjShare
+              ? `${APP_URL}/projects/share/${meta.share_token}`
+              : `${APP_URL}/share/${meta.share_token}`;
             await resend.emails.send({
               from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
               to: meta.buyer_email,
-              subject: `Your ${meta.license_type} license is ready`,
+              subject: `Your licenses are ready`,
               html: `
                 <div style="font-family: sans-serif; background: #0a0907; color: #E8DCC8; padding: 40px; border-radius: 20px;">
                   <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 14px; color: #D4BFA0;">Purchase complete</h1>
-                  <p style="font-size: 15px; line-height: 1.7;">Thanks for your purchase. Your ${meta.license_type} license is now active.</p>
+                  <p style="font-size: 15px; line-height: 1.7;">Thanks for your purchase. Your licenses are now active.</p>
                   <div style="margin-top: 40px;">
                     <a href="${shareUrl}" style="background: #E8DCC8; color: #0a0907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px;">Access tracks</a>
                   </div>
@@ -106,9 +148,6 @@ export async function POST(req: NextRequest) {
               `,
             });
           } catch (err) {
-            // Don't fail the webhook on email failure — the purchase
-            // is recorded, the buyer can always retrieve via the
-            // share link.
             log.warn('receipt email failed', { error: errorMessage(err) });
           }
         }

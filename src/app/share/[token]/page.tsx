@@ -206,7 +206,9 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
     const a = document.createElement('a');
     a.href = proxied;
     a.download = filename;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
   };
   const fmt = (s: number) => {
     if (!isFinite(s) || s < 0) return '0:00';
@@ -532,7 +534,99 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             })}
           </div>
         </div>
+
+        {/* License info section */}
+        {(creator?.license_lease_price_usd != null || creator?.license_exclusive_price_usd != null || creator?.license_notes || creator?.license_agreement) && (
+          <LicenseInfoSection creator={creator} />
+        )}
       </main>
+    </div>
+  );
+}
+
+function LicenseInfoSection({ creator }: { creator: any }) {
+  const [open, setOpen] = useState<'lease' | 'exclusive' | null>(null);
+
+  const tiers = [
+    {
+      key: 'lease' as const,
+      label: 'Lease License',
+      price: creator?.license_lease_price_usd != null ? `$${creator.license_lease_price_usd}` : null,
+      includes: [
+        'WAV + MP3 delivery',
+        'Up to 500K streams',
+        'Up to 1 commercial release',
+        'Must credit producer',
+      ],
+      excludes: ['Exclusive rights', 'Stems included'],
+    },
+    {
+      key: 'exclusive' as const,
+      label: 'Exclusive License',
+      price: creator?.license_exclusive_price_usd != null ? `$${creator.license_exclusive_price_usd}` : null,
+      includes: [
+        'WAV + MP3 + stems delivery',
+        'Unlimited streams',
+        'Unlimited commercial releases',
+        'Full exclusive rights',
+        'Beat removed from store',
+      ],
+      excludes: [],
+    },
+  ].filter(t => t.price != null);
+
+  if (tiers.length === 0 && !creator?.license_notes && !creator?.license_agreement) return null;
+
+  return (
+    <div className="mt-12 border-t border-[#1a160f] pt-8 space-y-4">
+      <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142]">Licensing</p>
+
+      {creator?.license_notes && (
+        <p className="text-[12px] text-[#a08a6a] leading-relaxed">{creator.license_notes}</p>
+      )}
+
+      <div className="space-y-2">
+        {tiers.map(tier => (
+          <div key={tier.key} className="border border-[#1a160f] rounded-lg overflow-hidden">
+            <button
+              onClick={() => setOpen(open === tier.key ? null : tier.key)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#0c0a08] transition-colors text-left"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-[13px] font-medium text-[#E8DCC8]">{tier.label}</span>
+                {tier.price && (
+                  <span className="text-[11px] font-mono text-[#D4BFA0]">{tier.price}</span>
+                )}
+              </div>
+              <span className="text-[10px] text-[#5a5142]">{open === tier.key ? '▲' : '▼'}</span>
+            </button>
+            {open === tier.key && (
+              <div className="px-4 pb-4 space-y-2 border-t border-[#1a160f] pt-3">
+                {tier.includes.map(item => (
+                  <div key={item} className="flex items-center gap-2 text-[11px] text-[#a08a6a]">
+                    <span className="text-green-400 shrink-0">✓</span> {item}
+                  </div>
+                ))}
+                {tier.excludes.map(item => (
+                  <div key={item} className="flex items-center gap-2 text-[11px] text-[#5a5142]">
+                    <span className="text-[#3a3328] shrink-0">✗</span> {item}
+                  </div>
+                ))}
+                {tier.key === 'exclusive' && creator?.license_agreement && (
+                  <details className="mt-3">
+                    <summary className="text-[10px] font-mono text-[#5a5142] cursor-pointer hover:text-[#a08a6a] transition-colors">
+                      View full agreement
+                    </summary>
+                    <pre className="mt-2 text-[10px] text-[#5a5142] whitespace-pre-wrap leading-relaxed font-mono border border-[#1a160f] rounded p-3 bg-[#0a0907] max-h-48 overflow-y-auto">
+                      {creator.license_agreement}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

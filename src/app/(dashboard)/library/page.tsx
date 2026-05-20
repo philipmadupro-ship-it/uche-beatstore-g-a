@@ -548,7 +548,7 @@ export default function LibraryPage() {
                 key={t.id}
                 track={t}
                 index={i + 1}
-                onClickDetails={(track) => setSelectedTrack(track)}
+                onClickDetails={(track) => { setSelectedTrack(track); playTrack(track); }}
                 onPlayClick={() => playTrack(t)}
                 onDelete={(track) => handleDeleteTrack(track)}
                 selectable={selectMode}

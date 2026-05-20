@@ -322,7 +322,9 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     const a = document.createElement('a');
     a.href = proxied;
     a.download = filename;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
   };
 
   // ── editor actions ──────────────────────────────────────────────────

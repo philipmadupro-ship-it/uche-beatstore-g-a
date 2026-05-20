@@ -269,7 +269,9 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
       const a = document.createElement('a');
       a.href = proxied;
       a.download = filename;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
     }
   };
 
