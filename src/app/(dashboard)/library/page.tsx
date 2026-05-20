@@ -169,9 +169,7 @@ export default function LibraryPage() {
   const currentHeroTrack = currentTrack || filtered[0] || null;
   const heroCoverUrl = currentHeroTrack?.cover_url || null;
 
-  // Total library duration shown in the hero. Format follows the
-  // "N hr N min" pattern when over an hour, "N min" otherwise — same
-  // convention as project header stats.
+  // Total library duration shown in the hero.
   const totalDurationLabel = useMemo(() => {
     const secs = tracks.reduce((s, t) => s + (t.duration_seconds || 0), 0);
     if (secs <= 0) return '';
@@ -179,6 +177,41 @@ export default function LibraryPage() {
     const mins = Math.floor((secs % 3600) / 60);
     if (hours > 0) return `${hours} hr ${mins} min`;
     return `${Math.max(1, mins)} min`;
+  }, [tracks]);
+
+  // Aggregate stats computed from the full library (not the filtered
+  // view) so the stat strip reflects the vault state, not search state.
+  const libraryStats = useMemo(() => {
+    const withBpm = tracks.filter((t) => t.bpm != null);
+    const avgBpm = withBpm.length
+      ? Math.round(withBpm.reduce((s, t) => s + (t.bpm ?? 0), 0) / withBpm.length)
+      : null;
+
+    // Most common key (e.g. "C# minor")
+    const keyCount: Record<string, number> = {};
+    for (const t of tracks) {
+      if (t.key) {
+        const k = `${t.key}${t.scale === 'minor' ? 'm' : ''}`;
+        keyCount[k] = (keyCount[k] ?? 0) + 1;
+      }
+    }
+    const topKey = Object.entries(keyCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    const topKeyScale = topKey?.endsWith('m') ? 'minor' : 'major';
+
+    // Most common type
+    const typeCount: Record<string, number> = {};
+    for (const t of tracks) {
+      if (t.type) typeCount[t.type] = (typeCount[t.type] ?? 0) + 1;
+    }
+    const topType = Object.entries(typeCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+
+    // Average rating (only rated tracks)
+    const rated = tracks.filter((t) => t.rating != null && t.rating > 0);
+    const avgRating = rated.length
+      ? (rated.reduce((s, t) => s + (t.rating ?? 0), 0) / rated.length).toFixed(1)
+      : null;
+
+    return { avgBpm, topKey, topKeyScale, topType, avgRating };
   }, [tracks]);
 
   const playAll = () => {
@@ -348,6 +381,35 @@ export default function LibraryPage() {
                 {tracks.length} track{tracks.length !== 1 ? 's' : ''}
                 {totalDurationLabel && <> · {totalDurationLabel}</>}
               </p>
+              {/* Aggregate stat chips — only shown once there's data */}
+              {tracks.length > 0 && (
+                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                  {libraryStats.avgBpm && (
+                    <span className="text-[10px] font-mono text-[#6a5d4a] bg-[#14110d]/70 border border-[#1f1a13] px-2.5 py-1 rounded-lg tabular-nums">
+                      ⌀ {libraryStats.avgBpm} BPM
+                    </span>
+                  )}
+                  {libraryStats.topKey && (
+                    <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg ${
+                      libraryStats.topKeyScale === 'minor'
+                        ? 'text-[#9d95e8] bg-[#1a1833]/50 border border-[#534AB7]/25'
+                        : 'text-[#c8a47a] bg-[#1f1a10]/50 border border-[#3d3020]/30'
+                    }`}>
+                      Top key: {libraryStats.topKey}
+                    </span>
+                  )}
+                  {libraryStats.topType && (
+                    <span className="text-[10px] font-mono text-[#6a5d4a] bg-[#14110d]/70 border border-[#1f1a13] px-2.5 py-1 rounded-lg capitalize">
+                      Mostly {libraryStats.topType}s
+                    </span>
+                  )}
+                  {libraryStats.avgRating && (
+                    <span className="text-[10px] font-mono text-[#c8a84b] bg-[#1f1a0a]/50 border border-[#3a2f1f]/40 px-2.5 py-1 rounded-lg">
+                      ★ {libraryStats.avgRating} avg
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="flex items-center gap-2 mt-5">
                 <button
                   onClick={playAll}

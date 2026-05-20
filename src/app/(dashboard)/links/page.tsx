@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Link2, Copy, Trash2, Check, Loader2, ExternalLink, Lock, Clock,
-  X, Share2, Music, Pencil, Download, Save, Plus, Send,
+  X, Share2, Music, Pencil, Download, Save, Plus,
 } from 'lucide-react';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { Dropdown } from '@/components/ui/Dropdown';
@@ -55,7 +55,9 @@ export default function LinksPage() {
     try {
       const res = await fetch('/api/share');
       const data = await res.json();
-      setLinks(Array.isArray(data) ? data : data.links || []);
+      const raw: ShareLink[] = Array.isArray(data) ? data : data.links || [];
+      // Sort by plays descending — most-engaged links at the top.
+      setLinks(raw.slice().sort((a, b) => (b.plays ?? 0) - (a.plays ?? 0)));
     } catch (err) {
       console.error('Fetch links error:', err);
     } finally {
@@ -152,6 +154,11 @@ export default function LinksPage() {
               <span className="text-[11px] font-mono text-[#E8D8B8] uppercase tracking-wider">
                 {links.length} link{links.length !== 1 ? 's' : ''}
               </span>
+              {links.length > 0 && (
+                <span className="text-[11px] font-mono text-[#6a5d4a] uppercase tracking-wider">
+                  · {links.reduce((s, l) => s + (l.plays ?? 0), 0).toLocaleString()} total plays
+                </span>
+              )}
               <button
                 onClick={() => setShowQuickShare(true)}
                 className="flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black hover:bg-[#E8DCC8] text-[11px] font-medium transition-colors active:scale-[0.98]"
@@ -178,15 +185,18 @@ export default function LinksPage() {
           // is a button that opens the glass popup. Top-left corner
           // holds a checkbox for multi-select.
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {links.map((link) => {
+            {links.map((link, idx) => {
               const expired = isExpired(link);
               const selected = selectedTokens.has(link.token);
+              const maxPlays = Math.max(...links.map((l) => l.plays ?? 0), 1);
+              const playPct = Math.round(((link.plays ?? 0) / maxPlays) * 100);
+              const isTop = idx === 0 && (link.plays ?? 0) > 0;
               return (
                 <div
                   key={link.token}
                   onClick={() => setActive(link)}
                   className={cn(
-                    'group relative text-left rounded-2xl p-4 transition-all cursor-pointer',
+                    'group relative text-left rounded-2xl p-4 transition-all cursor-pointer overflow-hidden',
                     'bg-gradient-to-br from-[#14110d] to-[#0a0907] border',
                     selected
                       ? 'border-[#D4BFA0]/40 from-[#2A2418]/40'
@@ -221,12 +231,19 @@ export default function LinksPage() {
                   {/* Top row — title + kind + open-in-new shortcut. */}
                   <div className="flex items-start justify-between gap-2 mb-3">
                     <div className="min-w-0 flex-1">
-                      {link.title ? (
-                        <h3 className="text-[13px] font-medium text-[#E8DCC8] truncate">{link.title}</h3>
-                      ) : (
-                        <h3 className="text-[13px] font-medium text-[#a08a6a] truncate font-mono">{link.token}</h3>
-                      )}
-                      <p className="text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] mt-1">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        {link.title ? (
+                          <h3 className="text-[13px] font-medium text-[#E8DCC8] truncate">{link.title}</h3>
+                        ) : (
+                          <h3 className="text-[13px] font-medium text-[#a08a6a] truncate font-mono">{link.token}</h3>
+                        )}
+                        {isTop && (
+                          <span className="shrink-0 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#D4BFA0]/15 border border-[#D4BFA0]/30 text-[#D4BFA0]">
+                            Top
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] mt-0.5">
                         {link.kind || 'share'} · {link.track_ids?.length ?? 0} track{(link.track_ids?.length ?? 0) === 1 ? '' : 's'}
                       </p>
                     </div>
@@ -243,9 +260,9 @@ export default function LinksPage() {
                   </div>
 
                   {/* Bottom row — plays + expiry + flag icons. */}
-                  <div className="flex items-center justify-between gap-2 text-[10px] font-mono">
+                  <div className="flex items-center justify-between gap-2 text-[10px] font-mono mb-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-[#a08a6a] tabular-nums">
+                      <span className="text-[#a08a6a] tabular-nums font-bold">
                         {link.plays ?? 0} play{(link.plays ?? 0) === 1 ? '' : 's'}
                       </span>
                       <span className="text-[#3a3328]">·</span>
@@ -264,6 +281,20 @@ export default function LinksPage() {
                       {link.password_hash && <Lock size={10} />}
                       {link.allow_downloads !== false && <span className="text-[9px] uppercase">dl</span>}
                     </div>
+                  </div>
+                  {/* Engagement bar — relative play share vs most-played link */}
+                  <div className="h-1 bg-[#1a160f] rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{
+                        width: `${playPct}%`,
+                        background: playPct > 66
+                          ? '#D4BFA0'
+                          : playPct > 33
+                            ? '#8A7A5C'
+                            : '#3a3328',
+                      }}
+                    />
                   </div>
                 </div>
               );

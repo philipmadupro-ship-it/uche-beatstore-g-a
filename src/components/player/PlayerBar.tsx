@@ -3,11 +3,12 @@
 import { usePlayer } from '@/hooks/usePlayer';
 import {
   Play, Pause, SkipForward, SkipBack, Volume2, VolumeX,
-  ListMusic, Music, Shuffle, Repeat,
+  ListMusic, Music, Shuffle, Repeat, ChevronDown, X,
 } from 'lucide-react';
 import { WavePlayer } from './WavePlayer';
 import { QueueDrawer } from './QueueDrawer';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 
 /**
@@ -45,6 +46,9 @@ export function PlayerBar() {
     }
   };
   const [queueOpen, setQueueOpen] = useState(false);
+  const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   if (!currentTrack) return null;
 
@@ -76,7 +80,11 @@ export function PlayerBar() {
         >
           {/* Cover + name + meta — left cap of the pill. */}
           <div className="flex items-center gap-2 md:gap-3 pl-1 pr-2 md:pr-3 py-1 min-w-0">
-            <div className="w-10 h-10 md:w-11 md:h-11 bg-[#14110d] rounded-full overflow-hidden flex-shrink-0 border border-white/[0.06] relative">
+            <button
+              onClick={() => setNowPlayingOpen(true)}
+              className="w-10 h-10 md:w-11 md:h-11 bg-[#14110d] rounded-full overflow-hidden flex-shrink-0 border border-white/[0.06] relative group/cover"
+              aria-label="Open Now Playing"
+            >
               {currentTrack.cover_url ? (
                 <img loading="lazy" src={currentTrack.cover_url} alt="" className="w-full h-full object-cover" />
               ) : (
@@ -84,7 +92,10 @@ export function PlayerBar() {
                   <Music size={14} />
                 </div>
               )}
-            </div>
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-center justify-center">
+                <ChevronDown size={14} className="text-white rotate-180" />
+              </div>
+            </button>
             <div className="min-w-0 max-w-[120px] md:max-w-[160px]">
               <h4 className="text-[12px] font-medium text-[#E8DCC8] truncate leading-tight">{currentTrack.title}</h4>
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
@@ -235,6 +246,150 @@ export function PlayerBar() {
       </div>
 
       {queueOpen && <QueueDrawer onClose={() => setQueueOpen(false)} />}
+
+      {/* Full-screen Now Playing overlay — portaled to body so it escapes
+          the pill's stacking context and covers everything. */}
+      {mounted && nowPlayingOpen && createPortal(
+        <div className="fixed inset-0 z-[200] flex flex-col animate-in fade-in duration-300">
+          {/* Blurred album-art background */}
+          <div className="absolute inset-0">
+            {currentTrack.cover_url ? (
+              <img
+                src={currentTrack.cover_url}
+                alt=""
+                className="w-full h-full object-cover scale-110 blur-3xl opacity-30"
+              />
+            ) : null}
+            <div className="absolute inset-0 bg-[#0a0907]/85" />
+          </div>
+
+          {/* Content */}
+          <div className="relative z-10 flex flex-col h-full max-w-lg mx-auto w-full px-8 pt-safe">
+            {/* Top bar */}
+            <div className="flex items-center justify-between pt-8 pb-6">
+              <button
+                onClick={() => setNowPlayingOpen(false)}
+                className="w-9 h-9 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-[#a08a6a] hover:text-white transition-colors"
+                aria-label="Close"
+              >
+                <ChevronDown size={18} />
+              </button>
+              <div className="text-center">
+                <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#6a5d4a]">Now Playing</p>
+              </div>
+              <button
+                onClick={() => { setNowPlayingOpen(false); setQueueOpen(true); }}
+                className="w-9 h-9 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-[#a08a6a] hover:text-white transition-colors"
+                aria-label="Queue"
+              >
+                <ListMusic size={15} />
+              </button>
+            </div>
+
+            {/* Large album art */}
+            <div className="flex-1 flex items-center justify-center pb-2">
+              <div className="w-full max-w-[300px] aspect-square rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_32px_80px_rgba(0,0,0,0.6)]">
+                {currentTrack.cover_url ? (
+                  <img src={currentTrack.cover_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center">
+                    <Music size={48} className="text-[#3a3328]" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Track info */}
+            <div className="pb-6">
+              <div className="flex items-start justify-between gap-3 mb-1">
+                <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight truncate flex-1">
+                  {currentTrack.title}
+                </h2>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-mono text-[#6a5d4a] uppercase tracking-widest">
+                  {currentTrack.type}
+                </span>
+                {currentTrack.bpm && (
+                  <span className="text-[10px] font-mono text-[#6a5d4a] tabular-nums">· {currentTrack.bpm} BPM</span>
+                )}
+                {currentTrack.key && (
+                  <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                    (currentTrack as any).scale === 'minor'
+                      ? 'text-[#9d95e8] bg-[#1a1833]/70 border border-[#534AB7]/30'
+                      : 'text-[#c8a47a] bg-[#1f1a10]/70 border border-[#3d3020]/40'
+                  }`}>
+                    {currentTrack.key}{(currentTrack as any).scale === 'minor' ? 'm' : ''}
+                  </span>
+                )}
+              </div>
+
+              {/* Waveform */}
+              <div className="mt-5 mb-2">
+                {currentTrack.audio_url ? (
+                  <WavePlayer
+                    url={currentTrack.audio_url}
+                    trackId={currentTrack.id}
+                    peaksUrl={currentTrack.peaks_url ?? null}
+                    hideControls
+                    onFinish={next}
+                    height={48}
+                  />
+                ) : (
+                  <div className="w-full h-12 bg-[#1a160f] rounded-lg" />
+                )}
+              </div>
+              <div className="flex justify-between text-[10px] font-mono text-[#5a5142] tabular-nums">
+                <span>{formatTime(currentSeconds)}</span>
+                <span>{formatTime(totalSeconds)}</span>
+              </div>
+
+              {/* Transport */}
+              <div className="flex items-center justify-center gap-6 mt-6 mb-4">
+                <button
+                  onClick={toggleShuffle}
+                  className={cn('w-10 h-10 flex items-center justify-center rounded-full transition-colors', shuffle ? 'text-[#E8D8B8]' : 'text-[#6a5d4a] hover:text-white')}
+                >
+                  <Shuffle size={18} />
+                </button>
+                <button onClick={prev} className="w-10 h-10 flex items-center justify-center text-[#a08a6a] hover:text-white transition-colors">
+                  <SkipBack size={22} fill="currentColor" />
+                </button>
+                <button
+                  onClick={togglePlay}
+                  className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 active:scale-95 transition-transform shadow-[0_4px_24px_rgba(255,255,255,0.2)]"
+                >
+                  {isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" className="ml-1" />}
+                </button>
+                <button onClick={next} className="w-10 h-10 flex items-center justify-center text-[#a08a6a] hover:text-white transition-colors">
+                  <SkipForward size={22} fill="currentColor" />
+                </button>
+                <button
+                  onClick={cycleRepeat}
+                  className={cn('relative w-10 h-10 flex items-center justify-center rounded-full transition-colors', repeat !== 'off' ? 'text-[#E8D8B8]' : 'text-[#6a5d4a] hover:text-white')}
+                >
+                  <Repeat size={18} />
+                  {repeat === 'one' && <span className="absolute -top-0.5 -right-0.5 text-[7px] font-bold leading-none">1</span>}
+                </button>
+              </div>
+
+              {/* Volume */}
+              <div className="flex items-center gap-3 px-2">
+                <button onClick={toggleMute} className="text-[#6a5d4a] hover:text-white transition-colors">
+                  {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+                </button>
+                <input
+                  type="range" min="0" max="1" step="0.01" value={volume}
+                  onChange={(e) => setVolume(parseFloat(e.target.value))}
+                  className="flex-1 h-1 cursor-pointer accent-white"
+                />
+                <Volume2 size={15} className="text-[#6a5d4a] opacity-80" />
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </>
   );
 }

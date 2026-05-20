@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Play, Pause, Music, Sliders, Disc, Plus, Edit3, Save } from 'lucide-react';
+import { Edit3 } from 'lucide-react';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
 
@@ -94,12 +94,24 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
                 Lyrics &amp; Topline Sheet
               </h2>
             </div>
-            {currentTrack?.bpm || currentTrack?.key ? (
-              <div className="flex items-center gap-3 bg-[#14110d] border border-[#1f1a13] px-3 py-1.5 rounded-lg text-[10px] font-mono uppercase text-[#D4BFA0]">
-                {currentTrack.key && <span>Key: {currentTrack.key} {currentTrack.scale || ''}</span>}
-                {currentTrack.bpm && <span>BPM: {currentTrack.bpm}</span>}
+            {(currentTrack?.bpm || currentTrack?.key) && (
+              <div className="flex items-center gap-2">
+                {currentTrack.key && (
+                  <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg ${
+                    currentTrack.scale === 'minor'
+                      ? 'text-[#9d95e8] bg-[#1a1833]/60 border border-[#534AB7]/30'
+                      : 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/40'
+                  }`}>
+                    {currentTrack.key}{currentTrack.scale === 'minor' ? 'm' : ''}
+                  </span>
+                )}
+                {currentTrack.bpm && (
+                  <span className="text-[10px] font-mono text-[#6a5d4a] bg-[#14110d] border border-[#1f1a13] px-2.5 py-1 rounded-lg tabular-nums">
+                    {currentTrack.bpm} BPM
+                  </span>
+                )}
               </div>
-            ) : null}
+            )}
           </div>
 
           {currentTrack ? (
@@ -116,36 +128,58 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
             no need to duplicate the cover art here. */}
         <div className="flex flex-col gap-8">
 
-          {/* Interactive Writers Notepad */}
-          <div className="bg-[#14110d]/50 border border-[#1f1a13] rounded-2xl p-6 shadow-xl flex-1 flex flex-col">
-            <div className="flex items-center justify-between mb-4">
+          {/* Interactive Writers Notepad — lyric sheet style */}
+          <div className="bg-[#0e0c09] border border-[#1f1a13] rounded-2xl shadow-xl flex-1 flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#1f1a13] bg-[#14110d]">
               <div className="flex items-center gap-2 text-[#a08a6a]">
-                <Edit3 size={14} />
-                <span className="text-[10px] font-mono uppercase tracking-[0.2em]">Session Notepad</span>
+                <Edit3 size={12} />
+                <span className="text-[9px] font-mono uppercase tracking-[0.25em]">Session Notepad</span>
               </div>
-              <button 
-                onClick={() => setEditingNotepad(!editingNotepad)}
-                className="text-[9px] font-mono uppercase text-[#D4BFA0] hover:text-[#8A7A5C] transition-colors"
-              >
-                {editingNotepad ? 'Save Sketch' : 'Edit Text'}
-              </button>
+              <div className="flex items-center gap-3">
+                {sessionNotes && (
+                  <span className="text-[9px] font-mono text-[#4a4338] tabular-nums">
+                    {sessionNotes.split('\n').length} lines · {sessionNotes.replace(/\s/g, '').length} chars
+                  </span>
+                )}
+                <button
+                  onClick={() => setEditingNotepad(!editingNotepad)}
+                  className="text-[9px] font-mono uppercase tracking-wider text-[#D4BFA0] hover:text-[#8A7A5C] transition-colors"
+                >
+                  {editingNotepad ? 'Done' : 'Edit'}
+                </button>
+              </div>
             </div>
 
-            {editingNotepad ? (
-              <textarea
-                value={sessionNotes}
-                onChange={(e) => setSessionNotes(e.target.value)}
-                placeholder="Sketch out your lyrics, bars, hooks, or notes here while the track plays..."
-                className="w-full flex-1 min-h-[220px] bg-[#0a0907] border border-[#1f1a13] rounded-xl px-4 py-3 text-xs text-[#E8DCC8] placeholder:text-[#4a4338] focus:outline-none focus:border-[#D4BFA0] resize-none font-sans leading-relaxed"
-              />
-            ) : (
-              <div 
-                onClick={() => setEditingNotepad(true)}
-                className="w-full flex-1 min-h-[220px] bg-[#0a0907]/30 border border-[#1f1a13]/60 rounded-xl px-4 py-3 text-xs text-[#6a5d4a] hover:border-[#1f1a13] cursor-pointer whitespace-pre-wrap leading-relaxed select-text"
-              >
-                {sessionNotes || "Write notes or lyrics here during your session... (Click to edit)"}
+            <div className="flex flex-1 min-h-[240px] font-mono text-xs">
+              {/* Line numbers */}
+              <div className="shrink-0 w-8 bg-[#0a0907] border-r border-[#1f1a13] pt-3 pb-3 text-right pr-2 select-none">
+                {(sessionNotes || ' ').split('\n').map((_, i) => (
+                  <div key={i} className="leading-6 text-[9px] text-[#2d2620]">{i + 1}</div>
+                ))}
               </div>
-            )}
+              {/* Content */}
+              {editingNotepad ? (
+                <textarea
+                  value={sessionNotes}
+                  onChange={(e) => setSessionNotes(e.target.value)}
+                  autoFocus
+                  placeholder={"Hook:\n\nVerse 1:\n\nBridge:"}
+                  className="flex-1 bg-[#0a0907] px-3 pt-3 pb-3 text-[12px] text-[#E8DCC8] placeholder:text-[#2d2620] focus:outline-none resize-none leading-6 tracking-wide"
+                  style={{ fontFamily: 'monospace' }}
+                />
+              ) : (
+                <div
+                  onClick={() => setEditingNotepad(true)}
+                  className="flex-1 px-3 pt-3 pb-3 text-[12px] leading-6 cursor-pointer whitespace-pre-wrap select-text tracking-wide"
+                  style={{ fontFamily: 'monospace' }}
+                >
+                  {sessionNotes
+                    ? <span className="text-[#E8DCC8]">{sessionNotes}</span>
+                    : <span className="text-[#2d2620]">Click to write bars, hooks, or session notes…</span>
+                  }
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Projects Track List (if multiple tracks) */}

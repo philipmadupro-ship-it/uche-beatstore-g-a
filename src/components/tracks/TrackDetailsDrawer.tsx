@@ -351,72 +351,145 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
             top of the drawer reads as a lifted surface, not just another
             dark block stacked on dark. The accent dot in the corner is
             a faint #D4BFA0 wash bleeding from top-left. */}
-        <div className="relative p-8 border-b border-white/[0.04] bg-gradient-to-b from-[#161520]/80 via-[#0e0e10]/80 to-[#0a0907]/90 backdrop-blur-xl overflow-hidden">
+        <div className="relative p-6 border-b border-white/[0.04] bg-gradient-to-b from-[#161520]/80 via-[#0e0e10]/80 to-[#0a0907]/90 backdrop-blur-xl overflow-hidden">
           <div
             className="absolute -top-12 -left-12 w-40 h-40 rounded-full pointer-events-none opacity-30"
             style={{ background: 'radial-gradient(circle, #D4BFA0 0%, transparent 70%)' }}
           />
-          {/* Inner wrap pinned above the gradient so content reads cleanly. */}
-          <div className="relative z-10 flex items-center justify-between w-full">
-          <div className="min-w-0">
-             <div className="flex items-center gap-2 mb-2">
-                <button 
+          <div className="relative z-10 flex items-start justify-between w-full gap-3">
+            <div className="min-w-0 flex-1">
+              {/* Tab switcher */}
+              <div className="flex items-center gap-2 mb-3">
+                <button
                   onClick={() => setView('details')}
-                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-all ${view === 'details' ? 'bg-[#D4BFA0] text-white shadow-lg shadow-[#D4BFA0]/20' : 'bg-[#1a160f] text-[#4a4338] hover:text-[#a08a6a]'}`}
+                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-all ${view === 'details' ? 'bg-[#D4BFA0] text-black shadow-lg shadow-[#D4BFA0]/20' : 'bg-[#1a160f] text-[#4a4338] hover:text-[#a08a6a]'}`}
                 >
-                  Project
+                  Details
                 </button>
-                <button 
+                <button
                   onClick={() => setView('insights')}
-                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-all ${view === 'insights' ? 'bg-[#D4BFA0] text-white shadow-lg shadow-[#D4BFA0]/20' : 'bg-[#1a160f] text-[#4a4338] hover:text-[#a08a6a]'}`}
+                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-all ${view === 'insights' ? 'bg-[#D4BFA0] text-black shadow-lg shadow-[#D4BFA0]/20' : 'bg-[#1a160f] text-[#4a4338] hover:text-[#a08a6a]'}`}
                 >
                   Insights
                 </button>
-             </div>
-            <h2 className="text-2xl font-black text-white uppercase tracking-tighter truncate leading-none">{track.title}</h2>
+              </div>
+              {/* Title */}
+              <h2 className="text-xl font-black text-white uppercase tracking-tighter truncate leading-none mb-2">{track.title}</h2>
+              {/* Key / BPM / type meta strip */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[9px] font-mono uppercase tracking-widest text-[#6a5d4a] bg-[#1a160f] border border-[#2d2620] px-2 py-0.5 rounded">
+                  {track.type}
+                </span>
+                {track.bpm && (
+                  <span className="text-[9px] font-mono text-[#a08a6a] bg-[#1a160f] border border-[#2d2620] px-2 py-0.5 rounded tabular-nums">
+                    {track.bpm} BPM
+                  </span>
+                )}
+                {track.key && (
+                  <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded ${
+                    track.scale === 'minor'
+                      ? 'text-[#9d95e8] bg-[#1a1833]/60 border border-[#534AB7]/30'
+                      : 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/40'
+                  }`}>
+                    {track.key}{track.scale === 'minor' ? 'm' : ''}
+                  </span>
+                )}
+                {track.duration_seconds != null && track.duration_seconds > 0 && (
+                  <span className="text-[9px] font-mono text-[#4a4338] ml-auto tabular-nums">
+                    {Math.floor(track.duration_seconds / 60)}:{String(Math.floor(track.duration_seconds % 60)).padStart(2, '0')}
+                  </span>
+                )}
+              </div>
+            </div>
+            <button onClick={onClose} className="text-[#4a4338] hover:text-[#E8DCC8] transition-colors p-2 bg-white/[0.04] rounded-xl border border-white/[0.06] hover:border-white/20 backdrop-blur-sm shrink-0 mt-1">
+              <X size={18} />
+            </button>
           </div>
-          <button onClick={onClose} className="text-[#4a4338] hover:text-[#E8DCC8] transition-colors p-2 bg-white/[0.04] rounded-xl border border-white/[0.06] hover:border-white/20 backdrop-blur-sm">
-            <X size={20} />
-          </button>
-          </div> {/* end inner wrap */}
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {view === 'insights' ? (
-            <div className="p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div>
-                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#4a4338] mb-6">Audio Intelligence</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { label: 'BPM', value: track.bpm ?? '--' },
-                    { label: 'Key', value: track.key ? `${track.key} ${track.scale || ''}`.trim() : '--' },
-                    { label: 'Energy', value: track.energy != null ? `${Math.round(track.energy * 100)}%` : '--' },
-                    { label: 'Groove', value: track.danceability != null ? `${Math.round(track.danceability * 100)}%` : '--' },
-                    { label: 'Valence', value: track.valence != null ? `${Math.round(track.valence * 100)}%` : '--' },
-                    { label: 'Loudness', value: track.loudness != null ? `${track.loudness} LUFS` : '--' },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="bg-[#0a0907] border border-[#1f1a13] rounded-2xl p-5">
-                      <span className="text-[9px] font-black text-[#4a4338] uppercase tracking-widest block mb-2">{label}</span>
-                      <p className="text-2xl font-black text-white leading-none font-mono">{value}</p>
-                    </div>
-                  ))}
+            <div className="p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {/* Top stat cards — BPM + Key large */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-[#0a0907] border border-[#1f1a13] rounded-2xl p-4">
+                  <span className="text-[9px] font-black text-[#4a4338] uppercase tracking-widest block mb-1">BPM</span>
+                  <p className="text-3xl font-black text-white leading-none font-mono">{track.bpm ?? '—'}</p>
+                </div>
+                <div className={`rounded-2xl p-4 ${
+                  track.scale === 'minor'
+                    ? 'bg-[#1a1833]/40 border border-[#534AB7]/20'
+                    : 'bg-[#1f1a10]/40 border border-[#3d3020]/30'
+                }`}>
+                  <span className="text-[9px] font-black text-[#4a4338] uppercase tracking-widest block mb-1">Key</span>
+                  <p className={`text-3xl font-black leading-none font-mono ${
+                    track.scale === 'minor' ? 'text-[#9d95e8]' : 'text-[#c8a47a]'
+                  }`}>
+                    {track.key ? `${track.key}${track.scale === 'minor' ? 'm' : ''}` : '—'}
+                  </p>
+                  {track.scale && (
+                    <span className={`text-[8px] font-mono uppercase tracking-wider mt-1 block ${
+                      track.scale === 'minor' ? 'text-[#534AB7]' : 'text-[#6a5a3a]'
+                    }`}>{track.scale}</span>
+                  )}
                 </div>
               </div>
-              <div>
-                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-[#4a4338] mb-4">File Info</h3>
-                <div className="space-y-3 text-[11px] font-mono">
-                  {[
-                    { label: 'Type', value: track.type?.toUpperCase() ?? '--' },
-                    { label: 'Duration', value: track.duration_seconds ? `${Math.floor(track.duration_seconds / 60)}:${String(Math.floor(track.duration_seconds % 60)).padStart(2, '0')}` : '--' },
-                    { label: 'Rating', value: track.rating ? `${track.rating} / 5` : 'Unrated' },
-                    { label: 'Added', value: new Date(track.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex justify-between text-[#a08a6a]">
-                      <span className="text-[#4a4338] uppercase tracking-widest text-[9px] font-black">{label}</span>
-                      <span className="text-[#E8DCC8]">{value}</span>
-                    </div>
-                  ))}
+
+              {/* Percentage meters */}
+              {(() => {
+                const bars = [
+                  { label: 'Energy', value: track.energy, color: '#e87a5a' },
+                  { label: 'Groove', value: track.danceability, color: '#D4BFA0' },
+                  { label: 'Mood', value: track.valence, color: '#9d95e8' },
+                  { label: 'Acoustic', value: track.acousticness, color: '#8ecf9f' },
+                ].filter((b) => b.value != null);
+                if (!bars.length) return null;
+                return (
+                  <div className="bg-[#0a0907] border border-[#1f1a13] rounded-2xl p-4 space-y-3">
+                    <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#4a4338] mb-3">Vibe Analysis</h3>
+                    {bars.map(({ label, value, color }) => {
+                      const pct = Math.round((value as number) * 100);
+                      return (
+                        <div key={label}>
+                          <div className="flex justify-between items-baseline mb-1">
+                            <span className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a]">{label}</span>
+                            <span className="text-[10px] font-mono font-bold tabular-nums" style={{ color }}>{pct}%</span>
+                          </div>
+                          <div className="h-1.5 bg-[#1a160f] rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-700"
+                              style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.85 }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* Loudness */}
+              {track.loudness != null && (
+                <div className="bg-[#0a0907] border border-[#1f1a13] rounded-2xl p-4 flex items-center justify-between">
+                  <span className="text-[9px] font-black text-[#4a4338] uppercase tracking-widest">Loudness</span>
+                  <span className="text-[13px] font-mono font-bold text-[#E8DCC8] tabular-nums">{track.loudness} LUFS</span>
                 </div>
+              )}
+
+              {/* File info */}
+              <div className="bg-[#0a0907] border border-[#1f1a13] rounded-2xl p-4 space-y-2.5">
+                <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#4a4338] mb-3">File Info</h3>
+                {[
+                  { label: 'Type', value: track.type?.toUpperCase() ?? '—' },
+                  { label: 'Duration', value: track.duration_seconds ? `${Math.floor(track.duration_seconds / 60)}:${String(Math.floor(track.duration_seconds % 60)).padStart(2, '0')}` : '—' },
+                  { label: 'Rating', value: track.rating ? `${track.rating} / 5 ★` : 'Unrated' },
+                  { label: 'Added', value: new Date(track.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex justify-between items-center">
+                    <span className="text-[9px] font-black text-[#4a4338] uppercase tracking-widest">{label}</span>
+                    <span className="text-[11px] font-mono text-[#E8DCC8]">{value}</span>
+                  </div>
+                ))}
               </div>
             </div>
           ) : (
