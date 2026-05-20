@@ -6,7 +6,7 @@
  */
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3 } from 'lucide-react';
+import { Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { DropZone } from '@/components/upload/DropZone';
@@ -18,6 +18,9 @@ import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { listCached } from '@/lib/offline/audio-cache';
+import { TrackGridCard } from '@/components/tracks/TrackGridCard';
+import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount } from '@/components/library/FilterBar';
+import { ContentShareModal } from '@/components/share/ContentShareModal';
 
 // Sort modes — added so the library is browsable beyond "newest first."
 // `recent` reflects upload time; `recently_played` would need a history
@@ -85,6 +88,19 @@ export default function LibraryPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
+  const [shareTarget, setShareTarget] = useState<Track | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<LibraryFilters>(() => ({
+    ...DEFAULT_FILTERS,
+    keys: new Set<string>(),
+    statuses: new Set<string>(),
+  }));
+  useEffect(() => {
+    const saved = localStorage.getItem('library-view') as 'list' | 'grid' | null;
+    if (saved === 'list' || saved === 'grid') setViewMode(saved);
+  }, []);
+  useEffect(() => { localStorage.setItem('library-view', viewMode); }, [viewMode]);
   const { setTrack, setQueue, currentTrack } = usePlayer();
 
   const fetchTracks = async () => {
@@ -127,6 +143,13 @@ export default function LibraryPage() {
     const matched = tracks.filter((t) => {
       if (offlineOnly && !cachedIds.has(t.id)) return false;
       if (typeFilter !== 'all' && t.type !== typeFilter) return false;
+      if (filters.bpmMin != null && (t.bpm == null || t.bpm < filters.bpmMin)) return false;
+      if (filters.bpmMax != null && (t.bpm == null || t.bpm > filters.bpmMax)) return false;
+      if (filters.keys.size > 0 && (!t.key || !filters.keys.has(t.key))) return false;
+      if (filters.scale === 'major' && t.scale === 'minor') return false;
+      if (filters.scale === 'minor' && t.scale !== 'minor') return false;
+      if (filters.statuses.size > 0 && (!t.status || !filters.statuses.has(t.status))) return false;
+      if (filters.rating != null && (t.rating == null || t.rating < filters.rating)) return false;
       if (!q) return true;
       // Match against title, key (e.g. "C minor", "Am"), and BPM
       // string (e.g. "140"). Tags aren't on the Track row by default,
@@ -164,7 +187,7 @@ export default function LibraryPage() {
         sorted.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     }
     return sorted;
-  }, [tracks, search, typeFilter, offlineOnly, cachedIds, sortMode]);
+  }, [tracks, search, typeFilter, offlineOnly, cachedIds, sortMode, filters]);
 
   const currentHeroTrack = currentTrack || filtered[0] || null;
   const heroCoverUrl = currentHeroTrack?.cover_url || null;
@@ -516,7 +539,23 @@ export default function LibraryPage() {
               className="w-full bg-white/[0.03] border border-white/[0.06] rounded-full pl-8 pr-3 py-2 text-[12px] text-[#E8DCC8] placeholder-[#4a4338] focus:outline-none focus:border-white/[0.12] transition-colors"
             />
           </div>
-          <div className="ml-auto">
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={() => setShowFilters((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-medium transition-colors ${
+                showFilters || hasActiveFilters(filters)
+                  ? 'bg-[#2A2418] border border-[#8A7A5C]/40 text-[#E8D8B8]'
+                  : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-[#E8DCC8] hover:bg-white/[0.08]'
+              }`}
+            >
+              <SlidersHorizontal size={11} />
+              Filters
+              {hasActiveFilters(filters) && (
+                <span className="w-4 h-4 rounded-full bg-[#D4BFA0] text-black text-[8px] font-bold flex items-center justify-center leading-none">
+                  {activeFilterCount(filters)}
+                </span>
+              )}
+            </button>
             <Dropdown
               value={sortMode}
               onChange={(v) => setSortMode(v as SortMode)}
@@ -524,8 +563,32 @@ export default function LibraryPage() {
               label="Sort"
               aria-label="Sort tracks"
             />
+            <div className="flex items-center bg-white/[0.04] border border-white/[0.06] rounded-full p-0.5">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded-full transition-colors ${
+                  viewMode === 'list' ? 'bg-white text-black' : 'text-[#6a5d4a] hover:text-[#a08a6a]'
+                }`}
+                title="List view"
+              >
+                <LayoutList size={13} />
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-full transition-colors ${
+                  viewMode === 'grid' ? 'bg-white text-black' : 'text-[#6a5d4a] hover:text-[#a08a6a]'
+                }`}
+                title="Grid view"
+              >
+                <LayoutGrid size={13} />
+              </button>
+            </div>
           </div>
         </div>
+
+        {showFilters && (
+          <FilterBar filters={filters} onChange={setFilters} />
+        )}
 
         {/* Upload */}
         <div className="mb-8">
@@ -564,7 +627,7 @@ export default function LibraryPage() {
                 : 'Try a different search or filter'}
             </p>
           </div>
-        ) : (
+        ) : viewMode === 'list' ? (
           <div className="border-t border-[#161310] border-b mb-32">
             {/* Column header — grid must match TrackCard's 9-col md template */}
             <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_50px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[9px] font-mono uppercase tracking-wider">
@@ -637,6 +700,27 @@ export default function LibraryPage() {
                 onClickDetails={(track) => { setSelectedTrack(track); playTrack(track); }}
                 onPlayClick={() => playTrack(t)}
                 onDelete={(track) => handleDeleteTrack(track)}
+                onShare={(track) => setShareTarget(track)}
+                selectable={selectMode}
+                selected={selectedIds.has(t.id)}
+                onSelectChange={(track, sel) => setSelectedIds((prev) => {
+                  const next = new Set(prev);
+                  if (sel) next.add(track.id); else next.delete(track.id);
+                  return next;
+                })}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-32">
+            {filtered.map((t) => (
+              <TrackGridCard
+                key={t.id}
+                track={t}
+                onClickDetails={(track) => { setSelectedTrack(track); playTrack(track); }}
+                onPlayClick={() => playTrack(t)}
+                onDelete={(track) => handleDeleteTrack(track)}
+                onShare={(track) => setShareTarget(track)}
                 selectable={selectMode}
                 selected={selectedIds.has(t.id)}
                 onSelectChange={(track, sel) => setSelectedIds((prev) => {
@@ -655,6 +739,16 @@ export default function LibraryPage() {
           track={selectedTrack}
           onClose={() => setSelectedTrack(null)}
           onUpdate={fetchTracks}
+        />
+      )}
+
+      {shareTarget && (
+        <ContentShareModal
+          contentType="track"
+          contentId={shareTarget.id}
+          contentTitle={shareTarget.title}
+          coverUrl={shareTarget.cover_url}
+          onClose={() => setShareTarget(null)}
         />
       )}
 

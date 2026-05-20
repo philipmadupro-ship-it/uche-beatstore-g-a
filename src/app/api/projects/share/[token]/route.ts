@@ -70,31 +70,65 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       }
     }
 
-    // Hydrate project + tracks via the junction table. We also pull
-    // the project's `user_id` so we can find the owner's creator
-    // profile for the client-variant page (bio / hero / license card /
-    // social links). The owner column is private to the project; only
-    // the derived profile fields end up in the response.
+    const CREATOR_FIELDS = 'display_name, bio, hero_image_url, credits, license_lease_price_usd, license_exclusive_price_usd, license_notes, instagram_handle, twitter_handle, spotify_url, soundcloud_url, website_url, contact_email';
+    const TRACK_FIELDS = 'id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics, description, lease_price_usd, exclusive_price_usd';
+
+    async function fetchCreator(userId: string) {
+      const { data } = await admin.from('creator_profiles').select(CREATOR_FIELDS).eq('user_id', userId).maybeSingle();
+      return data ?? null;
+    }
+
+    // Fire-and-forget play counter.
+    admin.from('project_shares').update({ plays: (share.plays ?? 0) + 1 }).eq('id', share.id).then(() => {});
+
+    const contentType: string = (share as any).content_type ?? 'project';
+
+    // ── Playlist share ──────────────────────────────────────────────────
+    if (contentType === 'playlist') {
+      const playlistId = (share as any).playlist_id;
+      const [{ data: playlist }, { data: junction }] = await Promise.all([
+        admin.from('playlists').select('id, name, cover_url, user_id').eq('id', playlistId).maybeSingle(),
+        admin.from('playlist_tracks').select('track_id, position').eq('playlist_id', playlistId).order('position', { ascending: true }),
+      ]);
+      const trackIds = (junction ?? []).map((j: any) => j.track_id);
+      let tracks: any[] = [];
+      let stems: any[] = [];
+      if (trackIds.length) {
+        const [tracksRes, stemsRes] = await Promise.all([
+          admin.from('tracks').select(TRACK_FIELDS).in('id', trackIds),
+          admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').in('track_id', trackIds),
+        ]);
+        stems = stemsRes.data ?? [];
+        const byId = new Map((tracksRes.data ?? []).map((t: any) => [t.id, t]));
+        tracks = (junction ?? []).map((j: any) => byId.get(j.track_id)).filter(Boolean);
+      }
+      const creator = playlist?.user_id ? await fetchCreator(playlist.user_id) : null;
+      const { user_id: _u, ...playlistPublic } = (playlist ?? {}) as any;
+      return NextResponse.json({ share: redactShare(share), playlist: playlistPublic, project: null, tracks, creator, stems });
+    }
+
+    // ── Single-track share ──────────────────────────────────────────────
+    if (contentType === 'track') {
+      const trackId = (share as any).track_id;
+      const { data: trackRow } = await admin.from('tracks').select(`${TRACK_FIELDS}, user_id`).eq('id', trackId).maybeSingle();
+      const tracks = trackRow ? [(() => { const { user_id: _u, ...rest } = trackRow as any; return rest; })()] : [];
+      const stems = trackRow
+        ? (await admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').eq('track_id', trackId)).data ?? []
+        : [];
+      const creator = (trackRow as any)?.user_id ? await fetchCreator((trackRow as any).user_id) : null;
+      const trackPublic = trackRow ? { id: trackRow.id, title: trackRow.title, cover_url: (trackRow as any).cover_url } : null;
+      return NextResponse.json({ share: redactShare(share), track: trackPublic, project: null, playlist: null, tracks, creator, stems });
+    }
+
+    // ── Project share (default) ─────────────────────────────────────────
     const { data: project } = await admin
       .from('projects')
       .select('id, name, cover_url, description, bpm_target, key_target, status, user_id')
       .eq('id', share.project_id)
       .maybeSingle();
 
-    // Creator profile — best-effort, optional. The client variant
-    // degrades gracefully when the row doesn't exist yet (no settings
-    // page form filled out). Service-role read because creator_profiles
-    // RLS only allows the owner themselves; recipients hold no auth
-    // session of their own, only a valid share token.
     let creator: Record<string, unknown> | null = null;
-    if (project?.user_id) {
-      const { data: profile } = await admin
-        .from('creator_profiles')
-        .select('display_name, bio, hero_image_url, credits, license_lease_price_usd, license_exclusive_price_usd, license_notes, instagram_handle, twitter_handle, spotify_url, soundcloud_url, website_url, contact_email')
-        .eq('user_id', project.user_id)
-        .maybeSingle();
-      creator = profile ?? null;
-    }
+    if (project?.user_id) creator = await fetchCreator(project.user_id);
 
     const { data: junction } = await admin
       .from('project_tracks')
@@ -107,46 +141,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     let stems: any[] = [];
     if (trackIds.length) {
       const [tracksRes, stemsRes] = await Promise.all([
-        admin
-          .from('tracks')
-          .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics, description, lease_price_usd, exclusive_price_usd')
-          .in('id', trackIds),
-        admin
-          .from('stems')
-          .select('track_id, status, vocals_url, drums_url, bass_url, other_url')
-          .in('track_id', trackIds)
+        admin.from('tracks').select(TRACK_FIELDS).in('id', trackIds),
+        admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').in('track_id', trackIds),
       ]);
-      const trackRows = tracksRes.data ?? [];
       stems = stemsRes.data ?? [];
-      
-      // Re-order by junction position so the share respects the project sequence.
-      const byId = new Map((trackRows ?? []).map((t: any) => [t.id, t]));
-      tracks = (junction ?? [])
-        .map((j: any) => byId.get(j.track_id))
-        .filter(Boolean);
+      const byId = new Map((tracksRes.data ?? []).map((t: any) => [t.id, t]));
+      tracks = (junction ?? []).map((j: any) => byId.get(j.track_id)).filter(Boolean);
     }
 
-    // Best-effort play counter — fire-and-forget so a counter write never
-    // blocks the share response.
-    admin
-      .from('project_shares')
-      .update({ plays: (share.plays ?? 0) + 1 })
-      .eq('id', share.id)
-      .then(() => {});
-
-    // Strip the project's user_id before returning — recipients should
-    // never see the owner's auth-user uuid. Profile data is what they
-    // get, not identity.
-    const projectPublic = project
-      ? (() => {
-          const { user_id: _ownerUserId, ...rest } = project;
-          return rest;
-        })()
-      : null;
+    const projectPublic = project ? (() => { const { user_id: _u, ...rest } = project; return rest; })() : null;
 
     return NextResponse.json({
       share: redactShare(share),
       project: projectPublic,
+      playlist: null,
+      track: null,
       tracks,
       creator,
       stems,

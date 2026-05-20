@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Track } from '@/lib/types';
-import { Play, MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2 } from 'lucide-react';
+import { Play, MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2, Share2 } from 'lucide-react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { setTrackDragData } from '@/lib/dnd';
@@ -19,6 +19,8 @@ interface TrackCardProps {
   removeLabel?: string;
   /** When provided, exposes "Delete from library" — destroys the track. */
   onDelete?: (track: Track) => void;
+  /** When provided, exposes "Share track" in the context menu. */
+  onShare?: (track: Track) => void;
   /** When true the row renders a checkbox in the index column and the
    *  row's main click toggles selection instead of opening the drawer.
    *  Used by the library list when the user enters "Select" mode for
@@ -36,6 +38,7 @@ export function TrackCard({
   onRemoveFromContext,
   removeLabel = 'Remove from project',
   onDelete,
+  onShare,
   selectable = false,
   selected = false,
   onSelectChange,
@@ -263,6 +266,14 @@ export function TrackCard({
                 className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#E8DCC8] hover:bg-[#16130e]"
               >
                 <Info size={12} className="text-[#D4BFA0]" /> View details
+              </button>
+            )}
+            {onShare && (
+              <button
+                onClick={() => { setMenuOpen(false); onShare(track); }}
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#E8DCC8] hover:bg-[#16130e]"
+              >
+                <Share2 size={12} className="text-[#D4BFA0]" /> Share track
               </button>
             )}
             

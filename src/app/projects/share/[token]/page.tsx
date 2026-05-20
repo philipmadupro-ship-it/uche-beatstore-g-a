@@ -74,6 +74,18 @@ interface ShareProject {
   status: string;
 }
 
+interface SharePlaylist {
+  id: string;
+  name: string;
+  cover_url: string | null;
+}
+
+interface ShareTrackMeta {
+  id: string;
+  title: string;
+  cover_url: string | null;
+}
+
 interface Comment {
   id: string;
   track_id: string | null;
@@ -104,6 +116,8 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
 
   // ── share data ──────────────────────────────────────────────────────
   const [project, setProject] = useState<ShareProject | null>(null);
+  const [playlist, setPlaylist] = useState<SharePlaylist | null>(null);
+  const [shareTrackMeta, setShareTrackMeta] = useState<ShareTrackMeta | null>(null);
   const [share, setShare] = useState<ShareInfo | null>(null);
   const [tracks, setTracks] = useState<ShareTrack[]>([]);
   // Owner's creator profile (bio / hero / license / social). Powers
@@ -215,7 +229,9 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         setLoading(false);
         return;
       }
-      setProject(data.project);
+      setProject(data.project ?? null);
+      setPlaylist(data.playlist ?? null);
+      setShareTrackMeta(data.track ?? null);
       setShare(data.share);
       setTracks(data.tracks ?? []);
       setStems(data.stems ?? []);
@@ -508,18 +524,24 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
 
   const canComment = share?.role === 'commenter' || share?.role === 'editor';
 
+  // Normalise playlist/track shares into a project-shaped object so the
+  // four variant components receive consistent props regardless of content type.
+  const displayProject: ShareProject | null = project
+    ?? (playlist ? { id: playlist.id, name: playlist.name, cover_url: playlist.cover_url, description: null, bpm_target: null, key_target: null, status: 'active' } : null)
+    ?? (shareTrackMeta ? { id: shareTrackMeta.id, name: shareTrackMeta.title, cover_url: shareTrackMeta.cover_url, description: null, bpm_target: null, key_target: null, status: 'active' } : null);
+
   // Client-variant short-circuit. When the share was created with
   // `recipient_kind === 'client'`, the whole page is replaced with the
   // editorial "intro to my universe" layout: hero photo, bio, curated
   // tracks, license card, social links. Producer / rapper / friend
   // variants continue through to the historical layout below (still
   // the default for now; we'll specialise each variant in follow-ups).
-  if (share?.recipient_kind === 'client' && project) {
+  if (share?.recipient_kind === 'client' && displayProject) {
     return (
       <>
         <div ref={waveRef} className="hidden" />
         <ClientShareVariant
-          project={project}
+          project={displayProject}
           tracks={tracks}
           creator={creator}
           shareToken={share.sales_enabled ? token : undefined}
@@ -546,10 +568,10 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     );
   }
 
-  if (share?.recipient_kind === 'producer' && project) {
+  if (share?.recipient_kind === 'producer' && displayProject) {
     return (
       <ProducerShareVariant
-        project={project}
+        project={displayProject}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}
@@ -569,10 +591,10 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     );
   }
 
-  if (share?.recipient_kind === 'rapper' && project) {
+  if (share?.recipient_kind === 'rapper' && displayProject) {
     return (
       <RapperShareVariant
-        project={project}
+        project={displayProject}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}
@@ -592,10 +614,10 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     );
   }
 
-  if (share?.recipient_kind === 'friend' && project) {
+  if (share?.recipient_kind === 'friend' && displayProject) {
     return (
       <FriendShareVariant
-        project={project}
+        project={displayProject}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}

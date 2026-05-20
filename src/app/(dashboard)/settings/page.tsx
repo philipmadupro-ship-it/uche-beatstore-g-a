@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { UserPlus, Settings as SettingsIcon, Loader2, LogOut, CheckCircle2, Shield, User, DollarSign, Image as ImageIcon, Contact, Save } from 'lucide-react';
+import { UserPlus, Settings as SettingsIcon, Loader2, LogOut, CheckCircle2, Shield, User, ArrowRight } from 'lucide-react';
 
 interface TeamMember {
   user_id: string;
@@ -21,67 +22,8 @@ export default function SettingsPage() {
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Creator Profile State
-  const [profile, setProfile] = useState({
-    display_name: '',
-    bio: '',
-    hero_image_url: '',
-    credits: '',
-    license_lease_price_usd: '',
-    license_exclusive_price_usd: '',
-    license_notes: '',
-    license_agreement: '',
-    default_discount_percent: '',
-    contact_email: '',
-    instagram_handle: '',
-    twitter_handle: '',
-    spotify_url: '',
-    soundcloud_url: '',
-    website_url: '',
-  });
-  const [profileLoading, setProfileLoading] = useState(true);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [profileSuccess, setProfileSuccess] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [previewView, setPreviewView] = useState<'client' | 'producer' | 'rapper'>('client');
-
   useEffect(() => {
-    // Team fetch
     setLoading(false);
-
-    // Profile fetch
-    const fetchProfile = async () => {
-      try {
-        const res = await fetch('/api/profile');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.profile) {
-            setProfile({
-              display_name: data.profile.display_name || '',
-              bio: data.profile.bio || '',
-              hero_image_url: data.profile.hero_image_url || '',
-              credits: data.profile.credits || '',
-              license_lease_price_usd: data.profile.license_lease_price_usd != null ? String(data.profile.license_lease_price_usd) : '',
-              license_exclusive_price_usd: data.profile.license_exclusive_price_usd != null ? String(data.profile.license_exclusive_price_usd) : '',
-              license_notes: data.profile.license_notes || '',
-              license_agreement: data.profile.license_agreement || '',
-              default_discount_percent: data.profile.default_discount_percent != null ? String(data.profile.default_discount_percent) : '',
-              contact_email: data.profile.contact_email || '',
-              instagram_handle: data.profile.instagram_handle || '',
-              twitter_handle: data.profile.twitter_handle || '',
-              spotify_url: data.profile.spotify_url || '',
-              soundcloud_url: data.profile.soundcloud_url || '',
-              website_url: data.profile.website_url || '',
-            });
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching profile:', err);
-      } finally {
-        setProfileLoading(false);
-      }
-    };
-    fetchProfile();
   }, []);
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -103,42 +45,6 @@ export default function SettingsPage() {
     } finally {
       setSending(false);
     }
-  };
-
-  const handleSaveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingProfile(true);
-    setProfileSuccess(false);
-    try {
-      const res = await fetch('/api/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...profile,
-          license_lease_price_usd: profile.license_lease_price_usd ? Number(profile.license_lease_price_usd) : null,
-          license_exclusive_price_usd: profile.license_exclusive_price_usd ? Number(profile.license_exclusive_price_usd) : null,
-          default_discount_percent: profile.default_discount_percent ? Number(profile.default_discount_percent) : null,
-        }),
-      });
-      if (res.ok) {
-        setProfileSuccess(true);
-        setTimeout(() => setProfileSuccess(false), 3000);
-      }
-    } catch (err) {
-      console.error('Error saving profile:', err);
-    } finally {
-      setSavingProfile(false);
-    }
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setProfile((prev) => ({ ...prev, hero_image_url: reader.result as string }));
-    };
-    reader.readAsDataURL(file);
   };
 
   return (
@@ -166,210 +72,22 @@ export default function SettingsPage() {
 
         <div className="space-y-12">
           
-          {/* Creator Profile Form */}
-          <section className="bg-[#14110d] border border-[#1a160f] rounded-2xl p-8 shadow-xl">
-            <div className="flex items-center justify-between gap-4 mb-6 border-b border-[#1a160f] pb-4 flex-wrap">
-              <div className="flex items-center gap-3">
-                <User size={18} className="text-[#a08a6a]" />
-                <div>
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-[#E8DCC8]">Creator Profile</h2>
-                  <p className="text-[10px] uppercase tracking-widest text-[#5a5142] mt-0.5 font-bold">Customize your public listener landing page</p>
-                </div>
+          {/* Creator Profile — link card to canonical /profile page */}
+          <section>
+            <Link
+              href="/profile"
+              className="flex items-center gap-5 bg-[#14110d] border border-[#1a160f] rounded-2xl p-6 hover:border-[#2d2620] hover:bg-[#16130e] transition-all group"
+            >
+              <div className="w-12 h-12 rounded-xl bg-[#1a160f] border border-[#2d2620] flex items-center justify-center shrink-0 group-hover:border-[#D4BFA0]/30 transition-colors">
+                <User size={20} className="text-[#a08a6a]" />
               </div>
-              <button
-                type="button"
-                onClick={() => setShowPreview(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-[#2d2620] hover:border-[#D4BFA0]/50 text-[10px] font-bold uppercase tracking-wider text-[#a08a6a] hover:text-[#E8DCC8] transition-all bg-[#0a0907]"
-              >
-                <ImageIcon size={11} />
-                Preview Profile
-              </button>
-            </div>
-
-            {profileLoading ? (
-              <div className="py-12 flex justify-center"><Loader2 size={20} className="animate-spin text-[#a08a6a]" /></div>
-            ) : (
-              <form onSubmit={handleSaveProfile} className="space-y-6">
-                
-                {/* 1. Basic Showcase */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Display Name</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Uche Beatstore"
-                      className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                      value={profile.display_name}
-                      onChange={(e) => setProfile({ ...profile, display_name: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Hero Image Portrait</label>
-                    <div className="flex gap-4 items-center">
-                      {profile.hero_image_url ? (
-                        <div className="w-12 h-12 rounded-lg overflow-hidden border border-[#1f1a13] shrink-0 bg-[#0c0a08]">
-                          <img loading="lazy" src={profile.hero_image_url} alt="" className="w-full h-full object-cover" />
-                        </div>
-                      ) : (
-                        <div className="w-12 h-12 rounded-lg border border-[#1f1a13] border-dashed flex items-center justify-center text-[#3a3328] shrink-0 bg-[#0c0a08]">
-                          <ImageIcon size={16} />
-                        </div>
-                      )}
-                      <label className="flex-1 cursor-pointer bg-[#0c0a08] border border-[#1f1a13] hover:border-[#D4BFA0]/50 rounded-lg py-2.5 px-4 text-center text-xs text-[#a08a6a] hover:text-[#E8DCC8] transition-colors">
-                        Choose / Drag photo
-                        <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Bio Introduction</label>
-                  <textarea
-                    rows={4}
-                    placeholder="Tell your story. This paragraph leads your public client landing page..."
-                    className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] transition-colors resize-none leading-relaxed"
-                    value={profile.bio}
-                    onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Credits List (One per line)</label>
-                  <textarea
-                    rows={3}
-                    placeholder="Drake - Honestly Nevermind&#10;Lil Baby - It's Only Me&#10;Gunna - DS4EVER"
-                    className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] transition-colors resize-none font-mono leading-relaxed"
-                    value={profile.credits}
-                    onChange={(e) => setProfile({ ...profile, credits: e.target.value })}
-                  />
-                </div>
-
-                {/* 2. Commercial Licensing */}
-                <div className="border-t border-[#1a160f] pt-6">
-                  <div className="flex items-center gap-2 mb-4 text-[#a08a6a]">
-                    <DollarSign size={14} />
-                    <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] font-bold">Licensing &amp; Commercial terms</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                    <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Lease Price (USD)</label>
-                      <input
-                        type="number"
-                        placeholder="e.g. 150"
-                        className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] transition-colors font-mono"
-                        value={profile.license_lease_price_usd}
-                        onChange={(e) => setProfile({ ...profile, license_lease_price_usd: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Exclusive Price (USD)</label>
-                      <input
-                        type="number"
-                        placeholder="e.g. 2500"
-                        className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] transition-colors font-mono"
-                        value={profile.license_exclusive_price_usd}
-                        onChange={(e) => setProfile({ ...profile, license_exclusive_price_usd: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Licensing Notes &amp; Terms</label>
-                    <textarea
-                      rows={2}
-                      placeholder="e.g. 50/50 split on master and publishing. Custom stems sent on full payout."
-                      className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] transition-colors resize-none leading-relaxed"
-                      value={profile.license_notes}
-                      onChange={(e) => setProfile({ ...profile, license_notes: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                {/* 3. Get in Touch / Socials */}
-                <div className="border-t border-[#1a160f] pt-6">
-                  <div className="flex items-center gap-2 mb-4 text-[#a08a6a]">
-                    <Contact size={14} />
-                    <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] font-bold">Contact &amp; Social links</h3>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Contact Email</label>
-                      <input
-                        type="email"
-                        placeholder="producer@email.com"
-                        className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                        value={profile.contact_email}
-                        onChange={(e) => setProfile({ ...profile, contact_email: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Website URL</label>
-                      <input
-                        type="url"
-                        placeholder="https://mywebsite.com"
-                        className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                        value={profile.website_url}
-                        onChange={(e) => setProfile({ ...profile, website_url: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Instagram Handle</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. uche_music"
-                        className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                        value={profile.instagram_handle}
-                        onChange={(e) => setProfile({ ...profile, instagram_handle: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Twitter / X Handle</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. uche_music"
-                        className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                        value={profile.twitter_handle}
-                        onChange={(e) => setProfile({ ...profile, twitter_handle: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Spotify Artist URL</label>
-                      <input
-                        type="url"
-                        placeholder="https://open.spotify.com/artist/..."
-                        className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                        value={profile.spotify_url}
-                        onChange={(e) => setProfile({ ...profile, spotify_url: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">SoundCloud Profile URL</label>
-                      <input
-                        type="url"
-                        placeholder="https://soundcloud.com/..."
-                        className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                        value={profile.soundcloud_url}
-                        onChange={(e) => setProfile({ ...profile, soundcloud_url: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Save button */}
-                <button
-                  disabled={savingProfile || profileSuccess}
-                  type="submit"
-                  className={`w-full py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2 ${
-                    profileSuccess
-                      ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                      : 'bg-[#D4BFA0] hover:bg-[#8A7A5C] text-black shadow-lg shadow-[#D4BFA0]/10 disabled:opacity-50'
-                  }`}
-                >
-                  {savingProfile ? <Loader2 size={14} className="animate-spin" /> : profileSuccess ? <CheckCircle2 size={14} /> : <Save size={14} />}
-                  {savingProfile ? 'Saving profile...' : profileSuccess ? 'Profile saved' : 'Save creator profile'}
-                </button>
-              </form>
-            )}
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-0.5">Creator identity</p>
+                <h2 className="text-[14px] font-semibold text-[#E8DCC8]">Creator Profile</h2>
+                <p className="text-[11px] text-[#5a5142] mt-0.5">Bio, hero image, licensing tiers, social links, and license agreement.</p>
+              </div>
+              <ArrowRight size={16} className="text-[#5a5142] group-hover:text-[#a08a6a] shrink-0 transition-colors" />
+            </Link>
           </section>
 
           {/* Team */}
@@ -466,48 +184,52 @@ export default function SettingsPage() {
 
       {/* Creator Profile Slide-over Preview */}
       {showPreview && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm transition-all duration-300">
-          <div 
-            className="w-full max-w-[500px] h-full bg-[#0c0c0c] border-l border-white/[0.08] p-8 flex flex-col justify-between overflow-y-auto relative shadow-2xl"
-            style={{
-              boxShadow: '-20px 0 50px rgba(0, 0, 0, 0.8)'
-            }}
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm transition-all duration-300"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowPreview(false); }}
+        >
+          <div
+            className="w-full max-w-[480px] h-full bg-[#0a0907] border-l border-[#1f1a13] flex flex-col shadow-[−20px_0_60px_rgba(0,0,0,0.9)] animate-in slide-in-from-right duration-300"
           >
             {/* Header */}
-            <div className="flex items-center justify-between pb-6 border-b border-white/[0.05] mb-6">
+            <div className="px-6 py-4 border-b border-[#1f1a13] flex items-center justify-between shrink-0 bg-[#0e0c09]">
               <div>
-                <span className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#7F77DD] font-bold">Creator Universe</span>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-[#E8DCC8] mt-1 font-heading">Template Previews</h3>
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a]">Share page · Live preview</p>
+                <h3 className="text-[13px] font-bold text-[#E8DCC8] mt-0.5">
+                  {profile.display_name || 'Your Profile'} — {previewView.charAt(0).toUpperCase() + previewView.slice(1)} view
+                </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowPreview(false)}
-                className="px-3 py-1.5 rounded-full border border-white/[0.06] text-[9px] font-bold uppercase tracking-wider text-[#5a5142] hover:text-white hover:border-white/25 transition-all"
+                className="p-1.5 rounded-lg text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-white/[0.04] transition-colors border border-transparent hover:border-[#2d2620]"
               >
-                Close Preview
+                <X size={16} />
               </button>
             </div>
 
             {/* View Selector Tabs */}
-            <div className="flex bg-[#0c0a08] border border-[#1f1a13] rounded-lg p-0.5 mb-6">
-              {(['client', 'producer', 'rapper'] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setPreviewView(v)}
-                  className={`flex-1 py-2 rounded text-[9px] font-bold uppercase tracking-wider transition-all ${
-                    previewView === v
-                      ? 'bg-[#1e1a14] text-[#E8DCC8] border border-[#2d2620]'
-                      : 'text-[#5a5142] hover:text-[#a08a6a]'
-                  }`}
-                >
-                  {v === 'client' ? 'Client' : v === 'producer' ? 'Producer' : 'Rapper'}
-                </button>
-              ))}
+            <div className="px-6 pt-4 pb-0 shrink-0">
+              <div className="flex bg-[#14110d] border border-[#1f1a13] rounded-full p-0.5 gap-0.5">
+                {(['client', 'producer', 'rapper'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setPreviewView(v)}
+                    className={`flex-1 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-wider transition-all ${
+                      previewView === v
+                        ? 'bg-[#2A2418] text-[#E8D8B8] border border-[#8A7A5C]/40'
+                        : 'text-[#5a5142] hover:text-[#a08a6a]'
+                    }`}
+                  >
+                    {v === 'client' ? 'Client' : v === 'producer' ? 'Producer' : 'Rapper'}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Live Interactive Interface Preview */}
-            <div className="flex-1 space-y-8">
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
               {previewView === 'client' && (
                 <>
                   {/* 1. Header Banner & Profile Pic */}
@@ -653,10 +375,17 @@ export default function SettingsPage() {
               )}
             </div>
 
-            {/* Footer Links */}
-            <div className="border-t border-white/[0.05] pt-6 mt-6 flex justify-center gap-4 text-[#a08a6a]">
-              {profile.contact_email && <span className="text-[10px] font-mono">Email: {profile.contact_email}</span>}
-              {profile.instagram_handle && <span className="text-[10px] font-mono">IG: @{profile.instagram_handle}</span>}
+            {/* Footer — social links preview */}
+            <div className="shrink-0 px-6 py-4 border-t border-[#1f1a13] flex items-center gap-4 bg-[#0a0907]">
+              {profile.contact_email && (
+                <span className="text-[9px] font-mono text-[#5a5142] truncate">✉ {profile.contact_email}</span>
+              )}
+              {profile.instagram_handle && (
+                <span className="text-[9px] font-mono text-[#5a5142]">@{profile.instagram_handle}</span>
+              )}
+              {!profile.contact_email && !profile.instagram_handle && (
+                <span className="text-[9px] font-mono text-[#3a3328]">Add contact / social links above to show them here</span>
+              )}
             </div>
           </div>
         </div>

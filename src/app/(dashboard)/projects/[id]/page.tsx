@@ -9,7 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { DropZone } from '@/components/upload/DropZone';
-import { ProjectShareModal } from '@/components/share/ProjectShareModal';
+import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { ProjectCommentsPanel } from '@/components/projects/ProjectCommentsPanel';
 import { AddFromLibraryModal } from '@/components/projects/AddFromLibraryModal';
 import { ProjectDetailHeader } from '@/components/projects/ProjectDetailHeader';
@@ -419,13 +419,10 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
       )}
 
       {showShareModal && project && (
-        // ProjectShareModal supersedes the old ShareModal for projects —
-        // adds role-gated permissions (viewer / commenter / editor) and
-        // manages multiple concurrent share tokens per project. The legacy
-        // ShareModal is still used for individual track shares.
-        <ProjectShareModal
-          projectId={params.id as string}
-          projectTitle={project.name}
+        <ContentShareModal
+          contentType="project"
+          contentId={params.id as string}
+          contentTitle={project.name}
           coverUrl={project.cover_url}
           onClose={() => setShowShareModal(false)}
         />

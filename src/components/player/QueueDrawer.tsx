@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Track } from '@/lib/types';
-import { X, Play, Music, ListMusic, Trash2, Minus, History as HistoryIcon, ArrowRight } from 'lucide-react';
+import { X, Play, Music, ListMusic, Trash2, Minus, History as HistoryIcon, ArrowRight, GripVertical } from 'lucide-react';
 import { usePlayer } from '@/hooks/usePlayer';
 
 interface QueueDrawerProps {
@@ -19,7 +19,11 @@ export function QueueDrawer({ onClose }: QueueDrawerProps) {
     isPlaying,
     removeFromQueue,
     clearQueue,
+    reorderQueue,
   } = usePlayer();
+
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dropTo, setDropTo] = useState<number | null>(null);
 
   // The full queue is always shown — splitting it around the cursor created
   // empty "Up next" sections that made the drawer look broken when the user
@@ -135,14 +139,39 @@ export function QueueDrawer({ onClose }: QueueDrawerProps) {
                     : null
                 }
               >
-                {upNext.map((t, i) => (
-                  <Row
-                    key={`up-${t.id}-${i}`}
-                    track={t}
-                    onPlay={() => setTrack(t)}
-                    onRemove={() => removeFromQueue(t.id)}
-                  />
-                ))}
+                {upNext.map((t, i) => {
+                  const isDraggingThis = dragFrom === i;
+                  const isDropTarget = dropTo === i && dragFrom !== null && dragFrom !== i;
+                  return (
+                    <div
+                      key={`up-${t.id}-${i}`}
+                      draggable
+                      onDragStart={() => setDragFrom(i)}
+                      onDragOver={(e) => { e.preventDefault(); if (dropTo !== i) setDropTo(i); }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (dragFrom !== null && dragFrom !== i) {
+                          const base = currentIndex >= 0 ? currentIndex + 1 : 0;
+                          reorderQueue(base + dragFrom, base + i);
+                        }
+                        setDragFrom(null);
+                        setDropTo(null);
+                      }}
+                      onDragEnd={() => { setDragFrom(null); setDropTo(null); }}
+                      className={`relative transition-opacity ${isDraggingThis ? 'opacity-40' : ''}`}
+                    >
+                      {isDropTarget && (
+                        <div className="absolute -top-px left-2 right-2 h-0.5 bg-[#D4BFA0]/60 rounded-full z-10 pointer-events-none" />
+                      )}
+                      <Row
+                        track={t}
+                        dragHandle
+                        onPlay={() => setTrack(t)}
+                        onRemove={() => removeFromQueue(t.id)}
+                      />
+                    </div>
+                  );
+                })}
               </Section>
             );
           })()}
@@ -228,6 +257,7 @@ function Row({
   isCurrent,
   isPlaying,
   muted,
+  dragHandle,
   onPlay,
   onRemove,
 }: {
@@ -235,6 +265,7 @@ function Row({
   isCurrent?: boolean;
   isPlaying?: boolean;
   muted?: boolean;
+  dragHandle?: boolean;
   onPlay: () => void;
   onRemove: (() => void) | null;
 }) {
@@ -249,6 +280,9 @@ function Row({
             : 'bg-transparent border-transparent hover:bg-[#16130e] hover:border-[#1f1a13]'
       }`}
     >
+      {dragHandle && (
+        <GripVertical size={12} className="text-[#3a3328] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing" />
+      )}
       <div className="w-9 h-9 bg-[#16130e] rounded-lg overflow-hidden shrink-0 border border-[#1f1a13] relative">
         {track.cover_url ? (
           <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />

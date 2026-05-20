@@ -9,7 +9,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { TrackCard } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
-import { ShareModal } from '@/components/share/ShareModal';
+import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { PlaylistOfflineSync } from '@/components/offline/PlaylistOfflineSync';
 import { Loader2, Camera, Check, X, Edit2, Play, Share2, Music, Plus, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
 import { Track } from '@/lib/types';
@@ -362,13 +362,12 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
       )}
 
       {showShareModal && playlist && (
-        <ShareModal
-          onClose={() => setShowShareModal(false)}
-          title={playlist.name}
-          trackIds={tracks.map((t) => t.id)}
+        <ContentShareModal
+          contentType="playlist"
+          contentId={params.id}
+          contentTitle={playlist.name}
           coverUrl={playlist.cover_url}
-          projectId={params.id}
-          kind="playlist"
+          onClose={() => setShowShareModal(false)}
         />
       )}
 
