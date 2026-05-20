@@ -504,8 +504,9 @@ export default function LibraryPage() {
           </div>
         ) : (
           <div className="border-t border-[#161310] border-b mb-32">
-            <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
-              <span className="text-center flex items-center justify-center">
+            {/* Column header — grid must match TrackCard's 9-col md template */}
+            <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_50px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[9px] font-mono uppercase tracking-wider">
+              <span className="text-center flex items-center justify-center text-[#3a3328]">
                 {selectMode ? (
                   <button
                     type="button"
@@ -536,11 +537,34 @@ export default function LibraryPage() {
                 )}
               </span>
               <span />
-              <span>Title</span>
-              <span className="hidden sm:block">Type</span>
-              <span>BPM · Key</span>
-              <span className="hidden md:block">Added</span>
-              <span className="text-right hidden sm:block">Rating</span>
+              {/* Clickable sort headers */}
+              {(
+                [
+                  { label: 'Title', sort: 'title' as SortMode, always: true },
+                  { label: 'Type', sort: null, always: false, cls: 'hidden sm:block' },
+                  { label: 'BPM · Key', sort: sortMode === 'bpm' ? 'bpm-desc' as SortMode : 'bpm' as SortMode, always: true, activeSort: sortMode === 'bpm' || sortMode === 'bpm-desc' },
+                  { label: 'Len', sort: null, always: false, cls: 'hidden md:block' },
+                  { label: 'Added', sort: 'recent' as SortMode, always: false, cls: 'hidden md:block' },
+                  { label: '★', sort: 'rating' as SortMode, always: false, cls: 'hidden sm:block text-right' },
+                ] as Array<{ label: string; sort: SortMode | null; always: boolean; cls?: string; activeSort?: boolean }>
+              ).map(({ label, sort, cls, activeSort }) => {
+                const isActive = activeSort ?? (sort != null && sortMode === sort);
+                if (!sort) return <span key={label} className={`${cls ?? ''} text-[#3a3328]`}>{label}</span>;
+                return (
+                  <button
+                    key={label}
+                    onClick={() => setSortMode(sort)}
+                    className={`flex items-center gap-1 transition-colors hover:text-[#E8DCC8] ${cls ?? ''} ${
+                      isActive ? 'text-[#D4BFA0]' : 'text-[#3a3328]'
+                    }`}
+                  >
+                    {label}
+                    <span className="text-[8px]">
+                      {isActive ? (sortMode === 'bpm-desc' ? '↓' : '↑') : ''}
+                    </span>
+                  </button>
+                );
+              })}
               <span />
             </div>
             {filtered.map((t: any, i: number) => (

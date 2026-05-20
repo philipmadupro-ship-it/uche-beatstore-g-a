@@ -87,10 +87,20 @@ export function PlayerBar() {
             </div>
             <div className="min-w-0 max-w-[120px] md:max-w-[160px]">
               <h4 className="text-[12px] font-medium text-[#E8DCC8] truncate leading-tight">{currentTrack.title}</h4>
-              <p className="text-[10px] font-mono text-[#5a5142] mt-0.5 uppercase tracking-wider truncate">
-                {currentTrack.type}
-                {currentTrack.bpm ? ` · ${currentTrack.bpm} bpm` : ''}
-              </p>
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                <span className="text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">
+                  {currentTrack.type}{currentTrack.bpm ? ` · ${currentTrack.bpm}` : ''}
+                </span>
+                {currentTrack.key && (
+                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wider leading-none ${
+                    (currentTrack as any).scale === 'minor'
+                      ? 'text-[#9d95e8] bg-[#1a1833]/70 border border-[#534AB7]/25'
+                      : 'text-[#c8a47a] bg-[#1f1a10]/70 border border-[#3d3020]/35'
+                  }`}>
+                    {currentTrack.key}{(currentTrack as any).scale === 'minor' ? 'm' : ''}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -182,15 +192,18 @@ export function PlayerBar() {
             </button>
             <button
               onClick={() => setQueueOpen(true)}
-              className="relative w-7 h-7 flex items-center justify-center text-[#6a5d4a] hover:text-white transition-colors rounded-full"
+              className="relative flex items-center gap-1 px-2 h-7 text-[#6a5d4a] hover:text-white transition-colors rounded-full hover:bg-white/[0.04]"
               aria-label="Queue"
             >
               <ListMusic size={12} />
-              {queue.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 text-[8px] font-mono px-1 min-w-[12px] h-[12px] rounded-full bg-[#D4BFA0] text-white flex items-center justify-center leading-none">
-                  {queue.length > 99 ? '99+' : queue.length}
-                </span>
-              )}
+              {queue.length > 0 && (() => {
+                const pos = queue.findIndex((t) => t.id === currentTrack?.id);
+                return (
+                  <span className="text-[9px] font-mono tabular-nums leading-none">
+                    {pos >= 0 ? `${pos + 1}/${queue.length}` : queue.length}
+                  </span>
+                );
+              })()}
             </button>
             {/* Volume — clickable mute toggle + hover-revealed slider so
                 the pill stays compact in the resting state. Hidden on

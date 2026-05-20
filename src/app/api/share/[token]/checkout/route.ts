@@ -12,20 +12,14 @@ export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/share/[token]/checkout
- *   body: { license_type: 'lease' | 'exclusive', track_ids: string[], buyer_email: string }
+ *   body: { buyer_email: string, cart_items: { track_id: string, license_id: string }[] }
  *
- * Creates a Stripe Checkout Session for the requested license against
- * the share's owner. We resolve the price from the owner's
- * creator_profiles row (locked-in at checkout time so a producer
- * mid-flight can't accidentally change the price a buyer sees).
+ * Works for both project shares (/projects/share/[token]) and flat
+ * share links (/share/[token]). Resolves the token against
+ * project_shares first, then share_links as fallback.
  *
- * Returns { url } — the client redirects the browser to it.
- *
- * Webhook (`/api/stripe/webhook`) handles the post-payment flow:
- *   - inserts a `license_purchases` row
- *   - sends the buyer a receipt with the gated WAV download link
- *   - the share page polls or refreshes to flip the license card
- *     from "Buy" → "Purchased — download"
+ * Prices are resolved server-side (share override → track override →
+ * creator profile default). Client-supplied prices are never trusted.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -39,15 +33,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   try {
     const body = await req.json().catch(() => ({}));
-    const licenseType = body.license_type as 'lease' | 'exclusive';
-    const trackIds = Array.isArray(body.track_ids) ? body.track_ids : [];
+    const cartItems = Array.isArray(body.cart_items) ? body.cart_items : [];
     const buyerEmail = typeof body.buyer_email === 'string' ? body.buyer_email.trim() : '';
 
-    if (!['lease', 'exclusive'].includes(licenseType)) {
-      return NextResponse.json({ error: 'Invalid license_type' }, { status: 400 });
-    }
-    if (!trackIds.length) {
-      return NextResponse.json({ error: 'No tracks selected' }, { status: 400 });
+    if (!cartItems.length) {
+      return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
     }
     if (!buyerEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(buyerEmail)) {
       return NextResponse.json({ error: 'Valid buyer email required' }, { status: 400 });
@@ -55,41 +45,55 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
     const admin = createServiceClient();
 
-    // Resolve the share → owner → creator profile to get the price.
-    // We trust the owner's profile, not anything the client sent —
-    // never let the buyer dictate the price.
-    const { data: share } = await admin
+    // Resolve the share token — try project_shares first, then share_links.
+    let sellerUserId: string | null = null;
+    let projectName: string | null = null;
+    let isProjectShare = true;
+    let shareLeasePrice: number | null = null;
+    let shareExclusivePrice: number | null = null;
+    let shareDiscountPercent: number | null = null;
+
+    const { data: projShare } = await admin
       .from('project_shares')
-      .select('project_id, projects(user_id, name)')
+      .select('project_id, lease_price_usd, exclusive_price_usd, discount_percent, projects(user_id, name)')
       .eq('token', token)
       .maybeSingle();
 
-    if (!share) {
-      return NextResponse.json({ error: 'Share not found' }, { status: 404 });
-    }
-    const sellerUserId = (share as any).projects?.user_id as string | undefined;
-    const projectName = (share as any).projects?.name as string | undefined;
-    if (!sellerUserId) {
-      return NextResponse.json({ error: 'Share has no owner' }, { status: 400 });
+    if (projShare) {
+      sellerUserId = (projShare as any).projects?.user_id ?? null;
+      projectName = (projShare as any).projects?.name ?? null;
+      shareLeasePrice = projShare.lease_price_usd != null ? Number(projShare.lease_price_usd) : null;
+      shareExclusivePrice = projShare.exclusive_price_usd != null ? Number(projShare.exclusive_price_usd) : null;
+      shareDiscountPercent = projShare.discount_percent != null ? Number(projShare.discount_percent) : null;
+    } else {
+      const { data: linkShare } = await admin
+        .from('share_links')
+        .select('user_id, title, lease_price_usd, exclusive_price_usd, discount_percent')
+        .eq('token', token)
+        .maybeSingle();
+
+      if (linkShare) {
+        sellerUserId = linkShare.user_id;
+        projectName = linkShare.title;
+        shareLeasePrice = linkShare.lease_price_usd != null ? Number(linkShare.lease_price_usd) : null;
+        shareExclusivePrice = linkShare.exclusive_price_usd != null ? Number(linkShare.exclusive_price_usd) : null;
+        shareDiscountPercent = linkShare.discount_percent != null ? Number(linkShare.discount_percent) : null;
+        isProjectShare = false;
+      }
     }
 
-    // Profile-level defaults — used as the fallback when a track
-    // hasn't set its own override.
+    if (!sellerUserId) {
+      return NextResponse.json({ error: 'Share not found' }, { status: 404 });
+    }
+
+    // Creator profile fallback prices.
     const { data: profile } = await admin
       .from('creator_profiles')
-      .select('license_lease_price_usd, license_exclusive_price_usd, display_name')
+      .select('license_lease_price_usd, license_exclusive_price_usd')
       .eq('user_id', sellerUserId)
       .maybeSingle();
 
-    const profileDefault = licenseType === 'lease'
-      ? profile?.license_lease_price_usd
-      : profile?.license_exclusive_price_usd;
-
-    // Pull all selected tracks WITH their per-track price columns so
-    // we can build one Stripe line item per track. Per-track listing
-    // (migration 021) lets a flagship beat cost more than the rest of
-    // the catalog; the profile default kicks in only for tracks that
-    // didn't set their own price.
+    const trackIds = cartItems.map((i: any) => i.track_id);
     const { data: tracks } = await admin
       .from('tracks')
       .select('id, title, lease_price_usd, exclusive_price_usd')
@@ -99,28 +103,48 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       return NextResponse.json({ error: 'No matching tracks found' }, { status: 400 });
     }
 
-    // Resolve effective price per track. If a track has no override
-    // and the profile default is also unset/zero, the producer hasn't
-    // priced this track — we refuse rather than silently charging $0.
     const lineItems: any[] = [];
     const unpriced: string[] = [];
-    for (const t of tracks) {
-      const override = licenseType === 'lease' ? t.lease_price_usd : t.exclusive_price_usd;
-      const effective = override != null && Number(override) > 0
-        ? Number(override)
-        : (profileDefault != null && Number(profileDefault) > 0 ? Number(profileDefault) : null);
-      if (effective == null) {
+
+    for (const item of cartItems) {
+      const t = tracks.find((tr) => tr.id === item.track_id);
+      if (!t) continue;
+
+      const isLease = item.license_id === 'basic-lease';
+      const isExclusive = item.license_id === 'exclusive-rights';
+      if (!isLease && !isExclusive) {
+        unpriced.push(`${t.title} (unknown license)`);
+        continue;
+      }
+
+      // Price hierarchy: share override → track override → profile default.
+      const shareOverride = isLease ? shareLeasePrice : shareExclusivePrice;
+      const trackOverride = isLease ? t.lease_price_usd : t.exclusive_price_usd;
+      const profileDefault = isLease
+        ? profile?.license_lease_price_usd
+        : profile?.license_exclusive_price_usd;
+
+      const basePrice =
+        shareOverride ??
+        (trackOverride != null ? Number(trackOverride) : null) ??
+        (profileDefault != null ? Number(profileDefault) : null);
+
+      if (basePrice == null || basePrice <= 0) {
         unpriced.push(t.title);
         continue;
       }
+
+      let effective = basePrice;
+      if (shareDiscountPercent != null && shareDiscountPercent > 0 && shareDiscountPercent <= 100) {
+        effective = effective * (1 - shareDiscountPercent / 100);
+      }
+
       lineItems.push({
         price_data: {
           currency: 'usd',
           unit_amount: Math.round(effective * 100),
           product_data: {
-            name: `${licenseType === 'exclusive' ? 'Exclusive' : 'Lease'} — ${t.title}`,
-            // Description gets the project context so the Stripe
-            // receipt has enough info to be self-explanatory.
+            name: `${isExclusive ? 'Exclusive Rights' : 'Basic Lease'} — ${t.title}`,
             description: projectName ? projectName.slice(0, 220) : undefined,
           },
         },
@@ -130,31 +154,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
     if (unpriced.length) {
       return NextResponse.json(
-        { error: `No ${licenseType} price set for: ${unpriced.join(', ')}. Set per-track prices on the library detail page or a profile default in /settings.` },
+        { error: `No price set for: ${unpriced.join(', ')}. Set prices in your profile or per-track.` },
         { status: 400 },
       );
     }
 
+    if (!lineItems.length) {
+      return NextResponse.json({ error: 'No valid items to charge' }, { status: 400 });
+    }
+
     const APP_URL = getAppUrl();
     const stripe = getStripe();
+    const sharePath = isProjectShare ? `/projects/share/${token}` : `/share/${token}`;
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
       customer_email: buyerEmail,
       line_items: lineItems,
-      // Stash everything the webhook needs in metadata so we don't
-      // have to re-resolve from the database. Stripe metadata values
-      // are strings — we JSON.stringify arrays.
       metadata: {
         share_token: token,
-        license_type: licenseType,
-        track_ids: JSON.stringify(trackIds),
+        cart_items: JSON.stringify(cartItems),
         seller_user_id: sellerUserId,
         buyer_email: buyerEmail,
+        is_project_share: String(isProjectShare),
       },
-      success_url: `${APP_URL}/projects/share/${token}?purchase=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${APP_URL}/projects/share/${token}?purchase=cancelled`,
+      success_url: `${APP_URL}${sharePath}?purchase=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${APP_URL}${sharePath}?purchase=cancelled`,
     });
 
     return NextResponse.json({ url: session.url, session_id: session.id });

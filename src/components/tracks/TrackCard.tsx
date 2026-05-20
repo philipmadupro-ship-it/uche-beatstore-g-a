@@ -145,7 +145,7 @@ export function TrackCard({
           cover_url: track.cover_url ?? null,
         });
       }}
-      className={`group grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_120px_110px_32px] items-center gap-4 px-4 h-[52px] border-b border-[#161310] hover:bg-[#101010] transition-colors cursor-pointer ${
+      className={`group grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_50px_120px_110px_32px] items-center gap-4 px-4 h-[52px] border-b border-[#161310] hover:bg-[#101010] transition-colors cursor-pointer ${
         isCurrent ? 'bg-[#0e0c08]' : ''
       } ${selected ? 'bg-[#15132a]' : ''}`}
     >
@@ -206,10 +206,25 @@ export function TrackCard({
         {track.type}
       </div>
 
-      {/* BPM / Key */}
-      <div className="text-[11px] text-[#6a5d4a] font-mono tabular-nums truncate">
-        {track.bpm ? `${track.bpm}` : '—'}
-        {track.key ? ` · ${track.key}${track.scale ? track.scale[0] : ''}` : ''}
+      {/* BPM / Key — BPM muted, key color-coded by scale */}
+      <div className="flex items-center gap-1.5 font-mono truncate">
+        <span className="text-[11px] text-[#6a5d4a] tabular-nums">{track.bpm || '—'}</span>
+        {track.key && (
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 ${
+            track.scale === 'minor'
+              ? 'text-[#9d95e8] bg-[#1a1833]/60 border border-[#534AB7]/20'
+              : 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/30'
+          }`}>
+            {track.key}{track.scale === 'minor' ? 'm' : ''}
+          </span>
+        )}
+      </div>
+
+      {/* Duration */}
+      <div className="text-[11px] text-[#5a5142] font-mono hidden md:block tabular-nums">
+        {track.duration_seconds
+          ? `${Math.floor(track.duration_seconds / 60)}:${String(Math.floor(track.duration_seconds % 60)).padStart(2, '0')}`
+          : '—'}
       </div>
 
       {/* Date */}

@@ -17,6 +17,7 @@ import {
   Bell,
   Menu,
   X,
+  User,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
@@ -41,6 +42,7 @@ const NAV_ITEMS = [
 // Mobile drawer keeps Settings reachable since there's no gear icon
 // in the cramped mobile header.
 const MOBILE_EXTRA_ITEMS = [
+  { label: 'Profile',   icon: User,      href: '/profile'   },
   { label: 'Settings',  icon: Settings,  href: '/settings'  },
 ];
 
@@ -147,12 +149,22 @@ export function TopBar() {
           <Settings size={14} />
         </Link>
 
-        {/* User badge */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="w-7 h-7 rounded-full bg-[#1a160f] border border-[#2d2620] flex items-center justify-center">
-            <span className="text-[9px] font-bold text-[#a08a6a]">U</span>
+        {/* User badge — links to creator profile */}
+        <Link
+          href="/profile"
+          aria-label="Creator profile"
+          title="Profile"
+          className={cn(
+            'flex items-center gap-2 shrink-0 w-7 h-7 rounded-full transition-colors',
+            pathname === '/profile' || pathname.startsWith('/profile/')
+              ? 'bg-[#D4BFA0]/20 border border-[#D4BFA0]/40'
+              : 'bg-[#1a160f] border border-[#2d2620] hover:border-[#D4BFA0]/30',
+          )}
+        >
+          <div className="w-full h-full rounded-full flex items-center justify-center">
+            <User size={12} className={pathname === '/profile' ? 'text-[#D4BFA0]' : 'text-[#a08a6a]'} />
           </div>
-        </div>
+        </Link>
 
         <style jsx>{`
           .no-scrollbar::-webkit-scrollbar { display: none; }

@@ -30,6 +30,8 @@ export default function SettingsPage() {
     license_lease_price_usd: '',
     license_exclusive_price_usd: '',
     license_notes: '',
+    license_agreement: '',
+    default_discount_percent: '',
     contact_email: '',
     instagram_handle: '',
     twitter_handle: '',
@@ -62,6 +64,8 @@ export default function SettingsPage() {
               license_lease_price_usd: data.profile.license_lease_price_usd != null ? String(data.profile.license_lease_price_usd) : '',
               license_exclusive_price_usd: data.profile.license_exclusive_price_usd != null ? String(data.profile.license_exclusive_price_usd) : '',
               license_notes: data.profile.license_notes || '',
+              license_agreement: data.profile.license_agreement || '',
+              default_discount_percent: data.profile.default_discount_percent != null ? String(data.profile.default_discount_percent) : '',
               contact_email: data.profile.contact_email || '',
               instagram_handle: data.profile.instagram_handle || '',
               twitter_handle: data.profile.twitter_handle || '',
@@ -113,6 +117,7 @@ export default function SettingsPage() {
           ...profile,
           license_lease_price_usd: profile.license_lease_price_usd ? Number(profile.license_lease_price_usd) : null,
           license_exclusive_price_usd: profile.license_exclusive_price_usd ? Number(profile.license_exclusive_price_usd) : null,
+          default_discount_percent: profile.default_discount_percent ? Number(profile.default_discount_percent) : null,
         }),
       });
       if (res.ok) {

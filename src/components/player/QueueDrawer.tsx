@@ -274,7 +274,26 @@ function Row({
         }`}>
           {track.title}
         </h4>
-        <p className="text-[9px] text-[#5a5142] uppercase font-panchang tracking-widest mt-0.5">{track.type}</p>
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          <span className="text-[9px] text-[#4a4338] uppercase font-mono tracking-widest">{track.type}</span>
+          {(track as any).bpm && (
+            <span className="text-[9px] font-mono text-[#3a3328] tabular-nums">{(track as any).bpm} bpm</span>
+          )}
+          {(track as any).key && (
+            <span className={`text-[8px] font-mono font-bold px-1 py-px rounded uppercase leading-none ${
+              (track as any).scale === 'minor'
+                ? 'text-[#9d95e8] bg-[#1a1833]/50'
+                : 'text-[#c8a47a] bg-[#1f1a10]/50'
+            }`}>
+              {(track as any).key}{(track as any).scale === 'minor' ? 'm' : ''}
+            </span>
+          )}
+          {(track as any).duration_seconds > 0 && (
+            <span className="text-[9px] font-mono text-[#2d2620] tabular-nums ml-auto">
+              {Math.floor((track as any).duration_seconds / 60)}:{String(Math.floor((track as any).duration_seconds % 60)).padStart(2, '0')}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">

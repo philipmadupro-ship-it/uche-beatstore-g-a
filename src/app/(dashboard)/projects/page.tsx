@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Loader2, Music, Layers, Plus, Search } from 'lucide-react';
+import { Loader2, Music, Layers, Plus, Search, Play, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { fmtBpm, fmtKey } from '@/lib/audio/format';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
@@ -36,10 +36,40 @@ interface Project {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  in_progress: 'text-[#c8a84b] border-[#3a2f10] bg-[#1a1505]',
-  final: 'text-[#8ecf9f] border-[#0a3a1a] bg-[#0a1f0f]',
-  archived: 'text-[#6a5d4a] border-[#1a160f] bg-[#0e0c08]',
+  in_progress: 'text-[#c8a84b] border-[#3a2f10] bg-[#1a1505]/80',
+  final: 'text-[#8ecf9f] border-[#0a3a1a] bg-[#0a1f0f]/80',
+  archived: 'text-[#6a5d4a] border-[#1a160f] bg-[#0e0c08]/80',
 };
+
+const STATUS_BORDER: Record<string, string> = {
+  in_progress: 'border-[#3a2f10]/60 hover:border-[#c8a84b]/30',
+  final: 'border-[#0a3a1a]/60 hover:border-[#8ecf9f]/30',
+  archived: 'border-[#1a160f] hover:border-[#2d2620]',
+};
+
+const STATUS_GRADIENT: Record<string, string> = {
+  in_progress: 'bg-gradient-to-t from-[#1a1505]/90 via-transparent to-transparent',
+  final: 'bg-gradient-to-t from-[#0a1f0f]/90 via-transparent to-transparent',
+  archived: 'bg-gradient-to-t from-[#0e0c08]/90 via-transparent to-transparent',
+};
+
+const STATUS_EMPTY_BG: Record<string, string> = {
+  in_progress: 'bg-gradient-to-br from-[#2a2010] to-[#0e0c08]',
+  final: 'bg-gradient-to-br from-[#0a2010] to-[#0a0907]',
+  archived: 'bg-gradient-to-br from-[#14110d] to-[#0a0907]',
+};
+
+function relativeDate(date: Date): string {
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -263,41 +293,72 @@ export default function ProjectsPage() {
             );
           })()
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
-            {filtered.map((project) => (
-              <Link href={`/projects/${project.id}`} key={project.id} className="group">
-                <div className="aspect-square bg-[#14110d] rounded-lg mb-3 overflow-hidden border border-[#1a160f] group-hover:border-[#2d2620] transition-colors relative">
-                  {project.cover_url ? (
-                    <img loading="lazy" src={project.cover_url} alt={project.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Music size={28} className="text-[#1a160f]" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {filtered.map((project) => {
+              const status = project.status || 'in_progress';
+              const updatedAt = project.updated_at ? new Date(project.updated_at) : null;
+              const relativeTime = updatedAt ? relativeDate(updatedAt) : null;
+
+              return (
+                <Link href={`/projects/${project.id}`} key={project.id} className="group flex flex-col">
+                  {/* Cover card */}
+                  <div className={`relative aspect-square rounded-xl mb-3 overflow-hidden border transition-all duration-200 ${STATUS_BORDER[status]} group-hover:scale-[1.02]`}>
+                    {/* Status-tinted gradient overlay at bottom */}
+                    <div className={`absolute inset-0 ${STATUS_GRADIENT[status]} opacity-60`} />
+
+                    {project.cover_url ? (
+                      <img loading="lazy" src={project.cover_url} alt={project.name} className="absolute inset-0 w-full h-full object-cover" />
+                    ) : (
+                      <div className={`absolute inset-0 flex items-center justify-center ${STATUS_EMPTY_BG[status]}`}>
+                        <Music size={28} className="text-white/10" />
+                      </div>
+                    )}
+
+                    {/* Play overlay on hover */}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div className="w-12 h-12 rounded-full bg-white/95 flex items-center justify-center shadow-xl">
+                        <Play size={18} fill="black" className="text-black ml-0.5" />
+                      </div>
                     </div>
-                  )}
-                  <div className={`absolute top-2 left-2 px-2 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider border ${STATUS_STYLE[project.status || 'in_progress']}`}>
-                    {(project.status || 'in_progress').replace('_', ' ')}
+
+                    {/* Status badge */}
+                    <div className={`absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[8px] font-mono font-bold uppercase tracking-wider border backdrop-blur-sm ${STATUS_STYLE[status]}`}>
+                      {status.replace('_', ' ')}
+                    </div>
+
+                    {/* Track count badge */}
+                    <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                      <Music size={9} className="text-[#a08a6a]" />
+                      <span className="text-[9px] font-mono text-[#E8DCC8]">{project.track_count || 0}</span>
+                    </div>
                   </div>
-                </div>
-                <h3 className="text-[13px] font-medium text-[#E8DCC8] truncate leading-tight mb-1 group-hover:text-white">
-                  {project.name}
-                </h3>
-                <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-[#5a5142]">
-                  <span>{project.track_count || 0} track{(project.track_count || 0) !== 1 ? 's' : ''}</span>
-                  {project.bpm_target != null && (
-                    <>
-                      <span>·</span>
-                      <span>{fmtBpm(project.bpm_target)}</span>
-                    </>
-                  )}
-                  {project.key_target && (
-                    <>
-                      <span>·</span>
-                      <span>{fmtKey(project.key_target, null)}</span>
-                    </>
-                  )}
-                </div>
-              </Link>
-            ))}
+
+                  {/* Meta below card */}
+                  <h3 className="text-[13px] font-semibold text-[#E8DCC8] truncate leading-tight mb-1.5 group-hover:text-white transition-colors">
+                    {project.name}
+                  </h3>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {project.bpm_target != null && (
+                      <span className="text-[9px] font-mono text-[#5a5142] bg-[#14110d] border border-[#1f1a13] px-1.5 py-0.5 rounded tabular-nums">
+                        {fmtBpm(project.bpm_target)}
+                      </span>
+                    )}
+                    {project.key_target && (
+                      <span className="text-[9px] font-mono text-[#5a5142] bg-[#14110d] border border-[#1f1a13] px-1.5 py-0.5 rounded uppercase">
+                        {fmtKey(project.key_target, null)}
+                      </span>
+                    )}
+                    {relativeTime && (
+                      <span className="text-[9px] font-mono text-[#3a3328] flex items-center gap-1 ml-auto">
+                        <Clock size={8} />
+                        {relativeTime}
+                      </span>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>
