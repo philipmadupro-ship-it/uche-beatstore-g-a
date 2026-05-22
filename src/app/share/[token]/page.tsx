@@ -7,6 +7,8 @@ import { Track } from '@/lib/types';
 // the ~150 KB WaveSurfer bundle doesn't ship in this page's initial JS.
 import type WaveSurferType from 'wavesurfer.js';
 import React from 'react';
+import { createPortal } from 'react-dom';
+import { Check, X as XIcon } from 'lucide-react';
 import { audioSrc } from '@/lib/audio/url';
 import { ClientShareVariant } from '@/components/share/variants/ClientShareVariant';
 import { ProducerShareVariant } from '@/components/share/variants/ProducerShareVariant';
@@ -15,6 +17,37 @@ import { FriendShareVariant } from '@/components/share/variants/FriendShareVaria
 
 export default function PublicSharePage({ params: paramsPromise }: { params: Promise<{ token: string }> }) {
   const params = React.use(paramsPromise);
+  const token = params.token;
+
+  // ── purchase state ──────────────────────────────────────────────────
+  // Mirrors the modern share page. Stripe redirects here with
+  // ?purchase=success&session_id=cs_xxx; we persist the session_id to
+  // localStorage keyed by token so downloads remain unlocked across reloads.
+  const [purchaseSessionId, setPurchaseSessionId] = useState<string | null>(null);
+  const [purchaseBanner, setPurchaseBanner] = useState<'success' | 'cancelled' | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const purchase = url.searchParams.get('purchase');
+    const sid = url.searchParams.get('session_id');
+    if (purchase === 'success' && sid) {
+      try { localStorage.setItem(`u2c-purchase-${token}`, sid); } catch {}
+      setPurchaseSessionId(sid);
+      setPurchaseBanner('success');
+    } else if (purchase === 'cancelled') {
+      setPurchaseBanner('cancelled');
+    } else {
+      try {
+        const stored = localStorage.getItem(`u2c-purchase-${token}`);
+        if (stored) setPurchaseSessionId(stored);
+      } catch {}
+    }
+    if (purchase) {
+      url.searchParams.delete('purchase');
+      url.searchParams.delete('session_id');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [token]);
 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [shareTitle, setShareTitle] = useState('');
@@ -193,18 +226,16 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
     setIsPlaying(true);
   };
   const downloadTrack = (track: Track) => {
-    // Route the download through our same-origin proxy so the response
-    // carries Content-Disposition: attachment. Without that, browsers
-    // ignore the <a download> attribute for cross-origin R2 URLs and just
-    // navigate to the audio file — which the user perceives as "downloads
-    // don't work."
+    // Route through /api/share/[token]/download — the endpoint grants
+    // either via share.allow_downloads (free) or via a matching
+    // license_purchases row keyed by purchaseSessionId (paid).
+    const url = new URL(`/api/share/${token}/download`, window.location.origin);
+    url.searchParams.set('track_id', track.id);
+    if (purchaseSessionId) url.searchParams.set('session_id', purchaseSessionId);
     const ext = (track.audio_url.match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i)?.[1] || 'mp3').toLowerCase();
     const filename = `${track.title || 'track'}.${ext}`;
-    const proxied =
-      `/api/audio?src=${encodeURIComponent(track.audio_url)}` +
-      `&download=1&filename=${encodeURIComponent(filename)}`;
     const a = document.createElement('a');
-    a.href = proxied;
+    a.href = url.toString();
     a.download = filename;
     document.body.appendChild(a);
     a.click();
@@ -266,14 +297,52 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
     description: null,
   };
 
+  // Portal the post-Stripe banner to <body> so it overlays whichever
+  // variant renders. Mirrors the modern share page.
+  const purchaseBannerNode = purchaseBanner && typeof document !== 'undefined'
+    ? createPortal(
+        <div
+          className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] max-w-[90vw] sm:max-w-md px-5 py-3 rounded-full border backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] flex items-center gap-3 animate-in slide-in-from-top-4 fade-in duration-300 ${
+            purchaseBanner === 'success'
+              ? 'bg-[#0e1f17]/95 border-[#6DC6A4]/30 text-[#9fe5c1]'
+              : 'bg-[#1f1410]/95 border-[#8A7A5C]/30 text-[#E8D8B8]'
+          }`}
+        >
+          {purchaseBanner === 'success' ? (
+            <>
+              <Check size={14} className="text-[#6DC6A4] shrink-0" />
+              <span className="text-[12px] font-medium">
+                Purchase complete — receipt + access sent to your email.
+              </span>
+            </>
+          ) : (
+            <>
+              <XIcon size={14} className="text-[#a08a6a] shrink-0" />
+              <span className="text-[12px] font-medium">Checkout cancelled.</span>
+            </>
+          )}
+          <button
+            onClick={() => setPurchaseBanner(null)}
+            className="ml-2 text-current opacity-60 hover:opacity-100 transition-opacity"
+            aria-label="Dismiss"
+          >
+            <XIcon size={12} />
+          </button>
+        </div>,
+        document.body,
+      )
+    : null;
+
   if (share?.recipient_kind === 'client') {
     return (
       <>
+        {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
         <ClientShareVariant
           project={projectMock}
           tracks={tracks}
           creator={creator}
+          licenses={[]}
           shareToken={share?.sales_enabled ? params.token : undefined}
           shareLeasePrice={share?.lease_price_usd ?? null}
           shareExclusivePrice={share?.exclusive_price_usd ?? null}
@@ -301,6 +370,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   if (share?.recipient_kind === 'producer') {
     return (
       <>
+        {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
         <ProducerShareVariant
           project={projectMock}
@@ -320,6 +390,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   if (share?.recipient_kind === 'rapper') {
     return (
       <>
+        {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
         <RapperShareVariant
           project={projectMock}
@@ -339,6 +410,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   if (share?.recipient_kind === 'friend') {
     return (
       <>
+        {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
         <FriendShareVariant
           project={projectMock}
@@ -356,6 +428,8 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   }
 
   return (
+    <>
+    {purchaseBannerNode}
     <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8] flex flex-col font-sans">
       {/* Header */}
       <header className="px-8 py-5 border-b border-[#16130e] flex items-center justify-between">
@@ -545,6 +619,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         )}
       </main>
     </div>
+    </>
   );
 }
 

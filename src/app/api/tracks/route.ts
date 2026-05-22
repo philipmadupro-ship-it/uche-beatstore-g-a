@@ -83,7 +83,15 @@ export async function GET(req: NextRequest) {
       if (isErrorResponse(rows)) return rows;
     }
 
-    return NextResponse.json(rows);
+    // `private` keeps responses out of shared CDN caches (per-user data).
+    // `max-age=15` lets browser back/forward nav serve instantly.
+    // `stale-while-revalidate=60` keeps the screen instant while a quiet
+    // background refresh updates the cache. The realtime hook still fires
+    // an explicit invalidation on actual DB changes, so this only bounds
+    // staleness when there's no realtime event.
+    return NextResponse.json(rows, {
+      headers: { 'Cache-Control': 'private, max-age=15, stale-while-revalidate=60' },
+    });
   } catch (error) {
     log.error('list failed', { error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });

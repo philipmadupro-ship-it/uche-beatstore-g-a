@@ -15,7 +15,7 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { fmtBpm, fmtKey, fmtDuration } from '@/lib/audio/format';
 import { StarRating } from '@/components/tracks/StarRating';
 import { TagPicker } from '@/components/tracks/TagPicker';
-import { ShareModal } from '@/components/share/ShareModal';
+import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { audioSrc } from '@/lib/audio/url';
 import { OfflineToggle } from '@/components/offline/OfflineToggle';
 import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
@@ -525,12 +525,12 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
       </div>
 
       {shareOpen && (
-        <ShareModal
-          onClose={() => setShareOpen(false)}
-          title={track.title}
-          trackIds={[track.id]}
+        <ContentShareModal
+          contentType="track"
+          contentId={track.id}
+          contentTitle={track.title}
           coverUrl={track.cover_url}
-          kind="track"
+          onClose={() => setShareOpen(false)}
         />
       )}
     </DashboardLayout>

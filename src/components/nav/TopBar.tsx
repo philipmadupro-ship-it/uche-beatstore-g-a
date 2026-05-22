@@ -18,6 +18,8 @@ import {
   Menu,
   X,
   User,
+  Store,
+  ExternalLink,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
@@ -36,6 +38,7 @@ const NAV_ITEMS = [
   { label: 'Contacts',  icon: Users,     href: '/contacts'  },
   { label: 'Calendar',  icon: Calendar,  href: '/calendar'  },
   { label: 'Links',     icon: Link2,     href: '/links'     },
+  { label: 'Store',     icon: Store,     href: '/store-editor' },
   { label: 'Offline',   icon: CloudOff,  href: '/offline'   },
 ];
 
@@ -119,6 +122,20 @@ export function TopBar() {
           <span className="flex-1 text-left">Search</span>
           <kbd className="text-[9px] font-mono border border-[#1a160f] rounded px-1 py-0.5">⌘K</kbd>
         </button>
+
+        {/* View Storefront — external link to /store. Hidden below md
+            where the mobile drawer has a Store nav item already. */}
+        <Link
+          href="/store"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="View public storefront"
+          className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#D4BFA0] hover:bg-[#16130e] border border-transparent hover:border-[#1f1a13] transition-all shrink-0"
+        >
+          <Store size={11} />
+          <span>Store</span>
+          <ExternalLink size={9} className="opacity-60" />
+        </Link>
 
         {/* Activity bell — opens the slide-in activity panel. Shown at
             every breakpoint; mobile users want this just as much. */}

@@ -39,11 +39,15 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
   const [editingTargets, setEditingTargets] = useState(false);
   const [targetBpm, setTargetBpm] = useState<string>('');
   const [targetKey, setTargetKey] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
+  const [priceUsd, setPriceUsd] = useState<string>('');
+  const [savingStorefront, setSavingStorefront] = useState(false);
   // Multi-select state — Set for O(1) toggle. Mirrors playlists +
   // contacts patterns so the floating BatchActionBar feels the same
   // across the app.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [togglingStoreFeatured, setTogglingStoreFeatured] = useState(false);
 
   const { setTrack: setGlobalTrack, setQueue } = usePlayer();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -58,6 +62,10 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
         setTempTitle(prData.project.name);
         setTargetBpm(prData.project.bpm_target ? String(prData.project.bpm_target) : '');
         setTargetKey(prData.project.key_target || '');
+        setDescription(prData.project.description ?? '');
+        setPriceUsd(
+          prData.project.price_usd != null ? String(prData.project.price_usd) : '',
+        );
       }
       const tracksRes = await fetch(`/api/tracks?project_id=${params.id}`);
       const tracksData = await tracksRes.json();
@@ -162,6 +170,36 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
 
   const setStatus = async (status: typeof STATUSES[number]) => {
     await patchProject({ status });
+  };
+
+  const toggleStoreFeatured = async () => {
+    if (togglingStoreFeatured) return;
+    const next = !project?.store_featured;
+    setTogglingStoreFeatured(true);
+    await patchProject(
+      { store_featured: next },
+      next ? 'Featured in store' : 'Removed from featured',
+    );
+    setTogglingStoreFeatured(false);
+  };
+
+  const saveStorefront = async () => {
+    setSavingStorefront(true);
+    const trimmed = description.trim();
+    const priceParsed = priceUsd.trim() === '' ? null : Number.parseFloat(priceUsd);
+    if (priceParsed != null && (Number.isNaN(priceParsed) || priceParsed < 0)) {
+      toast.error('Invalid price', 'Enter a non-negative number');
+      setSavingStorefront(false);
+      return;
+    }
+    await patchProject(
+      {
+        description: trimmed === '' ? null : trimmed,
+        price_usd: priceParsed,
+      },
+      'Storefront details saved',
+    );
+    setSavingStorefront(false);
   };
 
   const handlePlayTrack = (track: Track) => {
@@ -346,6 +384,9 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           onToggleUpload={() => setShowUpload(!showUpload)}
           playDisabled={!filtered.length}
           shareDisabled={!tracks.length}
+          storeFeatured={project?.store_featured}
+          onToggleStoreFeatured={toggleStoreFeatured}
+          storeFeaturedPending={togglingStoreFeatured}
         />
 
         {/* Upload Zone */}
@@ -360,6 +401,59 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
             />
           </div>
         )}
+
+        {/* Storefront — description + price for the public /store project page. */}
+        <div className="mb-8 rounded-2xl border border-[#1f1a13] bg-[#14110d] p-5">
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#a08a6a] mb-3">
+            Storefront
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-4">
+            <div>
+              <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] block mb-1.5">
+                Description
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                maxLength={10000}
+                placeholder="Describe this project…"
+                className="w-full bg-[#0c0a08] border border-[#1f1a13] rounded-lg px-3 py-2 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#8A7A5C] transition-colors resize-none leading-relaxed"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] block mb-1.5">
+                Price (USD)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#5a5142]">$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={priceUsd}
+                  onChange={(e) => setPriceUsd(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full bg-[#0c0a08] border border-[#1f1a13] rounded-lg pl-7 pr-3 py-2 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#8A7A5C] transition-colors"
+                />
+              </div>
+              <p className="text-[9px] font-mono text-[#3a3328] mt-1.5">
+                Leave blank to hide from store.
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end mt-4">
+            <button
+              type="button"
+              onClick={saveStorefront}
+              disabled={savingStorefront}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#D4BFA0] hover:bg-[#E8D8B8] disabled:opacity-60 text-black text-[11px] font-semibold transition-all"
+            >
+              {savingStorefront ? <Loader2 size={12} className="animate-spin" /> : null}
+              {savingStorefront ? 'Saving…' : 'Save storefront'}
+            </button>
+          </div>
+        </div>
 
         {/* Tabs + search + track list — extracted to components/projects/ProjectTrackList. */}
         <ProjectTrackList

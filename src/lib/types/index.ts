@@ -33,6 +33,12 @@ export interface Track {
   description?: string | null;
   lease_price_usd?: number | null;
   exclusive_price_usd?: number | null;
+  store_listed?: boolean | null;
+  free_download_enabled?: boolean | null;
+  /** Store display position. Lower = appears earlier. NULL = unordered (shown after all ordered tracks). */
+  store_sort_order?: number | null;
+  /** Optional separate WAV upload for licensed delivery (migration 039). */
+  wav_url?: string | null;
   created_at: string;
 }
 
@@ -78,6 +84,7 @@ export type ContactCategory =
   | 'curator'
   | 'engineer'
   | 'press'
+  | 'buyer'
   | 'other';
 
 export interface Contact {
@@ -95,6 +102,9 @@ export interface Contact {
   twitter?: string | null;
   website?: string | null;
   notes?: string | null;
+  /** Buyer pipeline stage — set when contact was created via store
+   *  free-download or contact form (category = 'buyer'). */
+  buyer_pipeline_status?: 'new_lead' | 'contacted' | 'negotiating' | 'purchased' | 'repeat_buyer' | null;
   created_at: string;
 }
 

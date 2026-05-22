@@ -6,6 +6,7 @@ import {
   ListMusic, Music, Shuffle, Repeat, ChevronDown, X,
 } from 'lucide-react';
 import { WavePlayer } from './WavePlayer';
+import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
@@ -324,16 +325,15 @@ export function PlayerBar() {
                 )}
               </div>
 
-              {/* Waveform */}
+              {/* Waveform — MiniWaveform reads global progress; no second
+                  WaveSurfer instance so the audio can't double-play. */}
               <div className="mt-5 mb-2">
                 {currentTrack.audio_url ? (
-                  <WavePlayer
-                    url={currentTrack.audio_url}
+                  <MiniWaveform
                     trackId={currentTrack.id}
                     peaksUrl={currentTrack.peaks_url ?? null}
-                    hideControls
-                    onFinish={next}
                     height={48}
+                    isActive
                   />
                 ) : (
                   <div className="w-full h-12 bg-[#1a160f] rounded-lg" />

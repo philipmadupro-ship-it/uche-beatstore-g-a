@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Loader2, Music, Layers, Plus, Search, Play, Clock } from 'lucide-react';
+import { Loader2, Music, Layers, Plus, Search, Play, Clock, ShoppingBag, Globe } from 'lucide-react';
 import Link from 'next/link';
 import { fmtBpm, fmtKey } from '@/lib/audio/format';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
@@ -33,6 +33,8 @@ interface Project {
   track_count?: number;
   created_at?: string;
   updated_at?: string;
+  store_featured?: boolean;
+  is_public?: boolean;
 }
 
 const STATUS_STYLE: Record<string, string> = {
@@ -82,6 +84,44 @@ export default function ProjectsPage() {
   // empty-state branch below can show a real retry instead of pretending
   // the user just hasn't created anything yet.
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [togglingStore, setTogglingStore] = useState<string | null>(null);
+
+  const toggleStoreFeatured = async (project: Project, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = !project.store_featured;
+    // When adding to store, also make the project public so it passes the
+    // store API's is_public guard. A private project that is store_featured
+    // would never render — auto-publish avoids a confusing two-step flow.
+    const patch: Record<string, unknown> = { store_featured: next };
+    if (next && !project.is_public) patch.is_public = true;
+
+    setTogglingStore(project.id);
+    // Optimistic update
+    setProjects((prev) => prev.map((p) =>
+      p.id === project.id ? { ...p, store_featured: next, is_public: next ? true : p.is_public } : p,
+    ));
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      toast.success(next ? 'Project added to store ✓' : 'Project removed from store');
+    } catch (err: any) {
+      // Rollback
+      setProjects((prev) => prev.map((p) =>
+        p.id === project.id ? { ...p, store_featured: !next, is_public: project.is_public } : p,
+      ));
+      toast.error('Failed to update', err.message);
+    } finally {
+      setTogglingStore(null);
+    }
+  };
 
   const fetchProjects = async () => {
     setFetchError(null);
@@ -300,63 +340,92 @@ export default function ProjectsPage() {
               const relativeTime = updatedAt ? relativeDate(updatedAt) : null;
 
               return (
-                <Link href={`/projects/${project.id}`} key={project.id} className="group flex flex-col">
-                  {/* Cover card */}
-                  <div className={`relative aspect-square rounded-xl mb-3 overflow-hidden border transition-all duration-200 ${STATUS_BORDER[status]} group-hover:scale-[1.02]`}>
-                    {/* Status-tinted gradient overlay at bottom */}
-                    <div className={`absolute inset-0 ${STATUS_GRADIENT[status]} opacity-60`} />
+                <div key={project.id} className="flex flex-col">
+                  <Link href={`/projects/${project.id}`} className="group flex flex-col">
+                    {/* Cover card */}
+                    <div className={`relative aspect-square rounded-xl mb-3 overflow-hidden border transition-all duration-200 ${STATUS_BORDER[status]} group-hover:scale-[1.02]`}>
+                      {/* Status-tinted gradient overlay at bottom */}
+                      <div className={`absolute inset-0 ${STATUS_GRADIENT[status]} opacity-60`} />
 
-                    {project.cover_url ? (
-                      <img loading="lazy" src={project.cover_url} alt={project.name} className="absolute inset-0 w-full h-full object-cover" />
-                    ) : (
-                      <div className={`absolute inset-0 flex items-center justify-center ${STATUS_EMPTY_BG[status]}`}>
-                        <Music size={28} className="text-white/10" />
+                      {project.cover_url ? (
+                        <img loading="lazy" src={project.cover_url} alt={project.name} className="absolute inset-0 w-full h-full object-cover" />
+                      ) : (
+                        <div className={`absolute inset-0 flex items-center justify-center ${STATUS_EMPTY_BG[status]}`}>
+                          <Music size={28} className="text-white/10" />
+                        </div>
+                      )}
+
+                      {/* Play overlay on hover */}
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-white/95 flex items-center justify-center shadow-xl">
+                          <Play size={18} fill="black" className="text-black ml-0.5" />
+                        </div>
                       </div>
-                    )}
 
-                    {/* Play overlay on hover */}
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <div className="w-12 h-12 rounded-full bg-white/95 flex items-center justify-center shadow-xl">
-                        <Play size={18} fill="black" className="text-black ml-0.5" />
+                      {/* Status badge */}
+                      <div className={`absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[8px] font-mono font-bold uppercase tracking-wider border backdrop-blur-sm ${STATUS_STYLE[status]}`}>
+                        {status.replace('_', ' ')}
+                      </div>
+
+                      {/* Store badge — shown when store_featured */}
+                      {project.store_featured && (
+                        <div className="absolute top-2.5 right-2.5 px-1.5 py-0.5 rounded-full text-[7px] font-mono font-bold uppercase tracking-wider bg-[#D4BFA0] text-black border border-[#D4BFA0]/80">
+                          In Store
+                        </div>
+                      )}
+
+                      {/* Track count badge */}
+                      <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded-full">
+                        <Music size={9} className="text-[#a08a6a]" />
+                        <span className="text-[9px] font-mono text-[#E8DCC8]">{project.track_count || 0}</span>
                       </div>
                     </div>
 
-                    {/* Status badge */}
-                    <div className={`absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[8px] font-mono font-bold uppercase tracking-wider border backdrop-blur-sm ${STATUS_STYLE[status]}`}>
-                      {status.replace('_', ' ')}
+                    {/* Meta below card */}
+                    <h3 className="text-[13px] font-semibold text-[#E8DCC8] truncate leading-tight mb-1.5 group-hover:text-white transition-colors">
+                      {project.name}
+                    </h3>
+
+                    <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                      {project.bpm_target != null && (
+                        <span className="text-[9px] font-mono text-[#5a5142] bg-[#14110d] border border-[#1f1a13] px-1.5 py-0.5 rounded tabular-nums">
+                          {fmtBpm(project.bpm_target)}
+                        </span>
+                      )}
+                      {project.key_target && (
+                        <span className="text-[9px] font-mono text-[#5a5142] bg-[#14110d] border border-[#1f1a13] px-1.5 py-0.5 rounded uppercase">
+                          {fmtKey(project.key_target, null)}
+                        </span>
+                      )}
+                      {relativeTime && (
+                        <span className="text-[9px] font-mono text-[#3a3328] flex items-center gap-1 ml-auto">
+                          <Clock size={8} />
+                          {relativeTime}
+                        </span>
+                      )}
                     </div>
+                  </Link>
 
-                    {/* Track count badge */}
-                    <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                      <Music size={9} className="text-[#a08a6a]" />
-                      <span className="text-[9px] font-mono text-[#E8DCC8]">{project.track_count || 0}</span>
-                    </div>
-                  </div>
-
-                  {/* Meta below card */}
-                  <h3 className="text-[13px] font-semibold text-[#E8DCC8] truncate leading-tight mb-1.5 group-hover:text-white transition-colors">
-                    {project.name}
-                  </h3>
-
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {project.bpm_target != null && (
-                      <span className="text-[9px] font-mono text-[#5a5142] bg-[#14110d] border border-[#1f1a13] px-1.5 py-0.5 rounded tabular-nums">
-                        {fmtBpm(project.bpm_target)}
-                      </span>
-                    )}
-                    {project.key_target && (
-                      <span className="text-[9px] font-mono text-[#5a5142] bg-[#14110d] border border-[#1f1a13] px-1.5 py-0.5 rounded uppercase">
-                        {fmtKey(project.key_target, null)}
-                      </span>
-                    )}
-                    {relativeTime && (
-                      <span className="text-[9px] font-mono text-[#3a3328] flex items-center gap-1 ml-auto">
-                        <Clock size={8} />
-                        {relativeTime}
-                      </span>
-                    )}
-                  </div>
-                </Link>
+                  {/* Show in Store toggle — outside Link to prevent navigation */}
+                  <button
+                    onClick={(e) => toggleStoreFeatured(project, e)}
+                    disabled={togglingStore === project.id}
+                    title={project.store_featured ? 'Remove from store' : 'Add to store (will also make project public)'}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-mono uppercase tracking-wider border transition-all w-full justify-center disabled:opacity-60 ${
+                      project.store_featured
+                        ? 'bg-[#D4BFA0]/10 border-[#D4BFA0]/30 text-[#D4BFA0] hover:bg-[#D4BFA0]/20'
+                        : 'bg-transparent border-[#1f1a13] text-[#6a5d4a] hover:border-[#D4BFA0]/30 hover:text-[#D4BFA0]'
+                    }`}
+                  >
+                    {togglingStore === project.id
+                      ? <Loader2 size={9} className="animate-spin" />
+                      : project.store_featured
+                      ? <ShoppingBag size={9} />
+                      : <Globe size={9} />
+                    }
+                    {project.store_featured ? 'In store' : 'Add to store'}
+                  </button>
+                </div>
               );
             })}
           </div>

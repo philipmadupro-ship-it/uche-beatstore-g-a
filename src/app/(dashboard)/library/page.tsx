@@ -6,7 +6,7 @@
  */
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid, SlidersHorizontal } from 'lucide-react';
+import { Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid, SlidersHorizontal, Store } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { DropZone } from '@/components/upload/DropZone';
@@ -24,8 +24,9 @@ import { ContentShareModal } from '@/components/share/ContentShareModal';
 
 // Sort modes — added so the library is browsable beyond "newest first."
 // `recent` reflects upload time; `recently_played` would need a history
-// table we don't have. Skipping for now.
-type SortMode = 'recent' | 'title' | 'bpm' | 'bpm-desc' | 'key' | 'rating';
+// table we don't have. Skipping for now. `store_order` activates the
+// beat reorder UI so creators can control public storefront placement.
+type SortMode = 'recent' | 'title' | 'bpm' | 'bpm-desc' | 'key' | 'rating' | 'store_order';
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: 'recent', label: 'Newest' },
@@ -34,6 +35,7 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: 'bpm-desc', label: 'BPM ↓' },
   { value: 'key', label: 'Key' },
   { value: 'rating', label: 'Rating ↓' },
+  { value: 'store_order', label: 'Store Order ↕' },
 ];
 
 // Circle-of-fifths ordering — sorting by key alphabetically would
@@ -107,7 +109,7 @@ export default function LibraryPage() {
     setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch('/api/tracks', { cache: 'no-store' });
+      const res = await fetch('/api/tracks');
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data?.error || `Failed to load tracks (${res.status})`);
@@ -182,6 +184,18 @@ export default function LibraryPage() {
       case 'rating':
         sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
         break;
+      case 'store_order':
+        // Tracks with a set store_sort_order come first (ascending),
+        // then tracks with no order fall to the bottom sorted by created_at.
+        sorted.sort((a, b) => {
+          const ao = (a as any).store_sort_order;
+          const bo = (b as any).store_sort_order;
+          if (ao == null && bo == null) return String(b.created_at).localeCompare(String(a.created_at));
+          if (ao == null) return 1;
+          if (bo == null) return -1;
+          return ao - bo;
+        });
+        break;
       case 'recent':
       default:
         sorted.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
@@ -247,6 +261,43 @@ export default function LibraryPage() {
     const shuffled = [...filtered].sort(() => Math.random() - 0.5);
     setQueue(shuffled);
     setTrack(shuffled[0]);
+  };
+
+  // Store reorder — swap store_sort_order between positions fromIdx and toIdx
+  // within the current filtered list (only valid in store_order sort mode).
+  // We assign contiguous integers on first move if tracks haven't been ordered.
+  const moveTrack = async (fromIdx: number, toIdx: number) => {
+    if (toIdx < 0 || toIdx >= filtered.length) return;
+
+    // Build a working copy with sort orders assigned (fill nulls with position)
+    const withOrder = filtered.map((t, i) => ({
+      ...t,
+      store_sort_order: (t as any).store_sort_order ?? i,
+    }));
+
+    // Swap the two
+    const aOrder = withOrder[fromIdx].store_sort_order as number;
+    const bOrder = withOrder[toIdx].store_sort_order as number;
+    withOrder[fromIdx] = { ...withOrder[fromIdx], store_sort_order: bOrder };
+    withOrder[toIdx] = { ...withOrder[toIdx], store_sort_order: aOrder };
+
+    // Optimistic state update — rebuild the full tracks array
+    setTracks((prev) => {
+      const updated = new Map(withOrder.map((t) => [t.id, t]));
+      return prev.map((t) => updated.get(t.id) ?? t);
+    });
+
+    // Persist both affected tracks in parallel
+    await Promise.all([withOrder[fromIdx], withOrder[toIdx]].map((t) =>
+      fetch(`/api/tracks/${t.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ store_sort_order: t.store_sort_order }),
+      }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); }),
+    )).catch(() => {
+      // On failure re-fetch the true server state
+      fetchTracks();
+    });
   };
 
   const playTrack = (track: any) => {
@@ -629,10 +680,20 @@ export default function LibraryPage() {
           </div>
         ) : viewMode === 'list' ? (
           <div className="border-t border-[#161310] border-b mb-32">
+            {sortMode === 'store_order' && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-[#0e0c09] border-b border-[#1a160f]">
+                <Store size={10} className="text-[#D4BFA0]" />
+                <span className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a]">
+                  Store order — use ↑↓ to rearrange how beats appear on your public store
+                </span>
+              </div>
+            )}
             {/* Column header — grid must match TrackCard's 9-col md template */}
             <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_50px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[9px] font-mono uppercase tracking-wider">
               <span className="text-center flex items-center justify-center text-[#3a3328]">
-                {selectMode ? (
+                {sortMode === 'store_order' ? (
+                  <Store size={10} className="text-[#D4BFA0]" />
+                ) : selectMode ? (
                   <button
                     type="button"
                     onClick={() => {
@@ -701,13 +762,19 @@ export default function LibraryPage() {
                 onPlayClick={() => playTrack(t)}
                 onDelete={(track) => handleDeleteTrack(track)}
                 onShare={(track) => setShareTarget(track)}
-                selectable={selectMode}
+                selectable={selectMode && sortMode !== 'store_order'}
                 selected={selectedIds.has(t.id)}
                 onSelectChange={(track, sel) => setSelectedIds((prev) => {
                   const next = new Set(prev);
                   if (sel) next.add(track.id); else next.delete(track.id);
                   return next;
                 })}
+                {...(sortMode === 'store_order' ? {
+                  onMoveUp: () => moveTrack(i, i - 1),
+                  onMoveDown: () => moveTrack(i, i + 1),
+                  isFirstInOrder: i === 0,
+                  isLastInOrder: i === filtered.length - 1,
+                } : {})}
               />
             ))}
           </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import React from 'react';
+import { createPortal } from 'react-dom';
 import {
   Play, Pause, SkipBack, SkipForward, Download, Volume2, VolumeX,
   Music, Lock, Loader2, Shield, MessageSquare, Send, Eye, Edit3,
@@ -12,6 +13,7 @@ import { useWaveSurfer } from '@/hooks/useWaveSurfer';
 import { PlayerCanvas } from '@/components/player/PlayerCanvas';
 import { toast } from '@/hooks/useToast';
 import { ClientShareVariant } from '@/components/share/variants/ClientShareVariant';
+import type { LicenseTier } from '@/components/store/LicenseSelector';
 import { ArrangementOverlay } from '@/components/tracks/ArrangementOverlay';
 import { ProducerShareVariant } from '@/components/share/variants/ProducerShareVariant';
 import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
@@ -114,6 +116,38 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   const params = React.use(paramsPromise);
   const token = params.token;
 
+  // ── purchase state ──────────────────────────────────────────────────
+  // On return from Stripe checkout the URL carries
+  // ?purchase=success&session_id=cs_xxx. We snapshot the session_id into
+  // localStorage keyed by share token so it survives reloads, then strip
+  // the params from the URL. Downloads pass session_id back to
+  // /api/share/[token]/download to unlock paid tracks.
+  const [purchaseSessionId, setPurchaseSessionId] = useState<string | null>(null);
+  const [purchaseBanner, setPurchaseBanner] = useState<'success' | 'cancelled' | null>(null);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const purchase = url.searchParams.get('purchase');
+    const sid = url.searchParams.get('session_id');
+    if (purchase === 'success' && sid) {
+      try { localStorage.setItem(`u2c-purchase-${token}`, sid); } catch {}
+      setPurchaseSessionId(sid);
+      setPurchaseBanner('success');
+    } else if (purchase === 'cancelled') {
+      setPurchaseBanner('cancelled');
+    } else {
+      try {
+        const stored = localStorage.getItem(`u2c-purchase-${token}`);
+        if (stored) setPurchaseSessionId(stored);
+      } catch {}
+    }
+    if (purchase) {
+      url.searchParams.delete('purchase');
+      url.searchParams.delete('session_id');
+      window.history.replaceState({}, '', url.toString());
+    }
+  }, [token]);
+
   // ── share data ──────────────────────────────────────────────────────
   const [project, setProject] = useState<ShareProject | null>(null);
   const [playlist, setPlaylist] = useState<SharePlaylist | null>(null);
@@ -131,6 +165,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   const [passwordError, setPasswordError] = useState('');
   const [unlocking, setUnlocking] = useState(false);
   const [stems, setStems] = useState<any[]>([]);
+  const [licenses, setLicenses] = useState<LicenseTier[]>([]);
 
   // We keep the unlocked password in memory so subsequent fetches
   // (comments etc.) don't re-prompt.
@@ -239,6 +274,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
       // owner has filled out their settings form. Client variant
       // degrades section-by-section when fields are missing.
       setCreator(data.creator ?? null);
+      setLicenses((data.licenses as LicenseTier[]) ?? []);
       setRequiresPassword(false);
       if (pw) passwordRef.current = pw;
     } catch {
@@ -331,12 +367,17 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   };
 
   const downloadTrack = (t: ShareTrack) => {
-    if (!share?.allow_downloads) return;
+    // Route through /api/share/[token]/download — the endpoint decides
+    // whether to grant based on share.allow_downloads OR a matching
+    // license_purchases row keyed by purchaseSessionId. We always pass
+    // session_id when we have one; the server ignores it for free shares.
+    const url = new URL(`/api/share/${token}/download`, window.location.origin);
+    url.searchParams.set('track_id', t.id);
+    if (purchaseSessionId) url.searchParams.set('session_id', purchaseSessionId);
     const ext = (t.audio_url.match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i)?.[1] || 'mp3').toLowerCase();
     const filename = `${t.title || 'track'}.${ext}`;
-    const proxied = `/api/audio?src=${encodeURIComponent(t.audio_url)}&download=1&filename=${encodeURIComponent(filename)}`;
     const a = document.createElement('a');
-    a.href = proxied;
+    a.href = url.toString();
     a.download = filename;
     document.body.appendChild(a);
     a.click();
@@ -524,6 +565,43 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
 
   const canComment = share?.role === 'commenter' || share?.role === 'editor';
 
+  // Portal the post-Stripe banner to <body> so it stays visible across
+  // every variant (Client / Producer / Rapper / Friend / default) without
+  // having to thread it through each variant's JSX. Dismiss on click.
+  const purchaseBannerNode = purchaseBanner && typeof document !== 'undefined'
+    ? createPortal(
+        <div
+          className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] max-w-[90vw] sm:max-w-md px-5 py-3 rounded-full border backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] flex items-center gap-3 animate-in slide-in-from-top-4 fade-in duration-300 ${
+            purchaseBanner === 'success'
+              ? 'bg-[#0e1f17]/95 border-[#6DC6A4]/30 text-[#9fe5c1]'
+              : 'bg-[#1f1410]/95 border-[#8A7A5C]/30 text-[#E8D8B8]'
+          }`}
+        >
+          {purchaseBanner === 'success' ? (
+            <>
+              <Check size={14} className="text-[#6DC6A4] shrink-0" />
+              <span className="text-[12px] font-medium">
+                Purchase complete — receipt + access sent to your email.
+              </span>
+            </>
+          ) : (
+            <>
+              <XIcon size={14} className="text-[#a08a6a] shrink-0" />
+              <span className="text-[12px] font-medium">Checkout cancelled.</span>
+            </>
+          )}
+          <button
+            onClick={() => setPurchaseBanner(null)}
+            className="ml-2 text-current opacity-60 hover:opacity-100 transition-opacity"
+            aria-label="Dismiss"
+          >
+            <XIcon size={12} />
+          </button>
+        </div>,
+        document.body,
+      )
+    : null;
+
   // Normalise playlist/track shares into a project-shaped object so the
   // four variant components receive consistent props regardless of content type.
   const displayProject: ShareProject | null = project
@@ -539,11 +617,13 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   if (share?.recipient_kind === 'client' && displayProject) {
     return (
       <>
+        {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
         <ClientShareVariant
           project={displayProject}
           tracks={tracks}
           creator={creator}
+          licenses={licenses}
           shareToken={share.sales_enabled ? token : undefined}
           playingId={activeTrack?.id ?? null}
           isPlaying={isPlaying}
@@ -570,6 +650,8 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
 
   if (share?.recipient_kind === 'producer' && displayProject) {
     return (
+      <>
+      {purchaseBannerNode}
       <ProducerShareVariant
         project={displayProject}
         tracks={tracks}
@@ -588,11 +670,14 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           }
         }}
       />
+      </>
     );
   }
 
   if (share?.recipient_kind === 'rapper' && displayProject) {
     return (
+      <>
+      {purchaseBannerNode}
       <RapperShareVariant
         project={displayProject}
         tracks={tracks}
@@ -611,11 +696,14 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           }
         }}
       />
+      </>
     );
   }
 
   if (share?.recipient_kind === 'friend' && displayProject) {
     return (
+      <>
+      {purchaseBannerNode}
       <FriendShareVariant
         project={displayProject}
         tracks={tracks}
@@ -634,10 +722,13 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           }
         }}
       />
+      </>
     );
   }
 
   return (
+    <>
+    {purchaseBannerNode}
     <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8] flex flex-col">
       {/* Header */}
       <header className="px-8 py-5 border-b border-[#16130e] flex items-center justify-between">
@@ -1039,6 +1130,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         </section>
       </main>
     </div>
+    </>
   );
 }
 

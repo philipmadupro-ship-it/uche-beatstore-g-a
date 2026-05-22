@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { UserPlus, Settings as SettingsIcon, Loader2, LogOut, CheckCircle2, Shield, User, ArrowRight } from 'lucide-react';
+import { UserPlus, Settings as SettingsIcon, Loader2, LogOut, CheckCircle2, Shield, User, ArrowRight, FileText } from 'lucide-react';
 
 interface TeamMember {
   user_id: string;
@@ -85,6 +85,24 @@ export default function SettingsPage() {
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-0.5">Creator identity</p>
                 <h2 className="text-[14px] font-semibold text-[#E8DCC8]">Creator Profile</h2>
                 <p className="text-[11px] text-[#5a5142] mt-0.5">Bio, hero image, licensing tiers, social links, and license agreement.</p>
+              </div>
+              <ArrowRight size={16} className="text-[#5a5142] group-hover:text-[#a08a6a] shrink-0 transition-colors" />
+            </Link>
+          </section>
+
+          {/* License Builder */}
+          <section>
+            <Link
+              href="/settings/licenses"
+              className="flex items-center gap-5 bg-[#14110d] border border-[#1a160f] rounded-2xl p-6 hover:border-[#2d2620] hover:bg-[#16130e] transition-all group"
+            >
+              <div className="w-12 h-12 rounded-xl bg-[#1a160f] border border-[#2d2620] flex items-center justify-center shrink-0 group-hover:border-[#D4BFA0]/30 transition-colors">
+                <FileText size={20} className="text-[#a08a6a]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-0.5">Storefront</p>
+                <h2 className="text-[14px] font-semibold text-[#E8DCC8]">License Builder</h2>
+                <p className="text-[11px] text-[#5a5142] mt-0.5">Create up to 4 license tiers with custom pricing, rights, and file delivery.</p>
               </div>
               <ArrowRight size={16} className="text-[#5a5142] group-hover:text-[#a08a6a] shrink-0 transition-colors" />
             </Link>

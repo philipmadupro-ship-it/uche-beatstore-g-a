@@ -13,6 +13,14 @@ interface PlayerState {
   volume: number;
   shuffle: boolean;
   repeat: RepeatMode;
+  /**
+   * When non-null, WavePlayer reads this on every render cycle and seeks
+   * its WaveSurfer instance to that fraction (0..1), then clears it back
+   * to null.  External components (store grid waveform, share page) write
+   * here via seekTo() to seek the active audio engine without holding a
+   * direct ref to the WaveSurfer instance.
+   */
+  seekTarget: number | null;
 
   // Core controls
   setTrack: (track: Track) => void;
@@ -25,6 +33,8 @@ interface PlayerState {
   setPlaying: (isPlaying: boolean) => void;
   setProgress: (progress: number) => void;
   setVolume: (volume: number) => void;
+  /** Seek the active audio engine to a fraction 0..1 of the track. */
+  seekTo: (fraction: number) => void;
 
   // Navigation
   next: () => void;
@@ -59,6 +69,7 @@ export const usePlayer = create<PlayerState>()(
       volume: 0.8,
       shuffle: false,
       repeat: 'off',
+      seekTarget: null,
 
       setTrack: (track) => {
         const prev = get().currentTrack;
@@ -100,6 +111,7 @@ export const usePlayer = create<PlayerState>()(
       setPlaying: (isPlaying) => set({ isPlaying }),
       setProgress: (progress) => set({ progress }),
       setVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)) }),
+      seekTo: (fraction) => set({ seekTarget: Math.max(0, Math.min(1, fraction)) }),
 
       next: () => {
         const { currentTrack, queue, repeat, shuffle, history } = get();

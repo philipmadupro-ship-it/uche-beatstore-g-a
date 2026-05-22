@@ -13,6 +13,7 @@ interface Project {
   status?: 'in_progress' | 'final' | 'archived';
   bpm_target?: number | null;
   key_target?: string | null;
+  store_featured?: boolean;
 }
 
 const STATUSES = ['in_progress', 'final', 'archived'] as const;
@@ -54,6 +55,11 @@ interface Props {
    *  separately in a side-by-side layout. Default keeps the original
    *  cover-inline shape so existing callers stay unchanged. */
   hideCover?: boolean;
+
+  // Store curation
+  storeFeatured?: boolean;
+  onToggleStoreFeatured?: () => void;
+  storeFeaturedPending?: boolean;
 }
 
 /**
@@ -77,6 +83,9 @@ export function ProjectDetailHeader(props: Props) {
     onPlay, onShare, onAddFromLibrary, onToggleUpload,
     playDisabled, shareDisabled,
     hideCover = false,
+    storeFeatured = false,
+    onToggleStoreFeatured,
+    storeFeaturedPending = false,
   } = props;
 
   return (
@@ -186,6 +195,24 @@ export function ProjectDetailHeader(props: Props) {
               </button>
             )}
           </div>
+
+          {/* Featured in Store toggle — mirrors the one in playlist detail.
+              Lets the producer promote this project to the public /store page. */}
+           <div className="flex items-center gap-2 mt-2">
+             <span className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142]">Featured in Store</span>
+             <button
+               onClick={onToggleStoreFeatured}
+               disabled={!onToggleStoreFeatured || storeFeaturedPending}
+               className={`relative inline-flex w-9 h-5 rounded-full transition-colors ${storeFeatured ? 'bg-[#D4BFA0]' : 'bg-[#1f1a13] border border-[#2d2620]'}`}
+               aria-pressed={storeFeatured}
+               title="Toggle visibility on the public /store page"
+             >
+               <span
+                 className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${storeFeatured ? 'translate-x-4' : ''}`}
+               />
+             </button>
+             {storeFeaturedPending && <Loader2 size={10} className="animate-spin text-[#D4BFA0]" />}
+           </div>
         </div>
 
         {/* Action buttons — pill style matching the rest of the app */}

@@ -65,3 +65,6 @@ Thumbs.db
 /coverage
 /test-results/
 /playwright-report/
+node_modules/
+.next/
+stem-service/.venv/

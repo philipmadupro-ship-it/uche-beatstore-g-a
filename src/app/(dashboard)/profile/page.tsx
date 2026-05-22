@@ -26,6 +26,8 @@ const EMPTY_PROFILE = {
   spotify_url: '',
   soundcloud_url: '',
   website_url: '',
+  accent_color: '#D4BFA0',
+  font_style: 'default',
 };
 
 type Profile = typeof EMPTY_PROFILE;
@@ -91,6 +93,8 @@ export default function ProfilePage() {
             spotify_url: data.profile.spotify_url || '',
             soundcloud_url: data.profile.soundcloud_url || '',
             website_url: data.profile.website_url || '',
+            accent_color: data.profile.accent_color || '#D4BFA0',
+            font_style: data.profile.font_style || 'default',
           });
         }
       })
@@ -311,6 +315,61 @@ export default function ProfilePage() {
                   <Music size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4338]" />
                   <input type="url" value={profile.soundcloud_url} onChange={set('soundcloud_url')}
                     placeholder="https://soundcloud.com/yourname" className={`${inputCls} pl-8`} />
+                </div>
+              </Field>
+            </div>
+          </Section>
+
+          {/* ── Section 4: Storefront Theme ────────────────────────── */}
+          <Section icon={<Eye size={15} />} title="Storefront Theme" subtitle="Accent color and font style shown on your public beat store">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <Field label="Accent Color" hint="Used for buttons, waveforms, and highlights on your public store">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={profile.accent_color || '#D4BFA0'}
+                    onChange={set('accent_color')}
+                    className="w-10 h-10 rounded-lg cursor-pointer bg-transparent border border-[#1a160f] p-0.5"
+                  />
+                  <input
+                    type="text"
+                    value={profile.accent_color || '#D4BFA0'}
+                    onChange={set('accent_color')}
+                    placeholder="#D4BFA0"
+                    maxLength={7}
+                    className={`${inputCls} font-mono uppercase flex-1`}
+                  />
+                </div>
+                {/* Live swatch preview */}
+                <div className="flex gap-2 mt-2">
+                  {['#D4BFA0', '#7F77DD', '#6DC6A4', '#E8874A', '#E87A8C', '#64B5F6'].map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => set('accent_color')({ target: { value: c } } as any)}
+                      style={{ background: c, borderColor: profile.accent_color === c ? 'white' : 'transparent' }}
+                      className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110"
+                      aria-label={c}
+                    />
+                  ))}
+                </div>
+              </Field>
+              <Field label="Font Style" hint="Typography style for your public storefront">
+                <div className="grid grid-cols-3 gap-2">
+                  {(['default', 'modern', 'minimal'] as const).map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => set('font_style')({ target: { value: s } } as any)}
+                      className={`py-2.5 rounded-xl border text-[10px] font-mono uppercase tracking-wider transition-all ${
+                        (profile.font_style || 'default') === s
+                          ? 'border-[#D4BFA0]/50 bg-[#D4BFA0]/10 text-[#D4BFA0]'
+                          : 'border-[#1f1a13] text-[#5a5142] hover:text-[#E8DCC8]'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
                 </div>
               </Field>
             </div>

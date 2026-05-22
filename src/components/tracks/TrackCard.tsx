@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Track } from '@/lib/types';
-import { Play, MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2, Share2 } from 'lucide-react';
+import { Play, MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2, Share2, ChevronUp, ChevronDown } from 'lucide-react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { setTrackDragData } from '@/lib/dnd';
@@ -28,6 +28,11 @@ interface TrackCardProps {
   selectable?: boolean;
   selected?: boolean;
   onSelectChange?: (track: Track, selected: boolean) => void;
+  /** Store reorder mode — show ↑/↓ arrows in the index column */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  isFirstInOrder?: boolean;
+  isLastInOrder?: boolean;
 }
 
 export function TrackCard({
@@ -42,6 +47,10 @@ export function TrackCard({
   selectable = false,
   selected = false,
   onSelectChange,
+  onMoveUp,
+  onMoveDown,
+  isFirstInOrder = false,
+  isLastInOrder = false,
 }: TrackCardProps) {
   const { currentTrack, isPlaying, setTrack, togglePlay } = usePlayer();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -152,33 +161,58 @@ export function TrackCard({
         isCurrent ? 'bg-[#0e0c08]' : ''
       } ${selected ? 'bg-[#15132a]' : ''}`}
     >
-      {/* Index — replaced by checkbox in selectable mode so the column
-          retains its width and the row layout stays stable. */}
-      <div className={`text-[11px] font-mono text-center tabular-nums ${isCurrent ? 'text-[#D4BFA0]' : 'text-[#3a3328]'}`}>
-        {selectable ? (
+      {/* Index — replaced by checkbox in selectable mode, or ↑↓ arrows in
+          reorder mode, so the column retains its width in all states. */}
+      <div className={`text-[11px] font-mono text-center tabular-nums ${isCurrent ? 'text-[#D4BFA0]' : 'text-[#3a3328]'}`}
+        onClick={(e) => { if (onMoveUp || onMoveDown) e.stopPropagation(); }}
+      >
+        {onMoveUp !== undefined || onMoveDown !== undefined ? (
+          /* Store reorder mode — ↑/↓ arrow stack */
+          <div className="flex flex-col items-center justify-center gap-0.5 -my-0.5">
+            <button
+              type="button"
+              disabled={isFirstInOrder}
+              onClick={(e) => { e.stopPropagation(); onMoveUp?.(); }}
+              className={`p-0.5 rounded transition-colors ${isFirstInOrder ? 'text-[#1f1a13] cursor-default' : 'text-[#5a5142] hover:text-[#D4BFA0] hover:bg-[#1f1a13]'}`}
+              aria-label="Move up"
+            >
+              <ChevronUp size={11} />
+            </button>
+            <button
+              type="button"
+              disabled={isLastInOrder}
+              onClick={(e) => { e.stopPropagation(); onMoveDown?.(); }}
+              className={`p-0.5 rounded transition-colors ${isLastInOrder ? 'text-[#1f1a13] cursor-default' : 'text-[#5a5142] hover:text-[#D4BFA0] hover:bg-[#1f1a13]'}`}
+              aria-label="Move down"
+            >
+              <ChevronDown size={11} />
+            </button>
+          </div>
+        ) : selectable ? (
           <div className={`w-4 h-4 mx-auto rounded flex items-center justify-center transition-colors ${
             selected ? 'bg-[#D4BFA0] border border-[#E8D8B8]' : 'border border-[#2d2620] hover:border-[#4a4338]'
           }`}>
             {selected && <span className="text-white text-[10px] leading-none">✓</span>}
           </div>
-        ) : null}
-        <div className={selectable ? 'hidden' : ''}>
-        {isActive ? (
-          <div className="flex gap-0.5 items-end h-3 justify-center">
-            <div className="w-0.5 bg-[#D4BFA0] animate-pulse h-2" />
-            <div className="w-0.5 bg-[#D4BFA0] animate-pulse h-3" style={{ animationDelay: '120ms' }} />
-            <div className="w-0.5 bg-[#D4BFA0] animate-pulse h-1.5" style={{ animationDelay: '240ms' }} />
-          </div>
         ) : (
-          <span className="group-hover:hidden">{String(index).padStart(2, '0')}</span>
+          <>
+            {isActive ? (
+              <div className="flex gap-0.5 items-end h-3 justify-center">
+                <div className="w-0.5 bg-[#D4BFA0] animate-pulse h-2" />
+                <div className="w-0.5 bg-[#D4BFA0] animate-pulse h-3" style={{ animationDelay: '120ms' }} />
+                <div className="w-0.5 bg-[#D4BFA0] animate-pulse h-1.5" style={{ animationDelay: '240ms' }} />
+              </div>
+            ) : (
+              <span className="group-hover:hidden">{String(index).padStart(2, '0')}</span>
+            )}
+            <button
+              onClick={handlePlay}
+              className={`hidden ${isActive ? '' : 'group-hover:flex'} w-6 h-6 items-center justify-center rounded-full bg-white text-black hover:scale-110 transition-transform mx-auto`}
+            >
+              <Play size={10} fill="currentColor" className="ml-0.5" />
+            </button>
+          </>
         )}
-        <button
-          onClick={handlePlay}
-          className={`hidden ${isActive ? '' : 'group-hover:flex'} w-6 h-6 items-center justify-center rounded-full bg-white text-black hover:scale-110 transition-transform mx-auto`}
-        >
-          <Play size={10} fill="currentColor" className="ml-0.5" />
-        </button>
-        </div> {/* end !selectable inner wrap */}
       </div>
 
       {/* Thumbnail */}

@@ -18,6 +18,7 @@ import {
   Megaphone,
   Music,
   Play,
+  Receipt,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -44,6 +45,7 @@ const NAV_ITEMS = [
   { label: 'Campaigns', icon: Megaphone, href: '/campaigns', description: 'Outreach batches and follow-ups.' },
   { label: 'Calendar',  icon: Calendar,  href: '/calendar',  description: 'Releases, sessions, deadlines.' },
   { label: 'Links',     icon: Link2,     href: '/links',     description: 'Share links you\'ve generated.' },
+  { label: 'Sales',     icon: Receipt,   href: '/sales',     description: 'Completed purchases — tracks and projects.' },
   { label: 'Offline',   icon: CloudOff,  href: '/offline',   description: 'Cached tracks for offline play.' },
   { label: 'Settings',  icon: Settings,  href: '/settings',  description: 'Account, team, integrations.' },
 ];
@@ -114,7 +116,7 @@ export function Sidebar() {
   }, []);
   const fetchProjects = async () => {
     try {
-      const res = await fetch('/api/projects', { cache: 'no-store' });
+      const res = await fetch('/api/projects');
       if (!res.ok) return;
       const data = await res.json();
       const list = Array.isArray(data) ? data : data.projects || [];

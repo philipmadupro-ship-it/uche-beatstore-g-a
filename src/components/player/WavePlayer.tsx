@@ -66,7 +66,8 @@ export function WavePlayer({
 }: WavePlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { isPlaying, setPlaying, setProgress, volume, currentTrack, setTrack } = usePlayer();
+  const { isPlaying, setPlaying, setProgress, volume, currentTrack, setTrack,
+          seekTarget } = usePlayer();
 
   // A WavePlayer is the "active" audio source for the app only when its
   // track matches the global current track — see header comment.
@@ -112,7 +113,7 @@ export function WavePlayer({
 
   const {
     ready, currentTime, duration, failed,
-    play, pause, setVolume,
+    play, pause, setVolume, seek,
   } = useWaveSurfer({
     container: containerRef,
     url: resolvedUrl,
@@ -163,6 +164,19 @@ export function WavePlayer({
     if (isPlaying) play();
     else pause();
   }, [ready, isActiveAudio, isPlaying, volume, play, pause, setVolume]);
+
+  // Consume seekTarget from the store — external components (store grid
+  // waveform, share page) write a 0..1 fraction here to seek the active
+  // audio engine without holding a direct ref to this WaveSurfer instance.
+  useEffect(() => {
+    if (!isActiveAudio || !ready || seekTarget == null) return;
+    seek(seekTarget);
+    // Clear so this effect doesn't re-fire on the same value.
+    // We write directly to the store because seekTo() only accepts 0..1.
+    usePlayer.setState({ seekTarget: null });
+  // seekTarget is the only dep that matters — seek/seekTo are stable callbacks
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seekTarget]);
 
   const formatTime = (s: number) => {
     if (!isFinite(s) || s < 0) return '0:00';

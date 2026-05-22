@@ -37,7 +37,7 @@ export function AddFromLibraryModal({
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/tracks', { cache: 'no-store' });
+        const res = await fetch('/api/tracks');
         const data = await res.json();
         setTracks(Array.isArray(data) ? data : data.tracks || []);
       } catch (err: any) {

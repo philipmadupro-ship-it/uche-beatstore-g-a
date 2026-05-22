@@ -43,7 +43,9 @@ export async function GET() {
   }
 
   const withCount = projects.map((p) => ({ ...p, track_count: counts.get(p.id) ?? 0 }));
-  return NextResponse.json({ projects: withCount });
+  return NextResponse.json({ projects: withCount }, {
+    headers: { 'Cache-Control': 'private, max-age=15, stale-while-revalidate=60' },
+  });
 }
 
 export async function POST(req: NextRequest) {

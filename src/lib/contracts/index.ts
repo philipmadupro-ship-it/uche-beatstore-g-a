@@ -66,6 +66,9 @@ export const TrackPatchBodySchema = z.object({
   description: z.string().max(5000).nullable().optional(),
   lease_price_usd: z.number().nonnegative().nullable().optional(),
   exclusive_price_usd: z.number().nonnegative().nullable().optional(),
+  store_listed: z.boolean().optional(),
+  free_download_enabled: z.boolean().optional(),
+  store_sort_order: z.number().int().nullable().optional(),
 }).strict();
 export type TrackPatchBody = z.infer<typeof TrackPatchBodySchema>;
 
@@ -81,6 +84,10 @@ export const ProjectPatchBodySchema = z.object({
   status: z.enum(PROJECT_STATUSES).optional(),
   bpm_target: z.number().nullable().optional(),
   key_target: z.string().nullable().optional(),
+  store_featured: z.boolean().optional(),
+  store_order: z.number().nullable().optional(),
+  price_usd: z.number().nonnegative().nullable().optional(),
+  is_public: z.boolean().optional(),
 }).strict();
 export type ProjectPatchBody = z.infer<typeof ProjectPatchBodySchema>;
 
@@ -140,6 +147,8 @@ export type ProjectSharePatchBody = z.infer<typeof ProjectSharePatchBodySchema>;
 export const PlaylistPatchBodySchema = z.object({
   name: z.string().min(1).max(200).optional(),
   cover_url: z.string().nullable().optional(),
+  store_featured: z.boolean().optional(),
+  store_order: z.number().int().nullable().optional(),
 }).strict();
 export type PlaylistPatchBody = z.infer<typeof PlaylistPatchBodySchema>;
 

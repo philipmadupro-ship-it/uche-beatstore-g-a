@@ -255,7 +255,9 @@ export function ContactsView({
       if (categoryFilter !== 'all') {
         const cat = c.category?.toLowerCase() || '';
         const role = c.role?.toLowerCase() || '';
-        if (categoryFilter === 'producers') {
+        if (categoryFilter === 'buyers') {
+          if (cat !== 'buyer') return false;
+        } else if (categoryFilter === 'producers') {
           if (cat !== 'producer' && !role.includes('producer')) return false;
         } else if (categoryFilter === 'rappers') {
           if (cat !== 'rapper' && !role.includes('rapper') && !role.includes('artist') && !role.includes('singer')) return false;
@@ -386,14 +388,15 @@ export function ContactsView({
 
       {activeTab === 'network' ? (
         <>
-          {/* Five legendary CRM segment chips */}
+          {/* CRM segment chips */}
           <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
-            {(['all', 'rappers', 'producers', 'a&r', 'friends', 'nudge'] as const).map((segment) => {
+            {(['all', 'buyers', 'rappers', 'producers', 'a&r', 'friends', 'nudge'] as const).map((segment) => {
               const count = contacts.filter((c) => {
                 if (segment === 'all') return true;
                 if (segment === 'nudge') return needsNudge(c.id);
                 const cat = c.category?.toLowerCase() || '';
                 const role = c.role?.toLowerCase() || '';
+                if (segment === 'buyers') return cat === 'buyer';
                 if (segment === 'producers') return cat === 'producer' || role.includes('producer');
                 if (segment === 'rappers') return cat === 'rapper' || role.includes('rapper') || role.includes('artist') || role.includes('singer');
                 if (segment === 'a&r') return cat === 'a&r' || cat === 'label' || role.includes('a&r') || role.includes('label');

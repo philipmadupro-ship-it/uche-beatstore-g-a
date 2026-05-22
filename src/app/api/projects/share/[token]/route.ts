@@ -45,12 +45,41 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     }
 
     const admin = createServiceClient();
-    const { data: share, error } = await admin
+    const { data: dbShare, error } = await admin
       .from('project_shares')
       .select('*')
       .eq('token', token)
       .maybeSingle();
     if (error) throw error;
+
+    let share: any = dbShare;
+    if (!share) {
+      // Fallback for paid storefront project purchases (migration 042)
+      const { data: paidAccess } = await admin
+        .from('project_access_links')
+        .select('id, project_id, buyer_email, token, created_at')
+        .eq('token', token)
+        .maybeSingle();
+      if (paidAccess) {
+        share = {
+          id: paidAccess.id,
+          project_id: paidAccess.project_id,
+          token: paidAccess.token,
+          role: 'viewer',
+          allow_downloads: true,
+          revoked_at: null,
+          expires_at: null,
+          password_hash: null,
+          invited_email: paidAccess.buyer_email,
+          label: 'Storefront purchase',
+          plays: 0,
+          created_at: paidAccess.created_at,
+          recipient_kind: 'client',
+          sales_enabled: false,
+          content_type: 'project',
+        };
+      }
+    }
     if (!share) return NextResponse.json({ error: 'Link not found' }, { status: 404 });
 
     if (share.revoked_at) {
@@ -78,8 +107,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       return data ?? null;
     }
 
-    // Fire-and-forget play counter.
-    admin.from('project_shares').update({ plays: (share.plays ?? 0) + 1 }).eq('id', share.id).then(() => {});
+    // Fire-and-forget play counter (only for real project_shares rows, not paid access tokens)
+    if (dbShare && share.id === dbShare.id) {
+      admin.from('project_shares').update({ plays: (share.plays ?? 0) + 1 }).eq('id', share.id).then(() => {});
+    }
 
     const contentType: string = (share as any).content_type ?? 'project';
 
@@ -121,35 +152,50 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     }
 
     // ── Project share (default) ─────────────────────────────────────────
-    const { data: project } = await admin
-      .from('projects')
-      .select('id, name, cover_url, description, bpm_target, key_target, status, user_id')
-      .eq('id', share.project_id)
-      .maybeSingle();
-
-    let creator: Record<string, unknown> | null = null;
-    if (project?.user_id) creator = await fetchCreator(project.user_id);
-
-    const { data: junction } = await admin
-      .from('project_tracks')
-      .select('track_id, role, position')
-      .eq('project_id', share.project_id)
-      .order('position', { ascending: true });
+    // Project + junction don't depend on each other; fan out.
+    const [{ data: project }, { data: junction }] = await Promise.all([
+      admin.from('projects')
+        .select('id, name, cover_url, description, bpm_target, key_target, status, user_id')
+        .eq('id', share.project_id)
+        .maybeSingle(),
+      admin.from('project_tracks')
+        .select('track_id, role, position')
+        .eq('project_id', share.project_id)
+        .order('position', { ascending: true }),
+    ]);
 
     const trackIds = (junction ?? []).map((j: any) => j.track_id);
-    let tracks: any[] = [];
-    let stems: any[] = [];
-    if (trackIds.length) {
-      const [tracksRes, stemsRes] = await Promise.all([
-        admin.from('tracks').select(TRACK_FIELDS).in('id', trackIds),
-        admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').in('track_id', trackIds),
-      ]);
-      stems = stemsRes.data ?? [];
-      const byId = new Map((tracksRes.data ?? []).map((t: any) => [t.id, t]));
-      tracks = (junction ?? []).map((j: any) => byId.get(j.track_id)).filter(Boolean);
-    }
+
+    // Creator depends on project.user_id; tracks/stems depend on junction.
+    // Run all three in parallel now that those inputs are resolved.
+    const [creator, tracksRes, stemsRes] = await Promise.all([
+      project?.user_id ? fetchCreator(project.user_id) : Promise.resolve(null),
+      trackIds.length ? admin.from('tracks').select(TRACK_FIELDS).in('id', trackIds) : Promise.resolve({ data: [] as any[] }),
+      trackIds.length ? admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').in('track_id', trackIds) : Promise.resolve({ data: [] as any[] }),
+    ]);
+
+    const stems = stemsRes.data ?? [];
+    const byId = new Map(((tracksRes as any).data ?? []).map((t: any) => [t.id, t]));
+    const tracks = trackIds.length
+      ? (junction ?? []).map((j: any) => byId.get(j.track_id)).filter(Boolean)
+      : [];
 
     const projectPublic = project ? (() => { const { user_id: _u, ...rest } = project; return rest; })() : null;
+
+    // ── Producer's custom license tiers (for client share page) ────────
+    let licenses: any[] = [];
+    if (project?.user_id) {
+      try {
+        const { data: licData } = await admin
+          .from('licenses')
+          .select('id, name, description, price_usd, is_free, file_types, stems_included, is_exclusive, sort_order')
+          .eq('user_id', project.user_id)
+          .order('sort_order', { ascending: true });
+        licenses = licData ?? [];
+      } catch {
+        // licenses table may not exist in all deployments — non-fatal
+      }
+    }
 
     return NextResponse.json({
       share: redactShare(share),
@@ -159,6 +205,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       tracks,
       creator,
       stems,
+      licenses,
     });
   } catch (error: any) {
     console.error('Project share read error:', error);

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Track } from '@/lib/types';
+import { toast } from '@/hooks/useToast';
 
 export interface CartLicense {
   id: string;
@@ -34,20 +35,31 @@ export const useCart = create<CartState>()(
       isOpen: false,
 
       addItem: (track, license) => {
-        // Use functional set so that rapid successive calls (e.g. forEach
-        // over all tracks) each see the already-updated state, not a stale
-        // snapshot captured before the first set() resolved.
+        // Use functional set so that rapid successive calls (e.g. "Add All")
+        // each see the already-updated state, not a stale snapshot.
+        let isDuplicate = false;
         set((state) => {
           const currentItems = state.items || [];
-          const existingIndex = currentItems.findIndex(i => i.track?.id === track.id);
-          const newItems = [...currentItems];
-          if (existingIndex >= 0) {
-            newItems[existingIndex] = { id: currentItems[existingIndex].id, track, license };
-          } else {
-            newItems.push({ id: Math.random().toString(36).substring(2, 9), track, license });
+          // Dedup by composite key: same track + same license tier = already in cart.
+          // Same track with a different license tier is allowed as a separate entry.
+          const exactMatch = currentItems.findIndex(
+            (i) => i.track?.id === track.id && i.license?.id === license.id,
+          );
+          if (exactMatch >= 0) {
+            isDuplicate = true;
+            return { items: currentItems }; // no change
           }
-          return { items: newItems, isOpen: true };
+          return {
+            items: [
+              ...currentItems,
+              { id: `${track.id}-${license.id}-${Date.now()}`, track, license },
+            ],
+            isOpen: true,
+          };
         });
+        if (isDuplicate) {
+          toast.info('Already in cart', `${track.title} (${license.name}) is already added`);
+        }
       },
 
       removeItem: (itemId) =>

@@ -4,14 +4,14 @@ import { Track } from '@/lib/types';
 import {
   X, Share, BarChart2, RefreshCw,
   Scissors, PlusSquare, Download, FolderInput, Copy, Trash2,
-  Loader2, Mic2, ExternalLink, Sliders,
+  Loader2, Mic2, ExternalLink, Sliders, Play, Pause,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { ShareModal } from '@/components/share/ShareModal';
+import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { usePlayer } from '@/hooks/usePlayer';
-import { WavePlayer } from '@/components/player/WavePlayer';
+import { MiniWaveform } from '@/components/player/MiniWaveform';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { TrackVersionsPanel } from '@/components/tracks/TrackVersionsPanel';
 import { ProjectCommentsPanel } from '@/components/projects/ProjectCommentsPanel';
@@ -39,7 +39,7 @@ interface TrackDetailsDrawerProps {
 }
 
 export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projectId }: TrackDetailsDrawerProps) {
-  const { addToQueue, setTrack } = usePlayer();
+  const { addToQueue, setTrack, currentTrack, isPlaying, setPlaying, progress } = usePlayer();
   const router = useRouter();
 
   // Optimistic patch overlay. We merge it on top of the parent prop so
@@ -494,24 +494,66 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
             </div>
           ) : (
             <>
-              {/* Waveform Player */}
-              <div className="p-8 border-b border-[#1f1a13] bg-[#0a0907] relative group">
-                {track.audio_url ? (
-                  <WavePlayer
-                    url={track.audio_url}
-                    trackId={track.id}
-                    track={track}
-                    peaksUrl={track.peaks_url ?? null}
-                    height={60}
-                    onFinish={() => {}}
-                  />
-                ) : (
+              {/* Waveform transport — visual only.
+                  WavePlayer is intentionally NOT used here: mounting two
+                  WaveSurfer instances for the same trackId (one here, one
+                  in PlayerBar) both satisfy isActiveAudio = true and produce
+                  double audio. MiniWaveform reads global progress from
+                  Zustand and triggers seek via the store — zero extra audio. */}
+              <div className="p-6 border-b border-[#1f1a13] bg-[#0a0907] relative">
+                {track.audio_url ? (() => {
+                  const isActive = currentTrack?.id === track.id;
+                  const dur = track.duration_seconds ?? 0;
+                  const currentSec = isActive ? progress * dur : 0;
+                  const fmt = (s: number) =>
+                    isFinite(s) && s >= 0
+                      ? `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`
+                      : '0:00';
+                  return (
+                    <div className="flex items-center gap-3">
+                      {/* Play / pause button — controls global player */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isActive) {
+                            setTrack(track);
+                          } else {
+                            setPlaying(!isPlaying);
+                          }
+                        }}
+                        className="w-9 h-9 rounded-full bg-[#16130e] border border-[#1a160f] flex items-center justify-center text-[#E8DCC8] hover:border-[#D4BFA0]/50 hover:text-[#D4BFA0] transition-all shrink-0"
+                      >
+                        {isActive && isPlaying
+                          ? <Pause size={14} fill="currentColor" />
+                          : <Play size={14} fill="currentColor" className="ml-0.5" />}
+                      </button>
+
+                      <span className="text-[10px] font-mono text-[#5a5142] tabular-nums w-10 text-right shrink-0">
+                        {fmt(currentSec)}
+                      </span>
+
+                      <div className="flex-1 min-w-0">
+                        <MiniWaveform
+                          trackId={track.id}
+                          peaksUrl={track.peaks_url ?? null}
+                          height={52}
+                          isActive={isActive}
+                          onPlay={() => setTrack(track)}
+                        />
+                      </div>
+
+                      <span className="text-[10px] font-mono text-[#5a5142] tabular-nums w-10 shrink-0">
+                        {fmt(dur)}
+                      </span>
+                    </div>
+                  );
+                })() : (
                   <div className="w-full h-[60px] bg-[#1a160f] rounded flex items-center justify-center text-[10px] font-mono uppercase text-[#4a4338] tracking-widest">
                     No audio source
                   </div>
                 )}
                 {isReplacing && (
-                  <div className="absolute inset-0 bg-[#0a0907]/80 backdrop-blur-sm flex flex-col items-center justify-center p-8 animate-in fade-in">
+                  <div className="absolute inset-0 bg-[#0a0907]/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 animate-in fade-in">
                     <Loader2 size={32} className="animate-spin text-[#D4BFA0] mb-4" />
                     <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Replacing Source Asset</p>
                   </div>
@@ -612,12 +654,12 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
       />
 
       {showShareModal && track && (
-        <ShareModal
+        <ContentShareModal
           onClose={() => setShowShareModal(false)}
-          title={track.title}
-          trackIds={[track.id]}
+          contentType="track"
+          contentId={track.id}
+          contentTitle={track.title}
           coverUrl={track.cover_url}
-          kind="track"
         />
       )}
 

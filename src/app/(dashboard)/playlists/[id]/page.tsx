@@ -102,6 +102,22 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
     setIsEditingTitle(false);
   };
 
+  const toggleStoreFeatured = async () => {
+    const next = !playlist?.store_featured;
+    const res = await fetch(`/api/playlists/${params.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ store_featured: next }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      toast.error('Failed to update', e.error || `HTTP ${res.status}`);
+      return;
+    }
+    setPlaylist((p: any) => ({ ...p, store_featured: next }));
+    toast.success(next ? 'Featured in store' : 'Removed from featured');
+  };
+
   const handlePlayTrack = (track: Track) => {
     setQueue(tracks);
     setGlobalTrack(track);
@@ -248,6 +264,21 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                 <span>{tracks.length} track{tracks.length !== 1 ? 's' : ''}</span>
                 <span>·</span>
                 <span>{fmtDuration(totalDuration)}</span>
+              </div>
+
+              {/* Featured in Store toggle — owner only, persists via PATCH */}
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142]">Featured in Store</span>
+                <button
+                  onClick={toggleStoreFeatured}
+                  className={`relative inline-flex w-9 h-5 rounded-full transition-colors ${playlist?.store_featured ? 'bg-[#D4BFA0]' : 'bg-[#1f1a13] border border-[#2d2620]'}`}
+                  aria-pressed={!!playlist?.store_featured}
+                  title="Toggle visibility on the public /store page"
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${playlist?.store_featured ? 'translate-x-4' : ''}`}
+                  />
+                </button>
               </div>
             </div>
 

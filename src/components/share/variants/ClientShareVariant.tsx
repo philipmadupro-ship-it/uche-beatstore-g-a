@@ -11,6 +11,8 @@ import {
 import { useCart } from '@/hooks/useCart';
 import { CartDrawer } from '@/components/share/CartDrawer';
 import { ShareTrackDetailsDrawer } from '@/components/share/ShareTrackDetailsDrawer';
+import { LicenseSelector } from '@/components/store/LicenseSelector';
+import type { LicenseTier } from '@/components/store/LicenseSelector';
 
 function InstagramIcon({ size = 12 }: { size?: number }) {
   return (
@@ -80,6 +82,8 @@ interface Props {
   project: Project;
   tracks: Track[];
   creator: CreatorProfile | null;
+  /** Custom license tiers from the producer's /api/licenses. Empty array = use fallback */
+  licenses: LicenseTier[];
   shareToken?: string;
   shareLeasePrice?: number | null;
   shareExclusivePrice?: number | null;
@@ -132,6 +136,7 @@ export function ClientShareVariant({
   project,
   tracks,
   creator,
+  licenses,
   shareToken,
   shareLeasePrice,
   shareExclusivePrice,
@@ -188,25 +193,53 @@ export function ClientShareVariant({
   const creatorLeasePrice = creator?.license_lease_price_usd ?? null;
   const creatorExclusivePrice = creator?.license_exclusive_price_usd ?? null;
 
-  // Effective bundle prices (used for the section-level license card)
+  // Effective bundle prices (used for the section-level license card fallback)
   const bundleLeasePrice = resolvePrice(shareLeasePrice, null, creatorLeasePrice, discount);
   const bundleExclusivePrice = resolvePrice(shareExclusivePrice, null, creatorExclusivePrice, discount);
-  const hasLicenseSection = bundleLeasePrice != null || bundleExclusivePrice != null || !!creator?.license_notes?.trim();
+  const hasLicenseSection = bundleLeasePrice != null || bundleExclusivePrice != null || !!creator?.license_notes?.trim() || licenses.length > 0;
+
+  // ── Resolved tier list for LicenseSelector ─────────────────────────
+  // Custom tiers take precedence; their prices are run through resolvePrice
+  // so share-level and discount overrides apply correctly.
+  // When no custom tiers exist, synthesise the classic two-tier shape.
+  const resolvedTiers: LicenseTier[] = licenses.length > 0
+    ? licenses.map((l) => ({
+        ...l,
+        price_usd: l.is_free
+          ? 0
+          : l.is_exclusive
+            ? resolvePrice(shareExclusivePrice, l.price_usd, creatorExclusivePrice, discount) ?? l.price_usd
+            : resolvePrice(shareLeasePrice, l.price_usd, creatorLeasePrice, discount) ?? l.price_usd,
+      }))
+    : (
+        [
+          bundleLeasePrice != null
+            ? { id: 'basic-lease', name: 'Basic Lease', price_usd: bundleLeasePrice, file_types: ['MP3', 'WAV'], is_exclusive: false }
+            : null,
+          bundleExclusivePrice != null
+            ? { id: 'exclusive-rights', name: 'Exclusive Rights', price_usd: bundleExclusivePrice, file_types: ['MP3', 'WAV', 'STEMS'], is_exclusive: true }
+            : null,
+        ].filter(Boolean) as LicenseTier[]
+      );
+
+  const [selectedLicenseId, setSelectedLicenseId] = useState<string>(resolvedTiers[0]?.id ?? '');
 
   const cartCount = cartItems.length;
   const cartTotal = cartItems.reduce((sum, i) => sum + i.license.price_usd, 0);
 
-  const handleAddToCart = (track: Track, type: 'lease' | 'exclusive') => {
-    const price = type === 'lease'
-      ? resolvePrice(shareLeasePrice, track.lease_price_usd, creatorLeasePrice, discount)
-      : resolvePrice(shareExclusivePrice, track.exclusive_price_usd, creatorExclusivePrice, discount);
-    if (price == null) return;
+  const handleAddToCart = (track: Track) => {
+    const tier = resolvedTiers.find((t) => t.id === selectedLicenseId) ?? resolvedTiers[0];
+    if (!tier || tier.price_usd == null) return;
+    // For per-track price overrides: exclusive tiers use exclusive_price_usd, lease tiers use lease_price_usd
+    const price = tier.is_exclusive
+      ? resolvePrice(shareExclusivePrice, track.exclusive_price_usd, creatorExclusivePrice, discount) ?? tier.price_usd
+      : resolvePrice(shareLeasePrice, track.lease_price_usd, creatorLeasePrice, discount) ?? tier.price_usd;
     addItem(track as any, {
-      id: type === 'lease' ? 'basic-lease' : 'exclusive-rights',
-      name: type === 'lease' ? 'Basic Lease' : 'Exclusive Rights',
+      id: tier.id,
+      name: tier.name,
       price_usd: price,
-      file_types: type === 'lease' ? ['MP3', 'WAV'] : ['MP3', 'WAV', 'STEMS'],
-      is_exclusive: type === 'exclusive',
+      file_types: tier.file_types ?? [],
+      is_exclusive: tier.is_exclusive ?? false,
     });
     setCartOpen(true);
   };
@@ -384,7 +417,6 @@ export function ClientShareVariant({
                 // Original (pre-discount) prices for strikethrough
                 const leaseOrig = discount && leasePrice != null ? leasePrice / (1 - discount / 100) : null;
                 const exclOrig = discount && exclPrice != null ? exclPrice / (1 - discount / 100) : null;
-                const hasPricing = leasePrice != null || exclPrice != null;
                 const inCart = cartItems.some((ci) => ci.track.id === t.id);
 
                 return (
@@ -472,41 +504,43 @@ export function ClientShareVariant({
 
                     {/* License pills / chevron */}
                     <div className="flex items-center justify-end gap-2 shrink-0 ml-auto md:ml-0">
-                      {shareToken && hasPricing ? (
-                        <div className="flex items-center gap-1.5">
-                          {leasePrice != null && (
+                      {shareToken && resolvedTiers.length > 0 ? (
+                        (() => {
+                          const selTier = resolvedTiers.find((r) => r.id === selectedLicenseId) ?? resolvedTiers[0];
+                          const price = selTier?.is_exclusive ? exclPrice : leasePrice;
+                          const origPrice = selTier?.is_exclusive ? exclOrig : leaseOrig;
+                          if (price == null) return (
                             <button
-                              onClick={() => handleAddToCart(t, 'lease')}
-                              className="flex flex-col items-center px-2.5 py-1.5 rounded-lg bg-[#14110d] border border-[#2d2620] hover:border-[#D4BFA0]/40 hover:bg-[#1a160f] transition-colors group/btn"
+                              onClick={() => setSelectedTrackForDetails(t)}
+                              className="text-[#3a3328] group-hover:text-[#E8DCC8] transition-colors p-1"
                             >
-                              {leaseOrig && (
+                              <ChevronRight size={14} />
+                            </button>
+                          );
+                          const isExcl = selTier?.is_exclusive ?? false;
+                          return (
+                            <button
+                              onClick={() => handleAddToCart(t)}
+                              className={`flex flex-col items-center px-2.5 py-1.5 rounded-lg border transition-colors ${
+                                isExcl
+                                  ? 'bg-[#D4BFA0]/[0.07] border-[#D4BFA0]/20 hover:border-[#D4BFA0]/50 hover:bg-[#D4BFA0]/10'
+                                  : 'bg-[#14110d] border-[#2d2620] hover:border-[#D4BFA0]/40 hover:bg-[#1a160f]'
+                              }`}
+                            >
+                              {origPrice && (
                                 <span className="text-[8px] font-mono text-[#3a3328] line-through tabular-nums">
-                                  ${Math.round(leaseOrig)}
+                                  ${Math.round(origPrice)}
                                 </span>
                               )}
-                              <span className="text-[11px] font-mono font-bold text-[#E8D8B8] tabular-nums leading-none">
-                                ${Math.round(leasePrice)}
+                              <span className={`text-[11px] font-mono font-bold tabular-nums leading-none ${isExcl ? 'text-[#D4BFA0]' : 'text-[#E8D8B8]'}`}>
+                                ${Math.round(price)}
                               </span>
-                              <span className="text-[7px] font-mono text-[#6a5d4a] uppercase tracking-wider mt-0.5">Lease</span>
-                            </button>
-                          )}
-                          {exclPrice != null && (
-                            <button
-                              onClick={() => handleAddToCart(t, 'exclusive')}
-                              className="flex flex-col items-center px-2.5 py-1.5 rounded-lg bg-[#D4BFA0]/[0.07] border border-[#D4BFA0]/20 hover:border-[#D4BFA0]/50 hover:bg-[#D4BFA0]/10 transition-colors"
-                            >
-                              {exclOrig && (
-                                <span className="text-[8px] font-mono text-[#3a3328] line-through tabular-nums">
-                                  ${Math.round(exclOrig)}
-                                </span>
-                              )}
-                              <span className="text-[11px] font-mono font-bold text-[#D4BFA0] tabular-nums leading-none">
-                                ${Math.round(exclPrice)}
+                              <span className={`text-[7px] font-mono uppercase tracking-wider mt-0.5 ${isExcl ? 'text-[#a08a6a]' : 'text-[#6a5d4a]'}`}>
+                                {selTier?.name ?? 'Add'}
                               </span>
-                              <span className="text-[7px] font-mono text-[#a08a6a] uppercase tracking-wider mt-0.5">Excl.</span>
                             </button>
-                          )}
-                        </div>
+                          );
+                        })()
                       ) : (
                         <button
                           onClick={() => setSelectedTrackForDetails(t)}
@@ -523,49 +557,17 @@ export function ClientShareVariant({
           </div>
         </section>
 
-        {/* ── License feature comparison ── */}
+        {/* ── License tiers ── */}
         {hasLicenseSection && (
           <section className="mb-14">
             <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#a08a6a] mb-4">
               License tiers
             </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {bundleLeasePrice != null && (
-                <LicenseTierCard
-                  label="Basic Lease"
-                  badge="Most Popular"
-                  price={bundleLeasePrice}
-                  originalPrice={discount ? bundleLeasePrice / (1 - discount / 100) : null}
-                  discount={discount}
-                  features={[
-                    { label: 'MP3 + WAV download', included: true },
-                    { label: 'Unlimited streaming', included: true },
-                    { label: 'Up to 100k streams', included: true },
-                    { label: 'Trackout stems', included: false },
-                    { label: 'Exclusive rights', included: false },
-                    { label: 'Radio & sync clearance', included: false },
-                  ]}
-                  accent="default"
-                />
-              )}
-              {bundleExclusivePrice != null && (
-                <LicenseTierCard
-                  label="Exclusive Rights"
-                  price={bundleExclusivePrice}
-                  originalPrice={discount ? bundleExclusivePrice / (1 - discount / 100) : null}
-                  discount={discount}
-                  features={[
-                    { label: 'MP3 + WAV download', included: true },
-                    { label: 'Unlimited streaming', included: true },
-                    { label: 'Unlimited streams', included: true },
-                    { label: 'Trackout stems', included: true },
-                    { label: 'Exclusive rights', included: true },
-                    { label: 'Radio & sync clearance', included: true },
-                  ]}
-                  accent="gold"
-                />
-              )}
-            </div>
+            <LicenseSelector
+              tiers={resolvedTiers}
+              selectedId={selectedLicenseId}
+              onSelect={setSelectedLicenseId}
+            />
             {creator?.license_notes && (
               <p className="text-[12px] text-[#a08a6a] mt-4 leading-relaxed">
                 {creator.license_notes}
@@ -732,69 +734,6 @@ export function ClientShareVariant({
 }
 
 // ── Sub-components ──────────────────────────────────────────────────────────
-
-function LicenseTierCard({
-  label, badge, price, originalPrice, discount, features, accent,
-}: {
-  label: string;
-  badge?: string;
-  price: number;
-  originalPrice: number | null;
-  discount: number | null;
-  features: { label: string; included: boolean }[];
-  accent: 'default' | 'gold';
-}) {
-  const isGold = accent === 'gold';
-  return (
-    <div className={`relative rounded-2xl border p-6 flex flex-col gap-4 overflow-hidden ${
-      isGold
-        ? 'border-[#D4BFA0]/25 bg-gradient-to-br from-[#1a160d] to-[#0c0a08]'
-        : 'border-[#1f1a13] bg-[#14110d]'
-    }`}>
-      {badge && (
-        <span className="absolute top-4 right-4 text-[8px] font-mono uppercase tracking-[0.2em] text-[#a08a6a] bg-[#1f1a13] border border-[#2d2620] px-2 py-0.5 rounded-full">
-          {badge}
-        </span>
-      )}
-
-      <div>
-        <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#6a5d4a] mb-1.5">{label}</p>
-        <div className="flex items-baseline gap-2">
-          <span className={`text-3xl font-mono font-bold ${isGold ? 'text-[#D4BFA0]' : 'text-white'}`}>
-            ${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-          </span>
-          {originalPrice && discount && (
-            <span className="text-[13px] font-mono text-[#3a3328] line-through tabular-nums">
-              ${Math.round(originalPrice).toLocaleString()}
-            </span>
-          )}
-        </div>
-        {discount && (
-          <span className="text-[9px] font-mono text-[#6DC6A4] mt-0.5 block">
-            You save ${Math.round((originalPrice ?? price) - price).toLocaleString()} ({discount}% off)
-          </span>
-        )}
-      </div>
-
-      <ul className="space-y-2">
-        {features.map((f) => (
-          <li key={f.label} className="flex items-center gap-2.5 text-[11px]">
-            <span className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 ${
-              f.included
-                ? isGold ? 'bg-[#D4BFA0]/20 text-[#D4BFA0]' : 'bg-white/10 text-[#E8DCC8]'
-                : 'bg-[#1a160f] text-[#3a3328]'
-            }`}>
-              {f.included ? '✓' : '✗'}
-            </span>
-            <span className={f.included ? 'text-[#E8DCC8]/80' : 'text-[#3a3328]'}>
-              {f.label}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 function SocialPill({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
   return (

@@ -40,7 +40,9 @@ export async function GET() {
   }
 
   const withCount = playlists.map((p) => ({ ...p, track_count: counts.get(p.id) ?? 0 }));
-  return NextResponse.json({ playlists: withCount });
+  return NextResponse.json({ playlists: withCount }, {
+    headers: { 'Cache-Control': 'private, max-age=15, stale-while-revalidate=60' },
+  });
 }
 
 export async function POST(req: NextRequest) {
