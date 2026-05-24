@@ -7,7 +7,7 @@
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid, SlidersHorizontal, Store } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { DropZone } from '@/components/upload/DropZone';
 import { TrackCard } from '@/components/tracks/TrackCard';
@@ -19,6 +19,7 @@ import { Dropdown } from '@/components/ui/Dropdown';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { listCached } from '@/lib/offline/audio-cache';
 import { TrackGridCard } from '@/components/tracks/TrackGridCard';
+import MusicPortfolio, { type PortfolioTrack } from '@/components/library/MusicPortfolio';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount } from '@/components/library/FilterBar';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 
@@ -91,7 +92,7 @@ export default function LibraryPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [shareTarget, setShareTarget] = useState<Track | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'portfolio'>('list');
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<LibraryFilters>(() => ({
     ...DEFAULT_FILTERS,
@@ -99,11 +100,11 @@ export default function LibraryPage() {
     statuses: new Set<string>(),
   }));
   useEffect(() => {
-    const saved = localStorage.getItem('library-view') as 'list' | 'grid' | null;
-    if (saved === 'list' || saved === 'grid') setViewMode(saved);
+    const saved = localStorage.getItem('library-view') as 'list' | 'grid' | 'portfolio' | null;
+    if (saved === 'list' || saved === 'grid' || saved === 'portfolio') setViewMode(saved);
   }, []);
   useEffect(() => { localStorage.setItem('library-view', viewMode); }, [viewMode]);
-  const { setTrack, setQueue, currentTrack } = usePlayer();
+  const { setTrack, setQueue, currentTrack, isPlaying } = usePlayer();
 
   const fetchTracks = async () => {
     setLoading(true);
@@ -390,6 +391,51 @@ export default function LibraryPage() {
     }
   };
 
+  // Map library tracks to the PortfolioTrack shape MusicPortfolio expects.
+  const portfolioTracks = useMemo<PortfolioTrack[]>(() => {
+    return filtered.map((track) => ({
+      id: track.id,
+      title: track.title,
+      artist: (track as { creator?: { display_name?: string } }).creator?.display_name ?? 'U2C',
+      type: track.type,
+      cover_url: track.cover_url ?? null,
+      bpm: track.bpm,
+      key: track.key,
+      year: track.created_at ? new Date(track.created_at).getFullYear().toString() : '',
+    }));
+  }, [filtered]);
+
+  const handlePortfolioPlay = useCallback((trackId: string) => {
+    const track = filtered.find((t) => t.id === trackId);
+    if (track) playTrack(track);
+  }, [filtered]);
+
+  // Portfolio is an immersive full-bleed mode — early-return replaces
+  // the entire library page chrome with just MusicPortfolio (which
+  // exposes its own onExit chip to come back to list view).
+  if (viewMode === 'portfolio') {
+    return (
+      <DashboardLayout>
+        <MusicPortfolio
+          tracks={portfolioTracks}
+          onTrackPlay={handlePortfolioPlay}
+          currentTrackId={currentTrack?.id ?? null}
+          isPlaying={isPlaying}
+          onExit={() => setViewMode('list')}
+        />
+        {shareTarget && (
+          <ContentShareModal
+            contentType="track"
+            contentId={shareTarget.id}
+            contentTitle={shareTarget.title}
+            coverUrl={shareTarget.cover_url}
+            onClose={() => setShareTarget(null)}
+          />
+        )}
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10">
@@ -632,6 +678,13 @@ export default function LibraryPage() {
                 title="Grid view"
               >
                 <LayoutGrid size={13} />
+              </button>
+              <button
+                onClick={() => setViewMode('portfolio')}
+                className="p-1.5 rounded-full transition-colors text-[#6a5d4a] hover:text-[#a08a6a]"
+                title="Portfolio view"
+              >
+                <Disc3 size={13} />
               </button>
             </div>
           </div>

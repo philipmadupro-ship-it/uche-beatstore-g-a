@@ -12,7 +12,10 @@ export interface CartLicense {
 }
 
 export interface CartItem {
-  id: string; // unique ID for the cart item (usually nanoid)
+  // unique per cart: `${trackId}-${licenseId}-${ts}` (addItem) or
+  // `${trackId}-${licenseId}-${ts}-${i}` (addItems bulk; `i` disambiguates
+  // sibling adds inside the same millisecond). No nanoid dep.
+  id: string;
   track: Track;
   license: CartLicense;
 }
@@ -21,6 +24,8 @@ interface CartState {
   items: CartItem[];
   isOpen: boolean;
   addItem: (track: Track, license: CartLicense) => void;
+  /** Bulk add many tracks with the same license tier. Skips duplicates silently. */
+  addItems: (pairs: Array<{ track: Track; license: CartLicense }>) => void;
   removeItem: (itemId: string) => void;
   clearCart: () => void;
   setIsOpen: (isOpen: boolean) => void;
@@ -60,6 +65,23 @@ export const useCart = create<CartState>()(
         if (isDuplicate) {
           toast.info('Already in cart', `${track.title} (${license.name}) is already added`);
         }
+      },
+
+      addItems: (pairs) => {
+        set((state) => {
+          const currentItems = state.items || [];
+          const seen = new Set(currentItems.map((i) => `${i.track?.id}-${i.license?.id}`));
+          const newItems: CartItem[] = [];
+          for (const { track, license } of pairs) {
+            const key = `${track.id}-${license.id}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            newItems.push({ id: `${track.id}-${license.id}-${Date.now()}-${newItems.length}`, track, license });
+          }
+          return newItems.length > 0
+            ? { items: [...currentItems, ...newItems], isOpen: true }
+            : { items: currentItems };
+        });
       },
 
       removeItem: (itemId) =>

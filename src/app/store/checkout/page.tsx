@@ -10,8 +10,14 @@ import {
 import { loadStripe } from '@stripe/stripe-js';
 import { useCart } from '@/hooks/useCart';
 
-// Load Stripe. Fallback to a placeholder in dev if not set to prevent crashing
-const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_51TYTBb2NNv7qe8ftKQFdtdthCaiwwb8qqRqljC0fpKmpOqyKkyiYya3JqmHT6txvu7kqF9B26u6JpSIhJB9L9DGX00Jlp1pqaB';
+// Load Stripe. The previous fallback hardcoded a real `pk_test_…` from
+// another Stripe account, which would silently route payments to that
+// account if `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` was missing in prod.
+// Replaced with a loud sentinel that Stripe rejects immediately so the
+// failure is obvious instead of charging the wrong account.
+const stripePublishableKey =
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
+  'pk_test_MISSING_SET_NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY';
 const stripePromise = loadStripe(stripePublishableKey);
 
 function CheckoutContent() {

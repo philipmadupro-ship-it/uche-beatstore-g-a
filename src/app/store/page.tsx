@@ -19,6 +19,9 @@ import { LicenseSelector } from '@/components/store/LicenseSelector';
 import type { LicenseTier as LicenseTierImport } from '@/components/store/LicenseSelector';
 import { MusicArtwork } from '@/components/store/MusicArtwork';
 import { ParticleText } from '@/components/store/ParticleText';
+import MusicPortfolio, { type PortfolioTrack } from '@/components/library/MusicPortfolio';
+import BandcampRemixCard from '@/components/store/BandcampRemixCard';
+import { RecommendationsStrip } from '@/components/store/RecommendationsStrip';
 import { useWishlist } from '@/hooks/useWishlist';
 import { Sparkles } from 'lucide-react';
 
@@ -413,6 +416,36 @@ function StorePage() {
     return sorted;
   }, [tracks, debouncedSearch, typeFilter, freeOnly, favoritesOnly, newThisWeek, priceRangeActive, effectivePriceMin, effectivePriceMax, effectiveBpmMin, effectiveBpmMax, keyFilter, scaleFilter, durationBucket, genreFilter, moodFilter, sortBy, creator?.license_lease_price_usd, wishlist.ids]);
 
+  // Retention strips at the bottom of the page. "More from this producer"
+  // excludes anything visible in the current filtered set so the picks
+  // genuinely add to what the visitor is already seeing. "You might also
+  // like" pivots off the genre tags of whichever track the visitor most
+  // recently played or previewed (falls back to recent if no engagement).
+  const moreFromProducer = useMemo(() => {
+    const visible = new Set(filtered.map((t) => t.id));
+    const pool = tracks.filter((t) => !visible.has(t.id));
+    return pool.sort(() => Math.random() - 0.5).slice(0, 12);
+  }, [tracks, filtered]);
+
+  const youMightAlsoLike = useMemo(() => {
+    const pivot = currentTrack ?? previewTrack ?? null;
+    const pivotTags = pivot ? (tracks.find((t) => t.id === pivot.id)?.tags ?? []) : [];
+    const pivotGenres = new Set(
+      pivotTags
+        .filter((tag) => tag.category === 'genre')
+        .map((tag) => tag.tag.toLowerCase()),
+    );
+    const exclude = pivot?.id;
+    if (pivotGenres.size > 0) {
+      const matches = tracks.filter((t) => {
+        if (t.id === exclude) return false;
+        return (t.tags ?? []).some((tag) => tag.category === 'genre' && pivotGenres.has(tag.tag.toLowerCase()));
+      });
+      if (matches.length > 0) return matches.slice(0, 12);
+    }
+    return tracks.filter((t) => t.id !== exclude).slice(0, 12);
+  }, [tracks, currentTrack, previewTrack]);
+
   const handlePlay = (t: StoreTrack) => {
     if (currentTrack?.id === t.id) { togglePlay(); return; }
     setQueue(filtered as Track[]);
@@ -771,7 +804,29 @@ function StorePage() {
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filtered.map((t) => (
+              {filtered.map((t) =>
+                // Remix tracks get the Bandcamp release-card layout to
+                // stand out in the mixed grid; regular beats keep BeatCard.
+                t.type === 'remix' ? (
+                  <BandcampRemixCard
+                    key={t.id}
+                    track={t as unknown as Track}
+                    creatorName={creator?.display_name ?? null}
+                    priceLease={priceFor(t, 'lease')}
+                    priceExclusive={priceFor(t, 'exclusive')}
+                    isCurrent={currentTrack?.id === t.id}
+                    isPlaying={isPlaying && currentTrack?.id === t.id}
+                    isPreview={previewTrack?.id === t.id}
+                    onPlay={() => handlePlay(t)}
+                    onPreview={() => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
+                    onAddLease={() => addToCart(t, 'lease')}
+                    onAddExclusive={() => addToCart(t, 'exclusive')}
+                    onFreeDownload={() => setFreeDownloadTrack(t)}
+                    accentColor={accentColor}
+                    isWishlisted={wishlist.has(t.id)}
+                    onToggleWishlist={() => wishlist.toggle(t.id)}
+                  />
+                ) : (
                   <BeatCard
                     key={t.id}
                     track={t}
@@ -790,32 +845,72 @@ function StorePage() {
                     isWishlisted={wishlist.has(t.id)}
                     onToggleWishlist={() => wishlist.toggle(t.id)}
                   />
-              ))}
+                ),
+              )}
             </div>
           ) : (
-            <div className="space-y-1">
-              {filtered.map((t, i) => (
-                <BeatListRow
-                  key={t.id}
-                  track={t}
-                  index={i + 1}
-                  priceLease={priceFor(t, 'lease')}
-                  priceExclusive={priceFor(t, 'exclusive')}
-                  isCurrent={currentTrack?.id === t.id}
-                  isPlaying={isPlaying && currentTrack?.id === t.id}
-                  isPreview={previewTrack?.id === t.id}
-                  onPlay={() => handlePlay(t)}
-                  onPreview={() => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
-                  onAddLease={() => addToCart(t, 'lease')}
-                  onAddExclusive={() => addToCart(t, 'exclusive')}
-                  onFreeDownload={() => setFreeDownloadTrack(t)}
-                  accentColor={accentColor}
-                />
-              ))}
-            </div>
+            // List view = embedded MusicPortfolio. Hero / filters / view
+            // toggle above stay put; only the listing area becomes the
+            // cinematic hover-background row layout. Cover-art click plays
+            // the track; row click opens the preview drawer.
+            <MusicPortfolio
+              variant="embedded"
+              tracks={filtered.map((t): PortfolioTrack => ({
+                id: t.id,
+                title: t.title,
+                artist: creator?.display_name ?? '',
+                type: t.type,
+                cover_url: t.cover_url ?? null,
+                bpm: t.bpm,
+                key: t.key,
+                year: t.created_at ? new Date(t.created_at).getFullYear().toString() : '',
+                priceLease: priceFor(t, 'lease'),
+                priceExclusive: priceFor(t, 'exclusive'),
+                freeDownload: !!t.free_download_enabled,
+                durationSeconds: t.duration_seconds ?? null,
+                tags: (t.tags ?? [])
+                  .filter((tag) => tag.category === 'genre' || tag.category === 'mood')
+                  .slice(0, 2)
+                  .map((tag) => tag.tag),
+              }))}
+              currentTrackId={currentTrack?.id ?? null}
+              isPlaying={isPlaying}
+              onTrackPlay={(id) => {
+                const t = filtered.find((x) => x.id === id);
+                if (t) handlePlay(t);
+              }}
+              onTrackOpen={(id) => {
+                const t = filtered.find((x) => x.id === id);
+                if (t) setPreviewTrack(previewTrack?.id === t.id ? null : t);
+              }}
+              isWishlisted={(id) => wishlist.has(id)}
+              onToggleWishlist={(id) => wishlist.toggle(id)}
+            />
           )}
         </div>
       </div>
+
+      {/* ── Retention strips ─────────────────────────────────────── */}
+      <RecommendationsStrip
+        label="More from this producer"
+        tracks={moreFromProducer}
+        accentColor={accentColor}
+        currentTrackId={currentTrack?.id ?? null}
+        isPlaying={isPlaying}
+        priceFor={(t, k) => priceFor(t, k)}
+        onPlay={(t) => handlePlay(t)}
+        onPreview={(t) => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
+      />
+      <RecommendationsStrip
+        label="You might also like"
+        tracks={youMightAlsoLike}
+        accentColor={accentColor}
+        currentTrackId={currentTrack?.id ?? null}
+        isPlaying={isPlaying}
+        priceFor={(t, k) => priceFor(t, k)}
+        onPlay={(t) => handlePlay(t)}
+        onPreview={(t) => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
+      />
 
       {/* ── Contact form ─────────────────────────────────────────── */}
       <StoreContactForm creator={creator} accentColor={accentColor} />

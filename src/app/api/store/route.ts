@@ -19,6 +19,19 @@ function sanitizeUrl(url: string | null | undefined): string | null {
 }
 
 /**
+ * Validate a seller user_id before interpolating it into a Postgrest
+ * `.or()` filter string. PostgREST uses commas to separate the
+ * conditions inside `.or(...)`, so any comma in the value would
+ * silently break the filter. Restricting to the strict UUID v4 shape
+ * is the safest bound — auth.users.id is always a UUID anyway.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function safeSellerId(id: string | null | undefined): string | null {
+  if (!id || !UUID_RE.test(id)) return null;
+  return id;
+}
+
+/**
  * GET /api/store
  *
  * Public-by-design endpoint that powers the /store page. Returns:
@@ -40,11 +53,22 @@ export async function GET() {
 
     const admin = createServiceClient();
 
+    const profileOwner = await admin
+      .from('creator_profiles')
+      .select('user_id')
+      .limit(1)
+      .maybeSingle();
+    let sellerId = profileOwner.data?.user_id as string | undefined;
+    // Pre-validate the seller id once so each downstream `.or()` call is
+    // working with a known-safe UUID (Postgrest treats commas in `.or()`
+    // values as filter separators).
+    let safeSeller = safeSellerId(sellerId);
+
     // ── Tracks ─────────────────────────────────────────────────────────────
     // Try with store_sort_order first (migration 033). Fall back without it.
     let tracksAny: any[] = [];
 
-    const withSortOrder = await admin
+    let withSortOrderQuery = admin
       .from('tracks')
       .select([
         'id', 'user_id', 'title', 'type',
@@ -54,12 +78,16 @@ export async function GET() {
         'lease_price_usd', 'exclusive_price_usd',
         'store_listed', 'free_download_enabled', 'store_sort_order', 'created_at',
       ].join(', '))
-      .eq('store_listed', true)
+      .eq('store_listed', true);
+    if (sellerId) {
+      withSortOrderQuery = withSortOrderQuery.or(`user_id.eq.${safeSeller},user_id.is.null`);
+    }
+    const withSortOrder = await withSortOrderQuery
       .order('store_sort_order', { ascending: true, nullsFirst: false })
       .order('created_at', { ascending: false });
 
     if (withSortOrder.error) {
-      const fallback = await admin
+      let fallbackQuery = admin
         .from('tracks')
         .select([
           'id', 'user_id', 'title', 'type',
@@ -69,7 +97,11 @@ export async function GET() {
           'lease_price_usd', 'exclusive_price_usd',
           'store_listed', 'free_download_enabled', 'created_at',
         ].join(', '))
-        .eq('store_listed', true)
+        .eq('store_listed', true);
+      if (sellerId) {
+        fallbackQuery = fallbackQuery.or(`user_id.eq.${safeSeller},user_id.is.null`);
+      }
+      const fallback = await fallbackQuery
         .order('created_at', { ascending: false });
       if (fallback.error) throw fallback.error;
       tracksAny = (fallback.data as any[]) ?? [];
@@ -101,10 +133,9 @@ export async function GET() {
     }
 
     // ── Creator profile ─────────────────────────────────────────────────────
-    const sellerId =
-      tracksAny.find((t: any) => !!t.user_id)?.user_id ??
-      (await admin.from('creator_profiles').select('user_id').limit(1).maybeSingle())
-        .data?.user_id;
+    sellerId = sellerId ?? tracksAny.find((t: any) => !!t.user_id)?.user_id;
+    // Re-derive the safe form now that sellerId may have changed.
+    safeSeller = safeSellerId(sellerId);
 
     let creator: Record<string, unknown> | null = null;
     let featuredPlaylists: Record<string, unknown>[] = [];
@@ -118,7 +149,7 @@ export async function GET() {
           'license_lease_price_usd', 'license_exclusive_price_usd', 'license_notes',
           'instagram_handle', 'twitter_handle', 'spotify_url',
           'soundcloud_url', 'website_url', 'contact_email',
-          'accent_color', 'font_style', 'store_enabled', 'text_color_primary',
+          'accent_color', 'font_style', 'text_color_primary',
         ].join(', '))
         .eq('user_id', sellerId)
         .maybeSingle();
@@ -145,123 +176,125 @@ export async function GET() {
         creator = { ...creator, hero_image_url: sanitizeUrl(creator.hero_image_url as string) };
       }
 
-      // ── Featured playlists + their tracks (migration 035) ──────────────
-      try {
-        const playlistsResult = await admin
-          .from('playlists')
-          .select('id, name, cover_url, store_order')
-          .eq('user_id', sellerId)
-          .eq('store_featured', true)
-          .order('store_order', { ascending: true, nullsFirst: false })
-          .order('created_at', { ascending: false });
+    }
 
-        if (playlistsResult.error) {
-          console.error('[store] featured playlists query error:', playlistsResult.error.message);
-        } else if (playlistsResult.data?.length) {
-          const playlists = playlistsResult.data as any[];
-          const plIds = playlists.map((p: any) => p.id);
-
-          // Fetch junction rows, then fetch all referenced tracks in one query.
-          // Two explicit queries avoids relying on PostgREST nested-select FK names.
-          const junctionRes = await admin
-            .from('playlist_tracks')
-            .select('playlist_id, track_id, position')
-            .in('playlist_id', plIds)
-            .order('position', { ascending: true });
-
-          const junction = (junctionRes.data ?? []) as any[];
-          const playlistTrackIds = [...new Set(junction.map((j: any) => j.track_id))];
-
-          let playlistTrackMap: Record<string, any> = {};
-          if (playlistTrackIds.length > 0) {
-            const { data: ptRows } = await admin
-              .from('tracks')
-              .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled')
-              .in('id', playlistTrackIds);
-            for (const t of (ptRows ?? []) as any[]) {
-              playlistTrackMap[t.id] = { ...t, cover_url: sanitizeUrl(t.cover_url) };
-            }
-          }
-
-          featuredPlaylists = playlists.map((pl: any) => {
-            const plTracks = junction
-              .filter((j: any) => j.playlist_id === pl.id)
-              .map((j: any) => playlistTrackMap[j.track_id])
-              .filter(Boolean);
-            return {
-              ...pl,
-              cover_url: sanitizeUrl(pl.cover_url),
-              tracks: plTracks,
-            };
-          });
-        }
-      } catch (e) {
-        console.error('[store] featured playlists error:', e);
+    // ── Featured playlists + their tracks (migration 035) ──────────────
+    try {
+      let playlistsQuery = admin
+        .from('playlists')
+        .select('id, name, cover_url, store_order')
+        .eq('store_featured', true)
+        .order('store_order', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false });
+      if (sellerId) {
+        playlistsQuery = playlistsQuery.or(`user_id.eq.${safeSeller},user_id.is.null`);
       }
+      const playlistsResult = await playlistsQuery;
+
+      if (playlistsResult.error) {
+        console.error('[store] featured playlists query error:', playlistsResult.error.message);
+      } else if (playlistsResult.data?.length) {
+        const playlists = playlistsResult.data as any[];
+        const plIds = playlists.map((p: any) => p.id);
+
+        const junctionRes = await admin
+          .from('playlist_tracks')
+          .select('playlist_id, track_id, position')
+          .in('playlist_id', plIds)
+          .order('position', { ascending: true });
+
+        const junction = (junctionRes.data ?? []) as any[];
+        const playlistTrackIds = [...new Set(junction.map((j: any) => j.track_id))];
+
+        let playlistTrackMap: Record<string, any> = {};
+        if (playlistTrackIds.length > 0) {
+          const { data: ptRows } = await admin
+            .from('tracks')
+            .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled')
+            .in('id', playlistTrackIds);
+          for (const t of (ptRows ?? []) as any[]) {
+            playlistTrackMap[t.id] = { ...t, cover_url: sanitizeUrl(t.cover_url) };
+          }
+        }
+
+        featuredPlaylists = playlists.map((pl: any) => {
+          const plTracks = junction
+            .filter((j: any) => j.playlist_id === pl.id)
+            .map((j: any) => playlistTrackMap[j.track_id])
+            .filter(Boolean);
+          return {
+            ...pl,
+            cover_url: sanitizeUrl(pl.cover_url),
+            tracks: plTracks,
+          };
+        });
+      }
+    } catch (e) {
+      console.error('[store] featured playlists error:', e);
     }
 
     // ── Store-featured projects (migration 040) ──────────────────────────
     // Only requires store_featured = true. is_public is auto-set when a
     // producer clicks "Add to store", so we don't double-gate here.
     let featuredProjects: Record<string, unknown>[] = [];
-    if (sellerId) {
-      try {
-        const projectsResult = await admin
-          .from('projects')
-          .select('id, name, cover_url, description, price_usd, store_featured, store_order, created_at')
-          .eq('user_id', sellerId)
-          .eq('store_featured', true)
-          .order('store_order', { ascending: true, nullsFirst: false })
-          .order('created_at', { ascending: false })
-          .limit(6);
-
-        if (projectsResult.error) {
-          console.error('[store] featured projects query error:', projectsResult.error.message);
-        } else if (projectsResult.data?.length) {
-          const projects = projectsResult.data as any[];
-          const projIds = projects.map((p: any) => p.id);
-
-          // Fetch junction + tracks explicitly (avoids nested-select FK ambiguity)
-          const junctionRes = await admin
-            .from('project_tracks')
-            .select('project_id, track_id, position')
-            .in('project_id', projIds)
-            .order('position', { ascending: true });
-
-          const junction = (junctionRes.data ?? []) as any[];
-          const projectTrackIds = [...new Set(junction.map((j: any) => j.track_id))];
-
-          let projectTrackMap: Record<string, any> = {};
-          if (projectTrackIds.length > 0) {
-            const { data: ptRows } = await admin
-              .from('tracks')
-              .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled')
-              .in('id', projectTrackIds);
-            for (const t of (ptRows ?? []) as any[]) {
-              projectTrackMap[t.id] = { ...t, cover_url: sanitizeUrl(t.cover_url) };
-            }
-          }
-
-          featuredProjects = projects.map((proj: any) => {
-            const projTracks = junction
-              .filter((j: any) => j.project_id === proj.id)
-              .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
-              .map((j: any) => projectTrackMap[j.track_id])
-              .filter(Boolean);
-            return {
-              id: proj.id,
-              name: proj.name,
-              cover_url: sanitizeUrl(proj.cover_url),
-              description: proj.description ?? null,
-              price_usd: proj.price_usd ?? null,
-              store_order: proj.store_order ?? null,
-              tracks: projTracks,
-            };
-          });
-        }
-      } catch (e) {
-        console.error('[store] featured projects error:', e);
+    try {
+      let projectsQuery = admin
+        .from('projects')
+        .select('id, name, cover_url, description, price_usd, store_featured, store_order, created_at')
+        .eq('store_featured', true)
+        .order('store_order', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .limit(12);
+      if (sellerId) {
+        projectsQuery = projectsQuery.or(`user_id.eq.${safeSeller},user_id.is.null`);
       }
+      const projectsResult = await projectsQuery;
+
+      if (projectsResult.error) {
+        console.error('[store] featured projects query error:', projectsResult.error.message);
+      } else if (projectsResult.data?.length) {
+        const projects = projectsResult.data as any[];
+        const projIds = projects.map((p: any) => p.id);
+
+        const junctionRes = await admin
+          .from('project_tracks')
+          .select('project_id, track_id, position')
+          .in('project_id', projIds)
+          .order('position', { ascending: true });
+
+        const junction = (junctionRes.data ?? []) as any[];
+        const projectTrackIds = [...new Set(junction.map((j: any) => j.track_id))];
+
+        let projectTrackMap: Record<string, any> = {};
+        if (projectTrackIds.length > 0) {
+          const { data: ptRows } = await admin
+            .from('tracks')
+            .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled')
+            .in('id', projectTrackIds);
+          for (const t of (ptRows ?? []) as any[]) {
+            projectTrackMap[t.id] = { ...t, cover_url: sanitizeUrl(t.cover_url) };
+          }
+        }
+
+        featuredProjects = projects.map((proj: any) => {
+          const projTracks = junction
+            .filter((j: any) => j.project_id === proj.id)
+            .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
+            .map((j: any) => projectTrackMap[j.track_id])
+            .filter(Boolean);
+          return {
+            id: proj.id,
+            name: proj.name,
+            cover_url: sanitizeUrl(proj.cover_url),
+            description: proj.description ?? null,
+            price_usd: proj.price_usd ?? null,
+            store_order: proj.store_order ?? null,
+            tracks: projTracks,
+          };
+        });
+      }
+    } catch (e) {
+      console.error('[store] featured projects error:', e);
     }
 
     // ── Licenses (from licenses table, migration 031) ────────────────────
