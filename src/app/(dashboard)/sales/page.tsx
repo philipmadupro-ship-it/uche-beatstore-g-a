@@ -13,8 +13,9 @@ import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Loader2, Receipt, Music, Layers, ExternalLink, Search,
-  DollarSign, ShoppingBag, AlertCircle,
+  DollarSign, ShoppingBag, AlertCircle, Send,
 } from 'lucide-react';
+import { toast } from '@/hooks/useToast';
 
 interface Sale {
   id: string;
@@ -230,6 +231,25 @@ function SaleRow({ sale }: { sale: Sale }) {
   const stripeUrl = sale.stripe_session_id
     ? `https://dashboard.stripe.com/payments/${sale.stripe_session_id}`
     : null;
+  const [resending, setResending] = useState(false);
+  const handleResend = async () => {
+    if (resending) return;
+    setResending(true);
+    try {
+      const res = await fetch('/api/sales/resend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sale.id, kind: sale.kind }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      toast.success('Delivery email resent', `Sent to ${sale.buyer_email}`);
+    } catch (err: any) {
+      toast.error('Resend failed', err.message);
+    } finally {
+      setResending(false);
+    }
+  };
 
   return (
     <div className="md:grid md:grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-5 py-3.5 flex flex-col gap-2 hover:bg-[#16130e] transition-colors">
@@ -263,7 +283,17 @@ function SaleRow({ sale }: { sale: Sale }) {
         {sale.status}
       </span>
 
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-1.5">
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={resending || sale.status !== 'paid'}
+          className="text-[#3a3328] hover:text-[#E8DCC8] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          title={sale.status !== 'paid' ? `Cannot resend (${sale.status})` : `Resend delivery email to ${sale.buyer_email}`}
+          aria-label="Resend delivery email"
+        >
+          {resending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+        </button>
         {stripeUrl && (
           <a
             href={stripeUrl}

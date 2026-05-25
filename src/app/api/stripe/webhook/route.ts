@@ -176,6 +176,21 @@ async function runFulfillment(params: {
         return `• ${typeLabel} license — Track ID: ${li.track_id}`;
       });
 
+      // Promo + totals breakdown. Stripe gives us the final paid total +
+      // any discounts it applied; surface them so the buyer sees what
+      // their code did.
+      const totalCents = Number(session.amount_total ?? 0);
+      const subtotalCents = Number(session.amount_subtotal ?? totalCents);
+      const discountCents = Math.max(0, subtotalCents - totalCents);
+      const fmt = (cents: number) =>
+        `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const promoLine = meta.promo_code
+        ? `<div style="display:flex;justify-content:space-between;font-size:11px;color:#6DC6A4;margin-top:8px;">
+             <span>Promo ${meta.promo_code} applied</span>
+             <span>−${fmt(discountCents)}</span>
+           </div>`
+        : '';
+
       await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
         to: meta.buyer_email,
@@ -190,6 +205,15 @@ async function runFulfillment(params: {
             </p>
             <div style="margin: 24px 0; padding: 16px; background: #14110d; border-radius: 12px; border: 1px solid #1f1a13; font-size: 12px; color: #a08a6a; font-family: monospace; line-height: 1.8;">
               ${itemSummaries.join('<br/>')}
+              <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #1f1a13;">
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:#a08a6a;">
+                  <span>Subtotal</span><span>${fmt(subtotalCents)}</span>
+                </div>
+                ${promoLine}
+                <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:bold;color:#E8DCC8;margin-top:8px;">
+                  <span>Total paid</span><span>${fmt(totalCents)}</span>
+                </div>
+              </div>
             </div>
             <div style="margin-top: 36px;">
               <a href="${downloadUrl}"
@@ -367,6 +391,32 @@ export async function POST(req: NextRequest) {
         }
 
         const purchaseKind = meta.purchase_kind ?? 'track_license';
+
+        // ── Promo redemption — atomic increment (migration 048) ─────────
+        // Closes the race where two buyers can both see uses_count <
+        // max_uses, both create sessions, and both complete. The RPC
+        // returns NULL when the cap was reached between create + complete.
+        // Stripe already collected the (discounted) money, so we honour
+        // the session either way and just log the over-redemption.
+        const promoCode = meta.promo_code;
+        if (promoCode) {
+          try {
+            const { data: incrementedRow, error: rpcErr } = await admin.rpc(
+              'increment_promo_use',
+              { p_code: promoCode },
+            );
+            if (rpcErr) {
+              log.warn('promo increment failed', { code: promoCode, error: errorMessage(rpcErr) });
+            } else if (!incrementedRow) {
+              log.warn('promo exhausted between session create and complete', {
+                code: promoCode,
+                session_id: session.id,
+              });
+            }
+          } catch (err) {
+            log.warn('promo increment threw', { code: promoCode, error: errorMessage(err) });
+          }
+        }
 
         if (purchaseKind === 'project') {
           // ── Project storefront purchase ─────────────────────────────────

@@ -11,8 +11,18 @@ import {
 import { loadStripe } from '@stripe/stripe-js';
 import { useCart } from '@/hooks/useCart';
 
-// Load Stripe. Fallback to a placeholder in dev if not set to prevent crashing
-const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_51TYTBb2NNv7qe8ftKQFdtdthCaiwwb8qqRqljC0fpKmpOqyKkyiYya3JqmHT6txvu7kqF9B26u6JpSIhJB9L9DGX00Jlp1pqaB';
+// Load Stripe. The previous fallback hardcoded a real `pk_test_…` from
+// another Stripe account, which would silently route payments to that
+// account if NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY was missing in prod.
+// The sentinel below is a clearly-invalid key Stripe rejects on first
+// request, so a missing env var fails LOUDLY instead of silently
+// charging the wrong account. The boolean below flips the "test mode"
+// banner off in that broken state so the user isn't misled into
+// trying to test.
+const PK_MISSING_SENTINEL = 'pk_test_MISSING_SET_NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY';
+const stripePublishableKey =
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || PK_MISSING_SENTINEL;
+const stripeKeyMissing = stripePublishableKey === PK_MISSING_SENTINEL;
 const stripePromise = loadStripe(stripePublishableKey);
 
 function CheckoutContent() {
@@ -82,7 +92,21 @@ function CheckoutContent() {
         checkoutInstance.mount('#checkout-element');
       } catch (err: any) {
         console.error('Stripe mount error:', err);
-        setInitError(err.message || 'Failed to render secure payment form.');
+        // Detect expired / invalid client_secret so we show a friendlier
+        // "Refresh checkout" message rather than the raw Stripe error.
+        // Stripe surfaces these as messages like "Session has expired"
+        // or "no longer valid" when the buyer leaves the tab open
+        // past the ~24h session lifetime.
+        const raw = String(err?.message ?? '').toLowerCase();
+        const isExpired = raw.includes('expired') || raw.includes('no longer valid') || raw.includes('invalid');
+        if (isExpired) {
+          setInitError('Your checkout session expired. Refresh to start a new one.');
+          // Clear the dead clientSecret so the retry path re-fetches fresh.
+          setClientSecret('');
+          setIsEmailSubmitted(false);
+        } else {
+          setInitError(err.message || 'Failed to render secure payment form.');
+        }
       }
     }
 
@@ -339,27 +363,38 @@ function CheckoutContent() {
             </div>
           </div>
 
-          {/* Warning about testing if publishable key seems standard/mocked */}
-          {stripePublishableKey.startsWith('pk_test') && (
+          {/* Missing-key warning wins over the test-mode hint — if the
+              env var is missing the publishable key is the sentinel,
+              which Stripe will reject, so "test mode" is misleading. */}
+          {stripeKeyMissing ? (
+            <div className="mb-5 p-3 rounded-xl bg-red-950/30 border border-red-500/30 text-[10px] text-red-300 font-mono leading-relaxed">
+              ⚠ <strong>Stripe publishable key missing.</strong> Set
+              <code className="mx-1 px-1 bg-red-500/10 rounded">NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>
+              in the deployment environment. Checkout will not work until this is fixed.
+            </div>
+          ) : stripePublishableKey.startsWith('pk_test') && (
             <div className="mb-5 p-3 rounded-xl bg-[#2A2418]/60 border border-[#D4BFA0]/10 text-[10px] text-[#a08a6a] font-mono leading-relaxed">
               💡 <strong>Test Mode Active:</strong> You can complete purchases using Stripe test cards (e.g. 4242 4242 4242 4242).
             </div>
           )}
 
-          {initError && (
-            <div className="p-4 rounded-xl bg-red-950/20 border border-red-500/20 text-red-300 text-[11px] font-mono mb-5 flex items-start gap-2.5">
-              <AlertTriangle size={14} className="shrink-0 mt-0.5 text-red-400" />
-              <div className="space-y-2">
-                <p>{initError}</p>
-                <button
-                  onClick={() => triggerCheckoutInit(email)}
-                  className="flex items-center gap-1.5 px-3 py-1 bg-red-500/10 hover:bg-red-500/20 rounded border border-red-500/30 text-[9px] uppercase tracking-wider transition-colors"
-                >
-                  <RefreshCw size={10} /> Retry setup
-                </button>
+          {initError && (() => {
+            const isExpired = initError.toLowerCase().includes('expired');
+            return (
+              <div className="p-4 rounded-xl bg-red-950/20 border border-red-500/20 text-red-300 text-[11px] font-mono mb-5 flex items-start gap-2.5">
+                <AlertTriangle size={14} className="shrink-0 mt-0.5 text-red-400" />
+                <div className="space-y-2">
+                  <p>{initError}</p>
+                  <button
+                    onClick={() => triggerCheckoutInit(email)}
+                    className="flex items-center gap-1.5 px-3 py-1 bg-red-500/10 hover:bg-red-500/20 rounded border border-red-500/30 text-[9px] uppercase tracking-wider transition-colors"
+                  >
+                    <RefreshCw size={10} /> {isExpired ? 'Refresh checkout' : 'Retry setup'}
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {isEmailSubmitted && isInitializing && (
             <div className="py-12 flex flex-col items-center justify-center gap-3 text-center">
