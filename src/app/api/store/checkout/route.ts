@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
 
     const { data: tracks, error: tracksErr } = await admin
       .from('tracks')
-      .select('id, user_id, title, store_listed, lease_price_usd, exclusive_price_usd')
+      .select('id, user_id, title, store_listed, lease_price_usd, exclusive_price_usd, wav_url, stems_status')
       .in('id', trackIds);
 
     if (tracksErr) throw tracksErr;
@@ -216,6 +216,37 @@ export async function POST(req: NextRequest) {
     const unlisted = (tracks as any[]).filter((t) => !t.store_listed).map((t: any) => t.title);
     if (unlisted.length) {
       return NextResponse.json({ error: `Not for sale: ${unlisted.join(', ')}` }, { status: 400 });
+    }
+
+    // Exclusive gating — an exclusive purchase delivers the WAV + stems, so
+    // reject the session before reaching Stripe if the track has neither.
+    // Buyers should never pay for a deliverable that doesn't exist.
+    const wantsExclusive = (kind: string | undefined, license: any) =>
+      license?.is_exclusive === true || kind === 'exclusive' || kind === 'exclusive-rights';
+    const stemsReady = (stemsStatus: string | null | undefined) =>
+      stemsStatus === 'ready' || stemsStatus === 'done' || stemsStatus === 'complete';
+    const missingDeliverable = rawItems
+      .map((it) => {
+        const track = (tracks as any[]).find((t) => t.id === it.track_id);
+        if (!track) return null;
+        const license = rawItems.length > 0
+          ? null // we resolve license below; for now use raw flags only
+          : null;
+        const isExclusive = wantsExclusive(it.license_type, license);
+        if (!isExclusive) return null;
+        const hasWav = !!track.wav_url;
+        const hasStems = stemsReady(track.stems_status);
+        if (hasWav || hasStems) return null;
+        return track.title as string;
+      })
+      .filter((t): t is string => !!t);
+    if (missingDeliverable.length > 0) {
+      return NextResponse.json(
+        {
+          error: `Exclusive license unavailable — these tracks have no WAV or stems uploaded yet: ${missingDeliverable.join(', ')}. Contact the producer or choose a lease.`,
+        },
+        { status: 400 },
+      );
     }
 
     // ── Creator profile (for legacy price fallback) ──────────────────────────

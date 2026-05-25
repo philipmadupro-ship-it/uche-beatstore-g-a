@@ -23,7 +23,7 @@ import {
   Image as ImageIcon, Upload, Globe,
   Music, ListMusic, DollarSign, Eye, EyeOff,
   GripVertical, Check, X, Plus, Layers, Search,
-  ToggleLeft, ToggleRight, ShoppingBag,
+  ShoppingBag,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { LicenseBuilder } from '@/components/store/LicenseBuilder';
@@ -400,7 +400,7 @@ export default function StoreEditorPage() {
           license_lease_price_usd: p.license_lease_price_usd != null ? String(p.license_lease_price_usd) : '',
           license_exclusive_price_usd: p.license_exclusive_price_usd != null ? String(p.license_exclusive_price_usd) : '',
           license_notes: p.license_notes ?? '',
-          store_enabled: p.store_enabled !== false,
+          store_enabled: true,
         });
 
         const allPlaylists: PlaylistRow[] = pld.playlists ?? [];
@@ -569,7 +569,7 @@ export default function StoreEditorPage() {
         license_lease_price_usd: form.license_lease_price_usd !== '' ? parseFloat(form.license_lease_price_usd) : null,
         license_exclusive_price_usd: form.license_exclusive_price_usd !== '' ? parseFloat(form.license_exclusive_price_usd) : null,
         license_notes: form.license_notes || null,
-        store_enabled: form.store_enabled,
+        store_enabled: true,
       };
 
       const profileRes = await fetch('/api/profile', {
@@ -1241,6 +1241,47 @@ export default function StoreEditorPage() {
                 <span>{allTracks.length} total beats</span>
               </div>
 
+              {/* Needs attention — surfaces listed beats with quality
+                  issues that hurt conversion (no cover, no price set, no
+                  BPM/key metadata). Producer can fix in /library. */}
+              {(() => {
+                const listed = allTracks.filter((t) => t.store_listed);
+                const noCover = listed.filter((t) => !t.cover_url);
+                const noPrice = listed.filter(
+                  (t) => (t.lease_price_usd == null || t.lease_price_usd <= 0)
+                    && (t.exclusive_price_usd == null || t.exclusive_price_usd <= 0),
+                );
+                const noBpmKey = listed.filter((t) => t.bpm == null && !t.key);
+                const issues = [
+                  noCover.length > 0 && { label: 'no cover art', count: noCover.length },
+                  noPrice.length > 0 && { label: 'no price set', count: noPrice.length },
+                  noBpmKey.length > 0 && { label: 'no BPM or key', count: noBpmKey.length },
+                ].filter(Boolean) as Array<{ label: string; count: number }>;
+                if (issues.length === 0) return null;
+                return (
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-3">
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-amber-400/80 mb-2">
+                      Needs attention · {issues.reduce((s, i) => s + i.count, 0)} issue{issues.reduce((s, i) => s + i.count, 0) === 1 ? '' : 's'}
+                    </p>
+                    <ul className="space-y-1">
+                      {issues.map((i) => (
+                        <li key={i.label} className="text-[11px] text-[#a08a6a] flex items-center gap-2">
+                          <span className="w-1 h-1 rounded-full bg-amber-400/60" />
+                          <span className="tabular-nums font-mono text-amber-400/90">{i.count}</span>
+                          <span>listed beat{i.count === 1 ? '' : 's'} {i.label}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <a
+                      href="/library"
+                      className="mt-2 inline-block text-[10px] font-mono uppercase tracking-wider text-amber-400/80 hover:text-amber-300 underline underline-offset-2"
+                    >
+                      Fix in Library →
+                    </a>
+                  </div>
+                );
+              })()}
+
               {/* Track rows */}
               {allTracks.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-[#1f1a13] py-10 text-center">
@@ -1330,27 +1371,6 @@ export default function StoreEditorPage() {
               open={openSections.has('track-controls')}
               onToggle={() => toggleSection('track-controls')}
             >
-              {/* Store enabled toggle */}
-              <div className="flex items-center justify-between py-3 border-b border-[#1f1a13]">
-                <div>
-                  <p className="text-[12px] font-medium text-[#E8DCC8]">Store Visible</p>
-                  <p className="text-[10px] font-mono text-[#5a5142] mt-0.5">
-                    When off, your /store page shows an "under construction" state.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, store_enabled: !f.store_enabled }))}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ml-4 ${
-                    form.store_enabled ? 'bg-[#6DC6A4]' : 'bg-[#1f1a13]'
-                  }`}
-                >
-                  <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    form.store_enabled ? 'translate-x-5' : 'translate-x-0'
-                  }`} />
-                </button>
-              </div>
-
               {/* License notes */}
               <Field label="License Notes">
                 <textarea
@@ -1412,11 +1432,6 @@ export default function StoreEditorPage() {
                 featuredPlaylists={featured}
                 tracks={previewTracks}
               />
-              {!form.store_enabled && (
-                <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-950/30 border border-amber-900/30 text-amber-500 text-[10px] font-mono">
-                  <EyeOff size={11} /> Store is currently hidden from visitors
-                </div>
-              )}
             </div>
           </div>
         </div>

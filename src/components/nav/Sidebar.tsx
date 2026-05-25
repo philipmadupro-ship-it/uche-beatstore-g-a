@@ -19,6 +19,7 @@ import {
   Music,
   Play,
   Receipt,
+  BarChart3,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -46,6 +47,7 @@ const NAV_ITEMS = [
   { label: 'Calendar',  icon: Calendar,  href: '/calendar',  description: 'Releases, sessions, deadlines.' },
   { label: 'Links',     icon: Link2,     href: '/links',     description: 'Share links you\'ve generated.' },
   { label: 'Sales',     icon: Receipt,   href: '/sales',     description: 'Completed purchases — tracks and projects.' },
+  { label: 'Analytics', icon: BarChart3, href: '/analytics', description: 'Plays, sales, gross — last 30 days + top tracks.' },
   { label: 'Offline',   icon: CloudOff,  href: '/offline',   description: 'Cached tracks for offline play.' },
   { label: 'Settings',  icon: Settings,  href: '/settings',  description: 'Account, team, integrations.' },
 ];
