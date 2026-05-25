@@ -23,6 +23,7 @@ import MusicPortfolio, { type PortfolioTrack } from '@/components/library/MusicP
 import BandcampRemixCard from '@/components/store/BandcampRemixCard';
 import { RecommendationsStrip } from '@/components/store/RecommendationsStrip';
 import { useWishlist } from '@/hooks/useWishlist';
+import { filterAndSortTracks, type StoreTrack as StoreTrackFilter } from '@/lib/store/filters';
 import { Sparkles } from 'lucide-react';
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -338,83 +339,35 @@ function StorePage() {
     setTypeFilter('all');
   };
 
-  const filtered = useMemo(() => {
-    const q = debouncedSearch.trim().toLowerCase();
-    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const result = tracks.filter((t) => {
-      if (typeFilter === 'beats' && t.type !== 'beat' && t.type !== 'instrumental') return false;
-      if (typeFilter !== 'all' && typeFilter !== 'beats' && t.type !== typeFilter) return false;
-      if (freeOnly && !t.free_download_enabled) return false;
-      if (favoritesOnly && !wishlist.has(t.id)) return false;
-      if (newThisWeek) {
-        const created = t.created_at ? new Date(t.created_at).getTime() : 0;
-        if (created < weekAgo) return false;
-      }
-      if (priceRangeActive) {
-        const lp = t.lease_price_usd ?? creator?.license_lease_price_usd ?? null;
-        const p = lp != null && Number(lp) > 0 ? Number(lp) : null;
-        if (p == null || p < effectivePriceMin || p > effectivePriceMax) return false;
-      }
-      if (t.bpm != null && (t.bpm < effectiveBpmMin || t.bpm > effectiveBpmMax)) return false;
-      if (keyFilter && (t.key ?? '').toLowerCase() !== keyFilter.toLowerCase()) return false;
-      if (scaleFilter && (t.scale ?? '').toLowerCase() !== scaleFilter) return false;
-      if (durationBucket) {
-        const d = t.duration_seconds ?? 0;
-        if (durationBucket === 'short' && d >= 120) return false;
-        if (durationBucket === 'medium' && (d < 120 || d > 240)) return false;
-        if (durationBucket === 'long' && d <= 240) return false;
-      }
-      if (genreFilter) {
-        const hasGenre = (t.tags ?? []).some(
-          (tag) => tag.category === 'genre' && tag.tag.toLowerCase() === genreFilter.toLowerCase(),
-        );
-        if (!hasGenre) return false;
-      }
-      if (moodFilter) {
-        const hasMood = (t.tags ?? []).some(
-          (tag) => tag.category === 'mood' && tag.tag.toLowerCase() === moodFilter.toLowerCase(),
-        );
-        if (!hasMood) return false;
-      }
-      if (!q) return true;
-      return (
-        t.title.toLowerCase().includes(q) ||
-        (t.key ?? '').toLowerCase().includes(q) ||
-        String(t.bpm ?? '').includes(q) ||
-        (t.description ?? '').toLowerCase().includes(q) ||
-        (t.tags ?? []).some((tag) => tag.tag.toLowerCase().includes(q))
-      );
-    });
-
-    // Sort applied after filtering so the count is stable.
-    const priceOf = (t: StoreTrack) => {
-      const lease = t.lease_price_usd ?? creator?.license_lease_price_usd ?? null;
-      return lease != null && Number(lease) > 0 ? Number(lease) : Infinity;
-    };
-    const sorted = [...result];
-    switch (sortBy) {
-      case 'bpm-asc':   sorted.sort((a, b) => (a.bpm ?? Infinity) - (b.bpm ?? Infinity)); break;
-      case 'bpm-desc':  sorted.sort((a, b) => (b.bpm ?? -Infinity) - (a.bpm ?? -Infinity)); break;
-      case 'price-asc': sorted.sort((a, b) => priceOf(a) - priceOf(b)); break;
-      case 'price-desc':sorted.sort((a, b) => priceOf(b) - priceOf(a)); break;
-      case 'title':     sorted.sort((a, b) => a.title.localeCompare(b.title)); break;
-      case 'popular':
-        // Lightweight proxy until a real popularity column exists: rating
-        // dominates, BPM nudges ties, title break for determinism.
-        sorted.sort((a, b) => {
-          const score = (t: StoreTrack) => (t.rating ?? 0) * 100 + (t.bpm ?? 0);
-          const diff = score(b) - score(a);
-          return diff !== 0 ? diff : a.title.localeCompare(b.title);
-        });
-        break;
-      case 'newest':
-      default:
-        sorted.sort((a, b) =>
-          new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
-        );
-    }
-    return sorted;
-  }, [tracks, debouncedSearch, typeFilter, freeOnly, favoritesOnly, newThisWeek, priceRangeActive, effectivePriceMin, effectivePriceMax, effectiveBpmMin, effectiveBpmMax, keyFilter, scaleFilter, durationBucket, genreFilter, moodFilter, sortBy, creator?.license_lease_price_usd, wishlist.ids]);
+  // Filter + sort delegated to the pure helper in @/lib/store/filters so
+  // the logic is covered by Vitest (lib/store/filters.test.ts) and future
+  // refactors can't silently wipe sidebar features the way two parallel
+  // AIs did in earlier rounds.
+  const filtered = useMemo(() => filterAndSortTracks(tracks as StoreTrackFilter[], {
+    searchQuery: debouncedSearch,
+    typeFilter,
+    freeOnly,
+    favoritesOnly,
+    newThisWeek,
+    priceRangeActive,
+    priceMin: effectivePriceMin,
+    priceMax: effectivePriceMax,
+    bpmMin: effectiveBpmMin,
+    bpmMax: effectiveBpmMax,
+    keyFilter,
+    scaleFilter,
+    durationBucket,
+    genreFilter,
+    moodFilter,
+    sortBy,
+    favoriteIds: wishlist.ids,
+    defaultLeasePrice: creator?.license_lease_price_usd,
+  }) as StoreTrack[], [
+    tracks, debouncedSearch, typeFilter, freeOnly, favoritesOnly, newThisWeek,
+    priceRangeActive, effectivePriceMin, effectivePriceMax,
+    effectiveBpmMin, effectiveBpmMax, keyFilter, scaleFilter, durationBucket,
+    genreFilter, moodFilter, sortBy, creator?.license_lease_price_usd, wishlist.ids,
+  ]);
 
   // Retention strips at the bottom of the page. "More from this producer"
   // excludes anything visible in the current filtered set so the picks

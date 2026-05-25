@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Project-local pre-commit hook. Enable once per clone with:
+#   git config core.hooksPath .githooks
+#
+# Catches the regression class that hit storefront work three times:
+#   - merge-conflict markers left in source files
+#   - tsc errors on staged TS files
+# We intentionally skip a full `npm test` / `npm run build` here so the
+# hook stays sub-second. Heavy checks run in GitHub Actions CI.
+
+set -e
+
+# 1. Conflict markers in staged content
+if git diff --cached --name-only -z | xargs -0 grep -lE '^(<<<<<<<|=======|>>>>>>>) ' 2>/dev/null; then
+  echo "✖ Merge conflict markers found in staged files. Resolve before committing." >&2
+  exit 1
+fi
+
+# 2. TypeScript on staged .ts/.tsx files (incremental — fast)
+staged_ts=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx)$' || true)
+if [ -n "$staged_ts" ]; then
+  # Use --noEmit so we don't generate output; --skipLibCheck for speed.
+  if ! npx --no-install tsc --noEmit --skipLibCheck $staged_ts 2>&1; then
+    echo "✖ TypeScript errors in staged files." >&2
+    exit 1
+  fi
+fi
+
+exit 0

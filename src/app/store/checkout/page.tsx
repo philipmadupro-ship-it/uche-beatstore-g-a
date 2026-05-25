@@ -73,7 +73,9 @@ function CheckoutContent() {
         // `initEmbeddedCheckout` was removed in @stripe/stripe-js >= 9.x;
         // the current method for sessions created with
         // `ui_mode: 'embedded_page'` server-side is `createEmbeddedCheckoutPage`.
-        checkoutInstance = await (stripe as any).createEmbeddedCheckoutPage({
+        // Typed call (no `as any`) so the next SDK rename surfaces at compile
+        // time instead of throwing in the browser.
+        checkoutInstance = await stripe.createEmbeddedCheckoutPage({
           clientSecret,
         });
 

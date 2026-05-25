@@ -1,0 +1,66 @@
+name: ci
+
+# Catches the kind of regressions the storefront branch hit three times
+# in a row: dead imports, parse errors after merges, broken sidebar
+# helpers, removed Stripe APIs. PR can't merge if build or tests fail.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel older runs on the same branch when a new commit lands.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      # Type-check standalone first — gives a fast, focused error
+      # message before the slower `next build` runs.
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      # Vitest — pure-logic test suite. Hits the sidebar filter helper,
+      # useWishlist store, /api routes, etc.
+      - name: Tests
+        run: npm test
+
+      # `next build` doubles as a build sanity check. Skip env-dependent
+      # page-data collection failures by stubbing the secrets we don't
+      # have in CI; the build step itself only needs the code to
+      # compile.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://stub.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: stub-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: stub-service-role-key
+          NEXT_PUBLIC_APP_URL: https://stub.example.com
+          STRIPE_SECRET_KEY: sk_test_stub
+          STRIPE_WEBHOOK_SECRET: whsec_stub
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_stub
+          RESEND_API_KEY: re_stub
+          RESEND_FROM_EMAIL: ci@stub.example.com
+          R2_ACCOUNT_ID: stub
+          R2_ACCESS_KEY_ID: stub
+          R2_SECRET_ACCESS_KEY: stub
+          R2_BUCKET_NAME: stub
+          NEXT_PUBLIC_R2_PUBLIC_URL: https://stub.r2.dev
+          CRON_SECRET: stub
