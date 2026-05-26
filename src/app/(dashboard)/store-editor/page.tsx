@@ -23,7 +23,7 @@ import {
   Image as ImageIcon, Upload, Globe,
   Music, ListMusic, DollarSign, Eye, EyeOff,
   GripVertical, Check, X, Plus, Layers, Search,
-  ShoppingBag,
+  ShoppingBag, Star,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { LicenseBuilder } from '@/components/store/LicenseBuilder';
@@ -167,6 +167,7 @@ interface TrackRow {
   bpm: number | null;
   key: string | null;
   store_listed: boolean;
+  store_featured: boolean;
   store_sort_order: number | null;
   lease_price_usd: number | null;
   exclusive_price_usd: number | null;
@@ -368,6 +369,7 @@ export default function StoreEditorPage() {
               bpm: t.bpm ?? null,
               key: t.key ?? null,
               store_listed: !!t.store_listed,
+              store_featured: !!t.store_featured,
               store_sort_order: t.store_sort_order ?? null,
               lease_price_usd: t.lease_price_usd ?? null,
               exclusive_price_usd: t.exclusive_price_usd ?? null,
@@ -541,6 +543,33 @@ export default function StoreEditorPage() {
       toast.error('Failed to update', err.message);
     } finally {
       setTogglingTrack(null);
+    }
+  };
+
+  /* ── Track featured toggle (migration 054) ── */
+  const toggleTrackFeatured = async (trackId: string, currentlyFeatured: boolean) => {
+    const nextState = !currentlyFeatured;
+    // Optimistic
+    setAllTracks((prev) =>
+      prev.map((t) => t.id === trackId ? { ...t, store_featured: nextState } : t),
+    );
+    try {
+      const res = await fetch(`/api/tracks/${trackId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ store_featured: nextState }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      toast.success(nextState ? "Pinned to Producer's Picks" : "Removed from picks");
+    } catch (err: any) {
+      // Rollback
+      setAllTracks((prev) =>
+        prev.map((t) => t.id === trackId ? { ...t, store_featured: currentlyFeatured } : t),
+      );
+      toast.error('Failed to update', err.message);
     }
   };
 
@@ -1339,6 +1368,22 @@ export default function StoreEditorPage() {
                         }`}>
                           {t.store_listed ? 'Live' : 'Draft'}
                         </span>
+
+                        {/* Producer's-Picks toggle — only available on listed
+                            tracks. Star fills with the accent gold when active. */}
+                        {t.store_listed && (
+                          <button
+                            onClick={() => toggleTrackFeatured(t.id, t.store_featured)}
+                            title={t.store_featured ? "Unpin from Producer's Picks" : "Pin to Producer's Picks"}
+                            className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center border transition-colors ${
+                              t.store_featured
+                                ? 'bg-[#c8a84b]/15 border-[#c8a84b]/40 text-[#c8a84b]'
+                                : 'bg-white/[0.03] border-[#1f1a13] text-[#5a5142] hover:text-[#c8a84b] hover:border-[#c8a84b]/30'
+                            }`}
+                          >
+                            <Star size={12} fill={t.store_featured ? 'currentColor' : 'none'} />
+                          </button>
+                        )}
 
                         {/* Toggle */}
                         <button

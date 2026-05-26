@@ -530,7 +530,7 @@ export default function StoreProductPage({
           <section className="mt-16">
             <div className="flex items-center justify-between mb-5">
               <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#5a5142]">
-                More Beats
+                You might also like
               </p>
               <Link
                 href="/store"

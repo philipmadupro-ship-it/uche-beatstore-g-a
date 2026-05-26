@@ -117,7 +117,7 @@ export async function GET() {
         'duration_seconds', 'bpm', 'key', 'scale',
         'rating', 'description',
         'lease_price_usd', 'exclusive_price_usd',
-        'store_listed', 'free_download_enabled', 'store_sort_order', 'created_at',
+        'store_listed', 'store_featured', 'free_download_enabled', 'store_sort_order', 'created_at',
       ].join(', '))
       .eq('store_listed', true);
     if (sellerId) {

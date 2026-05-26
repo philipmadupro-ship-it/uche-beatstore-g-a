@@ -291,24 +291,11 @@ function StorePage() {
     return pool.sort(() => Math.random() - 0.5).slice(0, 12);
   }, [tracks, filtered]);
 
-  const youMightAlsoLike = useMemo(() => {
-    const pivot = currentTrack ?? previewTrack ?? null;
-    const pivotTags = pivot ? (tracks.find((t) => t.id === pivot.id)?.tags ?? []) : [];
-    const pivotGenres = new Set(
-      pivotTags
-        .filter((tag) => tag.category === 'genre')
-        .map((tag) => tag.tag.toLowerCase()),
-    );
-    const exclude = pivot?.id;
-    if (pivotGenres.size > 0) {
-      const matches = tracks.filter((t) => {
-        if (t.id === exclude) return false;
-        return (t.tags ?? []).some((tag) => tag.category === 'genre' && pivotGenres.has(tag.tag.toLowerCase()));
-      });
-      if (matches.length > 0) return matches.slice(0, 12);
-    }
-    return tracks.filter((t) => t.id !== exclude).slice(0, 12);
-  }, [tracks, currentTrack, previewTrack]);
+  // Producer-curated picks — uses tracks.store_featured (migration 054).
+  // Falls back to nothing when the producer hasn't picked anything yet.
+  const producerPicks = useMemo(() => {
+    return tracks.filter((t) => (t as any).store_featured === true).slice(0, 12);
+  }, [tracks]);
 
   const handlePlay = (t: StoreTrack) => {
     if (currentTrack?.id === t.id) { togglePlay(); return; }
@@ -767,19 +754,21 @@ function StorePage() {
       </div>
 
       {/* ── Retention strips ─────────────────────────────────────── */}
+      {producerPicks.length > 0 && (
+        <RecommendationsStrip
+          label="Producer's Picks"
+          tracks={producerPicks}
+          accentColor={accentColor}
+          currentTrackId={currentTrack?.id ?? null}
+          isPlaying={isPlaying}
+          priceFor={(t, k) => priceFor(t, k)}
+          onPlay={(t) => handlePlay(t)}
+          onPreview={(t) => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
+        />
+      )}
       <RecommendationsStrip
         label="More from this producer"
         tracks={moreFromProducer}
-        accentColor={accentColor}
-        currentTrackId={currentTrack?.id ?? null}
-        isPlaying={isPlaying}
-        priceFor={(t, k) => priceFor(t, k)}
-        onPlay={(t) => handlePlay(t)}
-        onPreview={(t) => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
-      />
-      <RecommendationsStrip
-        label="You might also like"
-        tracks={youMightAlsoLike}
         accentColor={accentColor}
         currentTrackId={currentTrack?.id ?? null}
         isPlaying={isPlaying}

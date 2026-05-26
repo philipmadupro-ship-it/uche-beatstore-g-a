@@ -67,6 +67,9 @@ export const TrackPatchBodySchema = z.object({
   lease_price_usd: z.number().nonnegative().nullable().optional(),
   exclusive_price_usd: z.number().nonnegative().nullable().optional(),
   store_listed: z.boolean().optional(),
+  // Producer-curated "Picks" badge on /store. Independent of store_listed
+  // (must be listed to appear; not all listed tracks are picks). Migration 054.
+  store_featured: z.boolean().optional(),
   free_download_enabled: z.boolean().optional(),
   store_sort_order: z.number().int().nullable().optional(),
 }).strict();
