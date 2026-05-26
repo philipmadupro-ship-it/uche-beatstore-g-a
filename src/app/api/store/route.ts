@@ -86,9 +86,17 @@ export async function GET() {
 
     const admin = createServiceClient();
 
+    // Pick the canonical creator_profile — the one that actually has a
+    // display_name filled in. Without this, multi-profile databases (a
+    // common artefact of dev seeding + repeated OAuth round-trips for
+    // the same producer) lose the .limit(1) lottery to whichever empty
+    // row landed first, and the .or() scope clause below then filters
+    // out every real track because their user_id doesn't match the
+    // orphan profile's user_id. NULLS LAST puts populated rows first.
     const profileOwner = await admin
       .from('creator_profiles')
-      .select('user_id')
+      .select('user_id, display_name')
+      .order('display_name', { ascending: true, nullsFirst: false })
       .limit(1)
       .maybeSingle();
     let sellerId = profileOwner.data?.user_id as string | undefined;
