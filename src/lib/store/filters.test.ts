@@ -133,8 +133,8 @@ describe('filterAndSortTracks', () => {
   it('popular sort places null ratings last but preserves title tiebreak among them', () => {
     const tracks = [
       makeTrack({ id: 'rated', rating: 3, bpm: 0, title: 'Zebra' }),
-      makeTrack({ id: 'unrated-b', rating: null as any, bpm: 0, title: 'Banana' }),
-      makeTrack({ id: 'unrated-a', rating: null as any, bpm: 0, title: 'Apple' }),
+      makeTrack({ id: 'unrated-b', rating: null, bpm: 0, title: 'Banana' }),
+      makeTrack({ id: 'unrated-a', rating: null, bpm: 0, title: 'Apple' }),
     ];
     const sorted = filterAndSortTracks(tracks, { ...DEFAULT_FILTERS, sortBy: 'popular' });
     expect(sorted.map((t) => t.id)).toEqual(['rated', 'unrated-a', 'unrated-b']);
