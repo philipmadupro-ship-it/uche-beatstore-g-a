@@ -7,7 +7,7 @@
  *   1. Hero — display_name, bio, credits, hero_image_url, accent_color
  *   2. Social Links — instagram, twitter, spotify, soundcloud, website, email
  *   3. Featured Playlists — drag-to-reorder, toggle featured (max 5)
- *   4. Track Listing Controls — store_enabled, default prices, license_notes
+ *   4. Track Listing Controls — default prices, license_notes
  *
  * Live preview: a read-only sidebar component that mirrors the unsaved
  * form state in real time. On mobile it's behind a "Preview" toggle.
@@ -47,7 +47,6 @@ interface ProfileForm {
   license_lease_price_usd: string;
   license_exclusive_price_usd: string;
   license_notes: string;
-  store_enabled: boolean;
 }
 
 interface PlaylistRow {
@@ -85,7 +84,6 @@ const EMPTY_PROFILE: ProfileForm = {
   license_lease_price_usd: '',
   license_exclusive_price_usd: '',
   license_notes: '',
-  store_enabled: true,
 };
 
 const ACCENT_PRESETS = [
@@ -400,7 +398,6 @@ export default function StoreEditorPage() {
           license_lease_price_usd: p.license_lease_price_usd != null ? String(p.license_lease_price_usd) : '',
           license_exclusive_price_usd: p.license_exclusive_price_usd != null ? String(p.license_exclusive_price_usd) : '',
           license_notes: p.license_notes ?? '',
-          store_enabled: true,
         });
 
         const allPlaylists: PlaylistRow[] = pld.playlists ?? [];
@@ -569,7 +566,6 @@ export default function StoreEditorPage() {
         license_lease_price_usd: form.license_lease_price_usd !== '' ? parseFloat(form.license_lease_price_usd) : null,
         license_exclusive_price_usd: form.license_exclusive_price_usd !== '' ? parseFloat(form.license_exclusive_price_usd) : null,
         license_notes: form.license_notes || null,
-        store_enabled: true,
       };
 
       const profileRes = await fetch('/api/profile', {

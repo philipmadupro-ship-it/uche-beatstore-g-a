@@ -30,7 +30,6 @@ export interface CreatorProfile {
   accent_color?: string | null;
   font_style?: string | null;
   text_color_primary?: string | null;
-  store_enabled?: boolean | null;
 }
 
 export interface PlaylistTrackItem {

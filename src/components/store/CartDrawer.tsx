@@ -33,13 +33,22 @@ interface CartDrawerProps {
   total: number;
 }
 
-export function CartDrawer({ open, onClose, items, removeItem, total }: CartDrawerProps) {
+export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: rawTotal }: CartDrawerProps) {
   const router = useRouter();
   const [buyerEmail, setBuyerEmail] = useState('');
   const [promoCode, setPromoCode] = useState('');
 
-  // Hydrate email from localStorage on mount
+  // Gate cart-derived values on a client-mounted flag. items + total
+  // come from useCart (Zustand + localStorage persist), so SSR renders
+  // an empty cart while the client renders the persisted state, causing
+  // a hydration mismatch on the total. Use the SSR-shape (empty + 0)
+  // on the first paint, then swap to the real values after mount.
+  const [mounted, setMounted] = useState(false);
+  const items = mounted ? rawItems : [];
+  const total = mounted ? rawTotal : 0;
+
   useEffect(() => {
+    setMounted(true);
     const stored = localStorage.getItem('antigravity-buyer-email');
     if (stored) {
       setBuyerEmail(stored);
@@ -170,8 +179,10 @@ export function CartDrawer({ open, onClose, items, removeItem, total }: CartDraw
  */
 export function FloatingCartButton() {
   const { items, isOpen, setIsOpen, cartTotal } = useCart();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
-  if (items.length === 0) return null;
+  if (!mounted || items.length === 0) return null;
 
   return (
     <button
