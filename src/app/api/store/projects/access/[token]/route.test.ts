@@ -121,7 +121,10 @@ describe('GET /api/store/projects/access/[token]', () => {
       { id: 'track-a', title: 'Track A', type: 'beat', audio_url: 'https://r2/a.mp3', wav_url: 'https://r2/a.wav', cover_url: null },
     ]));
 
-    // 5. creator_profiles.select().eq().maybeSingle
+    // 5. track_tags.select().in (genre/mood chips for the listening page)
+    mockFromQueue.push(listResult([]));
+
+    // 6. creator_profiles.select().eq().maybeSingle
     mockFromQueue.push(singleResult({ display_name: 'Seller One', contact_email: 's@x.io' }));
 
     const mod = await loadRoute();

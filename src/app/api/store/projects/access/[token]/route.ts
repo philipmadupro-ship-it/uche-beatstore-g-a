@@ -85,7 +85,18 @@ export async function GET(
           cover_url: sanitizeUrl(t.cover_url),
           audio_url: sanitizeUrl(t.audio_url),
           wav_url: sanitizeUrl(t.wav_url),
+          tags: [],
         };
+      }
+
+      // Attach genre/mood tags so the listening page can render
+      // hashtag chips next to each track.
+      const { data: tagRows } = await admin
+        .from('track_tags')
+        .select('track_id, tag, category')
+        .in('track_id', trackIds);
+      for (const r of (tagRows ?? []) as any[]) {
+        if (trackMap[r.track_id]) trackMap[r.track_id].tags.push({ tag: r.tag, category: r.category });
       }
     }
 
@@ -95,10 +106,13 @@ export async function GET(
     if (sellerId) {
       const { data: prof } = await admin
         .from('creator_profiles')
-        .select('display_name, contact_email, instagram_handle, twitter_handle, website_url')
+        .select('display_name, hero_image_url, contact_email, instagram_handle, twitter_handle, website_url, accent_color, bio')
         .eq('user_id', sellerId)
         .maybeSingle();
       creator = (prof as Record<string, unknown> | null) ?? null;
+      if (creator && (creator as any).hero_image_url) {
+        creator = { ...creator, hero_image_url: sanitizeUrl((creator as any).hero_image_url) };
+      }
     }
 
     const { user_id: _u, ...safeProject } = project as any;
