@@ -19,7 +19,7 @@ import { LicenseSelector } from '@/components/store/LicenseSelector';
 import type { LicenseTier as LicenseTierImport } from '@/components/store/LicenseSelector';
 import { MusicArtwork } from '@/components/store/MusicArtwork';
 import { ParticleText } from '@/components/store/ParticleText';
-import MusicPortfolio, { type PortfolioTrack } from '@/components/library/MusicPortfolio';
+import { StoreListView } from '@/components/store/StoreListView';
 import BandcampRemixCard from '@/components/store/BandcampRemixCard';
 import { RecommendationsStrip } from '@/components/store/RecommendationsStrip';
 import { useWishlist } from '@/hooks/useWishlist';
@@ -591,8 +591,11 @@ function StorePage() {
         </div>
       </div>
 
-      {/* ── Main layout: sidebar + beat listing ─────────────────── */}
-      <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-8 flex gap-6 items-start">
+      {/* ── Main layout: sidebar + beat listing ──────────────────
+          1600px max — wider than the previous 1400 so list-view rows
+          breathe and the grid can comfortably fit 4 columns on
+          standard laptops. Sidebar stays sticky on the left. */}
+      <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-8 flex gap-6 items-start">
 
         {/* Left sidebar — sticky, visible on lg+ */}
         <StoreSidebar
@@ -712,40 +715,22 @@ function StorePage() {
               )}
             </div>
           ) : (
-            // List view = embedded MusicPortfolio. Hero / filters / view
-            // toggle above stay put; only the listing area becomes the
-            // cinematic hover-background row layout. Cover-art click plays
-            // the track; row click opens the preview drawer.
-            <MusicPortfolio
-              variant="embedded"
-              tracks={filtered.map((t): PortfolioTrack => ({
-                id: t.id,
-                title: t.title,
-                artist: creator?.display_name ?? '',
-                type: t.type,
-                cover_url: t.cover_url ?? null,
-                bpm: t.bpm,
-                key: t.key,
-                year: t.created_at ? new Date(t.created_at).getFullYear().toString() : '',
-                priceLease: priceFor(t, 'lease'),
-                priceExclusive: priceFor(t, 'exclusive'),
-                freeDownload: !!t.free_download_enabled,
-                durationSeconds: t.duration_seconds ?? null,
-                tags: (t.tags ?? [])
-                  .filter((tag) => tag.category === 'genre' || tag.category === 'mood')
-                  .slice(0, 2)
-                  .map((tag) => tag.tag),
-              }))}
+            // List view — Apple-UI rows on a glass shell with the
+            // hovered row's cover fading in as a blurred backdrop
+            // (carryover from the deprecated MusicPortfolio embedded
+            // mode the user asked us to replace).
+            <StoreListView
+              tracks={filtered}
+              accentColor={accentColor}
               currentTrackId={currentTrack?.id ?? null}
               isPlaying={isPlaying}
-              onTrackPlay={(id) => {
-                const t = filtered.find((x) => x.id === id);
-                if (t) handlePlay(t);
-              }}
-              onTrackOpen={(id) => {
-                const t = filtered.find((x) => x.id === id);
-                if (t) setPreviewTrack(previewTrack?.id === t.id ? null : t);
-              }}
+              isPreviewId={previewTrack?.id ?? null}
+              priceFor={priceFor}
+              onPlay={(t) => handlePlay(t)}
+              onPreview={(t) => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
+              onAddLease={(t) => addToCart(t, 'lease')}
+              onAddExclusive={(t) => addToCart(t, 'exclusive')}
+              onFreeDownload={(t) => setFreeDownloadTrack(t)}
               isWishlisted={(id) => wishlist.has(id)}
               onToggleWishlist={(id) => wishlist.toggle(id)}
             />
