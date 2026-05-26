@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { CheckCircle2, Loader2, Send } from 'lucide-react';
+import Link from 'next/link';
+import { CheckCircle2, Loader2, Send, User } from 'lucide-react';
 import type { CreatorProfile } from './types';
 
 interface Props {
@@ -154,6 +155,16 @@ export function StoreContactForm({ creator, accentColor }: Props) {
             </button>
           </form>
         )}
+
+        <div className="mt-10 pt-6 border-t border-[#1a160f] text-center">
+          <Link
+            href="/store/account"
+            className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] hover:text-[#a08a6a] transition-colors"
+          >
+            <User size={11} />
+            Already purchased? View my account
+          </Link>
+        </div>
       </div>
     </div>
   );
