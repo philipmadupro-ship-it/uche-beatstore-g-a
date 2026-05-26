@@ -442,6 +442,7 @@ function StorePage() {
             <FeaturedPlaylistsStrip
               label="Featured Playlists"
               playlists={featuredPlaylists}
+              detailHrefBase="/store/playlists"
               currentTrack={currentTrack}
               isPlaying={isPlaying}
               onPlay={(t, playlist) => {
