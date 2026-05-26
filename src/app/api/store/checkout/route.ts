@@ -188,7 +188,9 @@ export async function POST(req: NextRequest) {
           content_id: project.id,
           promo_code: promo?.code ?? '',
         },
-        return_url: `${APP_URL}/store/download?session_id={CHECKOUT_SESSION_ID}`,
+        // Project bundles land on the Spotify-style listening page
+        // (post the access-gate poller that waits for the webhook).
+        return_url: `${APP_URL}/store/projects/access?session_id={CHECKOUT_SESSION_ID}`,
       } as any);
 
       // Increment promo usage
