@@ -445,11 +445,18 @@ export default function LibraryPage() {
             cover, only flatter and wider. Filter chips and the secondary
             toolbar sit underneath, outside the hero, so the hero only
             owns identity + primary intent. */}
-        <div className="relative mb-6 sm:mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#3a2a8a]/35 via-[#2A2418]/25 to-[#0c0c0c] p-4 sm:p-6 md:p-7 transition-all duration-700">
-          {/* Dynamic Image Background */}
+        <div className="relative mb-6 sm:mb-8 rounded-[28px] overflow-hidden border border-white/[0.08] bg-[#14110d]/70 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.55)] p-4 sm:p-6 md:p-7 transition-all duration-700">
+          {/* Cover backdrop — same blur + accent gradient as the storefront
+              pages so /library reads as part of the same visual system. */}
           <div
-            className="absolute inset-0 z-0 bg-cover bg-center opacity-25 mix-blend-overlay blur-[2px] transition-all duration-700"
+            className="absolute inset-0 z-0 bg-cover bg-center opacity-20 blur-3xl scale-110 transition-all duration-700"
             style={{ backgroundImage: heroCoverUrl ? `url(${heroCoverUrl})` : "url('/images/hero-abstract-1.png')" }}
+          />
+          <div
+            className="absolute inset-0 z-0 pointer-events-none"
+            style={{
+              background: 'linear-gradient(180deg, rgba(212,191,160,0.10) 0%, rgba(20,17,13,0.4) 60%, rgba(20,17,13,0.7) 100%)',
+            }}
           />
           <div
             className="absolute -top-20 -right-20 w-64 h-64 rounded-full pointer-events-none opacity-25 z-0 transition-all duration-700"
