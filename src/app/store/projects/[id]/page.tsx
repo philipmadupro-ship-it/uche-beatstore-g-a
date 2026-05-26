@@ -17,6 +17,7 @@ import {
   Layers, AtSign, Link2, Globe, Mail,
 } from 'lucide-react';
 import { usePlayer } from '@/hooks/usePlayer';
+import { slugify } from '@/lib/slug';
 import type { Track } from '@/lib/types';
 
 interface ProjectTrack {
@@ -178,9 +179,16 @@ export default function StoreProjectPage({
             {creator && (
               <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] p-4">
                 <p className="text-[9px] font-mono uppercase tracking-widest text-[#5a5142] mb-2">Producer</p>
-                <p className="text-[14px] font-semibold text-[#E8DCC8]">
-                  {creator.display_name || 'Producer'}
-                </p>
+                {creator.display_name ? (
+                  <Link
+                    href={`/store/producer/${slugify(creator.display_name)}`}
+                    className="text-[14px] font-semibold text-[#E8DCC8] hover:text-[#D4BFA0] transition-colors"
+                  >
+                    {creator.display_name}
+                  </Link>
+                ) : (
+                  <p className="text-[14px] font-semibold text-[#E8DCC8]">Producer</p>
+                )}
                 {creator.bio && (
                   <p className="text-[11px] text-[#6a5d4a] mt-1.5 leading-relaxed line-clamp-3">
                     {creator.bio}
@@ -243,7 +251,13 @@ export default function StoreProjectPage({
               </h1>
               {creator?.display_name && (
                 <p className="mt-1 text-[13px] text-[#6a5d4a]">
-                  prod. {creator.display_name}
+                  prod.{' '}
+                  <Link
+                    href={`/store/producer/${slugify(creator.display_name)}`}
+                    className="text-[#a08a6a] hover:text-[#D4BFA0] transition-colors"
+                  >
+                    {creator.display_name}
+                  </Link>
                 </p>
               )}
 

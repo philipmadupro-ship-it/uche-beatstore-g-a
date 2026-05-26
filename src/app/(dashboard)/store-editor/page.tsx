@@ -1253,10 +1253,10 @@ export default function StoreEditorPage() {
                 );
                 const noBpmKey = listed.filter((t) => t.bpm == null && !t.key);
                 const issues = [
-                  noCover.length > 0 && { label: 'no cover art', count: noCover.length },
-                  noPrice.length > 0 && { label: 'no price set', count: noPrice.length },
-                  noBpmKey.length > 0 && { label: 'no BPM or key', count: noBpmKey.length },
-                ].filter(Boolean) as Array<{ label: string; count: number }>;
+                  noCover.length > 0 && { label: 'no cover art', count: noCover.length, firstId: noCover[0].id },
+                  noPrice.length > 0 && { label: 'no price set', count: noPrice.length, firstId: noPrice[0].id },
+                  noBpmKey.length > 0 && { label: 'no BPM or key', count: noBpmKey.length, firstId: noBpmKey[0].id },
+                ].filter(Boolean) as Array<{ label: string; count: number; firstId: string }>;
                 if (issues.length === 0) return null;
                 return (
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-3">
@@ -1265,19 +1265,19 @@ export default function StoreEditorPage() {
                     </p>
                     <ul className="space-y-1">
                       {issues.map((i) => (
-                        <li key={i.label} className="text-[11px] text-[#a08a6a] flex items-center gap-2">
-                          <span className="w-1 h-1 rounded-full bg-amber-400/60" />
-                          <span className="tabular-nums font-mono text-amber-400/90">{i.count}</span>
-                          <span>listed beat{i.count === 1 ? '' : 's'} {i.label}</span>
+                        <li key={i.label}>
+                          <a
+                            href={`/library/${i.firstId}`}
+                            className="text-[11px] text-[#a08a6a] hover:text-amber-300 flex items-center gap-2 group"
+                          >
+                            <span className="w-1 h-1 rounded-full bg-amber-400/60" />
+                            <span className="tabular-nums font-mono text-amber-400/90">{i.count}</span>
+                            <span>listed beat{i.count === 1 ? '' : 's'} {i.label}</span>
+                            <span className="opacity-0 group-hover:opacity-100 text-amber-400/80 ml-auto">→</span>
+                          </a>
                         </li>
                       ))}
                     </ul>
-                    <a
-                      href="/library"
-                      className="mt-2 inline-block text-[10px] font-mono uppercase tracking-wider text-amber-400/80 hover:text-amber-300 underline underline-offset-2"
-                    >
-                      Fix in Library →
-                    </a>
                   </div>
                 );
               })()}

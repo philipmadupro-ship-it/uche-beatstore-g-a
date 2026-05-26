@@ -98,6 +98,22 @@ export default function AnalyticsPage() {
               <p className="text-[10px] text-[#a08a6a] mt-1 font-mono">{error}</p>
             </div>
           </div>
+        ) : (totals?.plays ?? 0) === 0 && (totals?.sales_count ?? 0) === 0 && (totals?.gross_usd ?? 0) === 0 ? (
+          <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] px-6 py-16 text-center">
+            <BarChart3 size={28} className="text-[#3a3328] mx-auto mb-3" />
+            <p className="text-[14px] text-[#E8DCC8] font-medium mb-1">No activity yet</p>
+            <p className="text-[12px] text-[#6a5d4a] max-w-md mx-auto mb-5">
+              Once a buyer plays a beat or completes a purchase, the numbers, sparkline, and top-tracks leaderboard will populate here.
+            </p>
+            <div className="flex items-center justify-center gap-3 flex-wrap">
+              <Link href="/store-editor" className="text-[10px] font-mono uppercase tracking-wider px-3 py-2 rounded-md bg-[#D4BFA0] text-[#14110d] hover:bg-[#E8DCC8] transition-colors">
+                List tracks for sale
+              </Link>
+              <Link href="/contacts" className="text-[10px] font-mono uppercase tracking-wider px-3 py-2 rounded-md border border-[#2d2620] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#3a3328] transition-colors">
+                Send a beat
+              </Link>
+            </div>
+          </div>
         ) : (
           <>
             {/* Totals strip */}

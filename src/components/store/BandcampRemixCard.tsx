@@ -136,7 +136,7 @@ export default function BandcampRemixCard({
             onClick={(e) => { e.stopPropagation(); onToggleWishlist(); }}
             aria-pressed={!!isWishlisted}
             title={isWishlisted ? 'Remove from favorites' : 'Add to favorites'}
-            className={`absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur transition-colors ${
+            className={`absolute top-3 right-3 z-20 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur transition-colors ${
               isWishlisted
                 ? 'bg-[#c8a84b]/20 border border-[#c8a84b]/50 text-[#c8a84b]'
                 : 'bg-black/40 border border-white/10 text-white/80 hover:text-white hover:bg-black/60'
