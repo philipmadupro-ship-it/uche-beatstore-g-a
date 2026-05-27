@@ -496,9 +496,11 @@ function StorePage() {
         </div>
       )}
 
-      {/* ── Toolbar ─────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 bg-[#0a0907]/95 backdrop-blur-md border-b border-[#1f1a13]">
-        <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-3 flex items-center gap-3">
+      {/* ── Toolbar — sticky glass header, matches /store body width.
+          The accent gradient over a #14110d tint gives the bar the
+          same depth as the page cards underneath. */}
+      <div className="sticky top-0 z-30 bg-[#0a0907]/85 backdrop-blur-xl border-b border-white/[0.06]">
+        <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-3 flex items-center gap-3">
           {/* Mobile filters toggle */}
           <button
             onClick={() => setSidebarOpen((o) => !o)}

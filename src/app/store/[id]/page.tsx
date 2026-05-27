@@ -306,7 +306,7 @@ export default function StoreProductPage({
                 {creator.display_name ? (
                   <Link
                     href={`/store/producer/${slugify(creator.display_name)}`}
-                    className="text-[14px] font-semibold text-[#E8DCC8] hover:text-[#D4BFA0] transition-colors"
+                    className="inline-block max-w-full text-[14px] font-semibold text-[#E8DCC8] hover:text-[#D4BFA0] transition-colors break-words"
                   >
                     {creator.display_name}
                   </Link>
@@ -415,11 +415,11 @@ export default function StoreProductPage({
                 </button>
               </div>
               {creator?.display_name && (
-                <p className="mt-1 text-[13px] text-[#6a5d4a]">
+                <p className="mt-1 text-[13px] text-[#6a5d4a] break-words">
                   prod.{' '}
                   <Link
                     href={`/store/producer/${slugify(creator.display_name)}`}
-                    className="text-[#a08a6a] hover:text-[#D4BFA0] transition-colors"
+                    className="text-[#a08a6a] hover:text-[#D4BFA0] transition-colors break-words"
                   >
                     {creator.display_name}
                   </Link>

@@ -144,6 +144,52 @@ function Label({ children }: { children: React.ReactNode }) {
   );
 }
 
+function BackfillPeaksButton() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ succeeded: number; failed: number; total_needed: number } | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      const res = await fetch('/api/tracks/peaks/backfill-all', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setResult(data);
+      if (data.total_needed === 0) {
+        toast.success('All tracks already have peaks');
+      } else if (data.failed === 0) {
+        toast.success(`Regenerated ${data.succeeded} waveforms`);
+      } else {
+        toast.warning(`${data.succeeded}/${data.total_needed} done`, `${data.failed} failed`);
+      }
+    } catch (err: any) {
+      toast.error('Backfill failed', err?.message ?? 'try again');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={run}
+        disabled={busy}
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#D4BFA0] text-black text-[12px] font-bold uppercase tracking-wider hover:bg-[#E8D8B8] transition-colors disabled:opacity-50"
+      >
+        {busy ? <Loader2 size={12} className="animate-spin" /> : <Music size={12} />}
+        {busy ? 'Regenerating…' : 'Regenerate all waveforms'}
+      </button>
+      {result && (
+        <p className="text-[11px] text-[#a08a6a]">
+          {result.total_needed === 0
+            ? 'Nothing needed — every track already has its peaks.'
+            : `${result.succeeded}/${result.total_needed} succeeded${result.failed > 0 ? ` · ${result.failed} failed` : ''}.`}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
@@ -1792,6 +1838,21 @@ export default function StoreEditorPage() {
                   </div>
                 )}
               </Field>
+            </Section>
+
+            {/* Waveform backfill — owner-only batch tool. Useful for
+                tracks uploaded before the peaks pipeline existed. */}
+            <Section
+              id="waveforms"
+              title="Waveforms"
+              icon={<Music size={15} />}
+              open={openSections.has('waveforms')}
+              onToggle={() => toggleSection('waveforms')}
+            >
+              <p className="text-[11px] text-[#5a5142]">
+                If your beats' waveforms in /store look generic, that's because the original peaks weren't computed at upload. Regenerate them now — the player will then draw the real shape of every file.
+              </p>
+              <BackfillPeaksButton />
             </Section>
 
             {/* Discount codes — promo_codes (mig 047) */}

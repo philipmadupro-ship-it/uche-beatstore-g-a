@@ -295,10 +295,10 @@ export default function PlaylistPage({
                 {playlist.name}
               </h1>
               {creator?.display_name && (
-                <div className="mt-3">
+                <div className="mt-3 min-w-0">
                   <Link
                     href={`/store/producer/${slugify(creator.display_name)}`}
-                    className="text-[15px] md:text-[16px] text-white/90 font-medium hover:text-white transition-colors break-words"
+                    className="inline-block max-w-full text-[15px] md:text-[16px] text-white/90 font-medium hover:text-white transition-colors break-all"
                   >
                     {creator.display_name}
                   </Link>
