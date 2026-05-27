@@ -120,6 +120,50 @@ export async function uploadPeaksSidecar(
 }
 
 /**
+ * Upload a generated PDF (license contract) to R2 under contracts/.
+ * Falls back to /public/uploads/contracts/ in local dev.
+ *
+ * Returns the public URL on success, null on failure — the caller
+ * should treat null as "fall back to non-PDF email delivery" rather
+ * than failing the whole webhook.
+ */
+export async function uploadContractPdf(
+  purchaseId: string,
+  pdf: Buffer,
+): Promise<string | null> {
+  try {
+    const filename = `${purchaseId}.pdf`;
+
+    if (!isR2Configured()) {
+      const dir = path.join(process.cwd(), 'public', 'uploads', 'contracts');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, filename), pdf);
+      return `/uploads/contracts/${filename}`;
+    }
+
+    const bucketName = process.env.R2_BUCKET_NAME;
+    const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+    if (!bucketName || !publicUrl) return null;
+
+    const key = `contracts/${filename}`;
+    await r2.send(new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Body: pdf,
+      ContentType: 'application/pdf',
+      // Contracts are per-purchase + immutable.
+      CacheControl: 'public, max-age=31536000, immutable',
+      ContentDisposition: `attachment; filename="license-${purchaseId}.pdf"`,
+    }));
+
+    return `${publicUrl.replace(/\/$/, '')}/${key}`;
+  } catch (err) {
+    console.warn('uploadContractPdf failed:', err);
+    return null;
+  }
+}
+
+/**
  * Local filesystem upload fallback for development.
  * Saves files to /public/uploads/ and returns a URL path.
  */

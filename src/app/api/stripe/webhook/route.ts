@@ -5,6 +5,9 @@ import { getStripe } from '@/lib/stripe/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { DEFAULT_TEMPLATE_MD, fillTemplate } from '@/lib/contracts/license-template';
+import { renderContractPdf } from '@/lib/contracts/pdf';
+import { uploadContractPdf } from '@/lib/storage/upload';
 
 const log = createLogger('stripe.webhook');
 export const runtime = 'nodejs';
@@ -239,7 +242,66 @@ async function runFulfillment(params: {
     }
   }
 
-  // 3. Delivery email — guarded by fulfillment_email_sent flag to prevent duplicates
+  // 3. Generate the license-contract PDF (migration 057). Best-effort —
+  // if it fails (R2 down, template malformed) we still send the
+  // delivery email without an attachment so the buyer isn't blocked.
+  let contractPdfUrl: string | null = null;
+  let contractPdfBuffer: Buffer | null = null;
+  try {
+    // Pull template + producer info + track titles + buyer name
+    const [{ data: prof }, { data: trackRows }] = await Promise.all([
+      meta.seller_user_id
+        ? admin
+            .from('creator_profiles')
+            .select('display_name, contact_email, license_template_md')
+            .eq('user_id', meta.seller_user_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      trackIds.length
+        ? admin.from('tracks').select('id, title').in('id', trackIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const titlesByTrack = new Map<string, string>(
+      ((trackRows ?? []) as any[]).map((t) => [t.id, t.title as string]),
+    );
+    const orderedTitles = lineItems.map(
+      (li) => titlesByTrack.get(li.track_id) ?? `Track ${li.track_id.slice(0, 8)}`,
+    );
+    const dominantType = hasAnyExclusive ? 'Exclusive' : 'Lease';
+    const profAny = prof as Record<string, unknown> | null;
+    const templateMd = ((profAny?.license_template_md as string | null | undefined) ?? '').trim()
+      || DEFAULT_TEMPLATE_MD;
+
+    const totalCentsForContract = Number(session.amount_total ?? 0);
+    const priceLabel = `$${(totalCentsForContract / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const filled = fillTemplate(templateMd, {
+      buyer_name: session.customer_details?.name || meta.buyer_email || 'Customer',
+      buyer_email: meta.buyer_email || '',
+      track_titles: orderedTitles.join(' · '),
+      license_type: dominantType,
+      purchase_date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+      purchase_id: purchaseId.slice(0, 8),
+      producer_name: (profAny?.display_name as string | null | undefined) || 'Producer',
+      producer_email: (profAny?.contact_email as string | null | undefined) || '',
+      price: priceLabel,
+    });
+
+    contractPdfBuffer = await renderContractPdf(filled);
+    const uploadedUrl = await uploadContractPdf(purchaseId, contractPdfBuffer);
+    if (uploadedUrl) {
+      contractPdfUrl = uploadedUrl;
+      await admin
+        .from('license_purchases')
+        .update({ contract_pdf_url: uploadedUrl })
+        .eq('id', purchaseId);
+    }
+    log.info('license contract pdf ready', { purchaseId, hasUrl: !!uploadedUrl });
+  } catch (err) {
+    log.warn('contract pdf generation failed', { purchaseId, error: errorMessage(err) });
+  }
+
+  // 4. Delivery email — guarded by fulfillment_email_sent flag to prevent duplicates
   if (process.env.RESEND_API_KEY && meta.buyer_email) {
     try {
       // Re-fetch the flag in case a concurrent execution already sent the email
@@ -286,10 +348,22 @@ async function runFulfillment(params: {
            </div>`
         : '';
 
+      const contractLine = contractPdfUrl
+        ? `<p style="margin-top: 20px; font-size: 12px; color: #a08a6a;">
+             📜 Your signed-style <a href="${contractPdfUrl}" style="color: #D4BFA0; text-decoration: underline;">license agreement (PDF)</a> is attached to this email.
+           </p>`
+        : '';
+
       await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
         to: meta.buyer_email,
         subject: `Your license${lineItems.length > 1 ? 's are' : ' is'} ready`,
+        attachments: contractPdfBuffer
+          ? [{
+              filename: `license-${purchaseId.slice(0, 8)}.pdf`,
+              content: contractPdfBuffer.toString('base64'),
+            }]
+          : undefined,
         html: `
           <div style="font-family: sans-serif; background: #0a0907; color: #E8DCC8; padding: 40px; border-radius: 20px; max-width: 560px;">
             <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #D4BFA0; margin: 0 0 20px;">
@@ -316,6 +390,7 @@ async function runFulfillment(params: {
                 Download your files
               </a>
             </div>
+            ${contractLine}
             <p style="margin-top: 48px; font-size: 10px; color: #4a4338; text-transform: uppercase; letter-spacing: 0.5em;">
               Questions? Reply to this email or contact support.
             </p>

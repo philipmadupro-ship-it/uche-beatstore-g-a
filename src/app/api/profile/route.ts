@@ -38,6 +38,7 @@ export async function POST(req: NextRequest) {
       seo_title,
       seo_description,
       og_image_url,
+      license_template_md,
     } = body;
 
     const payload = {
@@ -63,6 +64,8 @@ export async function POST(req: NextRequest) {
       seo_title: seo_title || null,
       seo_description: seo_description || null,
       og_image_url: og_image_url || null,
+      // License contract template (migration 057)
+      license_template_md: license_template_md || null,
     };
 
     const result = await updateCreatorProfile(payload);

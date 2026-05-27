@@ -26,6 +26,7 @@ import {
   ShoppingBag, Star, Tag, Trash2, Clock,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { DEFAULT_TEMPLATE_MD, VARIABLE_LIST } from '@/lib/contracts/license-template';
 import { LicenseBuilder } from '@/components/store/LicenseBuilder';
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -51,6 +52,8 @@ interface ProfileForm {
   seo_title: string;
   seo_description: string;
   og_image_url: string;
+  // Migration 057 — per-producer license-agreement template
+  license_template_md: string;
 }
 
 interface PlaylistRow {
@@ -91,6 +94,7 @@ const EMPTY_PROFILE: ProfileForm = {
   seo_title: '',
   seo_description: '',
   og_image_url: '',
+  license_template_md: '',
 };
 
 const ACCENT_PRESETS = [
@@ -141,6 +145,100 @@ function Label({ children }: { children: React.ReactNode }) {
     <label className="text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] block mb-1.5">
       {children}
     </label>
+  );
+}
+
+/**
+ * Markdown editor for the producer's license-contract template.
+ * Click any variable chip to insert {{key}} at the cursor. Hit
+ * "Use default" to populate with the system template — useful as
+ * a starting point or to recover if the producer wiped their copy.
+ * Preview toggles between the raw template and a sample-filled
+ * version using a fake buyer so producers can sanity-check the
+ * substitution.
+ */
+function LicenseTemplateEditor({
+  value,
+  onChange,
+}: { value: string; onChange: (v: string) => void }) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [preview, setPreview] = useState(false);
+
+  const insertVar = (key: string) => {
+    const el = textareaRef.current;
+    if (!el) {
+      onChange((value ?? '') + ` {{${key}}}`);
+      return;
+    }
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? value.length;
+    const next = `${value.slice(0, start)}{{${key}}}${value.slice(end)}`;
+    onChange(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      const cursor = start + `{{${key}}}`.length;
+      el.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const filledPreview = (() => {
+    const sample = Object.fromEntries(VARIABLE_LIST.map((v) => [v.key, v.sample])) as Record<string, string>;
+    const tpl = (value && value.trim()) || DEFAULT_TEMPLATE_MD;
+    return tpl.replace(/\{\{([a-z_]+)\}\}/g, (m, k) => sample[k] ?? m);
+  })();
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] text-[#5a5142]">
+        Filled in at every purchase and attached as a PDF to the delivery email. Markdown supported (# heading, ** bold **, - bullet). Leave empty to use the default template.
+      </p>
+
+      <div className="flex flex-wrap gap-1.5">
+        {VARIABLE_LIST.map((v) => (
+          <button
+            key={v.key}
+            type="button"
+            onClick={() => insertVar(v.key)}
+            title={`Insert {{${v.key}}} — sample: ${v.sample}`}
+            className="px-2 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white/[0.04] border border-[#1f1a13] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-colors"
+          >
+            +{v.label}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => onChange(DEFAULT_TEMPLATE_MD)}
+          className="ml-auto px-3 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white/[0.04] border border-[#2d2620] text-[#a08a6a] hover:text-[#E8DCC8] transition-colors"
+        >
+          Use default
+        </button>
+        <button
+          type="button"
+          onClick={() => setPreview((p) => !p)}
+          className="px-3 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider border transition-colors"
+          style={preview
+            ? { backgroundColor: '#D4BFA0', color: '#000', borderColor: '#D4BFA0' }
+            : { backgroundColor: 'transparent', color: '#a08a6a', borderColor: '#2d2620' }}
+        >
+          {preview ? 'Edit' : 'Preview'}
+        </button>
+      </div>
+
+      {preview ? (
+        <pre className="bg-[#0a0907] border border-[#1f1a13] rounded-lg p-4 text-[12px] text-[#E8DCC8] leading-relaxed whitespace-pre-wrap font-sans max-h-[480px] overflow-auto">
+          {filledPreview}
+        </pre>
+      ) : (
+        <textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={20}
+          placeholder="Leave empty to use the default template."
+          className={`${textareaCls} font-mono text-[11px] leading-relaxed`}
+        />
+      )}
+    </div>
   );
 }
 
@@ -515,6 +613,7 @@ export default function StoreEditorPage() {
           seo_title: p.seo_title ?? '',
           seo_description: p.seo_description ?? '',
           og_image_url: p.og_image_url ?? '',
+          license_template_md: p.license_template_md ?? '',
         });
 
         const allPlaylists: PlaylistRow[] = pld.playlists ?? [];
@@ -857,6 +956,7 @@ export default function StoreEditorPage() {
         seo_title: form.seo_title || null,
         seo_description: form.seo_description || null,
         og_image_url: form.og_image_url || null,
+        license_template_md: form.license_template_md || null,
       };
 
       const profileRes = await fetch('/api/profile', {
@@ -1838,6 +1938,20 @@ export default function StoreEditorPage() {
                   </div>
                 )}
               </Field>
+            </Section>
+
+            {/* License contract — markdown template (mig 057) */}
+            <Section
+              id="license-template"
+              title="License Contract"
+              icon={<Layers size={15} />}
+              open={openSections.has('license-template')}
+              onToggle={() => toggleSection('license-template')}
+            >
+              <LicenseTemplateEditor
+                value={form.license_template_md}
+                onChange={(v) => setForm((f) => ({ ...f, license_template_md: v }))}
+              />
             </Section>
 
             {/* Waveform backfill — owner-only batch tool. Useful for
