@@ -188,6 +188,7 @@ export async function GET(
               'license_lease_price_usd', 'license_exclusive_price_usd', 'license_notes',
               'instagram_handle', 'twitter_handle', 'spotify_url',
               'soundcloud_url', 'website_url', 'contact_email',
+              'accent_color', 'share_card_style', 'share_video_style',
             ].join(', '))
             .eq('user_id', sellerId)
             .maybeSingle()

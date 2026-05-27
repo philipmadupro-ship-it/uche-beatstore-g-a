@@ -39,6 +39,8 @@ export async function POST(req: NextRequest) {
       seo_description,
       og_image_url,
       license_template_md,
+      share_card_style,
+      share_video_style,
     } = body;
 
     const payload = {
@@ -66,6 +68,9 @@ export async function POST(req: NextRequest) {
       og_image_url: og_image_url || null,
       // License contract template (migration 057)
       license_template_md: license_template_md || null,
+      // Share template styles (migration 062)
+      share_card_style: share_card_style || null,
+      share_video_style: share_video_style || null,
     };
 
     const result = await updateCreatorProfile(payload);

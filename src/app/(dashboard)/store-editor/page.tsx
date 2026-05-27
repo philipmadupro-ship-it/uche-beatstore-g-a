@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { DEFAULT_TEMPLATE_MD, VARIABLE_LIST } from '@/lib/contracts/license-template';
+import { CARD_STYLE_META, VIDEO_STYLE_META } from '@/lib/share/styles';
 import { LicenseBuilder } from '@/components/store/LicenseBuilder';
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -54,6 +55,9 @@ interface ProfileForm {
   og_image_url: string;
   // Migration 057 — per-producer license-agreement template
   license_template_md: string;
+  // Migration 062 — share-card + 9:16 video template
+  share_card_style: string;
+  share_video_style: string;
 }
 
 interface PlaylistRow {
@@ -95,6 +99,8 @@ const EMPTY_PROFILE: ProfileForm = {
   seo_description: '',
   og_image_url: '',
   license_template_md: '',
+  share_card_style: '',
+  share_video_style: '',
 };
 
 const ACCENT_PRESETS = [
@@ -237,6 +243,82 @@ function LicenseTemplateEditor({
           placeholder="Leave empty to use the default template."
           className={`${textareaCls} font-mono text-[11px] leading-relaxed`}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Visual style picker for the IG share card (1080×1920) and the 9:16
+ * vertical preview. Renders one thumbnail per style using a real track
+ * from the producer's catalogue so what they see is what buyers get.
+ */
+function ShareStylePicker({
+  kind, value, onChange, tracks,
+}: {
+  kind: 'card' | 'video';
+  value: string;
+  onChange: (v: string) => void;
+  tracks: TrackRow[];
+}) {
+  const sampleTrack = tracks.find((t) => t.store_listed) ?? tracks[0];
+  const styles = kind === 'card' ? CARD_STYLE_META : VIDEO_STYLE_META;
+
+  return (
+    <div className="mb-6 last:mb-0">
+      <div className="flex items-center justify-between mb-3">
+        <Label>{kind === 'card' ? 'IG share card (1080×1920)' : '9:16 vertical preview'}</Label>
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#a08a6a]"
+          >
+            Use default
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {styles.map((s) => {
+          const active = (value || (kind === 'card' ? 'minimal' : 'vinyl')) === s.id;
+          const thumbUrl = kind === 'card' && sampleTrack
+            ? `/api/store/share-card?track_id=${sampleTrack.id}&style=${s.id}&kind=playing`
+            : null;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => onChange(s.id)}
+              title={s.description}
+              className={`relative rounded-xl overflow-hidden border-2 transition-all text-left ${
+                active ? 'border-[#D4BFA0]' : 'border-[#1f1a13] hover:border-[#2d2620]'
+              }`}
+            >
+              <div className="aspect-[9/16] bg-[#0a0907] overflow-hidden">
+                {thumbUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={thumbUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-[#3a3328] text-[10px] font-mono uppercase tracking-wider">
+                    {s.label}
+                  </div>
+                )}
+              </div>
+              <div className="px-2 py-1.5 bg-[#14110d]">
+                <p className="text-[11px] font-medium text-[#E8DCC8]">{s.label}</p>
+                <p className="text-[9px] text-[#5a5142] leading-tight line-clamp-2">{s.description}</p>
+              </div>
+              {active && (
+                <span className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-[#D4BFA0] text-black text-[10px] flex items-center justify-center font-bold">✓</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {!sampleTrack && kind === 'card' && (
+        <p className="mt-2 text-[10px] text-[#3a3328] font-mono">
+          List a beat to see real previews.
+        </p>
       )}
     </div>
   );
@@ -614,6 +696,8 @@ export default function StoreEditorPage() {
           seo_description: p.seo_description ?? '',
           og_image_url: p.og_image_url ?? '',
           license_template_md: p.license_template_md ?? '',
+          share_card_style: p.share_card_style ?? '',
+          share_video_style: p.share_video_style ?? '',
         });
 
         const allPlaylists: PlaylistRow[] = pld.playlists ?? [];
@@ -957,6 +1041,8 @@ export default function StoreEditorPage() {
         seo_description: form.seo_description || null,
         og_image_url: form.og_image_url || null,
         license_template_md: form.license_template_md || null,
+        share_card_style: form.share_card_style || null,
+        share_video_style: form.share_video_style || null,
       };
 
       const profileRes = await fetch('/api/profile', {
@@ -1938,6 +2024,28 @@ export default function StoreEditorPage() {
                   </div>
                 )}
               </Field>
+            </Section>
+
+            {/* Share templates (mig 062) — IG card + 9:16 video styles */}
+            <Section
+              id="share-templates"
+              title="Share Templates"
+              icon={<Layers size={15} />}
+              open={openSections.has('share-templates')}
+              onToggle={() => toggleSection('share-templates')}
+            >
+              <ShareStylePicker
+                kind="card"
+                value={form.share_card_style}
+                onChange={(v) => setForm((f) => ({ ...f, share_card_style: v }))}
+                tracks={allTracks}
+              />
+              <ShareStylePicker
+                kind="video"
+                value={form.share_video_style}
+                onChange={(v) => setForm((f) => ({ ...f, share_video_style: v }))}
+                tracks={allTracks}
+              />
             </Section>
 
             {/* License contract — markdown template (mig 057) */}

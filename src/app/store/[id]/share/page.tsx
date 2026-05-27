@@ -18,12 +18,14 @@
  */
 
 import { useEffect, useRef, useState, use } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   Play, Pause, Loader2, ArrowLeft, ScanLine, Video, Copy, Music,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { asVideoStyle } from '@/lib/share/styles';
 
 interface TrackShape {
   id: string;
@@ -38,6 +40,7 @@ interface TrackShape {
 interface CreatorShape {
   display_name?: string | null;
   accent_color?: string | null;
+  share_video_style?: string | null;
 }
 
 const BARS = 48;
@@ -65,6 +68,15 @@ export default function VerticalSharePage({
   const track = data?.track ?? null;
   const creator = data?.creator ?? null;
   const accent = creator?.accent_color || '#D4BFA0';
+
+  const searchParams = useSearchParams();
+  const styleOverride = searchParams?.get('style');
+  const videoStyle = asVideoStyle(styleOverride ?? creator?.share_video_style ?? null);
+  const isMono = videoStyle === 'mono';
+  const isMinimal = videoStyle === 'minimal';
+  const coverShapeClass = isMinimal || isMono ? 'rounded-2xl' : 'rounded-full';
+  const coverFilter = isMono ? 'grayscale(0.85) contrast(1.05)' : undefined;
+  const spinClass = videoStyle === 'vinyl' && !isMono && !isMinimal ? 'animate-[spin_8s_linear_infinite]' : '';
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -355,14 +367,22 @@ export default function VerticalSharePage({
           }}
         />
 
+        {/* Mono accent strips */}
+        {isMono && (
+          <>
+            <div className="absolute top-0 left-0 right-0 h-2" style={{ backgroundColor: accent }} />
+            <div className="absolute bottom-0 left-0 right-0 h-2" style={{ backgroundColor: accent }} />
+          </>
+        )}
+
         {/* Spinning cover (vinyl style) */}
         <div className="absolute top-[18%] left-1/2 -translate-x-1/2">
           <div
-            className={`w-[58vw] max-w-[300px] aspect-square rounded-full overflow-hidden border-4 border-white/[0.06] shadow-[0_24px_60px_rgba(0,0,0,0.5)] ${isPlaying ? 'animate-[spin_8s_linear_infinite]' : ''}`}
+            className={`w-[58vw] max-w-[300px] aspect-square ${coverShapeClass} overflow-hidden border-4 border-white/[0.06] shadow-[0_24px_60px_rgba(0,0,0,0.5)] ${isPlaying ? spinClass : ''}`}
           >
             {track.cover_url ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" />
+              <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" style={coverFilter ? { filter: coverFilter } : undefined} />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center text-white/40">
                 <Music size={40} />
