@@ -26,6 +26,7 @@ import { useWishlist } from '@/hooks/useWishlist';
 import { toast } from '@/hooks/useToast';
 import { GlassPage } from '@/components/store/GlassPage';
 import { ProducerProfile } from '@/components/store/ProducerProfile';
+import { ShareCardButton } from '@/components/store/ShareCardButton';
 import type { Track } from '@/lib/types';
 
 interface AccessTrack {
@@ -275,6 +276,14 @@ export default function ProjectAccessPage({
         {anyOurTrackPlaying ? <Pause size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" className="ml-0.5" />}
         {anyOurTrackPlaying ? 'Pause' : 'Play all'}
       </button>
+      {tracks[0] && (
+        <ShareCardButton
+          trackId={tracks[0].id}
+          trackTitle={project?.name ?? tracks[0].title}
+          kind="licensed"
+          accentColor={accent}
+        />
+      )}
     </>
   );
 
