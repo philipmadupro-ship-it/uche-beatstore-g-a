@@ -13,6 +13,7 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { useCart } from '@/hooks/useCart';
 import { toast } from '@/hooks/useToast';
 import { slugify } from '@/lib/slug';
+import { BeatComments } from '@/components/store/BeatComments';
 import type { Track } from '@/lib/types';
 
 /* ─── Types ────────────────────────────────────────────────── */
@@ -28,6 +29,7 @@ interface CreatorProfile {
   soundcloud_url?: string | null;
   website_url?: string | null;
   contact_email?: string | null;
+  accent_color?: string | null;
 }
 
 /** Shape returned by /api/store/[id] after license resolution */
@@ -521,6 +523,15 @@ export default function StoreProductPage({
             )}
           </div>
         </div>
+
+        {/* ── Comments ── */}
+        {track && (
+          <BeatComments
+            trackId={track.id}
+            trackDurationSeconds={track.duration_seconds}
+            accentColor={creator?.accent_color || '#D4BFA0'}
+          />
+        )}
 
         {/* ── Related tracks ── */}
         {related.length > 0 && (
