@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Resend } from 'resend';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
+import { getAppUrl } from '@/lib/env';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -58,7 +60,59 @@ export async function GET(req: NextRequest) {
       count: dueRows.length,
       tracks: dueRows.map((r: any) => ({ id: r.id, title: r.title, user_id: r.user_id })),
     });
-    return NextResponse.json({ ok: true, published: dueRows.length, ids });
+
+    // Fan out "drop is live" emails to subscribers (mig 059). Best-
+    // effort — failure to send shouldn't roll back the publish. We
+    // stamp notified_at after a successful send so a cron re-run
+    // doesn't double-notify.
+    let notified = 0;
+    if (process.env.RESEND_API_KEY) {
+      try {
+        const APP_URL = getAppUrl();
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const { data: subs } = await admin
+          .from('drop_subscribers')
+          .select('id, track_id, email')
+          .in('track_id', ids)
+          .is('notified_at', null);
+        const subscribers = (subs ?? []) as Array<{ id: string; track_id: string; email: string }>;
+        const titleById = new Map<string, string>(
+          dueRows.map((r: any) => [r.id as string, r.title as string]),
+        );
+        for (const s of subscribers) {
+          try {
+            const title = titleById.get(s.track_id) ?? 'Beat';
+            const url = `${APP_URL}/store/${s.track_id}`;
+            await resend.emails.send({
+              from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+              to: s.email,
+              subject: `🔔 ${title} is live`,
+              html: `
+                <div style="font-family: sans-serif; background: #0a0907; color: #E8DCC8; padding: 40px; border-radius: 20px; max-width: 560px;">
+                  <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #D4BFA0; margin: 0 0 20px;">It's live</h1>
+                  <p style="font-size: 15px; line-height: 1.7;"><strong>${title}</strong> just dropped on the store. You asked us to ping you.</p>
+                  <div style="margin-top: 28px;">
+                    <a href="${url}" style="background: #D4BFA0; color: #0a0907; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">Listen now</a>
+                  </div>
+                  <p style="margin-top: 32px; font-size: 10px; color: #4a4338;">You're getting this because you subscribed to this drop on the store. No future emails are queued.</p>
+                </div>
+              `,
+            });
+            await admin
+              .from('drop_subscribers')
+              .update({ notified_at: new Date().toISOString() })
+              .eq('id', s.id);
+            notified++;
+          } catch (sendErr) {
+            log.warn('drop notification send failed', { subscriber: s.id, error: errorMessage(sendErr) });
+          }
+        }
+      } catch (subErr) {
+        log.warn('drop subscriber fan-out failed', { error: errorMessage(subErr) });
+      }
+    }
+
+    return NextResponse.json({ ok: true, published: dueRows.length, ids, notified });
   } catch (err) {
     log.warn('publish-scheduled failed', { error: errorMessage(err) });
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });

@@ -39,6 +39,7 @@ import { FeaturedPlaylistsStrip } from '@/components/store/FeaturedPlaylistsStri
 import {
   StoreSidebar, BeatCardSkeleton, BeatListRowSkeleton,
 } from '@/components/store/StoreSidebar';
+import { DropCountdown } from '@/components/store/DropCountdown';
 import { TagChips } from '@/components/store/TagChips';
 import { BeatCard } from '@/components/store/BeatCard';
 import { BeatListRow } from '@/components/store/BeatListRow';
@@ -421,6 +422,10 @@ function StorePage() {
 
       {/* ── Artist bio block ──────────────────────────────────── */}
       <ArtistBioBlock creator={creator} trackCount={tracks.length} accentColor={accentColor} />
+
+      {/* ── Next-drop countdown (only renders when there's an
+          upcoming scheduled_publish_at on a draft track) ──────── */}
+      <DropCountdown accentColor={accentColor} />
 
       {/* ── Featured playlists + projects ────────────────────── */}
       {(featuredPlaylists.length > 0 || featuredProjects.length > 0) && (
