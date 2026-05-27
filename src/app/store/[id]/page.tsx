@@ -14,6 +14,7 @@ import { useCart } from '@/hooks/useCart';
 import { toast } from '@/hooks/useToast';
 import { slugify } from '@/lib/slug';
 import { BeatComments } from '@/components/store/BeatComments';
+import { ShareCardButton } from '@/components/store/ShareCardButton';
 import type { Track } from '@/lib/types';
 
 /* ─── Types ────────────────────────────────────────────────── */
@@ -412,6 +413,23 @@ export default function StoreProductPage({
                 >
                   <Share2 size={14} />
                 </button>
+                {/* TikTok / Reels vertical preview — opens a 9:16 stage
+                    optimised for phone screen-record. */}
+                <Link
+                  href={`/store/${track.id}/share`}
+                  title="Open vertical share preview"
+                  aria-label="Open vertical share preview"
+                  className="shrink-0 w-10 h-10 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-[#a08a6a] hover:text-[#E8DCC8] hover:bg-white/[0.08] hover:border-white/[0.16] transition-colors"
+                >
+                  <span className="text-[12px] font-mono font-bold tracking-tighter">9:16</span>
+                </Link>
+                <ShareCardButton
+                  trackId={track.id}
+                  trackTitle={track.title}
+                  kind="playing"
+                  variant="icon"
+                  accentColor={creator?.accent_color || '#D4BFA0'}
+                />
               </div>
               {creator?.display_name && (
                 <p className="mt-1 text-[13px] text-[#6a5d4a] break-words">
