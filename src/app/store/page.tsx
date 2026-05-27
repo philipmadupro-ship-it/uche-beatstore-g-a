@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useCallback, Suspense } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
@@ -56,12 +57,34 @@ export default function StorePageWrapper() {
 /* ─── Main page ──────────────────────────────────────────────── */
 
 function StorePage() {
-  const [creator, setCreator] = useState<CreatorProfile | null>(null);
-  const [tracks, setTracks] = useState<StoreTrack[]>([]);
-  const [licenses, setLicenses] = useState<LicenseTier[]>([]);
-  const [featuredPlaylists, setFeaturedPlaylists] = useState<FeaturedPlaylist[]>([]);
-  const [featuredProjects, setFeaturedProjects] = useState<FeaturedPlaylist[]>([]);
-  const [loading, setLoading] = useState(true);
+  const storeQuery = useQuery({
+    queryKey: ['store'],
+    queryFn: async () => {
+      const res = await fetch('/api/store');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const rawTracks = (data.tracks as StoreTrack[]) ?? [];
+      return {
+        creator: (data.creator ?? null) as CreatorProfile | null,
+        tracks: rawTracks.map((t) => ({
+          ...t,
+          cover_url: sanitizeUrl(t.cover_url) ?? undefined,
+        })),
+        licenses: (data.licenses as LicenseTier[]) ?? [],
+        featuredPlaylists: (data.featuredPlaylists as FeaturedPlaylist[]) ?? [],
+        featuredProjects: (data.featuredProjects as FeaturedPlaylist[]) ?? [],
+      };
+    },
+  });
+  const creator = storeQuery.data?.creator ?? null;
+  const tracks = useMemo(() => storeQuery.data?.tracks ?? [], [storeQuery.data]);
+  const licenses = storeQuery.data?.licenses ?? [];
+  const featuredPlaylists = storeQuery.data?.featuredPlaylists ?? [];
+  const featuredProjects = storeQuery.data?.featuredProjects ?? [];
+  const loading = storeQuery.isLoading;
+  useEffect(() => {
+    if (storeQuery.isError) toast.error("Couldn't load store");
+  }, [storeQuery.isError]);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
@@ -134,29 +157,6 @@ function StorePage() {
     router.replace(url.pathname + (url.search ? url.search : ''), { scroll: false });
   };
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch('/api/store');
-        const data = await res.json();
-        const rawTracks = (data.tracks as StoreTrack[]) ?? [];
-        const cleanTracks = rawTracks.map((t) => ({
-          ...t,
-          cover_url: sanitizeUrl(t.cover_url) ?? undefined,
-        }));
-        setCreator(data.creator ?? null);
-        setTracks(cleanTracks);
-        setLicenses((data.licenses as LicenseTier[]) ?? []);
-        setFeaturedPlaylists((data.featuredPlaylists as FeaturedPlaylist[]) ?? []);
-        setFeaturedProjects((data.featuredProjects as FeaturedPlaylist[]) ?? []);
-      } catch (err) {
-        console.error('store fetch failed', err);
-        toast.error("Couldn't load store");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
 
   // Distinct genres from track tags
   const availableGenres = useMemo(() => {

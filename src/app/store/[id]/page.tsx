@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useState, use } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   ArrowLeft, Play, Pause, ShoppingCart, Music, Clock, Gauge,
@@ -129,36 +130,32 @@ export default function StoreProductPage({
 }) {
   const { id } = use(params);
 
-  const [track, setTrack] = useState<Track | null>(null);
-  const [creator, setCreator] = useState<CreatorProfile | null>(null);
-  const [licenses, setLicenses] = useState<LicenseTier[]>([]);
-  const [tags, setTags] = useState<Array<{ tag: string; category: string }>>([]);
-  const [related, setRelated] = useState<Track[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
-
   const { currentTrack, isPlaying, setTrack: playTrack, togglePlay, setQueue } = usePlayer();
   const { addItem, isOpen, setIsOpen } = useCart();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`/api/store/${id}`);
-        if (res.status === 404) { setNotFound(true); return; }
-        const data = await res.json();
-        if (data.error) { setNotFound(true); return; }
-        setTrack(data.track as Track);
-        setCreator(data.creator ?? null);
-        setLicenses(((data.licenses ?? []) as ApiLicenseTier[]).map(mapToUiTier));
-        setTags(data.tags ?? []);
-        setRelated((data.related as Track[]) ?? []);
-      } catch {
-        setNotFound(true);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [id]);
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: ['storeTrack', id],
+    queryFn: async () => {
+      const res = await fetch(`/api/store/${id}`);
+      if (res.status === 404) throw new Error('Not found');
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      return {
+        track: json.track as Track,
+        creator: (json.creator ?? null) as CreatorProfile | null,
+        licenses: ((json.licenses ?? []) as ApiLicenseTier[]).map(mapToUiTier),
+        tags: (json.tags ?? []) as Array<{ tag: string; category: string }>,
+        related: (json.related ?? []) as Track[],
+      };
+    },
+    retry: false,
+  });
+  const track = data?.track ?? null;
+  const creator = data?.creator ?? null;
+  const licenses = data?.licenses ?? [];
+  const tags = data?.tags ?? [];
+  const related = data?.related ?? [];
+  const notFound = isError || (!loading && !track);
 
   if (loading) {
     return (

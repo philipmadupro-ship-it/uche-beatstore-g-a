@@ -9,7 +9,8 @@
  * CTA in the hero replaces the access page's Follow/Play-all pair.
  */
 
-import { useEffect, useMemo, useState, use } from 'react';
+import { useMemo, useState, use } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -85,32 +86,29 @@ export default function StoreProjectPage({
   const { id } = use(params);
   const router = useRouter();
 
-  const [project, setProject] = useState<ProjectDetail | null>(null);
-  const [tracks, setTracks] = useState<ProjectTrack[]>([]);
-  const [creator, setCreator] = useState<CreatorProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
   const [tab, setTab] = useState<'overview' | 'tracks' | 'producer'>('overview');
 
   const { currentTrack, isPlaying, setTrack: playTrack, togglePlay, setQueue } = usePlayer();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`/api/store/projects/${id}`);
-        if (res.status === 404) { setNotFound(true); return; }
-        const data = await res.json();
-        if (data.error) { setNotFound(true); return; }
-        setProject(data.project);
-        setTracks(data.tracks ?? []);
-        setCreator(data.creator ?? null);
-      } catch {
-        setNotFound(true);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [id]);
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: ['storeProject', id],
+    queryFn: async () => {
+      const res = await fetch(`/api/store/projects/${id}`);
+      if (res.status === 404) throw new Error('Not found');
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      return json as {
+        project: ProjectDetail;
+        tracks: ProjectTrack[];
+        creator: CreatorProfile | null;
+      };
+    },
+    retry: false,
+  });
+  const project = data?.project ?? null;
+  const tracks = data?.tracks ?? [];
+  const creator = data?.creator ?? null;
+  const notFound = isError || (!loading && !project);
 
   const accent = creator?.accent_color || '#D4BFA0';
   const totalDuration = useMemo(

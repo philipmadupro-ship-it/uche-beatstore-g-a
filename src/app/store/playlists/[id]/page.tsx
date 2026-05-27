@@ -12,13 +12,14 @@
  * and /store/projects/access/[token] for visual continuity.
  */
 
-import { useEffect, useState, use, useMemo } from 'react';
+import { useState, use, useMemo } from 'react';
 import {
   Loader2, ListMusic, Play, Pause, Music, ShoppingBag, Check,
   Headphones, Clock, Heart, MoreHorizontal,
   Copy, Plus,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useCart } from '@/hooks/useCart';
 import { useWishlist } from '@/hooks/useWishlist';
@@ -84,12 +85,6 @@ export default function PlaylistPage({
 }) {
   const { id } = use(params);
 
-  const [playlist, setPlaylist] = useState<PlaylistShape | null>(null);
-  const [tracks, setTracks] = useState<PlaylistTrack[]>([]);
-  const [creator, setCreator] = useState<Creator | null>(null);
-  const [fallback, setFallback] = useState<{ lease: number | null; exclusive: number | null }>({ lease: null, exclusive: null });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [hovered, setHovered] = useState<string | null>(null);
   const [tab, setTab] = useState<'tracks' | 'producer'>('tracks');
@@ -99,24 +94,26 @@ export default function PlaylistPage({
   const { addItem, addItems, items: cartItems } = useCart();
   const { has: isWishlisted, toggle: toggleWishlist } = useWishlist();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`/api/store/playlists/${id}`);
-        if (res.status === 404) { setError('Playlist not found.'); return; }
-        const data = await res.json();
-        if (data.error) { setError(data.error); return; }
-        setPlaylist(data.playlist);
-        setTracks(data.tracks ?? []);
-        setCreator(data.creator ?? null);
-        setFallback(data.pricing_fallback ?? { lease: null, exclusive: null });
-      } catch (err: any) {
-        setError(err?.message || 'Could not load playlist');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [id]);
+  const { data, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ['playlist', id],
+    queryFn: async () => {
+      const res = await fetch(`/api/store/playlists/${id}`);
+      if (res.status === 404) throw new Error('Playlist not found.');
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      return json as {
+        playlist: PlaylistShape;
+        tracks: PlaylistTrack[];
+        creator: Creator | null;
+        pricing_fallback?: { lease: number | null; exclusive: number | null };
+      };
+    },
+  });
+  const playlist = data?.playlist ?? null;
+  const tracks = data?.tracks ?? [];
+  const creator = data?.creator ?? null;
+  const fallback = data?.pricing_fallback ?? { lease: null, exclusive: null };
+  const error = queryError ? (queryError as Error).message : null;
 
   const accent = creator?.accent_color || '#D4BFA0';
   const totalDuration = useMemo(

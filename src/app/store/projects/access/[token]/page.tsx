@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useMemo, useState, use, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   Loader2, Layers, Play, Pause, Music, Download, Lock, Mail,
@@ -153,11 +154,6 @@ export default function ProjectAccessPage({
 }) {
   const { token } = use(params);
 
-  const [project, setProject] = useState<AccessProject | null>(null);
-  const [tracks, setTracks] = useState<AccessTrack[]>([]);
-  const [creator, setCreator] = useState<AccessCreator | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [invalid, setInvalid] = useState(false);
   const [tab, setTab] = useState<'overview' | 'tracks' | 'producer'>('overview');
   const [following, setFollowing] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -165,23 +161,25 @@ export default function ProjectAccessPage({
   const { currentTrack, isPlaying, setTrack: playTrack, togglePlay, setQueue } = usePlayer();
   const { has: isWishlisted, toggle: toggleWishlist } = useWishlist();
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`/api/store/projects/access/${token}`);
-        if (res.status === 404) { setInvalid(true); return; }
-        const data = await res.json();
-        if (data.error) { setInvalid(true); return; }
-        setProject(data.project);
-        setTracks(data.tracks ?? []);
-        setCreator(data.creator ?? null);
-      } catch {
-        setInvalid(true);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [token]);
+  const { data, isLoading: loading, isError } = useQuery({
+    queryKey: ['accessProject', token],
+    queryFn: async () => {
+      const res = await fetch(`/api/store/projects/access/${token}`);
+      if (res.status === 404) throw new Error('Not found');
+      const json = await res.json();
+      if (json.error) throw new Error(json.error);
+      return json as {
+        project: AccessProject;
+        tracks: AccessTrack[];
+        creator: AccessCreator | null;
+      };
+    },
+    retry: false,
+  });
+  const project = data?.project ?? null;
+  const tracks = data?.tracks ?? [];
+  const creator = data?.creator ?? null;
+  const invalid = isError || (!loading && !project);
 
   // localStorage-backed follow (no auth required)
   useEffect(() => {
