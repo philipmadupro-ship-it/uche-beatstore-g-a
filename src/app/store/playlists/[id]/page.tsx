@@ -13,17 +13,18 @@
  */
 
 import { useEffect, useState, use, useMemo } from 'react';
-import Link from 'next/link';
 import {
   Loader2, ListMusic, Play, Pause, Music, ShoppingBag, Check,
-  Mail, Globe, AtSign, Link2, Headphones, Clock, Heart, MoreHorizontal,
+  Headphones, Clock, Heart, MoreHorizontal,
   Copy, Plus,
 } from 'lucide-react';
+import Link from 'next/link';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useCart } from '@/hooks/useCart';
 import { useWishlist } from '@/hooks/useWishlist';
 import { toast } from '@/hooks/useToast';
-import { slugify } from '@/lib/slug';
+import { GlassPage } from '@/components/store/GlassPage';
+import { ProducerProfile } from '@/components/store/ProducerProfile';
 import type { Track } from '@/lib/types';
 
 interface PlaylistTrack {
@@ -236,127 +237,70 @@ export default function PlaylistPage({
 
   const stickyVisible = selected.size > 0;
 
-  return (
-    <div className={`min-h-screen bg-[#0a0907] text-[#E8DCC8] px-4 md:px-6 pt-8 md:pt-12 ${stickyVisible ? 'pb-44' : 'pb-24'}`}>
-      {playlist.cover_url && (
+  const heroMeta = (
+    <>
+      <Headphones size={13} className="text-white/40" />
+      <span>{tracks.length} {tracks.length === 1 ? 'song' : 'songs'} Total</span>
+      {totalDuration > 0 && (
         <>
-          <div
-            className="fixed inset-0 -z-10 bg-cover bg-center blur-3xl opacity-20 scale-110"
-            style={{ backgroundImage: `url(${playlist.cover_url})` }}
-            aria-hidden
-          />
-          <div
-            className="fixed inset-0 -z-10"
-            style={{
-              background: `linear-gradient(180deg, ${accent}1a 0%, rgba(10,9,7,0.85) 50%, #0a0907 100%)`,
-            }}
-            aria-hidden
-          />
+          <span className="text-white/30">·</span>
+          <span>{fmtTotal(totalDuration)}</span>
         </>
       )}
+    </>
+  );
 
-      <div className="max-w-5xl mx-auto">
-        <div className="rounded-[28px] border border-white/[0.08] bg-[#14110d]/70 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.55)] overflow-hidden">
+  const heroActions = (
+    <>
+      <button
+        onClick={playAll}
+        disabled={tracks.length === 0}
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/[0.08] border border-white/[0.10] text-white text-[12px] hover:bg-white/[0.14] transition-colors disabled:opacity-40"
+      >
+        {anyOurTrackPlaying ? <Pause size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" className="ml-0.5" />}
+        {anyOurTrackPlaying ? 'Pause' : 'Play all'}
+      </button>
+      <button
+        onClick={() => addBulk('lease', 'all')}
+        disabled={tracks.length === 0}
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-white/[0.10] bg-white/[0.04] text-white text-[12px] hover:bg-white/[0.08] transition-colors disabled:opacity-40"
+      >
+        <ShoppingBag size={11} />
+        Add all — Lease
+      </button>
+      <button
+        onClick={() => addBulk('exclusive', 'all')}
+        disabled={tracks.length === 0}
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full text-black text-[12px] font-medium transition-opacity hover:opacity-90 disabled:opacity-40"
+        style={{ backgroundColor: accent }}
+      >
+        <ShoppingBag size={11} />
+        Add all — Exclusive
+      </button>
+    </>
+  );
 
-          {/* Top tab nav */}
-          <div className="flex items-center justify-center pt-5 pb-3 border-b border-white/[0.05]">
-            <div className="flex items-center gap-7">
-              {([
-                ['tracks', 'Tracks'],
-                ['producer', 'Producer'],
-              ] as const).map(([k, label]) => {
-                const active = tab === k;
-                return (
-                  <button
-                    key={k}
-                    onClick={() => setTab(k)}
-                    className={`relative text-[13px] tracking-wide transition-colors ${active ? 'text-white' : 'text-white/45 hover:text-white/75'}`}
-                  >
-                    {label}
-                    {active && (
-                      <span
-                        className="absolute -bottom-[10px] left-0 right-0 h-px"
-                        style={{ backgroundColor: accent }}
-                      />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Hero */}
-          <div className="relative flex flex-col md:flex-row gap-6 px-6 md:px-10 py-8 md:py-10 border-b border-white/[0.05]">
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/45">
-                Playlist
-              </p>
-              <h1 className="mt-1.5 text-3xl md:text-5xl font-semibold text-white leading-[1.05] tracking-tight font-heading break-words">
-                {playlist.name}
-              </h1>
-              {creator?.display_name && (
-                <div className="mt-3 min-w-0">
-                  <Link
-                    href={`/store/producer/${slugify(creator.display_name)}`}
-                    className="inline-block max-w-full text-[15px] md:text-[16px] text-white/90 font-medium hover:text-white transition-colors break-all"
-                  >
-                    {creator.display_name}
-                  </Link>
-                </div>
-              )}
-              <div className="mt-1.5 flex items-center gap-2 text-[12px] text-white/55 flex-wrap">
-                <Headphones size={13} className="text-white/40" />
-                <span>{tracks.length} {tracks.length === 1 ? 'song' : 'songs'} Total</span>
-                {totalDuration > 0 && (
-                  <>
-                    <span className="text-white/30">·</span>
-                    <span>{fmtTotal(totalDuration)}</span>
-                  </>
-                )}
-              </div>
-
-              <div className="mt-6 flex flex-wrap items-center gap-2">
-                <button
-                  onClick={playAll}
-                  disabled={tracks.length === 0}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/[0.08] border border-white/[0.10] text-white text-[12px] hover:bg-white/[0.14] transition-colors disabled:opacity-40"
-                >
-                  {anyOurTrackPlaying ? <Pause size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" className="ml-0.5" />}
-                  {anyOurTrackPlaying ? 'Pause' : 'Play all'}
-                </button>
-                <button
-                  onClick={() => addBulk('lease', 'all')}
-                  disabled={tracks.length === 0}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-white/[0.10] bg-white/[0.04] text-white text-[12px] hover:bg-white/[0.08] transition-colors disabled:opacity-40"
-                >
-                  <ShoppingBag size={11} />
-                  Add all — Lease
-                </button>
-                <button
-                  onClick={() => addBulk('exclusive', 'all')}
-                  disabled={tracks.length === 0}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full text-black text-[12px] font-medium transition-opacity hover:opacity-90 disabled:opacity-40"
-                  style={{ backgroundColor: accent }}
-                >
-                  <ShoppingBag size={11} />
-                  Add all — Exclusive
-                </button>
-              </div>
-            </div>
-
-            <div className="relative w-full md:w-[280px] aspect-[16/10] md:aspect-square rounded-2xl overflow-hidden bg-[#0a0907] shrink-0">
-              {playlist.cover_url ? (
-                <img src={playlist.cover_url} alt={playlist.name} className="w-full h-full object-cover" />
-              ) : creator?.hero_image_url ? (
-                <img src={creator.hero_image_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#2A2418] to-[#0a0907] text-[#5a5142]">
-                  <ListMusic size={56} />
-                </div>
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-            </div>
-          </div>
+  return (
+    <div className={stickyVisible ? 'pb-20' : ''}>
+      <GlassPage coverUrl={playlist.cover_url} accentColor={accent}>
+        <GlassPage.TabNav
+          tabs={[
+            ['tracks', 'Tracks'],
+            ['producer', 'Producer'],
+          ] as const}
+          activeTab={tab}
+          onTabChange={setTab}
+          accentColor={accent}
+        />
+        <GlassPage.Hero
+          eyebrow="Playlist"
+          title={playlist.name}
+          producer={creator}
+          meta={heroMeta}
+          actions={heroActions}
+          coverImage={playlist.cover_url || creator?.hero_image_url}
+          coverFallback={<ListMusic size={56} />}
+        />
 
           {tab === 'tracks' && (
             <div className="px-2 md:px-4 pt-3 pb-2">
@@ -561,64 +505,12 @@ export default function PlaylistPage({
             </div>
           )}
 
-          {tab === 'producer' && (
-            <div className="px-6 md:px-10 py-8">
-              <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-3">
-                About the producer
-              </p>
-              {creator?.display_name ? (
-                <>
-                  <Link
-                    href={`/store/producer/${slugify(creator.display_name)}`}
-                    className="text-[20px] font-semibold text-white hover:text-[#D4BFA0] transition-colors"
-                  >
-                    {creator.display_name}
-                  </Link>
-                  {creator.bio && (
-                    <p className="mt-3 text-[13px] text-white/65 leading-relaxed max-w-2xl whitespace-pre-line">
-                      {creator.bio}
-                    </p>
-                  )}
-                  <div className="mt-5 flex items-center gap-2 flex-wrap">
-                    {creator.instagram_handle && (
-                      <a href={`https://instagram.com/${creator.instagram_handle.replace(/^@/, '')}`}
-                         target="_blank" rel="noopener noreferrer"
-                         className="w-9 h-9 rounded-full flex items-center justify-center bg-white/[0.05] border border-white/[0.08] text-white/65 hover:text-white hover:bg-white/[0.10] transition-colors"
-                         title="Instagram">
-                        <AtSign size={14} />
-                      </a>
-                    )}
-                    {creator.twitter_handle && (
-                      <a href={`https://x.com/${creator.twitter_handle.replace(/^@/, '')}`}
-                         target="_blank" rel="noopener noreferrer"
-                         className="w-9 h-9 rounded-full flex items-center justify-center bg-white/[0.05] border border-white/[0.08] text-white/65 hover:text-white hover:bg-white/[0.10] transition-colors"
-                         title="X / Twitter">
-                        <Link2 size={14} />
-                      </a>
-                    )}
-                    {creator.website_url && (
-                      <a href={creator.website_url} target="_blank" rel="noopener noreferrer"
-                         className="w-9 h-9 rounded-full flex items-center justify-center bg-white/[0.05] border border-white/[0.08] text-white/65 hover:text-white hover:bg-white/[0.10] transition-colors"
-                         title="Website">
-                        <Globe size={14} />
-                      </a>
-                    )}
-                    {creator.contact_email && (
-                      <a href={`mailto:${creator.contact_email}`}
-                         className="w-9 h-9 rounded-full flex items-center justify-center bg-white/[0.05] border border-white/[0.08] text-white/65 hover:text-white hover:bg-white/[0.10] transition-colors"
-                         title="Email">
-                        <Mail size={14} />
-                      </a>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <p className="text-[13px] text-white/50">Producer details unavailable.</p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+        {tab === 'producer' && (
+          <GlassPage.Section eyebrow="About the producer" noBorder className="px-6 md:px-10 py-8">
+            <ProducerProfile creator={creator} />
+          </GlassPage.Section>
+        )}
+      </GlassPage>
 
       {/* Sticky bulk-action bar (only when selection > 0) */}
       {stickyVisible && (
