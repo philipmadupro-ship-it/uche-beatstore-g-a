@@ -40,6 +40,7 @@ import {
   StoreSidebar, BeatCardSkeleton, BeatListRowSkeleton,
 } from '@/components/store/StoreSidebar';
 import { DropCountdown } from '@/components/store/DropCountdown';
+import { BeatMatchModal } from '@/components/store/BeatMatchModal';
 import { logPlay } from '@/lib/buyer-session';
 import { TagChips } from '@/components/store/TagChips';
 import { BeatCard } from '@/components/store/BeatCard';
@@ -572,6 +573,11 @@ function StorePage() {
             >
               <List size={13} />
             </button>
+          </div>
+
+          {/* AI Beat Match — drop a vocal, get matching beats */}
+          <div className="hidden md:block">
+            <BeatMatchModal accentColor={accentColor} />
           </div>
 
           {/* Copy store link */}
