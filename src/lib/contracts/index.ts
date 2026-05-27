@@ -72,6 +72,10 @@ export const TrackPatchBodySchema = z.object({
   store_featured: z.boolean().optional(),
   free_download_enabled: z.boolean().optional(),
   store_sort_order: z.number().int().nullable().optional(),
+  // Scheduled publish (migration 056). When set on a draft, the cron
+  // route /api/cron/publish-scheduled flips store_listed=true at that
+  // timestamp and clears this field. Null clears any pending schedule.
+  scheduled_publish_at: z.string().datetime().nullable().optional(),
 }).strict();
 export type TrackPatchBody = z.infer<typeof TrackPatchBodySchema>;
 

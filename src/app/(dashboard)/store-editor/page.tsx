@@ -23,7 +23,7 @@ import {
   Image as ImageIcon, Upload, Globe,
   Music, ListMusic, DollarSign, Eye, EyeOff,
   GripVertical, Check, X, Plus, Layers, Search,
-  ShoppingBag, Star, Tag, Trash2,
+  ShoppingBag, Star, Tag, Trash2, Clock,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { LicenseBuilder } from '@/components/store/LicenseBuilder';
@@ -181,6 +181,9 @@ interface TrackRow {
   store_sort_order: number | null;
   lease_price_usd: number | null;
   exclusive_price_usd: number | null;
+  // Migration 056 — when set on a draft, the cron flips
+  // store_listed=true at that time and clears this field.
+  scheduled_publish_at: string | null;
 }
 
 function StorePreview({
@@ -433,6 +436,7 @@ export default function StoreEditorPage() {
               store_listed: !!t.store_listed,
               store_featured: !!t.store_featured,
               store_sort_order: t.store_sort_order ?? null,
+              scheduled_publish_at: t.scheduled_publish_at ?? null,
               lease_price_usd: t.lease_price_usd ?? null,
               exclusive_price_usd: t.exclusive_price_usd ?? null,
             }))
@@ -684,6 +688,31 @@ export default function StoreEditorPage() {
         prev.map((t) => t.id === trackId ? { ...t, store_featured: currentlyFeatured } : t),
       );
       toast.error('Failed to update', err.message);
+    }
+  };
+
+  /* ── Scheduled-publish action ──
+     Drafts can be given a future timestamp. The cron route at
+     /api/cron/publish-scheduled flips them live when due. */
+  const [scheduleOpenFor, setScheduleOpenFor] = useState<string | null>(null);
+  const [scheduleDraft, setScheduleDraft] = useState<string>('');
+  const setSchedule = async (trackId: string, isoOrNull: string | null) => {
+    const prev = allTracks;
+    setAllTracks((p) => p.map((t) => t.id === trackId ? { ...t, scheduled_publish_at: isoOrNull } : t));
+    try {
+      const res = await fetch(`/api/tracks/${trackId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduled_publish_at: isoOrNull }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? `HTTP ${res.status}`);
+      }
+      toast.success(isoOrNull ? 'Scheduled' : 'Schedule cleared');
+    } catch (err: any) {
+      setAllTracks(prev);
+      toast.error('Could not schedule', err?.message ?? 'try again');
     }
   };
 
@@ -1565,14 +1594,98 @@ export default function StoreEditorPage() {
                           </span>
                         )}
 
-                        {/* Status badge */}
-                        <span className={`hidden sm:block text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 ${
-                          t.store_listed
-                            ? 'text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20'
-                            : 'text-[#4a4338] bg-[#1a160f] border border-[#1f1a13]'
-                        }`}>
-                          {t.store_listed ? 'Live' : 'Draft'}
-                        </span>
+                        {/* Status badge — Live / Draft / Scheduled */}
+                        {t.store_listed ? (
+                          <span className="hidden sm:block text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20">
+                            Live
+                          </span>
+                        ) : t.scheduled_publish_at ? (
+                          <span
+                            className="hidden sm:flex items-center gap-1 text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-amber-300 bg-amber-500/10 border border-amber-500/30"
+                            title={`Auto-publishes ${new Date(t.scheduled_publish_at).toLocaleString()}`}
+                          >
+                            <ChevronRight size={9} className="-mr-0.5" />
+                            Scheduled
+                          </span>
+                        ) : (
+                          <span className="hidden sm:block text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-[#4a4338] bg-[#1a160f] border border-[#1f1a13]">
+                            Draft
+                          </span>
+                        )}
+
+                        {/* Schedule button — only on drafts; opens an
+                            inline datetime picker. Clearing the input
+                            cancels any pending schedule. */}
+                        {!t.store_listed && (
+                          <div className="relative shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (scheduleOpenFor === t.id) {
+                                  setScheduleOpenFor(null);
+                                } else {
+                                  setScheduleOpenFor(t.id);
+                                  setScheduleDraft(t.scheduled_publish_at
+                                    ? new Date(t.scheduled_publish_at).toISOString().slice(0, 16)
+                                    : '');
+                                }
+                              }}
+                              title={t.scheduled_publish_at
+                                ? `Edit schedule (${new Date(t.scheduled_publish_at).toLocaleString()})`
+                                : 'Schedule auto-publish'}
+                              className={`w-7 h-7 rounded-md flex items-center justify-center border transition-colors ${
+                                t.scheduled_publish_at
+                                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                                  : 'bg-white/[0.03] border-[#1f1a13] text-[#5a5142] hover:text-amber-300 hover:border-amber-500/30'
+                              }`}
+                            >
+                              <Clock size={12} />
+                            </button>
+                            {scheduleOpenFor === t.id && (
+                              <div className="absolute right-0 top-9 z-30 w-64 rounded-xl bg-[#0c0a08] border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] p-3">
+                                <p className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-2">
+                                  Auto-publish at
+                                </p>
+                                <input
+                                  type="datetime-local"
+                                  value={scheduleDraft}
+                                  onChange={(e) => setScheduleDraft(e.target.value)}
+                                  className={inputCls}
+                                />
+                                <div className="flex items-center gap-2 mt-3">
+                                  <button
+                                    onClick={async () => {
+                                      if (!scheduleDraft) return;
+                                      const iso = new Date(scheduleDraft).toISOString();
+                                      await setSchedule(t.id, iso);
+                                      setScheduleOpenFor(null);
+                                    }}
+                                    disabled={!scheduleDraft}
+                                    className="flex-1 px-3 py-2 rounded-md bg-[#D4BFA0] text-black text-[10px] font-bold uppercase tracking-wider hover:bg-[#E8D8B8] transition-colors disabled:opacity-40"
+                                  >
+                                    Schedule
+                                  </button>
+                                  {t.scheduled_publish_at && (
+                                    <button
+                                      onClick={async () => {
+                                        await setSchedule(t.id, null);
+                                        setScheduleOpenFor(null);
+                                      }}
+                                      className="px-3 py-2 rounded-md border border-[#2d2620] text-[#a08a6a] text-[10px] font-mono uppercase tracking-wider hover:text-white hover:border-[#3a3328] transition-colors"
+                                    >
+                                      Clear
+                                    </button>
+                                  )}
+                                </div>
+                                {t.scheduled_publish_at && (
+                                  <p className="mt-2 text-[10px] text-[#5a5142]">
+                                    Currently set for {new Date(t.scheduled_publish_at).toLocaleString()}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Producer's-Picks toggle — only available on listed
                             tracks. Star fills with the accent gold when active. */}
