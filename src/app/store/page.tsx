@@ -40,6 +40,7 @@ import {
   StoreSidebar, BeatCardSkeleton, BeatListRowSkeleton,
 } from '@/components/store/StoreSidebar';
 import { DropCountdown } from '@/components/store/DropCountdown';
+import { logPlay } from '@/lib/buyer-session';
 import { TagChips } from '@/components/store/TagChips';
 import { BeatCard } from '@/components/store/BeatCard';
 import { BeatListRow } from '@/components/store/BeatListRow';
@@ -313,6 +314,9 @@ function StorePage() {
         source: viewMode === 'grid' ? 'store-grid' : 'store-list',
       }),
     }).catch(() => undefined);
+    // If the buyer has a magic-link token on this device, also log to
+    // their personal listening history (mig 060). No-op when anonymous.
+    void logPlay(t.id);
   };
 
   const priceFor = (t: StoreTrack, type: 'lease' | 'exclusive'): number | null => {

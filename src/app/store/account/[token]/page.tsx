@@ -2,10 +2,13 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Loader2, AlertCircle, Music, Layers, Download, ExternalLink,
-  CreditCard,
+  CreditCard, Heart, History, ListMusic, Plus, Trash2,
 } from 'lucide-react';
+import { setBuyerToken } from '@/lib/buyer-session';
+import { toast } from '@/hooks/useToast';
 
 interface TrackLicense {
   id: string;
@@ -52,6 +55,11 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
   const [portalError, setPortalError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Persist the token so subsequent /store visits know who the buyer
+    // is (logPlay, toggleFavorite, etc. become real DB writes instead
+    // of localStorage-only). 24h expiry handled inside buyer-session.
+    setBuyerToken(token);
+
     (async () => {
       try {
         const res = await fetch(`/api/store/account/${token}`);
@@ -269,6 +277,11 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
           </>
         )}
 
+        {/* ── Library — listening history, favorites, custom playlists
+            (migration 060). Shown for every magic-linked buyer
+            regardless of purchase status. */}
+        <BuyerLibrary token={token} />
+
         <footer className="mt-10 pt-6 border-t border-[#1a160f]">
           <p className="text-[10px] font-mono text-[#3a3328] leading-relaxed">
             This link expires 24h after you requested it. If it stops working,{' '}
@@ -279,5 +292,198 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
         </footer>
       </div>
     </div>
+  );
+}
+
+/* ─── Buyer Library — history + favorites + playlists ─────────── */
+
+interface LibraryHistoryRow { track_id: string; played_at: string }
+interface LibraryFavRow { track_id: string; created_at: string }
+interface LibraryPlaylist {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  track_ids: string[];
+}
+interface LibraryShape {
+  email: string;
+  history: LibraryHistoryRow[];
+  favorites: LibraryFavRow[];
+  playlists: LibraryPlaylist[];
+}
+
+function BuyerLibrary({ token }: { token: string }) {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['buyerLibrary', token],
+    queryFn: async () => {
+      const res = await fetch(`/api/store/me?token=${encodeURIComponent(token)}`);
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error ?? `HTTP ${res.status}`);
+      }
+      return (await res.json()) as LibraryShape;
+    },
+    retry: false,
+  });
+
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ['buyerLibrary', token] });
+
+  const createMut = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await fetch(`/api/store/me?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create_playlist', name }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+      return j.playlist as LibraryPlaylist;
+    },
+    onSuccess: () => { setNewPlaylistName(''); toast.success('Playlist created'); refresh(); },
+    onError: (e: Error) => toast.error('Could not create', e.message),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: async (playlist_id: string) => {
+      const res = await fetch(`/api/store/me?token=${encodeURIComponent(token)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_playlist', playlist_id }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error ?? `HTTP ${res.status}`);
+      }
+    },
+    onSuccess: () => { toast.success('Playlist deleted'); refresh(); },
+    onError: (e: Error) => toast.error('Could not delete', e.message),
+  });
+
+  if (isLoading) {
+    return (
+      <section className="mt-10 pt-6 border-t border-[#1a160f]">
+        <Loader2 size={16} className="animate-spin text-[#5a5142]" />
+      </section>
+    );
+  }
+  if (!data) return null;
+
+  const recentHistory = data.history.slice(0, 12);
+
+  return (
+    <section className="mt-10 pt-8 border-t border-[#1a160f]">
+      <h2 className="text-[16px] font-medium text-[#E8DCC8] mb-5">My library</h2>
+
+      {/* History */}
+      <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] px-5 py-4 mb-5">
+        <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-[#a08a6a] mb-3">
+          <History size={11} />
+          Recently played
+        </p>
+        {recentHistory.length === 0 ? (
+          <p className="text-[12px] text-white/40">Listen to a beat on the store and it'll show up here.</p>
+        ) : (
+          <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            {recentHistory.map((r, i) => (
+              <li key={`${r.track_id}-${r.played_at}-${i}`}>
+                <Link
+                  href={`/store/${r.track_id}`}
+                  className="block px-3 py-2 rounded-lg bg-white/[0.03] border border-[#1f1a13] hover:bg-white/[0.06] hover:border-[#2d2620] transition-colors"
+                >
+                  <p className="text-[11px] text-[#E8DCC8] truncate font-mono">{r.track_id.slice(0, 8)}</p>
+                  <p className="text-[9px] text-white/40 font-mono">
+                    {new Date(r.played_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Favorites */}
+      <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] px-5 py-4 mb-5">
+        <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-[#a08a6a] mb-3">
+          <Heart size={11} className="text-[#c8a84b]" fill="currentColor" />
+          Favorites ({data.favorites.length})
+        </p>
+        {data.favorites.length === 0 ? (
+          <p className="text-[12px] text-white/40">Tap the heart on any beat to save it here, synced across your devices.</p>
+        ) : (
+          <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+            {data.favorites.map((f) => (
+              <li key={f.track_id}>
+                <Link
+                  href={`/store/${f.track_id}`}
+                  className="block px-3 py-2 rounded-lg bg-white/[0.03] border border-[#1f1a13] hover:bg-white/[0.06] hover:border-[#2d2620] transition-colors"
+                >
+                  <p className="text-[11px] text-[#E8DCC8] truncate font-mono">{f.track_id.slice(0, 8)}</p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Playlists */}
+      <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] px-5 py-4">
+        <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-[#a08a6a] mb-3">
+          <ListMusic size={11} />
+          My playlists ({data.playlists.length})
+        </p>
+        <div className="flex items-center gap-2 mb-3">
+          <input
+            type="text"
+            value={newPlaylistName}
+            onChange={(e) => setNewPlaylistName(e.target.value)}
+            placeholder="New playlist name"
+            maxLength={80}
+            onKeyDown={(e) => { if (e.key === 'Enter' && newPlaylistName.trim()) createMut.mutate(newPlaylistName.trim()); }}
+            className="flex-1 bg-[#0a0907] border border-[#1f1a13] rounded-lg px-3 py-2 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]"
+          />
+          <button
+            type="button"
+            onClick={() => createMut.mutate(newPlaylistName.trim())}
+            disabled={!newPlaylistName.trim() || createMut.isPending}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-[#D4BFA0] text-black text-[11px] font-bold uppercase tracking-wider hover:bg-[#E8D8B8] transition-colors disabled:opacity-40"
+          >
+            {createMut.isPending ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+            Create
+          </button>
+        </div>
+        {data.playlists.length === 0 ? (
+          <p className="text-[12px] text-white/40">Build your own mixtapes from the producer's catalogue.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {data.playlists.map((p) => (
+              <li
+                key={p.id}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.03] border border-[#1f1a13]"
+              >
+                <ListMusic size={12} className="text-[#5a5142]" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] font-medium text-[#E8DCC8] truncate">{p.name}</p>
+                  <p className="text-[10px] font-mono text-[#5a5142]">{p.track_ids.length} tracks · updated {new Date(p.updated_at).toLocaleDateString()}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm(`Delete playlist "${p.name}"?`)) deleteMut.mutate(p.id);
+                  }}
+                  title="Delete"
+                  className="w-7 h-7 rounded-md border border-[#1f1a13] flex items-center justify-center text-[#5a5142] hover:text-red-400 hover:border-red-900/40 transition-colors"
+                >
+                  <Trash2 size={11} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }
