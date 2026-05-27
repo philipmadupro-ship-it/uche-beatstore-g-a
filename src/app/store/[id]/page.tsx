@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, Play, Pause, ShoppingCart, Music, Clock, Gauge,
   Music2, Check, X, Loader2, ExternalLink, Globe, Mail,
-  AtSign, Download, ChevronRight, Tag, Link2, Share2,
+  AtSign, Download, ChevronRight, Tag, Link2,
 } from 'lucide-react';
 import { MiniWaveform } from '@/components/player/MiniWaveform';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -14,7 +14,7 @@ import { useCart } from '@/hooks/useCart';
 import { toast } from '@/hooks/useToast';
 import { slugify } from '@/lib/slug';
 import { BeatComments } from '@/components/store/BeatComments';
-import { ShareCardButton } from '@/components/store/ShareCardButton';
+import { ShareMenu } from '@/components/store/ShareMenu';
 import type { Track } from '@/lib/types';
 
 /* ─── Types ────────────────────────────────────────────────── */
@@ -377,57 +377,13 @@ export default function StoreProductPage({
                 <h1 className="text-2xl md:text-4xl font-bold text-white leading-tight tracking-tight">
                   {track.title}
                 </h1>
-                {/* Share — uses Web Share API on mobile/supported browsers,
-                    falls back to clipboard copy + toast on desktop. */}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (typeof window === 'undefined') return;
-                    const nav = window.navigator as Navigator & {
-                      share?: (d: ShareData) => Promise<void>;
-                    };
-                    const url = window.location.href;
-                    const shareData: ShareData = {
-                      title: track.title,
-                      text: `${track.title}${creator?.display_name ? ` — prod. ${creator.display_name}` : ''}`,
-                      url,
-                    };
-                    if (typeof nav.share === 'function') {
-                      try {
-                        await nav.share(shareData);
-                        return;
-                      } catch {
-                        // user cancelled or share blocked — fall through to clipboard
-                      }
-                    }
-                    try {
-                      await nav.clipboard.writeText(url);
-                      toast.success('Link copied');
-                    } catch {
-                      toast.error('Could not share', 'Copy the URL manually.');
-                    }
-                  }}
-                  aria-label="Share this beat"
-                  title="Share"
-                  className="shrink-0 w-10 h-10 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-[#a08a6a] hover:text-[#E8DCC8] hover:bg-white/[0.08] hover:border-white/[0.16] transition-colors"
-                >
-                  <Share2 size={14} />
-                </button>
-                {/* TikTok / Reels vertical preview — opens a 9:16 stage
-                    optimised for phone screen-record. */}
-                <Link
-                  href={`/store/${track.id}/share`}
-                  title="Open vertical share preview"
-                  aria-label="Open vertical share preview"
-                  className="shrink-0 w-10 h-10 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-[#a08a6a] hover:text-[#E8DCC8] hover:bg-white/[0.08] hover:border-white/[0.16] transition-colors"
-                >
-                  <span className="text-[12px] font-mono font-bold tracking-tighter">9:16</span>
-                </Link>
-                <ShareCardButton
+                {/* Single share affordance — popover with URL share /
+                    IG card / 9:16 vertical preview. Replaces the three
+                    overlapping buttons that used to live here. */}
+                <ShareMenu
                   trackId={track.id}
                   trackTitle={track.title}
-                  kind="playing"
-                  variant="icon"
+                  producerName={creator?.display_name ?? null}
                   accentColor={creator?.accent_color || '#D4BFA0'}
                 />
               </div>

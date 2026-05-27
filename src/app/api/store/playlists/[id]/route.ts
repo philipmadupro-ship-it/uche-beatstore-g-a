@@ -49,7 +49,7 @@ export async function GET(
 
     const { data: playlist, error: plErr } = await admin
       .from('playlists')
-      .select('id, user_id, name, cover_url, store_featured, created_at')
+      .select('id, user_id, name, description, cover_url, store_featured, created_at')
       .eq('id', id)
       .eq('store_featured', true)
       .maybeSingle();
@@ -112,6 +112,7 @@ export async function GET(
     const safePlaylist = {
       id: (playlist as any).id,
       name: (playlist as any).name,
+      description: (playlist as any).description ?? null,
       cover_url: sanitizeUrl((playlist as any).cover_url),
       created_at: (playlist as any).created_at,
     };

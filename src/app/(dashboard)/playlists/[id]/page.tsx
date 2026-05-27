@@ -26,6 +26,8 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState('');
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [tempDescription, setTempDescription] = useState('');
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAddTracks, setShowAddTracks] = useState(false);
   const [vaultTracks, setVaultTracks] = useState<Track[]>([]);
@@ -44,6 +46,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
       if (plData.playlist) {
         setPlaylist(plData.playlist);
         setTempTitle(plData.playlist.name);
+        setTempDescription(plData.playlist.description ?? '');
       }
       const trRes = await fetch(`/api/tracks?playlist_id=${params.id}`);
       const trData = await trRes.json();
@@ -100,6 +103,27 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
     });
     setPlaylist({ ...playlist, name: tempTitle.trim() });
     setIsEditingTitle(false);
+  };
+
+  const handleDescriptionSave = async () => {
+    const next = tempDescription.trim();
+    if (next === (playlist?.description ?? '')) {
+      setIsEditingDescription(false);
+      return;
+    }
+    const res = await fetch(`/api/playlists/${params.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: next || null }),
+    });
+    if (res.ok) {
+      setPlaylist({ ...playlist, description: next || null });
+      toast.success(next ? 'Description saved' : 'Description cleared');
+    } else {
+      const j = await res.json().catch(() => ({}));
+      toast.error('Could not save', j.error ?? 'try again');
+    }
+    setIsEditingDescription(false);
   };
 
   const toggleStoreFeatured = async () => {
@@ -265,6 +289,45 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                 <span>·</span>
                 <span>{fmtDuration(totalDuration)}</span>
               </div>
+
+              {/* Curator description — shows on the public playlist page
+                  (mig 061). Click to edit; blur or ⌘+Enter to save. */}
+              {isEditingDescription ? (
+                <div className="mt-3">
+                  <textarea
+                    autoFocus
+                    value={tempDescription}
+                    onChange={(e) => setTempDescription(e.target.value)}
+                    onBlur={handleDescriptionSave}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleDescriptionSave();
+                      if (e.key === 'Escape') { setTempDescription(playlist?.description ?? ''); setIsEditingDescription(false); }
+                    }}
+                    rows={3}
+                    maxLength={2000}
+                    placeholder="What's this playlist about? Late-night drives, gospel chops, etc."
+                    className="w-full bg-[#0a0907] border border-[#2d2620] rounded-lg px-3 py-2 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] resize-none"
+                  />
+                  <p className="mt-1 text-[9px] font-mono text-[#3a3328]">
+                    {tempDescription.length}/2000 · ⌘/Ctrl+Enter to save
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsEditingDescription(true)}
+                  className="group mt-3 block text-left max-w-2xl"
+                >
+                  {playlist?.description ? (
+                    <p className="text-[12px] text-[#a08a6a] leading-relaxed whitespace-pre-line group-hover:text-[#E8DCC8] transition-colors">
+                      {playlist.description}
+                    </p>
+                  ) : (
+                    <p className="text-[12px] text-[#3a3328] italic group-hover:text-[#5a5142] transition-colors">
+                      + Add a description
+                    </p>
+                  )}
+                </button>
+              )}
 
               {/* Featured in Store toggle — owner only, persists via PATCH */}
               <div className="flex items-center gap-2 mt-2">

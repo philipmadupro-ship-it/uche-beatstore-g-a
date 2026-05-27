@@ -5,6 +5,16 @@ const nextConfig: NextConfig = {
   // that webpack/turbopack cannot trace. Mark them server-external so the
   // server bundle requires them at runtime; analyze.client.ts (browser) does
   // not import them, so client builds are unaffected.
+  experimental: {
+    // Bump multipart body limit so the buyer beat-match upload (vocal
+    // clip up to ~25MB) makes it through Next's parser instead of being
+    // truncated at the default 10MB.
+    serverActions: { bodySizeLimit: '25mb' },
+  },
+  // App Router route handlers — same setting (Next 16+).
+  // @ts-ignore  middlewareClientMaxBodySize is a Next 16+ option not yet
+  // in the TS types.
+  middlewareClientMaxBodySize: '25mb',
   serverExternalPackages: [
     'audio-decode',
     '@wasm-audio-decoders/opus-ml',

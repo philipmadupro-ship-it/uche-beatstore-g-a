@@ -153,6 +153,8 @@ export type ProjectSharePatchBody = z.infer<typeof ProjectSharePatchBodySchema>;
 
 export const PlaylistPatchBodySchema = z.object({
   name: z.string().min(1).max(200).optional(),
+  // Migration 061 — curator's note shown on /store/playlists/[id]
+  description: z.string().max(2000).nullable().optional(),
   cover_url: z.string().nullable().optional(),
   store_featured: z.boolean().optional(),
   store_order: z.number().int().nullable().optional(),

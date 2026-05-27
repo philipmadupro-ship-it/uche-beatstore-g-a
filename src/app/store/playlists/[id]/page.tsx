@@ -47,6 +47,7 @@ interface PlaylistTrack {
 interface PlaylistShape {
   id: string;
   name: string;
+  description: string | null;
   cover_url: string | null;
   created_at: string;
 }
@@ -298,6 +299,17 @@ export default function PlaylistPage({
           coverImage={playlist.cover_url || creator?.hero_image_url}
           coverFallback={<ListMusic size={56} />}
         />
+
+        {/* Curator's description (migration 061). Whitespace-pre-line
+            so paragraphs survive; same warm-sand styling as the
+            project pages for visual consistency. */}
+        {playlist.description && (
+          <GlassPage.Section eyebrow="About this playlist">
+            <p className="text-[13px] text-[#a08a6a] leading-relaxed whitespace-pre-line max-w-3xl">
+              {playlist.description}
+            </p>
+          </GlassPage.Section>
+        )}
 
           {tab === 'tracks' && (
             <div className="px-2 md:px-4 pt-3 pb-2">

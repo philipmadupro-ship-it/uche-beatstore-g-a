@@ -48,6 +48,9 @@ export async function extractPeaks(
     const decode = (await import('audio-decode')).default as (
       b: Buffer,
     ) => Promise<{
+      // v3 shape
+      channelData?: Float32Array[];
+      // v2 fallback
       getChannelData?: (i: number) => Float32Array;
       _channelData?: Float32Array[];
       sampleRate?: number;
@@ -60,13 +63,18 @@ export async function extractPeaks(
     // Mix down to mono. We average channels rather than just taking [0] so
     // tracks that put the kick on one side and the snare on the other
     // still render a representative waveform.
-    const channelCount = audioBuffer.numberOfChannels ?? 1;
     const channels: Float32Array[] = [];
-    for (let c = 0; c < channelCount; c++) {
-      const ch = audioBuffer.getChannelData
-        ? audioBuffer.getChannelData(c)
-        : audioBuffer._channelData?.[c];
-      if (ch) channels.push(ch);
+    if (audioBuffer.channelData && audioBuffer.channelData.length > 0) {
+      // v3
+      channels.push(...audioBuffer.channelData);
+    } else {
+      const channelCount = audioBuffer.numberOfChannels ?? 1;
+      for (let c = 0; c < channelCount; c++) {
+        const ch = audioBuffer.getChannelData
+          ? audioBuffer.getChannelData(c)
+          : audioBuffer._channelData?.[c];
+        if (ch) channels.push(ch);
+      }
     }
     if (channels.length === 0) return null;
 
