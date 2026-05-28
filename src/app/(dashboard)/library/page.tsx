@@ -6,7 +6,12 @@
  */
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid, SlidersHorizontal, Store } from 'lucide-react';
+import {
+  Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid,
+  SlidersHorizontal, Store, FolderOpen, ListMusic, Users, BarChart2, CalendarDays,
+  ShoppingBag, ArrowRight, AlertCircle, TrendingUp, DollarSign,
+} from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { DropZone } from '@/components/upload/DropZone';
@@ -126,6 +131,15 @@ export default function LibraryPage() {
   };
 
   useEffect(() => { fetchTracks(); }, []);
+
+  // Light analytics summary for the dashboard — plays, sales, gross.
+  const [analyticsStats, setAnalyticsStats] = useState<{ plays: number; sales_count: number; gross_usd: number } | null>(null);
+  useEffect(() => {
+    fetch('/api/analytics')
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.totals) setAnalyticsStats(d.totals); })
+      .catch(() => undefined);
+  }, []);
 
   // Auto-refresh on track inserts/updates/deletes. Replaces the previous
   // "refresh only on user action" behavior — uploads from elsewhere or
@@ -251,6 +265,13 @@ export default function LibraryPage() {
 
     return { avgBpm, topKey, topKeyScale, topType, avgRating };
   }, [tracks]);
+
+  const listedTracks = useMemo(() => tracks.filter((t: any) => t.store_listed), [tracks]);
+  const attentionCount = useMemo(() => {
+    return listedTracks.filter((t: any) =>
+      !t.cover_url || (!t.lease_price_usd && !t.exclusive_price_usd) || !t.bpm
+    ).length;
+  }, [listedTracks]);
 
   const playAll = () => {
     if (filtered.length === 0) return;
@@ -587,6 +608,96 @@ export default function LibraryPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* ── Dashboard section ─────────────────────────────────────
+            Sits between the hero identity block and the track list.
+            Shows live analytics stats, quick-nav tiles for every
+            other major dashboard surface, and a "needs attention"
+            alert when store-listed tracks are missing key metadata. */}
+        <div className="mb-6 space-y-3">
+
+          {/* Stats row — plays, sales, gross, store listed */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            {[
+              {
+                label: 'Total plays',
+                value: analyticsStats != null ? String(analyticsStats.plays) : '—',
+                icon: <TrendingUp size={13} className="text-[#a08a6a]" />,
+              },
+              {
+                label: 'Sales',
+                value: analyticsStats != null ? String(analyticsStats.sales_count) : '—',
+                icon: <ShoppingBag size={13} className="text-[#6DC6A4]" />,
+              },
+              {
+                label: 'Gross',
+                value: analyticsStats != null
+                  ? `$${analyticsStats.gross_usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+                  : '—',
+                icon: <DollarSign size={13} className="text-[#c8a84b]" />,
+              },
+              {
+                label: 'Listed',
+                value: String(listedTracks.length),
+                icon: <Store size={13} className="text-[#9d95e8]" />,
+              },
+            ].map(({ label, value, icon }) => (
+              <div key={label} className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-4 py-3 flex items-center gap-3">
+                <div className="w-7 h-7 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0">
+                  {icon}
+                </div>
+                <div>
+                  <p className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142]">{label}</p>
+                  <p className="text-[18px] font-bold text-white tabular-nums leading-tight mt-0.5">{value}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Quick-nav tiles */}
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+            {([
+              { href: '/store-editor', label: 'Store', sub: `${listedTracks.length} listed`, icon: <Store size={18} />, color: 'text-[#9d95e8]', border: 'hover:border-[#9d95e8]/30' },
+              { href: '/projects', label: 'Projects', sub: 'Active sessions', icon: <FolderOpen size={18} />, color: 'text-[#D4BFA0]', border: 'hover:border-[#D4BFA0]/30' },
+              { href: '/playlists', label: 'Playlists', sub: 'Curated sets', icon: <ListMusic size={18} />, color: 'text-[#6DC6A4]', border: 'hover:border-[#6DC6A4]/30' },
+              { href: '/contacts', label: 'CRM', sub: 'Artists & labels', icon: <Users size={18} />, color: 'text-[#e8a06a]', border: 'hover:border-[#e8a06a]/30' },
+              { href: '/sales', label: 'Sales', sub: analyticsStats ? `$${analyticsStats.gross_usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} gross` : 'All orders', icon: <ShoppingBag size={18} />, color: 'text-[#c8a84b]', border: 'hover:border-[#c8a84b]/30' },
+              { href: '/analytics', label: 'Analytics', sub: analyticsStats ? `${analyticsStats.plays} plays` : 'Stats & charts', icon: <BarChart2 size={18} />, color: 'text-[#a08a6a]', border: 'hover:border-[#a08a6a]/30' },
+            ] as const).map(({ href, label, sub, icon, color, border }) => (
+              <Link
+                key={href}
+                href={href}
+                className={`group flex flex-col items-start gap-2 rounded-xl border border-[#1f1a13] bg-[#14110d] px-3.5 py-3.5 hover:bg-[#18140f] transition-all ${border}`}
+              >
+                <div className={`${color} transition-transform group-hover:scale-110 duration-150`}>{icon}</div>
+                <div className="w-full">
+                  <p className="text-[11px] font-semibold text-[#E8DCC8]">{label}</p>
+                  <p className="text-[10px] font-mono text-[#5a5142] mt-0.5 truncate">{sub}</p>
+                </div>
+                <ArrowRight size={10} className={`${color} opacity-0 group-hover:opacity-60 transition-opacity self-end`} />
+              </Link>
+            ))}
+          </div>
+
+          {/* Needs attention alert */}
+          {attentionCount > 0 && (
+            <Link
+              href="/store-editor"
+              className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[#3a2f1f]/50 bg-[#1f1510]/60 hover:bg-[#241a0e]/80 transition-colors group"
+            >
+              <AlertCircle size={14} className="text-[#c8a84b] shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-medium text-[#E8DCC8]">
+                  {attentionCount} store-listed beat{attentionCount === 1 ? '' : 's'} need attention
+                </p>
+                <p className="text-[10px] font-mono text-[#6a5d4a]">
+                  Missing cover, price, or BPM — fix in Store Editor
+                </p>
+              </div>
+              <ArrowRight size={12} className="text-[#c8a84b] shrink-0 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+            </Link>
+          )}
         </div>
 
         {/* Filter chips strip — type tabs as pill chips, scrolls
