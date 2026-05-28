@@ -329,6 +329,12 @@ function CheckoutContent() {
               >
                 Continue to Payment
               </button>
+              <p className="text-[10px] text-[#5a5142] text-center pt-1">
+                Want to save purchases &amp; favorites?{' '}
+                <Link href="/store/account" className="text-[#a08a6a] hover:text-[#E8DCC8] underline underline-offset-2 transition-colors">
+                  Create your free U2C account
+                </Link>
+              </p>
             </form>
           ) : (
             <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.01] border border-white/[0.03]">

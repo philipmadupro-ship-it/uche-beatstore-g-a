@@ -337,13 +337,22 @@ function DownloadPortal() {
             <Package size={11} />
             <span>All files licensed to {purchase.buyer_email}</span>
           </div>
-          <Link
-            href="/store"
-            className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#a08a6a] transition-colors"
-          >
-            Browse more beats
-            <ExternalLink size={9} />
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/store/account"
+              className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#a08a6a] hover:text-[#E8DCC8] transition-colors"
+            >
+              View my account
+              <ExternalLink size={9} />
+            </Link>
+            <Link
+              href="/store"
+              className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#a08a6a] transition-colors"
+            >
+              Browse more beats
+              <ExternalLink size={9} />
+            </Link>
+          </div>
         </div>
       </div>
     </div>

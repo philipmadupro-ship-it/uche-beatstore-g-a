@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, Globe, Mail } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronDown, Globe, Mail, ArrowRight } from 'lucide-react';
 import { ParticleText } from '@/components/store/ParticleText';
 import { sanitizeUrl } from './helpers';
+import { slugify } from '@/lib/slug';
 import type { CreatorProfile } from './types';
 
 interface Props {
@@ -122,23 +124,30 @@ export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
           </div>
         )}
 
-        {socialLinks.length > 0 && (
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            {socialLinks.map(({ href, label, icon, color }) => (
-              <a
-                key={href}
-                href={href}
-                target={href.startsWith('mailto:') ? undefined : '_blank'}
-                rel="noopener noreferrer"
-                title={label}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/30 border border-white/10 text-[#a08a6a] ${color} hover:bg-black/50 hover:border-white/20 transition-all text-[11px] font-medium`}
-              >
-                {icon}
-                <span className="hidden sm:inline text-[10px] font-mono uppercase tracking-wider">{label}</span>
-              </a>
-            ))}
-          </div>
-        )}
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          {creator?.display_name && (
+            <Link
+              href={`/store/producer/${slugify(creator.display_name)}`}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/20 text-[#E8DCC8] hover:bg-white/10 hover:border-white/30 transition-all text-[11px] font-mono uppercase tracking-wider"
+            >
+              View full profile
+              <ArrowRight size={11} />
+            </Link>
+          )}
+          {socialLinks.map(({ href, label, icon, color }) => (
+            <a
+              key={href}
+              href={href}
+              target={href.startsWith('mailto:') ? undefined : '_blank'}
+              rel="noopener noreferrer"
+              title={label}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/30 border border-white/10 text-[#a08a6a] ${color} hover:bg-black/50 hover:border-white/20 transition-all text-[11px] font-medium`}
+            >
+              {icon}
+              <span className="hidden sm:inline text-[10px] font-mono uppercase tracking-wider">{label}</span>
+            </a>
+          ))}
+        </div>
       </div>
     </div>
   );

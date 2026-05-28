@@ -9,8 +9,9 @@ import {
   Globe, X, CheckCircle2, XCircle, Link2, LayoutGrid,
   List, Mail, ChevronDown, Send, ListMusic, Sliders,
   Heart, ExternalLink, SlidersHorizontal, RotateCcw,
-  ShoppingBag, Download, ChevronRight,
+  ShoppingBag, Download, ChevronRight, User,
 } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 import { MiniWaveform } from '@/components/player/MiniWaveform';
 import { useCart } from '@/hooks/useCart';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -90,6 +91,10 @@ function StorePage() {
   }, [storeQuery.isError]);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  useEffect(() => {
+    createClient().auth.getUser().then(({ data }) => setIsSignedIn(!!data.user));
+  }, []);
 
   // Sidebar filters
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile toggle
@@ -589,6 +594,18 @@ function StorePage() {
             <Link2 size={11} />
             Share
           </button>
+
+          {/* My Account */}
+          <Link
+            href="/store/account/me"
+            title={isSignedIn ? 'My Account' : 'Sign in'}
+            className="flex items-center gap-1.5 px-2.5 py-2 rounded-full border border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-colors"
+          >
+            <User size={13} fill={isSignedIn ? 'currentColor' : 'none'} />
+            <span className="hidden sm:inline text-[10px] font-mono uppercase tracking-wider">
+              {isSignedIn ? 'Account' : 'Sign in'}
+            </span>
+          </Link>
 
           {/* Cart */}
           <button

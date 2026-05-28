@@ -56,7 +56,7 @@ public/sw.js                 service worker (app shell only — audio uses Index
 
 **UI** — dark warm theme. `--bg-page #0a0907`, `--bg-card #14110d`, `--accent #D4BFA0` (burnt amber), text `#E8DCC8/#a08a6a/#6a5d4a`, borders `#1f1a13/#2d2620`. Type: H1 40px `font-heading`, labels 10px mono uppercase tracking-[0.2em]. Use `Dropdown` over `<select>`. Bulk = `BatchActionBar` + `Set<string>` selection state. Feedback = `toast.*` / `confirmToast` from `useToast`. Fonts: Akira Expanded (body), Synkopy (`.font-heading`), Panchang (`.font-mono`) — all `/public/fonts`, no CDN imports.
 
-**DB** — migrations append-only, idempotent (`IF NOT EXISTS`). End each schema change with `NOTIFY pgrst, 'reload schema';`. RLS on every owned table; owner-or-null SELECT pattern. Apply migrations on Supabase BEFORE merging dependent PRs. Latest applied = 047. When working in a worktree off a stale base, check `git log --all -- supabase/migrations/` before naming.
+**DB** — migrations append-only, idempotent (`IF NOT EXISTS`). End each schema change with `NOTIFY pgrst, 'reload schema';`. RLS on every owned table; owner-or-null SELECT pattern. Apply migrations on Supabase BEFORE merging dependent PRs. Latest applied = 062. When working in a worktree off a stale base, check `git log --all -- supabase/migrations/` before naming.
 
 **Auth** — Supabase via `@supabase/ssr`, Google OAuth. Refresh in `src/proxy.ts` (must run on `/api/*`). Public-by-design: `/share/*`, `/projects/share/*`, `/store/**`. Service-role key is server-only.
 

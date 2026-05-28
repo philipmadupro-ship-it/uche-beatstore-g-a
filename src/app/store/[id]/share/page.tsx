@@ -17,7 +17,7 @@
  * button hides and the screen-record path is the recommended flow.
  */
 
-import { useEffect, useRef, useState, use } from 'react';
+import { useEffect, useRef, useState, use, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -46,6 +46,22 @@ interface CreatorShape {
 const BARS = 48;
 
 export default function VerticalSharePage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0907] flex items-center justify-center">
+        <Loader2 size={20} className="animate-spin text-[#5a5142]" />
+      </div>
+    }>
+      <VerticalShareContent params={params} />
+    </Suspense>
+  );
+}
+
+function VerticalShareContent({
   params,
 }: {
   params: Promise<{ id: string }>;
