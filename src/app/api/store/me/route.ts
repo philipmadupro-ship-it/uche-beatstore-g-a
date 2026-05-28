@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createServiceClient } from '@/lib/auth/ownership';
+import { requireUser, createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { errorMessage } from '@/lib/errors';
@@ -38,16 +38,37 @@ async function readClaims(token: string | null) {
   return verifyBuyerToken(token);
 }
 
+async function resolveEmail(req: NextRequest): Promise<{ email: string } | null> {
+  const { searchParams } = new URL(req.url);
+  const token = searchParams.get('token');
+  const sessionMode = searchParams.get('session') === '1';
+
+  if (token) {
+    const claims = await readClaims(token);
+    return claims ? { email: claims.email } : null;
+  }
+  if (sessionMode) {
+    const result = await requireUser();
+    if (!result.ok) return null;
+    const admin = createServiceClient();
+    const { data: authUser } = await admin.auth.admin.getUserById(result.userId);
+    const email = authUser?.user?.email;
+    return email ? { email } : null;
+  }
+  return null;
+}
+
 export async function GET(req: NextRequest) {
   try {
-    const token = new URL(req.url).searchParams.get('token');
-    const claims = await readClaims(token);
-    if (!claims) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 400 });
+    const resolved = await resolveEmail(req);
+    if (!resolved) {
+      return NextResponse.json({ error: 'Invalid or expired link' }, { status: 400 });
+    }
+    const { email } = resolved;
     if (!isSupabaseConfigured()) {
-      return NextResponse.json({ email: claims.email, history: [], favorites: [], playlists: [] });
+      return NextResponse.json({ email, history: [], favorites: [], playlists: [] });
     }
     const admin = createServiceClient();
-    const email = claims.email;
 
     const [historyRes, favRes, plRes] = await Promise.all([
       admin
@@ -107,10 +128,8 @@ const bodySchema = z.discriminatedUnion('action', [
 
 export async function POST(req: NextRequest) {
   try {
-    const url = new URL(req.url);
-    const token = url.searchParams.get('token');
-    const claims = await readClaims(token);
-    if (!claims) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 400 });
+    const resolved = await resolveEmail(req);
+    if (!resolved) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 400 });
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
     }
@@ -120,7 +139,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
     const admin = createServiceClient();
-    const email = claims.email;
+    const { email } = resolved;
 
     switch (parsed.data.action) {
       case 'log_play': {

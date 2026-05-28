@@ -82,6 +82,24 @@ export async function proxy(request: NextRequest) {
     url.searchParams.set('next', path);
     return NextResponse.redirect(url);
   }
+
+  // Buyers who signed in via OTP must not land inside the producer dashboard.
+  // Identify the producer by the presence of their creator_profiles row.
+  // The anon client with a valid session cookie can read the user's own row
+  // via RLS — if it returns null the logged-in user is a buyer, not the producer.
+  if (user && (isProtectedPath || path === '/login')) {
+    const { data: profile } = await supabase
+      .from('creator_profiles')
+      .select('user_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (!profile) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/store/account/me';
+      return NextResponse.redirect(url);
+    }
+  }
+
   if (path === '/login' && user) {
     const url = request.nextUrl.clone();
     url.pathname = '/library';
