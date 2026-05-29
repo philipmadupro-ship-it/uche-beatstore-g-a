@@ -31,8 +31,9 @@ import { TrackListingEditor } from '@/components/tracks/TrackListingEditor';
 // audio-decode worker chain doesn't break client/SSR bundling.
 
 const STATUS_OPTIONS: { value: TrackStatus; label: string; color: string }[] = [
+  { value: 'maq',         label: 'MAQ',        color: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
+  { value: 'needs_work',  label: 'WIP',        color: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]' },
   { value: 'finished',    label: 'Finished',   color: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
-  { value: 'needs_work',  label: 'Needs work', color: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]' },
   { value: 'archived',    label: 'Archived',   color: 'bg-[#16130e] text-[#6a5d4a] border-[#1f1a13]' },
 ];
 

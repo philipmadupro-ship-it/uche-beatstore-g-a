@@ -12,9 +12,10 @@ const TYPE_OPTIONS: { value: TrackType; label: string }[] = [
 ];
 
 const STATUS_OPTIONS: { value: TrackStatus; label: string; active: string; dot: string }[] = [
-  { value: 'finished',   label: 'Finished',   active: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]', dot: 'bg-[#8ecf9f]' },
-  { value: 'needs_work', label: 'Needs work', active: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]', dot: 'bg-[#c8a84b]' },
-  { value: 'archived',   label: 'Archived',   active: 'bg-[#16130e] text-[#6a5d4a] border-[#1f1a13]', dot: 'bg-[#4a4338]' },
+  { value: 'maq',        label: 'MAQ',        active: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40', dot: 'bg-[#b39ddb]' },
+  { value: 'needs_work', label: 'WIP',        active: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]',   dot: 'bg-[#c8a84b]' },
+  { value: 'finished',   label: 'Finished',   active: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]',   dot: 'bg-[#8ecf9f]' },
+  { value: 'archived',   label: 'Archived',   active: 'bg-[#16130e] text-[#6a5d4a] border-[#1f1a13]',   dot: 'bg-[#4a4338]' },
 ];
 
 // All 12 chromatic pitch classes in circle-of-fifths order so adjacent

@@ -1,5 +1,5 @@
 export type TrackType = 'beat' | 'instrumental' | 'song' | 'remix';
-export type TrackStatus = 'finished' | 'needs_work' | 'archived';
+export type TrackStatus = 'finished' | 'needs_work' | 'archived' | 'maq';
 export type StemsStatus = 'none' | 'pending' | 'done' | 'failed';
 
 export interface Track {

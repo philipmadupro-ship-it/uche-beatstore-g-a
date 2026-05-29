@@ -10,7 +10,7 @@ import {
   Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid,
   SlidersHorizontal, Store, FolderOpen, ListMusic, Users, BarChart2,
   ShoppingBag, ArrowRight, AlertCircle, TrendingUp, DollarSign,
-  Upload, Rocket, ChevronLeft, ChevronRight,
+  Upload, Rocket, ChevronLeft, ChevronRight, ChevronDown,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -103,8 +103,9 @@ export default function LibraryPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<LibraryFilters>(() => ({
     ...DEFAULT_FILTERS,
-    keys: new Set<string>(),
+    genres: new Set<string>(),
     statuses: new Set<string>(),
+    keys: new Set<string>(),
   }));
   useEffect(() => {
     const saved = localStorage.getItem('library-view') as 'list' | 'grid' | 'portfolio' | null;
@@ -114,23 +115,39 @@ export default function LibraryPage() {
   const { setTrack, setQueue, currentTrack, isPlaying } = usePlayer();
   const router = useRouter();
 
-  // ── New Release: create project + playlist in one move ──────────
+  // ── New Release dropdown ─────────────────────────────────────────
   const [creatingRelease, setCreatingRelease] = useState(false);
-  const handleNewRelease = async () => {
+  const [releaseDropdownOpen, setReleaseDropdownOpen] = useState(false);
+
+  const handleNewRelease = async (mode: 'both' | 'project' | 'playlist') => {
     if (creatingRelease) return;
     setCreatingRelease(true);
+    setReleaseDropdownOpen(false);
     try {
-      const [projRes, playRes] = await Promise.all([
-        fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }),
-        fetch('/api/playlists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }),
-      ]);
-      const [projData, playData] = await Promise.all([projRes.json(), playRes.json()]);
-      if (!projRes.ok) throw new Error(projData.error || 'Project creation failed');
-      if (!playRes.ok) throw new Error(playData.error || 'Playlist creation failed');
-      toast.success('New release started', `Project & playlist created — add tracks and cover art.`);
-      router.push(`/projects/${projData.project.id}`);
+      if (mode === 'project') {
+        const res = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        toast.success('Project created');
+        router.push(`/projects/${data.project.id}`);
+      } else if (mode === 'playlist') {
+        const res = await fetch('/api/playlists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed');
+        toast.success('Playlist created');
+        router.push(`/playlists/${data.playlist.id}`);
+      } else {
+        const [projRes, playRes] = await Promise.all([
+          fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
+          fetch('/api/playlists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }),
+        ]);
+        const [projData] = await Promise.all([projRes.json(), playRes.json()]);
+        if (!projRes.ok) throw new Error(projData.error || 'Failed');
+        toast.success('New release started', 'Project + playlist created — add tracks and cover art.');
+        router.push(`/projects/${projData.project.id}`);
+      }
     } catch (err: any) {
-      toast.error('Could not create release', err.message);
+      toast.error('Could not create', err.message);
     } finally {
       setCreatingRelease(false);
     }
@@ -192,6 +209,13 @@ export default function LibraryPage() {
       if (filters.scale === 'minor' && t.scale !== 'minor') return false;
       if (filters.statuses.size > 0 && (!t.status || !filters.statuses.has(t.status))) return false;
       if (filters.rating != null && (t.rating == null || t.rating < filters.rating)) return false;
+      // Genre filter — track_tags come down from the API rich select
+      if (filters.genres.size > 0) {
+        const trackGenres: string[] = ((t as any).track_tags ?? [])
+          .filter((tt: any) => tt.category === 'genre')
+          .map((tt: any) => tt.tag);
+        if (!Array.from(filters.genres).some((g) => trackGenres.includes(g))) return false;
+      }
       if (!q) return true;
       // Match against title, key (e.g. "C minor", "Am"), and BPM
       // string (e.g. "140"). Tags aren't on the Track row by default,
@@ -260,31 +284,41 @@ export default function LibraryPage() {
 
   // ── Sections for homepage-style browse ──────────────────────────
   const sections = useMemo(() => {
-    // All tracks newest-first for recency section
     const byDate = [...tracks].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    const all = tracks;
-    const result: Array<{ title: string; tracks: Track[] }> = [];
+    const result: Array<{ title: string; subtitle?: string; tracks: Track[] }> = [];
 
+    // Helper: get genres for a track from the nested track_tags
+    const getGenres = (t: any): string[] =>
+      (t.track_tags ?? []).filter((tt: any) => tt.category === 'genre').map((tt: any) => tt.tag);
+
+    // ── Recently added
     const recentlyAdded = byDate.slice(0, 10);
     if (recentlyAdded.length) result.push({ title: 'Recently Added', tracks: recentlyAdded });
 
-    const beats = all.filter((t) => t.type === 'beat').slice(0, 10);
-    if (beats.length) result.push({ title: 'Beats', tracks: beats });
+    // ── MAQ ideas — maquette/bare demos
+    const maq = tracks.filter((t) => t.status === 'maq').slice(0, 10);
+    if (maq.length) result.push({ title: 'MAQ — Maquette Ideas', subtitle: 'Stripped demos to develop', tracks: maq });
 
-    const instrumentals = all.filter((t) => t.type === 'instrumental').slice(0, 10);
-    if (instrumentals.length) result.push({ title: 'Instrumentals', tracks: instrumentals });
+    // ── WIP — in progress
+    const wip = tracks.filter((t) => t.status === 'needs_work').slice(0, 10);
+    if (wip.length) result.push({ title: 'WIP — In Progress', subtitle: 'Needs more work', tracks: wip });
 
-    const highBpm = all.filter((t) => t.bpm != null && t.bpm >= 130).sort((a, b) => (b.bpm ?? 0) - (a.bpm ?? 0)).slice(0, 10);
-    if (highBpm.length) result.push({ title: 'High Tempo · 130+ BPM', tracks: highBpm });
+    // ── Finished & ready
+    const finished = tracks.filter((t) => t.status === 'finished').slice(0, 10);
+    if (finished.length) result.push({ title: 'Finished — Ready', subtitle: 'Polished and ready to share', tracks: finished });
 
-    const midBpm = all.filter((t) => t.bpm != null && t.bpm >= 90 && t.bpm < 130).slice(0, 10);
-    if (midBpm.length) result.push({ title: 'Mid Tempo · 90–129 BPM', tracks: midBpm });
+    // ── Genre rows — derive from track_tags
+    const TOP_GENRES = ['Drill', 'Trap', 'R&B', 'Afrobeats', 'Amapiano', 'Hip-hop', 'Lo-fi'];
+    for (const genre of TOP_GENRES) {
+      const genreTracks = tracks.filter((t) => getGenres(t).includes(genre)).slice(0, 10);
+      if (genreTracks.length >= 2) {
+        result.push({ title: genre, subtitle: `${genreTracks.length} track${genreTracks.length === 1 ? '' : 's'}`, tracks: genreTracks });
+      }
+    }
 
-    const lowBpm = all.filter((t) => t.bpm != null && t.bpm < 90).slice(0, 10);
-    if (lowBpm.length) result.push({ title: 'Low Tempo · <90 BPM', tracks: lowBpm });
-
-    const listed = all.filter((t: any) => t.store_listed).slice(0, 10);
-    if (listed.length) result.push({ title: 'In Your Store', tracks: listed });
+    // ── In your store
+    const listed = tracks.filter((t: any) => t.store_listed).slice(0, 10);
+    if (listed.length) result.push({ title: 'In Your Store', subtitle: `${listed.length} listed`, tracks: listed });
 
     return result;
   }, [tracks]);
@@ -597,33 +631,62 @@ export default function LibraryPage() {
 
         {/* ── Quick actions ──────────────────────────────────────── */}
         <div className="flex items-center gap-2 mb-5 flex-wrap">
-          {[
-            { label: 'Upload beat', icon: <Upload size={13} />, action: () => window.scrollTo({ top: 9999, behavior: 'smooth' }) },
-            { label: 'New release', icon: <Rocket size={13} />, action: handleNewRelease, loading: creatingRelease, accent: true },
-            { label: 'Store editor', icon: <Store size={13} />, href: '/store-editor' },
-            { label: 'View sales', icon: <ShoppingBag size={13} />, href: '/sales' },
-            { label: 'Analytics', icon: <BarChart2 size={13} />, href: '/analytics' },
-          ].map((item) =>
-            item.href ? (
-              <Link key={item.label} href={(item as any).href} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#14110d] border border-[#1f1a13] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] hover:bg-[#18140f] transition-all">
-                {item.icon}{item.label}
-              </Link>
-            ) : (
+          <button onClick={() => window.scrollTo({ top: 9999, behavior: 'smooth' })} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#14110d] border border-[#1f1a13] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] hover:bg-[#18140f] transition-all">
+            <Upload size={13} />Upload beat
+          </button>
+
+          {/* New Release — split button with dropdown */}
+          <div className="relative">
+            <div className="flex items-center rounded-full overflow-hidden bg-[#D4BFA0] text-black shadow-sm">
               <button
-                key={item.label}
-                onClick={(item as any).action}
-                disabled={(item as any).loading}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-[11px] font-medium transition-all disabled:opacity-60 ${
-                  (item as any).accent
-                    ? 'bg-[#D4BFA0] text-black hover:bg-[#E8D8B8] shadow-sm'
-                    : 'bg-[#14110d] border border-[#1f1a13] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] hover:bg-[#18140f]'
-                }`}
+                onClick={() => handleNewRelease('both')}
+                disabled={creatingRelease}
+                className="flex items-center gap-1.5 pl-3.5 pr-2.5 py-2 text-[11px] font-bold hover:bg-[#E8D8B8] transition-colors disabled:opacity-60"
               >
-                {(item as any).loading ? <Loader2 size={13} className="animate-spin" /> : item.icon}
-                {item.label}
+                {creatingRelease ? <Loader2 size={13} className="animate-spin" /> : <Rocket size={13} />}
+                New release
               </button>
-            )
-          )}
+              <div className="w-px h-4 bg-black/20" />
+              <button
+                onClick={() => setReleaseDropdownOpen((v) => !v)}
+                className="px-2 py-2 hover:bg-[#E8D8B8] transition-colors"
+                aria-label="Release options"
+              >
+                <ChevronDown size={12} />
+              </button>
+            </div>
+            {releaseDropdownOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setReleaseDropdownOpen(false)} />
+                <div className="absolute left-0 top-full mt-1.5 z-40 w-48 bg-[#14110d] border border-[#1f1a13] rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+                  {[
+                    { mode: 'both' as const, label: 'Project + Playlist', sub: 'Full release flow' },
+                    { mode: 'project' as const, label: 'Project only', sub: 'Production session' },
+                    { mode: 'playlist' as const, label: 'Playlist only', sub: 'Curated set' },
+                  ].map(({ mode, label, sub }) => (
+                    <button
+                      key={mode}
+                      onClick={() => handleNewRelease(mode)}
+                      className="w-full flex flex-col items-start px-4 py-3 text-left hover:bg-[#1a160f] transition-colors border-b border-[#1a160f] last:border-0"
+                    >
+                      <span className="text-[12px] font-medium text-[#E8DCC8]">{label}</span>
+                      <span className="text-[9px] font-mono text-[#5a5142] mt-0.5">{sub}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {[
+            { label: 'Store editor', icon: <Store size={13} />, href: '/store-editor' },
+            { label: 'View sales',   icon: <ShoppingBag size={13} />, href: '/sales' },
+            { label: 'Analytics',    icon: <BarChart2 size={13} />,   href: '/analytics' },
+          ].map(({ label, icon, href }) => (
+            <Link key={label} href={href} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#14110d] border border-[#1f1a13] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] hover:bg-[#18140f] transition-all">
+              {icon}{label}
+            </Link>
+          ))}
         </div>
 
         {/* ── Dashboard — Spotify-style home content ────────────── */}
@@ -751,7 +814,10 @@ export default function LibraryPage() {
             ) : sections.map((sec) => (
               <div key={sec.title}>
                 <div className="flex items-center justify-between mb-2.5">
-                  <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#a08a6a]">{sec.title}</h3>
+                  <div>
+                    <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#a08a6a]">{sec.title}</h3>
+                    {(sec as any).subtitle && <p className="text-[9px] font-mono text-[#3a3328] mt-0.5">{(sec as any).subtitle}</p>}
+                  </div>
                   <button
                     onClick={() => { setBrowseMode('all'); }}
                     className="text-[9px] font-mono text-[#5a5142] hover:text-[#a08a6a] transition-colors"
@@ -1182,15 +1248,21 @@ function MiniTrackCard({
       className="group relative shrink-0 w-[130px] sm:w-[150px] cursor-pointer"
       onClick={onOpen}
     >
-      {/* Cover art */}
+      {/* Cover art + overlays */}
       <div className={`relative w-full aspect-square rounded-xl overflow-hidden bg-[#14110d] border mb-2 transition-all ${isCurrent ? 'border-[#D4BFA0]/60 ring-1 ring-[#D4BFA0]/30' : 'border-[#1f1a13] group-hover:border-[#2d2620]'}`}>
-        {track.cover_url ? (
+        {track.cover_url
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1a160f] to-[#0a0907]">
-            <Music size={24} className="text-[#3a3328]" />
-          </div>
+          ? <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" />
+          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1a160f] to-[#0a0907]"><Music size={24} className="text-[#3a3328]" /></div>}
+        {/* State badge */}
+        {track.status && track.status !== 'archived' && (
+          <span className={`absolute top-1.5 left-1.5 text-[7px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
+            track.status === 'maq'        ? 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' :
+            track.status === 'finished'   ? 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]'   :
+            track.status === 'needs_work' ? 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]'   : ''
+          }`}>
+            {track.status === 'maq' ? 'MAQ' : track.status === 'finished' ? '✓' : 'WIP'}
+          </span>
         )}
         {/* Play overlay */}
         <button

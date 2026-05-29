@@ -12,8 +12,9 @@ import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Loader2, Headphones, Music, AlertCircle, BarChart3,
-  TrendingUp, Radio, ExternalLink, SlidersHorizontal, X,
+  TrendingUp, Radio, ExternalLink, SlidersHorizontal, X, ChevronDown, ChevronUp,
 } from 'lucide-react';
+import { TAG_TAXONOMY } from '@/lib/types/tags';
 
 // ── Types ────────────────────────────────────────────────────────
 interface Totals { plays: number; sales_count: number; gross_usd: number }
@@ -26,10 +27,19 @@ interface TrackMeta {
   bpm: number | null;
   key: string | null;
   scale: string | null;
+  status: string | null;
+  track_tags?: Array<{ tag: string; category: string }>;
 }
 
 type DatePreset = '7d' | '30d' | '90d' | 'all';
 type TypeFilter = 'all' | 'beat' | 'instrumental' | 'song' | 'remix';
+
+const STATUS_OPTIONS = [
+  { value: 'maq',        label: 'MAQ',      color: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
+  { value: 'needs_work', label: 'WIP',      color: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]'   },
+  { value: 'finished',   label: 'Finished', color: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]'   },
+  { value: 'archived',   label: 'Archived', color: 'bg-[#16130e] text-[#6a5d4a] border-[#1f1a13]'   },
+];
 
 function fmtDate(iso: string): string {
   const d = new Date(iso);
@@ -63,12 +73,18 @@ export default function AnalyticsPage() {
   // ── Filter state ─────────────────────────────────────────────
   const [datePreset, setDatePreset] = useState<DatePreset>('30d');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [selectedGenres, setSelectedGenres] = useState<Set<string>>(new Set());
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<string>>(new Set());
   const [bpmMin, setBpmMin] = useState<string>('');
   const [bpmMax, setBpmMax] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  const hasActiveFilters = datePreset !== '30d' || typeFilter !== 'all' || bpmMin !== '' || bpmMax !== '';
-  const activeFilterCount = [datePreset !== '30d', typeFilter !== 'all', bpmMin !== '' || bpmMax !== ''].filter(Boolean).length;
+  const toggleGenre = (g: string) => setSelectedGenres((prev) => { const n = new Set(prev); n.has(g) ? n.delete(g) : n.add(g); return n; });
+  const toggleStatus = (s: string) => setSelectedStatuses((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
+
+  const hasActiveFilters = datePreset !== '30d' || typeFilter !== 'all' || selectedGenres.size > 0 || selectedStatuses.size > 0 || bpmMin !== '' || bpmMax !== '';
+  const activeFilterCount = [datePreset !== '30d', typeFilter !== 'all', selectedGenres.size > 0, selectedStatuses.size > 0, bpmMin !== '' || bpmMax !== ''].filter(Boolean).length;
 
   useEffect(() => {
     (async () => {
@@ -90,7 +106,7 @@ export default function AnalyticsPage() {
           const tracksData = await tracksRes.json();
           const meta = new Map<string, TrackMeta>();
           for (const t of (Array.isArray(tracksData) ? tracksData : [])) {
-            meta.set(t.id, { id: t.id, type: t.type, bpm: t.bpm, key: t.key, scale: t.scale });
+            meta.set(t.id, { id: t.id, type: t.type, bpm: t.bpm, key: t.key, scale: t.scale, status: t.status ?? null, track_tags: t.track_tags ?? [] });
           }
           setTrackMeta(meta);
         }
@@ -117,16 +133,23 @@ export default function AnalyticsPage() {
     return byDay.filter((d) => d.date >= dateCutoff);
   }, [byDay, dateCutoff]);
 
-  // ── Filter byTrack by type + BPM ────────────────────────────
+  // ── Filter byTrack by genre + state + type + BPM ────────────
   const filteredByTrack = useMemo(() => {
     const bpmLow  = bpmMin !== '' ? Number(bpmMin) : null;
     const bpmHigh = bpmMax !== '' ? Number(bpmMax) : null;
 
     return byTrack.filter((t) => {
       const meta = trackMeta.get(t.track_id);
-      if (typeFilter !== 'all') {
-        if (!meta || meta.type !== typeFilter) return false;
+      // Type
+      if (typeFilter !== 'all' && meta?.type !== typeFilter) return false;
+      // State
+      if (selectedStatuses.size > 0 && !selectedStatuses.has(meta?.status ?? '')) return false;
+      // Genre (from track_tags)
+      if (selectedGenres.size > 0) {
+        const genres = (meta?.track_tags ?? []).filter((tt) => tt.category === 'genre').map((tt) => tt.tag);
+        if (!Array.from(selectedGenres).some((g) => genres.includes(g))) return false;
       }
+      // BPM
       if (bpmLow != null || bpmHigh != null) {
         const bpm = meta?.bpm ?? null;
         if (bpm == null) return false;
@@ -135,7 +158,7 @@ export default function AnalyticsPage() {
       }
       return true;
     });
-  }, [byTrack, trackMeta, typeFilter, bpmMin, bpmMax]);
+  }, [byTrack, trackMeta, typeFilter, selectedGenres, selectedStatuses, bpmMin, bpmMax]);
 
   // ── Filtered plays total ─────────────────────────────────────
   const filteredTotalPlays = useMemo(
@@ -158,7 +181,7 @@ export default function AnalyticsPage() {
 
   const isEmpty = !loading && !error && (totals?.plays ?? 0) === 0;
 
-  const resetFilters = () => { setDatePreset('30d'); setTypeFilter('all'); setBpmMin(''); setBpmMax(''); };
+  const resetFilters = () => { setDatePreset('30d'); setTypeFilter('all'); setSelectedGenres(new Set()); setSelectedStatuses(new Set()); setBpmMin(''); setBpmMax(''); };
 
   return (
     <DashboardLayout>
@@ -210,56 +233,63 @@ export default function AnalyticsPage() {
           {/* Expanded filter panel */}
           {showFilters && (
             <div className="mt-3 bg-[#0e0c08] border border-[#1a160f] rounded-xl p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {/* Type filter */}
-                <div>
-                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Track type</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {TYPE_OPTIONS.map(({ value, label }) => (
-                      <button
-                        key={value}
-                        onClick={() => setTypeFilter(value)}
-                        className={`px-2.5 py-1 rounded-md text-[10px] font-medium border transition-colors ${
-                          typeFilter === value
-                            ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]'
-                            : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
-                        }`}
-                      >{label}</button>
-                    ))}
-                  </div>
-                </div>
 
-                {/* BPM range */}
-                <div>
-                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">BPM range</p>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="number"
-                      placeholder="min"
-                      value={bpmMin}
-                      onChange={(e) => setBpmMin(e.target.value)}
-                      className="w-20 bg-[#14110d] border border-[#1a160f] rounded px-2 py-1.5 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] tabular-nums"
-                    />
-                    <span className="text-[#3a3328] text-[10px]">–</span>
-                    <input
-                      type="number"
-                      placeholder="max"
-                      value={bpmMax}
-                      onChange={(e) => setBpmMax(e.target.value)}
-                      className="w-20 bg-[#14110d] border border-[#1a160f] rounded px-2 py-1.5 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] tabular-nums"
-                    />
-                    <span className="text-[9px] font-mono text-[#3a3328]">BPM</span>
-                  </div>
+              {/* Genre — first-class */}
+              <div>
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Genre</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {TAG_TAXONOMY.genre.map((g) => (
+                    <button key={g} onClick={() => toggleGenre(g)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                        selectedGenres.has(g) ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'
+                      }`}>{g}</button>
+                  ))}
                 </div>
+              </div>
 
-                {/* Section (future) */}
-                <div>
-                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Context / section</p>
-                  <p className="text-[10px] text-[#3a3328] font-mono">
-                    Store · Share · Project detail
-                    <br /><span className="text-[8px]">(per-section play tracking coming soon)</span>
-                  </p>
+              {/* State — first-class */}
+              <div>
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">State</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {STATUS_OPTIONS.map(({ value, label, color }) => (
+                    <button key={value} onClick={() => toggleStatus(value)}
+                      className={`px-3 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                        selectedStatuses.has(value) ? color : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'
+                      }`}>{label}</button>
+                  ))}
                 </div>
+              </div>
+
+              {/* Advanced: type + BPM */}
+              <div>
+                <button onClick={() => setAdvancedOpen((v) => !v)} className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] hover:text-[#a08a6a] transition-colors">
+                  {advancedOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                  Advanced (type, BPM)
+                </button>
+                {advancedOpen && (
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Track type</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {TYPE_OPTIONS.map(({ value, label }) => (
+                          <button key={value} onClick={() => setTypeFilter(value)}
+                            className={`px-2.5 py-1 rounded-md text-[10px] font-medium border transition-colors ${typeFilter === value ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'}`}
+                          >{label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">BPM range</p>
+                      <div className="flex items-center gap-2">
+                        <input type="number" placeholder="min" value={bpmMin} onChange={(e) => setBpmMin(e.target.value)}
+                          className="w-20 bg-[#14110d] border border-[#1a160f] rounded px-2 py-1.5 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] tabular-nums" />
+                        <span className="text-[#3a3328] text-[10px]">–</span>
+                        <input type="number" placeholder="max" value={bpmMax} onChange={(e) => setBpmMax(e.target.value)}
+                          className="w-20 bg-[#14110d] border border-[#1a160f] rounded px-2 py-1.5 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] tabular-nums" />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {hasActiveFilters && (
@@ -335,6 +365,8 @@ export default function AnalyticsPage() {
               <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <span className="text-[9px] font-mono text-[#5a5142] uppercase tracking-wider">Active filters:</span>
                 {datePreset !== '30d' && <Chip label={DATE_OPTIONS.find(d => d.value === datePreset)?.label ?? ''} onRemove={() => setDatePreset('30d')} />}
+                {Array.from(selectedGenres).map((g) => <Chip key={g} label={g} onRemove={() => toggleGenre(g)} />)}
+                {Array.from(selectedStatuses).map((s) => <Chip key={s} label={STATUS_OPTIONS.find(o => o.value === s)?.label ?? s} onRemove={() => toggleStatus(s)} />)}
                 {typeFilter !== 'all' && <Chip label={TYPE_OPTIONS.find(t => t.value === typeFilter)?.label ?? ''} onRemove={() => setTypeFilter('all')} />}
                 {(bpmMin !== '' || bpmMax !== '') && <Chip label={`${bpmMin || '?'}–${bpmMax || '?'} BPM`} onRemove={() => { setBpmMin(''); setBpmMax(''); }} />}
                 <span className="text-[10px] font-mono text-[#5a5142] ml-1">

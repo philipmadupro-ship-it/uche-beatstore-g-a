@@ -47,7 +47,7 @@ export type TagDeleteBody = z.infer<typeof TagDeleteBodySchema>;
 export const TrackPatchBodySchema = z.object({
   title: z.string().min(1).max(200).optional(),
   type: z.enum(['beat', 'instrumental', 'song', 'remix']).optional(),
-  status: z.enum(['finished', 'needs_work', 'archived']).nullable().optional(),
+  status: z.enum(['finished', 'needs_work', 'archived', 'maq']).nullable().optional(),
   notes: z.string().max(10000).nullable().optional(),
   cover_url: z.string().nullable().optional(),
   peaks_url: z.string().nullable().optional(),
