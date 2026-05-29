@@ -29,7 +29,7 @@ import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { listCached } from '@/lib/offline/audio-cache';
 import { TrackGridCard } from '@/components/tracks/TrackGridCard';
 import MusicPortfolio, { type PortfolioTrack } from '@/components/library/MusicPortfolio';
-import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount } from '@/components/library/FilterBar';
+import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 
 // Sort modes — added so the library is browsable beyond "newest first."
@@ -111,6 +111,43 @@ export default function LibraryPage() {
     statuses: new Set<string>(),
     keys: new Set<string>(),
   }));
+  // ── Smart playlists — saved auto-updating filter views (mig 067) ──
+  const [smartPlaylists, setSmartPlaylists] = useState<Array<{ id: string; name: string; filter: any }>>([]);
+  const [activeSmartId, setActiveSmartId] = useState<string | null>(null);
+  const fetchSmartPlaylists = useCallback(() => {
+    fetch('/api/smart-playlists').then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.smart_playlists) setSmartPlaylists(d.smart_playlists); })
+      .catch(() => undefined);
+  }, []);
+  useEffect(() => { fetchSmartPlaylists(); }, [fetchSmartPlaylists]);
+
+  const saveSmartPlaylist = async () => {
+    const name = window.prompt('Name this smart playlist (e.g. "Finished Drill 140+"):');
+    if (!name?.trim()) return;
+    try {
+      const res = await fetch('/api/smart-playlists', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), filter: { ...serializeFilters(filters), typeFilter } }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed');
+      toast.success('Smart playlist saved', 'It updates automatically as new tracks match.');
+      fetchSmartPlaylists();
+    } catch (e: any) { toast.error('Could not save', e.message); }
+  };
+
+  const applySmartPlaylist = (sp: { id: string; filter: any }) => {
+    setFilters(deserializeFilters(sp.filter));
+    if (typeof sp.filter?.typeFilter === 'string') setTypeFilter(sp.filter.typeFilter);
+    setActiveSmartId(sp.id);
+    setShowFilters(true);
+    setBrowseMode('all');
+  };
+
+  const deleteSmartPlaylist = async (id: string) => {
+    setSmartPlaylists((prev) => prev.filter((s) => s.id !== id));
+    if (activeSmartId === id) setActiveSmartId(null);
+    await fetch(`/api/smart-playlists/${id}`, { method: 'DELETE' }).catch(() => undefined);
+  };
   useEffect(() => {
     const saved = localStorage.getItem('library-view') as 'list' | 'grid' | 'portfolio' | null;
     if (saved === 'list' || saved === 'grid' || saved === 'portfolio') setViewMode(saved);
@@ -1034,6 +1071,30 @@ export default function LibraryPage() {
 
         {showFilters && (
           <FilterBar filters={filters} onChange={setFilters} />
+        )}
+
+        {/* ── Smart playlists — saved auto-updating filter views ──── */}
+        {(smartPlaylists.length > 0 || hasActiveFilters(filters)) && (
+          <div className="flex items-center gap-2 flex-wrap mb-4">
+            <span className="text-[9px] font-mono uppercase tracking-wider text-[#3a3328] shrink-0">Smart playlists:</span>
+            {smartPlaylists.map((sp) => (
+              <span key={sp.id} className={`group inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-[10px] font-medium border transition-all ${
+                activeSmartId === sp.id ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+              }`}>
+                <button onClick={() => applySmartPlaylist(sp)} className="flex items-center gap-1.5">
+                  <Sparkles size={9} />{sp.name}
+                </button>
+                <button onClick={() => deleteSmartPlaylist(sp.id)} className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity ml-0.5" title="Delete smart playlist">
+                  <X size={9} />
+                </button>
+              </span>
+            ))}
+            {hasActiveFilters(filters) && (
+              <button onClick={saveSmartPlaylist} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium border border-dashed border-[#2d2620] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#3a3328] transition-all">
+                <Sparkles size={9} />Save current filter
+              </button>
+            )}
+          </div>
         )}
 
         {/* Upload */}

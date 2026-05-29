@@ -60,6 +60,33 @@ export function activeFilterCount(f: LibraryFilters): number {
   ].filter(Boolean).length;
 }
 
+/** Serialize filters to a plain JSON object (Sets → arrays) for storage. */
+export function serializeFilters(f: LibraryFilters): Record<string, unknown> {
+  return {
+    genres: Array.from(f.genres),
+    statuses: Array.from(f.statuses),
+    bpmMin: f.bpmMin,
+    bpmMax: f.bpmMax,
+    keys: Array.from(f.keys),
+    scale: f.scale,
+    rating: f.rating,
+  };
+}
+
+/** Rehydrate filters from a stored JSON object (arrays → Sets). */
+export function deserializeFilters(raw: any): LibraryFilters {
+  const r = raw ?? {};
+  return {
+    genres: new Set<string>(Array.isArray(r.genres) ? r.genres : []),
+    statuses: new Set<string>(Array.isArray(r.statuses) ? r.statuses : []),
+    bpmMin: typeof r.bpmMin === 'number' ? r.bpmMin : null,
+    bpmMax: typeof r.bpmMax === 'number' ? r.bpmMax : null,
+    keys: new Set<string>(Array.isArray(r.keys) ? r.keys : []),
+    scale: r.scale === 'major' || r.scale === 'minor' ? r.scale : 'all',
+    rating: typeof r.rating === 'number' ? r.rating : null,
+  };
+}
+
 interface FilterBarProps {
   filters: LibraryFilters;
   onChange: (f: LibraryFilters) => void;
