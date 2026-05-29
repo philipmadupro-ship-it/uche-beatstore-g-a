@@ -196,23 +196,24 @@ export function ProjectDetailHeader(props: Props) {
             )}
           </div>
 
-          {/* Featured in Store toggle — mirrors the one in playlist detail.
-              Lets the producer promote this project to the public /store page. */}
-           <div className="flex items-center gap-2 mt-2">
-             <span className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142]">Featured in Store</span>
-             <button
-               onClick={onToggleStoreFeatured}
-               disabled={!onToggleStoreFeatured || storeFeaturedPending}
-               className={`relative inline-flex w-9 h-5 rounded-full transition-colors ${storeFeatured ? 'bg-[#D4BFA0]' : 'bg-[#1f1a13] border border-[#2d2620]'}`}
-               aria-pressed={storeFeatured}
-               title="Toggle visibility on the public /store page"
-             >
-               <span
-                 className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${storeFeatured ? 'translate-x-4' : ''}`}
-               />
-             </button>
-             {storeFeaturedPending && <Loader2 size={10} className="animate-spin text-[#D4BFA0]" />}
-           </div>
+          {/* List in store — prominent pill so it's easy to find */}
+          <div className="mt-2">
+            <button
+              onClick={onToggleStoreFeatured}
+              disabled={!onToggleStoreFeatured || storeFeaturedPending}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all disabled:opacity-40 ${
+                storeFeatured
+                  ? 'bg-[#D4BFA0]/15 border-[#D4BFA0]/40 text-[#D4BFA0]'
+                  : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+              }`}
+              title="Toggle visibility on the public /store page"
+            >
+              {storeFeaturedPending
+                ? <Loader2 size={11} className="animate-spin" />
+                : <span className="text-[10px]">{storeFeatured ? '✓' : '+'}</span>}
+              {storeFeatured ? 'In store' : 'List in store'}
+            </button>
+          </div>
         </div>
 
         {/* Action buttons — pill style matching the rest of the app */}

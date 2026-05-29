@@ -14,7 +14,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Loader2, Receipt, Music, Layers, ExternalLink, Search,
   DollarSign, ShoppingBag, AlertCircle, Send, TrendingUp,
-  ArrowUpRight, Tag, Crown,
+  ArrowUpRight, Tag, Crown, Download,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 
@@ -161,9 +161,39 @@ export default function SalesPage() {
             <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight text-white leading-none font-heading">Sales</h1>
             <p className="text-[12px] text-[#6a5d4a] mt-1.5">Revenue, orders, and license breakdown.</p>
           </div>
-          <Link href="/analytics" className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full border border-[#1f1a13] bg-[#14110d] text-[10px] font-mono text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all">
-            Plays & engagement →
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const rows = [
+                  ['Date', 'Type', 'Item', 'Buyer', 'Amount (USD)', 'License', 'Status'],
+                  ...visibleSales.map((s) => [
+                    new Date(s.created_at).toISOString().slice(0, 10),
+                    s.kind,
+                    s.item_label,
+                    s.buyer_email,
+                    s.amount_usd != null ? s.amount_usd.toFixed(2) : '',
+                    s.license_type ?? '',
+                    s.status,
+                  ]),
+                ];
+                const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `sales-${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-[#1f1a13] bg-[#14110d] text-[10px] font-mono text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all"
+              title="Export visible sales as CSV"
+            >
+              <Download size={11} />
+              Export CSV
+            </button>
+            <Link href="/analytics" className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full border border-[#1f1a13] bg-[#14110d] text-[10px] font-mono text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all">
+              Plays & engagement →
+            </Link>
+          </div>
         </div>
 
         {/* ── KPI strip — 4 cols on small, 8 on large ─────────────── */}

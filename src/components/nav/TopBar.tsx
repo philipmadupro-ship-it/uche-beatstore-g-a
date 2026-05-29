@@ -103,6 +103,12 @@ export function TopBar() {
   };
 
   useEffect(() => { fetchNotifs(); }, []);
+  // 60-second polling fallback in case the realtime subscription doesn't fire
+  // (e.g. the notifications table isn't in the realtime publication yet).
+  useEffect(() => {
+    const id = setInterval(fetchNotifs, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   useRealtimeTable({
     table: 'notifications',

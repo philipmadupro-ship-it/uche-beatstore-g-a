@@ -99,6 +99,8 @@ export default function LibraryPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkEditing, setBulkEditing] = useState(false);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [shareTarget, setShareTarget] = useState<Track | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid' | 'portfolio'>('list');
@@ -1256,48 +1258,112 @@ export default function LibraryPage() {
         />
       )}
 
-      {/* Batch-delete bar — visible only in select mode with ≥1 chosen.
-          Loops the existing DELETE /api/tracks/[id] (already gated by
-          requireRowOwnership + cascades on project/playlist junctions).
-          No bulk endpoint needed; parallel HTTP keeps wall time flat. */}
+      {/* Batch action bar */}
       <BatchActionBar
         count={selectedIds.size}
         noun={['track', 'tracks']}
-        onClear={() => setSelectedIds(new Set())}
-        busy={bulkDeleting}
-        actions={[{
-          label: 'Delete',
-          icon: <DeleteIcon size={11} />,
-          intent: 'danger',
-          onClick: async () => {
-            const ok = await confirmToast(
-              `Delete ${selectedIds.size} track${selectedIds.size === 1 ? '' : 's'}?`,
-              'Permanently removes the audio files, stems, and history. Cannot be undone.',
-              { confirmLabel: 'Delete', cancelLabel: 'Keep', danger: true },
-            );
-            if (!ok) return;
-            setBulkDeleting(true);
-            const ids = Array.from(selectedIds);
-            const results = await Promise.allSettled(
-              ids.map((id) =>
-                fetch(`/api/tracks/${id}`, { method: 'DELETE' }).then((r) => {
-                  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                }),
-              ),
-            );
-            const failed = results.filter((r) => r.status === 'rejected').length;
-            setBulkDeleting(false);
-            setSelectedIds(new Set());
-            setSelectMode(false);
-            await fetchTracks();
-            if (failed === 0) {
-              toast.success(`Deleted ${ids.length} track${ids.length === 1 ? '' : 's'}`);
-            } else {
-              toast.warning(`Deleted ${ids.length - failed}, ${failed} failed`);
-            }
+        onClear={() => { setSelectedIds(new Set()); setBulkEditOpen(false); }}
+        busy={bulkDeleting || bulkEditing}
+        actions={[
+          {
+            label: bulkEditOpen ? 'Close' : 'Edit',
+            icon: <SlidersHorizontal size={11} />,
+            intent: bulkEditOpen ? 'primary' : 'default',
+            onClick: () => setBulkEditOpen((v) => !v),
           },
-        }]}
+          {
+            label: 'Delete',
+            icon: <DeleteIcon size={11} />,
+            intent: 'danger',
+            onClick: async () => {
+              const ok = await confirmToast(
+                `Delete ${selectedIds.size} track${selectedIds.size === 1 ? '' : 's'}?`,
+                'Permanently removes the audio files, stems, and history. Cannot be undone.',
+                { confirmLabel: 'Delete', cancelLabel: 'Keep', danger: true },
+              );
+              if (!ok) return;
+              setBulkDeleting(true);
+              const ids = Array.from(selectedIds);
+              const results = await Promise.allSettled(
+                ids.map((id) =>
+                  fetch(`/api/tracks/${id}`, { method: 'DELETE' }).then((r) => {
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                  }),
+                ),
+              );
+              const failed = results.filter((r) => r.status === 'rejected').length;
+              setBulkDeleting(false);
+              setSelectedIds(new Set());
+              setSelectMode(false);
+              setBulkEditOpen(false);
+              await fetchTracks();
+              if (failed === 0) toast.success(`Deleted ${ids.length} track${ids.length === 1 ? '' : 's'}`);
+              else toast.warning(`Deleted ${ids.length - failed}, ${failed} failed`);
+            },
+          },
+        ]}
       />
+      {/* Bulk edit popover */}
+      {bulkEditOpen && selectedIds.size > 0 && (
+        <div className="fixed bottom-44 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-2 fade-in duration-200">
+          <div className="bg-[#14110d] border border-[#1f1a13] rounded-2xl shadow-2xl p-4 w-72 space-y-3">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142]">
+              Edit {selectedIds.size} track{selectedIds.size === 1 ? '' : 's'}
+            </p>
+            {/* Batch status */}
+            <div>
+              <p className="text-[9px] font-mono uppercase tracking-wider text-[#3a3328] mb-1.5">Set status</p>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { v: 'maq', l: 'MAQ', cls: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
+                  { v: 'needs_work', l: 'WIP', cls: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]' },
+                  { v: 'finished', l: 'Finished', cls: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
+                  { v: 'archived', l: 'Archived', cls: 'bg-[#16130e] text-[#6a5d4a] border-[#1f1a13]' },
+                ].map(({ v, l, cls }) => (
+                  <button
+                    key={v}
+                    disabled={bulkEditing}
+                    onClick={async () => {
+                      setBulkEditing(true);
+                      const ids = Array.from(selectedIds);
+                      await Promise.allSettled(ids.map((id) =>
+                        fetch(`/api/tracks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: v }) })
+                      ));
+                      setBulkEditing(false);
+                      await fetchTracks();
+                      toast.success(`Set ${ids.length} tracks to ${l}`);
+                    }}
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all disabled:opacity-40 ${cls}`}
+                  >{l}</button>
+                ))}
+              </div>
+            </div>
+            {/* Batch store list */}
+            <div className="flex gap-2">
+              {[
+                { label: 'List in store', val: true },
+                { label: 'Unlist', val: false },
+              ].map(({ label, val }) => (
+                <button
+                  key={String(val)}
+                  disabled={bulkEditing}
+                  onClick={async () => {
+                    setBulkEditing(true);
+                    const ids = Array.from(selectedIds);
+                    await Promise.allSettled(ids.map((id) =>
+                      fetch(`/api/tracks/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ store_listed: val }) })
+                    ));
+                    setBulkEditing(false);
+                    await fetchTracks();
+                    toast.success(`${val ? 'Listed' : 'Unlisted'} ${ids.length} track${ids.length === 1 ? '' : 's'}`);
+                  }}
+                  className="flex-1 px-3 py-1.5 rounded-lg border border-[#1f1a13] bg-[#0a0907] text-[10px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all disabled:opacity-40"
+                >{label}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
