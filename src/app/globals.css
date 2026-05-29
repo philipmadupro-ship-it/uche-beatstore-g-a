@@ -314,6 +314,28 @@ html {
   animation: blink 1s step-start infinite;
 }
 
+/* Skeleton shimmer — sweeping highlight for loading placeholders.
+   Warmer + more premium than a flat pulse. Respects reduced-motion. */
+@keyframes skeletonShimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    #16130e 25%,
+    #211c14 50%,
+    #16130e 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer { animation: none; }
+}
+
 /* ── MusicArtwork (vinyl peek + spin) ──────────────────────────────────
    Slides the vinyl record out from behind the cover on hover. Spin uses
    the existing `vinylSpin` keyframe; pause freezes via animationPlayState.

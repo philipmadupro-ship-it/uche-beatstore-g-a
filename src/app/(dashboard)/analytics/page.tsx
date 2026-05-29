@@ -15,6 +15,7 @@ import {
   TrendingUp, Radio, ExternalLink, SlidersHorizontal, X, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
+import { SkeletonStatStrip, SkeletonList } from '@/components/ui/Skeleton';
 
 // ── Types ────────────────────────────────────────────────────────
 interface Totals { plays: number; sales_count: number; gross_usd: number }
@@ -302,9 +303,10 @@ export default function AnalyticsPage() {
         </div>
 
         {loading ? (
-          <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] py-20 flex items-center justify-center">
-            <Loader2 size={18} className="animate-spin text-[#4a4338]" />
-          </div>
+          <>
+            <SkeletonStatStrip count={3} />
+            <SkeletonList rows={8} />
+          </>
         ) : error ? (
           <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-6 flex items-start gap-3">
             <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />

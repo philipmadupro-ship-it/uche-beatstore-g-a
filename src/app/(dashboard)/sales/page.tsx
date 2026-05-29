@@ -17,6 +17,7 @@ import {
   ArrowUpRight, Tag, Crown, Download,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { SkeletonList } from '@/components/ui/Skeleton';
 
 interface Sale {
   id: string;
@@ -292,9 +293,7 @@ export default function SalesPage() {
 
         {/* Body */}
         {loading ? (
-          <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] py-20 flex items-center justify-center">
-            <Loader2 size={18} className="animate-spin text-[#4a4338]" />
-          </div>
+          <SkeletonList rows={8} />
         ) : error ? (
           <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-6 flex items-start gap-3">
             <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />

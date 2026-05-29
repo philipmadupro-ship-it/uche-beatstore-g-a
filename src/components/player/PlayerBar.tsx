@@ -11,6 +11,7 @@ import { QueueDrawer } from './QueueDrawer';
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
+import { extractCoverColor } from '@/lib/audio/cover-color';
 
 /**
  * Floating mini-player pill, centered along the bottom edge.
@@ -26,7 +27,7 @@ import { cn } from '@/lib/utils';
 export function PlayerBar() {
   const {
     currentTrack, isPlaying, togglePlay, next, prev,
-    volume, setVolume, progress, queue,
+    volume, setVolume, progress, queue, seekTo,
     // Pulled from the store now, not local useState — local state
     // was decorative; the playback engine in usePlayer reads these
     // values to decide auto-advance / shuffle order.
@@ -50,6 +51,44 @@ export function PlayerBar() {
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
+
+  // ── Ambient color from cover art ────────────────────────────────
+  // Extracted once per cover and used to tint the Now Playing overlay.
+  const [ambient, setAmbient] = useState<string | null>(null);
+  const coverUrl = currentTrack?.cover_url ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    if (!coverUrl) { setAmbient(null); return; }
+    extractCoverColor(coverUrl).then((c) => { if (!cancelled) setAmbient(c); });
+    return () => { cancelled = true; };
+  }, [coverUrl]);
+
+  // ── Global keyboard shortcuts ───────────────────────────────────
+  // Space play/pause · ←/→ seek 5s · ↑/↓ volume · n/p next/prev · m mute.
+  // Ignored while the user is typing in a field or a modal input.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const dur = currentTrack?.duration_seconds || 0;
+      switch (e.key) {
+        case ' ': e.preventDefault(); togglePlay(); break;
+        case 'ArrowRight': if (dur > 0) { e.preventDefault(); seekTo(Math.min(1, progress + 5 / dur)); } break;
+        case 'ArrowLeft':  if (dur > 0) { e.preventDefault(); seekTo(Math.max(0, progress - 5 / dur)); } break;
+        case 'ArrowUp':   e.preventDefault(); setVolume(Math.min(1, volume + 0.1)); break;
+        case 'ArrowDown': e.preventDefault(); setVolume(Math.max(0, volume - 0.1)); break;
+        case 'n': case 'N': next(); break;
+        case 'p': case 'P': prev(); break;
+        case 'm': case 'M':
+          if (volume > 0) { prevVolumeRef.current = volume; setVolume(0); }
+          else setVolume(prevVolumeRef.current || 0.8);
+          break;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [currentTrack, progress, volume, togglePlay, next, prev, seekTo, setVolume]);
 
   if (!currentTrack) return null;
 
@@ -252,8 +291,15 @@ export function PlayerBar() {
           the pill's stacking context and covers everything. */}
       {mounted && nowPlayingOpen && createPortal(
         <div className="fixed inset-0 z-[200] flex flex-col animate-in fade-in duration-300">
-          {/* Blurred album-art background */}
+          {/* Ambient color wash extracted from the cover, layered under a
+              blurred copy of the art — the Spotify now-playing treatment. */}
           <div className="absolute inset-0">
+            {ambient && (
+              <div
+                className="absolute inset-0 transition-colors duration-700"
+                style={{ background: `linear-gradient(180deg, ${ambient} 0%, #0a0907 75%)` }}
+              />
+            )}
             {currentTrack.cover_url ? (
               <img
                 src={currentTrack.cover_url}
@@ -261,7 +307,7 @@ export function PlayerBar() {
                 className="w-full h-full object-cover scale-110 blur-3xl opacity-30"
               />
             ) : null}
-            <div className="absolute inset-0 bg-[#0a0907]/85" />
+            <div className="absolute inset-0 bg-[#0a0907]/80" />
           </div>
 
           {/* Content */}
