@@ -10,9 +10,10 @@ import {
   Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid,
   SlidersHorizontal, Store, FolderOpen, ListMusic, Users, BarChart2,
   ShoppingBag, ArrowRight, AlertCircle, TrendingUp, DollarSign,
-  Upload, PlusSquare,
+  Upload, Rocket, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { DropZone } from '@/components/upload/DropZone';
@@ -111,6 +112,29 @@ export default function LibraryPage() {
   }, []);
   useEffect(() => { localStorage.setItem('library-view', viewMode); }, [viewMode]);
   const { setTrack, setQueue, currentTrack, isPlaying } = usePlayer();
+  const router = useRouter();
+
+  // ── New Release: create project + playlist in one move ──────────
+  const [creatingRelease, setCreatingRelease] = useState(false);
+  const handleNewRelease = async () => {
+    if (creatingRelease) return;
+    setCreatingRelease(true);
+    try {
+      const [projRes, playRes] = await Promise.all([
+        fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }),
+        fetch('/api/playlists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }),
+      ]);
+      const [projData, playData] = await Promise.all([projRes.json(), playRes.json()]);
+      if (!projRes.ok) throw new Error(projData.error || 'Project creation failed');
+      if (!playRes.ok) throw new Error(playData.error || 'Playlist creation failed');
+      toast.success('New release started', `Project & playlist created — add tracks and cover art.`);
+      router.push(`/projects/${projData.project.id}`);
+    } catch (err: any) {
+      toast.error('Could not create release', err.message);
+    } finally {
+      setCreatingRelease(false);
+    }
+  };
 
   const fetchTracks = async () => {
     setLoading(true);
@@ -221,6 +245,49 @@ export default function LibraryPage() {
 
   const currentHeroTrack = currentTrack || filtered[0] || null;
   const heroCoverUrl = currentHeroTrack?.cover_url || null;
+
+  // ── Browse mode: 'sections' (homepage-style) or 'all' (paginated list) ──
+  const [browseMode, setBrowseMode] = useState<'sections' | 'all'>('sections');
+  const [currentPage, setCurrentPage] = useState(0);
+  const PAGE_SIZE = 50;
+
+  // Reset page when filters change
+  useEffect(() => { setCurrentPage(0); }, [search, typeFilter, offlineOnly, sortMode, filters]);
+
+  // Paginated slice for 'all' view
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const pageTracks = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+
+  // ── Sections for homepage-style browse ──────────────────────────
+  const sections = useMemo(() => {
+    // All tracks newest-first for recency section
+    const byDate = [...tracks].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+    const all = tracks;
+    const result: Array<{ title: string; tracks: Track[] }> = [];
+
+    const recentlyAdded = byDate.slice(0, 10);
+    if (recentlyAdded.length) result.push({ title: 'Recently Added', tracks: recentlyAdded });
+
+    const beats = all.filter((t) => t.type === 'beat').slice(0, 10);
+    if (beats.length) result.push({ title: 'Beats', tracks: beats });
+
+    const instrumentals = all.filter((t) => t.type === 'instrumental').slice(0, 10);
+    if (instrumentals.length) result.push({ title: 'Instrumentals', tracks: instrumentals });
+
+    const highBpm = all.filter((t) => t.bpm != null && t.bpm >= 130).sort((a, b) => (b.bpm ?? 0) - (a.bpm ?? 0)).slice(0, 10);
+    if (highBpm.length) result.push({ title: 'High Tempo · 130+ BPM', tracks: highBpm });
+
+    const midBpm = all.filter((t) => t.bpm != null && t.bpm >= 90 && t.bpm < 130).slice(0, 10);
+    if (midBpm.length) result.push({ title: 'Mid Tempo · 90–129 BPM', tracks: midBpm });
+
+    const lowBpm = all.filter((t) => t.bpm != null && t.bpm < 90).slice(0, 10);
+    if (lowBpm.length) result.push({ title: 'Low Tempo · <90 BPM', tracks: lowBpm });
+
+    const listed = all.filter((t: any) => t.store_listed).slice(0, 10);
+    if (listed.length) result.push({ title: 'In Your Store', tracks: listed });
+
+    return result;
+  }, [tracks]);
 
   // Total library duration shown in the hero.
   const totalDurationLabel = useMemo(() => {
@@ -531,19 +598,29 @@ export default function LibraryPage() {
         {/* ── Quick actions ──────────────────────────────────────── */}
         <div className="flex items-center gap-2 mb-5 flex-wrap">
           {[
-            { label: 'Upload beat', icon: <Upload size={13} />, action: () => document.querySelector<HTMLElement>('[data-dropzone]')?.click() ?? window.scrollTo({ top: 9999, behavior: 'smooth' }) },
-            { label: 'New playlist', icon: <PlusSquare size={13} />, href: '/playlists' },
+            { label: 'Upload beat', icon: <Upload size={13} />, action: () => window.scrollTo({ top: 9999, behavior: 'smooth' }) },
+            { label: 'New release', icon: <Rocket size={13} />, action: handleNewRelease, loading: creatingRelease, accent: true },
             { label: 'Store editor', icon: <Store size={13} />, href: '/store-editor' },
             { label: 'View sales', icon: <ShoppingBag size={13} />, href: '/sales' },
             { label: 'Analytics', icon: <BarChart2 size={13} />, href: '/analytics' },
           ].map((item) =>
             item.href ? (
-              <Link key={item.label} href={item.href} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#14110d] border border-[#1f1a13] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] hover:bg-[#18140f] transition-all">
+              <Link key={item.label} href={(item as any).href} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#14110d] border border-[#1f1a13] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] hover:bg-[#18140f] transition-all">
                 {item.icon}{item.label}
               </Link>
             ) : (
-              <button key={item.label} onClick={item.action} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#14110d] border border-[#1f1a13] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] hover:bg-[#18140f] transition-all">
-                {item.icon}{item.label}
+              <button
+                key={item.label}
+                onClick={(item as any).action}
+                disabled={(item as any).loading}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-[11px] font-medium transition-all disabled:opacity-60 ${
+                  (item as any).accent
+                    ? 'bg-[#D4BFA0] text-black hover:bg-[#E8D8B8] shadow-sm'
+                    : 'bg-[#14110d] border border-[#1f1a13] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] hover:bg-[#18140f]'
+                }`}
+              >
+                {(item as any).loading ? <Loader2 size={13} className="animate-spin" /> : item.icon}
+                {item.label}
               </button>
             )
           )}
@@ -646,17 +723,66 @@ export default function LibraryPage() {
           </div>
         </div>
 
-        {/* ── Library section header ─────────────────────────────── */}
+        {/* ── Library section header + browse toggle ─────────────── */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Music size={13} className="text-[#5a5142]" />
             <h2 className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#a08a6a]">Library</h2>
             <span className="text-[9px] font-mono text-[#3a3328] tabular-nums">· {tracks.length}</span>
           </div>
+          {/* Browse mode toggle */}
+          <div className="flex items-center bg-white/[0.04] border border-white/[0.06] rounded-full p-0.5">
+            <button
+              onClick={() => setBrowseMode('sections')}
+              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${browseMode === 'sections' ? 'bg-white text-black' : 'text-[#6a5d4a] hover:text-[#a08a6a]'}`}
+            >Browse</button>
+            <button
+              onClick={() => setBrowseMode('all')}
+              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${browseMode === 'all' ? 'bg-white text-black' : 'text-[#6a5d4a] hover:text-[#a08a6a]'}`}
+            >All tracks</button>
+          </div>
         </div>
 
+        {/* ── Sections view (Browse mode) ────────────────────────── */}
+        {browseMode === 'sections' && !loading && (
+          <div className="mb-6 space-y-6">
+            {sections.length === 0 ? (
+              <p className="text-[12px] text-[#5a5142] py-8 text-center">Upload your first track to see sections here.</p>
+            ) : sections.map((sec) => (
+              <div key={sec.title}>
+                <div className="flex items-center justify-between mb-2.5">
+                  <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#a08a6a]">{sec.title}</h3>
+                  <button
+                    onClick={() => { setBrowseMode('all'); }}
+                    className="text-[9px] font-mono text-[#5a5142] hover:text-[#a08a6a] transition-colors"
+                  >See all →</button>
+                </div>
+                {/* Horizontal scrolling row of mini cards */}
+                <div className="flex gap-2.5 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide">
+                  {sec.tracks.map((t) => (
+                    <MiniTrackCard
+                      key={t.id}
+                      track={t}
+                      isCurrent={currentTrack?.id === t.id}
+                      isPlaying={isPlaying && currentTrack?.id === t.id}
+                      onPlay={() => { setTrack(t); setQueue(sec.tracks); }}
+                      onOpen={() => { setSelectedTrack(t); playTrack(t); }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+            {/* Upload zone in sections view too */}
+            <div className="pt-2">
+              <DropZone onUploadSuccess={fetchTracks} />
+            </div>
+          </div>
+        )}
+
         {/* Filter chips — Beat and Instrumental are mutually exclusive
-            single-type filters. "All" resets. */}
+            single-type filters. "All" resets. Only shown in 'all' list view. */}
+        {browseMode === 'all' && (
+          <>
         <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
           {([
             { value: 'all',          label: 'All' },
@@ -881,34 +1007,37 @@ export default function LibraryPage() {
               })}
               <span />
             </div>
-            {filtered.map((t: any, i: number) => (
-              <TrackCard
-                key={t.id}
-                track={t}
-                index={i + 1}
-                onClickDetails={(track) => { setSelectedTrack(track); playTrack(track); }}
-                onPlayClick={() => playTrack(t)}
-                onDelete={(track) => handleDeleteTrack(track)}
-                onShare={(track) => setShareTarget(track)}
-                selectable={selectMode && sortMode !== 'store_order'}
-                selected={selectedIds.has(t.id)}
-                onSelectChange={(track, sel) => setSelectedIds((prev) => {
-                  const next = new Set(prev);
-                  if (sel) next.add(track.id); else next.delete(track.id);
-                  return next;
-                })}
-                {...(sortMode === 'store_order' ? {
-                  onMoveUp: () => moveTrack(i, i - 1),
-                  onMoveDown: () => moveTrack(i, i + 1),
-                  isFirstInOrder: i === 0,
-                  isLastInOrder: i === filtered.length - 1,
-                } : {})}
-              />
-            ))}
+            {pageTracks.map((t: any, i: number) => {
+              const absIdx = currentPage * PAGE_SIZE + i;
+              return (
+                <TrackCard
+                  key={t.id}
+                  track={t}
+                  index={absIdx + 1}
+                  onClickDetails={(track) => { setSelectedTrack(track); playTrack(track); }}
+                  onPlayClick={() => playTrack(t)}
+                  onDelete={(track) => handleDeleteTrack(track)}
+                  onShare={(track) => setShareTarget(track)}
+                  selectable={selectMode && sortMode !== 'store_order'}
+                  selected={selectedIds.has(t.id)}
+                  onSelectChange={(track, sel) => setSelectedIds((prev) => {
+                    const next = new Set(prev);
+                    if (sel) next.add(track.id); else next.delete(track.id);
+                    return next;
+                  })}
+                  {...(sortMode === 'store_order' ? {
+                    onMoveUp: () => moveTrack(absIdx, absIdx - 1),
+                    onMoveDown: () => moveTrack(absIdx, absIdx + 1),
+                    isFirstInOrder: absIdx === 0,
+                    isLastInOrder: absIdx === filtered.length - 1,
+                  } : {})}
+                />
+              );
+            })}
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-32">
-            {filtered.map((t) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
+            {pageTracks.map((t) => (
               <TrackGridCard
                 key={t.id}
                 track={t}
@@ -927,6 +1056,47 @@ export default function LibraryPage() {
             ))}
           </div>
         )}
+
+        {/* ── Pagination controls (all view) ─────────────────────── */}
+        {browseMode === 'all' && totalPages > 1 && (
+          <div className="flex items-center justify-between py-4 mb-24 border-t border-[#1a160f]">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+              disabled={currentPage === 0}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-[#1f1a13] bg-[#14110d] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >
+              <ChevronLeft size={13} /> Previous
+            </button>
+            <div className="flex items-center gap-1.5">
+              {Array.from({ length: Math.min(7, totalPages) }, (_, i) => {
+                // Show first, last, current ± 1, with ellipsis
+                const page = totalPages <= 7 ? i : (i === 0 ? 0 : i === 6 ? totalPages - 1 : currentPage - 2 + i);
+                if (page < 0 || page >= totalPages) return null;
+                return (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`w-7 h-7 rounded-full text-[11px] font-mono tabular-nums transition-colors ${
+                      page === currentPage
+                        ? 'bg-white text-black font-bold'
+                        : 'text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-white/[0.06]'
+                    }`}
+                  >{page + 1}</button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+              disabled={currentPage >= totalPages - 1}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-[#1f1a13] bg-[#14110d] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            >
+              Next <ChevronRight size={13} />
+            </button>
+          </div>
+        )}
+
+        </>
+        )}{/* end browseMode === 'all' */}
       </div>
 
       {selectedTrack && (
@@ -990,5 +1160,56 @@ export default function LibraryPage() {
         }]}
       />
     </DashboardLayout>
+  );
+}
+
+// ── MiniTrackCard — compact card for the sections/browse row ─────
+function MiniTrackCard({
+  track,
+  isCurrent,
+  isPlaying,
+  onPlay,
+  onOpen,
+}: {
+  track: Track;
+  isCurrent: boolean;
+  isPlaying: boolean;
+  onPlay: () => void;
+  onOpen: () => void;
+}) {
+  return (
+    <div
+      className="group relative shrink-0 w-[130px] sm:w-[150px] cursor-pointer"
+      onClick={onOpen}
+    >
+      {/* Cover art */}
+      <div className={`relative w-full aspect-square rounded-xl overflow-hidden bg-[#14110d] border mb-2 transition-all ${isCurrent ? 'border-[#D4BFA0]/60 ring-1 ring-[#D4BFA0]/30' : 'border-[#1f1a13] group-hover:border-[#2d2620]'}`}>
+        {track.cover_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1a160f] to-[#0a0907]">
+            <Music size={24} className="text-[#3a3328]" />
+          </div>
+        )}
+        {/* Play overlay */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onPlay(); }}
+          className={`absolute inset-0 flex items-center justify-center transition-all ${isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+          aria-label="Play"
+        >
+          <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
+            {isPlaying
+              ? <div className="flex items-end gap-[2px] h-4">{[3,5,7,5,3].map((h,i)=><span key={i} className="w-[3px] rounded-sm bg-[#D4BFA0] animate-bounce" style={{height:h,animationDelay:`${i*80}ms`}}/>)}</div>
+              : <Play size={14} fill="white" className="text-white ml-0.5" />}
+          </div>
+        </button>
+      </div>
+      {/* Meta */}
+      <p className={`text-[11px] font-medium truncate leading-tight ${isCurrent ? 'text-[#D4BFA0]' : 'text-[#E8DCC8]'}`}>{track.title}</p>
+      <p className="text-[9px] font-mono text-[#5a5142] mt-0.5 truncate">
+        {[track.bpm && `${track.bpm}`, track.key && `${track.key}${track.scale === 'minor' ? 'm' : ''}`].filter(Boolean).join(' · ') || track.type || '—'}
+      </p>
+    </div>
   );
 }
