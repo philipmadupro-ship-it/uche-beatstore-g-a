@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast } from '@/hooks/useToast';
+import { getBuyerToken } from '@/lib/buyer-session';
 import type { Track } from '@/lib/types';
 
 /* ─── Types ─────────────────────────────────────────────────── */
@@ -120,16 +121,32 @@ export default function ProducerPage({
   const handleFollow = () => {
     if (!creator?.user_id) return;
     const followed = getFollowedProducers();
-    if (followed.has(creator.user_id)) {
+    const willFollow = !followed.has(creator.user_id);
+    // Instant optimistic localStorage feedback (works anonymous too).
+    if (willFollow) {
+      followed.add(creator.user_id);
+      setIsFollowing(true);
+      toast.success('Following', `You'll be notified when ${creator.display_name || 'this producer'} drops new beats.`);
+    } else {
       followed.delete(creator.user_id);
       setIsFollowing(false);
       toast.info('Unfollowed', `You unfollowed ${creator.display_name || 'this producer'}`);
-    } else {
-      followed.add(creator.user_id);
-      setIsFollowing(true);
-      toast.success('Following', `You're now following ${creator.display_name || 'this producer'}`);
     }
     setFollowedProducers(followed);
+
+    // Best-effort DB persistence so the producer can see + notify followers.
+    // If the buyer has no identity (no token), the API returns needsEmail
+    // and we silently keep the localStorage follow — no friction.
+    const token = getBuyerToken();
+    fetch('/api/store/follow', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        producer_user_id: creator.user_id,
+        action: willFollow ? 'follow' : 'unfollow',
+        token: token ?? undefined,
+      }),
+    }).catch(() => undefined);
   };
 
   const handlePlayTrack = (t: Track) => {
