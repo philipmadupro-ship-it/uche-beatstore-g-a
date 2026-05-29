@@ -228,10 +228,60 @@ export async function GET(
       admin.from('track_tags').select('tag, category').eq('track_id', id),
     ]);
 
+    // ── "Fans also bought" — collaborative filtering ────────────────
+    // Buyers who bought THIS track, then the other tracks those same
+    // buyers bought, ranked by co-purchase frequency. Best-effort: any
+    // failure (missing column, no sales) just yields an empty strip.
+    let fansAlsoBought: any[] = [];
+    if (sellerId) {
+      try {
+        const { data: withThis } = await admin
+          .from('license_purchases')
+          .select('buyer_email, track_ids')
+          .eq('seller_user_id', sellerId)
+          .eq('status', 'paid')
+          .contains('track_ids', [id]);
+
+        const buyers = [...new Set((withThis ?? []).map((p: any) => p.buyer_email).filter(Boolean))];
+        if (buyers.length > 0) {
+          const { data: theirPurchases } = await admin
+            .from('license_purchases')
+            .select('track_ids')
+            .eq('seller_user_id', sellerId)
+            .eq('status', 'paid')
+            .in('buyer_email', buyers);
+
+          // Tally co-purchased track ids (excluding the current track)
+          const counts = new Map<string, number>();
+          for (const p of (theirPurchases ?? []) as any[]) {
+            for (const tid of (p.track_ids ?? [])) {
+              if (tid && tid !== id) counts.set(tid, (counts.get(tid) ?? 0) + 1);
+            }
+          }
+          const rankedIds = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([tid]) => tid);
+          if (rankedIds.length > 0) {
+            const { data: fanTracks } = await admin
+              .from('tracks')
+              .select(TRACK_FIELDS)
+              .eq('store_listed', true)
+              .in('id', rankedIds);
+            // Preserve the co-purchase ranking order
+            const order = new Map(rankedIds.map((tid, i) => [tid, i]));
+            fansAlsoBought = (fanTracks ?? []).sort(
+              (a: any, b: any) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99),
+            );
+          }
+        }
+      } catch {
+        // Non-fatal — collaborative data is a bonus, not required.
+      }
+    }
+
     // Strip user_id off every track before responding
     const stripUserId = ({ user_id: _u, ...rest }: any) => rest;
     const safeTrack = stripUserId(track);
     const safeRelated = related.map(stripUserId);
+    const safeFans = fansAlsoBought.map(stripUserId);
 
     return NextResponse.json({
       track: safeTrack,
@@ -239,6 +289,7 @@ export async function GET(
       licenses,
       tags: tagsRes.data ?? [],
       related: safeRelated,
+      fans_also_bought: safeFans,
     });
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });

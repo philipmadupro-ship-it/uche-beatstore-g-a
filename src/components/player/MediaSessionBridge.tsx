@@ -23,6 +23,8 @@ export function MediaSessionBridge() {
   const next = usePlayer((s) => s.next);
   const prev = usePlayer((s) => s.prev);
   const setPlaying = usePlayer((s) => s.setPlaying);
+  const progress = usePlayer((s) => s.progress);
+  const seekTo = usePlayer((s) => s.seekTo);
 
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
@@ -50,16 +52,39 @@ export function MediaSessionBridge() {
     navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
   }, [currentTrack, isPlaying]);
 
+  // Position state — drives the OS-level scrubber (lock screen, macOS Now
+  // Playing widget, Bluetooth displays). Updated as progress advances so
+  // the scrubber tracks playback and the elapsed/remaining times are right.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    const dur = currentTrack?.duration_seconds || 0;
+    if (!currentTrack || dur <= 0 || typeof navigator.mediaSession.setPositionState !== 'function') return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: dur,
+        position: Math.max(0, Math.min(dur, progress * dur)),
+        playbackRate: 1,
+      });
+    } catch {
+      // Some browsers throw if position > duration mid-transition; ignore.
+    }
+  }, [currentTrack, progress]);
+
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
 
+    const dur = () => usePlayer.getState().currentTrack?.duration_seconds || 0;
     const handlers: Array<[MediaSessionAction, MediaSessionActionHandler]> = [
       ['play',          () => setPlaying(true)],
       ['pause',         () => setPlaying(false)],
       ['stop',          () => setPlaying(false)],
       ['nexttrack',     () => next()],
       ['previoustrack', () => prev()],
-      ['togglemicrophone' as MediaSessionAction, () => togglePlay()],
+      // OS scrubber drag → seek to absolute time.
+      ['seekto', (d: any) => { const t = dur(); if (t > 0 && typeof d?.seekTime === 'number') seekTo(d.seekTime / t); }],
+      // Hardware ±10s (headphone double-tap, lock-screen skip buttons).
+      ['seekforward',  (d: any) => { const t = dur(); if (t > 0) seekTo(Math.min(1, usePlayer.getState().progress + (d?.seekOffset ?? 10) / t)); }],
+      ['seekbackward', (d: any) => { const t = dur(); if (t > 0) seekTo(Math.max(0, usePlayer.getState().progress - (d?.seekOffset ?? 10) / t)); }],
     ];
 
     for (const [action, handler] of handlers) {
@@ -79,7 +104,7 @@ export function MediaSessionBridge() {
         }
       }
     };
-  }, [togglePlay, next, prev, setPlaying]);
+  }, [togglePlay, next, prev, setPlaying, seekTo]);
 
   return null;
 }

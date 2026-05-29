@@ -149,6 +149,7 @@ export default function StoreProductPage({
         licenses: ((json.licenses ?? []) as ApiLicenseTier[]).map(mapToUiTier),
         tags: (json.tags ?? []) as Array<{ tag: string; category: string }>,
         related: (json.related ?? []) as Track[],
+        fansAlsoBought: (json.fans_also_bought ?? []) as Track[],
       };
     },
     retry: false,
@@ -158,6 +159,7 @@ export default function StoreProductPage({
   const licenses = data?.licenses ?? [];
   const tags = data?.tags ?? [];
   const related = data?.related ?? [];
+  const fansAlsoBought = data?.fansAlsoBought ?? [];
   const notFound = isError || (!loading && !track);
 
   if (loading) {
@@ -505,6 +507,22 @@ export default function StoreProductPage({
             trackDurationSeconds={track.duration_seconds}
             accentColor={creator?.accent_color || '#D4BFA0'}
           />
+        )}
+
+        {/* ── Fans also bought (collaborative filtering) ── */}
+        {fansAlsoBought.length > 0 && (
+          <section className="mt-16">
+            <div className="flex items-center gap-2 mb-5">
+              <p className="text-[10px] font-mono uppercase tracking-[0.25em]" style={{ color: creator?.accent_color || '#D4BFA0' }}>
+                Fans also bought
+              </p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
+              {fansAlsoBought.map((r) => (
+                <RelatedCard key={r.id} track={r} />
+              ))}
+            </div>
+          </section>
         )}
 
         {/* ── Related tracks ── */}

@@ -12,6 +12,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { extractCoverColor } from '@/lib/audio/cover-color';
+import { audioSrc } from '@/lib/audio/url';
 
 /**
  * Floating mini-player pill, centered along the bottom edge.
@@ -33,6 +34,26 @@ export function PlayerBar() {
     // values to decide auto-advance / shuffle order.
     shuffle, toggleShuffle, repeat, cycleRepeat,
   } = usePlayer();
+
+  // ── Preload the next track for near-gapless advance ──────────────
+  // The gap between tracks today is the next file's network fetch. We
+  // warm the browser HTTP cache (audio + peaks sidecar) for the next
+  // sequential track while the current one plays, so useWaveSurfer's
+  // load() resolves instantly on advance. Skipped in shuffle (next is
+  // unpredictable) and when paused (don't burn data in the background).
+  useEffect(() => {
+    if (!isPlaying || shuffle || !currentTrack || queue.length === 0) return;
+    const idx = queue.findIndex((t) => t.id === currentTrack.id);
+    const upcoming = queue[idx + 1] ?? (repeat === 'all' ? queue[0] : null);
+    if (!upcoming?.audio_url || upcoming.id === currentTrack.id) return;
+    const ctrl = new AbortController();
+    // Low-priority so it never competes with the current track's stream.
+    fetch(audioSrc(upcoming.audio_url), { signal: ctrl.signal, priority: 'low' as RequestPriority }).catch(() => {});
+    if (upcoming.peaks_url) {
+      fetch(upcoming.peaks_url, { signal: ctrl.signal, cache: 'force-cache' }).catch(() => {});
+    }
+    return () => ctrl.abort();
+  }, [currentTrack?.id, isPlaying, shuffle, repeat, queue]);
   // Mute is implemented by setting engine volume to 0 and stashing
   // the previous level so we can restore it on unmute. Without this,
   // clicking mute just flipped a local boolean — the audio kept
