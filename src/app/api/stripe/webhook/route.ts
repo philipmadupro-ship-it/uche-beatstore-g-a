@@ -560,6 +560,11 @@ export async function POST(req: NextRequest) {
           throw eventInsertErr;
         }
 
+        // Mark any abandoned-cart row for this session as recovered so the
+        // reminder cron never emails a buyer who actually completed (mig 071).
+        admin.from('abandoned_carts').update({ recovered: true }).eq('stripe_session_id', session.id)
+          .then(({ error }) => { if (error) log.warn('abandoned-cart recover failed', { error: error.message }); });
+
         const purchaseKind = meta.purchase_kind ?? 'track_license';
 
         // ── Promo redemption — atomic increment (migration 048) ─────────

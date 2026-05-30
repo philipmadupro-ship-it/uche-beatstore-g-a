@@ -429,6 +429,22 @@ export async function POST(req: NextRequest) {
       await admin.rpc('increment_promo_uses', { code: promo.code });
     }
 
+    // Abandoned-cart capture (mig 071). Best-effort — the webhook flips
+    // recovered=true on completion; a cron reminds the rest after ~1h.
+    try {
+      const totalCents = discountedItems.reduce((s: number, li: any) => s + li.price_data.unit_amount * (li.quantity ?? 1), 0);
+      await admin.from('abandoned_carts').insert({
+        stripe_session_id: session.id,
+        seller_user_id: sellerUserId || null,
+        buyer_email: buyerEmail,
+        items: discountedItems.map((li: any) => ({ name: li.price_data.product_data.name, price_usd: li.price_data.unit_amount / 100 })),
+        item_count: cartItemsMeta.length,
+        total_usd: totalCents / 100,
+      });
+    } catch (e) {
+      log.warn('abandoned-cart capture failed', { error: errorMessage(e) });
+    }
+
     log.info('store checkout session created', { session_id: session.id, items: cartItemsMeta.length, promo: promo?.code ?? null });
     return NextResponse.json({ client_secret: session.client_secret, session_id: session.id });
   } catch (err) {

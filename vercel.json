@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/publish-scheduled",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/abandoned-carts",
+      "schedule": "0 * * * *"
     }
   ]
 }
