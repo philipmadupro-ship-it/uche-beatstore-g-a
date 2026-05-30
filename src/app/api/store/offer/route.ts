@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { Resend } from 'resend';
-import { createServiceClient } from '@/lib/auth/ownership';
+import { createServiceClient, requireUser } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
@@ -10,6 +10,29 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const log = createLogger('api.store.offer');
+
+/**
+ * GET /api/store/offer — the authed producer's received offers, newest first.
+ * Used by the /sales Offers tab.
+ */
+export async function GET() {
+  try {
+    const result = await requireUser();
+    if (!result.ok) return result.res;
+    if (!isSupabaseConfigured()) return NextResponse.json({ offers: [] });
+
+    const { userId, admin } = result;
+    const { data, error } = await admin
+      .from('buyer_offers')
+      .select('id, track_id, track_title, buyer_email, offered_price_usd, message, status, created_at')
+      .eq('seller_user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return NextResponse.json({ offers: data ?? [] });
+  } catch (err) {
+    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+  }
+}
 
 /**
  * POST /api/store/offer — a buyer makes an offer on an (exclusive) beat.

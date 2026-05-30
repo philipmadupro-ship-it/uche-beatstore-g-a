@@ -14,7 +14,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Loader2, Receipt, Music, Layers, ExternalLink, Search,
   DollarSign, ShoppingBag, AlertCircle, Send, TrendingUp,
-  ArrowUpRight, Tag, Crown, Download,
+  ArrowUpRight, Tag, Crown, Download, Check, X,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { SkeletonList } from '@/components/ui/Skeleton';
@@ -44,6 +44,24 @@ interface Totals {
 const FILTERS = ['All', 'Tracks', 'Projects'] as const;
 type Filter = (typeof FILTERS)[number];
 
+interface Offer {
+  id: string;
+  track_id: string;
+  track_title: string | null;
+  buyer_email: string;
+  offered_price_usd: number;
+  message: string | null;
+  status: 'pending' | 'accepted' | 'countered' | 'declined';
+  created_at: string;
+}
+
+const OFFER_STATUS_STYLES: Record<Offer['status'], string> = {
+  pending: 'text-[#D4BFA0] bg-[#D4BFA0]/10 border-[#D4BFA0]/20',
+  accepted: 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/20',
+  countered: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  declined: 'text-[#a08a6a] bg-white/[0.04] border-white/[0.06]',
+};
+
 function fmtDate(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -69,6 +87,9 @@ export default function SalesPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('All');
   const [search, setSearch] = useState('');
+  // Top-level view: completed sales vs. incoming offers.
+  const [view, setView] = useState<'sales' | 'offers'>('sales');
+  const [offers, setOffers] = useState<Offer[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -87,7 +108,13 @@ export default function SalesPage() {
         setLoading(false);
       }
     })();
+    // Offers load independently (separate entity) so the sales view never blocks on them.
+    fetch('/api/store/offer').then(r => r.ok ? r.json() : null).then(d => { if (d?.offers) setOffers(d.offers); }).catch(() => undefined);
   }, []);
+
+  const pendingOffers = useMemo(() => offers.filter((o) => o.status === 'pending').length, [offers]);
+  const updateOfferStatus = (id: string, status: Offer['status']) =>
+    setOffers((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)));
 
   const visibleSales = useMemo(() => {
     return sales.filter((s) => {
@@ -263,6 +290,31 @@ export default function SalesPage() {
           </div>
         )}
 
+        {/* View switch — Sales vs. Offers */}
+        <div className="flex items-center gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setView('sales')}
+            className={`px-4 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider border transition-colors ${
+              view === 'sales' ? 'bg-white text-black border-white' : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+            }`}
+          >Sales</button>
+          <button
+            type="button"
+            onClick={() => setView('offers')}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider border transition-colors ${
+              view === 'offers' ? 'bg-white text-black border-white' : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+            }`}
+          >
+            Offers
+            {pendingOffers > 0 && (
+              <span className={`w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center leading-none ${view === 'offers' ? 'bg-black text-white' : 'bg-[#D4BFA0] text-black'}`}>{pendingOffers}</span>
+            )}
+          </button>
+        </div>
+
+        {view === 'sales' && (
+        <>
         {/* Filters */}
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           {FILTERS.map((f) => (
@@ -342,8 +394,113 @@ export default function SalesPage() {
             </div>
           </div>
         )}
+        </>
+        )}
+
+        {view === 'offers' && (
+          offers.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[#1f1a13] bg-[#14110d]/40 py-16 px-6 text-center">
+              <Tag size={28} className="text-[#3a3328] mx-auto mb-3" />
+              <p className="text-[13px] text-[#a08a6a] font-medium">No offers yet.</p>
+              <p className="text-[11px] text-[#5a5142] mt-1">When a buyer makes an offer on an exclusive beat, it shows up here to accept, counter, or decline.</p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {offers.map((o) => (
+                <OfferRow key={o.id} offer={o} onStatusChange={updateOfferStatus} />
+              ))}
+            </div>
+          )
+        )}
       </div>
     </DashboardLayout>
+  );
+}
+
+function OfferRow({ offer, onStatusChange }: { offer: Offer; onStatusChange: (id: string, status: Offer['status']) => void }) {
+  const [busy, setBusy] = useState<null | 'accept' | 'decline' | 'counter'>(null);
+  const [counterOpen, setCounterOpen] = useState(false);
+  const [counterPrice, setCounterPrice] = useState('');
+
+  const respond = async (action: 'accept' | 'decline' | 'counter') => {
+    if (busy) return;
+    if (action === 'counter') {
+      const price = Number.parseFloat(counterPrice);
+      if (!Number.isFinite(price) || price <= 0) { toast.error('Enter a counter price'); return; }
+    }
+    setBusy(action);
+    try {
+      const res = await fetch(`/api/store/offer/${offer.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...(action === 'counter' ? { counter_price_usd: Number.parseFloat(counterPrice) } : {}) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      onStatusChange(offer.id, data.status);
+      setCounterOpen(false);
+      toast.success(
+        action === 'accept' ? 'Offer accepted — buyer notified' :
+        action === 'counter' ? 'Counter sent to buyer' : 'Offer declined',
+      );
+    } catch (err: any) {
+      toast.error('Could not respond', err.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const isPending = offer.status === 'pending';
+
+  return (
+    <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] px-4 sm:px-5 py-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <Tag size={12} className="text-[#D4BFA0] shrink-0" />
+            <p className="text-[13px] font-semibold text-[#E8DCC8] truncate">{offer.track_title || 'Untitled'}</p>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider border shrink-0 ${OFFER_STATUS_STYLES[offer.status]}`}>{offer.status}</span>
+          </div>
+          <p className="text-[11px] text-[#a08a6a] truncate" title={offer.buyer_email}>{offer.buyer_email} · {fmtDate(offer.created_at)}</p>
+          {offer.message && <p className="text-[11px] text-[#6a5d4a] mt-1.5 italic">“{offer.message}”</p>}
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142]">Offer</p>
+          <p className="text-[22px] font-bold text-white tabular-nums leading-none">{fmtMoney(offer.offered_price_usd)}</p>
+        </div>
+      </div>
+
+      {isPending && (
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#1a160f] flex-wrap">
+          <button onClick={() => respond('accept')} disabled={!!busy}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#6DC6A4]/15 border border-[#6DC6A4]/30 text-[#6DC6A4] hover:bg-[#6DC6A4]/25 transition-colors disabled:opacity-40">
+            {busy === 'accept' ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}Accept
+          </button>
+          {!counterOpen ? (
+            <button onClick={() => setCounterOpen(true)} disabled={!!busy}
+              className="px-3 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-wider border border-[#2d2620] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#3a3328] transition-colors disabled:opacity-40">
+              Counter
+            </button>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6a5d4a] text-[12px]">$</span>
+                <input type="number" min="1" value={counterPrice} onChange={(e) => setCounterPrice(e.target.value)} placeholder="price" autoFocus
+                  className="w-24 bg-[#0a0907] border border-[#1f1a13] rounded-full pl-6 pr-2 py-1.5 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] tabular-nums" />
+              </div>
+              <button onClick={() => respond('counter')} disabled={!!busy}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#D4BFA0] text-black hover:bg-[#E8D8B8] transition-colors disabled:opacity-40">
+                {busy === 'counter' ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}Send
+              </button>
+              <button onClick={() => { setCounterOpen(false); setCounterPrice(''); }} className="text-[#5a5142] hover:text-[#E8DCC8]"><X size={13} /></button>
+            </div>
+          )}
+          <button onClick={() => respond('decline')} disabled={!!busy}
+            className="ml-auto px-3 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-wider border border-[#1f1a13] text-[#5a5142] hover:text-red-300 hover:border-red-900/40 transition-colors disabled:opacity-40">
+            {busy === 'decline' ? <Loader2 size={11} className="animate-spin" /> : 'Decline'}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -365,6 +522,27 @@ function SaleRow({ sale }: { sale: Sale }) {
     ? `https://dashboard.stripe.com/payments/${sale.stripe_session_id}`
     : null;
   const [resending, setResending] = useState(false);
+  const [delivering, setDelivering] = useState(false);
+  const [delivered, setDelivered] = useState(false);
+
+  const handleDeliverStems = async () => {
+    if (delivering) return;
+    setDelivering(true);
+    try {
+      const res = await fetch('/api/sales/deliver-stems', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purchase_id: sale.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setDelivered(true);
+      toast.success('Stems delivered', `${sale.buyer_email} was emailed the download link.`);
+    } catch (err: any) {
+      toast.error('Could not deliver', err.message);
+    } finally {
+      setDelivering(false);
+    }
+  };
   const handleResend = async () => {
     if (resending) return;
     setResending(true);
@@ -396,12 +574,28 @@ function SaleRow({ sale }: { sale: Sale }) {
       <div className="min-w-0">
         <p className="text-[12px] text-[#E8DCC8] truncate flex items-center gap-2">
           <span className="truncate">{sale.item_label}</span>
-          {sale.needs_stems_upload && (
-            <span
-              className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-amber-500/15 border border-amber-500/35 text-amber-300"
-              title="Buyer paid for exclusive — needs WAV/stems upload to complete delivery"
-            >
-              Awaiting stems
+          {sale.needs_stems_upload && !delivered && (
+            <span className="shrink-0 inline-flex items-center gap-1.5">
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-amber-500/15 border border-amber-500/35 text-amber-300"
+                title="Buyer paid for exclusive — upload stems then deliver"
+              >
+                Awaiting stems
+              </span>
+              <button
+                onClick={handleDeliverStems}
+                disabled={delivering}
+                title="Email the buyer that their stems are ready"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-[#6DC6A4]/15 border border-[#6DC6A4]/30 text-[#6DC6A4] hover:bg-[#6DC6A4]/25 transition-colors disabled:opacity-40"
+              >
+                {delivering ? <Loader2 size={9} className="animate-spin" /> : <Send size={9} />}
+                Deliver
+              </button>
+            </span>
+          )}
+          {delivered && (
+            <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-[#6DC6A4]/15 border border-[#6DC6A4]/30 text-[#6DC6A4]">
+              <Check size={9} /> Delivered
             </span>
           )}
         </p>
