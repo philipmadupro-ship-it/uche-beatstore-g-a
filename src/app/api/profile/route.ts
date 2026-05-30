@@ -43,6 +43,8 @@ export async function POST(req: NextRequest) {
       share_video_style,
       lossless_exports,
       auto_tagging,
+      voice_tag_url,
+      voice_tag_interval_seconds,
     } = body;
 
     const payload = {
@@ -76,6 +78,9 @@ export async function POST(req: NextRequest) {
       // Workspace preferences (migration 063)
       ...(lossless_exports !== undefined && { lossless_exports: Boolean(lossless_exports) }),
       ...(auto_tagging !== undefined && { auto_tagging: Boolean(auto_tagging) }),
+      // Voice tag (migration 072) — url set via /api/profile/voice-tag upload
+      ...(voice_tag_url !== undefined && { voice_tag_url: voice_tag_url || null }),
+      ...(voice_tag_interval_seconds !== undefined && { voice_tag_interval_seconds: Math.max(5, Math.min(120, Number(voice_tag_interval_seconds) || 20)) }),
     };
 
     const result = await updateCreatorProfile(payload);

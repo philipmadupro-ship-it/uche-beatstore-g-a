@@ -117,7 +117,7 @@ export async function GET() {
         'duration_seconds', 'bpm', 'key', 'scale',
         'rating', 'description',
         'lease_price_usd', 'exclusive_price_usd',
-        'store_listed', 'store_featured', 'free_download_enabled', 'store_sort_order', 'created_at',
+        'store_listed', 'store_featured', 'free_download_enabled', 'store_sort_order', 'voice_tag_enabled', 'created_at',
       ].join(', '))
       .eq('store_listed', true);
     if (sellerId) {
@@ -191,6 +191,7 @@ export async function GET() {
           'instagram_handle', 'twitter_handle', 'spotify_url',
           'soundcloud_url', 'website_url', 'contact_email',
           'accent_color', 'font_style', 'text_color_primary',
+          'voice_tag_url', 'voice_tag_interval_seconds',
         ].join(', '))
         .eq('user_id', sellerId)
         .maybeSingle();
@@ -370,11 +371,16 @@ export async function GET() {
     }
 
     // Strip owner uuid + sanitize cover_url + attach tags to each track
+    // Voice tag (mig 072): attach the creator's tag to beats that opted in so
+    // the preview player can overlay it client-side. Owner downloads stay clean.
+    const tagUrl = (creator as any)?.voice_tag_url ?? null;
+    const tagInterval = (creator as any)?.voice_tag_interval_seconds ?? 20;
     const safeTracks = tracksAny.map(({ user_id: _u, cover_url, ...rest }: any) => ({
       ...rest,
       cover_url: sanitizeUrl(cover_url),
       tags: tagsByTrack[rest.id] ?? [],
       wav_url: wavByTrack[rest.id] ?? null,
+      ...(rest.voice_tag_enabled && tagUrl ? { voice_tag_url: tagUrl, voice_tag_interval: tagInterval } : {}),
     }));
 
     // Public catalogue → CDN-cacheable. Short s-maxage so newly listed

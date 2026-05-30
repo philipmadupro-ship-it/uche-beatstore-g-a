@@ -13,7 +13,7 @@ const TRACK_FIELDS = [
   'duration_seconds', 'bpm', 'key', 'scale',
   'rating', 'description',
   'lease_price_usd', 'exclusive_price_usd',
-  'store_listed', 'free_download_enabled', 'created_at',
+  'store_listed', 'free_download_enabled', 'voice_tag_enabled', 'created_at',
 ].join(', ');
 
 /**
@@ -189,6 +189,7 @@ export async function GET(
               'instagram_handle', 'twitter_handle', 'spotify_url',
               'soundcloud_url', 'website_url', 'contact_email',
               'accent_color', 'share_card_style', 'share_video_style',
+              'voice_tag_url', 'voice_tag_interval_seconds',
             ].join(', '))
             .eq('user_id', sellerId)
             .maybeSingle()
@@ -280,6 +281,13 @@ export async function GET(
     // Strip user_id off every track before responding
     const stripUserId = ({ user_id: _u, ...rest }: any) => rest;
     const safeTrack = stripUserId(track);
+    // Voice tag (mig 072) — attach the creator's tag when this beat opted in,
+    // so the preview player overlays it. Owner downloads remain clean.
+    const cr = creatorRes.data as any;
+    if ((safeTrack as any).voice_tag_enabled && cr?.voice_tag_url) {
+      (safeTrack as any).voice_tag_url = cr.voice_tag_url;
+      (safeTrack as any).voice_tag_interval = cr.voice_tag_interval_seconds ?? 20;
+    }
     const safeRelated = related.map(stripUserId);
     const safeFans = fansAlsoBought.map(stripUserId);
 

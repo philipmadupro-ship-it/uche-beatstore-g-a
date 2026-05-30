@@ -39,6 +39,12 @@ export interface Track {
   store_sort_order?: number | null;
   /** Optional separate WAV upload for licensed delivery (migration 039). */
   wav_url?: string | null;
+  /** Producer chose to overlay their voice tag on this beat's store preview (mig 072). */
+  voice_tag_enabled?: boolean | null;
+  /** Attached by the store API when voice_tag_enabled + the creator has a tag —
+   *  the preview player overlays this audio at `voice_tag_interval` seconds. */
+  voice_tag_url?: string | null;
+  voice_tag_interval?: number | null;
   created_at: string;
 }
 

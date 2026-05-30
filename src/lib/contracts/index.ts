@@ -71,6 +71,8 @@ export const TrackPatchBodySchema = z.object({
   // (must be listed to appear; not all listed tracks are picks). Migration 054.
   store_featured: z.boolean().optional(),
   free_download_enabled: z.boolean().optional(),
+  // Overlay the producer's voice tag on this beat's store preview (mig 072).
+  voice_tag_enabled: z.boolean().optional(),
   store_sort_order: z.number().int().nullable().optional(),
   // Scheduled publish (migration 056). When set on a draft, the cron
   // route /api/cron/publish-scheduled flips store_listed=true at that

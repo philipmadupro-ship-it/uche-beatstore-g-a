@@ -13,6 +13,7 @@
 
 import { PlayerBar } from '@/components/player/PlayerBar';
 import { MediaSessionBridge } from '@/components/player/MediaSessionBridge';
+import { VoiceTagPlayer } from '@/components/player/VoiceTagPlayer';
 import { CartDrawer, FloatingCartButton } from '@/components/store/CartDrawer';
 import { InstallAppButton } from '@/components/store/InstallAppButton';
 import { useCart } from '@/hooks/useCart';
@@ -27,6 +28,7 @@ export function StoreLayoutClient({ children }: { children: React.ReactNode }) {
       </main>
       <PlayerBar />
       <MediaSessionBridge />
+      <VoiceTagPlayer />
       <FloatingCartButton />
       <InstallAppButton />
       <CartDrawer

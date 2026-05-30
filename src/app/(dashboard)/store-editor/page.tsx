@@ -23,7 +23,7 @@ import {
   Image as ImageIcon, Upload, Globe,
   Music, ListMusic, DollarSign, Eye, EyeOff,
   GripVertical, Check, X, Plus, Layers, Search,
-  ShoppingBag, Star, Tag, Trash2, Clock,
+  ShoppingBag, Star, Tag, Trash2, Clock, Mic2, Play,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { DEFAULT_TEMPLATE_MD, VARIABLE_LIST } from '@/lib/contracts/license-template';
@@ -58,6 +58,9 @@ interface ProfileForm {
   // Migration 062 — share-card + 9:16 video template
   share_card_style: string;
   share_video_style: string;
+  // Migration 072 — producer voice tag for store previews
+  voice_tag_url: string;
+  voice_tag_interval_seconds: string;
 }
 
 interface PlaylistRow {
@@ -101,6 +104,8 @@ const EMPTY_PROFILE: ProfileForm = {
   license_template_md: '',
   share_card_style: '',
   share_video_style: '',
+  voice_tag_url: '',
+  voice_tag_interval_seconds: '20',
 };
 
 const ACCENT_PRESETS = [
@@ -407,6 +412,7 @@ interface TrackRow {
   store_sort_order: number | null;
   lease_price_usd: number | null;
   exclusive_price_usd: number | null;
+  voice_tag_enabled: boolean;
   // Migration 056 — when set on a draft, the cron flips
   // store_listed=true at that time and clears this field.
   scheduled_publish_at: string | null;
@@ -665,6 +671,7 @@ export default function StoreEditorPage() {
               scheduled_publish_at: t.scheduled_publish_at ?? null,
               lease_price_usd: t.lease_price_usd ?? null,
               exclusive_price_usd: t.exclusive_price_usd ?? null,
+              voice_tag_enabled: !!t.voice_tag_enabled,
             }))
           : [];
         setAllTracks(rawTracks.sort((a, b) => {
@@ -698,6 +705,8 @@ export default function StoreEditorPage() {
           license_template_md: p.license_template_md ?? '',
           share_card_style: p.share_card_style ?? '',
           share_video_style: p.share_video_style ?? '',
+          voice_tag_url: p.voice_tag_url ?? '',
+          voice_tag_interval_seconds: String(p.voice_tag_interval_seconds ?? 20),
         });
 
         const allPlaylists: PlaylistRow[] = pld.playlists ?? [];
@@ -930,6 +939,23 @@ export default function StoreEditorPage() {
     }
   };
 
+  /* ── Voice-tag toggle (per beat) ── */
+  const toggleTrackTag = async (trackId: string, currentlyOn: boolean) => {
+    const nextState = !currentlyOn;
+    setAllTracks((prev) => prev.map((t) => t.id === trackId ? { ...t, voice_tag_enabled: nextState } : t));
+    try {
+      const res = await fetch(`/api/tracks/${trackId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice_tag_enabled: nextState }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      toast.success(nextState ? 'Voice tag on for this beat' : 'Voice tag off');
+    } catch (err: any) {
+      setAllTracks((prev) => prev.map((t) => t.id === trackId ? { ...t, voice_tag_enabled: currentlyOn } : t));
+      toast.error('Failed to update', err.message);
+    }
+  };
+
   /* ── Scheduled-publish action ──
      Drafts can be given a future timestamp. The cron route at
      /api/cron/publish-scheduled flips them live when due. */
@@ -1053,6 +1079,8 @@ export default function StoreEditorPage() {
         license_template_md: form.license_template_md || null,
         share_card_style: form.share_card_style || null,
         share_video_style: form.share_video_style || null,
+        voice_tag_url: form.voice_tag_url || null,
+        voice_tag_interval_seconds: Number(form.voice_tag_interval_seconds) || 20,
       };
 
       const profileRes = await fetch('/api/profile', {
@@ -1945,6 +1973,25 @@ export default function StoreEditorPage() {
                           </button>
                         )}
 
+                        {/* Voice-tag toggle — only on listed tracks, and only
+                            useful once a tag is uploaded (button hints when not). */}
+                        {t.store_listed && (
+                          <button
+                            onClick={() => {
+                              if (!form.voice_tag_url) { toast.info('Upload a voice tag first', 'Find it in the Voice Tag section above.'); return; }
+                              toggleTrackTag(t.id, t.voice_tag_enabled);
+                            }}
+                            title={t.voice_tag_enabled ? 'Voice tag on (preview only)' : 'Add voice tag to preview'}
+                            className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center border transition-colors ${
+                              t.voice_tag_enabled
+                                ? 'bg-[#9d95e8]/15 border-[#9d95e8]/40 text-[#9d95e8]'
+                                : 'bg-white/[0.03] border-[#1f1a13] text-[#5a5142] hover:text-[#9d95e8] hover:border-[#9d95e8]/30'
+                            }`}
+                          >
+                            <Mic2 size={12} />
+                          </button>
+                        )}
+
                         {/* Toggle */}
                         <button
                           onClick={() => toggleTrackListed(t.id, t.store_listed)}
@@ -2055,6 +2102,24 @@ export default function StoreEditorPage() {
                 value={form.share_video_style}
                 onChange={(v) => setForm((f) => ({ ...f, share_video_style: v }))}
                 tracks={allTracks}
+              />
+            </Section>
+
+            {/* Voice tag (mig 072) — upload once, toggle per beat in the
+                listing manager. Overlays on store previews only. */}
+            <Section
+              id="voice-tag"
+              title="Voice Tag"
+              icon={<Mic2 size={15} />}
+              open={openSections.has('voice-tag')}
+              onToggle={() => toggleSection('voice-tag')}
+            >
+              <VoiceTagSection
+                value={form.voice_tag_url}
+                interval={form.voice_tag_interval_seconds}
+                onUploaded={(url) => setForm((f) => ({ ...f, voice_tag_url: url }))}
+                onIntervalChange={(v) => setForm((f) => ({ ...f, voice_tag_interval_seconds: v }))}
+                onRemove={() => setForm((f) => ({ ...f, voice_tag_url: '' }))}
               />
             </Section>
 
@@ -2282,5 +2347,107 @@ export default function StoreEditorPage() {
         </div>
       </div>
     </DashboardLayout>
+  );
+}
+
+/* ─── Voice Tag section ─────────────────────────────────────── */
+
+function VoiceTagSection({
+  value,
+  interval,
+  onUploaded,
+  onIntervalChange,
+  onRemove,
+}: {
+  value: string;
+  interval: string;
+  onUploaded: (url: string) => void;
+  onIntervalChange: (v: string) => void;
+  onRemove: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { toast.error('Tag too large', 'Keep it under 5 MB.'); return; }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/profile/voice-tag', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      onUploaded(data.voice_tag_url);
+      toast.success('Voice tag uploaded', 'Now toggle it on per beat in the listing manager.');
+    } catch (err: any) {
+      toast.error('Upload failed', err.message);
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[11px] text-[#6a5d4a] leading-relaxed">
+        Upload your producer tag once, then switch it on per beat (the mic icon in the
+        listing manager). It overlays on store previews every {interval || 20}s — buyers
+        hear it on the preview, but the file they download after purchase is always clean.
+      </p>
+
+      {value ? (
+        <div className="flex items-center gap-3 rounded-xl border border-[#9d95e8]/25 bg-[#9d95e8]/[0.05] px-4 py-3">
+          <button
+            type="button"
+            onClick={() => { audioRef.current?.play().catch(() => undefined); }}
+            className="w-9 h-9 rounded-full bg-[#9d95e8]/15 border border-[#9d95e8]/30 text-[#9d95e8] flex items-center justify-center hover:bg-[#9d95e8]/25 transition-colors shrink-0"
+            title="Preview tag"
+          >
+            <Play size={13} fill="currentColor" className="ml-0.5" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-medium text-[#E8DCC8]">Voice tag set</p>
+            <p className="text-[10px] font-mono text-[#5a5142] truncate">{value.split('/').pop()}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            className="text-[10px] font-mono uppercase tracking-wider text-[#a08a6a] hover:text-[#E8DCC8] transition-colors"
+          >Replace</button>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="text-[#5a5142] hover:text-red-400 transition-colors"
+            title="Remove tag"
+          ><Trash2 size={13} /></button>
+          <audio ref={audioRef} src={value} preload="none" crossOrigin="anonymous" />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-[#2d2620] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#9d95e8]/40 transition-all text-[12px] font-medium disabled:opacity-50"
+        >
+          {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+          {uploading ? 'Uploading…' : 'Upload voice tag (MP3/WAV, <5 MB)'}
+        </button>
+      )}
+
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142]">Repeat every</span>
+        <input
+          type="number" min={5} max={120} value={interval}
+          onChange={(e) => onIntervalChange(e.target.value)}
+          className="w-16 bg-[#0a0907] border border-[#1f1a13] rounded-lg px-2 py-1.5 text-[12px] text-[#E8DCC8] focus:outline-none focus:border-[#2d2620] tabular-nums"
+        />
+        <span className="text-[10px] font-mono text-[#5a5142]">seconds (saved with the profile)</span>
+      </div>
+
+      <input ref={inputRef} type="file" accept="audio/*" onChange={handleFile} className="hidden" />
+    </div>
   );
 }
