@@ -10,7 +10,7 @@ import {
   Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid,
   SlidersHorizontal, Store, FolderOpen, ListMusic, Users, BarChart2,
   ShoppingBag, ArrowRight, AlertCircle, TrendingUp, DollarSign,
-  Upload, Rocket, ChevronLeft, ChevronRight, ChevronDown, X,
+  Upload, Rocket, ChevronLeft, ChevronRight, ChevronDown, X, Package,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -191,6 +191,62 @@ export default function LibraryPage() {
       toast.error('Could not create', err.message);
     } finally {
       setCreatingRelease(false);
+    }
+  };
+
+  // ── Beat-pack builder ───────────────────────────────────────────
+  // Bundle the selected beats into a project, priced at a ~20% discount off
+  // the summed lease prices, and list it as a store bundle (reuses the whole
+  // project-bundle checkout + delivery flow).
+  const [packing, setPacking] = useState(false);
+  const createPackFromSelected = async () => {
+    if (packing) return;
+    const ids = Array.from(selectedIds);
+    if (ids.length < 2) { toast.error('Pick at least 2 beats', 'A pack needs 2+ beats.'); return; }
+    const chosen = tracks.filter((t) => selectedIds.has(t.id));
+    const leaseSum = chosen.reduce((s, t) => s + (t.lease_price_usd ?? 0), 0);
+    const suggested = leaseSum > 0 ? Math.round(leaseSum * 0.8) : '';
+    const name = window.prompt(`Name this beat pack (${ids.length} beats):`, 'Beat Pack');
+    if (!name?.trim()) return;
+    const priceStr = window.prompt('Pack price (USD) — ~20% off the lease total:', String(suggested));
+    if (priceStr == null) return;
+    const price = Number.parseFloat(priceStr);
+    if (!Number.isFinite(price) || price <= 0) { toast.error('Enter a valid price'); return; }
+
+    setPacking(true);
+    try {
+      const projRes = await fetch('/api/projects', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      const projData = await projRes.json();
+      if (!projRes.ok) throw new Error(projData.error || 'Project create failed');
+      const projectId = projData.project.id;
+
+      const addRes = await fetch(`/api/projects/${projectId}/tracks`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ track_ids: ids }),
+      });
+      if (!addRes.ok) throw new Error((await addRes.json().catch(() => ({}))).error || 'Adding beats failed');
+
+      const patchRes = await fetch(`/api/projects/${projectId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          price_usd: price,
+          store_featured: true,
+          description: `${ids.length}-beat pack`,
+        }),
+      });
+      if (!patchRes.ok) throw new Error((await patchRes.json().catch(() => ({}))).error || 'Pricing failed');
+
+      toast.success('Pack created & listed', `${ids.length} beats · $${price} bundle`);
+      setSelectedIds(new Set());
+      setSelectMode(false);
+      router.push(`/projects/${projectId}`);
+    } catch (err: any) {
+      toast.error('Could not create pack', err.message);
+    } finally {
+      setPacking(false);
     }
   };
 
@@ -1324,13 +1380,19 @@ export default function LibraryPage() {
         count={selectedIds.size}
         noun={['track', 'tracks']}
         onClear={() => { setSelectedIds(new Set()); setBulkEditOpen(false); }}
-        busy={bulkDeleting || bulkEditing}
+        busy={bulkDeleting || bulkEditing || packing}
         actions={[
           {
             label: bulkEditOpen ? 'Close' : 'Edit',
             icon: <SlidersHorizontal size={11} />,
             intent: bulkEditOpen ? 'primary' : 'default',
             onClick: () => setBulkEditOpen((v) => !v),
+          },
+          {
+            label: 'Create pack',
+            icon: <Package size={11} />,
+            intent: 'primary',
+            onClick: createPackFromSelected,
           },
           {
             label: 'Delete',
