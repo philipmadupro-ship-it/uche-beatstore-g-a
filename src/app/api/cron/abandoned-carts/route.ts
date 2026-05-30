@@ -31,29 +31,54 @@ export async function GET(req: NextRequest) {
   try {
     const admin = createServiceClient();
     const now = Date.now();
-    const oneHourAgo = new Date(now - 60 * 60 * 1000).toISOString();
-    const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const hoursAgo = (h: number) => new Date(now - h * 60 * 60 * 1000).toISOString();
 
+    // Candidates: unrecovered, not yet fully reminded (max 2), aged 1h–7d.
     const { data: carts } = await admin
       .from('abandoned_carts')
-      .select('id, buyer_email, items, total_usd, item_count')
+      .select('id, seller_user_id, buyer_email, items, total_usd, item_count, reminder_count, reminded_at, recovery_code')
       .eq('recovered', false)
-      .is('reminded_at', null)
-      .lt('created_at', oneHourAgo)
-      .gt('created_at', sevenDaysAgo)
+      .lt('reminder_count', 2)
+      .lt('created_at', hoursAgo(1))
+      .gt('created_at', hoursAgo(24 * 7))
       .order('created_at', { ascending: true })
       .limit(100);
 
-    const rows = carts ?? [];
-    if (rows.length === 0) return NextResponse.json({ ok: true, reminded: 0 });
-
+    const rows = (carts ?? []) as any[];
     const resendKey = process.env.RESEND_API_KEY;
-    const checkoutUrl = `${getAppUrl()}/store/checkout`;
+    const checkoutBase = `${getAppUrl()}/store/checkout`;
     let reminded = 0;
 
-    for (const cart of rows as any[]) {
-      // Stamp first so a slow/failed send never re-queues this row.
-      await admin.from('abandoned_carts').update({ reminded_at: new Date().toISOString() }).eq('id', cart.id);
+    for (const cart of rows) {
+      // Stage gate: #1 fires after 1h (reminder_count 0); #2 after 24h
+      // since the first reminder (reminder_count 1).
+      const isSecond = cart.reminder_count === 1;
+      if (isSecond) {
+        const lastMs = cart.reminded_at ? Date.parse(cart.reminded_at) : 0;
+        if (now - lastMs < 23 * 60 * 60 * 1000) continue; // not due yet
+      }
+
+      // Generate a one-time 10% recovery code on the first reminder; reuse on
+      // the second. Requires a seller to scope the promo to; skip the discount
+      // (still send a plain nudge) when seller is unknown.
+      let code = cart.recovery_code as string | null;
+      if (!code && cart.seller_user_id) {
+        code = `COMEBACK${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+        const { error: promoErr } = await admin.from('promo_codes').insert({
+          code,
+          user_id: cart.seller_user_id,
+          discount_percent: 10,
+          max_uses: 1,
+          active: true,
+          expires_at: hoursAgo(-7 * 24), // +7 days
+        });
+        if (promoErr) { log.warn('recovery promo insert failed', { error: promoErr.message }); code = null; }
+      }
+
+      // Stamp progress first so a slow/failed send never re-queues this row.
+      await admin.from('abandoned_carts')
+        .update({ reminder_count: cart.reminder_count + 1, reminded_at: new Date().toISOString(), ...(code ? { recovery_code: code } : {}) })
+        .eq('id', cart.id);
 
       if (!resendKey) continue;
       try {
@@ -61,16 +86,23 @@ export async function GET(req: NextRequest) {
         const itemRows = items.slice(0, 6).map((i) =>
           `<tr><td style="padding:6px 0;color:#E8DCC8;font-size:13px">${i.name}</td><td style="padding:6px 0;text-align:right;color:#a08a6a;font-size:13px">$${Number(i.price_usd).toFixed(2)}</td></tr>`,
         ).join('');
+        const checkoutUrl = code ? `${checkoutBase}?promo=${code}` : checkoutBase;
+        const discountBlock = code
+          ? `<p style="color:#6DC6A4;font-size:14px;margin:0 0 18px">Here's <strong>10% off</strong> to finish — code <strong style="font-family:monospace">${code}</strong> (applied automatically at the link).</p>`
+          : '';
+        const headline = isSecond ? 'Last chance on your cart' : 'You left beats in your cart';
+
         const resend = new Resend(resendKey);
         await resend.emails.send({
           from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
           to: cart.buyer_email,
-          subject: 'You left beats in your cart',
+          subject: isSecond ? `${headline} — 10% off inside` : headline,
           html: `<div style="background:#0a0907;color:#E8DCC8;padding:32px;font-family:sans-serif;border-radius:12px">
-              <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#a08a6a;margin:0 0 8px">Still interested?</p>
-              <h1 style="color:#D4BFA0;font-size:22px;margin:0 0 16px">Your cart is waiting</h1>
+              <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#a08a6a;margin:0 0 8px">${isSecond ? 'Still want these?' : 'Still interested?'}</p>
+              <h1 style="color:#D4BFA0;font-size:22px;margin:0 0 16px">${isSecond ? 'Your cart expires soon' : 'Your cart is waiting'}</h1>
               <table style="width:100%;border-collapse:collapse;margin:0 0 16px">${itemRows}</table>
-              <p style="color:#E8DCC8;font-size:14px;font-weight:bold;margin:0 0 20px">Total: $${Number(cart.total_usd).toFixed(2)}</p>
+              <p style="color:#E8DCC8;font-size:14px;font-weight:bold;margin:0 0 16px">Total: $${Number(cart.total_usd).toFixed(2)}</p>
+              ${discountBlock}
               <a href="${checkoutUrl}" style="background:#D4BFA0;color:#0a0907;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold;font-size:13px">Complete your purchase</a>
             </div>`,
         });
