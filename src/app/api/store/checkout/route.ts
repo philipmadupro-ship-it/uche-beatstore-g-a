@@ -45,6 +45,32 @@ async function resolvePromo(
   };
 }
 
+type LineItems = Array<{ price_data: { unit_amount: number; product_data: { name: string } }; quantity: number }>;
+
+/**
+ * Automatic bundle/quantity discount (Task 7). When the cart's item count
+ * meets the producer's threshold, knock `percent` off every line uniformly.
+ * Runs BEFORE any promo code, so a promo stacks on the already-bundled price.
+ * Off when threshold<=0, percent<=0, or the cart is below the threshold.
+ */
+function applyBundleDiscount(
+  lineItems: LineItems,
+  rule: { threshold: number; percent: number } | null,
+): { items: LineItems; applied: boolean; percent: number } {
+  if (!rule || rule.threshold <= 0 || rule.percent <= 0 || lineItems.length < rule.threshold) {
+    return { items: lineItems, applied: false, percent: 0 };
+  }
+  const factor = 1 - Math.min(90, rule.percent) / 100;
+  const items = lineItems.map((li) => ({
+    ...li,
+    price_data: {
+      ...li.price_data,
+      unit_amount: Math.max(1, Math.round(li.price_data.unit_amount * factor)),
+    },
+  }));
+  return { items, applied: true, percent: rule.percent };
+}
+
 function applyDiscount(
   lineItems: Array<{ price_data: { unit_amount: number; product_data: { name: string } }; quantity: number }>,
   promo: PromoTerms | null,
@@ -253,14 +279,18 @@ export async function POST(req: NextRequest) {
     const sellerUserId = (tracks[0] as any).user_id as string | undefined;
     let profileLease: number | null = null;
     let profileExclusive: number | null = null;
+    let bundleRule: { threshold: number; percent: number } | null = null;
     if (sellerUserId) {
       const { data: profile } = await admin
         .from('creator_profiles')
-        .select('license_lease_price_usd, license_exclusive_price_usd')
+        .select('license_lease_price_usd, license_exclusive_price_usd, bundle_discount_threshold, bundle_discount_percent')
         .eq('user_id', sellerUserId)
         .maybeSingle();
       profileLease = profile?.license_lease_price_usd ?? null;
       profileExclusive = profile?.license_exclusive_price_usd ?? null;
+      const threshold = Number((profile as any)?.bundle_discount_threshold ?? 0);
+      const percent = Number((profile as any)?.bundle_discount_percent ?? 0);
+      if (threshold > 0 && percent > 0) bundleRule = { threshold, percent };
     }
 
     // Validate promo code for this seller
@@ -398,8 +428,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No valid items to charge' }, { status: 400 });
     }
 
-    // Apply promo discount before creating Stripe session
-    const { discountedItems } = applyDiscount(lineItems, promo);
+    // Automatic bundle/quantity discount first (Task 7), then any promo code
+    // stacks on the bundled price.
+    const bundle = applyBundleDiscount(lineItems, bundleRule);
+    const { discountedItems } = applyDiscount(bundle.items, promo);
 
     // ── Create Stripe Embedded Checkout Session ──────────────────────────────
     const APP_URL = getAppUrl();
@@ -427,6 +459,7 @@ export async function POST(req: NextRequest) {
         // Full cart (capped at 25 items to stay within Stripe 500-char limit)
         cart_items: JSON.stringify(cartItemsMeta.slice(0, 25)),
         promo_code: promo?.code ?? '',
+        bundle_discount_percent: bundle.applied ? String(bundle.percent) : '',
         // Exclusive purchases of tracks with no WAV / no ready stems —
         // webhook reads this and flags the purchase + emails the
         // producer to upload. Comma-separated track ids; "" when none.

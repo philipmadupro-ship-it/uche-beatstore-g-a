@@ -45,6 +45,8 @@ export async function POST(req: NextRequest) {
       auto_tagging,
       voice_tag_url,
       voice_tag_interval_seconds,
+      bundle_discount_threshold,
+      bundle_discount_percent,
     } = body;
 
     const payload = {
@@ -81,6 +83,9 @@ export async function POST(req: NextRequest) {
       // Voice tag (migration 072) — url set via /api/profile/voice-tag upload
       ...(voice_tag_url !== undefined && { voice_tag_url: voice_tag_url || null }),
       ...(voice_tag_interval_seconds !== undefined && { voice_tag_interval_seconds: Math.max(5, Math.min(120, Number(voice_tag_interval_seconds) || 20)) }),
+      // Bundle/quantity discount (migration 077)
+      ...(bundle_discount_threshold !== undefined && { bundle_discount_threshold: Math.max(0, Math.min(99, Math.round(Number(bundle_discount_threshold) || 0))) }),
+      ...(bundle_discount_percent !== undefined && { bundle_discount_percent: Math.max(0, Math.min(90, Number(bundle_discount_percent) || 0)) }),
     };
 
     const result = await updateCreatorProfile(payload);

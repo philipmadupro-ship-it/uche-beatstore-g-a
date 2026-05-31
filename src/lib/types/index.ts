@@ -48,6 +48,9 @@ export interface Track {
    *  the preview player overlays this audio at `voice_tag_interval` seconds. */
   voice_tag_url?: string | null;
   voice_tag_interval?: number | null;
+  /** Detected chord timeline (mig 078) — ordered { time, chord } segments,
+   *  e.g. [{ time: 0, chord: 'Am' }]. Rendered in TrackDetailsDrawer. */
+  chords?: Array<{ time: number; chord: string }> | null;
   created_at: string;
 }
 

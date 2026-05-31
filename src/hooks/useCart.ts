@@ -20,9 +20,18 @@ export interface CartItem {
   license: CartLicense;
 }
 
+export interface BundleRule {
+  threshold: number;
+  percent: number;
+}
+
 interface CartState {
   items: CartItem[];
   isOpen: boolean;
+  /** Producer's automatic bundle/quantity discount (mig 077). Set from the
+   *  store creator payload; drives the cart-drawer banner. Not persisted. */
+  bundleRule: BundleRule | null;
+  setBundleRule: (rule: BundleRule | null) => void;
   addItem: (track: Track, license: CartLicense) => void;
   /** Bulk add many tracks with the same license tier. Skips duplicates silently. */
   addItems: (pairs: Array<{ track: Track; license: CartLicense }>) => void;
@@ -38,6 +47,9 @@ export const useCart = create<CartState>()(
     (set, get) => ({
       items: [],
       isOpen: false,
+      bundleRule: null,
+
+      setBundleRule: (rule) => set({ bundleRule: rule }),
 
       addItem: (track, license) => {
         // Use functional set so that rapid successive calls (e.g. "Add All")

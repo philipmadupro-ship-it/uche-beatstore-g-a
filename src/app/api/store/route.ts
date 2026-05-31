@@ -192,6 +192,7 @@ export async function GET() {
           'soundcloud_url', 'website_url', 'contact_email',
           'accent_color', 'font_style', 'text_color_primary',
           'voice_tag_url', 'voice_tag_interval_seconds',
+          'bundle_discount_threshold', 'bundle_discount_percent',
         ].join(', '))
         .eq('user_id', sellerId)
         .maybeSingle();

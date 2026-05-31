@@ -49,6 +49,9 @@ interface ProfileForm {
   license_lease_price_usd: string;
   license_exclusive_price_usd: string;
   license_notes: string;
+  // Migration 077 — automatic bundle/quantity discount
+  bundle_discount_threshold: string;
+  bundle_discount_percent: string;
   // Migration 055 — storefront-root SEO + social share card
   seo_title: string;
   seo_description: string;
@@ -98,6 +101,8 @@ const EMPTY_PROFILE: ProfileForm = {
   license_lease_price_usd: '',
   license_exclusive_price_usd: '',
   license_notes: '',
+  bundle_discount_threshold: '',
+  bundle_discount_percent: '',
   seo_title: '',
   seo_description: '',
   og_image_url: '',
@@ -699,6 +704,8 @@ export default function StoreEditorPage() {
           license_lease_price_usd: p.license_lease_price_usd != null ? String(p.license_lease_price_usd) : '',
           license_exclusive_price_usd: p.license_exclusive_price_usd != null ? String(p.license_exclusive_price_usd) : '',
           license_notes: p.license_notes ?? '',
+          bundle_discount_threshold: p.bundle_discount_threshold ? String(p.bundle_discount_threshold) : '',
+          bundle_discount_percent: p.bundle_discount_percent ? String(p.bundle_discount_percent) : '',
           seo_title: p.seo_title ?? '',
           seo_description: p.seo_description ?? '',
           og_image_url: p.og_image_url ?? '',
@@ -1067,6 +1074,8 @@ export default function StoreEditorPage() {
         license_lease_price_usd: form.license_lease_price_usd !== '' ? parseFloat(form.license_lease_price_usd) : null,
         license_exclusive_price_usd: form.license_exclusive_price_usd !== '' ? parseFloat(form.license_exclusive_price_usd) : null,
         license_notes: form.license_notes || null,
+        bundle_discount_threshold: form.bundle_discount_threshold !== '' ? parseInt(form.bundle_discount_threshold, 10) : 0,
+        bundle_discount_percent: form.bundle_discount_percent !== '' ? parseFloat(form.bundle_discount_percent) : 0,
         seo_title: form.seo_title || null,
         seo_description: form.seo_description || null,
         og_image_url: form.og_image_url || null,
@@ -2024,6 +2033,40 @@ export default function StoreEditorPage() {
                   placeholder="Shown to buyers on the checkout page — usage terms, credit requirements, etc."
                   className={textareaCls}
                 />
+              </Field>
+
+              {/* Bundle / quantity discount (mig 077) */}
+              <Field
+                label="Bundle Discount"
+                hint="Automatic cart discount — no promo code needed. e.g. 3 items → 15% off. Leave at 0 to disable."
+              >
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={99}
+                      value={form.bundle_discount_threshold}
+                      onChange={set('bundle_discount_threshold')}
+                      placeholder="3"
+                      className={`${inputCls} w-20`}
+                    />
+                    <span className="text-[11px] text-[#6a5d4a]">items →</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={90}
+                      step="0.5"
+                      value={form.bundle_discount_percent}
+                      onChange={set('bundle_discount_percent')}
+                      placeholder="15"
+                      className={`${inputCls} w-20`}
+                    />
+                    <span className="text-[11px] text-[#6a5d4a]">% off</span>
+                  </div>
+                </div>
               </Field>
             </Section>
 

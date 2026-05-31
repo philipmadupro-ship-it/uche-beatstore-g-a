@@ -435,6 +435,14 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                 </div>
               </div>
 
+              {/* Chord progression (mig 078) — detect client-side, sync to playback */}
+              <ChordSection
+                track={track}
+                isActive={currentTrack?.id === track.id}
+                progress={progress}
+                onSaved={(chords) => setOptimistic((o) => ({ ...o, chords }))}
+              />
+
               {/* Percentage meters */}
               {(() => {
                 const bars = [
@@ -669,5 +677,107 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         }
       `}</style>
     </>
+  );
+}
+
+/**
+ * ChordSection — detect + display a chord timeline (mig 078, Task 8).
+ *
+ * "Detect chords" runs Essentia HPCP analysis in the browser, POSTs the result
+ * to /api/tracks/[id]/analyze (chord-only path), and renders the progression
+ * as chips. When the track is the active player track, the chip under the
+ * current playback position highlights in real time.
+ */
+function ChordSection({
+  track,
+  isActive,
+  progress,
+  onSaved,
+}: {
+  track: Track;
+  isActive: boolean;
+  progress: number;
+  onSaved: (chords: Array<{ time: number; chord: string }>) => void;
+}) {
+  const [detecting, setDetecting] = useState(false);
+  const chords = track.chords ?? [];
+  const dur = track.duration_seconds ?? 0;
+  const currentSec = isActive ? progress * dur : 0;
+
+  // Index of the chord segment currently playing (last segment whose start
+  // time is <= currentSec).
+  let activeIdx = -1;
+  if (isActive && chords.length) {
+    for (let i = 0; i < chords.length; i++) {
+      if (chords[i].time <= currentSec) activeIdx = i;
+      else break;
+    }
+  }
+
+  const detect = async () => {
+    if (detecting || !track.audio_url) return;
+    setDetecting(true);
+    try {
+      const { detectChordsFromUrl } = await import('@/lib/audio/chords.client');
+      const result = await detectChordsFromUrl(track.audio_url);
+      if (!result.length) {
+        toast.error('No chords detected', 'The track may be too quiet or percussive to analyze.');
+        return;
+      }
+      const res = await fetch(`/api/tracks/${track.id}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chords: result }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      onSaved(result);
+      toast.success('Chords detected', `${result.length} chord changes mapped.`);
+    } catch (err: any) {
+      toast.error('Chord detection failed', err?.message || 'Try again.');
+    } finally {
+      setDetecting(false);
+    }
+  };
+
+  return (
+    <div className="bg-[#0a0907] border border-[#1f1a13] rounded-2xl p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#4a4338]">Chords</h3>
+        <button
+          onClick={detect}
+          disabled={detecting || !track.audio_url}
+          className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-md bg-[#1a160f] text-[#a08a6a] hover:text-[#E8DCC8] hover:bg-[#241e15] transition-all disabled:opacity-40"
+        >
+          {detecting ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+          {detecting ? 'Detecting' : chords.length ? 'Re-detect' : 'Detect chords'}
+        </button>
+      </div>
+      {chords.length ? (
+        <div className="flex flex-wrap gap-1.5">
+          {chords.map((c, i) => (
+            <span
+              key={`${c.time}-${i}`}
+              title={`${Math.floor(c.time / 60)}:${String(Math.floor(c.time % 60)).padStart(2, '0')}`}
+              className={`px-2 py-1 rounded-md text-[11px] font-mono font-bold tabular-nums transition-all duration-200 ${
+                i === activeIdx
+                  ? 'bg-[#D4BFA0] text-black scale-105 shadow-lg shadow-[#D4BFA0]/20'
+                  : 'bg-[#14110d] text-[#a08a6a] border border-[#1f1a13]'
+              }`}
+            >
+              {c.chord}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[10px] text-[#5a5142] leading-relaxed">
+          {track.audio_url
+            ? 'No chords yet. Detect the progression to render a timeline that follows playback.'
+            : 'Upload audio to detect chords.'}
+        </p>
+      )}
+    </div>
   );
 }

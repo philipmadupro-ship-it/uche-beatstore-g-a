@@ -7,18 +7,27 @@ const nextConfig: NextConfig = {
   // sensors we don't use. The nonce-based CSP is applied per-request in
   // src/proxy.ts (it needs a per-request nonce, which static headers can't do).
   async headers() {
-    return [{
-      source: '/:path*',
-      headers: [
-        { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
-        { key: 'X-Content-Type-Options', value: 'nosniff' },
-        { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-        { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-        { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()' },
-        // CSP (incl. frame-ancestors) is set per-request with a nonce in
-        // src/proxy.ts — not here, so the two don't conflict.
-      ],
-    }];
+    const baseHeaders = [
+      { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()' },
+      // CSP (incl. frame-ancestors) is set per-request with a nonce in
+      // src/proxy.ts — not here, so the two don't conflict.
+    ];
+    return [
+      {
+        // Everything EXCEPT /embed gets X-Frame-Options: SAMEORIGIN
+        // (clickjacking protection). /embed is intentionally framable
+        // cross-origin so producers can embed the player anywhere.
+        source: '/((?!embed/).*)',
+        headers: [...baseHeaders, { key: 'X-Frame-Options', value: 'SAMEORIGIN' }],
+      },
+      {
+        source: '/embed/:path*',
+        headers: baseHeaders, // no X-Frame-Options → embeddable anywhere
+      },
+    ];
   },
   // audio-decode + WASM decoder workers use `await import(<dynamic>)` patterns
   // that webpack/turbopack cannot trace. Mark them server-external so the

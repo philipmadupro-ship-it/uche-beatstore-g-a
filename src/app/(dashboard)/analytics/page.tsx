@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Loader2, Headphones, Music, AlertCircle, BarChart3,
-  TrendingUp, Radio, ExternalLink, SlidersHorizontal, X, ChevronDown, ChevronUp,
+  TrendingUp, Radio, ExternalLink, SlidersHorizontal, X, ChevronDown, ChevronUp, Link2,
 } from 'lucide-react';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { SkeletonStatStrip, SkeletonList } from '@/components/ui/Skeleton';
@@ -21,6 +21,17 @@ import { SkeletonStatStrip, SkeletonList } from '@/components/ui/Skeleton';
 interface Totals { plays: number; sales_count: number; gross_usd: number }
 interface ByTrack { track_id: string; title: string; plays: number; sales: number; gross: number }
 interface ByDay { date: string; sales: number; gross: number }
+interface ShareLinkRow {
+  token: string;
+  recipient_kind: string | null;
+  plays: number;
+  unique_opens: number;
+  track_count: number;
+  top_source: string;
+  platforms: Record<string, number>;
+  last_play: string | null;
+  created_at: string | null;
+}
 
 interface TrackMeta {
   id: string;
@@ -67,6 +78,7 @@ export default function AnalyticsPage() {
   const [totals, setTotals] = useState<Totals | null>(null);
   const [byTrack, setByTrack] = useState<ByTrack[]>([]);
   const [byDay, setByDay] = useState<ByDay[]>([]);
+  const [byShareLink, setByShareLink] = useState<ShareLinkRow[]>([]);
   const [trackMeta, setTrackMeta] = useState<Map<string, TrackMeta>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +114,7 @@ export default function AnalyticsPage() {
         setTotals(analyticsData.totals);
         setByTrack(analyticsData.by_track ?? []);
         setByDay(analyticsData.by_day ?? []);
+        setByShareLink(analyticsData.by_share_link ?? []);
 
         if (tracksRes.ok) {
           const tracksData = await tracksRes.json();
@@ -418,6 +431,51 @@ export default function AnalyticsPage() {
               <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] px-6 py-10 text-center mb-5">
                 <Music size={20} className="text-[#3a3328] mx-auto mb-2" />
                 <p className="text-[12px] text-[#6a5d4a]">No tracks match the current filters.</p>
+              </div>
+            )}
+
+            {/* Share-link analytics (Task 6) — per-token engagement + source */}
+            {byShareLink.length > 0 && (
+              <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] mb-5 overflow-hidden">
+                <div className="px-5 py-3 border-b border-[#1a160f] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Link2 size={12} className="text-[#a08a6a]" />
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#a08a6a]">Share links</p>
+                  </div>
+                  <p className="text-[9px] font-mono text-[#3a3328]">{byShareLink.length} opened</p>
+                </div>
+                {/* Column headers */}
+                <div className="hidden sm:flex items-center gap-3 px-5 py-2 border-b border-[#1a160f] text-[8px] font-mono uppercase tracking-[0.18em] text-[#3a3328]">
+                  <span className="flex-1">Link</span>
+                  <span className="w-16 text-right">Plays</span>
+                  <span className="w-20 text-right">Unique</span>
+                  <span className="w-28 text-right">Source</span>
+                </div>
+                <div className="divide-y divide-[#1a160f]">
+                  {byShareLink.slice(0, 20).map((s) => (
+                    <div key={s.token} className="flex items-center gap-3 px-5 py-3 hover:bg-[#16130e] transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <a
+                          href={`/share/${s.token}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[12px] text-[#E8DCC8] hover:text-[#D4BFA0] transition-colors font-mono truncate inline-flex items-center gap-1.5"
+                          title={s.token}
+                        >
+                          /{s.token.slice(0, 12)}{s.token.length > 12 ? '…' : ''}
+                          <ExternalLink size={9} className="text-[#5a5142] shrink-0" />
+                        </a>
+                        <p className="text-[9px] font-mono text-[#5a5142] mt-0.5">
+                          {s.track_count} track{s.track_count === 1 ? '' : 's'}
+                          {s.recipient_kind ? ` · ${s.recipient_kind}` : ''}
+                        </p>
+                      </div>
+                      <span className="w-16 text-right text-[11px] font-mono font-bold text-[#D4BFA0] tabular-nums">{s.plays}</span>
+                      <span className="w-20 text-right text-[11px] font-mono text-[#a08a6a] tabular-nums">{s.unique_opens}</span>
+                      <span className="w-28 text-right text-[10px] font-mono text-[#a08a6a] truncate" title={s.top_source}>{s.top_source}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

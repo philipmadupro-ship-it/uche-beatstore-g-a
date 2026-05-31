@@ -44,8 +44,14 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
   // a hydration mismatch on the total. Use the SSR-shape (empty + 0)
   // on the first paint, then swap to the real values after mount.
   const [mounted, setMounted] = useState(false);
+  const bundleRule = useCart((s) => s.bundleRule);
   const items = mounted ? rawItems : [];
   const total = mounted ? rawTotal : 0;
+
+  // Automatic bundle/quantity discount preview (Task 7). The server is the
+  // source of truth at checkout; this just shows the buyer the deal early.
+  const bundleQualifies = !!bundleRule && bundleRule.percent > 0 && items.length >= bundleRule.threshold;
+  const bundleTotal = bundleQualifies ? total * (1 - bundleRule!.percent / 100) : total;
 
   useEffect(() => {
     setMounted(true);
@@ -138,9 +144,22 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
 
         {/* Footer */}
         <div className="border-t border-white/[0.04] px-5 py-4 space-y-3 bg-[#0a0907]/40">
+          {bundleQualifies && (
+            <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[#6DC6A4]/10 border border-[#6DC6A4]/30">
+              <span className="text-[11px] font-semibold text-[#6DC6A4]">Bundle deal applied 🎉</span>
+              <span className="text-[11px] font-mono font-bold text-[#6DC6A4]">-{bundleRule!.percent}%</span>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a]">Total</span>
-            <span className="text-[18px] font-bold text-white tabular-nums">${total.toLocaleString()}</span>
+            {bundleQualifies ? (
+              <span className="flex items-baseline gap-2">
+                <span className="text-[12px] font-mono text-[#5a5142] line-through tabular-nums">${total.toLocaleString()}</span>
+                <span className="text-[18px] font-bold text-white tabular-nums">${bundleTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+              </span>
+            ) : (
+              <span className="text-[18px] font-bold text-white tabular-nums">${total.toLocaleString()}</span>
+            )}
           </div>
           <input
             type="email"

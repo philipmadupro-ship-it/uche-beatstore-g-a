@@ -29,7 +29,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 // flip CSP_ENFORCE to true once the violation reports are clean.
 const CSP_ENFORCE = false;
 
-function buildCsp(nonce: string): string {
+function buildCsp(nonce: string, framable = false): string {
+  // /embed/* must be framable on any origin (it's a distribution widget), so
+  // its frame-ancestors is wide-open; every other route stays locked to self.
+  const frameAncestors = framable ? `frame-ancestors *` : `frame-ancestors 'self'`;
   return [
     `default-src 'self'`,
     // Next inline bootstrap gets the nonce; bundled chunks are 'self';
@@ -46,7 +49,7 @@ function buildCsp(nonce: string): string {
     `font-src 'self' data:`,
     `connect-src 'self' https: wss:`,
     `frame-src https://js.stripe.com https://*.stripe.com`,
-    `frame-ancestors 'self'`,
+    frameAncestors,
     `base-uri 'self'`,
     `form-action 'self'`,
     `object-src 'none'`,
@@ -58,7 +61,8 @@ export async function proxy(request: NextRequest) {
   // App Router extracts the nonce and stamps it onto its <script> tags; the
   // browser sees whichever response header we choose below.
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
-  const csp = buildCsp(nonce);
+  const framable = request.nextUrl.pathname.startsWith('/embed/');
+  const csp = buildCsp(nonce, framable);
   const cspHeaderName = CSP_ENFORCE ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only';
 
   const baseRequestHeaders = new Headers(request.headers);
@@ -72,6 +76,10 @@ export async function proxy(request: NextRequest) {
   };
 
   let response = newResponse();
+
+  // /embed/* is a public, cookieless distribution widget — skip the Supabase
+  // token refresh entirely so it loads fast and never touches auth.
+  if (framable) return response;
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

@@ -6,6 +6,32 @@ import { parsePurchaseLineItems } from '@/lib/contracts';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+/** Bucket a raw Referer URL into a friendly traffic-source label. */
+function platformFromReferrer(referrer: string | null | undefined): string {
+  if (!referrer) return 'Direct';
+  let host = '';
+  try {
+    host = new URL(referrer).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return 'Other';
+  }
+  if (!host) return 'Direct';
+  if (host.includes('instagram')) return 'Instagram';
+  if (host.includes('tiktok')) return 'TikTok';
+  if (host === 't.co' || host.includes('twitter') || host === 'x.com') return 'Twitter/X';
+  if (host.includes('youtube') || host === 'youtu.be') return 'YouTube';
+  if (host.includes('facebook') || host === 'fb.com' || host.includes('fb.me')) return 'Facebook';
+  if (host.includes('whatsapp')) return 'WhatsApp';
+  if (host.includes('t.me') || host.includes('telegram')) return 'Telegram';
+  if (host.includes('discord')) return 'Discord';
+  if (host.includes('reddit')) return 'Reddit';
+  if (host.includes('google') || host.includes('bing') || host.includes('duckduckgo')) return 'Search';
+  // Same-origin opens (the store domain itself) read as direct navigation.
+  const appHost = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase();
+  if (appHost && host.includes(appHost.replace(/^www\./, ''))) return 'Direct';
+  return host;
+}
+
 /**
  * GET /api/analytics
  *
@@ -57,21 +83,68 @@ export async function GET() {
     //    The combined number is what /analytics actually reports.
     let playsByTrack: Record<string, number> = {};
     let totalPlays = 0;
+    // Per-share-link rollup (Task 6): plays, unique opens, tracks, platform mix.
+    const shareLinkAgg = new Map<string, {
+      token: string;
+      created_at: string | null;
+      recipient_kind: string | null;
+      plays: number;
+      ips: Set<string>;
+      tracks: Set<string>;
+      platforms: Record<string, number>;
+      last_play: string | null;
+    }>();
     try {
       const { data: links } = await admin
         .from('share_links')
-        .select('token')
+        .select('token, created_at, recipient_kind')
         .eq('user_id', userId);
       const tokens = (links ?? []).map((l: any) => l.token).filter(Boolean);
+      for (const l of (links ?? []) as any[]) {
+        shareLinkAgg.set(l.token, {
+          token: l.token,
+          created_at: l.created_at ?? null,
+          recipient_kind: l.recipient_kind ?? null,
+          plays: 0,
+          ips: new Set(),
+          tracks: new Set(),
+          platforms: {},
+          last_play: null,
+        });
+      }
       if (tokens.length > 0) {
-        const { data: plays } = await admin
-          .from('share_plays')
-          .select('track_id, link_token')
-          .in('link_token', tokens);
-        for (const row of (plays ?? []) as any[]) {
+        // referrer is mig 076 — select it, retry without if not yet applied.
+        let plays: any[] | null = null;
+        {
+          const r = await admin
+            .from('share_plays')
+            .select('track_id, link_token, ip_hash, referrer, played_at')
+            .in('link_token', tokens);
+          if (r.error && /referrer/i.test(r.error.message)) {
+            const r2 = await admin
+              .from('share_plays')
+              .select('track_id, link_token, ip_hash, played_at')
+              .in('link_token', tokens);
+            plays = (r2.data ?? []) as any[];
+          } else {
+            plays = (r.data ?? []) as any[];
+          }
+        }
+        for (const row of plays as any[]) {
           totalPlays++;
           if (row.track_id) {
             playsByTrack[row.track_id] = (playsByTrack[row.track_id] ?? 0) + 1;
+          }
+          const agg = shareLinkAgg.get(row.link_token);
+          if (agg) {
+            agg.plays++;
+            if (row.ip_hash) agg.ips.add(row.ip_hash);
+            if (row.track_id) agg.tracks.add(row.track_id);
+            const platform = platformFromReferrer(row.referrer);
+            agg.platforms[platform] = (agg.platforms[platform] ?? 0) + 1;
+            if (row.played_at && (!agg.last_play || row.played_at > agg.last_play)) {
+              agg.last_play = row.played_at;
+            }
           }
         }
       }
@@ -202,6 +275,27 @@ export async function GET() {
       0,
     );
 
+    // Share-link table (Task 6) — only links that actually got opened, busiest
+    // first, with the dominant traffic source surfaced.
+    const byShareLink = Array.from(shareLinkAgg.values())
+      .filter((s) => s.plays > 0)
+      .map((s) => {
+        const topPlatform =
+          Object.entries(s.platforms).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'Direct';
+        return {
+          token: s.token,
+          recipient_kind: s.recipient_kind,
+          plays: s.plays,
+          unique_opens: s.ips.size,
+          track_count: s.tracks.size,
+          top_source: topPlatform,
+          platforms: s.platforms,
+          last_play: s.last_play,
+          created_at: s.created_at,
+        };
+      })
+      .sort((a, b) => b.plays - a.plays);
+
     return NextResponse.json({
       totals: {
         plays: totalPlays,
@@ -211,6 +305,7 @@ export async function GET() {
       by_track: byTrack,
       by_day: byDay,
       recent_sales: recentSales,
+      by_share_link: byShareLink,
     });
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });

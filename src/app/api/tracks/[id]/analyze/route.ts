@@ -44,17 +44,39 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // 400 rather than silently skip Essentia, which would land the user
     // back on the slow server path with no explanation.
     let clientFeatures: any = null;
+    let clientChords: Array<{ time: number; chord: string }> | null = null;
     const rawText = await req.text();
     if (rawText.trim().length > 0) {
       try {
         const body = JSON.parse(rawText);
         clientFeatures = body?.features || null;
+        // Chord timeline (Task 8) — client-detected via Essentia HPCP. Validate
+        // shape + cap length so a bad payload can't bloat the row.
+        if (Array.isArray(body?.chords)) {
+          clientChords = body.chords
+            .filter((c: any) => c && typeof c.chord === 'string' && Number.isFinite(c.time))
+            .slice(0, 2000)
+            .map((c: any) => ({ time: Math.max(0, Number(c.time)), chord: String(c.chord).slice(0, 8) }));
+        }
       } catch {
         return NextResponse.json(
           { error: 'Malformed JSON body. Send `{}` or `{features: {...}}`.' },
           { status: 400 },
         );
       }
+    }
+
+    // Chord-only update: when the client sends just a chord timeline (the
+    // "Detect chords" button), persist it directly without re-running the full
+    // audio analysis pipeline.
+    if (clientChords && !clientFeatures) {
+      if (isSupabaseConfigured()) {
+        const { data, error } = await admin!.from('tracks').update({ chords: clientChords }).eq('id', id).select().single();
+        if (error) throw error;
+        return NextResponse.json({ track: data, source: 'client', chords_saved: clientChords.length });
+      }
+      const updated = update('tracks', id, { chords: clientChords });
+      return NextResponse.json({ track: updated, source: 'client', chords_saved: clientChords.length });
     }
 
     // Client features are only worth keeping if they actually contain
@@ -202,6 +224,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     for (const [k, v] of Object.entries(merged)) {
       if (v != null && !k.startsWith('_')) patch[k] = v;
     }
+    // Persist a chord timeline alongside features when the client sent one.
+    if (clientChords) patch.chords = clientChords;
 
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: 'Analysis returned no usable features' }, { status: 422 });

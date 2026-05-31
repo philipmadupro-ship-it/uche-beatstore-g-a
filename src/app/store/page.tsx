@@ -132,8 +132,16 @@ function StorePage() {
   // Free download modal
   const [freeDownloadTrack, setFreeDownloadTrack] = useState<StoreTrack | null>(null);
 
-  const { items, addItem, addItems, clearCart, setIsOpen } = useCart();
+  const { items, addItem, addItems, clearCart, setIsOpen, setBundleRule } = useCart();
   const { currentTrack, isPlaying, setTrack, togglePlay, setQueue, progress } = usePlayer();
+
+  // Feed the producer's automatic bundle discount into the cart store so the
+  // drawer can show the "Bundle deal applied" banner (mig 077, Task 7).
+  useEffect(() => {
+    const threshold = Number((creator as any)?.bundle_discount_threshold ?? 0);
+    const percent = Number((creator as any)?.bundle_discount_percent ?? 0);
+    setBundleRule(threshold > 0 && percent > 0 ? { threshold, percent } : null);
+  }, [creator, setBundleRule]);
 
   const searchParams = useSearchParams();
   const router = useRouter();
