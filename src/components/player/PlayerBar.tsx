@@ -332,30 +332,35 @@ export function PlayerBar() {
       {/* Full-screen Now Playing overlay — portaled to body so it escapes
           the pill's stacking context and covers everything. */}
       {mounted && nowPlayingOpen && createPortal(
-        <div className="fixed inset-0 z-[200] flex flex-col animate-in fade-in duration-300">
-          {/* Ambient color wash extracted from the cover, layered under a
-              blurred copy of the art — the Spotify now-playing treatment. */}
-          <div className="absolute inset-0">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          {/* Ambient backdrop — a color wash + heavily blurred copy of the
+              cover (the Spotify depth treatment). Clicking it closes. */}
+          <button
+            aria-label="Close now playing"
+            onClick={() => setNowPlayingOpen(false)}
+            className="absolute inset-0 cursor-default"
+          >
             {ambient && (
               <div
                 className="absolute inset-0 transition-colors duration-700"
-                style={{ background: `linear-gradient(180deg, ${ambient} 0%, #0a0907 75%)` }}
+                style={{ background: `linear-gradient(180deg, ${ambient} 0%, #0a0907 80%)` }}
               />
             )}
             {currentTrack.cover_url ? (
               <img
                 src={currentTrack.cover_url}
                 alt=""
-                className="w-full h-full object-cover scale-110 blur-3xl opacity-30"
+                className="w-full h-full object-cover scale-125 blur-[72px] opacity-40"
               />
             ) : null}
-            <div className="absolute inset-0 bg-[#0a0907]/80" />
-          </div>
+            <div className="absolute inset-0 bg-[#0a0907]/70 backdrop-blur-2xl" />
+          </button>
 
-          {/* Content */}
-          <div className="relative z-10 flex flex-col h-full max-w-lg mx-auto w-full px-8 pt-safe">
+          {/* The card — solid, luxury, centered. Holds the whole now-playing
+              experience: vinyl, title, waveform, transport, volume. */}
+          <div className="relative z-10 w-full max-w-[400px] max-h-[94vh] overflow-y-auto no-scrollbar rounded-[30px] border border-white/[0.09] bg-gradient-to-b from-[#1b1712] to-[#100d09] shadow-[0_40px_120px_-12px_rgba(0,0,0,0.78),inset_0_1px_0_rgba(255,255,255,0.07)] px-6 pt-5 pb-6">
             {/* Top bar */}
-            <div className="flex items-center justify-between pt-8 pb-6">
+            <div className="flex items-center justify-between pb-1">
               <button
                 onClick={() => setNowPlayingOpen(false)}
                 className="w-9 h-9 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-[#a08a6a] hover:text-white transition-colors"
@@ -375,27 +380,44 @@ export function PlayerBar() {
               </button>
             </div>
 
-            {/* Large album art */}
-            <div className="flex-1 flex items-center justify-center pb-2">
-              <div className="w-full max-w-[300px] aspect-square rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_32px_80px_rgba(0,0,0,0.6)]">
-                {currentTrack.cover_url ? (
-                  <img src={currentTrack.cover_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center">
-                    <Music size={48} className="text-[#3a3328]" />
-                  </div>
+            {/* Vinyl — the cover sits in the center label and the whole disc
+                spins while playing (paused = upright, readable). Respects
+                prefers-reduced-motion. The signature "vinyl" treatment. */}
+            <div className="flex items-center justify-center py-7">
+              <div
+                className={cn(
+                  'relative w-[15rem] h-[15rem] rounded-full flex items-center justify-center',
+                  'bg-[radial-gradient(circle_at_50%_50%,#1a1611_0%,#0c0907_58%,#060403_100%)]',
+                  'shadow-[0_30px_80px_-10px_rgba(0,0,0,0.72),inset_0_0_50px_rgba(0,0,0,0.7)]',
+                  isPlaying && 'animate-[spin_9s_linear_infinite] motion-reduce:animate-none',
                 )}
+              >
+                {/* Concentric grooves */}
+                <div className="absolute inset-3 rounded-full border border-white/[0.03]" />
+                <div className="absolute inset-8 rounded-full border border-white/[0.025]" />
+                <div className="absolute inset-[3.25rem] rounded-full border border-white/[0.02]" />
+                {/* Light sheen sweeping across the disc */}
+                <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/[0.05] to-transparent pointer-events-none" />
+                {/* Center label = cover art, with a punched spindle hole */}
+                <div className="w-36 h-36 rounded-full overflow-hidden border-[5px] border-[#0a0907] relative shadow-[0_8px_28px_rgba(0,0,0,0.55)]">
+                  {currentTrack.cover_url ? (
+                    <img src={currentTrack.cover_url} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center">
+                      <Music size={36} className="text-[#3a3328]" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 m-auto w-3.5 h-3.5 rounded-full bg-[#0a0907] border border-black/70 shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)]" />
+                </div>
               </div>
             </div>
 
             {/* Track info */}
-            <div className="pb-6">
-              <div className="flex items-start justify-between gap-3 mb-1">
-                <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight truncate flex-1">
-                  {currentTrack.title || 'Untitled'}
-                </h2>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
+            <div className="pb-1">
+              <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight text-center px-2 truncate">
+                {currentTrack.title || 'Untitled'}
+              </h2>
+              <div className="flex items-center justify-center gap-2 flex-wrap mt-1.5">
                 <span className="text-[10px] font-mono text-[#6a5d4a] uppercase tracking-widest">
                   {currentTrack.type}
                 </span>
