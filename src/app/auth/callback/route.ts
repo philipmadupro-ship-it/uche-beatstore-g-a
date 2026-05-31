@@ -4,8 +4,11 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
-  // if "next" is in search params, use it as the redirection URL
-  const next = searchParams.get('next') ?? '/library';
+  // Only accept a relative, same-origin path for `next` — reject absolute
+  // URLs and protocol-relative `//host` so a crafted link can't bounce the
+  // freshly-authenticated user off to an attacker's site (open redirect).
+  const rawNext = searchParams.get('next') ?? '/library';
+  const next = /^\/(?!\/)/.test(rawNext) ? rawNext : '/library';
 
   if (code) {
     const supabase = await createClient();

@@ -1,6 +1,26 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Baseline security headers on every response. HSTS forces HTTPS;
+  // nosniff blocks MIME-confusion; frame-ancestors/X-Frame-Options stop
+  // clickjacking; Referrer-Policy trims referer leakage; Permissions-Policy
+  // disables sensors we don't use. We intentionally do NOT set a strict
+  // script CSP yet — Next's inline bootstrap + the hand-rolled inline styles
+  // need a nonce pipeline first; that's a follow-up. frame-ancestors is the
+  // high-value CSP directive and is safe to ship now.
+  async headers() {
+    return [{
+      source: '/:path*',
+      headers: [
+        { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+        { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()' },
+        { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+      ],
+    }];
+  },
   // audio-decode + WASM decoder workers use `await import(<dynamic>)` patterns
   // that webpack/turbopack cannot trace. Mark them server-external so the
   // server bundle requires them at runtime; analyze.client.ts (browser) does

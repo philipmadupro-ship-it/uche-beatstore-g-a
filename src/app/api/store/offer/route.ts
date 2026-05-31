@@ -5,7 +5,8 @@ import { createServiceClient, requireUser } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { emailShell, emailHeading } from '@/lib/email/templates';
+import { emailShell, emailHeading, escapeHtml } from '@/lib/email/templates';
+import { rateLimit, clientIp } from '@/lib/security/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -58,6 +59,12 @@ const bodySchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    // Public endpoint — throttle to stop offer-spam / email-bombing the
+    // producer's inbox from one source.
+    if (!rateLimit(`offer:${clientIp(req)}`, 5, 60_000)) {
+      return NextResponse.json({ error: 'Too many offers — try again shortly.' }, { status: 429 });
+    }
+
     const raw = await req.json().catch(() => ({}));
     const parsed = bodySchema.safeParse(raw);
     if (!parsed.success) {
@@ -134,8 +141,8 @@ export async function POST(req: NextRequest) {
             subject: `New offer on "${trackTitle}" — ${priceLabel}`,
             html: emailShell('New offer',
               `${emailHeading(`${priceLabel} for "${trackTitle}"`)}
-               <p style="color:#a08a6a;font-size:13px;margin:0 0 16px">From <strong style="color:#E8DCC8">${buyer_email}</strong></p>
-               ${message ? `<blockquote style="border-left:2px solid #2d2620;padding-left:12px;margin:0 0 16px;color:#a08a6a;font-size:13px">${message}</blockquote>` : ''}
+               <p style="color:#a08a6a;font-size:13px;margin:0 0 16px">From <strong style="color:#E8DCC8">${escapeHtml(buyer_email)}</strong></p>
+               ${message ? `<blockquote style="border-left:2px solid #2d2620;padding-left:12px;margin:0 0 16px;color:#a08a6a;font-size:13px">${escapeHtml(message)}</blockquote>` : ''}
                <p style="color:#6a5d4a;font-size:12px;margin:0">Reply to this email to negotiate directly with the buyer.</p>`,
             ),
           });

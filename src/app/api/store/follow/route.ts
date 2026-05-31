@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { errorMessage } from '@/lib/errors';
+import { rateLimit, clientIp } from '@/lib/security/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,6 +39,9 @@ function resolveEmail(body: z.infer<typeof bodySchema>): string | null {
 
 export async function POST(req: NextRequest) {
   try {
+    if (!rateLimit(`follow:${clientIp(req)}`, 20, 60_000)) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
     const raw = await req.json().catch(() => ({}));
     const parsed = bodySchema.safeParse(raw);
     if (!parsed.success) {

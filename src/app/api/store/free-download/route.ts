@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { z } from 'zod';
+import { rateLimit, clientIp } from '@/lib/security/rate-limit';
 
 const log = createLogger('api.store.free-download');
 export const runtime = 'nodejs';
@@ -26,6 +27,9 @@ const FreeDownloadBody = z.object({
  */
 export async function POST(req: NextRequest) {
   try {
+    if (!rateLimit(`freedl:${clientIp(req)}`, 10, 60_000)) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
     const raw = await req.json().catch(() => ({}));
     const parsed = FreeDownloadBody.safeParse(raw);
     if (!parsed.success) {

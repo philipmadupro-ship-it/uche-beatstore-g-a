@@ -3,6 +3,7 @@ import { Resend } from 'resend';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
+import { rateLimit, clientIp } from '@/lib/security/rate-limit';
 
 /**
  * POST /api/store/contact
@@ -19,6 +20,9 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: NextRequest) {
   try {
+    if (!rateLimit(`contact:${clientIp(req)}`, 5, 60_000)) {
+      return NextResponse.json({ error: 'Too many messages — try again shortly.' }, { status: 429 });
+    }
     const body = await req.json();
     const { name, email, subject, message } = body ?? {};
 

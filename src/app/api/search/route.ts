@@ -30,13 +30,19 @@ export async function GET(req: NextRequest) {
       const sb = createServiceClient();
 
       const pattern = `%${q.replace(/[%_]/g, '\\$&')}%`;
+      // For the .or() filter string, also strip PostgREST grammar chars
+      // (comma, parens, backslash, dot) — otherwise a crafted query could
+      // break the filter or inject extra OR conditions. (Results stay scoped
+      // to user_id by the AND below, but we don't rely on that alone.)
+      const orTerm = q.replace(/[%_]/g, '\\$&').replace(/[(),\\.]/g, ' ').trim();
+      const orPattern = `%${orTerm}%`;
       const [tracksRes, projectsRes, contactsRes] = await Promise.all([
         sb.from('tracks').select('id, title, type, cover_url, audio_url')
           .ilike('title', pattern).eq('user_id', user.id).limit(5),
         sb.from('projects').select('id, name, cover_url')
           .ilike('name', pattern).eq('user_id', user.id).limit(5),
         sb.from('contacts').select('id, name, email, role, label')
-          .or(`name.ilike.${pattern},email.ilike.${pattern}`).eq('user_id', user.id).limit(5),
+          .or(`name.ilike.${orPattern},email.ilike.${orPattern}`).eq('user_id', user.id).limit(5),
       ]);
 
       return NextResponse.json({

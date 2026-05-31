@@ -11,6 +11,22 @@
  * unit-testable and usable from any route or cron.
  */
 
+/**
+ * Escape user-supplied text before interpolating it into email HTML.
+ * Buyer emails, offer messages, and beat-send notes are all attacker-
+ * controllable; without escaping they enable HTML/link injection (phishing
+ * inside the recipient's inbox). Use on ANY user value placed in email HTML.
+ */
+export function escapeHtml(s: string | null | undefined): string {
+  if (!s) return '';
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const BG = '#0a0907';
 const TEXT = '#E8DCC8';
 const MUTED = '#a08a6a';
