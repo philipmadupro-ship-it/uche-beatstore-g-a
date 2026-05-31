@@ -3,6 +3,13 @@
 Working notes for LLM agents. Product spec lives in AGENTS.md.
 
 @AGENTS.md
+@.claude/README.md
+
+## Claude agent setup
+
+Project-specific Claude orchestration and specialist guidance live in `.claude/agents/` and `.claude/skills/`.
+Default to `orchestrator` for autonomous routing, then let it delegate to `planner`, `app-router`, `ui-system`, `supabase-data`, `commerce-storefront`, and `qa-test` as needed while loading the matching skill files before implementation.
+
 
 ---
 

@@ -199,20 +199,17 @@ export default function LibraryPage() {
   // the summed lease prices, and list it as a store bundle (reuses the whole
   // project-bundle checkout + delivery flow).
   const [packing, setPacking] = useState(false);
-  const createPackFromSelected = async () => {
-    if (packing) return;
-    const ids = Array.from(selectedIds);
-    if (ids.length < 2) { toast.error('Pick at least 2 beats', 'A pack needs 2+ beats.'); return; }
-    const chosen = tracks.filter((t) => selectedIds.has(t.id));
-    const leaseSum = chosen.reduce((s, t) => s + (t.lease_price_usd ?? 0), 0);
-    const suggested = leaseSum > 0 ? Math.round(leaseSum * 0.8) : '';
-    const name = window.prompt(`Name this beat pack (${ids.length} beats):`, 'Beat Pack');
-    if (!name?.trim()) return;
-    const priceStr = window.prompt('Pack price (USD) — ~20% off the lease total:', String(suggested));
-    if (priceStr == null) return;
-    const price = Number.parseFloat(priceStr);
-    if (!Number.isFinite(price) || price <= 0) { toast.error('Enter a valid price'); return; }
+  const [packModalOpen, setPackModalOpen] = useState(false);
 
+  // Opens the builder modal (real UI with live discount math) instead of
+  // a chain of window.prompts.
+  const createPackFromSelected = () => {
+    if (selectedIds.size < 2) { toast.error('Pick at least 2 beats', 'A pack needs 2+ beats.'); return; }
+    setPackModalOpen(true);
+  };
+
+  const submitPack = async (name: string, price: number) => {
+    const ids = Array.from(selectedIds);
     setPacking(true);
     try {
       const projRes = await fetch('/api/projects', {
@@ -240,6 +237,7 @@ export default function LibraryPage() {
       if (!patchRes.ok) throw new Error((await patchRes.json().catch(() => ({}))).error || 'Pricing failed');
 
       toast.success('Pack created & listed', `${ids.length} beats · $${price} bundle`);
+      setPackModalOpen(false);
       setSelectedIds(new Set());
       setSelectMode(false);
       router.push(`/projects/${projectId}`);
@@ -1487,6 +1485,15 @@ export default function LibraryPage() {
           </div>
         </div>
       )}
+
+      {packModalOpen && (
+        <PackBuilderModal
+          tracks={tracks.filter((t) => selectedIds.has(t.id))}
+          busy={packing}
+          onClose={() => { if (!packing) setPackModalOpen(false); }}
+          onCreate={submitPack}
+        />
+      )}
     </DashboardLayout>
   );
 }
@@ -1655,6 +1662,123 @@ function HomeRow({
         ))}
         {cfg.source === 'playlists' && playlists.map((pl) => <MiniPlaylistCard key={pl.id} playlist={pl} />)}
         {cfg.source === 'projects' && projects.map((pr) => <MiniProjectCard key={pr.id} project={pr} />)}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Pack Builder modal ────────────────────────────────────────
+   Replaces the old window.prompt chain: shows the selected beats, the
+   summed lease value, a discount slider, and the resulting pack price +
+   buyer savings live. */
+function PackBuilderModal({
+  tracks,
+  busy,
+  onClose,
+  onCreate,
+}: {
+  tracks: Track[];
+  busy: boolean;
+  onClose: () => void;
+  onCreate: (name: string, price: number) => void;
+}) {
+  const leaseSum = useMemo(
+    () => tracks.reduce((s, t) => s + (t.lease_price_usd ?? 0), 0),
+    [tracks],
+  );
+  const [name, setName] = useState('Beat Pack');
+  const [discount, setDiscount] = useState(20); // percent off the lease total
+
+  // If no lease prices are set we can't anchor a discount — let the producer
+  // type an absolute price instead.
+  const hasAnchor = leaseSum > 0;
+  const computed = hasAnchor ? Math.max(1, Math.round(leaseSum * (1 - discount / 100))) : 0;
+  const [manualPrice, setManualPrice] = useState('');
+  const price = hasAnchor ? computed : Number.parseFloat(manualPrice);
+  const savings = hasAnchor ? Math.round(leaseSum - computed) : 0;
+  const valid = !!name.trim() && Number.isFinite(price) && price > 0;
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border border-[#1f1a13] bg-[#0e0c08] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#9d95e8]">Beat pack</p>
+            <h3 className="text-[16px] font-bold text-[#E8DCC8] mt-1">Bundle {tracks.length} beats</h3>
+          </div>
+          <button onClick={onClose} disabled={busy} className="text-[#5a5142] hover:text-[#E8DCC8] transition-colors disabled:opacity-40"><X size={16} /></button>
+        </div>
+
+        {/* Selected beats — scrollable cover strip */}
+        <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 scrollbar-hide">
+          {tracks.map((t) => (
+            <div key={t.id} className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-[#14110d] border border-[#1f1a13]" title={t.title}>
+              {t.cover_url
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={14} /></div>}
+            </div>
+          ))}
+        </div>
+
+        {/* Name */}
+        <label className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Pack name</label>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={120}
+          className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-3 py-2.5 text-[13px] text-[#E8DCC8] focus:outline-none focus:border-[#2d2620] mb-4"
+        />
+
+        {hasAnchor ? (
+          <>
+            {/* Discount slider */}
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142]">Discount</label>
+              <span className="text-[11px] font-mono text-[#9d95e8] tabular-nums">{discount}% off</span>
+            </div>
+            <input
+              type="range" min={0} max={60} step={5} value={discount}
+              onChange={(e) => setDiscount(Number(e.target.value))}
+              className="w-full accent-[#9d95e8] mb-4"
+            />
+            {/* Price math */}
+            <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-4 py-3 mb-5 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] text-[#6a5d4a]">
+                <span>Lease value of {tracks.length} beats</span>
+                <span className="tabular-nums line-through">${leaseSum.toLocaleString()}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-medium text-[#E8DCC8]">Pack price</span>
+                <span className="text-[22px] font-bold text-white tabular-nums">${computed.toLocaleString()}</span>
+              </div>
+              {savings > 0 && (
+                <p className="text-[10px] font-mono text-[#6DC6A4]">Buyer saves ${savings.toLocaleString()}</p>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <label className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Pack price (USD)</label>
+            <div className="relative mb-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a5d4a]">$</span>
+              <input
+                type="number" min={1} value={manualPrice} onChange={(e) => setManualPrice(e.target.value)} placeholder="50"
+                className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg pl-7 pr-3 py-2.5 text-[14px] text-[#E8DCC8] focus:outline-none focus:border-[#2d2620] tabular-nums"
+              />
+            </div>
+            <p className="text-[10px] text-[#5a5142] mb-5">No lease prices on these beats yet — set the pack price directly.</p>
+          </>
+        )}
+
+        <button
+          onClick={() => onCreate(name, price)}
+          disabled={!valid || busy}
+          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-bold uppercase tracking-wider bg-[#9d95e8] text-black hover:bg-[#b3aef0] transition-colors disabled:opacity-40"
+        >
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <Package size={13} />}
+          Create &amp; list pack
+        </button>
       </div>
     </div>
   );
