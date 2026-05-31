@@ -21,8 +21,57 @@ import { NextResponse, type NextRequest } from 'next/server';
  *    of `/share/*` and a few other surfaces). Flip `AUTH_REDIRECTS_ENABLED`
  *    to enable.
  */
+// ── Content-Security-Policy ──────────────────────────────────────────────
+// Strict, nonce-based CSP. Shipping in REPORT-ONLY first: an *enforcing*
+// strict script-src white-screens any statically-rendered page (Next's
+// build-time inline bootstrap scripts can't receive a per-request nonce).
+// Report-Only lets the policy bake against real traffic with zero risk;
+// flip CSP_ENFORCE to true once the violation reports are clean.
+const CSP_ENFORCE = false;
+
+function buildCsp(nonce: string): string {
+  return [
+    `default-src 'self'`,
+    // Next inline bootstrap gets the nonce; bundled chunks are 'self';
+    // Stripe.js is allowlisted for embedded checkout. 'wasm-unsafe-eval'
+    // permits WebAssembly compilation only (Essentia/audio-decode) — it does
+    // NOT allow arbitrary JS eval, so it's safe. (Dev-mode HMR also trips
+    // 'unsafe-eval'; that's a dev-only false positive — don't add it.)
+    `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://js.stripe.com`,
+    // Inline styles + styled-jsx need 'unsafe-inline' (style injection is not
+    // a meaningful XSS vector the way script injection is).
+    `style-src 'self' 'unsafe-inline'`,
+    `img-src 'self' data: blob: https:`,
+    `media-src 'self' blob: https:`,
+    `font-src 'self' data:`,
+    `connect-src 'self' https: wss:`,
+    `frame-src https://js.stripe.com https://*.stripe.com`,
+    `frame-ancestors 'self'`,
+    `base-uri 'self'`,
+    `form-action 'self'`,
+    `object-src 'none'`,
+  ].join('; ');
+}
+
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  // Per-request nonce. Set the (enforcing) CSP on the REQUEST headers so the
+  // App Router extracts the nonce and stamps it onto its <script> tags; the
+  // browser sees whichever response header we choose below.
+  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+  const csp = buildCsp(nonce);
+  const cspHeaderName = CSP_ENFORCE ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only';
+
+  const baseRequestHeaders = new Headers(request.headers);
+  baseRequestHeaders.set('x-nonce', nonce);
+  baseRequestHeaders.set('Content-Security-Policy', csp);
+
+  const newResponse = () => {
+    const r = NextResponse.next({ request: { headers: baseRequestHeaders } });
+    r.headers.set(cspHeaderName, csp);
+    return r;
+  };
+
+  let response = newResponse();
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -40,7 +89,7 @@ export async function proxy(request: NextRequest) {
         // downstream route handler sees them in the same cycle) and the
         // outgoing response.
         cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({ request });
+        response = newResponse();
         cookiesToSet.forEach(({ name, value, options }) =>
           response.cookies.set(name, value, options),
         );

@@ -44,3 +44,31 @@ export function clientIp(req: Request): string {
   if (xff) return xff.split(',')[0].trim();
   return req.headers.get('x-real-ip') || 'unknown';
 }
+
+/**
+ * Durable, cross-instance rate limit backed by Postgres (mig 074), with an
+ * in-memory fallback. Returns true if allowed, false if over the limit.
+ *
+ * Uses the atomic rate_limit_hit() RPC so the limit holds across serverless
+ * instances/regions and cold starts. If Supabase is unconfigured or the RPC
+ * errors, falls back to the per-instance limiter so a DB hiccup never takes
+ * the endpoint down — it just degrades to local throttling.
+ */
+export async function rateLimitDurable(key: string, limit: number, windowMs = 60_000): Promise<boolean> {
+  try {
+    // Lazy import to keep this module usable in pure-logic/unit contexts.
+    const { isSupabaseConfigured } = await import('@/lib/local-store');
+    if (!isSupabaseConfigured()) return rateLimit(key, limit, windowMs);
+    const { createServiceClient } = await import('@/lib/auth/ownership');
+    const admin = createServiceClient();
+    const { data, error } = await admin.rpc('rate_limit_hit', {
+      p_bucket: key,
+      p_limit: limit,
+      p_window_seconds: Math.ceil(windowMs / 1000),
+    });
+    if (error) return rateLimit(key, limit, windowMs); // degrade, don't fail
+    return data !== false;
+  } catch {
+    return rateLimit(key, limit, windowMs);
+  }
+}

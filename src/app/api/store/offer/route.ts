@@ -6,7 +6,7 @@ import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { emailShell, emailHeading, escapeHtml } from '@/lib/email/templates';
-import { rateLimit, clientIp } from '@/lib/security/rate-limit';
+import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   try {
     // Public endpoint — throttle to stop offer-spam / email-bombing the
     // producer's inbox from one source.
-    if (!rateLimit(`offer:${clientIp(req)}`, 5, 60_000)) {
+    if (!await rateLimitDurable(`offer:${clientIp(req)}`, 5, 60_000)) {
       return NextResponse.json({ error: 'Too many offers — try again shortly.' }, { status: 429 });
     }
 

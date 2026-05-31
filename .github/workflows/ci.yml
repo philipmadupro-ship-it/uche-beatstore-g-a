@@ -32,6 +32,14 @@ jobs:
       - name: Install
         run: npm ci
 
+      # Dependency vulnerabilities — block on critical (actionable); surface
+      # high without blocking (transitive highs are often unfixable and
+      # shouldn't wedge every PR).
+      - name: Audit (critical blocks)
+        run: npm audit --audit-level=critical
+      - name: Audit (high — informational)
+        run: npm audit --audit-level=high || true
+
       # Type-check standalone first — gives a fast, focused error
       # message before the slower `next build` runs.
       - name: Type-check
@@ -64,3 +72,17 @@ jobs:
           R2_BUCKET_NAME: stub
           NEXT_PUBLIC_R2_PUBLIC_URL: https://stub.r2.dev
           CRON_SECRET: stub
+
+  # Secret scanning — catch an accidentally committed key/token before it
+  # ships. Runs in parallel with build-and-test; full history on push.
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

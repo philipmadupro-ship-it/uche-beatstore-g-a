@@ -2,12 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   // Baseline security headers on every response. HSTS forces HTTPS;
-  // nosniff blocks MIME-confusion; frame-ancestors/X-Frame-Options stop
-  // clickjacking; Referrer-Policy trims referer leakage; Permissions-Policy
-  // disables sensors we don't use. We intentionally do NOT set a strict
-  // script CSP yet — Next's inline bootstrap + the hand-rolled inline styles
-  // need a nonce pipeline first; that's a follow-up. frame-ancestors is the
-  // high-value CSP directive and is safe to ship now.
+  // nosniff blocks MIME-confusion; X-Frame-Options stops clickjacking;
+  // Referrer-Policy trims referer leakage; Permissions-Policy disables
+  // sensors we don't use. The nonce-based CSP is applied per-request in
+  // src/proxy.ts (it needs a per-request nonce, which static headers can't do).
   async headers() {
     return [{
       source: '/:path*',
@@ -17,7 +15,8 @@ const nextConfig: NextConfig = {
         { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
         { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()' },
-        { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+        // CSP (incl. frame-ancestors) is set per-request with a nonce in
+        // src/proxy.ts — not here, so the two don't conflict.
       ],
     }];
   },
