@@ -121,18 +121,26 @@ export default function LibraryPage() {
   }, []);
   useEffect(() => { fetchSmartPlaylists(); }, [fetchSmartPlaylists]);
 
-  const saveSmartPlaylist = async () => {
-    const name = window.prompt('Name this smart playlist (e.g. "Finished Drill 140+"):');
-    if (!name?.trim()) return;
+  // Smart-playlist save uses a real modal (not window.prompt) for a name.
+  const [smartNameOpen, setSmartNameOpen] = useState(false);
+  const [smartNameDraft, setSmartNameDraft] = useState('');
+  const [savingSmart, setSavingSmart] = useState(false);
+  const saveSmartPlaylist = () => { setSmartNameDraft(''); setSmartNameOpen(true); };
+  const confirmSaveSmartPlaylist = async () => {
+    const name = smartNameDraft.trim();
+    if (!name) return;
+    setSavingSmart(true);
     try {
       const res = await fetch('/api/smart-playlists', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), filter: { ...serializeFilters(filters), typeFilter } }),
+        body: JSON.stringify({ name, filter: { ...serializeFilters(filters), typeFilter } }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed');
       toast.success('Smart playlist saved', 'It updates automatically as new tracks match.');
+      setSmartNameOpen(false);
       fetchSmartPlaylists();
     } catch (e: any) { toast.error('Could not save', e.message); }
+    finally { setSavingSmart(false); }
   };
 
   const applySmartPlaylist = (sp: { id: string; filter: any }) => {
@@ -1494,6 +1502,31 @@ export default function LibraryPage() {
           onClose={() => { if (!packing) setPackModalOpen(false); }}
           onCreate={submitPack}
         />
+      )}
+
+      {smartNameOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => !savingSmart && setSmartNameOpen(false)}>
+          <div className="w-full max-w-sm rounded-2xl border border-[#1f1a13] bg-[#0e0c08] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#D4BFA0]">Smart playlist</p>
+            <h3 className="text-[15px] font-bold text-[#E8DCC8] mt-1 mb-1">Save current filters</h3>
+            <p className="text-[11px] text-[#6a5d4a] mb-4">Auto-updates as new tracks match these filters.</p>
+            <input
+              autoFocus
+              value={smartNameDraft}
+              onChange={(e) => setSmartNameDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && smartNameDraft.trim()) confirmSaveSmartPlaylist(); }}
+              placeholder='e.g. "Finished Drill 140+"'
+              maxLength={120}
+              className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-3 py-2.5 text-[13px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] mb-4"
+            />
+            <div className="flex items-center gap-2 justify-end">
+              <button onClick={() => setSmartNameOpen(false)} disabled={savingSmart} className="px-3 py-2 rounded-lg text-[11px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors disabled:opacity-40">Cancel</button>
+              <button onClick={confirmSaveSmartPlaylist} disabled={!smartNameDraft.trim() || savingSmart} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-[#D4BFA0] text-black hover:bg-[#E8D8B8] transition-colors disabled:opacity-40">
+                {savingSmart ? <Loader2 size={12} className="animate-spin" /> : null}Save
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </DashboardLayout>
   );

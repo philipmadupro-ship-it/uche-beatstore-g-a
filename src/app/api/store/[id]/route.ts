@@ -291,7 +291,7 @@ export async function GET(
     const safeRelated = related.map(stripUserId);
     const safeFans = fansAlsoBought.map(stripUserId);
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       track: safeTrack,
       creator: creatorRes.data ?? null,
       licenses,
@@ -299,6 +299,10 @@ export async function GET(
       related: safeRelated,
       fans_also_bought: safeFans,
     });
+    // Public product data → CDN-cacheable, matching the catalogue route. Short
+    // s-maxage so price/cover edits appear within ~30s; SWR keeps it snappy.
+    res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+    return res;
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
