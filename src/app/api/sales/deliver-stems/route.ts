@@ -6,6 +6,7 @@ import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { getAppUrl } from '@/lib/env';
+import { emailShell, emailButton, emailHeading } from '@/lib/email/templates';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -60,12 +61,11 @@ export async function POST(req: NextRequest) {
         from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
         to: buyerEmail,
         subject: 'Your stems are ready to download',
-        html: `<div style="background:#0a0907;color:#E8DCC8;padding:32px;font-family:sans-serif;border-radius:12px">
-            <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#a08a6a;margin:0 0 8px">U2C Beatstore</p>
-            <h1 style="color:#D4BFA0;font-size:22px;margin:0 0 8px">Your stems are ready</h1>
-            <p style="color:#a08a6a;font-size:13px;margin:0 0 20px">The producer has uploaded the stems for your exclusive purchase. Download them any time from your delivery page.</p>
-            <a href="${downloadUrl}" style="background:#D4BFA0;color:#0a0907;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold;font-size:13px">Download stems</a>
-          </div>`,
+        html: emailShell('U2C Beatstore',
+          `${emailHeading('Your stems are ready')}
+           <p style="color:#a08a6a;font-size:13px;margin:0 0 20px">The producer has uploaded the stems for your exclusive purchase. Download them any time from your delivery page.</p>
+           ${emailButton('Download stems', downloadUrl)}`,
+        ),
       });
     }
 

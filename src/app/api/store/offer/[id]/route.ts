@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { emailShell } from '@/lib/email/templates';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -109,10 +110,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           to: buyerEmail,
           ...(producerEmail ? { replyTo: producerEmail } : {}),
           subject,
-          html: `<div style="background:#0a0907;color:#E8DCC8;padding:32px;font-family:sans-serif;border-radius:12px">
-              <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#a08a6a;margin:0 0 8px">U2C Beatstore</p>
-              ${body}
-            </div>`,
+          html: emailShell('U2C Beatstore', body),
         });
       }
     } catch (mailErr) {

@@ -5,6 +5,7 @@ import { createServiceClient, requireUser } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { emailShell, emailHeading } from '@/lib/email/templates';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -131,14 +132,12 @@ export async function POST(req: NextRequest) {
             to: producerEmail,
             replyTo: buyer_email,
             subject: `New offer on "${trackTitle}" — ${priceLabel}`,
-            html: `
-              <div style="background:#0a0907;color:#E8DCC8;padding:32px;font-family:sans-serif;border-radius:12px">
-                <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#a08a6a;margin:0 0 8px">New offer</p>
-                <h1 style="color:#D4BFA0;font-size:22px;margin:0 0 4px">${priceLabel} for "${trackTitle}"</h1>
-                <p style="color:#a08a6a;font-size:13px;margin:0 0 16px">From <strong style="color:#E8DCC8">${buyer_email}</strong></p>
-                ${message ? `<blockquote style="border-left:2px solid #2d2620;padding-left:12px;margin:0 0 16px;color:#a08a6a;font-size:13px">${message}</blockquote>` : ''}
-                <p style="color:#6a5d4a;font-size:12px;margin:0">Reply to this email to negotiate directly with the buyer.</p>
-              </div>`,
+            html: emailShell('New offer',
+              `${emailHeading(`${priceLabel} for "${trackTitle}"`)}
+               <p style="color:#a08a6a;font-size:13px;margin:0 0 16px">From <strong style="color:#E8DCC8">${buyer_email}</strong></p>
+               ${message ? `<blockquote style="border-left:2px solid #2d2620;padding-left:12px;margin:0 0 16px;color:#a08a6a;font-size:13px">${message}</blockquote>` : ''}
+               <p style="color:#6a5d4a;font-size:12px;margin:0">Reply to this email to negotiate directly with the buyer.</p>`,
+            ),
           });
         }
       }

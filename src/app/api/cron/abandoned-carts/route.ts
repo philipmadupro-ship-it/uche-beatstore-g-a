@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { getAppUrl } from '@/lib/env';
+import { emailShell, emailButton, emailHeading, emailItemTable } from '@/lib/email/templates';
 
 const log = createLogger('cron.abandoned-carts');
 export const runtime = 'nodejs';
@@ -96,9 +97,7 @@ export async function GET(req: NextRequest) {
       if (!resendKey) continue;
       try {
         const items = (cart.items ?? []) as Array<{ name: string; price_usd: number }>;
-        const itemRows = items.slice(0, 6).map((i) =>
-          `<tr><td style="padding:6px 0;color:#E8DCC8;font-size:13px">${i.name}</td><td style="padding:6px 0;text-align:right;color:#a08a6a;font-size:13px">$${Number(i.price_usd).toFixed(2)}</td></tr>`,
-        ).join('');
+        const itemTable = emailItemTable(items.slice(0, 6).map((i) => ({ label: i.name, value: `$${Number(i.price_usd).toFixed(2)}` })));
         const checkoutUrl = code ? `${checkoutBase}?promo=${code}` : checkoutBase;
         const discountBlock = code
           ? `<p style="color:#6DC6A4;font-size:14px;margin:0 0 18px">Here's <strong>10% off</strong> to finish — code <strong style="font-family:monospace">${code}</strong> (applied automatically at the link).</p>`
@@ -110,14 +109,13 @@ export async function GET(req: NextRequest) {
           from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
           to: cart.buyer_email,
           subject: isSecond ? `${headline} — 10% off inside` : headline,
-          html: `<div style="background:#0a0907;color:#E8DCC8;padding:32px;font-family:sans-serif;border-radius:12px">
-              <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#a08a6a;margin:0 0 8px">${isSecond ? 'Still want these?' : 'Still interested?'}</p>
-              <h1 style="color:#D4BFA0;font-size:22px;margin:0 0 16px">${isSecond ? 'Your cart expires soon' : 'Your cart is waiting'}</h1>
-              <table style="width:100%;border-collapse:collapse;margin:0 0 16px">${itemRows}</table>
-              <p style="color:#E8DCC8;font-size:14px;font-weight:bold;margin:0 0 16px">Total: $${Number(cart.total_usd).toFixed(2)}</p>
-              ${discountBlock}
-              <a href="${checkoutUrl}" style="background:#D4BFA0;color:#0a0907;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold;font-size:13px">Complete your purchase</a>
-            </div>`,
+          html: emailShell(isSecond ? 'Still want these?' : 'Still interested?',
+            `${emailHeading(isSecond ? 'Your cart expires soon' : 'Your cart is waiting')}
+             ${itemTable}
+             <p style="color:#E8DCC8;font-size:14px;font-weight:bold;margin:0 0 16px">Total: $${Number(cart.total_usd).toFixed(2)}</p>
+             ${discountBlock}
+             ${emailButton('Complete your purchase', checkoutUrl)}`,
+          ),
         });
         reminded++;
       } catch (mailErr) {

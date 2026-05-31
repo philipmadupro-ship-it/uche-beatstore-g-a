@@ -6,6 +6,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { getAppUrl } from '@/lib/env';
 import { slugify } from '@/lib/slug';
+import { emailShell, emailButton, emailHeading, emailFooter } from '@/lib/email/templates';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -78,14 +79,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
           to,
           subject: `New drop from ${producerName}: ${title}`,
-          html: `<div style="background:#0a0907;color:#E8DCC8;padding:32px;font-family:sans-serif;border-radius:12px">
-              <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#a08a6a;margin:0 0 8px">New drop</p>
-              <h1 style="color:#D4BFA0;font-size:22px;margin:0 0 12px">${title}</h1>
-              ${cover ? `<img src="${cover}" alt="" width="280" style="border-radius:12px;margin:0 0 16px;max-width:100%" />` : ''}
-              <p style="color:#a08a6a;font-size:13px;margin:0 0 20px"><strong style="color:#E8DCC8">${producerName}</strong> just listed a new beat. Be first to grab it.</p>
-              <a href="${beatUrl}" style="background:#D4BFA0;color:#0a0907;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold;font-size:13px">Listen now</a>
-              <p style="color:#3a3328;font-size:10px;margin:20px 0 0">You follow ${producerName} on U2C. <a href="${manageUrl}" style="color:#6a5d4a">Manage</a>.</p>
-            </div>`,
+          html: emailShell('New drop',
+            `${emailHeading(title)}
+             ${cover ? `<img src="${cover}" alt="" width="280" style="border-radius:12px;margin:0 0 16px;max-width:100%" />` : ''}
+             <p style="color:#a08a6a;font-size:13px;margin:0 0 20px"><strong style="color:#E8DCC8">${producerName}</strong> just listed a new beat. Be first to grab it.</p>
+             ${emailButton('Listen now', beatUrl)}
+             ${emailFooter(`You follow ${producerName} on U2C.`, manageUrl)}`,
+          ),
         }),
       ));
       notified = results.filter((r) => r.status === 'fulfilled').length;

@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { getAppUrl } from '@/lib/env';
+import { emailShell, emailButton, emailHeading, emailFooter } from '@/lib/email/templates';
 
 const log = createLogger('cron.announce-drops');
 export const runtime = 'nodejs';
@@ -96,14 +97,13 @@ export async function GET(req: NextRequest) {
           from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
           to,
           subject: headline,
-          html: `<div style="background:#0a0907;color:#E8DCC8;padding:32px;font-family:sans-serif;border-radius:12px">
-              <p style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#a08a6a;margin:0 0 8px">New from ${producerName}</p>
-              <h1 style="color:#D4BFA0;font-size:22px;margin:0 0 16px">${headline}</h1>
-              <table style="width:100%;border-collapse:collapse;margin:0 0 16px">${beatRows}</table>
-              ${more}
-              <a href="${appUrl}/store" style="background:#D4BFA0;color:#0a0907;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold;font-size:13px;margin-top:8px">Listen now</a>
-              <p style="color:#3a3328;font-size:10px;margin:20px 0 0">You follow ${producerName} on U2C. <a href="${appUrl}/store/account" style="color:#6a5d4a">Manage</a>.</p>
-            </div>`,
+          html: emailShell(`New from ${producerName}`,
+            `${emailHeading(headline)}
+             <table style="width:100%;border-collapse:collapse;margin:0 0 16px">${beatRows}</table>
+             ${more}
+             ${emailButton('Listen now', `${appUrl}/store`)}
+             ${emailFooter(`You follow ${producerName} on U2C.`, `${appUrl}/store/account`)}`,
+          ),
         }),
       ));
       emailsSent += results.filter((r) => r.status === 'fulfilled').length;
