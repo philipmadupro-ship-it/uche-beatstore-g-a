@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';
 import { WavePlayer } from './WavePlayer';
-import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
@@ -380,35 +379,16 @@ export function PlayerBar() {
               </button>
             </div>
 
-            {/* Vinyl — the cover sits in the center label and the whole disc
-                spins while playing (paused = upright, readable). Respects
-                prefers-reduced-motion. The signature "vinyl" treatment. */}
-            <div className="flex items-center justify-center py-7">
-              <div
-                className={cn(
-                  'relative w-[15rem] h-[15rem] rounded-full flex items-center justify-center',
-                  'bg-[radial-gradient(circle_at_50%_50%,#1a1611_0%,#0c0907_58%,#060403_100%)]',
-                  'shadow-[0_30px_80px_-10px_rgba(0,0,0,0.72),inset_0_0_50px_rgba(0,0,0,0.7)]',
-                  isPlaying && 'animate-[spin_9s_linear_infinite] motion-reduce:animate-none',
+            {/* Square cover art — large, Spotify-style hero. */}
+            <div className="flex items-center justify-center pt-5 pb-1">
+              <div className="w-full aspect-square rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_28px_70px_-12px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.05)]">
+                {currentTrack.cover_url ? (
+                  <img src={currentTrack.cover_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center">
+                    <Music size={48} className="text-[#3a3328]" />
+                  </div>
                 )}
-              >
-                {/* Concentric grooves */}
-                <div className="absolute inset-3 rounded-full border border-white/[0.03]" />
-                <div className="absolute inset-8 rounded-full border border-white/[0.025]" />
-                <div className="absolute inset-[3.25rem] rounded-full border border-white/[0.02]" />
-                {/* Light sheen sweeping across the disc */}
-                <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-transparent via-white/[0.05] to-transparent pointer-events-none" />
-                {/* Center label = cover art, with a punched spindle hole */}
-                <div className="w-36 h-36 rounded-full overflow-hidden border-[5px] border-[#0a0907] relative shadow-[0_8px_28px_rgba(0,0,0,0.55)]">
-                  {currentTrack.cover_url ? (
-                    <img src={currentTrack.cover_url} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center">
-                      <Music size={36} className="text-[#3a3328]" />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 m-auto w-3.5 h-3.5 rounded-full bg-[#0a0907] border border-black/70 shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)]" />
-                </div>
               </div>
             </div>
 
@@ -435,23 +415,37 @@ export function PlayerBar() {
                 )}
               </div>
 
-              {/* Waveform — MiniWaveform reads global progress; no second
-                  WaveSurfer instance so the audio can't double-play. */}
-              <div className="mt-5 mb-2">
-                {currentTrack.audio_url ? (
-                  <MiniWaveform
-                    trackId={currentTrack.id}
-                    peaksUrl={currentTrack.peaks_url ?? null}
-                    height={48}
-                    isActive
+              {/* Progress — a straight, Spotify-style scrubber. Click anywhere
+                  on the track to seek; a thumb appears on hover. */}
+              <div className="mt-6">
+                <div
+                  role="slider"
+                  aria-label="Seek"
+                  aria-valuenow={Math.round(progress * 100)}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  onClick={(e) => {
+                    if (totalSeconds <= 0) return;
+                    const r = e.currentTarget.getBoundingClientRect();
+                    seekTo(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)));
+                  }}
+                  className="group/seek relative h-4 flex items-center cursor-pointer"
+                >
+                  <div className="w-full h-[5px] rounded-full bg-white/[0.13] overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-[#E8DCC8] group-hover/seek:bg-[#D4BFA0] transition-[width,background-color] duration-150 ease-linear"
+                      style={{ width: `${Math.min(100, Math.max(0, progress * 100))}%` }}
+                    />
+                  </div>
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white shadow-[0_1px_5px_rgba(0,0,0,0.55)] opacity-0 group-hover/seek:opacity-100 transition-opacity"
+                    style={{ left: `${Math.min(100, Math.max(0, progress * 100))}%` }}
                   />
-                ) : (
-                  <div className="w-full h-12 bg-[#1a160f] rounded-lg" />
-                )}
-              </div>
-              <div className="flex justify-between text-[10px] font-mono text-[#5a5142] tabular-nums">
-                <span>{formatTime(currentSeconds)}</span>
-                <span>{formatTime(totalSeconds)}</span>
+                </div>
+                <div className="flex justify-between text-[10px] font-mono text-[#5a5142] tabular-nums mt-1.5">
+                  <span>{formatTime(currentSeconds)}</span>
+                  <span>{formatTime(totalSeconds)}</span>
+                </div>
               </div>
 
               {/* Transport */}
@@ -462,17 +456,18 @@ export function PlayerBar() {
                 >
                   <Shuffle size={18} />
                 </button>
-                <button onClick={prev} className="w-10 h-10 flex items-center justify-center rounded-full text-[#a08a6a] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all">
-                  <PrevGlyph size={24} />
+                <button onClick={prev} className="w-10 h-10 flex items-center justify-center rounded-full text-[#cdbf9f] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all">
+                  <PrevGlyph size={26} />
                 </button>
                 <button
                   onClick={togglePlay}
-                  className="w-16 h-16 rounded-full flex items-center justify-center text-black bg-gradient-to-b from-white to-[#ece4d4] hover:scale-[1.06] active:scale-95 transition-transform duration-150 shadow-[0_6px_28px_rgba(0,0,0,0.4),0_0_0_0.5px_rgba(0,0,0,0.06),inset_0_2px_0_rgba(255,255,255,0.9)]"
+                  className="w-[3.75rem] h-[3.75rem] rounded-full flex items-center justify-center text-[#0a0907] bg-[#D4BFA0] hover:bg-[#E2CDA8] hover:scale-[1.05] active:scale-95 transition-all duration-150 shadow-[0_10px_30px_-8px_rgba(212,191,160,0.55)]"
+                  aria-label={isPlaying ? 'Pause' : 'Play'}
                 >
-                  {isPlaying ? <PauseGlyph size={24} /> : <PlayGlyph size={24} className="ml-1" />}
+                  {isPlaying ? <PauseGlyph size={25} /> : <PlayGlyph size={25} className="ml-1" />}
                 </button>
-                <button onClick={next} className="w-10 h-10 flex items-center justify-center rounded-full text-[#a08a6a] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all">
-                  <NextGlyph size={24} />
+                <button onClick={next} className="w-10 h-10 flex items-center justify-center rounded-full text-[#cdbf9f] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all">
+                  <NextGlyph size={26} />
                 </button>
                 <button
                   onClick={cycleRepeat}
