@@ -105,7 +105,11 @@ export function BeatListRow({
         )}
 
         <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-          {track.free_download_enabled ? (
+          {track.exclusive_sold ? (
+            <span className="px-3 py-2 rounded-md bg-white/[0.03] border border-[#D4BFA0]/25 text-[#D4BFA0] text-[10px] font-bold uppercase tracking-wider">
+              Exclusive Sold
+            </span>
+          ) : track.free_download_enabled ? (
             <button
               onClick={onFreeDownload}
               className="px-3 py-2 rounded-md bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 text-[#6DC6A4] text-[10px] font-bold uppercase tracking-wider hover:bg-[#6DC6A4]/20 transition-colors"

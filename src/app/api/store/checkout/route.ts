@@ -207,7 +207,7 @@ export async function POST(req: NextRequest) {
 
     const { data: tracks, error: tracksErr } = await admin
       .from('tracks')
-      .select('id, user_id, title, store_listed, lease_price_usd, exclusive_price_usd, wav_url, stems_status')
+      .select('id, user_id, title, store_listed, exclusive_sold, lease_price_usd, exclusive_price_usd, wav_url, stems_status')
       .in('id', trackIds);
 
     if (tracksErr) throw tracksErr;
@@ -218,6 +218,17 @@ export async function POST(req: NextRequest) {
     const unlisted = (tracks as any[]).filter((t) => !t.store_listed).map((t: any) => t.title);
     if (unlisted.length) {
       return NextResponse.json({ error: `Not for sale: ${unlisted.join(', ')}` }, { status: 400 });
+    }
+
+    // Exclusive-sold guard (mig 075). Once a beat's exclusive rights have sold,
+    // it can't be licensed again under ANY tier — the client hides the buttons,
+    // but this server check is the authoritative gate against a forged request.
+    const soldOut = (tracks as any[]).filter((t) => t.exclusive_sold).map((t: any) => t.title);
+    if (soldOut.length) {
+      return NextResponse.json(
+        { error: `Exclusive rights already sold: ${soldOut.join(', ')}` },
+        { status: 409 },
+      );
     }
 
     // Exclusive deliverable check — used to reject the session up front,

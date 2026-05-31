@@ -124,7 +124,11 @@ async function runFulfillment(params: {
     }
   }
 
-  // 2. Exclusivity lock — for any exclusive item, delist the track
+  // 2. Exclusivity lock — for any exclusive item, mark the track sold.
+  // We keep store_listed = true so the storefront still renders the beat
+  // with an "Exclusive Sold" badge (buy options hidden client-side) instead
+  // of having it silently vanish. The producer can re-list by clearing the
+  // flag; a refund clears it automatically (charge.refunded branch below).
   if (hasAnyExclusive) {
     const exclusiveTrackIds = lineItems
       .filter((li) => li.license_type === 'exclusive')
@@ -134,12 +138,12 @@ async function runFulfillment(params: {
       try {
         const { error } = await admin
           .from('tracks')
-          .update({ store_listed: false })
+          .update({ exclusive_sold: true })
           .in('id', exclusiveTrackIds);
         if (error) {
           log.warn('exclusivity lock failed', { trackIds: exclusiveTrackIds, error: errorMessage(error) });
         } else {
-          log.info('exclusive tracks delisted', { trackIds: exclusiveTrackIds });
+          log.info('exclusive tracks marked sold', { trackIds: exclusiveTrackIds });
         }
       } catch (err) {
         log.warn('exclusivity lock threw', { error: errorMessage(err) });
@@ -861,7 +865,7 @@ export async function POST(req: NextRequest) {
               if (exclusiveTracks.length > 0) {
                 await admin
                   .from('tracks')
-                  .update({ store_listed: true })
+                  .update({ exclusive_sold: false, store_listed: true })
                   .in('id', exclusiveTracks);
                 log.info('refunded exclusive tracks re-listed', { track_ids: exclusiveTracks });
               }

@@ -5,7 +5,9 @@ import { requireUser } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { emailShell } from '@/lib/email/templates';
+import { emailShell, emailButton } from '@/lib/email/templates';
+import { getStripe, isStripeConfigured } from '@/lib/stripe/server';
+import { getAppUrl } from '@/lib/env';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -56,16 +58,90 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // Load + ownership check.
     const { data: offer } = await admin
       .from('buyer_offers')
-      .select('id, seller_user_id, track_title, buyer_email, offered_price_usd, status')
+      .select('id, seller_user_id, track_id, track_title, buyer_email, offered_price_usd, status')
       .eq('id', id)
       .maybeSingle();
     if (!offer || (offer as any).seller_user_id !== userId) {
       return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
     }
 
-    const status = STATUS_FOR[parsed.data.action];
+    const action = parsed.data.action;
+    const trackId = (offer as any).track_id as string | null;
+    const offered = Number((offer as any).offered_price_usd);
+    const buyerEmail = (offer as any).buyer_email as string;
+    const title = (offer as any).track_title as string;
+
+    // Accepting an offer that's now sold-out under exclusive rights makes no
+    // sense — block it (mig 075). The track row is the source of truth.
+    let trackRow: { wav_url: string | null; stems_status: string | null; exclusive_sold: boolean | null } | null = null;
+    if (trackId) {
+      const { data: t } = await admin
+        .from('tracks')
+        .select('wav_url, stems_status, exclusive_sold')
+        .eq('id', trackId)
+        .maybeSingle();
+      trackRow = (t as any) ?? null;
+      if (action === 'accept' && trackRow?.exclusive_sold) {
+        return NextResponse.json(
+          { error: 'Exclusive rights for this track have already sold.' },
+          { status: 409 },
+        );
+      }
+    }
+
+    const status = STATUS_FOR[action];
     const { error: updErr } = await admin.from('buyer_offers').update({ status }).eq('id', id);
     if (updErr) throw updErr;
+
+    // On ACCEPT, mint a Stripe Checkout payment link for the agreed price so
+    // the buyer can pay immediately. The existing webhook fulfils it exactly
+    // like a normal store purchase (purchase_kind=track_license, exclusive) —
+    // writes license_purchases, locks the exclusive, emails the download link,
+    // and flags needs_stems_upload when WAV/stems aren't ready yet.
+    let paymentUrl: string | null = null;
+    if (action === 'accept' && trackId && isStripeConfigured()) {
+      try {
+        const APP_URL = getAppUrl();
+        const stemsReady = (s: string | null | undefined) =>
+          s === 'ready' || s === 'done' || s === 'complete';
+        const stemsPending = !trackRow?.wav_url && !stemsReady(trackRow?.stems_status);
+
+        const session = await getStripe().checkout.sessions.create({
+          mode: 'payment',
+          customer_email: buyerEmail,
+          line_items: [{
+            quantity: 1,
+            price_data: {
+              currency: 'usd',
+              unit_amount: Math.round(offered * 100),
+              product_data: { name: `${title} — Exclusive Rights` },
+            },
+          }],
+          metadata: {
+            purchase_kind: 'track_license',
+            source_surface: 'store',
+            content_id: trackId,
+            license_id: 'exclusive-rights',
+            license_type: 'exclusive',
+            seller_user_id: userId,
+            buyer_email: buyerEmail,
+            cart_items: JSON.stringify([
+              { track_id: trackId, license_id: 'exclusive-rights', license_type: 'exclusive' },
+            ]),
+            promo_code: '',
+            offer_id: id,
+            stems_pending_track_ids: stemsPending ? trackId : '',
+          },
+          success_url: `${APP_URL}/store/download?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${APP_URL}/store`,
+        });
+        paymentUrl = session.url ?? null;
+      } catch (stripeErr) {
+        // Don't fail the accept — the status is already flipped. Fall back to
+        // the plain "reply to arrange payment" email below.
+        log.warn('offer payment-link creation failed', { offerId: id, error: errorMessage(stripeErr) });
+      }
+    }
 
     // Best-effort buyer email.
     try {
@@ -83,17 +159,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           producerEmail = authUser?.user?.email ?? null;
         }
 
-        const title = (offer as any).track_title as string;
-        const offered = Number((offer as any).offered_price_usd);
-        const buyerEmail = (offer as any).buyer_email as string;
-
         let subject: string;
         let body: string;
-        if (parsed.data.action === 'accept') {
+        if (action === 'accept') {
           subject = `Your offer on "${title}" was accepted`;
-          body = `<h1 style="color:#6DC6A4;font-size:22px;margin:0 0 8px">Offer accepted — ${money(offered)}</h1>
-            <p style="color:#a08a6a;font-size:13px;margin:0 0 16px">The producer accepted your offer on <strong style="color:#E8DCC8">${title}</strong>. Reply to this email to arrange payment + delivery.</p>`;
-        } else if (parsed.data.action === 'counter') {
+          if (paymentUrl) {
+            body = `<h1 style="color:#6DC6A4;font-size:22px;margin:0 0 8px">Offer accepted — ${money(offered)}</h1>
+              <p style="color:#a08a6a;font-size:13px;margin:0 0 20px">The producer accepted your offer on <strong style="color:#E8DCC8">${title}</strong>. Pay securely below to unlock your exclusive download — the link is good for this agreed price.</p>
+              ${emailButton(`Pay ${money(offered)} & download`, paymentUrl)}
+              <p style="color:#6a5d4a;font-size:11px;margin:16px 0 0">Or reply to this email with any questions before paying.</p>`;
+          } else {
+            body = `<h1 style="color:#6DC6A4;font-size:22px;margin:0 0 8px">Offer accepted — ${money(offered)}</h1>
+              <p style="color:#a08a6a;font-size:13px;margin:0 0 16px">The producer accepted your offer on <strong style="color:#E8DCC8">${title}</strong>. Reply to this email to arrange payment + delivery.</p>`;
+          }
+        } else if (action === 'counter') {
           const counter = parsed.data.counter_price_usd!;
           subject = `Counter-offer on "${title}" — ${money(counter)}`;
           body = `<h1 style="color:#D4BFA0;font-size:22px;margin:0 0 8px">Counter-offer: ${money(counter)}</h1>
@@ -117,7 +196,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       log.warn('offer-response email failed', { error: errorMessage(mailErr) });
     }
 
-    return NextResponse.json({ ok: true, status });
+    return NextResponse.json({ ok: true, status, payment_url: paymentUrl });
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }

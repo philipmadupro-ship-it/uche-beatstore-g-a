@@ -10,6 +10,7 @@ import {
 } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { autoDeliverStems } from '@/lib/stems/auto-deliver';
 
 const log = createLogger('api.tracks.stems.upload');
 export const runtime = 'nodejs';
@@ -157,6 +158,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // Track-level stems_status enum mirrors the stems row's status
       // for the library list view's "Stems" badge.
       await admin.from('tracks').update({ stems_status: 'done' }).eq('id', trackId);
+
+      // Auto-deliver to any buyer awaiting stems for this track. Idempotent
+      // (stems_delivery_email_sent guards re-sends), best-effort — never blocks
+      // the upload response.
+      await autoDeliverStems(admin, trackId);
     } else {
       // Local-store path — same shape, in-memory.
       const existing = query('stems', (s) => (s as { track_id: string }).track_id === trackId)

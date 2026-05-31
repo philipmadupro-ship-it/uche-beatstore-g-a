@@ -34,6 +34,9 @@ export interface Track {
   lease_price_usd?: number | null;
   exclusive_price_usd?: number | null;
   store_listed?: boolean | null;
+  /** An exclusive license has sold — the storefront shows an "Exclusive Sold"
+   *  badge and hides buy options (mig 075). Cleared on refund or manual re-list. */
+  exclusive_sold?: boolean | null;
   free_download_enabled?: boolean | null;
   /** Store display position. Lower = appears earlier. NULL = unordered (shown after all ordered tracks). */
   store_sort_order?: number | null;

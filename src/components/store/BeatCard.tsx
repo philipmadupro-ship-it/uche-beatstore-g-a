@@ -112,8 +112,15 @@ export function BeatCard({
           </div>
         </div>
 
-        {/* Top-left chip — BPM or Free badge */}
-        {track.free_download_enabled ? (
+        {/* Exclusive sold — corner ribbon, takes priority over the Free/BPM chip */}
+        {track.exclusive_sold && (
+          <div className="absolute top-2.5 left-2.5 z-30 px-2 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase tracking-wider bg-black/75 text-[#D4BFA0] border border-[#D4BFA0]/40 backdrop-blur-sm pointer-events-none">
+            Exclusive Sold
+          </div>
+        )}
+
+        {/* Top-left chip — BPM or Free badge (hidden once sold) */}
+        {track.exclusive_sold ? null : track.free_download_enabled ? (
           <div className="absolute top-2.5 left-2.5 z-20 px-2 py-0.5 rounded-md text-[9px] font-mono font-bold uppercase tracking-wider bg-[#6DC6A4] text-black">
             Free
           </div>
@@ -195,7 +202,15 @@ export function BeatCard({
         {/* Buy strip — explicit, luxurious. Lease + Exclusive side-by-side
             with their own labels and visible separator. */}
         <div className="mt-auto pt-4">
-          {track.free_download_enabled ? (
+          {track.exclusive_sold ? (
+            <div
+              data-card-action
+              className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-xl bg-white/[0.03] border border-[#D4BFA0]/25 text-[#D4BFA0] text-[12px] font-bold uppercase tracking-[0.18em] cursor-default"
+              title="This beat's exclusive rights have been sold"
+            >
+              Exclusive Sold
+            </div>
+          ) : track.free_download_enabled ? (
             <button
               data-card-action
               onClick={stop(onFreeDownload)}

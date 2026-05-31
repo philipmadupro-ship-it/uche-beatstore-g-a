@@ -453,8 +453,17 @@ export default function StoreProductPage({
               </div>
             )}
 
-            {/* License cards */}
-            {licenses.length > 0 ? (
+            {/* License cards — hidden once the exclusive has sold (mig 075) */}
+            {track.exclusive_sold ? (
+              <div className="rounded-xl border border-[#D4BFA0]/30 bg-[#14110d] px-5 py-6 text-center">
+                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#D4BFA0] mb-1.5">
+                  Exclusive Sold
+                </p>
+                <p className="text-[12px] text-[#a08a6a] leading-relaxed">
+                  The exclusive rights to this beat have been purchased. It&apos;s no longer available for license.
+                </p>
+              </div>
+            ) : licenses.length > 0 ? (
               <div>
                 <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-3">
                   License Options

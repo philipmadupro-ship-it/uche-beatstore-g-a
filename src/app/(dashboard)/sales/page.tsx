@@ -439,8 +439,9 @@ function OfferRow({ offer, onStatusChange }: { offer: Offer; onStatusChange: (id
       onStatusChange(offer.id, data.status);
       setCounterOpen(false);
       toast.success(
-        action === 'accept' ? 'Offer accepted — buyer notified' :
-        action === 'counter' ? 'Counter sent to buyer' : 'Offer declined',
+        action === 'accept'
+          ? (data.payment_url ? 'Offer accepted — payment link emailed to buyer' : 'Offer accepted — buyer notified')
+          : action === 'counter' ? 'Counter sent to buyer' : 'Offer declined',
       );
     } catch (err: any) {
       toast.error('Could not respond', err.message);

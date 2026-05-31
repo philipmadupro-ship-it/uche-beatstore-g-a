@@ -13,7 +13,7 @@ const TRACK_FIELDS = [
   'duration_seconds', 'bpm', 'key', 'scale',
   'rating', 'description',
   'lease_price_usd', 'exclusive_price_usd',
-  'store_listed', 'free_download_enabled', 'voice_tag_enabled', 'created_at',
+  'store_listed', 'free_download_enabled', 'voice_tag_enabled', 'exclusive_sold', 'created_at',
 ].join(', ');
 
 /**

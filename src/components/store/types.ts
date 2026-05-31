@@ -46,6 +46,9 @@ export interface PlaylistTrackItem {
   lease_price_usd?: number | null;
   exclusive_price_usd?: number | null;
   free_download_enabled?: boolean | null;
+  /** Exclusive license already sold (mig 075) — show "Exclusive Sold" badge,
+   *  hide buy options. */
+  exclusive_sold?: boolean | null;
 }
 
 export interface FeaturedPlaylist {
