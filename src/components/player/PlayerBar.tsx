@@ -2,9 +2,10 @@
 
 import { usePlayer } from '@/hooks/usePlayer';
 import {
-  Play, Pause, SkipForward, SkipBack, Volume2, VolumeX,
+  Volume2, VolumeX,
   ListMusic, Music, Shuffle, Repeat, ChevronDown, X,
 } from 'lucide-react';
+import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';
 import { WavePlayer } from './WavePlayer';
 import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
@@ -128,14 +129,14 @@ export function PlayerBar() {
       <div className="fixed bottom-3 md:bottom-5 left-2 right-2 md:left-1/2 md:right-auto md:-translate-x-1/2 z-50 pointer-events-none flex justify-center">
         <div
           className={cn(
-            'pointer-events-auto flex items-center gap-2 md:gap-3 pl-2 pr-2 md:pr-3 py-2 rounded-[28px]',
-            // Apple-style frosted glass: heavy blur + saturation pop, a
-            // translucent warm base so the page bleeds through, a bright
-            // top edge-light (inset highlight) and a soft, far-cast shadow.
-            'backdrop-blur-2xl backdrop-saturate-150 border border-white/[0.09]',
-            'bg-[#14110d]/72',
-            'shadow-[0_16px_50px_-8px_rgba(0,0,0,0.65),0_2px_8px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.10),inset_0_-1px_0_rgba(0,0,0,0.3)]',
-            'transition-shadow duration-300 hover:shadow-[0_22px_60px_-8px_rgba(0,0,0,0.7),0_2px_8px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.12)]',
+            'pointer-events-auto relative flex items-center gap-2 md:gap-3 pl-2 pr-2 md:pr-3 py-2 rounded-[28px]',
+            // Deep frosted glass: maximal blur + saturation, a very translucent
+            // warm base so the page reads clearly through it, a bright top
+            // edge-light + a faint bottom shade, and a soft far-cast shadow.
+            'backdrop-blur-3xl backdrop-saturate-[1.8] border border-white/[0.10]',
+            'bg-[#14110d]/55',
+            'shadow-[0_16px_50px_-8px_rgba(0,0,0,0.6),0_2px_8px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(0,0,0,0.3)]',
+            'transition-shadow duration-300 hover:shadow-[0_22px_60px_-8px_rgba(0,0,0,0.68),0_2px_8px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.14)]',
             'animate-in slide-in-from-bottom-4 fade-in duration-300',
             // Below md: no min-width, fill the screen edges-minus-padding.
             // md+: anchor to the center column with the original
@@ -143,6 +144,13 @@ export function PlayerBar() {
             'w-full md:w-auto md:min-w-[640px] md:max-w-[920px]',
           )}
         >
+          {/* Glass sheen — a top-down light reflection across the surface,
+              clipped to the pill radius. Pure decoration, no hit-testing. */}
+          <div
+            aria-hidden
+            className="absolute inset-0 rounded-[28px] pointer-events-none bg-gradient-to-b from-white/[0.07] via-transparent to-white/[0.015]"
+          />
+
           {/* Cover + name + meta — left cap of the pill. */}
           <div className="flex items-center gap-2 md:gap-3 pl-1 pr-2 md:pr-3 py-1 min-w-0">
             <button
@@ -186,7 +194,7 @@ export function PlayerBar() {
             <span className="text-[10px] font-mono text-[#c8b89a] tabular-nums w-9 text-right shrink-0">
               {formatTime(currentSeconds)}
             </span>
-            <div className="w-[210px] h-8 flex items-center px-1.5 rounded-xl bg-black/15 shadow-[inset_0_1px_2px_rgba(0,0,0,0.25)]">
+            <div className="relative w-[210px] h-8 flex items-center px-1.5 rounded-xl bg-black/15 shadow-[inset_0_1px_2px_rgba(0,0,0,0.25)]">
               {currentTrack.audio_url ? (
                 <WavePlayer
                   url={currentTrack.audio_url}
@@ -199,6 +207,15 @@ export function PlayerBar() {
               ) : (
                 <div className="w-full h-[2px] bg-white/10 rounded" />
               )}
+              {/* Progression playhead — a slim warm line that tracks the song
+                  across the waveform, glowing softly. Driven by the global
+                  `progress` (0..1); offset by the 6px wrapper padding. */}
+              {currentTrack.audio_url && totalSeconds > 0 && (
+                <div
+                  className="absolute top-1 bottom-1 w-[2px] bg-[#F0E6D2] rounded-full pointer-events-none shadow-[0_0_8px_rgba(240,230,210,0.8)] transition-[left] duration-150 ease-linear"
+                  style={{ left: `calc(6px + ${Math.min(1, Math.max(0, progress))} * (100% - 12px))` }}
+                />
+              )}
             </div>
             <span className="text-[10px] font-mono text-[#5a5142] tabular-nums w-9 shrink-0">
               {formatTime(totalSeconds)}
@@ -209,17 +226,17 @@ export function PlayerBar() {
               circular element so it reads as the pill's "anchor". */}
           <div className="flex items-center gap-0.5 shrink-0">
             <button onClick={prev} className="w-8 h-8 flex items-center justify-center rounded-full text-[#a08a6a] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Previous track">
-              <SkipBack size={13} fill="currentColor" />
+              <PrevGlyph size={15} />
             </button>
             <button
               onClick={togglePlay}
               className="w-10 h-10 rounded-full flex items-center justify-center text-black ml-0.5 mr-0.5 bg-gradient-to-b from-white to-[#ece4d4] hover:scale-[1.07] active:scale-95 transition-transform duration-150 shadow-[0_3px_12px_rgba(0,0,0,0.35),0_0_0_0.5px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)]"
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
-              {isPlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="ml-0.5" />}
+              {isPlaying ? <PauseGlyph size={16} /> : <PlayGlyph size={16} className="ml-0.5" />}
             </button>
             <button onClick={next} className="w-8 h-8 flex items-center justify-center rounded-full text-[#a08a6a] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Next track">
-              <SkipForward size={13} fill="currentColor" />
+              <NextGlyph size={15} />
             </button>
           </div>
 
@@ -424,16 +441,16 @@ export function PlayerBar() {
                   <Shuffle size={18} />
                 </button>
                 <button onClick={prev} className="w-10 h-10 flex items-center justify-center rounded-full text-[#a08a6a] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all">
-                  <SkipBack size={22} fill="currentColor" />
+                  <PrevGlyph size={24} />
                 </button>
                 <button
                   onClick={togglePlay}
                   className="w-16 h-16 rounded-full flex items-center justify-center text-black bg-gradient-to-b from-white to-[#ece4d4] hover:scale-[1.06] active:scale-95 transition-transform duration-150 shadow-[0_6px_28px_rgba(0,0,0,0.4),0_0_0_0.5px_rgba(0,0,0,0.06),inset_0_2px_0_rgba(255,255,255,0.9)]"
                 >
-                  {isPlaying ? <Pause size={22} fill="currentColor" /> : <Play size={22} fill="currentColor" className="ml-1" />}
+                  {isPlaying ? <PauseGlyph size={24} /> : <PlayGlyph size={24} className="ml-1" />}
                 </button>
                 <button onClick={next} className="w-10 h-10 flex items-center justify-center rounded-full text-[#a08a6a] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all">
-                  <SkipForward size={22} fill="currentColor" />
+                  <NextGlyph size={24} />
                 </button>
                 <button
                   onClick={cycleRepeat}

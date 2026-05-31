@@ -16,9 +16,10 @@
 
 import { useMemo, useState } from 'react';
 import {
-  Music, Play, Pause, Heart, MoreHorizontal, ShoppingBag, Copy,
+  Music, Heart, MoreHorizontal, ShoppingBag, Copy,
   Plus, Download, Clock,
 } from 'lucide-react';
+import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { fmtDur } from './helpers';
 import type { StoreTrack } from './types';
 
@@ -130,8 +131,8 @@ export function StoreListView({
                     className="absolute inset-0 flex items-center justify-center bg-black/55 text-white"
                   >
                     {isCurPlaying
-                      ? <Pause size={12} fill="currentColor" />
-                      : <Play size={12} fill="currentColor" className="ml-0.5" />}
+                      ? <PauseGlyph size={13} />
+                      : <PlayGlyph size={13} className="ml-0.5" />}
                   </span>
                 )}
               </div>

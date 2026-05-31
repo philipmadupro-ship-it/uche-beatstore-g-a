@@ -9,6 +9,7 @@ import {
   AtSign, Download, ChevronRight, Tag, Link2,
 } from 'lucide-react';
 import { MiniWaveform } from '@/components/player/MiniWaveform';
+import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useCart } from '@/hooks/useCart';
@@ -267,8 +268,8 @@ export default function StoreProductPage({
               <div className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity duration-200 ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                 <div className="w-20 h-20 rounded-full bg-white text-black flex items-center justify-center shadow-2xl transform transition-transform duration-200 group-hover:scale-105">
                   {isCurrentPlaying
-                    ? <Pause size={30} fill="currentColor" />
-                    : <Play size={30} className="ml-1" fill="currentColor" />}
+                    ? <PauseGlyph size={30} />
+                    : <PlayGlyph size={30} className="ml-1" />}
                 </div>
               </div>
               {/* Currently playing indicator */}
@@ -771,7 +772,7 @@ function RelatedCard({ track }: { track: Track }) {
           </div>
         )}
         <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Play size={18} fill="currentColor" className="text-white ml-0.5" />
+          <PlayGlyph size={18} className="text-white ml-0.5" />
         </div>
       </div>
       <div className="p-2.5">

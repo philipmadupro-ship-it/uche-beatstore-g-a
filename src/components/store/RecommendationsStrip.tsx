@@ -11,7 +11,8 @@
  */
 
 import { useMemo } from 'react';
-import { Play, Pause, Music } from 'lucide-react';
+import { Music } from 'lucide-react';
+import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { CoverImage } from '@/components/ui/CoverImage';
 
 interface MinTrack {
@@ -85,7 +86,7 @@ export function RecommendationsStrip<T extends MinTrack>({
                   aria-label={isCurrentPlaying ? 'Pause' : 'Play'}
                 >
                   <span className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shadow-xl">
-                    {isCurrentPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
+                    {isCurrentPlaying ? <PauseGlyph size={17} /> : <PlayGlyph size={17} className="ml-0.5" />}
                   </span>
                 </span>
               </div>

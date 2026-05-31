@@ -12,6 +12,7 @@ import {
   ShoppingBag, ArrowRight, AlertCircle, TrendingUp, DollarSign,
   Upload, Rocket, ChevronLeft, ChevronRight, ChevronDown, X, Package,
 } from 'lucide-react';
+import { PlayGlyph } from '@/components/player/TransportIcons';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -758,7 +759,7 @@ export default function LibraryPage() {
               </p>
               <div className="flex items-center gap-2 flex-wrap">
                 <button onClick={playAll} disabled={!filtered.length} className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-black text-[12px] font-bold hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-40 transition-all shadow-lg">
-                  <Play size={13} fill="currentColor" className="ml-0.5" />
+                  <PlayGlyph size={14} className="ml-0.5" />
                   Play all
                 </button>
                 <button onClick={shuffleAll} disabled={!filtered.length} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/[0.10] border border-white/[0.12] text-[#E8DCC8] text-[12px] font-medium hover:bg-white/[0.18] disabled:opacity-40 transition-colors backdrop-blur-sm">
@@ -891,7 +892,7 @@ export default function LibraryPage() {
                 </div>
                 {/* Hover play dot */}
                 <div className="absolute right-2.5 bottom-2.5 w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100" style={{ backgroundColor: accent }}>
-                  <Play size={10} fill="#000" className="text-black ml-0.5" />
+                  <PlayGlyph size={11} className="text-black ml-0.5" />
                 </div>
               </Link>
             ))}
@@ -1576,7 +1577,7 @@ function MiniTrackCard({
           <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
             {isPlaying
               ? <div className="flex items-end gap-[2px] h-4">{[3,5,7,5,3].map((h,i)=><span key={i} className="w-[3px] rounded-sm bg-[#D4BFA0] animate-bounce" style={{height:h,animationDelay:`${i*80}ms`}}/>)}</div>
-              : <Play size={14} fill="white" className="text-white ml-0.5" />}
+              : <PlayGlyph size={15} className="text-white ml-0.5" />}
           </div>
         </button>
       </div>
@@ -1600,7 +1601,7 @@ function MiniPlaylistCard({ playlist }: { playlist: any }) {
           : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1f1a33] to-[#0a0907]"><ListMusic size={24} className="text-[#9d95e8]/40" /></div>}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-black/30">
           <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
-            <Play size={14} fill="white" className="text-white ml-0.5" />
+            <PlayGlyph size={15} className="text-white ml-0.5" />
           </div>
         </div>
       </div>

@@ -8,7 +8,8 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Loader2, Camera, Check, X, Edit2, Play, Music, Download, Share2, Activity, Sliders } from 'lucide-react';
+import { Loader2, Camera, Check, X, Edit2, Music, Download, Share2, Activity, Sliders } from 'lucide-react';
+import { PlayGlyph } from '@/components/player/TransportIcons';
 import { useRouter } from 'next/navigation';
 import { Track, TrackStatus, TrackType } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -384,7 +385,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 onClick={() => setGlobalTrack(track)}
                 className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-md text-[12px] font-medium hover:bg-[#E8DCC8] transition-colors"
               >
-                <Play size={12} fill="currentColor" className="ml-0.5" />
+                <PlayGlyph size={13} className="ml-0.5" />
                 Play
               </button>
               <button

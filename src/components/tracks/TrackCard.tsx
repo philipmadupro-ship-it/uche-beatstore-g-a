@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Track } from '@/lib/types';
-import { Play, MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2, Share2, ChevronUp, ChevronDown } from 'lucide-react';
+import { MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2, Share2, ChevronUp, ChevronDown } from 'lucide-react';
+import { PlayGlyph } from '@/components/player/TransportIcons';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { setTrackDragData } from '@/lib/dnd';
@@ -209,7 +210,7 @@ export function TrackCard({
               onClick={handlePlay}
               className={`hidden ${isActive ? '' : 'group-hover:flex'} w-6 h-6 items-center justify-center rounded-full bg-white text-black hover:scale-110 transition-transform mx-auto`}
             >
-              <Play size={10} fill="currentColor" className="ml-0.5" />
+              <PlayGlyph size={11} className="ml-0.5" />
             </button>
           </>
         )}

@@ -1,6 +1,7 @@
 'use client';
 
-import { Music, Play, Pause, ExternalLink } from 'lucide-react';
+import { Music, ExternalLink } from 'lucide-react';
+import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { fmtDur } from './helpers';
 import type { StoreTrack } from './types';
 
@@ -44,8 +45,8 @@ export function BeatListRow({
           style={isCurrent ? { backgroundColor: accentColor } : {}}
         >
           {isCurrent && isPlaying
-            ? <Pause size={11} fill="currentColor" />
-            : <Play size={11} fill="currentColor" className="ml-0.5" />}
+            ? <PauseGlyph size={12} />
+            : <PlayGlyph size={12} className="ml-0.5" />}
         </button>
 
         <button

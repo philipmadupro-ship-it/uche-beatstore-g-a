@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Music, Play, Pause, Heart, Download, ShoppingBag } from 'lucide-react';
+import { Music, Play, Heart, Download, ShoppingBag } from 'lucide-react';
+import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { MiniWaveform } from '@/components/player/MiniWaveform';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { getSimilarTracks } from './helpers';
@@ -107,8 +108,8 @@ export function BeatCard({
             style={{ backgroundColor: accentColor }}
           >
             {isCurrent && isPlaying
-              ? <Pause size={20} fill="currentColor" />
-              : <Play size={20} fill="currentColor" className="ml-1" />}
+              ? <PauseGlyph size={20} />
+              : <PlayGlyph size={20} className="ml-1" />}
           </div>
         </div>
 

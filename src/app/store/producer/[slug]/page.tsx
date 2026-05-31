@@ -3,9 +3,10 @@
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import {
-  Music, Play, Pause, Loader2, Globe, Mail, AtSign, Link2,
+  Music, Loader2, Globe, Mail, AtSign, Link2,
   Heart, UserPlus, ArrowLeft, Tag, Gauge, Clock, Music2,
 } from 'lucide-react';
+import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast } from '@/hooks/useToast';
 import { getBuyerToken } from '@/lib/buyer-session';
@@ -438,9 +439,9 @@ function TrackCard({
         >
           <div className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-lg">
             {isCurrent && isPlaying ? (
-              <Pause size={18} fill="currentColor" />
+              <PauseGlyph size={18} />
             ) : (
-              <Play size={18} className="ml-0.5" fill="currentColor" />
+              <PlayGlyph size={18} className="ml-0.5" />
             )}
           </div>
         </button>

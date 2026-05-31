@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Track } from '@/lib/types';
-import { Play, Pause, Music, Star, MoreHorizontal, Trash2, MinusCircle, Info, Share2 } from 'lucide-react';
+import { Music, Star, MoreHorizontal, Trash2, MinusCircle, Info, Share2 } from 'lucide-react';
+import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { setTrackDragData } from '@/lib/dnd';
@@ -127,9 +128,9 @@ export function TrackGridCard({
               className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-2xl"
             >
               {isActive ? (
-                <Pause size={20} fill="currentColor" />
+                <PauseGlyph size={20} />
               ) : (
-                <Play size={20} fill="currentColor" className="ml-0.5" />
+                <PlayGlyph size={20} className="ml-0.5" />
               )}
             </button>
           </div>

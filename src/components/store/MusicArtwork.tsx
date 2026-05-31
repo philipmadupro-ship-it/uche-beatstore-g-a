@@ -15,7 +15,8 @@
  */
 
 import { useState } from 'react';
-import { Play, Pause, Music as MusicIcon, Loader2 } from 'lucide-react';
+import { Music as MusicIcon, Loader2 } from 'lucide-react';
+import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 
 export interface MusicArtworkProps {
   /** Producer / artist label shown on the vinyl center label */
@@ -110,9 +111,9 @@ export function MusicArtwork({
           {isLoading ? (
             <Loader2 size={18} className="animate-spin" />
           ) : isPlaying ? (
-            <Pause size={18} fill="currentColor" />
+            <PauseGlyph size={18} />
           ) : (
-            <Play size={18} fill="currentColor" className="ml-0.5" />
+            <PlayGlyph size={18} className="ml-0.5" />
           )}
         </button>
       )}

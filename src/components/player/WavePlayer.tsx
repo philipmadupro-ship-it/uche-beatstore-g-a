@@ -27,7 +27,7 @@
 import { useEffect, useState } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useWaveSurfer } from '@/hooks/useWaveSurfer';
-import { Play, Pause } from 'lucide-react';
+import { PlayGlyph, PauseGlyph } from './TransportIcons';
 import { audioSrc } from '@/lib/audio/url';
 import { normalizationGain } from '@/lib/audio/loudness';
 import { getOfflineSrc } from '@/lib/offline/audio-cache';
@@ -213,9 +213,9 @@ export function WavePlayer({
           className="w-8 h-8 rounded-full bg-[#16130e]/80 border border-white/[0.08] flex items-center justify-center text-[#E8DCC8] hover:border-[#D4BFA0]/50 hover:text-[#D4BFA0] hover:scale-105 active:scale-95 transition-all shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
         >
           {isPlaying ? (
-            <Pause size={13} fill="currentColor" />
+            <PauseGlyph size={14} />
           ) : (
-            <Play size={13} fill="currentColor" className="ml-0.5" />
+            <PlayGlyph size={14} className="ml-0.5" />
           )}
         </button>
       )}

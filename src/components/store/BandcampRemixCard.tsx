@@ -14,7 +14,8 @@
  * render can branch on track.type without rewiring callbacks.
  */
 
-import { Play, Pause, Download, ShoppingBag, Heart } from 'lucide-react';
+import { Download, ShoppingBag, Heart } from 'lucide-react';
+import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import type { Track } from '@/lib/types';
 
 export type BandcampRemixTrack = Track;
@@ -120,7 +121,7 @@ export default function BandcampRemixCard({
           style={{ backgroundColor: accentColor }}
           aria-label={isPlaying ? 'Pause' : 'Play'}
         >
-          {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
+          {isPlaying ? <PauseGlyph size={17} /> : <PlayGlyph size={17} className="ml-0.5" />}
         </button>
 
         {isCurrent && (

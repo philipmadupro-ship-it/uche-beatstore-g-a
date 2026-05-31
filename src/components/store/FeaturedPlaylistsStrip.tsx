@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import {
-  ListMusic, ChevronRight, X, Play, Pause, Music, ShoppingBag,
+  ListMusic, ChevronRight, X, Music, ShoppingBag,
 } from 'lucide-react';
+import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import type { Track } from '@/lib/types';
 import type { FeaturedPlaylist, PlaylistTrackItem } from './types';
 
@@ -116,8 +117,8 @@ export function FeaturedPlaylistsStrip({
                       className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-colors ${isCur ? 'bg-[#D4BFA0] text-black' : 'bg-white/[0.06] text-[#a08a6a] hover:bg-white/[0.12] hover:text-white'}`}
                     >
                       {isCur && isPlaying
-                        ? <Pause size={10} fill="currentColor" />
-                        : <Play size={10} fill="currentColor" className="ml-0.5" />}
+                        ? <PauseGlyph size={11} />
+                        : <PlayGlyph size={11} className="ml-0.5" />}
                     </button>
                     <div className="w-8 h-8 rounded shrink-0 bg-[#0a0907] overflow-hidden">
                       {t.cover_url
