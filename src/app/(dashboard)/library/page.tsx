@@ -208,7 +208,7 @@ export default function LibraryPage() {
     setPackModalOpen(true);
   };
 
-  const submitPack = async (name: string, price: number) => {
+  const submitPack = async (name: string, price: number, coverUrl: string | null) => {
     const ids = Array.from(selectedIds);
     setPacking(true);
     try {
@@ -232,6 +232,7 @@ export default function LibraryPage() {
           price_usd: price,
           store_featured: true,
           description: `${ids.length}-beat pack`,
+          ...(coverUrl ? { cover_url: coverUrl } : {}),
         }),
       });
       if (!patchRes.ok) throw new Error((await patchRes.json().catch(() => ({}))).error || 'Pricing failed');
@@ -1680,7 +1681,7 @@ function PackBuilderModal({
   tracks: Track[];
   busy: boolean;
   onClose: () => void;
-  onCreate: (name: string, price: number) => void;
+  onCreate: (name: string, price: number, coverUrl: string | null) => void;
 }) {
   const leaseSum = useMemo(
     () => tracks.reduce((s, t) => s + (t.lease_price_usd ?? 0), 0),
@@ -1688,6 +1689,9 @@ function PackBuilderModal({
   );
   const [name, setName] = useState('Beat Pack');
   const [discount, setDiscount] = useState(20); // percent off the lease total
+  // Pack cover defaults to the first selected beat that has artwork; the
+  // producer can click any beat in the strip to use its cover instead.
+  const [coverUrl, setCoverUrl] = useState<string | null>(tracks.find((t) => t.cover_url)?.cover_url ?? null);
 
   // If no lease prices are set we can't anchor a discount — let the producer
   // type an absolute price instead.
@@ -1709,16 +1713,29 @@ function PackBuilderModal({
           <button onClick={onClose} disabled={busy} className="text-[#5a5142] hover:text-[#E8DCC8] transition-colors disabled:opacity-40"><X size={16} /></button>
         </div>
 
-        {/* Selected beats — scrollable cover strip */}
+        {/* Selected beats — click one with art to set it as the pack cover */}
+        <p className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Pack cover <span className="text-[#3a3328]">— tap a beat</span></p>
         <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 scrollbar-hide">
-          {tracks.map((t) => (
-            <div key={t.id} className="shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-[#14110d] border border-[#1f1a13]" title={t.title}>
-              {t.cover_url
-                // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
-                : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={14} /></div>}
-            </div>
-          ))}
+          {tracks.map((t) => {
+            const selectable = !!t.cover_url;
+            const isCover = !!t.cover_url && coverUrl === t.cover_url;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => { if (selectable) setCoverUrl(t.cover_url!); }}
+                title={selectable ? `Use "${t.title}" as cover` : t.title}
+                className={`shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-[#14110d] border transition-all ${
+                  isCover ? 'border-[#9d95e8] ring-2 ring-[#9d95e8]/40' : 'border-[#1f1a13] hover:border-[#2d2620]'
+                } ${selectable ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
+              >
+                {t.cover_url
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={14} /></div>}
+              </button>
+            );
+          })}
         </div>
 
         {/* Name */}
@@ -1772,7 +1789,7 @@ function PackBuilderModal({
         )}
 
         <button
-          onClick={() => onCreate(name, price)}
+          onClick={() => onCreate(name, price, coverUrl)}
           disabled={!valid || busy}
           className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-bold uppercase tracking-wider bg-[#9d95e8] text-black hover:bg-[#b3aef0] transition-colors disabled:opacity-40"
         >

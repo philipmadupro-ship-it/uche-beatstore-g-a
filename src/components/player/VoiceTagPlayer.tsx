@@ -28,6 +28,9 @@ export function VoiceTagPlayer() {
   const trackIdRef = useRef<string | null>(null);
   // Restore the beat volume when the tag finishes (or as a safety timeout).
   const restoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set if the tag asset fails to load (404 / CORS) — we then stop trying so
+  // it never ducks the beat or spams retries.
+  const failedRef = useRef(false);
 
   const tagUrl = (currentTrack as any)?.voice_tag_url as string | undefined;
   const interval = Math.max(5, Number((currentTrack as any)?.voice_tag_interval) || 20);
@@ -41,8 +44,11 @@ export function VoiceTagPlayer() {
       audioRef.current.crossOrigin = 'anonymous';
       // Restore the ducked beat the moment the tag finishes.
       audioRef.current.addEventListener('ended', () => setDuckGain(1));
+      // If the tag can't load, never duck — and stop retrying.
+      audioRef.current.addEventListener('error', () => { failedRef.current = true; setDuckGain(1); });
     }
     if (tagUrl && audioRef.current.src !== tagUrl) {
+      failedRef.current = false; // new url — give it a fresh chance
       audioRef.current.src = tagUrl;
     }
     // Reset the interval bucket on track change so the tag fires near the start.
@@ -50,7 +56,7 @@ export function VoiceTagPlayer() {
       trackIdRef.current = currentTrack?.id ?? null;
       lastBucketRef.current = -1;
     }
-  }, [tagUrl, currentTrack?.id]);
+  }, [tagUrl, currentTrack?.id, setDuckGain]);
 
   // Keep the tag at a sensible level relative to the player volume.
   useEffect(() => {
@@ -59,7 +65,7 @@ export function VoiceTagPlayer() {
 
   // Fire the tag at each interval bucket while a tagged track is playing.
   useEffect(() => {
-    if (!tagUrl || !isPlaying || !currentTrack) return;
+    if (!tagUrl || failedRef.current || !isPlaying || !currentTrack) return;
     const dur = currentTrack.duration_seconds || 0;
     if (dur <= 0) return;
     const seconds = progress * dur;
@@ -77,8 +83,8 @@ export function VoiceTagPlayer() {
             if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
             const ms = Math.max(800, Math.min(4000, (el.duration || 1.5) * 1000 + 150));
             restoreTimerRef.current = setTimeout(() => setDuckGain(1), ms);
-          }).catch(() => undefined);
-        } catch { /* ignore */ }
+          }).catch(() => setDuckGain(1)); // transient (e.g. pause interrupt) — don't disable
+        } catch { setDuckGain(1); }
       }
     }
   }, [progress, isPlaying, tagUrl, interval, currentTrack, setDuckGain]);

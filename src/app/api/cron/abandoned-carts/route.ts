@@ -44,7 +44,20 @@ export async function GET(req: NextRequest) {
       .order('created_at', { ascending: true })
       .limit(100);
 
-    const rows = (carts ?? []) as any[];
+    const allRows = (carts ?? []) as any[];
+
+    // Dedupe by buyer email: a buyer who retries checkout spawns several cart
+    // rows — we only want ONE reminder per person. Keep the newest pending cart
+    // per email; suppress the rest (bump them to reminder_count 2 so they never
+    // fire). Rows are ordered oldest-first, so the last seen per email is newest.
+    const newestByEmail = new Map<string, any>();
+    for (const c of allRows) newestByEmail.set(c.buyer_email, c);
+    const rows = [...newestByEmail.values()];
+    const suppressIds = allRows.filter((c) => newestByEmail.get(c.buyer_email)?.id !== c.id).map((c) => c.id);
+    if (suppressIds.length > 0) {
+      await admin.from('abandoned_carts').update({ reminder_count: 2 }).in('id', suppressIds);
+    }
+
     const resendKey = process.env.RESEND_API_KEY;
     const checkoutBase = `${getAppUrl()}/store/checkout`;
     let reminded = 0;
