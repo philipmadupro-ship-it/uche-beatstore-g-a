@@ -23,6 +23,8 @@ export interface Track {
   acousticness?: number | null;
   rating?: number | null; // 1-5
   status?: TrackStatus | null;
+  /** Instrumental (no vocals) flag — distinct from `type` (migration 079). */
+  instrumental?: boolean | null;
   stems_status: StemsStatus;
   notes?: string | null;
   lyrics?: string | null;

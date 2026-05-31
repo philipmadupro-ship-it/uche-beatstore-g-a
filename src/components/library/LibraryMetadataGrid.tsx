@@ -1,31 +1,29 @@
 import type { Track } from '@/lib/types';
-import { fmtBpm, fmtKey, fmtLUFS, fmtDuration, fmtPct } from '@/lib/audio/format';
+import { fmtBpm, fmtKey, fmtLUFS, fmtDuration } from '@/lib/audio/format';
+import { camelotOf } from '@/lib/audio/harmonic';
 
 interface Props {
   track: Track;
 }
 
 /**
- * 8-cell read-only analysis grid for the library detail page.
- *
- * Extracted from `library/[id]/page.tsx`. Pure presentation — no
- * mutation, no state. The detail page is the deep-dive view so we show
- * the full feature set here (Energy / Danceability / Valence /
- * Acousticness) even though the drawer's grid was pared back to
- * BPM + Scale.
+ * Compact analysis grid for the track workspace. Pared back to the five
+ * concrete, decision-useful metrics — BPM, Key, Camelot keypoint (for
+ * harmonic matching), Loudness, Duration. The vibe estimates (energy /
+ * danceability / valence / acousticness) were noisy and were removed in
+ * favour of the discovery + matching tools below.
  */
 
 interface CellDef {
   label: string;
   value: string;
   accent?: string;
-  fill?: number | null;
-  fillColor?: string;
   large?: boolean;
 }
 
 export function LibraryMetadataGrid({ track }: Props) {
   const isMinor = track.scale === 'minor';
+  const camelot = camelotOf({ id: track.id, key: track.key, scale: track.scale });
 
   const cells: CellDef[] = [
     {
@@ -41,9 +39,11 @@ export function LibraryMetadataGrid({ track }: Props) {
       large: true,
     },
     {
-      label: 'Duration',
-      value: fmtDuration(track.duration_seconds),
-      accent: 'text-[#E8DCC8]',
+      // Camelot "keypoint" — the harmonic-mixing code used by the matching
+      // tools to find compatible beats/instrumentals.
+      label: 'Keypoint',
+      value: camelot ?? '—',
+      accent: 'text-[#D4BFA0]',
     },
     {
       label: 'Loudness',
@@ -51,54 +51,19 @@ export function LibraryMetadataGrid({ track }: Props) {
       accent: 'text-[#a08a6a]',
     },
     {
-      label: 'Energy',
-      value: fmtPct(track.energy),
-      fill: track.energy,
-      fillColor: '#e87a5a',
-      accent: 'text-[#e87a5a]',
-    },
-    {
-      label: 'Danceability',
-      value: fmtPct(track.danceability),
-      fill: track.danceability,
-      fillColor: '#D4BFA0',
-      accent: 'text-[#D4BFA0]',
-    },
-    {
-      label: 'Valence',
-      value: fmtPct(track.valence),
-      fill: track.valence,
-      fillColor: '#9d95e8',
-      accent: 'text-[#9d95e8]',
-    },
-    {
-      label: 'Acoustic',
-      value: fmtPct(track.acousticness),
-      fill: track.acousticness,
-      fillColor: '#8ecf9f',
-      accent: 'text-[#8ecf9f]',
+      label: 'Duration',
+      value: fmtDuration(track.duration_seconds),
+      accent: 'text-[#E8DCC8]',
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-10">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-10">
       {cells.map((cell) => (
         <div
           key={cell.label}
-          className={`relative overflow-hidden bg-[#0e0c08] border border-[#1a160f] rounded-xl px-4 py-4 ${
-            cell.large ? 'md:col-span-1' : ''
-          }`}
+          className="relative overflow-hidden bg-[#0e0c08] border border-[#1a160f] rounded-xl px-4 py-4"
         >
-          {/* Fill bar for percentage cells */}
-          {cell.fill != null && (
-            <div
-              className="absolute bottom-0 left-0 h-[3px] rounded-full opacity-60 transition-all duration-700"
-              style={{
-                width: `${Math.round(cell.fill * 100)}%`,
-                backgroundColor: cell.fillColor,
-              }}
-            />
-          )}
 
           <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">
             {cell.label}
