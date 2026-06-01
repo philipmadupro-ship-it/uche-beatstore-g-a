@@ -213,9 +213,7 @@ export function ContactsView({
     return map;
   }, [beatSends]);
 
-  // Header stats — total contacts, total sends, contacts the user has
-  // sent something to ("engaged"), and contacts with activity in the
-  // last 30 days ("active"). Same data, three different lenses.
+  // Header stats — richer metrics than plain "total sends".
   const stats = useMemo(() => {
     const total = contacts.length;
     const sends = beatSends.length;
@@ -224,7 +222,29 @@ export function ContactsView({
     const activeIds = new Set(
       beatSends.filter((s) => s.sent_at >= thirtyDaysAgo).map((s) => s.contact_id),
     );
-    return { total, sends, engaged, active: activeIds.size };
+
+    // Response rate — sends that advanced beyond "sent" (opened, interested, negotiating, placed)
+    const responded = beatSends.filter((s) => !['sent'].includes(s.status ?? 'sent')).length;
+    const responseRate = sends > 0 ? Math.round((responded / sends) * 100) : 0;
+
+    // Pipeline breakdown
+    const pipeline = { sent: 0, opened: 0, interested: 0, negotiating: 0, placed: 0, pass: 0 };
+    for (const s of beatSends) {
+      const st = (s.status as keyof typeof pipeline) ?? 'sent';
+      if (st in pipeline) pipeline[st]++;
+    }
+
+    // Per-category contact counts
+    const byCategory: Record<string, number> = {};
+    for (const c of contacts) {
+      const cat = c.category?.toLowerCase() || 'other';
+      byCategory[cat] = (byCategory[cat] ?? 0) + 1;
+    }
+
+    // Open tracking (mig 089) — how many sends have been opened
+    const openedCount = beatSends.filter((s) => (s as any).opened_at).length;
+
+    return { total, sends, engaged, active: activeIds.size, responseRate, pipeline, byCategory, openedCount };
   }, [contacts, beatSends]);
 
   // Per-contact engagement status, derived from last-send recency.
@@ -374,15 +394,54 @@ export function ContactsView({
         </div>
         </div>
 
-        {/* Stats strip — four KPIs as quiet cards. Numbers are big and
-            cream; labels are tiny and warm-muted. Stacks 2×2 on mobile,
-            4-across on md+. Tone-color on Active matches the engagement
-            pill so the page reads as one system. */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <StatCard label="Total contacts" value={stats.total.toString()} />
-          <StatCard label="Engaged" value={stats.engaged.toString()} hint={stats.total ? `${Math.round((stats.engaged / stats.total) * 100)}%` : undefined} />
-          <StatCard label="Active · 30d" value={stats.active.toString()} tone="active" />
-          <StatCard label="Total sends" value={stats.sends.toString()} />
+        {/* Analytics strip — meaningful CRM metrics, not just raw counts. */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Total contacts */}
+          <StatCard label="Contacts" value={stats.total.toString()} hint={`${stats.active} active`} />
+
+          {/* Response rate — the conversion that actually matters */}
+          <StatCard
+            label="Response rate"
+            value={`${stats.responseRate}%`}
+            hint={`${stats.sends} sends`}
+            tone={stats.responseRate >= 30 ? 'active' : undefined}
+          />
+
+          {/* Open tracking — shows pending until Resend webhook lands */}
+          <div className="bg-[#14110d] border border-[#1f1a13] rounded-xl px-4 py-4">
+            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Opened</p>
+            <p className="text-[22px] font-bold font-mono text-[#E8DCC8] leading-none">
+              {stats.openedCount > 0 ? stats.openedCount : '—'}
+            </p>
+            <p className="text-[9px] font-mono text-[#3a3328] mt-1">
+              {stats.openedCount > 0 ? `${Math.round((stats.openedCount / Math.max(1, stats.sends)) * 100)}% open rate` : 'Pending Resend hook'}
+            </p>
+          </div>
+
+          {/* Pipeline mini-funnel */}
+          <div className="bg-[#14110d] border border-[#1f1a13] rounded-xl px-4 py-4">
+            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-3">Pipeline</p>
+            <div className="space-y-1.5">
+              {([
+                ['placed', '#6DC6A4'],
+                ['negotiating', '#9d95e8'],
+                ['interested', '#D4BFA0'],
+                ['opened', '#c8a84b'],
+              ] as const).map(([stage, color]) => {
+                const n = stats.pipeline[stage as keyof typeof stats.pipeline] ?? 0;
+                const pct = stats.sends > 0 ? Math.round((n / stats.sends) * 100) : 0;
+                return n > 0 ? (
+                  <div key={stage} className="flex items-center gap-2">
+                    <div className="w-16 h-1.5 rounded-full bg-[#1a160f] overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                    </div>
+                    <span className="text-[9px] font-mono capitalize text-[#5a5142]">{stage} · {n}</span>
+                  </div>
+                ) : null;
+              })}
+              {stats.sends === 0 && <p className="text-[9px] font-mono text-[#3a3328]">No sends yet</p>}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -753,7 +812,19 @@ export function ContactsView({
                     })()}
                     
                     <PipelinePill status={latestStatusByContact.get(contact.id) ?? null} />
-                    
+
+                    {/* Buyer pipeline — surfaced in the buyers segment and when a contact has
+                        buyer_pipeline_status set (mig 038). Shows the store-side conversion stage. */}
+                    {categoryFilter === 'buyers' && (contact as any).buyer_pipeline_status && (
+                      <span className={`text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0 ${
+                        (contact as any).buyer_pipeline_status === 'purchased' || (contact as any).buyer_pipeline_status === 'repeat_buyer'
+                          ? 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/30'
+                          : 'text-[#D4BFA0] bg-[#D4BFA0]/10 border-[#D4BFA0]/30'
+                      }`}>
+                        {((contact as any).buyer_pipeline_status as string).replace('_', ' ')}
+                      </span>
+                    )}
+
                     {/* Producers View Stems Indicator column */}
                     {categoryFilter === 'producers' && (
                       <div>

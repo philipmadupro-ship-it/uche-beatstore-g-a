@@ -301,6 +301,19 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                               {new Date(s.sent_at).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                             </p>
                           </div>
+                          {/* Open tracking badge — mig 089. Shows once Resend webhook fires. */}
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {(s as any).opened_at ? (
+                              <span className="text-[9px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 px-1.5 py-0.5 rounded" title={`Opened ${new Date((s as any).opened_at).toLocaleString()}`}>
+                                Opened
+                              </span>
+                            ) : (s as any).email_resend_id ? (
+                              <span className="text-[9px] font-mono uppercase tracking-wider text-[#3a3328]">Not opened</span>
+                            ) : null}
+                            {(s as any).link_clicked_at && (
+                              <span className="text-[9px] font-mono uppercase tracking-wider text-[#9d95e8] bg-[#9d95e8]/10 px-1.5 py-0.5 rounded">Link clicked</span>
+                            )}
+                          </div>
                           <span className={`text-[10px] font-medium ${tone.text}`}>{tone.label}</span>
                           {s.share_token && (
                             <Link
@@ -308,7 +321,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                               target="_blank"
                               className="text-[10px] font-mono text-[#6a5d4a] hover:text-white"
                             >
-                              open ↗
+                              ↗
                             </Link>
                           )}
                         </li>

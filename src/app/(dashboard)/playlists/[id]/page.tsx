@@ -14,6 +14,7 @@ import { PlaylistOfflineSync } from '@/components/offline/PlaylistOfflineSync';
 import { Loader2, Camera, Check, X, Edit2, Play, Share2, Music, Plus, ChevronUp, ChevronDown, Trash2, Search, Tag, ListMusic } from 'lucide-react';
 import { PlaylistSuggestions } from '@/components/playlists/PlaylistSuggestions';
 import { seededGradient } from '@/lib/ui/cover-gradient';
+import { AddFromLibraryModal } from '@/components/projects/AddFromLibraryModal';
 import { Track } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
 import { fmtDuration } from '@/lib/audio/format';
@@ -519,97 +520,13 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
       )}
 
       {showAddTracks && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setShowAddTracks(false)}>
-          <div className="bg-[#0a0907] border border-[#1f1a13] rounded-2xl w-full max-w-[640px] max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="p-6 border-b border-[#1f1a13] flex items-center justify-between">
-              <div>
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#D4BFA0]">Vault</p>
-                <h2 className="text-lg font-medium text-white mt-1">Add tracks to playlist</h2>
-              </div>
-              <button onClick={() => setShowAddTracks(false)} className="p-2 text-[#4a4338] hover:text-white hover:bg-[#1a160f] rounded-lg transition-all">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-4 border-b border-[#1f1a13]">
-              <input
-                value={vaultSearch}
-                onChange={(e) => setVaultSearch(e.target.value)}
-                placeholder="Search vault..."
-                className="w-full bg-[#0e0c08] border border-[#1a160f] rounded-md px-3 py-2 text-[12px] text-[#E8DCC8] placeholder-[#4a4338] focus:outline-none focus:border-[#2d2620]"
-              />
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              {vaultTracks.length === 0 ? (
-                <div className="py-16 text-center text-[11px] text-[#5a5142]">No tracks available to add. Upload some in the Vault.</div>
-              ) : (
-                vaultTracks
-                  .filter((t) => !vaultSearch || t.title?.toLowerCase().includes(vaultSearch.toLowerCase()))
-                  .map((t) => {
-                    const isSelected = selected.has(t.id);
-                    return (
-                      <button
-                        key={t.id}
-                        onClick={() => toggleSelected(t.id)}
-                        className={`w-full flex items-center gap-3 px-5 py-2.5 border-b border-[#161310] last:border-0 text-left transition-colors ${
-                          isSelected ? 'bg-[#2A2418]/40' : 'hover:bg-[#0e0c08]'
-                        }`}
-                      >
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                          isSelected ? 'bg-[#D4BFA0] border-[#D4BFA0]' : 'border-[#2d2620]'
-                        }`}>
-                          {isSelected && <Check size={11} className="text-white" />}
-                        </div>
-                        <div className="w-8 h-8 bg-[#14110d] rounded border border-[#1a160f] overflow-hidden shrink-0">
-                          {t.cover_url ? <img loading="lazy" src={t.cover_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Music size={12} className="text-[#3a3328]" /></div>}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[12px] text-[#E8DCC8] truncate">{t.title}</p>
-                          <p className="text-[10px] font-mono text-[#5a5142] uppercase tracking-wider truncate">{t.type}{t.bpm ? ` · ${t.bpm} bpm` : ''}{t.key ? ` · ${t.key}` : ''}</p>
-                        </div>
-                      </button>
-                    );
-                  })
-              )}
-            </div>
-             <div className="p-4 border-t border-[#1f1a13] flex items-center justify-between bg-[#0a0907]">
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-mono text-[#5a5142] uppercase tracking-wider">{selected.size} selected</span>
-                {vaultTracks.length > 0 && (
-                  <>
-                    <span className="text-[#1a160f] font-mono">·</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const visibleTracks = vaultTracks.filter((t) => !vaultSearch || t.title?.toLowerCase().includes(vaultSearch.toLowerCase()));
-                        const allSelected = visibleTracks.every((t) => selected.has(t.id));
-                        setSelected((prev) => {
-                          const next = new Set(prev);
-                          if (allSelected) {
-                            visibleTracks.forEach((t) => next.delete(t.id));
-                          } else {
-                            visibleTracks.forEach((t) => next.add(t.id));
-                          }
-                          return next;
-                        });
-                      }}
-                      className="text-[10px] font-mono uppercase tracking-wider text-[#D4BFA0] hover:text-[#E8D8B8] cursor-pointer transition-colors"
-                    >
-                      {vaultTracks.filter((t) => !vaultSearch || t.title?.toLowerCase().includes(vaultSearch.toLowerCase())).every((t) => selected.has(t.id)) ? 'Deselect All' : 'Select All'}
-                    </button>
-                  </>
-                )}
-              </div>
-              <button
-                onClick={submitAddTracks}
-                disabled={!selected.size || adding}
-                className="flex items-center gap-2 bg-[#D4BFA0] hover:bg-[#8A7A5C] disabled:opacity-30 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-[11px] font-bold uppercase tracking-wider transition-all"
-              >
-                {adding ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-                Add {selected.size > 0 ? `${selected.size} ` : ''}track{selected.size === 1 ? '' : 's'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <AddFromLibraryModal
+          endpoint={`/api/playlists/${params.id}/tracks`}
+          excludeIds={tracks.map((t) => t.id)}
+          title={`Add to ${playlist?.name || 'playlist'}`}
+          onClose={() => setShowAddTracks(false)}
+          onAdded={(count) => { fetchData(); if (count > 0) setShowAddTracks(false); }}
+        />
       )}
     </DashboardLayout>
   );

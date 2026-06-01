@@ -132,6 +132,11 @@ export interface BeatSend {
   message?: string | null;
   status: BeatSendStatus;
   sent_at: string;
+  // Email open tracking (mig 089). Populated by Resend webhook once connected.
+  // Until then the UI shows a "pending" indicator.
+  email_resend_id?: string | null;
+  opened_at?: string | null;
+  link_clicked_at?: string | null;
 }
 
 export interface CalendarEvent {
