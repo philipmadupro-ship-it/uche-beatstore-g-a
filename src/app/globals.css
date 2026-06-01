@@ -149,6 +149,12 @@ body {
   height: 100%;
   margin: 0;
   padding: 0;
+  /* Off-canvas panels (cart drawer, queue, now-playing) are position:fixed and
+     slide in from translate-x-full. On a phone the full-width closed drawer
+     would otherwise add a viewport of horizontal scroll. `clip` removes that
+     without creating a scroll container or breaking position:sticky the way
+     `overflow-x: hidden` would. */
+  overflow-x: clip;
 }
 
 body {
