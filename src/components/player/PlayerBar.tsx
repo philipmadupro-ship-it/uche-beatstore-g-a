@@ -6,6 +6,7 @@ import {
   ListMusic, Music, Shuffle, Repeat, ChevronDown, X,
 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';
+import { MarqueeText } from './MarqueeText';
 import { WavePlayer } from './WavePlayer';
 import { QueueDrawer } from './QueueDrawer';
 import { useState, useRef, useEffect } from 'react';
@@ -168,8 +169,8 @@ export function PlayerBar() {
                 <ChevronDown size={15} className="text-white rotate-180" />
               </div>
             </button>
-            <div className="min-w-0 flex-1 md:flex-initial md:max-w-[160px]">
-              <h4 className="text-[12px] font-medium text-[#E8DCC8] truncate leading-tight">{currentTrack.title || 'Untitled'}</h4>
+            <div className="min-w-0 flex-1 md:flex-none md:w-[160px]">
+              <MarqueeText text={currentTrack.title || 'Untitled'} className="text-[12px] font-medium text-[#E8DCC8] leading-tight" />
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span className="text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">
                   {currentTrack.type}{currentTrack.bpm ? ` · ${currentTrack.bpm}` : ''}
