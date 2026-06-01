@@ -69,6 +69,9 @@ export const TrackPatchBodySchema = z.object({
   lease_price_usd: z.number().nonnegative().nullable().optional(),
   exclusive_price_usd: z.number().nonnegative().nullable().optional(),
   store_listed: z.boolean().optional(),
+  // Exclusive-sold lock (mig 075). Set true by the webhook on exclusive sale;
+  // the producer can clear it here to re-list.
+  exclusive_sold: z.boolean().optional(),
   // Producer-curated "Picks" badge on /store. Independent of store_listed
   // (must be listed to appear; not all listed tracks are picks). Migration 054.
   store_featured: z.boolean().optional(),

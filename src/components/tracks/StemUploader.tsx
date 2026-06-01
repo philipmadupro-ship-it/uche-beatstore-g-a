@@ -102,7 +102,9 @@ export function StemUploader({ trackId, initial, onChange }: Props) {
       const res = await fetch(`/api/tracks/${trackId}/stem-files`, { cache: 'no-store' });
       if (!res.ok) return;
       const data = await res.json();
-      setFiles(data.files ?? []);
+      // Toplines (recorded in the Lyrics Studio notes) live in the same table
+      // but aren't deliverable stems — keep them out of this list.
+      setFiles((data.files ?? []).filter((f: StemFile) => f.category !== 'topline'));
     } catch {
       // best-effort
     } finally {

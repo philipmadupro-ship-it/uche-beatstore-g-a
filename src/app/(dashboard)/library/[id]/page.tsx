@@ -20,6 +20,7 @@ import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { audioSrc } from '@/lib/audio/url';
 import { OfflineToggle } from '@/components/offline/OfflineToggle';
 import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
+import { ToplineRecorder } from '@/components/lyrics/ToplineRecorder';
 import { toast } from '@/hooks/useToast';
 import { LibraryMetadataGrid } from '@/components/library/LibraryMetadataGrid';
 import { LibraryVersionHistory, type TrackVersion } from '@/components/library/LibraryVersionHistory';
@@ -446,7 +447,8 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
             {/* end meta panel (title / status / actions row group) */}
 
             {/* Notes — top of the workspace. Quick capture for session notes,
-                references, hooks, mix decisions; autosaves on blur. */}
+                references, hooks, mix decisions; autosaves on blur. Includes a
+                topline recorder for singing melody ideas straight over the beat. */}
             <div className="mb-8">
               <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-2">Notes</p>
               <textarea
@@ -458,6 +460,9 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 placeholder="Session notes, references, hook ideas, mix decisions…"
                 className="w-full min-h-[80px] bg-[#0e0c08] border border-[#1a160f] rounded-lg px-4 py-3 text-[13px] text-[#E8DCC8] placeholder:text-[#4a4338] focus:outline-none focus:border-[#2d2620] resize-y leading-relaxed"
               />
+              <div className="mt-2">
+                <ToplineRecorder trackId={track.id} />
+              </div>
             </div>
 
             {/* Metadata — extracted to components/library/LibraryMetadataGrid. */}

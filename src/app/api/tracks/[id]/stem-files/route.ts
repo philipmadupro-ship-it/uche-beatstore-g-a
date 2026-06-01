@@ -21,8 +21,11 @@ export const maxDuration = 60;
  * Owner-gated on the parent track.
  */
 const MAX_BYTES = 100 * 1024 * 1024;
-const ALLOWED_EXT = ['mp3', 'wav', 'flac', 'aiff', 'aif', 'm4a', 'ogg'];
-const CATEGORIES = ['vocals', 'drums', 'bass', 'melody', 'fx', 'other'];
+// webm/weba added for in-browser MediaRecorder captures (topline recordings).
+const ALLOWED_EXT = ['mp3', 'wav', 'flac', 'aiff', 'aif', 'm4a', 'ogg', 'webm', 'weba'];
+// 'topline' = a quick vocal/melody idea recorded in the Lyrics Studio notes;
+// kept distinct from deliverable stems so it never leaks to producer shares.
+const CATEGORIES = ['vocals', 'drums', 'bass', 'melody', 'fx', 'other', 'topline'];
 
 function detectContentType(ext: string, fallback: string): string {
   switch (ext) {
@@ -33,6 +36,8 @@ function detectContentType(ext: string, fallback: string): string {
     case 'aiff': return 'audio/aiff';
     case 'm4a':  return 'audio/mp4';
     case 'ogg':  return 'audio/ogg';
+    case 'webm':
+    case 'weba': return 'audio/webm';
     default:     return fallback || 'application/octet-stream';
   }
 }
