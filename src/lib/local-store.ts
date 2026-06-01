@@ -26,6 +26,9 @@ interface DBSchema {
   campaigns: any[];
   campaign_targets: any[];
   smart_playlists: any[];
+  project_tags: any[];
+  project_folders: any[];
+  project_folder_items: any[];
 }
 
 function getEmptyDB(): DBSchema {
@@ -51,6 +54,9 @@ function getEmptyDB(): DBSchema {
     campaigns: [],
     campaign_targets: [],
     smart_playlists: [],
+    project_tags: [],
+    project_folders: [],
+    project_folder_items: [],
   };
 }
 

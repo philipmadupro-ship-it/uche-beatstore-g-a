@@ -1,10 +1,12 @@
 'use client';
 
-import { RefObject } from 'react';
+import { RefObject, useState } from 'react';
 import {
-  Camera, Check, Edit2, Library, Loader2, Play, Plus, Share2, Target, X,
+  Camera, Check, Edit2, Library, Loader2, Play, Plus, Share2, Target, X, Tag,
 } from 'lucide-react';
 import { fmtBpm, fmtKey, fmtDuration } from '@/lib/audio/format';
+import { ProjectOptionsMenu } from './ProjectOptionsMenu';
+import { ProjectTagPicker } from './ProjectTagPicker';
 
 interface Project {
   id: string;
@@ -60,6 +62,11 @@ interface Props {
   storeFeatured?: boolean;
   onToggleStoreFeatured?: () => void;
   storeFeaturedPending?: boolean;
+
+  /** Refetch the project after an options-menu / tag change. */
+  onChanged?: () => void;
+  /** Called after the project is deleted from the options menu. */
+  onDeleted?: () => void;
 }
 
 /**
@@ -86,7 +93,11 @@ export function ProjectDetailHeader(props: Props) {
     storeFeatured = false,
     onToggleStoreFeatured,
     storeFeaturedPending = false,
+    onChanged,
+    onDeleted,
   } = props;
+
+  const [tagsOpen, setTagsOpen] = useState(false);
 
   return (
     <div className={`flex gap-7 mb-10 ${hideCover ? '' : 'pb-8 border-b border-[#16130e]'}`}>
@@ -196,8 +207,8 @@ export function ProjectDetailHeader(props: Props) {
             )}
           </div>
 
-          {/* List in store — prominent pill so it's easy to find */}
-          <div className="mt-2">
+          {/* List in store + Tags — quick pills. */}
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
             <button
               onClick={onToggleStoreFeatured}
               disabled={!onToggleStoreFeatured || storeFeaturedPending}
@@ -213,6 +224,26 @@ export function ProjectDetailHeader(props: Props) {
                 : <span className="text-[10px]">{storeFeatured ? '✓' : '+'}</span>}
               {storeFeatured ? 'In store' : 'List in store'}
             </button>
+            {project && (
+              <div className="relative">
+                <button
+                  onClick={() => setTagsOpen((v) => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all ${
+                    tagsOpen ? 'bg-[#2A2418] border-[#8A7A5C]/40 text-[#E8D8B8]' : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+                  }`}
+                >
+                  <Tag size={11} /> Tags
+                </button>
+                {tagsOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setTagsOpen(false)} />
+                    <div className="absolute top-full left-0 mt-2 z-50">
+                      <ProjectTagPicker projectId={project.id} />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -248,6 +279,14 @@ export function ProjectDetailHeader(props: Props) {
             <Plus size={12} />
             Upload
           </button>
+          {project && (
+            <ProjectOptionsMenu
+              project={project}
+              onChanged={onChanged}
+              onDeleted={onDeleted}
+              align="left"
+            />
+          )}
         </div>
       </div>
     </div>

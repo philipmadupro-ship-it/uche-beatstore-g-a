@@ -6,3 +6,12 @@ export const TAG_TAXONOMY = {
 } as const;
 
 export type TagCategory = keyof typeof TAG_TAXONOMY;
+
+// Project-only tag vocabulary. Kept separate from TAG_TAXONOMY so these never
+// leak into the per-track tagging UIs. Persisted under category 'project_type'
+// in project_tags. Projects also reuse the genre/mood vocab above for filtering.
+export const PROJECT_TYPE_OPTIONS = [
+  'Album', 'EP', 'Single', 'Mixtape', 'Beat tape', 'Loop kit',
+  'Client', 'Demo', 'Released', 'WIP',
+] as const;
+export type ProjectTypeTag = (typeof PROJECT_TYPE_OPTIONS)[number];

@@ -8,34 +8,29 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Loader2, Music, Layers, Plus, Search, Play, Clock, ShoppingBag, Globe } from 'lucide-react';
+import { Loader2, Music, Layers, Plus, Play, Clock, ShoppingBag, Globe } from 'lucide-react';
 import Link from 'next/link';
 import { fmtBpm, fmtKey } from '@/lib/audio/format';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { toast } from '@/hooks/useToast';
-import { Dropdown } from '@/components/ui/Dropdown';
+import { ProjectFilterBar } from '@/components/projects/ProjectFilterBar';
+import { ProjectOptionsMenu } from '@/components/projects/ProjectOptionsMenu';
+import {
+  filterAndSortProjects,
+  DEFAULT_PROJECT_FILTERS,
+  type ProjectFilterState,
+  type ProjectListItem,
+} from '@/lib/projects/filters';
 
-type SortMode = 'recent' | 'updated' | 'name' | 'tracks';
-const SORT_OPTIONS: { value: SortMode; label: string }[] = [
-  { value: 'recent', label: 'Created ↓' },
-  { value: 'updated', label: 'Updated ↓' },
-  { value: 'name', label: 'Name A→Z' },
-  { value: 'tracks', label: 'Track count ↓' },
-];
-
-interface Project {
-  id: string;
-  name: string;
-  cover_url?: string | null;
+interface Project extends ProjectListItem {
   status?: 'in_progress' | 'final' | 'archived';
+  cover_url?: string | null;
   bpm_target?: number | null;
   key_target?: string | null;
-  track_count?: number;
-  created_at?: string;
-  updated_at?: string;
-  store_featured?: boolean;
   is_public?: boolean;
 }
+
+interface FolderRow { id: string; name: string }
 
 const STATUS_STYLE: Record<string, string> = {
   in_progress: 'text-[#c8a84b] border-[#3a2f10] bg-[#1a1505]/80',
@@ -75,11 +70,10 @@ function relativeDate(date: Date): string {
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [folders, setFolders] = useState<FolderRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'in_progress' | 'final' | 'archived'>('all');
-  const [search, setSearch] = useState('');
-  const [sortMode, setSortMode] = useState<SortMode>('recent');
+  const [filters, setFilters] = useState<ProjectFilterState>(() => ({ ...DEFAULT_PROJECT_FILTERS, tags: new Set() }));
   // Distinguish "loaded fine, no projects" from "fetch errored" so the
   // empty-state branch below can show a real retry instead of pretending
   // the user just hasn't created anything yet.
@@ -138,13 +132,29 @@ export default function ProjectsPage() {
     }
   };
 
+  const fetchFolders = async () => {
+    try {
+      const res = await fetch('/api/projects/folders');
+      if (!res.ok) return;
+      const data = await res.json();
+      setFolders(data.folders ?? []);
+    } catch {
+      // best-effort
+    }
+  };
+
   useEffect(() => {
     fetchProjects();
+    fetchFolders();
   }, []);
 
   // Auto-refresh on any project mutation — sharing flows, comments, and
-  // bulk-from-library actions all land here without manual reload.
+  // bulk-from-library actions all land here without manual reload. Tag +
+  // folder-membership changes re-attach via the list fetch so chips stay live.
   useRealtimeTable({ table: 'projects', onChange: fetchProjects });
+  useRealtimeTable({ table: 'project_tags', onChange: fetchProjects });
+  useRealtimeTable({ table: 'project_folder_items', onChange: fetchProjects });
+  useRealtimeTable({ table: 'project_folders', onChange: fetchFolders });
 
   const createProject = async () => {
     setCreating(true);
@@ -167,33 +177,14 @@ export default function ProjectsPage() {
     }
   };
 
-  // Filter + sort. Memoized so a quick text-input doesn't re-sort
-  // hundreds of cards on every keystroke.
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const matched = projects.filter((p) => {
-      if (statusFilter !== 'all' && (p.status || 'in_progress') !== statusFilter) return false;
-      if (!q) return true;
-      return p.name.toLowerCase().includes(q);
-    });
-
-    const sorted = [...matched];
-    switch (sortMode) {
-      case 'name':
-        sorted.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case 'tracks':
-        sorted.sort((a, b) => (b.track_count ?? 0) - (a.track_count ?? 0));
-        break;
-      case 'updated':
-        sorted.sort((a, b) => String(b.updated_at ?? '').localeCompare(String(a.updated_at ?? '')));
-        break;
-      case 'recent':
-      default:
-        sorted.sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')));
-    }
-    return sorted;
-  }, [projects, statusFilter, search, sortMode]);
+  // Filter + sort delegated to the pure, tested helper (lib/projects/filters).
+  const filtered = useMemo(
+    () => filterAndSortProjects(projects, filters) as Project[],
+    [projects, filters],
+  );
+  const isFiltered =
+    filters.search.trim() !== '' || filters.status !== 'all' ||
+    filters.folder !== 'all' || filters.tags.size > 0;
 
   return (
     <DashboardLayout>
@@ -231,44 +222,14 @@ export default function ProjectsPage() {
           </div>
         </div>
 
-        {/* Search + status filter + sort. Same shape as the library page
-            so the muscle memory transfers — search input on the left,
-            status pills in the middle, sort dropdown on the right. */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="relative flex-1 max-w-sm">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4338]" />
-            <input
-              placeholder="Search projects"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#0e0c08] border border-[#1a160f] rounded-full pl-8 pr-3 py-2 text-[12px] text-[#E8DCC8] placeholder-[#4a4338] focus:outline-none focus:border-[#2d2620]"
-            />
-          </div>
-          <div className="flex items-center gap-1 text-[11px] font-mono uppercase tracking-wider">
-            {(['all', 'in_progress', 'final', 'archived'] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={`px-3 py-1.5 rounded-full transition-colors border ${
-                  statusFilter === s
-                    ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/60'
-                    : 'text-[#5a5142] hover:text-[#a08a6a] border-transparent'
-                }`}
-              >
-                {s.replace('_', ' ')}
-              </button>
-            ))}
-          </div>
-          <div className="ml-auto">
-            <Dropdown
-              value={sortMode}
-              onChange={(v) => setSortMode(v as SortMode)}
-              options={SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-              label="Sort"
-              aria-label="Sort projects"
-            />
-          </div>
-        </div>
+        {/* Folder chips + search + collapsible tag/status/sort filters. */}
+        <ProjectFilterBar
+          value={filters}
+          onChange={setFilters}
+          folders={folders}
+          onFoldersChanged={fetchFolders}
+          resultCount={filtered.length}
+        />
 
         {loading ? (
           <div className="flex items-center justify-center py-32">
@@ -296,7 +257,6 @@ export default function ProjectsPage() {
           // CTA differs — clearing filters fixes the first; only "create"
           // helps the second.
           (() => {
-            const isFiltered = statusFilter !== 'all' || search.trim() !== '';
             return (
               <div className="text-center py-32">
                 <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-[#14110d] border border-[#1a160f] flex items-center justify-center">
@@ -309,7 +269,7 @@ export default function ProjectsPage() {
                       {projects.length} project{projects.length !== 1 ? 's' : ''} hidden by the current filter or search.
                     </p>
                     <button
-                      onClick={() => { setStatusFilter('all'); setSearch(''); }}
+                      onClick={() => setFilters({ ...DEFAULT_PROJECT_FILTERS, tags: new Set() })}
                       className="inline-flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#2d2620] transition-colors"
                     >
                       Clear filters
@@ -367,9 +327,15 @@ export default function ProjectsPage() {
                         {status.replace('_', ' ')}
                       </div>
 
-                      {/* Store badge — shown when store_featured */}
+                      {/* Options menu (⋯) — top-right. Its handlers stopPropagation
+                          so opening/using it never navigates into the project. */}
+                      <div className="absolute top-2 right-2 z-10">
+                        <ProjectOptionsMenu project={project} onChanged={fetchProjects} onDeleted={fetchProjects} />
+                      </div>
+
+                      {/* Store badge — bottom-left when store_featured */}
                       {project.store_featured && (
-                        <div className="absolute top-2.5 right-2.5 px-1.5 py-0.5 rounded-full text-[7px] font-mono font-bold uppercase tracking-wider bg-[#D4BFA0] text-black border border-[#D4BFA0]/80">
+                        <div className="absolute bottom-2.5 left-2.5 px-1.5 py-0.5 rounded-full text-[7px] font-mono font-bold uppercase tracking-wider bg-[#D4BFA0] text-black border border-[#D4BFA0]/80">
                           In Store
                         </div>
                       )}
@@ -404,6 +370,20 @@ export default function ProjectsPage() {
                         </span>
                       )}
                     </div>
+
+                    {/* Tag chips — first few, so tagging is visible at a glance. */}
+                    {(project.tags?.length ?? 0) > 0 && (
+                      <div className="flex items-center gap-1 flex-wrap mb-2">
+                        {project.tags!.slice(0, 3).map((t) => (
+                          <span key={t.tag} className="text-[8px] font-mono uppercase tracking-wider text-[#a08a6a] bg-[#1a160f] border border-[#2d2620] px-1.5 py-0.5 rounded">
+                            {t.tag}
+                          </span>
+                        ))}
+                        {project.tags!.length > 3 && (
+                          <span className="text-[8px] font-mono text-[#4a4338]">+{project.tags!.length - 3}</span>
+                        )}
+                      </div>
+                    )}
                   </Link>
 
                   {/* Show in Store toggle — outside Link to prevent navigation */}

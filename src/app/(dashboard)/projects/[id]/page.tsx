@@ -387,6 +387,8 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           storeFeatured={project?.store_featured}
           onToggleStoreFeatured={toggleStoreFeatured}
           storeFeaturedPending={togglingStoreFeatured}
+          onChanged={fetchData}
+          onDeleted={() => { window.location.href = '/projects'; }}
         />
 
         {/* Upload Zone */}

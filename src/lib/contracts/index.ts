@@ -105,6 +105,24 @@ export const ProjectPatchBodySchema = z.object({
 }).strict();
 export type ProjectPatchBody = z.infer<typeof ProjectPatchBodySchema>;
 
+// ── Project folders (multi-membership collections) ───────────────────────
+export const FolderCreateBodySchema = z.object({
+  name: z.string().min(1).max(120),
+}).strict();
+export type FolderCreateBody = z.infer<typeof FolderCreateBodySchema>;
+
+export const FolderPatchBodySchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  position: z.number().int().optional(),
+}).strict();
+export type FolderPatchBody = z.infer<typeof FolderPatchBodySchema>;
+
+// PUT /api/projects/[id]/folders — replace the project's folder membership set.
+export const ProjectFoldersSetBodySchema = z.object({
+  folder_ids: z.array(z.string().uuid()).max(200),
+}).strict();
+export type ProjectFoldersSetBody = z.infer<typeof ProjectFoldersSetBodySchema>;
+
 
 export const ProjectCommentCreateBodySchema = z.object({
   body: z.string().min(1).max(5000),
