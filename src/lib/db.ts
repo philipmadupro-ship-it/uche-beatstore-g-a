@@ -67,7 +67,8 @@ type OwnedTable =
   | 'calendar_events'
   | 'share_links'
   | 'smart_playlists'
-  | 'project_folders';
+  | 'project_folders'
+  | 'playlist_folders';
 
 // Cheap shape we accept for local-store rows. Every row has at minimum an
 // `id`; everything else is dynamic-shaped (different per table). This

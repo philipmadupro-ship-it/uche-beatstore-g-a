@@ -24,22 +24,39 @@ export async function GET() {
 
   const ids = playlists.map((p) => p.id);
   const counts = new Map<string, number>();
+  const tagsByPlaylist = new Map<string, { tag: string; category: string | null }[]>();
+  const foldersByPlaylist = new Map<string, string[]>();
 
   if (isSupabaseConfigured() && ids.length) {
     const admin = createServiceClient();
-    const { data: pts } = await admin
-      .from('playlist_tracks')
-      .select('playlist_id')
-      .in('playlist_id', ids);
-    (pts ?? []).forEach((pt: { playlist_id: string }) => {
-      counts.set(pt.playlist_id, (counts.get(pt.playlist_id) ?? 0) + 1);
+    const [{ data: pts }, { data: tagRows }, { data: folderRows }] = await Promise.all([
+      admin.from('playlist_tracks').select('playlist_id').in('playlist_id', ids),
+      admin.from('playlist_tags').select('playlist_id, tag, category').in('playlist_id', ids),
+      admin.from('playlist_folder_items').select('playlist_id, folder_id').in('playlist_id', ids),
+    ]);
+    (pts ?? []).forEach((pt: any) => counts.set(pt.playlist_id, (counts.get(pt.playlist_id) ?? 0) + 1));
+    (tagRows ?? []).forEach((r: any) => {
+      const arr = tagsByPlaylist.get(r.playlist_id) ?? [];
+      arr.push({ tag: r.tag, category: r.category });
+      tagsByPlaylist.set(r.playlist_id, arr);
+    });
+    (folderRows ?? []).forEach((r: any) => {
+      const arr = foldersByPlaylist.get(r.playlist_id) ?? [];
+      arr.push(r.folder_id);
+      foldersByPlaylist.set(r.playlist_id, arr);
     });
   } else if (!isSupabaseConfigured()) {
-    const allPT = getAll('playlist_tracks') as { playlist_id: string }[];
-    allPT.forEach((pt) => counts.set(pt.playlist_id, (counts.get(pt.playlist_id) ?? 0) + 1));
+    (getAll('playlist_tracks') as any[]).forEach((pt) => counts.set(pt.playlist_id, (counts.get(pt.playlist_id) ?? 0) + 1));
+    (getAll('playlist_tags') as any[]).forEach((r: any) => { const arr = tagsByPlaylist.get(r.playlist_id) ?? []; arr.push({ tag: r.tag, category: r.category ?? null }); tagsByPlaylist.set(r.playlist_id, arr); });
+    (getAll('playlist_folder_items') as any[]).forEach((r: any) => { const arr = foldersByPlaylist.get(r.playlist_id) ?? []; arr.push(r.folder_id); foldersByPlaylist.set(r.playlist_id, arr); });
   }
 
-  const withCount = playlists.map((p) => ({ ...p, track_count: counts.get(p.id) ?? 0 }));
+  const withCount = playlists.map((p) => ({
+    ...p,
+    track_count: counts.get(p.id) ?? 0,
+    tags: tagsByPlaylist.get(p.id) ?? [],
+    folder_ids: foldersByPlaylist.get(p.id) ?? [],
+  }));
   return NextResponse.json({ playlists: withCount }, {
     headers: { 'Cache-Control': 'private, max-age=15, stale-while-revalidate=60' },
   });

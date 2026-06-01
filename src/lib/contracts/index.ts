@@ -197,8 +197,28 @@ export const PlaylistPatchBodySchema = z.object({
   cover_url: z.string().nullable().optional(),
   store_featured: z.boolean().optional(),
   store_order: z.number().int().nullable().optional(),
+  pinned: z.boolean().optional(),
 }).strict();
 export type PlaylistPatchBody = z.infer<typeof PlaylistPatchBodySchema>;
+
+// ── Playlist folders (mig 087-088) ───────────────────────────────────────
+export const PlaylistFolderCreateBodySchema = z.object({
+  name: z.string().min(1).max(120),
+  color: z.string().max(20).nullable().optional(),
+}).strict();
+export type PlaylistFolderCreateBody = z.infer<typeof PlaylistFolderCreateBodySchema>;
+
+export const PlaylistFolderPatchBodySchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  position: z.number().int().optional(),
+  color: z.string().max(20).nullable().optional(),
+}).strict();
+export type PlaylistFolderPatchBody = z.infer<typeof PlaylistFolderPatchBodySchema>;
+
+export const PlaylistFoldersSetBodySchema = z.object({
+  folder_ids: z.array(z.string().uuid()).max(200),
+}).strict();
+export type PlaylistFoldersSetBody = z.infer<typeof PlaylistFoldersSetBodySchema>;
 
 export const PlaylistTracksAddBodySchema = z.object({
   track_ids: z.array(z.string()).min(1),

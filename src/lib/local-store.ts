@@ -29,6 +29,9 @@ interface DBSchema {
   project_tags: any[];
   project_folders: any[];
   project_folder_items: any[];
+  playlist_tags: any[];
+  playlist_folders: any[];
+  playlist_folder_items: any[];
 }
 
 function getEmptyDB(): DBSchema {
@@ -57,6 +60,9 @@ function getEmptyDB(): DBSchema {
     project_tags: [],
     project_folders: [],
     project_folder_items: [],
+    playlist_tags: [],
+    playlist_folders: [],
+    playlist_folder_items: [],
   };
 }
 

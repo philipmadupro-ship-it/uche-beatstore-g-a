@@ -5,13 +5,13 @@
  * Not a workspace — just a curated list for listening / sharing.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { TrackCard } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { PlaylistOfflineSync } from '@/components/offline/PlaylistOfflineSync';
-import { Loader2, Camera, Check, X, Edit2, Play, Share2, Music, Plus, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
+import { Loader2, Camera, Check, X, Edit2, Play, Share2, Music, Plus, ChevronUp, ChevronDown, Trash2, Search, Tag } from 'lucide-react';
 import { Track } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
 import { fmtDuration } from '@/lib/audio/format';
@@ -34,6 +34,8 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [vaultSearch, setVaultSearch] = useState('');
   const [adding, setAdding] = useState(false);
+  const [trackSearch, setTrackSearch] = useState('');
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
 
   const { setTrack: setGlobalTrack, setQueue } = usePlayer();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -161,6 +163,23 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
       console.error('Vault fetch error:', err);
     }
   };
+
+  // Derived tag filter for the track list
+  const availableTags = useMemo(() => {
+    const s = new Set<string>();
+    for (const t of tracks) for (const tt of (t as any).track_tags ?? []) s.add(tt.tag);
+    return [...s].sort();
+  }, [tracks]);
+
+  const visibleTracks = useMemo(() => {
+    let list = tracks;
+    if (trackSearch.trim()) list = list.filter((t) => t.title.toLowerCase().includes(trackSearch.trim().toLowerCase()));
+    if (selectedTags.size > 0) list = list.filter((t) => {
+      const tags = ((t as any).track_tags ?? []).map((tt: any) => tt.tag as string);
+      return [...selectedTags].every((sel) => tags.includes(sel));
+    });
+    return list;
+  }, [tracks, trackSearch, selectedTags]);
 
   const toggleSelected = (id: string) => {
     setSelected((prev) => {
@@ -383,7 +402,32 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
 
         {/* Track list */}
         <div className="border-t border-[#161310] border-b pb-1 mb-32">
-          <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
+          {/* Search + tag chips */}
+          {tracks.length > 0 && (
+            <div className="px-4 py-3 border-b border-[#161310] space-y-2">
+              <div className="relative max-w-xs">
+                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3a3328] pointer-events-none" />
+                <input value={trackSearch} onChange={(e) => setTrackSearch(e.target.value)} placeholder="Search tracks or tags…"
+                  className="w-full bg-[#14110d] border border-[#1a160f] rounded-md py-1.5 pl-8 pr-3 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]" />
+              </div>
+              {availableTags.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Tag size={10} className="text-[#3a3328] shrink-0" />
+                  {availableTags.map((tag) => {
+                    const on = selectedTags.has(tag);
+                    return (
+                      <button key={tag} onClick={() => setSelectedTags((prev) => { const n = new Set(prev); n.has(tag) ? n.delete(tag) : n.add(tag); return n; })}
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'bg-transparent border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'}`}>
+                        {tag}
+                      </button>
+                    );
+                  })}
+                  {selectedTags.size > 0 && <button onClick={() => setSelectedTags(new Set())} className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#E8DCC8] ml-1 flex items-center gap-1"><X size={9} /> Clear</button>}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_72px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
             <span className="text-center">#</span>
             <span />
             <span>Title</span>
@@ -408,7 +452,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               </button>
             </div>
           ) : (
-            tracks.map((track, i) => (
+            visibleTracks.map((track, i) => (
               <div key={track.id} className="group relative">
                 <TrackCard
                   track={track}
