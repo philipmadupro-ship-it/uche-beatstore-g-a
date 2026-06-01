@@ -420,12 +420,12 @@ export default function ProjectsPage() {
                       </div>
                     </div>
 
-                    {/* Meta below card */}
-                    <h3 className="text-[13px] font-semibold text-[#E8DCC8] truncate leading-tight mb-1.5 group-hover:text-white transition-colors">
+                    {/* Title — the dominant element; large + bold so it reads at a glance */}
+                    <h3 className="text-[15px] font-bold text-white truncate leading-tight mb-1 group-hover:text-[#E8D8B8] transition-colors">
                       {project.name}
                     </h3>
 
-                    <div className="flex items-center gap-1.5 flex-wrap mb-2">
+                    <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
                       {project.bpm_target != null && (
                         <span className="text-[9px] font-mono text-[#5a5142] bg-[#14110d] border border-[#1f1a13] px-1.5 py-0.5 rounded tabular-nums">
                           {fmtBpm(project.bpm_target)}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   MoreHorizontal, Image as ImageIcon, Pencil, FolderInput, Store,
   Trash2, Loader2, Check, CircleDot, LayoutTemplate, Pin,
@@ -188,11 +189,15 @@ export function ProjectOptionsMenu({
         )}
       </div>
 
-      {showFolders && (
-        <ProjectFolderSelect projectId={project.id} onClose={() => setShowFolders(false)} onSaved={onChanged} />
+      {/* Both modals portaled to document.body so they escape any
+          overflow:hidden / stacking-context on the card grid. */}
+      {showFolders && createPortal(
+        <ProjectFolderSelect projectId={project.id} onClose={() => setShowFolders(false)} onSaved={onChanged} />,
+        document.body,
       )}
-      {showTemplate && (
-        <TemplatePicker projectId={project.id} onClose={() => setShowTemplate(false)} onApplied={onChanged} />
+      {showTemplate && createPortal(
+        <TemplatePicker projectId={project.id} onClose={() => setShowTemplate(false)} onApplied={onChanged} />,
+        document.body,
       )}
     </>
   );
