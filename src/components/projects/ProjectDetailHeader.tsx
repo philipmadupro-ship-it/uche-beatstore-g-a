@@ -7,6 +7,7 @@ import {
 import { fmtBpm, fmtKey, fmtDuration } from '@/lib/audio/format';
 import { ProjectOptionsMenu } from './ProjectOptionsMenu';
 import { ProjectTagPicker } from './ProjectTagPicker';
+import { DeliveryPackButton } from './DeliveryPackButton';
 
 interface Project {
   id: string;
@@ -279,6 +280,9 @@ export function ProjectDetailHeader(props: Props) {
             <Plus size={12} />
             Upload
           </button>
+          {project && (
+            <DeliveryPackButton projectId={project.id} projectName={project.name} />
+          )}
           {project && (
             <ProjectOptionsMenu
               project={project}

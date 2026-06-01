@@ -11,7 +11,7 @@ import {
   activeProjectFilterCount,
 } from '@/lib/projects/filters';
 
-interface FolderRow { id: string; name: string }
+interface FolderRow { id: string; name: string; color?: string | null; cover_url?: string | null }
 
 const STATUS_PILLS: { value: ProjectStatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -101,14 +101,18 @@ export function ProjectFilterBar({
     } catch { toast.error('Couldn’t delete folder'); }
   };
 
-  const folderChip = (key: string, label: string, active: boolean, onClick: () => void) => (
-    <button key={key} onClick={onClick}
-      className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors flex items-center gap-1.5 ${
-        active ? 'bg-[#7F77DD] text-white border border-[#7F77DD]/40' : 'bg-[#14110d] border border-[#1f1a13] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
-      }`}>
-      {label}
-    </button>
-  );
+  const folderChip = (key: string, label: string, active: boolean, onClick: () => void, color?: string | null) => {
+    const accent = color || '#7F77DD';
+    return (
+      <button key={key} onClick={onClick}
+        className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors flex items-center gap-1.5 border ${
+          active ? 'text-white' : 'bg-[#14110d] border-[#1f1a13] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+        }`}
+        style={active ? { backgroundColor: accent, borderColor: `${accent}66` } : {}}>
+        {label}
+      </button>
+    );
+  };
 
   return (
     <div className="mb-5">
@@ -127,7 +131,7 @@ export function ProjectFilterBar({
             />
           ) : (
             <span key={f.id} className="shrink-0 flex items-center">
-              {folderChip(f.id, f.name, value.folder === f.id, () => set({ folder: f.id }))}
+              {folderChip(f.id, f.name, value.folder === f.id, () => set({ folder: f.id }), f.color)}
               {manage && (
                 <span className="flex items-center -ml-1">
                   <button onClick={() => { setEditingId(f.id); setEditName(f.name); }} className="w-6 h-6 flex items-center justify-center text-[#6a5d4a] hover:text-[#E8DCC8]" aria-label="Rename folder"><Pencil size={11} /></button>

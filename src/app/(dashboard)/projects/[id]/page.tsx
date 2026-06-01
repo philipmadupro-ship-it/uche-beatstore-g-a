@@ -14,6 +14,9 @@ import { ProjectCommentsPanel } from '@/components/projects/ProjectCommentsPanel
 import { AddFromLibraryModal } from '@/components/projects/AddFromLibraryModal';
 import { ProjectDetailHeader } from '@/components/projects/ProjectDetailHeader';
 import { ProjectTrackList } from '@/components/projects/ProjectTrackList';
+import { ProjectChecklist } from '@/components/projects/ProjectChecklist';
+import { ToplineRecorder } from '@/components/lyrics/ToplineRecorder';
+import { ProjectAnalyticsPanel } from '@/components/projects/ProjectAnalyticsPanel';
 import { Loader2, Camera, Send, ListPlus } from 'lucide-react';
 import { Track } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -457,6 +460,26 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           </div>
         </div>
 
+        {/* Topline recorder — quick voice-memo session for melody ideas
+            over a project's reference beat. Reuses track_stem_files (mig 080)
+            with a shared project-level topline track id (first track). */}
+        {project && tracks.length > 0 && (
+          <div className="mb-6">
+            <ToplineRecorder trackId={tracks[0].id} />
+          </div>
+        )}
+
+        {/* Production checklist (mig 084) */}
+        {project && (
+          <div className="mb-6">
+            <ProjectChecklist
+              projectId={params.id}
+              items={project.checklist ?? []}
+              onChanged={(items) => setProject((p: any) => p ? { ...p, checklist: items } : p)}
+            />
+          </div>
+        )}
+
         {/* Tabs + search + track list — extracted to components/projects/ProjectTrackList. */}
         <ProjectTrackList
           tabs={['All', 'Beats', 'Instrumentals', 'Songs', 'Remixes']}
@@ -474,7 +497,24 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           selectedIds={selectedIds}
           onToggleSelect={toggleSelectOne}
           onSelectAll={toggleSelectAll}
+          onReorder={async (orderedIds) => {
+            // Optimistic reorder — reflect new order immediately.
+            const idxMap = new Map(orderedIds.map((id, i) => [id, i]));
+            setTracks((prev) => [...prev].sort((a, b) => (idxMap.get(a.id) ?? 999) - (idxMap.get(b.id) ?? 999)));
+            try {
+              await fetch(`/api/projects/${params.id}/tracks`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ positions: orderedIds.map((id, i) => ({ track_id: id, position: i })) }),
+              });
+            } catch {
+              // Non-fatal; reorder is cosmetic — page reloads will restore DB order.
+            }
+          }}
         />
+            {/* Analytics strip */}
+            {project && <ProjectAnalyticsPanel projectId={params.id} />}
+
             {/* end right column (min-w-0) */}
           </div>
           {/* end side-by-side grid */}

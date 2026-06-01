@@ -3,10 +3,11 @@
 import { useRef, useState } from 'react';
 import {
   MoreHorizontal, Image as ImageIcon, Pencil, FolderInput, Store,
-  Trash2, Loader2, Check, CircleDot,
+  Trash2, Loader2, Check, CircleDot, LayoutTemplate, Pin,
 } from 'lucide-react';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { ProjectFolderSelect } from './ProjectFolderSelect';
+import { TemplatePicker } from './TemplatePicker';
 
 interface ProjectLite {
   id: string;
@@ -44,6 +45,7 @@ export function ProjectOptionsMenu({
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(project.name);
   const [showFolders, setShowFolders] = useState(false);
+  const [showTemplate, setShowTemplate] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const patch = async (body: Record<string, unknown>, label: string) => {
@@ -111,6 +113,7 @@ export function ProjectOptionsMenu({
 
   const featured = !!project.store_featured;
   const curStatus = project.status || 'in_progress';
+  const isPinned = !!(project as any).pinned;
 
   return (
     <>
@@ -146,9 +149,13 @@ export function ProjectOptionsMenu({
                 </div>
               ) : (
                 <>
+                  <MenuItem icon={<Pin size={13} className={isPinned ? 'text-[#D4BFA0]' : ''} />} label={isPinned ? 'Unpin' : 'Pin to top'}
+                    busy={busy === 'pin'}
+                    onClick={async () => { await patch({ pinned: !isPinned }, 'pin'); setOpen(false); toast.success(isPinned ? 'Unpinned' : 'Pinned to top'); }} />
                   <MenuItem icon={<ImageIcon size={13} />} label="Change cover" busy={busy === 'cover'} onClick={() => fileRef.current?.click()} />
                   <MenuItem icon={<Pencil size={13} />} label="Rename" onClick={() => setRenaming(true)} />
                   <MenuItem icon={<FolderInput size={13} />} label="Move to folders" onClick={() => { setShowFolders(true); setOpen(false); }} />
+                  <MenuItem icon={<LayoutTemplate size={13} />} label="Apply template" onClick={() => { setShowTemplate(true); setOpen(false); }} />
 
                   <div className="my-1 border-t border-[#1a160f]" />
                   <p className="px-3 pt-1 pb-1 text-[8px] font-mono uppercase tracking-[0.2em] text-[#3a3328]">Status</p>
@@ -183,6 +190,9 @@ export function ProjectOptionsMenu({
 
       {showFolders && (
         <ProjectFolderSelect projectId={project.id} onClose={() => setShowFolders(false)} onSaved={onChanged} />
+      )}
+      {showTemplate && (
+        <TemplatePicker projectId={project.id} onClose={() => setShowTemplate(false)} onApplied={onChanged} />
       )}
     </>
   );

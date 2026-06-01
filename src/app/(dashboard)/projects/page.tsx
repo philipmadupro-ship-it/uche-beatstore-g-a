@@ -6,9 +6,9 @@
  * references, and a target BPM/key. This is where work-in-progress lives.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Loader2, Music, Layers, Plus, Play, Clock, ShoppingBag, Globe } from 'lucide-react';
+import { Loader2, Music, Layers, Plus, Play, Clock, ShoppingBag, Globe, Pin } from 'lucide-react';
 import Link from 'next/link';
 import { fmtBpm, fmtKey } from '@/lib/audio/format';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
@@ -28,9 +28,22 @@ interface Project extends ProjectListItem {
   bpm_target?: number | null;
   key_target?: string | null;
   is_public?: boolean;
+  pinned?: boolean;
 }
 
-interface FolderRow { id: string; name: string }
+interface FolderRow { id: string; name: string; color?: string | null; cover_url?: string | null }
+
+const RECENTLY_OPENED_KEY = 'antigravity-recent-projects';
+const MAX_RECENT = 8;
+
+function loadRecentIds(): string[] {
+  if (typeof window === 'undefined') return [];
+  try { return JSON.parse(localStorage.getItem(RECENTLY_OPENED_KEY) || '[]'); } catch { return []; }
+}
+function trackRecentOpen(id: string) {
+  const prev = loadRecentIds().filter((x) => x !== id);
+  localStorage.setItem(RECENTLY_OPENED_KEY, JSON.stringify([id, ...prev].slice(0, MAX_RECENT)));
+}
 
 const STATUS_STYLE: Record<string, string> = {
   in_progress: 'text-[#c8a84b] border-[#3a2f10] bg-[#1a1505]/80',
@@ -74,11 +87,27 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [filters, setFilters] = useState<ProjectFilterState>(() => ({ ...DEFAULT_PROJECT_FILTERS, tags: new Set() }));
-  // Distinguish "loaded fine, no projects" from "fetch errored" so the
-  // empty-state branch below can show a real retry instead of pretending
-  // the user just hasn't created anything yet.
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [togglingStore, setTogglingStore] = useState<string | null>(null);
+  const [togglingPin, setTogglingPin] = useState<string | null>(null);
+  const [recentIds, setRecentIds] = useState<string[]>([]);
+  const hasMounted = useRef(false);
+  useEffect(() => { setRecentIds(loadRecentIds()); hasMounted.current = true; }, []);
+
+  const togglePin = async (project: Project, e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    const next = !project.pinned;
+    setTogglingPin(project.id);
+    setProjects((prev) => prev.map((p) => p.id === project.id ? { ...p, pinned: next } : p));
+    try {
+      await fetch(`/api/projects/${project.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pinned: next }),
+      });
+    } catch {
+      setProjects((prev) => prev.map((p) => p.id === project.id ? { ...p, pinned: !next } : p));
+    } finally { setTogglingPin(null); }
+  };
 
   const toggleStoreFeatured = async (project: Project, e: React.MouseEvent) => {
     e.preventDefault();
@@ -178,13 +207,24 @@ export default function ProjectsPage() {
   };
 
   // Filter + sort delegated to the pure, tested helper (lib/projects/filters).
-  const filtered = useMemo(
-    () => filterAndSortProjects(projects, filters) as Project[],
-    [projects, filters],
-  );
+  // Pinned projects float to the very top within the sorted results.
+  const filtered = useMemo(() => {
+    const result = filterAndSortProjects(projects, filters) as Project[];
+    const pinned = result.filter((p) => p.pinned);
+    const rest = result.filter((p) => !p.pinned);
+    return [...pinned, ...rest];
+  }, [projects, filters]);
+
   const isFiltered =
     filters.search.trim() !== '' || filters.status !== 'all' ||
     filters.folder !== 'all' || filters.tags.size > 0;
+
+  // Recently-opened row — 4 most recent, excluding projects in the current filtered list.
+  const recentProjects = useMemo(() => {
+    if (!hasMounted.current) return [];
+    const byId = new Map(projects.map((p) => [p.id, p]));
+    return recentIds.map((id) => byId.get(id)).filter(Boolean).slice(0, 4) as Project[];
+  }, [recentIds, projects]);
 
   return (
     <DashboardLayout>
@@ -293,6 +333,28 @@ export default function ProjectsPage() {
             );
           })()
         ) : (
+          <>
+          {/* Recently opened — quick-access row before the main grid. Only shows
+              when not searching/filtering and there are genuine recents. */}
+          {!isFiltered && recentProjects.length > 0 && (
+            <div className="mb-6">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-3 flex items-center gap-2">
+                <Clock size={10} /> Recently opened
+              </p>
+              <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+                {recentProjects.map((p) => (
+                  <Link key={p.id} href={`/projects/${p.id}`} onClick={() => trackRecentOpen(p.id)}
+                    className="shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1f1a13] bg-[#14110d] hover:border-[#2d2620] hover:bg-[#1a160f] transition-colors min-w-[180px] max-w-[240px]">
+                    <div className="w-8 h-8 rounded-md overflow-hidden bg-[#0a0907] shrink-0">
+                      {p.cover_url ? <img src={p.cover_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={12} /></div>}
+                    </div>
+                    <span className="text-[11px] font-medium text-[#E8DCC8] truncate">{p.name}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {filtered.map((project) => {
               const status = project.status || 'in_progress';
@@ -301,7 +363,7 @@ export default function ProjectsPage() {
 
               return (
                 <div key={project.id} className="flex flex-col">
-                  <Link href={`/projects/${project.id}`} className="group flex flex-col">
+                  <Link href={`/projects/${project.id}`} onClick={() => trackRecentOpen(project.id)} className="group flex flex-col">
                     {/* Cover card */}
                     <div className={`relative aspect-square rounded-xl mb-3 overflow-hidden border transition-all duration-200 ${STATUS_BORDER[status]} group-hover:scale-[1.02]`}>
                       {/* Status-tinted gradient overlay at bottom */}
@@ -327,6 +389,17 @@ export default function ProjectsPage() {
                         {status.replace('_', ' ')}
                       </div>
 
+                      {/* Pin button — top-left next to status */}
+                      {project.pinned && (
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePin(project, e); }}
+                          disabled={togglingPin === project.id}
+                          className="absolute top-2 left-2 z-20 w-6 h-6 rounded-full bg-[#D4BFA0] text-black flex items-center justify-center shadow-sm"
+                          title="Unpin"
+                        >
+                          <Pin size={10} fill="currentColor" />
+                        </button>
+                      )}
                       {/* Options menu (⋯) — top-right. Its handlers stopPropagation
                           so opening/using it never navigates into the project. */}
                       <div className="absolute top-2 right-2 z-10">
@@ -409,6 +482,7 @@ export default function ProjectsPage() {
               );
             })}
           </div>
+          </>
         )}
       </div>
     </DashboardLayout>

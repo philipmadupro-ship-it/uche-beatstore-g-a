@@ -1,6 +1,7 @@
 'use client';
 
-import { Search, Music, Library, Plus } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Search, Music, Library, Plus, GripVertical } from 'lucide-react';
 import { TrackCard } from '@/components/tracks/TrackCard';
 import { Track } from '@/lib/types';
 
@@ -17,13 +18,11 @@ interface Props {
   onDeleteTrack: (id: string) => void;
   onAddFromLibrary: () => void;
   onShowUpload: () => void;
-  // Multi-select. When selectedIds is provided, the rows render
-  // checkboxes (via TrackCard's selectable mode) and the header
-  // gets a select-all toggle. Parent owns the Set so it can wire
-  // bulk actions in a BatchActionBar at page level.
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
   onSelectAll?: () => void;
+  /** Called after a drag-to-reorder completes with the new ordered id list. */
+  onReorder?: (orderedIds: string[]) => void;
 }
 
 /**
@@ -38,10 +37,35 @@ export function ProjectTrackList({
   filtered,
   onSelectTrack, onPlayTrack, onRemoveTrack, onDeleteTrack,
   onAddFromLibrary, onShowUpload,
-  selectedIds, onToggleSelect, onSelectAll,
+  selectedIds, onToggleSelect, onSelectAll, onReorder,
 }: Props) {
   const selectable = !!(selectedIds && onToggleSelect);
   const allSelected = selectable && filtered.length > 0 && filtered.every((t) => selectedIds!.has(t.id));
+
+  // Drag-to-reorder state (HTML5 DnD; no extra library).
+  const dragIdxRef = useRef<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  const handleDragStart = (idx: number) => (e: React.DragEvent) => {
+    dragIdxRef.current = idx;
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const handleDragOver = (idx: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverIdx(idx);
+  };
+  const handleDrop = (toIdx: number) => (e: React.DragEvent) => {
+    e.preventDefault();
+    const fromIdx = dragIdxRef.current;
+    dragIdxRef.current = null;
+    setDragOverIdx(null);
+    if (fromIdx == null || fromIdx === toIdx) return;
+    const next = [...filtered];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    onReorder?.(next.map((t) => t.id));
+  };
+
   return (
     <>
       {/* Tabs + Search */}
@@ -114,19 +138,36 @@ export function ProjectTrackList({
           </div>
         ) : (
           filtered.map((track, i) => (
-            <TrackCard
+            <div
               key={track.id}
-              track={track}
-              index={i + 1}
-              onClickDetails={onSelectTrack}
-              onPlayClick={() => onPlayTrack(track)}
-              onRemoveFromContext={(t) => onRemoveTrack(t.id)}
-              removeLabel="Remove from project"
-              onDelete={(t) => onDeleteTrack(t.id)}
-              selectable={selectable}
-              selected={selectable && selectedIds!.has(track.id)}
-              onSelectChange={(t) => onToggleSelect?.(t.id)}
-            />
+              draggable={!!onReorder}
+              onDragStart={onReorder ? handleDragStart(i) : undefined}
+              onDragOver={onReorder ? handleDragOver(i) : undefined}
+              onDrop={onReorder ? handleDrop(i) : undefined}
+              onDragEnd={() => { dragIdxRef.current = null; setDragOverIdx(null); }}
+              className={`relative transition-colors ${
+                dragOverIdx === i ? 'bg-[#D4BFA0]/5 border-t border-[#D4BFA0]/30' : ''
+              }`}
+            >
+              {/* Drag handle — only shown when reorder is enabled */}
+              {onReorder && (
+                <div className="absolute left-0 inset-y-0 flex items-center pl-1 cursor-grab active:cursor-grabbing z-10 opacity-0 group-hover:opacity-100 hover:opacity-100 text-[#3a3328] hover:text-[#a08a6a]">
+                  <GripVertical size={12} />
+                </div>
+              )}
+              <TrackCard
+                track={track}
+                index={i + 1}
+                onClickDetails={onSelectTrack}
+                onPlayClick={() => onPlayTrack(track)}
+                onRemoveFromContext={(t) => onRemoveTrack(t.id)}
+                removeLabel="Remove from project"
+                onDelete={(t) => onDeleteTrack(t.id)}
+                selectable={selectable}
+                selected={selectable && selectedIds!.has(track.id)}
+                onSelectChange={(t) => onToggleSelect?.(t.id)}
+              />
+            </div>
           ))
         )}
       </div>

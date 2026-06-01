@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { isSupabaseConfigured, insert, deleteRow, query, requireRowOwnership } from '@/lib/db';
+import { isSupabaseConfigured, insert, deleteRow, query, requireRowOwnership, update } from '@/lib/db';
 import { readBody } from '@/lib/validate';
 import { ProjectTracksAddBodySchema, ProjectTracksDeleteBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
+import { z } from 'zod';
 
 interface JunctionRow {
   id?: string;
@@ -104,6 +105,52 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     ) as JunctionRow[];
     for (const row of rows) {
       if (row.id) deleteRow('project_tracks', row.id);
+    }
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+  }
+}
+
+
+/**
+ * PATCH /api/projects/[id]/tracks — bulk reorder.
+ * Body: { positions: [{ track_id, position }] }
+ * Replaces positions for the listed tracks in one transaction-like loop.
+ */
+const ReorderBodySchema = z.object({
+  positions: z.array(z.object({ track_id: z.string().uuid(), position: z.number().int().min(0) })).min(1).max(500),
+});
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id: projectId } = await params;
+  const parsed = await readBody(req, ReorderBodySchema);
+  if (!parsed.ok) return parsed.res;
+  const { positions } = parsed.data;
+
+  try {
+    if (isSupabaseConfigured()) {
+      const owner = await requireRowOwnership('projects', projectId);
+      if (!owner.ok) return owner.res;
+      // Batch update: each row is a separate RPC-style upsert.
+      for (const { track_id, position } of positions) {
+        const { error } = await owner.admin
+          .from('project_tracks')
+          .update({ position })
+          .eq('project_id', projectId)
+          .eq('track_id', track_id);
+        if (error) throw error;
+      }
+      return NextResponse.json({ success: true });
+    }
+    // Local-store path
+    for (const { track_id, position } of positions) {
+      const rows = query('project_tracks', (pt) =>
+        (pt as JunctionRow).project_id === projectId && (pt as JunctionRow).track_id === track_id,
+      ) as JunctionRow[];
+      for (const row of rows) {
+        if (row.id) update('project_tracks', row.id, { position });
+      }
     }
     return NextResponse.json({ success: true });
   } catch (error) {

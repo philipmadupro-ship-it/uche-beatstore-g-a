@@ -102,18 +102,32 @@ export const ProjectPatchBodySchema = z.object({
   store_order: z.number().nullable().optional(),
   price_usd: z.number().nonnegative().nullable().optional(),
   is_public: z.boolean().optional(),
+  // Template slug + checklist (mig 084)
+  template: z.string().max(40).nullable().optional(),
+  checklist: z.array(z.object({
+    id: z.string(),
+    label: z.string().max(200),
+    done: z.boolean(),
+  })).max(50).nullable().optional(),
+  // Pin/favorite (mig 085)
+  pinned: z.boolean().optional(),
 }).strict();
+
 export type ProjectPatchBody = z.infer<typeof ProjectPatchBodySchema>;
 
 // ── Project folders (multi-membership collections) ───────────────────────
 export const FolderCreateBodySchema = z.object({
   name: z.string().min(1).max(120),
+  color: z.string().max(20).nullable().optional(),
+  cover_url: z.string().nullable().optional(),
 }).strict();
 export type FolderCreateBody = z.infer<typeof FolderCreateBodySchema>;
 
 export const FolderPatchBodySchema = z.object({
   name: z.string().min(1).max(120).optional(),
   position: z.number().int().optional(),
+  color: z.string().max(20).nullable().optional(),
+  cover_url: z.string().nullable().optional(),
 }).strict();
 export type FolderPatchBody = z.infer<typeof FolderPatchBodySchema>;
 
