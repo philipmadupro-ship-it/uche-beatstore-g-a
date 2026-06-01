@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Sparkles, Loader2, Music, ChevronRight, Plus, Search, Layers, X } from 'lucide-react';
+import { Loader2, Music, ChevronRight, ChevronDown, Plus, Search, Layers, X } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
@@ -55,6 +55,9 @@ const TEMPO_MAX = 0.3;
 export function SimilarTracks({ trackId, onPick }: Props) {
   const [results, setResults] = useState<SimilarTrack[] | null>(null);
   const [loading, setLoading] = useState(false);
+  // Collapsed by default — the matches stay tucked behind a toggle so they
+  // don't eat the page. Opening it lazy-loads the first time.
+  const [expanded, setExpanded] = useState(false);
 
   // Filters
   const [q, setQ] = useState('');
@@ -80,15 +83,22 @@ export function SimilarTracks({ trackId, onPick }: Props) {
     }
   };
 
-  // Auto-load on mount / track change — this is the page's primary matching
-  // tool now, so it shouldn't need a click to populate.
+  // Reset + collapse when the track changes; no fetch until the user opens it.
   useEffect(() => {
     setResults(null);
+    setExpanded(false);
     setQ(''); setType('all'); setState('all'); setTag('all');
     setHarmonic(false); setTempoClose(false);
-    fetchSimilar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackId]);
+
+  const toggleOpen = () => {
+    setExpanded((prev) => {
+      const next = !prev;
+      if (next && results === null && !loading) fetchSimilar();
+      return next;
+    });
+  };
 
   const matchPct = (distance: number) => Math.max(0, Math.round((1 - distance / 2) * 100));
 
@@ -120,12 +130,33 @@ export function SimilarTracks({ trackId, onPick }: Props) {
 
   return (
     <div className="mb-10">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] flex items-center gap-2">
-          <Layers size={11} />
-          Discover &amp; match
-          {results && <span className="text-[#3a3328]">· {filtered.length}/{results.length}</span>}
-        </p>
+      {/* Toggle header — collapsed by default so matches don't take up space.
+          Click to unlock + lazy-load the discovery surface. */}
+      <button
+        onClick={toggleOpen}
+        className={cn(
+          'w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border transition-colors text-left',
+          expanded
+            ? 'border-[#1f1a13] bg-[#0e0c08] rounded-b-none'
+            : 'border-[#1f1a13] bg-[#14110d] hover:border-[#2d2620] hover:bg-[#1a160f]',
+        )}
+      >
+        <Layers size={13} className="text-[#a08a6a] shrink-0" />
+        <span className="text-[11px] font-medium text-[#E8DCC8]">Discover &amp; match</span>
+        <span className="text-[10px] font-mono text-[#5a5142] hidden sm:inline">
+          {results ? `${filtered.length} of ${results.length} matches` : 'compatible beats & instrumentals'}
+        </span>
+        <div className="flex-1" />
+        {loading && <Loader2 size={12} className="animate-spin text-[#5a5142]" />}
+        <span className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a]">
+          {expanded ? 'Hide' : 'Show'}
+        </span>
+        <ChevronDown size={14} className={cn('text-[#5a5142] transition-transform', expanded && 'rotate-180')} />
+      </button>
+
+      {!expanded ? null : (
+      <div className="border border-t-0 border-[#1f1a13] rounded-b-xl bg-[#0c0a08] p-3">
+      <div className="flex items-center justify-end mb-2.5">
         <button
           onClick={fetchSimilar}
           disabled={loading}
@@ -232,6 +263,8 @@ export function SimilarTracks({ trackId, onPick }: Props) {
             );
           })}
         </div>
+      )}
+      </div>
       )}
     </div>
   );
