@@ -22,18 +22,25 @@ interface Props {
   onAction: (label: string) => void;
   /** Mid-flight deletion disables every row to avoid double-clicks. */
   disabled?: boolean;
+  /** Desktop: how many actions show before a "More" expander. Omit = all. */
+  defaultVisible?: number;
 }
 
 /**
- * Desktop: full labelled list.
- * Mobile (<sm): primary 5 actions as icon-only pills + a "…" overflow
- * button that reveals the rest in a floating menu.
+ * Desktop: a few primary actions + a "More" expander (keeps the drawer from
+ * ending on a wall of options). Mobile (<sm): primary icon pills + overflow.
  */
-export function DrawerActionList({ actions, onAction, disabled }: Props) {
+export function DrawerActionList({ actions, onAction, disabled, defaultVisible }: Props) {
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const PRIMARY_COUNT = 5;
   const primary = actions.slice(0, PRIMARY_COUNT);
   const overflow = actions.slice(PRIMARY_COUNT);
+
+  // Desktop collapse: show the first `defaultVisible` until expanded.
+  const deskCollapsed = defaultVisible != null && actions.length > defaultVisible && !showAll;
+  const deskActions = deskCollapsed ? actions.slice(0, defaultVisible) : actions;
+  const hiddenCount = actions.length - (defaultVisible ?? actions.length);
 
   return (
     <>
@@ -94,9 +101,9 @@ export function DrawerActionList({ actions, onAction, disabled }: Props) {
         </div>
       </div>
 
-      {/* ── Desktop: full labelled list ────────────────────────────── */}
+      {/* ── Desktop: primary actions + "More" expander ─────────────── */}
       <div className="hidden sm:block p-6 grid grid-cols-1 gap-1">
-        {actions.map((action, i) => {
+        {deskActions.map((action, i) => {
           const Icon = action.icon;
           return (
             <button
@@ -113,6 +120,15 @@ export function DrawerActionList({ actions, onAction, disabled }: Props) {
             </button>
           );
         })}
+        {defaultVisible != null && actions.length > defaultVisible && (
+          <button
+            onClick={() => setShowAll((v) => !v)}
+            className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] hover:text-[#a08a6a] hover:bg-[#14110d] transition-colors"
+          >
+            <MoreHorizontal size={12} />
+            {showAll ? 'Show less' : `More${hiddenCount > 0 ? ` · ${hiddenCount}` : ''}`}
+          </button>
+        )}
       </div>
     </>
   );

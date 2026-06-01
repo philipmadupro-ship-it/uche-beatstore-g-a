@@ -2,8 +2,8 @@
 
 import { Track } from '@/lib/types';
 import {
-  X, Share, BarChart2, RefreshCw,
-  Scissors, PlusSquare, Download, FolderInput, Copy, Trash2,
+  X, Share, RefreshCw,
+  Scissors, PlusSquare, Download, Trash2,
   Loader2, Mic2, ExternalLink, Sliders, Play, Pause,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -11,7 +11,6 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { usePlayer } from '@/hooks/usePlayer';
-import { MiniWaveform } from '@/components/player/MiniWaveform';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { TrackVersionsPanel } from '@/components/tracks/TrackVersionsPanel';
 import { ProjectCommentsPanel } from '@/components/projects/ProjectCommentsPanel';
@@ -39,7 +38,7 @@ interface TrackDetailsDrawerProps {
 }
 
 export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projectId }: TrackDetailsDrawerProps) {
-  const { addToQueue, setTrack, currentTrack, isPlaying, setPlaying, progress } = usePlayer();
+  const { addToQueue, setTrack, currentTrack, isPlaying, setPlaying } = usePlayer();
   const router = useRouter();
 
   // Optimistic patch overlay. We merge it on top of the parent prop so
@@ -307,9 +306,12 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
     }
   };
 
+  // Curated to what's functional + decision-light. Insights dropped (it's a
+  // top tab already); dead "Move"/"Duplicate" placeholders removed. The first
+  // few show inline; the rest tuck behind "More" so the drawer doesn't end on
+  // a wall of options.
   const actions = [
     { icon: Share, label: 'Share', color: 'text-blue-400', action: () => setShowShareModal(true) },
-    { icon: BarChart2, label: 'Insights', color: 'text-[#E8DCC8]', action: () => setView('insights') },
     // Send to studio — deep-links /studio?track=ID. The studio reads the
     // param on mount via useSearchParams and auto-selects the track. We
     // close the drawer immediately because the destination page IS the
@@ -323,14 +325,13 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         onClose();
       },
     },
-    { icon: RefreshCw, label: 'Replace audio', color: 'text-[#E8DCC8]', action: () => fileInputRef.current?.click() },
     { icon: Scissors, label: 'Split stems', color: 'text-purple-400' },
-    { icon: PlusSquare, label: 'Add to queue', color: 'text-[#E8DCC8]' },
     { icon: Download, label: 'Export', color: 'text-[#E8DCC8]' },
-    { icon: FolderInput, label: 'Move', color: 'text-[#E8DCC8]' },
-    { icon: Copy, label: 'Duplicate', color: 'text-[#E8DCC8]' },
+    { icon: PlusSquare, label: 'Add to queue', color: 'text-[#E8DCC8]' },
+    { icon: RefreshCw, label: 'Replace audio', color: 'text-[#E8DCC8]', action: () => fileInputRef.current?.click() },
     { icon: Trash2, label: 'Delete', color: 'text-red-500', action: handleDelete },
   ];
+  const DRAWER_PRIMARY_ACTIONS = 4;
 
   return (
     <>
@@ -401,9 +402,24 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                 )}
               </div>
             </div>
-            <button onClick={onClose} className="text-[#4a4338] hover:text-[#E8DCC8] transition-colors p-2 bg-white/[0.04] rounded-xl border border-white/[0.06] hover:border-white/20 backdrop-blur-sm shrink-0 mt-1">
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-2 shrink-0 mt-1">
+              {/* Play — the only transport here; the waveform lives in the
+                  global player bar, so this just promotes the track to it. */}
+              {track.audio_url && (
+                <button
+                  onClick={() => { currentTrack?.id === track.id ? setPlaying(!isPlaying) : setTrack(track); }}
+                  title={currentTrack?.id === track.id && isPlaying ? 'Pause' : 'Play'}
+                  className="p-2 bg-white/[0.04] rounded-xl border border-white/[0.06] hover:border-[#D4BFA0]/40 text-[#E8DCC8] hover:text-[#D4BFA0] transition-colors backdrop-blur-sm"
+                >
+                  {currentTrack?.id === track.id && isPlaying
+                    ? <Pause size={16} fill="currentColor" />
+                    : <Play size={16} fill="currentColor" className="ml-0.5" />}
+                </button>
+              )}
+              <button onClick={onClose} className="text-[#4a4338] hover:text-[#E8DCC8] transition-colors p-2 bg-white/[0.04] rounded-xl border border-white/[0.06] hover:border-white/20 backdrop-blur-sm">
+                <X size={18} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -434,14 +450,6 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                   )}
                 </div>
               </div>
-
-              {/* Chord progression (mig 078) — detect client-side, sync to playback */}
-              <ChordSection
-                track={track}
-                isActive={currentTrack?.id === track.id}
-                progress={progress}
-                onSaved={(chords) => setOptimistic((o) => ({ ...o, chords }))}
-              />
 
               {/* Percentage meters */}
               {(() => {
@@ -502,71 +510,8 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
             </div>
           ) : (
             <>
-              {/* Waveform transport — visual only.
-                  WavePlayer is intentionally NOT used here: mounting two
-                  WaveSurfer instances for the same trackId (one here, one
-                  in PlayerBar) both satisfy isActiveAudio = true and produce
-                  double audio. MiniWaveform reads global progress from
-                  Zustand and triggers seek via the store — zero extra audio. */}
-              <div className="p-6 border-b border-[#1f1a13] bg-[#0a0907] relative">
-                {track.audio_url ? (() => {
-                  const isActive = currentTrack?.id === track.id;
-                  const dur = track.duration_seconds ?? 0;
-                  const currentSec = isActive ? progress * dur : 0;
-                  const fmt = (s: number) =>
-                    isFinite(s) && s >= 0
-                      ? `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`
-                      : '0:00';
-                  return (
-                    <div className="flex items-center gap-3">
-                      {/* Play / pause button — controls global player */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!isActive) {
-                            setTrack(track);
-                          } else {
-                            setPlaying(!isPlaying);
-                          }
-                        }}
-                        className="w-9 h-9 rounded-full bg-[#16130e] border border-[#1a160f] flex items-center justify-center text-[#E8DCC8] hover:border-[#D4BFA0]/50 hover:text-[#D4BFA0] transition-all shrink-0"
-                      >
-                        {isActive && isPlaying
-                          ? <Pause size={14} fill="currentColor" />
-                          : <Play size={14} fill="currentColor" className="ml-0.5" />}
-                      </button>
-
-                      <span className="text-[10px] font-mono text-[#5a5142] tabular-nums w-10 text-right shrink-0">
-                        {fmt(currentSec)}
-                      </span>
-
-                      <div className="flex-1 min-w-0">
-                        <MiniWaveform
-                          trackId={track.id}
-                          peaksUrl={track.peaks_url ?? null}
-                          height={52}
-                          isActive={isActive}
-                          onPlay={() => setTrack(track)}
-                        />
-                      </div>
-
-                      <span className="text-[10px] font-mono text-[#5a5142] tabular-nums w-10 shrink-0">
-                        {fmt(dur)}
-                      </span>
-                    </div>
-                  );
-                })() : (
-                  <div className="w-full h-[60px] bg-[#1a160f] rounded flex items-center justify-center text-[10px] font-mono uppercase text-[#4a4338] tracking-widest">
-                    No audio source
-                  </div>
-                )}
-                {isReplacing && (
-                  <div className="absolute inset-0 bg-[#0a0907]/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 animate-in fade-in">
-                    <Loader2 size={32} className="animate-spin text-[#D4BFA0] mb-4" />
-                    <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Replacing Source Asset</p>
-                  </div>
-                )}
-              </div>
+              {/* No inline waveform — playback lives in the global player bar;
+                  the header Play button promotes this track to it. */}
 
               {/* Lyrics + word tools entry point */}
               <div className="px-8 pt-6 pb-4 border-b border-[#1f1a13]">
@@ -644,10 +589,19 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
               />
 
               {/* Actions — extracted to drawer/DrawerActionList. */}
-              <DrawerActionList actions={actions} onAction={handleAction} disabled={isDeleting} />
+              <DrawerActionList actions={actions} onAction={handleAction} disabled={isDeleting} defaultVisible={DRAWER_PRIMARY_ACTIONS} />
             </>
           )}
         </div>
+
+        {/* Replace-audio progress — panel-level overlay (the waveform block
+            that used to host it was removed). */}
+        {isReplacing && (
+          <div className="absolute inset-0 bg-[#0a0907]/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 animate-in fade-in z-10">
+            <Loader2 size={32} className="animate-spin text-[#D4BFA0] mb-4" />
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Replacing Source Asset</p>
+          </div>
+        )}
       </div>
 
       {/* Stem Player Overlay — extracted to drawer/DrawerStemOverlay.
@@ -677,107 +631,5 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         }
       `}</style>
     </>
-  );
-}
-
-/**
- * ChordSection — detect + display a chord timeline (mig 078, Task 8).
- *
- * "Detect chords" runs Essentia HPCP analysis in the browser, POSTs the result
- * to /api/tracks/[id]/analyze (chord-only path), and renders the progression
- * as chips. When the track is the active player track, the chip under the
- * current playback position highlights in real time.
- */
-function ChordSection({
-  track,
-  isActive,
-  progress,
-  onSaved,
-}: {
-  track: Track;
-  isActive: boolean;
-  progress: number;
-  onSaved: (chords: Array<{ time: number; chord: string }>) => void;
-}) {
-  const [detecting, setDetecting] = useState(false);
-  const chords = track.chords ?? [];
-  const dur = track.duration_seconds ?? 0;
-  const currentSec = isActive ? progress * dur : 0;
-
-  // Index of the chord segment currently playing (last segment whose start
-  // time is <= currentSec).
-  let activeIdx = -1;
-  if (isActive && chords.length) {
-    for (let i = 0; i < chords.length; i++) {
-      if (chords[i].time <= currentSec) activeIdx = i;
-      else break;
-    }
-  }
-
-  const detect = async () => {
-    if (detecting || !track.audio_url) return;
-    setDetecting(true);
-    try {
-      const { detectChordsFromUrl } = await import('@/lib/audio/chords.client');
-      const result = await detectChordsFromUrl(track.audio_url);
-      if (!result.length) {
-        toast.error('No chords detected', 'The track may be too quiet or percussive to analyze.');
-        return;
-      }
-      const res = await fetch(`/api/tracks/${track.id}/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chords: result }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `HTTP ${res.status}`);
-      }
-      onSaved(result);
-      toast.success('Chords detected', `${result.length} chord changes mapped.`);
-    } catch (err: any) {
-      toast.error('Chord detection failed', err?.message || 'Try again.');
-    } finally {
-      setDetecting(false);
-    }
-  };
-
-  return (
-    <div className="bg-[#0a0907] border border-[#1f1a13] rounded-2xl p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#4a4338]">Chords</h3>
-        <button
-          onClick={detect}
-          disabled={detecting || !track.audio_url}
-          className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-md bg-[#1a160f] text-[#a08a6a] hover:text-[#E8DCC8] hover:bg-[#241e15] transition-all disabled:opacity-40"
-        >
-          {detecting ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
-          {detecting ? 'Detecting' : chords.length ? 'Re-detect' : 'Detect chords'}
-        </button>
-      </div>
-      {chords.length ? (
-        <div className="flex flex-wrap gap-1.5">
-          {chords.map((c, i) => (
-            <span
-              key={`${c.time}-${i}`}
-              title={`${Math.floor(c.time / 60)}:${String(Math.floor(c.time % 60)).padStart(2, '0')}`}
-              className={`px-2 py-1 rounded-md text-[11px] font-mono font-bold tabular-nums transition-all duration-200 ${
-                i === activeIdx
-                  ? 'bg-[#D4BFA0] text-black scale-105 shadow-lg shadow-[#D4BFA0]/20'
-                  : 'bg-[#14110d] text-[#a08a6a] border border-[#1f1a13]'
-              }`}
-            >
-              {c.chord}
-            </span>
-          ))}
-        </div>
-      ) : (
-        <p className="text-[10px] text-[#5a5142] leading-relaxed">
-          {track.audio_url
-            ? 'No chords yet. Detect the progression to render a timeline that follows playback.'
-            : 'Upload audio to detect chords.'}
-        </p>
-      )}
-    </div>
   );
 }
