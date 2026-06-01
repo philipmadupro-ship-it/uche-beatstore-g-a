@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   MoreHorizontal, Image as ImageIcon, Pencil, FolderInput, Store,
-  Trash2, Loader2, Check, CircleDot, LayoutTemplate, Pin,
+  Trash2, Loader2, Check, CircleDot, LayoutTemplate, Pin, Link2,
 } from 'lucide-react';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { ProjectFolderSelect } from './ProjectFolderSelect';
@@ -156,6 +156,23 @@ export function ProjectOptionsMenu({
                   <MenuItem icon={<ImageIcon size={13} />} label="Change cover" busy={busy === 'cover'} onClick={() => fileRef.current?.click()} />
                   <MenuItem icon={<Pencil size={13} />} label="Rename" onClick={() => setRenaming(true)} />
                   <MenuItem icon={<FolderInput size={13} />} label="Move to folders" onClick={() => { setShowFolders(true); setOpen(false); }} />
+                  <MenuItem icon={<Link2 size={13} />} label="Copy share link"
+                    busy={busy === 'share'}
+                    onClick={async () => {
+                      setBusy('share'); setOpen(false);
+                      try {
+                        const res = await fetch(`/api/projects/${project.id}/shares`, {
+                          method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ role: 'viewer', allow_downloads: true, label: 'Quick share' }),
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+                        const url = `${window.location.origin}/projects/share/${data.share?.token ?? data.token}`;
+                        await navigator.clipboard.writeText(url).catch(() => undefined);
+                        toast.success('Share link copied!');
+                      } catch (err) { toast.error("Couldn't create share link", err instanceof Error ? err.message : ''); }
+                      finally { setBusy(null); }
+                    }} />
                   <MenuItem icon={<LayoutTemplate size={13} />} label="Apply template" onClick={() => { setShowTemplate(true); setOpen(false); }} />
 
                   <div className="my-1 border-t border-[#1a160f]" />

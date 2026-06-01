@@ -22,6 +22,7 @@ import { Track } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
+import { seededGradient } from '@/lib/ui/cover-gradient';
 
 const STATUSES = ['in_progress', 'final', 'archived'] as const;
 
@@ -343,7 +344,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
               {project?.cover_url ? (
                 <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[120px] font-light text-[#1a160f] bg-gradient-to-br from-[#161520] to-[#0a0907]">
+                <div className="w-full h-full flex items-center justify-center text-[120px] font-light text-white/[0.07]" style={seededGradient(project?.id ?? 'p')}>
                   {project?.name?.[0] || 'P'}
                 </div>
               )}

@@ -13,6 +13,7 @@ import { PlaylistFilterBar } from '@/components/playlists/PlaylistFilterBar';
 import { PlaylistOptionsMenu } from '@/components/playlists/PlaylistOptionsMenu';
 import { filterAndSortPlaylists, DEFAULT_PLAYLIST_FILTERS, type PlaylistFilterState, type PlaylistListItem } from '@/lib/playlists/filters';
 import { PlayGlyph } from '@/components/player/TransportIcons';
+import { seededGradient } from '@/lib/ui/cover-gradient';
 
 interface Playlist extends PlaylistListItem {
   cover_url?: string | null;
@@ -173,7 +174,7 @@ export default function PlaylistsPage() {
                       <div className="w-full h-full grid grid-cols-2 gap-px bg-[#1a160f]">
                         {covers.slice(0, 4).map((url, i) => <div key={i} className="overflow-hidden bg-[#14110d]">{url ? <img loading="lazy" src={url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center"><Music size={12} className="text-[#2d2620]" /></div>}</div>)}
                       </div>
-                    ) : <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center"><ListMusic size={32} className="text-[#2d2620]" /></div>}
+                    ) : <div className="w-full h-full flex items-center justify-center" style={seededGradient(playlist.id)}><ListMusic size={32} className="text-white/15" /></div>}
                   {!selectMode && (
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <button onClick={async (e) => { e.preventDefault(); e.stopPropagation(); try { const res = await fetch(`/api/playlists/${playlist.id}/tracks`); const data = await res.json(); const tracks = Array.isArray(data) ? data : data.tracks ?? []; if (tracks.length > 0) { setQueue(tracks); setTrack(tracks[0]); } } catch {} }}

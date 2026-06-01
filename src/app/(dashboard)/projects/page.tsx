@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Loader2, Music, Layers, Plus, Play, Clock, ShoppingBag, Globe, Pin } from 'lucide-react';
+import { seededGradient } from '@/lib/ui/cover-gradient';
 import Link from 'next/link';
 import { fmtBpm, fmtKey } from '@/lib/audio/format';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
@@ -372,7 +373,7 @@ export default function ProjectsPage() {
                       {project.cover_url ? (
                         <img loading="lazy" src={project.cover_url} alt={project.name} className="absolute inset-0 w-full h-full object-cover" />
                       ) : (
-                        <div className={`absolute inset-0 flex items-center justify-center ${STATUS_EMPTY_BG[status]}`}>
+                        <div className="absolute inset-0 flex items-center justify-center" style={seededGradient(project.id)}>
                           <Music size={28} className="text-white/10" />
                         </div>
                       )}

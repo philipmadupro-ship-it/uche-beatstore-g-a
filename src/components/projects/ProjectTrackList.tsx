@@ -69,11 +69,16 @@ export function ProjectTrackList({
   const dragIdxRef = useRef<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
-  const handleDragStart = (idx: number) => (e: React.DragEvent) => {
+  // Only the grip handle itself is draggable — making the whole row draggable
+  // fights TrackCard's click/pointer handlers and the drag never starts reliably.
+  const handleGripDragStart = (idx: number) => (e: React.DragEvent) => {
     dragIdxRef.current = idx;
     e.dataTransfer.effectAllowed = 'move';
+    // Stop the event reaching the parent row so clicks on non-grip areas stay clicks.
+    e.stopPropagation();
   };
   const handleDragOver = (idx: number) => (e: React.DragEvent) => {
+    if (dragIdxRef.current == null) return; // not our drag
     e.preventDefault();
     setDragOverIdx(idx);
   };
@@ -83,7 +88,8 @@ export function ProjectTrackList({
     dragIdxRef.current = null;
     setDragOverIdx(null);
     if (fromIdx == null || fromIdx === toIdx) return;
-    const next = [...filtered];
+    // Use visibleTracks (what the user sees) not filtered (the full unfiltered prop).
+    const next = [...visibleTracks];
     const [moved] = next.splice(fromIdx, 1);
     next.splice(toIdx, 0, moved);
     onReorder?.(next.map((t) => t.id));
@@ -194,19 +200,24 @@ export function ProjectTrackList({
           visibleTracks.map((track, i) => (
             <div
               key={track.id}
-              draggable={!!onReorder}
-              onDragStart={onReorder ? handleDragStart(i) : undefined}
               onDragOver={onReorder ? handleDragOver(i) : undefined}
               onDrop={onReorder ? handleDrop(i) : undefined}
               onDragEnd={() => { dragIdxRef.current = null; setDragOverIdx(null); }}
-              className={`relative transition-colors ${
-                dragOverIdx === i ? 'bg-[#D4BFA0]/5 border-t border-[#D4BFA0]/30' : ''
+              className={`group relative transition-colors ${
+                dragOverIdx === i ? 'bg-[#D4BFA0]/5 border-t-2 border-[#D4BFA0]/60' : ''
               }`}
             >
-              {/* Drag handle — only shown when reorder is enabled */}
+              {/* Grip handle — THIS element is draggable, not the whole row.
+                  Dragging the full row fights TrackCard's pointer handlers;
+                  dragging only the handle is reliable and intentional. */}
               {onReorder && (
-                <div className="absolute left-0 inset-y-0 flex items-center pl-1 cursor-grab active:cursor-grabbing z-10 opacity-0 group-hover:opacity-100 hover:opacity-100 text-[#3a3328] hover:text-[#a08a6a]">
-                  <GripVertical size={12} />
+                <div
+                  draggable
+                  onDragStart={handleGripDragStart(i)}
+                  className="absolute left-0 inset-y-0 flex items-center pl-1 cursor-grab active:cursor-grabbing z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[#3a3328] hover:text-[#a08a6a]"
+                  title="Drag to reorder"
+                >
+                  <GripVertical size={13} />
                 </div>
               )}
               <TrackCard
