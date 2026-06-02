@@ -102,7 +102,7 @@ CI: `.github/workflows/ci.yml` runs `tsc --noEmit` → `vitest` → `next build`
 ## Env vars
 **Required prod:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `R2_*` (×4), `NEXT_PUBLIC_R2_PUBLIC_URL`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_APP_URL=https://uche-beatstore-g.vercel.app`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `CRON_SECRET`.
 
-**Optional:** `MOISES_API_KEY` (legacy stems), `DEMUCS_SERVICE_URL` (current stems service), `NEXT_PUBLIC_AUDD_API_TOKEN`, `ENABLE_LOCAL_STORE=true`.
+**Optional:** `MOISES_API_KEY` (legacy stems), `DEMUCS_SERVICE_URL` (current stems service), `NEXT_PUBLIC_AUDD_API_TOKEN`, `ENABLE_LOCAL_STORE=true`, `RESEND_WEBHOOK_SECRET` (`whsec_…`; enables `/api/resend/webhook` open/click tracking → `beat_sends.opened_at/link_clicked_at`. Unset = route accepts events without signature verification, dev only).
 
 ## Dashboard config (prod)
 - **R2 CORS** must include `https://uche-beatstore-g.vercel.app` for `GET/PUT/POST/HEAD` — else "waveform unavailable."
@@ -140,4 +140,4 @@ CI: `.github/workflows/ci.yml` runs `tsc --noEmit` → `vitest` → `next build`
 - **Public storefront** — `/api/store` (catalogue), `/api/store/[id]` (track detail w/ licenses), `/api/store/projects/[id]` (project bundle), `/api/store/projects/access/[token]` (post-purchase delivery), `/api/store/producer/[slug]` (producer page), `/api/store/checkout`, `/api/store/promo`, `/api/store/contact`, `/api/store/delivery`, `/api/store/download-file`, `/api/store/free-download`.
 - **Public share** — `/api/share/[token]/{route,play,download,checkout,analytics}`, `/api/projects/share/[token]/{route,tracks,comments}`.
 - **Producer (auth)** — `/api/tracks`, `/api/projects`, `/api/playlists`, `/api/contacts`, `/api/beat_sends`, `/api/campaigns`, `/api/calendar`, `/api/events`, `/api/profile`, `/api/licenses`, `/api/track-licenses`, `/api/sales`, `/api/analytics`, `/api/upload/*`, `/api/stems/*`, `/api/tracks/[id]/{analyze,arrangement,heatmap,lyrics,peaks,rate,similar,tags,shares,versions}`, `/api/search`, `/api/activity`, `/api/whoami`, `/api/invite`, `/api/email`, `/api/words`.
-- **Webhook + diagnostics** — `/api/stripe/webhook`, `/api/stripe/diagnostics`, `/api/audio/diagnostics`, `/api/stems/health`, `/api/cron/nudge-stale`.
+- **Webhook + diagnostics** — `/api/stripe/webhook`, `/api/resend/webhook` (email open/click → `beat_sends`), `/api/stripe/diagnostics`, `/api/audio/diagnostics`, `/api/stems/health`, `/api/cron/nudge-stale`.
