@@ -1,15 +1,24 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   X, Send, Loader2, Search, Check, Music, Layers, Eye, Pencil,
   Lock, Calendar, MessageSquare, Download, Disc3, Tag as TagIcon, Users, Sparkles,
-  Star, ArrowUpDown, Zap, Mail,
+  Star, ArrowUpDown, Zap, Mail, BookmarkPlus, BookOpen, Trash2, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { Contact, Track } from '@/lib/types';
 import { toast } from '@/hooks/useToast';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { buildBeatSendEmail, defaultSubject } from '@/lib/email/beat-send-template';
+
+// Simple avatar color from name — used in preview recipient chip.
+const PREVIEW_PALETTES = [
+  { bg: 'bg-[#2A2418]', text: 'text-[#E8D8B8]' },
+  { bg: 'bg-[#1a1833]', text: 'text-[#AFA9EC]' },
+  { bg: 'bg-[#0d2318]', text: 'text-[#6DC6A4]' },
+  { bg: 'bg-[#2a1810]', text: 'text-[#e8a86a]' },
+];
+function previewPalette(name: string) { return PREVIEW_PALETTES[(name.charCodeAt(0) ?? 0) % PREVIEW_PALETTES.length]; }
 
 interface Project {
   id: string;
@@ -85,8 +94,42 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
   const [usePassword, setUsePassword] = useState(false);
   // Track picker sort mode
   const [trackSort, setTrackSort] = useState<'default' | 'rating' | 'bpm' | 'energy'>('default');
-
   const [sending, setSending] = useState(false);
+
+  // ── Message templates — saved to localStorage ─────────────────────────
+  const TEMPLATES_KEY = 'antigravity-msg-templates';
+  interface MsgTemplate { id: string; name: string; subject: string; message: string; createdAt: number }
+  const loadTemplates = (): MsgTemplate[] => { try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]'); } catch { return []; } };
+  const [templates, setTemplates] = useState<MsgTemplate[]>(() => typeof window !== 'undefined' ? loadTemplates() : []);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const templateNameRef = useRef<HTMLInputElement>(null);
+
+  const saveTemplate = () => {
+    if (!subject.trim() && !message.trim()) { toast.error('Nothing to save', 'Add a subject or message first'); return; }
+    const name = window.prompt('Name this template:', 'Follow-up · Rappers')?.trim();
+    if (!name) return;
+    const t: MsgTemplate = { id: crypto.randomUUID(), name, subject: subject.trim(), message: message.trim(), createdAt: Date.now() };
+    const next = [t, ...templates];
+    setTemplates(next);
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(next));
+    toast.success('Template saved');
+  };
+
+  const applyTemplate = (t: MsgTemplate) => {
+    setSubject(t.subject);
+    setMessage(t.message);
+    setShowTemplates(false);
+    toast.success(`Template loaded: ${t.name}`);
+  };
+
+  const deleteTemplate = (id: string) => {
+    const next = templates.filter((t) => t.id !== id);
+    setTemplates(next);
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(next));
+  };
+
+  // Preview recipient index — lets the user flip through recipients to see personalised versions
+  const [previewIdx, setPreviewIdx] = useState(0);
 
   useEffect(() => {
     let aborted = false;
@@ -376,7 +419,9 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
   };
 
   // ── Preview — uses the same canonical template as the actual sent email ──
-  const previewRecipient = recipients[0]?.name ?? 'Recipient';
+  const validPreviewIdx = Math.min(previewIdx, Math.max(0, recipients.length - 1));
+  const previewContact = recipients[validPreviewIdx] ?? null;
+  const previewRecipient = previewContact?.name ?? 'Recipient';
   const resolvedSubject = subject.trim() || defaultSubject('U2C Beatstore', summary.title, mode);
   const previewHtml = useMemo(() => buildBeatSendEmail({
     recipientName: previewRecipient,
@@ -720,34 +765,71 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                   </div>
                 </div>
 
-                {/* Subject line */}
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-[#6a5d4a] mb-2 flex items-center gap-1.5">
-                    <Mail size={10} /> Subject line
-                  </p>
-                  <input
-                    type="text"
-                    placeholder={resolvedSubject}
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    className="w-full bg-[#16130e] border border-[#1f1a13] rounded-xl px-4 py-2.5 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0]/40"
-                  />
+                {/* Templates bar */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#4a4338]">Templates</span>
+                  {templates.slice(0, 4).map((t) => (
+                    <button key={t.id} onClick={() => applyTemplate(t)}
+                      className="px-2 py-1 rounded-md bg-[#16130e] border border-[#1f1a13] text-[10px] text-[#a08a6a] hover:text-[#E8D8B8] hover:border-[#2d2620] truncate max-w-[90px] transition-colors" title={t.name}>
+                      {t.name}
+                    </button>
+                  ))}
+                  {templates.length > 4 && (
+                    <button onClick={() => setShowTemplates((v) => !v)}
+                      className="px-2 py-1 rounded-md bg-[#16130e] border border-[#1f1a13] text-[10px] text-[#5a5142] hover:text-[#a08a6a]">
+                      +{templates.length - 4}
+                    </button>
+                  )}
+                  <button onClick={saveTemplate} title="Save current as template"
+                    className="ml-auto flex items-center gap-1 px-2 py-1 rounded-md border border-dashed border-[#2d2620] text-[10px] text-[#5a5142] hover:text-[var(--accent)] hover:border-[var(--accent-dim)]/40 transition-colors shrink-0">
+                    <BookmarkPlus size={11} /> Save
+                  </button>
                 </div>
 
-                {/* Personal message */}
-                <div className="flex-1 min-h-0 flex flex-col">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-[#6a5d4a] mb-2 flex items-center gap-1.5">
-                    <MessageSquare size={10} /> Personal message
-                  </p>
-                  <textarea
-                    placeholder={`Hey ${(recipients[0]?.name || '').split(' ')[0] || 'there'}, here's some new work…`}
-                    className="flex-1 min-h-[100px] bg-[#16130e] border border-[#1f1a13] rounded-xl p-4 text-[12px] text-[#E8DCC8] placeholder:text-[#4a4338] focus:outline-none focus:border-[#D4BFA0]/40 resize-none leading-relaxed"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                  />
+                {/* Full template list (expanded) */}
+                {showTemplates && templates.length > 0 && (
+                  <div className="rounded-xl border border-[#1f1a13] bg-[#0a0907] p-2 space-y-1">
+                    {templates.map((t) => (
+                      <div key={t.id} className="flex items-center gap-2 group">
+                        <button onClick={() => applyTemplate(t)} className="flex-1 text-left px-2.5 py-1.5 rounded-lg hover:bg-[#14110d] transition-colors">
+                          <p className="text-[12px] font-medium text-[#E8DCC8]">{t.name}</p>
+                          {t.subject && <p className="text-[10px] text-[#5a5142] truncate">{t.subject}</p>}
+                        </button>
+                        <button onClick={() => deleteTemplate(t.id)} className="p-1 text-[#3a3328] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Subject + message stacked */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2 bg-[#16130e] border border-[#1f1a13] rounded-xl px-3.5 py-2 focus-within:border-[#D4BFA0]/40 transition-colors">
+                    <Mail size={11} className="text-[#4a4338] shrink-0" />
+                    <input
+                      type="text"
+                      placeholder={resolvedSubject}
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      className="flex-1 bg-transparent text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none min-w-0"
+                    />
+                  </div>
+                  <div className="relative bg-[#16130e] border border-[#1f1a13] rounded-xl focus-within:border-[#D4BFA0]/40 transition-colors">
+                    <MessageSquare size={11} className="absolute left-3.5 top-3.5 text-[#4a4338] pointer-events-none" />
+                    <textarea
+                      placeholder={`Hey ${(recipients[0]?.name || '').split(' ')[0] || 'there'}, here's some new work…`}
+                      className="w-full min-h-[110px] bg-transparent pl-9 pr-4 pt-3 pb-3 text-[12px] text-[#E8DCC8] placeholder:text-[#4a4338] focus:outline-none resize-none leading-relaxed"
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                    />
+                    {message.length > 0 && (
+                      <span className="absolute bottom-2 right-3 text-[9px] font-mono text-[#3a3328]">{message.length}</span>
+                    )}
+                  </div>
                   {recipients.length > 1 && (
-                    <p className="text-[9px] text-[#5a5142] mt-2">
-                      Same message goes out to every recipient — substitute their name with “Hey there” if you’re bulk-sending.
+                    <p className="text-[9px] text-[#4a4338] font-mono">
+                      Tip: Same message for all recipients — use first names in your text.
                     </p>
                   )}
                 </div>
@@ -798,34 +880,68 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 </div>
               </div>
             ) : (
-              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4">
-                {/* Email client simulation frame */}
-                <div className="rounded-xl overflow-hidden border border-[#2d2620] bg-[#14110d] shadow-xl">
-                  {/* Email client header bar */}
-                  <div className="px-4 py-3 border-b border-[#1f1a13] space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono text-[#4a4338] w-8 shrink-0">FROM</span>
-                      <span className="text-[11px] text-[#6a5d4a]">U2C Beatstore &lt;beats@uche.co&gt;</span>
+              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
+                {/* Recipient selector — appears when sending to multiple */}
+                {recipients.length > 1 && (
+                  <div className="sticky top-0 z-10 px-4 py-2 border-b border-[#1f1a13] bg-[#0e0c08] flex items-center gap-2">
+                    <button disabled={validPreviewIdx === 0} onClick={() => setPreviewIdx((i) => Math.max(0, i - 1))}
+                      className="w-7 h-7 rounded flex items-center justify-center text-[#5a5142] hover:text-[#E8DCC8] disabled:opacity-30 transition-colors">
+                      <ChevronLeft size={14} />
+                    </button>
+                    <div className="flex-1 flex items-center justify-center gap-2">
+                      {/* Avatar */}
+                      {previewContact && (() => {
+                        const p = previewPalette(previewContact.name);
+                        return <div className={`w-8 h-8 rounded-full ${p.bg} flex items-center justify-center text-[12px] font-bold ${p.text} shrink-0`}>{previewContact.name[0]?.toUpperCase()}</div>;
+                      })()}
+                      <div className="text-left">
+                        <p className="text-[12px] font-semibold text-[#E8DCC8]">{previewContact?.name}</p>
+                        <p className="text-[10px] text-[#5a5142]">{previewContact?.email ?? 'no email'}</p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono text-[#4a4338] w-8 shrink-0">TO</span>
-                      <span className="text-[11px] text-[#a08a6a]">
-                        {recipients.length > 1 ? `${recipients.length} recipients` : `${previewRecipient} ${recipients[0]?.email ? `<${recipients[0].email}>` : ''}`}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono text-[#4a4338] w-8 shrink-0">SUBJ</span>
-                      <span className="text-[12px] font-medium text-[#E8DCC8] truncate">{resolvedSubject}</span>
-                    </div>
+                    <button disabled={validPreviewIdx >= recipients.length - 1} onClick={() => setPreviewIdx((i) => Math.min(recipients.length - 1, i + 1))}
+                      className="w-7 h-7 rounded flex items-center justify-center text-[#5a5142] hover:text-[#E8DCC8] disabled:opacity-30 transition-colors">
+                      <ChevronRight size={14} />
+                    </button>
+                    <span className="text-[10px] font-mono text-[#3a3328] w-14 text-right">{validPreviewIdx + 1} / {recipients.length}</span>
                   </div>
-                  {/* Email body iframe-style */}
-                  <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                )}
+
+                <div className="p-4">
+                  {/* Email client frame */}
+                  <div className="rounded-xl overflow-hidden border border-[#2d2620] bg-[#14110d] shadow-xl">
+                    {/* Header: From / To / Subject */}
+                    <div className="px-4 py-3 border-b border-[#1f1a13] space-y-1.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[9px] font-mono text-[#3a3328] w-9 shrink-0 uppercase tracking-wider">From</span>
+                        <span className="text-[11px] text-[#6a5d4a]">U2C Beatstore &lt;beats@uche.co&gt;</span>
+                      </div>
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[9px] font-mono text-[#3a3328] w-9 shrink-0 uppercase tracking-wider">To</span>
+                        <div className="flex items-center gap-1.5">
+                          {previewContact && (() => {
+                            const p = previewPalette(previewContact.name);
+                            return <div className={`w-5 h-5 rounded-full ${p.bg} flex items-center justify-center text-[9px] font-bold ${p.text} shrink-0`}>{previewContact.name[0]?.toUpperCase()}</div>;
+                          })()}
+                          <span className="text-[11px] font-medium text-[#a08a6a]">
+                            {previewRecipient}{previewContact?.email ? ` <${previewContact.email}>` : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[9px] font-mono text-[#3a3328] w-9 shrink-0 uppercase tracking-wider">Subj</span>
+                        <span className="text-[12px] font-semibold text-[#E8DCC8] truncate">{resolvedSubject}</span>
+                      </div>
+                    </div>
+                    {/* Email body */}
+                    <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                  </div>
+                  <p className="text-[9px] font-mono text-[#3a3328] text-center mt-3 uppercase tracking-wider">
+                    {recipients.length > 1
+                      ? `Showing personalised preview for ${previewRecipient.split(' ')[0]} · ${recipients.length} total recipients`
+                      : `Exactly what ${previewRecipient.split(' ')[0]} will receive`}
+                  </p>
                 </div>
-                <p className="text-[9px] font-mono text-[#3a3328] text-center mt-3 uppercase tracking-wider">
-                  {recipients.length > 1
-                    ? `Each of ${recipients.length} recipients gets their own personalised copy`
-                    : `Preview of what ${previewRecipient.split(' ')[0]} will receive`}
-                </p>
               </div>
             )}
 
