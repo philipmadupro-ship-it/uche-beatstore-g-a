@@ -68,7 +68,8 @@ type OwnedTable =
   | 'share_links'
   | 'smart_playlists'
   | 'project_folders'
-  | 'playlist_folders';
+  | 'playlist_folders'
+  | 'contact_segments';
 
 // Cheap shape we accept for local-store rows. Every row has at minimum an
 // `id`; everything else is dynamic-shaped (different per table). This

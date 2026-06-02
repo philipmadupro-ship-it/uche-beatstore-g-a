@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Loader2, Search, Mail, Globe, Tag, Users, Send, Upload, Clock, X } from 'lucide-react';
+import { Plus, Loader2, Search, Mail, Globe, Tag, Users, Send, Upload, Clock, X, Bookmark, BookmarkPlus } from 'lucide-react';
 import { Contact, BeatSend } from '@/lib/types';
 import { AddContactModal } from '@/components/crm/AddContactModal';
 import { SendBeatModal } from '@/components/crm/SendBeatModal';
@@ -68,6 +68,54 @@ export function ContactsView({
   // selected. The modal supports `prefilledTrackIds` for this.
   const [prefilledTrackIds, setPrefilledTrackIds] = useState<string[] | null>(null);
   const [nudgeContact, setNudgeContact] = useState<{ contact: Contact; latestSend: any } | null>(null);
+
+  // Saved filter segments (mig 090) — named filter combos shown as chips.
+  type Segment = { id: string; name: string; filters: { search?: string; category?: string; status?: string; sort?: string } };
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [activeSegmentId, setActiveSegmentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/contacts/segments')
+      .then((r) => (r.ok ? r.json() : { segments: [] }))
+      .then((d) => setSegments(d.segments ?? []))
+      .catch(() => {});
+  }, []);
+
+  const saveSegment = async () => {
+    const name = window.prompt('Name this segment (e.g. "Active buyers"):')?.trim();
+    if (!name) return;
+    const filters = {
+      ...(searchQuery.trim() ? { search: searchQuery.trim() } : {}),
+      ...(categoryFilter !== 'all' ? { category: categoryFilter } : {}),
+      ...(statusFilter !== 'all' ? { status: statusFilter } : {}),
+      sort: sortMode,
+    };
+    try {
+      const res = await fetch('/api/contacts/segments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, filters }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      setSegments((prev) => [...prev, data.segment]);
+      setActiveSegmentId(data.segment.id);
+      toast.success('Segment saved');
+    } catch (err) { toast.error("Couldn't save segment", err instanceof Error ? err.message : ''); }
+  };
+
+  const applySegment = (seg: Segment) => {
+    setActiveSegmentId(seg.id);
+    setCategoryFilter(seg.filters.category ?? 'all');
+    setStatusFilter((seg.filters.status as any) ?? 'all');
+    setSortMode((seg.filters.sort as any) ?? 'recent');
+    setSearchQuery(seg.filters.search ?? '');
+  };
+
+  const deleteSegment = async (seg: Segment) => {
+    const ok = await confirmToast(`Delete segment "${seg.name}"?`, 'Your contacts are untouched.', { confirmLabel: 'Delete', cancelLabel: 'Keep', danger: true });
+    if (!ok) return;
+    setSegments((prev) => prev.filter((s) => s.id !== seg.id));
+    if (activeSegmentId === seg.id) setActiveSegmentId(null);
+    try { await fetch(`/api/contacts/segments/${seg.id}`, { method: 'DELETE' }); }
+    catch { toast.error("Couldn't delete segment"); }
+  };
 
   const handleDropOnContact = (contact: Contact, payload: TrackDragPayload) => {
     setPrefilledTrackIds([payload.id]);
@@ -472,7 +520,7 @@ export function ContactsView({
               return (
                 <button
                   key={segment}
-                  onClick={() => setCategoryFilter(segment)}
+                  onClick={() => { setCategoryFilter(segment); setActiveSegmentId(null); }}
                   className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
                     categoryFilter === segment
                       ? isNudge
@@ -490,6 +538,41 @@ export function ContactsView({
                 </button>
               );
             })}
+          </div>
+
+          {/* Saved segments — custom filter combos. Plus a "Save current filter" button. */}
+          <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
+            <span className="shrink-0 flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328]">
+              <Bookmark size={11} /> Segments
+            </span>
+            {segments.map((seg) => (
+              <span key={seg.id} className="shrink-0 flex items-center group">
+                <button
+                  onClick={() => applySegment(seg)}
+                  className={`px-3 py-1.5 rounded-full text-[10px] font-medium transition-all flex items-center gap-1.5 border ${
+                    activeSegmentId === seg.id
+                      ? 'bg-[#534AB7] text-white border-[#534AB7]'
+                      : 'bg-[#14110d] border-[#1f1a13] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+                  }`}
+                >
+                  {seg.name}
+                </button>
+                <button
+                  onClick={() => deleteSegment(seg)}
+                  className="w-5 h-5 -ml-0.5 flex items-center justify-center text-[#3a3328] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Delete segment"
+                >
+                  <X size={10} />
+                </button>
+              </span>
+            ))}
+            <button
+              onClick={saveSegment}
+              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-medium border border-dashed border-[#2d2620] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#534AB7]/50 transition-colors"
+              title="Save the current search + filters as a reusable segment"
+            >
+              <BookmarkPlus size={11} /> Save current
+            </button>
           </div>
 
           {/* Toolbar — search on the left, sort on the right. Refresh

@@ -248,6 +248,28 @@ export const BeatSendPatchBodySchema = z.object({
 });
 export type BeatSendPatchBody = z.infer<typeof BeatSendPatchBodySchema>;
 
+// ── Contact segments (mig 090) — saved CRM filter combos ──────────────────
+export const ContactSegmentFiltersSchema = z.object({
+  search: z.string().max(200).optional(),
+  category: z.string().max(40).optional(),
+  status: z.enum(['all', 'active', 'engaged', 'cold']).optional(),
+  sort: z.enum(['recent', 'name', 'category']).optional(),
+}).strict();
+export type ContactSegmentFilters = z.infer<typeof ContactSegmentFiltersSchema>;
+
+export const ContactSegmentCreateBodySchema = z.object({
+  name: z.string().min(1).max(60),
+  filters: ContactSegmentFiltersSchema,
+}).strict();
+export type ContactSegmentCreateBody = z.infer<typeof ContactSegmentCreateBodySchema>;
+
+// ── Find-or-create a contact by email (ad-hoc send) ───────────────────────
+export const ContactResolveBodySchema = z.object({
+  email: z.string().email().max(200),
+  name: z.string().max(120).optional(),
+}).strict();
+export type ContactResolveBody = z.infer<typeof ContactResolveBodySchema>;
+
 // ── License purchases ──────────────────────────────────────────────────
 // license_purchases.line_items is a JSON column the Stripe webhook writes
 // from cart_items metadata. Stripe metadata caps each value at 500 chars

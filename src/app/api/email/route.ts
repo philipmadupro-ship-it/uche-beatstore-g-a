@@ -67,6 +67,8 @@ export async function POST(req: NextRequest) {
           share_token: shareToken,
           message,
           status: 'sent',
+          // mig 089 — lets the Resend webhook correlate open/click events back here.
+          email_resend_id: resendData?.id ?? null,
         });
     } else {
       insert('beat_sends', {
@@ -75,6 +77,7 @@ export async function POST(req: NextRequest) {
         share_token: shareToken,
         message,
         status: 'sent',
+        email_resend_id: resendData?.id ?? null,
       });
     }
 

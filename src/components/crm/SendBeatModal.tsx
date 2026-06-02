@@ -50,6 +50,9 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
   }, [contact, contactsProp]);
 
   const [recipients, setRecipients] = useState<Contact[]>(initialRecipients);
+  // Ad-hoc recipient input — emails not yet in the CRM. Synthetic recipients
+  // carry an `adhoc:` id; on send they're find-or-created via /api/contacts/resolve.
+  const [adhocEmail, setAdhocEmail] = useState('');
 
   // When opened via track-on-contact DnD, start on the tracks tab so
   // the user sees their pre-loaded selection right away.
@@ -215,6 +218,18 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
     setSelectedTrackIds((prev) => prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]);
   };
 
+  const addAdhocEmail = () => {
+    const email = adhocEmail.trim();
+    if (!email) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast.error('Enter a valid email'); return; }
+    const emailLc = email.toLowerCase();
+    if (recipients.some((r) => (r.email ?? '').toLowerCase() === emailLc)) { setAdhocEmail(''); return; }
+    // Synthetic recipient — resolved to a real contact on send.
+    const synthetic = { id: `adhoc:${emailLc}`, name: email.split('@')[0] || email, email } as Contact;
+    setRecipients((prev) => [...prev, synthetic]);
+    setAdhocEmail('');
+  };
+
   const removeRecipient = (id: string) => {
     setRecipients((prev) => prev.filter((c) => c.id !== id));
   };
@@ -237,6 +252,18 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
           continue;
         }
         try {
+          // Ad-hoc recipient — find-or-create a real contact so the send is
+          // tracked and the person enters the CRM. Replaces the synthetic id.
+          let contactId = r.id;
+          if (r.id.startsWith('adhoc:')) {
+            const resolveRes = await fetch('/api/contacts/resolve', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: r.email, name: r.name }),
+            });
+            const resolveData = await resolveRes.json().catch(() => ({}));
+            if (!resolveRes.ok || !resolveData.contact?.id) throw new Error(resolveData.error || 'Could not create contact');
+            contactId = resolveData.contact.id;
+          }
           if (mode === 'project' && selectedProjectId) {
             const shareRes = await fetch(`/api/projects/${selectedProjectId}/shares`, {
               method: 'POST',
@@ -280,7 +307,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                contactId: r.id,
+                contactId,
                 email: r.email,
                 trackIds: selectedTrackIds,
                 shareToken: shareData.token,
@@ -371,32 +398,49 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
           </button>
         </div>
 
-        {/* Recipient chips (only when > 1) */}
-        {recipients.length > 1 && (
-          <div className="px-8 py-3 border-b border-[#1f1a13] bg-[#0a0907]/40 flex flex-wrap gap-1.5">
-            {recipients.map((r) => (
+        {/* Recipients — chips + an "add email" input so you can send to people
+            not yet in the CRM. New emails are find-or-created as contacts on send. */}
+        <div className="px-8 py-3 border-b border-[#1f1a13] bg-[#0a0907]/40 flex flex-wrap items-center gap-1.5">
+          {recipients.map((r) => {
+            const isAdhoc = r.id.startsWith('adhoc:');
+            return (
               <span
                 key={r.id}
                 className={`flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border ${
-                  r.email
-                    ? 'bg-[#2A2418] border-[#8A7A5C]/40 text-[#E8D8B8]'
-                    : 'bg-[#1a160f] border-[#1f1a13] text-yellow-500/70'
+                  isAdhoc
+                    ? 'bg-[#1a1833] border-[#534AB7]/40 text-[#AFA9EC]'
+                    : r.email
+                      ? 'bg-[#2A2418] border-[#8A7A5C]/40 text-[#E8D8B8]'
+                      : 'bg-[#1a160f] border-[#1f1a13] text-yellow-500/70'
                 }`}
                 title={r.email || 'No email on file'}
               >
-                {r.name}
-                {!r.email && <span className="text-[8px]">⚠</span>}
-                <button
-                  onClick={() => removeRecipient(r.id)}
-                  className="text-[#6a5d4a] hover:text-red-400 -mr-0.5"
-                  title="Remove from this send"
-                >
+                {isAdhoc ? r.email : r.name}
+                {isAdhoc && <span className="text-[7px] opacity-70">NEW</span>}
+                {!isAdhoc && !r.email && <span className="text-[8px]">⚠</span>}
+                <button onClick={() => removeRecipient(r.id)} className="text-[#6a5d4a] hover:text-red-400 -mr-0.5" title="Remove from this send">
                   <X size={10} />
                 </button>
               </span>
-            ))}
-          </div>
-        )}
+            );
+          })}
+          {/* Add-email input */}
+          <span className="flex items-center gap-1">
+            <input
+              type="email"
+              value={adhocEmail}
+              onChange={(e) => setAdhocEmail(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAdhocEmail(); } }}
+              placeholder={recipients.length ? 'Add email…' : 'Type an email to send…'}
+              className="w-40 bg-[#0e0c08] border border-[#1f1a13] rounded px-2.5 py-1 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#534AB7]/60"
+            />
+            {adhocEmail.trim() && (
+              <button onClick={addAdhocEmail} className="text-[10px] font-mono uppercase tracking-wider text-[#AFA9EC] hover:text-white px-1.5 py-1 rounded transition-colors">
+                + Add
+              </button>
+            )}
+          </span>
+        </div>
 
         {/* Mode + tab segmented controls */}
         <div className="px-8 py-3 border-b border-[#1f1a13] flex items-center gap-4 bg-[#0a0907]/40">
