@@ -4,10 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   X, Send, Loader2, Search, Check, Music, Layers, Eye, Pencil,
   Lock, Calendar, MessageSquare, Download, Disc3, Tag as TagIcon, Users, Sparkles,
+  Star, ArrowUpDown, Zap, Mail,
 } from 'lucide-react';
 import { Contact, Track } from '@/lib/types';
 import { toast } from '@/hooks/useToast';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { buildBeatSendEmail, defaultSubject } from '@/lib/email/beat-send-template';
 
 interface Project {
   id: string;
@@ -75,11 +77,14 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
 
   // Composer state
   const [message, setMessage] = useState('');
+  const [subject, setSubject] = useState('');
   const [role, setRole] = useState<ShareRole>('viewer');
   const [allowDownloads, setAllowDownloads] = useState(true);
   const [expiresDays, setExpiresDays] = useState(30);
   const [password, setPassword] = useState('');
   const [usePassword, setUsePassword] = useState(false);
+  // Track picker sort mode
+  const [trackSort, setTrackSort] = useState<'default' | 'rating' | 'bpm' | 'energy'>('default');
 
   const [sending, setSending] = useState(false);
 
@@ -207,8 +212,14 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
       const q = searchQuery.toLowerCase();
       pool = pool.filter((t) => t.title.toLowerCase().includes(q));
     }
-    return pool;
-  }, [tracks, projectScopeId, projectScopeTrackIds, tagFilter, searchQuery]);
+    const sorted = [...pool];
+    switch (trackSort) {
+      case 'rating': sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0)); break;
+      case 'bpm':    sorted.sort((a, b) => (b.bpm ?? 0) - (a.bpm ?? 0)); break;
+      case 'energy': sorted.sort((a, b) => (b.energy ?? 0) - (a.energy ?? 0)); break;
+    }
+    return sorted;
+  }, [tracks, projectScopeId, projectScopeTrackIds, tagFilter, searchQuery, trackSort]);
 
   const filteredProjects = projects.filter((p) =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -309,9 +320,17 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               body: JSON.stringify({
                 contactId,
                 email: r.email,
+                recipientName: r.name,
                 trackIds: selectedTrackIds,
                 shareToken: shareData.token,
                 message,
+                subject: resolvedSubject,
+                packTitle: summary.title,
+                packMeta: summary.countLabel,
+                coverUrl: summary.cover,
+                allowDownloads,
+                expiresDays,
+                tracks: selectedTracks.map((t) => ({ title: t.title, bpm: t.bpm, key: t.key, type: t.type })),
               }),
             });
             // Two-stage check: HTTP status first (a 500 with non-JSON
@@ -356,19 +375,21 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
     }
   };
 
-  // ── Preview body ─────────────────────────────────────────────────────
+  // ── Preview — uses the same canonical template as the actual sent email ──
   const previewRecipient = recipients[0]?.name ?? 'Recipient';
-  const previewHtml = useMemo(() => buildPreview({
-    contactName: previewRecipient,
-    summaryTitle: summary.title,
-    summaryCount: summary.countLabel,
-    cover: summary.cover,
+  const resolvedSubject = subject.trim() || defaultSubject('U2C Beatstore', summary.title, mode);
+  const previewHtml = useMemo(() => buildBeatSendEmail({
+    recipientName: previewRecipient,
+    shareUrl: '#preview',
+    packTitle: summary.title,
+    packMeta: summary.countLabel,
+    coverUrl: summary.cover,
     message: message.trim(),
-    role: mode === 'project' ? role : 'viewer',
     allowDownloads,
     expiresDays,
-    isProject: mode === 'project',
-  }), [previewRecipient, summary, message, mode, role, allowDownloads, expiresDays]);
+    kind: mode,
+    tracks: mode === 'tracks' ? selectedTracks.map((t) => ({ title: t.title, bpm: t.bpm, key: t.key, type: t.type })) : [],
+  }), [previewRecipient, summary, message, mode, allowDownloads, expiresDays, selectedTracks]);
 
   const recipientsWithoutEmail = recipients.filter((r) => !r.email);
   const recipientsWithEmail = recipients.length - recipientsWithoutEmail.length;
@@ -478,33 +499,40 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 />
               </div>
 
-              {/* Tag + project filters — tracks mode only */}
+              {/* Tag + project scope + sort — tracks mode only */}
               {mode === 'tracks' && (
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 bg-[#0a0907] border border-[#1a160f] rounded-md px-2 py-1 flex-1 min-w-0">
-                    <TagIcon size={10} className="text-[#5a5142] shrink-0" />
-                    <Dropdown
-                      value={tagFilter || 'none'}
-                      onChange={(val) => setTagFilter(val === 'none' ? '' : val)}
-                      disabled={allTags.length === 0}
-                      options={[
-                        { value: 'none', label: allTags.length === 0 ? 'No tags' : 'Any tag' },
-                        ...allTags.map((t) => ({ value: t, label: t.toUpperCase() }))
-                      ]}
-                      className="bg-transparent border-none text-[10px] text-[#bbb] p-0 hover:bg-transparent hover:border-none focus:ring-0 focus:ring-offset-0 w-full flex-1 h-6"
-                    />
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1 bg-[#0a0907] border border-[#1a160f] rounded-md px-2 py-1 flex-1 min-w-0">
+                      <TagIcon size={9} className="text-[#5a5142] shrink-0" />
+                      <Dropdown
+                        value={tagFilter || 'none'}
+                        onChange={(val) => setTagFilter(val === 'none' ? '' : val)}
+                        disabled={allTags.length === 0}
+                        options={[{ value: 'none', label: allTags.length === 0 ? 'No tags' : 'Any tag' }, ...allTags.map((t) => ({ value: t, label: t.toUpperCase() }))]}
+                        className="bg-transparent border-none text-[10px] text-[#bbb] p-0 hover:bg-transparent hover:border-none focus:ring-0 w-full flex-1 h-6"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1 bg-[#0a0907] border border-[#1a160f] rounded-md px-2 py-1 flex-1 min-w-0">
+                      <Layers size={9} className="text-[#5a5142] shrink-0" />
+                      <Dropdown
+                        value={projectScopeId || 'none'}
+                        onChange={(val) => setProjectScopeId(val === 'none' ? '' : val)}
+                        options={[{ value: 'none', label: 'Any project' }, ...projects.map((p) => ({ value: p.id, label: p.name.toUpperCase() }))]}
+                        className="bg-transparent border-none text-[10px] text-[#bbb] p-0 hover:bg-transparent hover:border-none focus:ring-0 w-full flex-1 h-6"
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 bg-[#0a0907] border border-[#1a160f] rounded-md px-2 py-1 flex-1 min-w-0">
-                    <Layers size={10} className="text-[#5a5142] shrink-0" />
-                    <Dropdown
-                      value={projectScopeId || 'none'}
-                      onChange={(val) => setProjectScopeId(val === 'none' ? '' : val)}
-                      options={[
-                        { value: 'none', label: 'Any project' },
-                        ...projects.map((p) => ({ value: p.id, label: p.name.toUpperCase() }))
-                      ]}
-                      className="bg-transparent border-none text-[10px] text-[#bbb] p-0 hover:bg-transparent hover:border-none focus:ring-0 focus:ring-offset-0 w-full flex-1 h-6"
-                    />
+                  {/* Sort row */}
+                  <div className="flex items-center gap-1">
+                    <ArrowUpDown size={9} className="text-[#4a4338] shrink-0" />
+                    <span className="text-[9px] font-mono text-[#4a4338] uppercase tracking-wider mr-1">Sort:</span>
+                    {(['default', 'rating', 'bpm', 'energy'] as const).map((s) => (
+                      <button key={s} onClick={() => setTrackSort(s)}
+                        className={`px-2 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider transition-colors capitalize ${trackSort === s ? 'bg-[#2A2418] text-[#E8D8B8]' : 'text-[#5a5142] hover:text-[#a08a6a]'}`}>
+                        {s === 'default' ? 'Default' : s === 'rating' ? '⭐ Rating' : s === 'bpm' ? 'BPM' : '⚡ Energy'}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
@@ -578,31 +606,59 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 ) : (
                   filteredTracks.map((track) => {
                     const selected = selectedTrackIds.includes(track.id);
+                    const rating = track.rating ?? 0;
+                    const energy = track.energy != null ? Math.round(track.energy * 100) : null;
+                    const hasCover = !!track.cover_url;
                     return (
                       <div
                         key={track.id}
                         onClick={() => toggleTrack(track.id)}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-md border cursor-pointer transition-colors ${
+                        className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
                           selected
-                            ? 'bg-[#2A2418] border-[#8A7A5C]/40 text-[#E8D8B8]'
-                            : 'bg-transparent border-transparent hover:bg-[#101010] text-[#a08a6a] hover:text-[#E8DCC8]'
+                            ? 'bg-[#2A2418] border-[#8A7A5C]/40'
+                            : 'bg-transparent border-transparent hover:bg-[#14110d] hover:border-[#1f1a13]'
                         }`}
                       >
-                        <div className={`w-5 h-5 rounded flex items-center justify-center border shrink-0 ${
+                        {/* Checkbox */}
+                        <div className={`w-5 h-5 mt-0.5 rounded flex items-center justify-center border shrink-0 transition-colors ${
                           selected ? 'bg-[#D4BFA0] border-[#D4BFA0]' : 'border-[#2d2620]'
                         }`}>
-                          {selected && <Check size={11} className="text-white" />}
+                          {selected && <Check size={11} className="text-black" />}
                         </div>
-                        <div className="w-7 h-7 bg-[#16130e] rounded border border-[#1a160f] overflow-hidden shrink-0">
-                          {track.cover_url
-                            ? <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
-                            : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={11} /></div>}
+                        {/* Cover */}
+                        <div className="w-9 h-9 bg-[#16130e] rounded-lg border border-[#1a160f] overflow-hidden shrink-0">
+                          {hasCover
+                            ? <img loading="lazy" src={track.cover_url!} alt="" className="w-full h-full object-cover" />
+                            : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={12} /></div>}
                         </div>
+                        {/* Title + meta */}
                         <div className="min-w-0 flex-1">
-                          <p className="text-[12px] font-medium truncate">{track.title}</p>
-                          <p className="text-[9px] font-mono text-[#5a5142] uppercase tracking-wider truncate">
-                            {track.type}{track.bpm ? ` · ${track.bpm}` : ''}{track.key ? ` · ${track.key}` : ''}
+                          <p className={`text-[12px] font-medium truncate ${selected ? 'text-[#E8D8B8]' : 'text-[#E8DCC8]'}`}>{track.title}</p>
+                          <p className="text-[9px] font-mono text-[#5a5142] uppercase tracking-wider">
+                            {track.type}{track.bpm ? ` · ${track.bpm} bpm` : ''}{track.key ? ` · ${track.key}${track.scale === 'minor' ? 'm' : ''}` : ''}
                           </p>
+                          {/* Quality signals */}
+                          <div className="flex items-center gap-2 mt-1">
+                            {/* Stars */}
+                            {rating > 0 && (
+                              <span className="flex items-center gap-0.5">
+                                {[1,2,3,4,5].map((s) => (
+                                  <Star key={s} size={9} fill={s <= rating ? '#c8a84b' : 'none'} strokeWidth={1.5} className={s <= rating ? 'text-[#c8a84b]' : 'text-[#2d2620]'} />
+                                ))}
+                              </span>
+                            )}
+                            {/* Energy bar */}
+                            {energy != null && (
+                              <span className="flex items-center gap-1">
+                                <Zap size={9} className="text-[#4a4338]" />
+                                <div className="w-10 h-1 bg-[#1a160f] rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full bg-gradient-to-r from-[#6a5d4a] to-[#D4BFA0]" style={{ width: `${energy}%` }} />
+                                </div>
+                                <span className="text-[8px] font-mono text-[#4a4338]">{energy}%</span>
+                              </span>
+                            )}
+                            {!hasCover && <span className="text-[8px] font-mono text-[#3a3328]">no cover</span>}
+                          </div>
                         </div>
                       </div>
                     );
@@ -664,6 +720,20 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                   </div>
                 </div>
 
+                {/* Subject line */}
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#6a5d4a] mb-2 flex items-center gap-1.5">
+                    <Mail size={10} /> Subject line
+                  </p>
+                  <input
+                    type="text"
+                    placeholder={resolvedSubject}
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="w-full bg-[#16130e] border border-[#1f1a13] rounded-xl px-4 py-2.5 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0]/40"
+                  />
+                </div>
+
                 {/* Personal message */}
                 <div className="flex-1 min-h-0 flex flex-col">
                   <p className="text-[10px] font-black uppercase tracking-widest text-[#6a5d4a] mb-2 flex items-center gap-1.5">
@@ -671,7 +741,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                   </p>
                   <textarea
                     placeholder={`Hey ${(recipients[0]?.name || '').split(' ')[0] || 'there'}, here's some new work…`}
-                    className="flex-1 min-h-[120px] bg-[#16130e] border border-[#1f1a13] rounded-xl p-4 text-[12px] text-[#E8DCC8] placeholder:text-[#4a4338] focus:outline-none focus:border-[#D4BFA0]/40 resize-none leading-relaxed"
+                    className="flex-1 min-h-[100px] bg-[#16130e] border border-[#1f1a13] rounded-xl p-4 text-[12px] text-[#E8DCC8] placeholder:text-[#4a4338] focus:outline-none focus:border-[#D4BFA0]/40 resize-none leading-relaxed"
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                   />
@@ -728,16 +798,34 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 </div>
               </div>
             ) : (
-              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#6a5d4a] mb-3">
-                  Email preview · {recipients.length > 1
-                    ? `each of ${recipients.length} recipients sees their own copy`
-                    : `what ${previewRecipient.split(' ')[0]} will see`}
+              <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-4">
+                {/* Email client simulation frame */}
+                <div className="rounded-xl overflow-hidden border border-[#2d2620] bg-[#14110d] shadow-xl">
+                  {/* Email client header bar */}
+                  <div className="px-4 py-3 border-b border-[#1f1a13] space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-mono text-[#4a4338] w-8 shrink-0">FROM</span>
+                      <span className="text-[11px] text-[#6a5d4a]">U2C Beatstore &lt;beats@uche.co&gt;</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-mono text-[#4a4338] w-8 shrink-0">TO</span>
+                      <span className="text-[11px] text-[#a08a6a]">
+                        {recipients.length > 1 ? `${recipients.length} recipients` : `${previewRecipient} ${recipients[0]?.email ? `<${recipients[0].email}>` : ''}`}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-mono text-[#4a4338] w-8 shrink-0">SUBJ</span>
+                      <span className="text-[12px] font-medium text-[#E8DCC8] truncate">{resolvedSubject}</span>
+                    </div>
+                  </div>
+                  {/* Email body iframe-style */}
+                  <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                </div>
+                <p className="text-[9px] font-mono text-[#3a3328] text-center mt-3 uppercase tracking-wider">
+                  {recipients.length > 1
+                    ? `Each of ${recipients.length} recipients gets their own personalised copy`
+                    : `Preview of what ${previewRecipient.split(' ')[0]} will receive`}
                 </p>
-                <div
-                  className="bg-white text-black rounded-xl overflow-hidden border border-[#1f1a13]"
-                  dangerouslySetInnerHTML={{ __html: previewHtml }}
-                />
               </div>
             )}
 
@@ -814,51 +902,6 @@ function ToggleRow({ icon, label, active, onToggle }: {
   );
 }
 
-function buildPreview(opts: {
-  contactName: string;
-  summaryTitle: string;
-  summaryCount: string;
-  cover: string | null;
-  message: string;
-  role: ShareRole;
-  allowDownloads: boolean;
-  expiresDays: number;
-  isProject: boolean;
-}): string {
-  const escape = (s: string) => s.replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string),
-  );
-  const safeMessage = escape(opts.message).replace(/\n/g, '<br>');
-  const safeName = escape(opts.contactName.split(' ')[0]);
-  const safeTitle = escape(opts.summaryTitle);
-  const expiresLine = opts.expiresDays > 0
-    ? `<p style="font-size:11px;color:#a08a6a;margin:10px 0 0;">Link expires in ${opts.expiresDays} days.</p>`
-    : '';
-  const roleBadge = opts.isProject
-    ? `<span style="display:inline-block;background:#ede9fe;color:#6d52e6;padding:2px 8px;border-radius:9999px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;margin-right:6px;">${opts.role}</span>`
-    : '';
-  const downloads = opts.allowDownloads
-    ? '<span style="color:#6d52e6;font-weight:600;">Downloads enabled</span>'
-    : '<span style="color:#a08a6a;">Downloads off</span>';
-
-  return `
-  <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fafafa;padding:32px 24px;">
-    <div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #ececec;border-radius:14px;overflow:hidden;">
-      ${opts.cover ? `<img loading="lazy" src="${escape(opts.cover)}" alt="" style="width:100%;display:block;max-height:240px;object-fit:cover;">` : ''}
-      <div style="padding:28px 28px 24px;">
-        <p style="font-size:11px;color:#6d52e6;text-transform:uppercase;letter-spacing:0.2em;margin:0 0 8px;font-weight:700;">${opts.isProject ? 'Project share' : 'New music'}</p>
-        <h1 style="font-size:22px;font-weight:600;color:#14110d;margin:0 0 6px;">${safeTitle}</h1>
-        <p style="font-size:13px;color:#6a5d4a;margin:0 0 18px;">
-          ${roleBadge}${escape(opts.summaryCount)} · ${downloads}
-        </p>
-        <p style="font-size:14px;color:#3a3328;line-height:1.6;margin:0 0 18px;">Hey ${safeName},</p>
-        ${safeMessage
-          ? `<div style="font-size:14px;color:#3a3328;line-height:1.6;background:#fafafa;border-left:3px solid #6d52e6;padding:14px 16px;border-radius:6px;margin:0 0 22px;">${safeMessage}</div>`
-          : '<p style="font-size:13px;color:#b89e7a;margin:0 0 22px;font-style:italic;">No personal message — recipient will see only the link.</p>'}
-        <a href="#" style="display:inline-block;background:#6d52e6;color:#fff;padding:12px 24px;text-decoration:none;border-radius:8px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;">Open ${opts.isProject ? 'project' : 'pack'}</a>
-        ${expiresLine}
-      </div>
-    </div>
-    <p style="text-align:center;font-size:10px;color:#b89e7a;text-transform:uppercase;letter-spacing:0.3em;margin-top:20px;">Sent via U2C Beatstore</p>
-  </div>`;
-}
+// buildPreview removed — the modal now uses buildBeatSendEmail from
+// @/lib/email/beat-send-template, ensuring the preview exactly matches
+// what Resend sends.

@@ -4,7 +4,7 @@ import { Resend } from 'resend';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured, insert } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
-import { escapeHtml } from '@/lib/email/templates';
+import { buildBeatSendEmail, defaultSubject } from '@/lib/email/beat-send-template';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -20,38 +20,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const { contactId, email, subject, message, trackIds, shareToken } = await req.json();
+    const { contactId, email, subject, message, trackIds, shareToken, packTitle, packMeta, coverUrl, recipientName, expiresDays, allowDownloads, tracks } = await req.json();
 
     if (!email || !shareToken) {
       return NextResponse.json({ error: 'Missing email or shareToken' }, { status: 400 });
     }
-    // shareToken is dropped into the link path — constrain to a token charset
-    // so it can't smuggle markup or a different URL into the email.
     if (!/^[A-Za-z0-9_-]{6,64}$/.test(String(shareToken))) {
       return NextResponse.json({ error: 'Invalid share token' }, { status: 400 });
     }
 
     const shareUrl = `${getAppUrl()}/share/${shareToken}`;
-    const safeMessage = escapeHtml(message) || 'I have some new music for you to check out.';
-    const safeSubject = (typeof subject === 'string' && subject.trim())
+    const resolvedTitle = typeof packTitle === 'string' && packTitle.trim() ? packTitle.trim() : 'New music';
+    const resolvedSubject = (typeof subject === 'string' && subject.trim())
       ? subject.trim().slice(0, 200)
-      : 'New Music Transmission from U2C Beatstore';
+      : defaultSubject('U2C Beatstore', resolvedTitle);
+
+    const html = buildBeatSendEmail({
+      recipientName: typeof recipientName === 'string' && recipientName.trim() ? recipientName : email.split('@')[0],
+      shareUrl,
+      packTitle: resolvedTitle,
+      packMeta: typeof packMeta === 'string' ? packMeta : '',
+      coverUrl: typeof coverUrl === 'string' ? coverUrl : null,
+      message: typeof message === 'string' ? message : '',
+      allowDownloads: allowDownloads !== false,
+      expiresDays: typeof expiresDays === 'number' ? expiresDays : 30,
+      tracks: Array.isArray(tracks) ? tracks : [],
+    });
 
     // 1. Send Email via Resend
     const { data: resendData, error: resendError } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
       to: email,
-      subject: safeSubject,
-      html: `
-        <div style="font-family: sans-serif; background: #0a0907; color: #E8DCC8; padding: 40px; border-radius: 20px;">
-          <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 14px; color: #D4BFA0;">New Assets Available</h1>
-          <p style="font-size: 16px; line-height: 1.6;">${safeMessage}</p>
-          <div style="margin-top: 40px;">
-            <a href="${shareUrl}" style="background: #E8DCC8; color: #0a0907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px;">Listen to Assets</a>
-          </div>
-          <p style="margin-top: 60px; font-size: 10px; color: #4a4338; text-transform: uppercase; letter-spacing: 0.5em;">Sent via U2C</p>
-        </div>
-      `,
+      subject: resolvedSubject,
+      html,
     });
 
     if (resendError) throw resendError;
