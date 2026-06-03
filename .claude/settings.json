@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit*)",
+      "Bash(npx tsc*)",
+      "Bash(npm test*)",
+      "Bash(npm run build*)",
+      "Bash(npx next build*)",
+      "Bash(npx vitest run*)",
+      "Bash(ls /Users/philipmadu/antigravity*)",
+      "Bash(lsof -ti:*)",
+      "Bash(wc -l *)",
+      "Bash(git log --oneline*)",
+      "Bash(git status --short*)",
+      "Bash(open http://localhost*)"
+    ]
+  }
+}
