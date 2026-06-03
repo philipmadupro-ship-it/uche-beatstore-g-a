@@ -23,12 +23,16 @@ import {
   Image as ImageIcon, Upload, Globe,
   Music, ListMusic, DollarSign, Eye, EyeOff,
   GripVertical, Check, X, Plus, Layers, Search,
-  ShoppingBag, Star, Tag, Trash2, Clock, Mic2, Play,
+  ShoppingBag, Star, Tag, Trash2, Clock, Mic2, Play, Download,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { DEFAULT_TEMPLATE_MD, VARIABLE_LIST } from '@/lib/contracts/license-template';
 import { CARD_STYLE_META, VIDEO_STYLE_META } from '@/lib/share/styles';
 import { LicenseBuilder } from '@/components/store/LicenseBuilder';
+import { ArtistBioBlock } from '@/components/store/ArtistBioBlock';
+import { BeatCard } from '@/components/store/BeatCard';
+import { TrackLicensePanel } from '@/components/store/TrackLicensePanel';
+import type { StoreTrack, CreatorProfile } from '@/components/store/types';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -397,13 +401,8 @@ const textareaCls = `${inputCls} resize-none leading-relaxed`;
 
 /* ─── Live preview ───────────────────────────────────────────── */
 
-interface PreviewTrack {
-  id: string;
-  title: string;
-  type: string;
-  cover_url: string | null;
-  bpm: number | null;
-}
+// PreviewTrack mirrors the fields BeatCard needs from StoreTrack.
+type PreviewTrack = TrackRow;
 
 interface TrackRow {
   id: string;
@@ -412,14 +411,15 @@ interface TrackRow {
   cover_url: string | null;
   bpm: number | null;
   key: string | null;
+  scale: string | null;
   store_listed: boolean;
   store_featured: boolean;
   store_sort_order: number | null;
   lease_price_usd: number | null;
   exclusive_price_usd: number | null;
+  free_download_enabled: boolean;
+  exclusive_sold: boolean;
   voice_tag_enabled: boolean;
-  // Migration 056 — when set on a draft, the cron flips
-  // store_listed=true at that time and clears this field.
   scheduled_publish_at: string | null;
 }
 
@@ -436,54 +436,57 @@ function StorePreview({
 }) {
   const accent = profile.accent_color || '#D4BFA0';
 
-  // Social link presence badges (bottom of preview)
-  const socialLinks = [
-    profile.instagram_handle && { label: 'IG', value: `@${profile.instagram_handle.replace(/^@/, '')}` },
-    profile.twitter_handle   && { label: 'X',  value: `@${profile.twitter_handle.replace(/^@/, '')}` },
-    profile.spotify_url      && { label: 'Spotify', value: '↗' },
-    profile.soundcloud_url   && { label: 'SoundCloud', value: '↗' },
-    profile.website_url      && { label: 'Site', value: '↗' },
-    profile.contact_email    && { label: 'Email', value: profile.contact_email },
-  ].filter(Boolean) as Array<{ label: string; value: string }>;
+  // Map ProfileForm → CreatorProfile so the real ArtistBioBlock can render.
+  const creator: CreatorProfile = {
+    display_name: profile.display_name || null,
+    bio: profile.bio || null,
+    credits: profile.credits || null,
+    hero_image_url: profile.hero_image_url || null,
+    instagram_handle: profile.instagram_handle || null,
+    twitter_handle: profile.twitter_handle || null,
+    spotify_url: profile.spotify_url || null,
+    soundcloud_url: profile.soundcloud_url || null,
+    website_url: profile.website_url || null,
+    contact_email: profile.contact_email || null,
+    accent_color: accent,
+    font_style: profile.font_style || 'default',
+    text_color_primary: profile.text_color_primary || '#E8DCC8',
+  };
+
+  // Map TrackRow → StoreTrack shape for BeatCard.
+  const storeNoop = () => {};
+  const asTracks = (ts: PreviewTrack[]): StoreTrack[] =>
+    ts.map((t) => ({
+      id: t.id,
+      user_id: '',
+      title: t.title,
+      type: t.type as StoreTrack['type'],
+      audio_url: '',
+      cover_url: t.cover_url,
+      bpm: t.bpm,
+      key: t.key,
+      scale: t.scale,
+      duration_seconds: null,
+      lease_price_usd: t.lease_price_usd,
+      exclusive_price_usd: t.exclusive_price_usd,
+      store_listed: t.store_listed,
+      free_download_enabled: t.free_download_enabled,
+      exclusive_sold: t.exclusive_sold,
+      stems_status: 'none' as const,
+      tags: [],
+      store_sort_order: t.store_sort_order,
+      created_at: '',
+    }));
+
+  const previewStoreTracks = asTracks(tracks);
 
   return (
     <div
       className="rounded-2xl overflow-hidden border border-[#1f1a13] bg-[#0a0907] text-[#E8DCC8]"
       style={{ '--store-accent': accent } as React.CSSProperties}
     >
-      {/* Hero strip */}
-      <div className="relative min-h-[140px] flex flex-col justify-end p-5">
-        {profile.hero_image_url ? (
-          <img
-            src={profile.hero_image_url}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-40"
-          />
-        ) : (
-          <div
-            className="absolute inset-0 opacity-25"
-            style={{ background: `radial-gradient(ellipse at 30% 50%, ${accent} 0%, transparent 65%)` }}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0907]/90 to-transparent" />
-        <div className="relative z-10">
-          <p className="text-[8px] font-mono uppercase tracking-widest mb-1" style={{ color: accent }}>
-            {profile.credits || 'Beat store'}
-          </p>
-          <h2
-            className={`text-[20px] font-black uppercase tracking-tight text-white leading-none ${
-              profile.font_style === 'serif' ? 'font-serif' : ''
-            }`}
-          >
-            {profile.display_name || 'Your Name'}
-          </h2>
-          {profile.bio && (
-            <p className="text-[10px] text-[#a08a6a] mt-1.5 leading-relaxed line-clamp-2">
-              {profile.bio}
-            </p>
-          )}
-        </div>
-      </div>
+      {/* Real ArtistBioBlock — mirrors what buyers see */}
+      <ArtistBioBlock creator={creator} trackCount={tracks.length} accentColor={accent} />
 
       {/* Featured playlists */}
       {featuredPlaylists.length > 0 && (
@@ -504,7 +507,7 @@ function StorePreview({
         </div>
       )}
 
-      {/* Featured projects — bundle tiles with their price */}
+      {/* Featured projects */}
       {featuredProjects.length > 0 && (
         <div className="px-4 py-3 border-t border-[#1a160f]">
           <p className="text-[8px] font-mono uppercase tracking-widest text-[#5a5142] mb-2">Featured Projects</p>
@@ -516,10 +519,7 @@ function StorePreview({
                     ? <img src={pr.cover_url} alt="" className="w-full h-full object-cover" />
                     : <Layers size={14} className="text-[#3a3328]" />}
                   {pr.price_usd != null && Number(pr.price_usd) > 0 && (
-                    <span
-                      className="absolute bottom-0 left-0 right-0 text-[7px] font-mono font-bold py-0.5 text-center text-black"
-                      style={{ backgroundColor: accent }}
-                    >
+                    <span className="absolute bottom-0 left-0 right-0 text-[7px] font-mono font-bold py-0.5 text-center text-black" style={{ backgroundColor: accent }}>
                       ${pr.price_usd}
                     </span>
                   )}
@@ -531,50 +531,43 @@ function StorePreview({
         </div>
       )}
 
-      {/* Beat grid — real published tracks */}
-      <div className="px-4 py-3 border-t border-[#1a160f]">
-        <p className="text-[8px] font-mono uppercase tracking-widest text-[#5a5142] mb-2">
-          Beats ({tracks.length} published)
+      {/* Real BeatCard components — exactly what buyers see */}
+      <div className="px-4 py-4 border-t border-[#1a160f]">
+        <p className="text-[8px] font-mono uppercase tracking-widest text-[#5a5142] mb-3">
+          Beats listed ({tracks.length})
         </p>
-        {tracks.length > 0 ? (
-          <div className="grid grid-cols-3 gap-1.5">
-            {tracks.slice(0, 6).map((t) => (
-              <div key={t.id} className="aspect-square rounded-lg bg-[#1a160f] border border-[#1f1a13] overflow-hidden flex items-center justify-center relative">
-                {t.cover_url
-                  ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
-                  : <Music size={12} className="text-[#2d2620]" />}
-              </div>
+        {previewStoreTracks.length > 0 ? (
+          <div className="grid grid-cols-2 gap-3">
+            {previewStoreTracks.slice(0, 2).map((t) => (
+              <BeatCard
+                key={t.id}
+                track={t}
+                allTracks={previewStoreTracks}
+                priceLease={t.lease_price_usd ?? null}
+                priceExclusive={t.exclusive_price_usd ?? null}
+                isCurrent={false}
+                isPlaying={false}
+                isPreview={false}
+                onPlay={storeNoop}
+                onPreview={storeNoop}
+                onAddLease={storeNoop}
+                onAddExclusive={storeNoop}
+                onFreeDownload={storeNoop}
+                accentColor={accent}
+              />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-1.5">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="aspect-square rounded-lg bg-[#1a160f] border border-dashed border-[#1f1a13] flex items-center justify-center">
-                <Music size={10} className="text-[#1f1a13]" />
+          <div className="grid grid-cols-2 gap-3">
+            {[0, 1].map((i) => (
+              <div key={i} className="aspect-square rounded-xl bg-[#14110d] border border-dashed border-[#1f1a13] flex flex-col items-center justify-center gap-2">
+                <Music size={16} className="text-[#2d2620]" />
+                <p className="text-[8px] font-mono text-[#2d2620]">No beats listed</p>
               </div>
             ))}
           </div>
         )}
-        {tracks.length === 0 && (
-          <p className="text-[8px] text-[#3a3328] mt-1.5 font-mono">
-            List beats in store to see them here.
-          </p>
-        )}
       </div>
-
-      {/* Social links at bottom */}
-      {socialLinks.length > 0 && (
-        <div className="px-4 py-3 border-t border-[#1a160f]">
-          <p className="text-[8px] font-mono uppercase tracking-widest text-[#5a5142] mb-2">Links</p>
-          <div className="flex flex-wrap gap-1.5">
-            {socialLinks.map(({ label, value }) => (
-              <span key={label} className="text-[8px] font-mono text-[#6a5d4a] bg-white/[0.03] border border-[#1f1a13] px-2 py-0.5 rounded">
-                {label}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -591,6 +584,10 @@ export default function StoreEditorPage() {
   const [allTracks, setAllTracks] = useState<TrackRow[]>([]);
   const [trackSearch, setTrackSearch] = useState('');
   const [togglingTrack, setTogglingTrack] = useState<string | null>(null);
+  // Global license tiers (for per-track license panel)
+  const [globalLicenses, setGlobalLicenses] = useState<Array<{ id: string; name: string; price_usd: number | null; is_free: boolean; is_exclusive: boolean; sort_order: number }>>([]);
+  // Which beat rows have their license panel expanded
+  const [licenseExpandedFor, setLicenseExpandedFor] = useState<Set<string>>(new Set());
 
   /* Promo codes (mig 047) */
   interface PromoCode {
@@ -646,20 +643,21 @@ export default function StoreEditorPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [profileRes, playlistRes, storeRes, tracksRes, projectsRes, promoRes] = await Promise.all([
+        const [profileRes, playlistRes, storeRes, tracksRes, projectsRes, promoRes, licensesRes] = await Promise.all([
           fetch('/api/profile'),
           fetch('/api/playlists'),
           fetch('/api/store'),
           fetch('/api/tracks'),
           fetch('/api/projects'),
           fetch('/api/promo-codes'),
+          fetch('/api/licenses'),
         ]);
-        const [pd, pld, sd, td, prd, promod] = await Promise.all([
-          profileRes.json(), playlistRes.json(), storeRes.json(), tracksRes.json(), projectsRes.json(), promoRes.json(),
+        const [pd, pld, sd, td, prd, promod, ld] = await Promise.all([
+          profileRes.json(), playlistRes.json(), storeRes.json(), tracksRes.json(), projectsRes.json(), promoRes.json(), licensesRes.json(),
         ]);
+        setGlobalLicenses((ld.licenses ?? []).sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
         setPromoCodes(promod.codes ?? []);
-        // Real published beats for the live preview
-        setPreviewTracks((sd.tracks ?? []).slice(0, 6) as PreviewTrack[]);
+        // previewTracks are set below once rawTracks is mapped.
 
         // All tracks for the listing manager (array response from /api/tracks)
         const rawTracks: TrackRow[] = Array.isArray(td)
@@ -670,22 +668,27 @@ export default function StoreEditorPage() {
               cover_url: t.cover_url ?? null,
               bpm: t.bpm ?? null,
               key: t.key ?? null,
+              scale: t.scale ?? null,
               store_listed: !!t.store_listed,
               store_featured: !!t.store_featured,
               store_sort_order: t.store_sort_order ?? null,
               scheduled_publish_at: t.scheduled_publish_at ?? null,
               lease_price_usd: t.lease_price_usd ?? null,
               exclusive_price_usd: t.exclusive_price_usd ?? null,
+              free_download_enabled: !!t.free_download_enabled,
+              exclusive_sold: !!t.exclusive_sold,
               voice_tag_enabled: !!t.voice_tag_enabled,
             }))
           : [];
-        setAllTracks(rawTracks.sort((a, b) => {
-          // Listed first (by sort order), then unlisted alphabetically
+        const sortedTracks = rawTracks.sort((a, b) => {
           if (a.store_listed && !b.store_listed) return -1;
           if (!a.store_listed && b.store_listed) return 1;
           if (a.store_sort_order != null && b.store_sort_order != null) return a.store_sort_order - b.store_sort_order;
           return a.title.localeCompare(b.title);
-        }));
+        });
+        setAllTracks(sortedTracks);
+        // Preview uses up to 3 listed tracks — full TrackRow fields so BeatCard renders correctly.
+        setPreviewTracks(sortedTracks.filter((t) => t.store_listed).slice(0, 3));
         const p = pd.profile ?? {};
         setForm({
           display_name: p.display_name ?? '',
@@ -881,11 +884,11 @@ export default function StoreEditorPage() {
     setAllTracks((prev) =>
       prev.map((t) => t.id === trackId ? { ...t, store_listed: nextState } : t),
     );
-    // Update preview tracks
-    setPreviewTracks((prev) => {
-      if (!nextState) return prev.filter((t) => t.id !== trackId);
-      // Don't add back — just re-fetch on save
-      return prev;
+    // Update preview tracks to reflect listing state.
+    setAllTracks((prev) => {
+      const updated = prev.map((t) => t.id === trackId ? { ...t, store_listed: nextState } : t);
+      setPreviewTracks(updated.filter((t) => t.store_listed).slice(0, 3));
+      return updated;
     });
     try {
       const res = await fetch(`/api/tracks/${trackId}`, {
@@ -953,6 +956,22 @@ export default function StoreEditorPage() {
       toast.success(nextState ? 'Voice tag on for this beat' : 'Voice tag off');
     } catch (err: any) {
       setAllTracks((prev) => prev.map((t) => t.id === trackId ? { ...t, voice_tag_enabled: currentlyOn } : t));
+      toast.error('Failed to update', err.message);
+    }
+  };
+
+  const toggleFreeDownload = async (trackId: string, currentlyOn: boolean) => {
+    const nextState = !currentlyOn;
+    setAllTracks((prev) => prev.map((t) => t.id === trackId ? { ...t, free_download_enabled: nextState } : t));
+    try {
+      const res = await fetch(`/api/tracks/${trackId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ free_download_enabled: nextState }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      toast.success(nextState ? 'Free download on' : 'Free download off');
+    } catch (err: any) {
+      setAllTracks((prev) => prev.map((t) => t.id === trackId ? { ...t, free_download_enabled: currentlyOn } : t));
       toast.error('Failed to update', err.message);
     }
   };
@@ -1825,8 +1844,8 @@ export default function StoreEditorPage() {
                         const listedIdx = listedIds.indexOf(t.id);
                         const isListed = listedIdx >= 0;
                         return (
+                      <div key={t.id}>
                       <div
-                        key={t.id}
                         draggable={isListed}
                         onDragStart={() => { if (isListed) handleTrackDragStart(listedIdx); }}
                         onDragOver={(e) => { if (isListed) handleTrackDragOver(e, listedIdx); }}
@@ -1976,6 +1995,36 @@ export default function StoreEditorPage() {
                           </button>
                         )}
 
+                        {/* License tier panel toggle — listed tracks only */}
+                        {t.store_listed && (
+                          <button
+                            onClick={() => setLicenseExpandedFor((prev) => { const n = new Set(prev); n.has(t.id) ? n.delete(t.id) : n.add(t.id); return n; })}
+                            title="Configure license tiers for this beat"
+                            className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center border transition-colors ${
+                              licenseExpandedFor.has(t.id)
+                                ? 'bg-[#D4BFA0]/15 border-[#D4BFA0]/40 text-[#D4BFA0]'
+                                : 'bg-white/[0.03] border-[#1f1a13] text-[#5a5142] hover:text-[#D4BFA0] hover:border-[#D4BFA0]/30'
+                            }`}
+                          >
+                            <Layers size={12} />
+                          </button>
+                        )}
+
+                        {/* Free-download toggle — listed tracks only. Green when on. */}
+                        {t.store_listed && (
+                          <button
+                            onClick={() => toggleFreeDownload(t.id, t.free_download_enabled)}
+                            title={t.free_download_enabled ? 'Free download on — click to disable' : 'Enable free download (email-gated)'}
+                            className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center border transition-colors ${
+                              t.free_download_enabled
+                                ? 'bg-[#6DC6A4]/15 border-[#6DC6A4]/40 text-[#6DC6A4]'
+                                : 'bg-white/[0.03] border-[#1f1a13] text-[#5a5142] hover:text-[#6DC6A4] hover:border-[#6DC6A4]/30'
+                            }`}
+                          >
+                            <Download size={12} />
+                          </button>
+                        )}
+
                         {/* Voice-tag toggle — only on listed tracks, and only
                             useful once a tag is uploaded (button hints when not). */}
                         {t.store_listed && (
@@ -2008,6 +2057,14 @@ export default function StoreEditorPage() {
                             t.store_listed ? 'translate-x-5' : 'translate-x-0'
                           }`} />
                         </button>
+                      </div>
+                      {/* Per-track license panel — expands below the row */}
+                      {licenseExpandedFor.has(t.id) && (
+                        <div className="mx-3 mb-1 px-3 py-3 rounded-xl bg-[#0a0907] border border-[#D4BFA0]/20">
+                          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#D4BFA0] mb-2">License tiers for this beat</p>
+                          <TrackLicensePanel trackId={t.id} globalLicenses={globalLicenses} />
+                        </div>
+                      )}
                       </div>
                         );
                       });

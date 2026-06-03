@@ -140,6 +140,16 @@ describe('filterAndSortTracks', () => {
     expect(sorted.map((t) => t.id)).toEqual(['rated', 'unrated-a', 'unrated-b']);
   });
 
+  it('popular sort uses play_count when available (play_count×10 outweighs rating×100 at high plays)', () => {
+    const tracks = [
+      makeTrack({ id: 'viral', rating: 1, bpm: 100, play_count: 200 }), // score 2000 + 100 = 2100
+      makeTrack({ id: 'rated', rating: 5, bpm: 100, play_count: 0 }),   // score 0 + 500 = 500
+      makeTrack({ id: 'mid',   rating: 3, bpm: 100, play_count: 10 }),  // score 100 + 300 = 400
+    ];
+    const sorted = filterAndSortTracks(tracks, { ...DEFAULT_FILTERS, sortBy: 'popular' });
+    expect(sorted.map((t) => t.id)).toEqual(['viral', 'rated', 'mid']);
+  });
+
   it('sorts by price ascending', () => {
     const tracks = [
       makeTrack({ id: 'c', lease_price_usd: 100 }),

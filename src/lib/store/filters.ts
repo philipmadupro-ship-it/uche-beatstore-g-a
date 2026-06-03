@@ -2,6 +2,8 @@ import type { Track } from '@/lib/types';
 
 export interface StoreTrack extends Track {
   tags?: { tag: string; category?: string | null }[];
+  /** Internal-only play count from store_plays (not displayed to buyers). Used for popular sort. */
+  play_count?: number;
 }
 
 export type TypeFilter = 'all' | 'beat' | 'instrumental' | 'song' | 'remix' | 'beats';
@@ -149,7 +151,11 @@ export function filterAndSortTracks(
       sorted.sort((a, b) => a.title.localeCompare(b.title));
       break;
     case 'popular': {
-      const score = (t: StoreTrack) => (t.rating ?? 0) * 100 + (t.bpm ?? 0);
+      // If play_count is populated (from store_plays), sort by real plays.
+      // Fall back to a quality proxy (rating × 100 + bpm) for stores
+      // that haven't accumulated play data yet.
+      const score = (t: StoreTrack) =>
+        (t.play_count != null ? t.play_count * 10 : 0) + (t.rating ?? 0) * 100;
       sorted.sort((a, b) => {
         const diff = score(b) - score(a);
         return diff !== 0 ? diff : a.title.localeCompare(b.title);

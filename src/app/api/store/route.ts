@@ -155,8 +155,24 @@ export async function GET() {
     // We do this as a lightweight separate check rather than in the main query
     // so the main tracks query stays resilient.
 
-    // ── Tags — join track_tags for all returned tracks ──────────────────
+    // ── Play counts — for popular sort (not exposed to buyers) ─────────
     const trackIds = tracksAny.map((t: any) => t.id).filter(Boolean);
+    let playCountByTrack: Record<string, number> = {};
+    if (trackIds.length > 0) {
+      try {
+        const { data: playRows } = await admin
+          .from('store_plays')
+          .select('track_id')
+          .in('track_id', trackIds);
+        for (const row of (playRows ?? []) as any[]) {
+          playCountByTrack[row.track_id] = (playCountByTrack[row.track_id] ?? 0) + 1;
+        }
+      } catch {
+        // non-fatal — popular sort falls back to rating proxy
+      }
+    }
+
+    // ── Tags — join track_tags for all returned tracks ──────────────────
     let tagsByTrack: Record<string, Array<{ tag: string; category: string | null }>> = {};
     if (trackIds.length > 0) {
       try {
@@ -381,6 +397,7 @@ export async function GET() {
       cover_url: sanitizeUrl(cover_url),
       tags: tagsByTrack[rest.id] ?? [],
       wav_url: wavByTrack[rest.id] ?? null,
+      play_count: playCountByTrack[rest.id] ?? 0,
       ...(rest.voice_tag_enabled && tagUrl ? { voice_tag_url: tagUrl, voice_tag_interval: tagInterval } : {}),
     }));
 

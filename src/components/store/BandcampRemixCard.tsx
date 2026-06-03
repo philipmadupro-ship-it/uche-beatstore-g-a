@@ -117,7 +117,7 @@ export default function BandcampRemixCard({
             e.stopPropagation();
             onPlay();
           }}
-          className="absolute bottom-3 right-3 w-11 h-11 rounded-full flex items-center justify-center text-black shadow-lg transition-transform hover:scale-105"
+          className="absolute bottom-3 right-3 w-11 h-11 rounded-full flex items-center justify-center text-black shadow-lg transition-transform duration-200 ease-out hover:scale-[1.04]"
           style={{ backgroundColor: accentColor }}
           aria-label={isPlaying ? 'Pause' : 'Play'}
         >

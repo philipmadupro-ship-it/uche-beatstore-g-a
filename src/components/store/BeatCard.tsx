@@ -90,7 +90,7 @@ export function BeatCard({
             src={track.cover_url}
             alt=""
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px"
-            className="block w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+            className="block w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.03]"
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center text-[#a08a6a]">
@@ -102,7 +102,7 @@ export function BeatCard({
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" />
 
         {/* Hover-only big play overlay */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
           <div
             className="w-14 h-14 rounded-full flex items-center justify-center text-black shadow-[0_8px_24px_rgba(0,0,0,0.55)]"
             style={{ backgroundColor: accentColor }}
@@ -170,7 +170,7 @@ export function BeatCard({
       </div>
 
       {/* Body */}
-      <div className="px-4 pt-4 pb-3 flex flex-col flex-1">
+      <div className="px-4 pt-3 pb-3 flex flex-col flex-1 gap-1.5">
         <div>
           <p
             className="text-[15px] font-medium tracking-tight text-[#E8DCC8] truncate transition-colors group-hover:text-white"
