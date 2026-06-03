@@ -362,12 +362,6 @@ html {
   }
 }
 
-/* DitherShader */
-canvas[aria-label="Dithered image"] {
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
-}
-
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

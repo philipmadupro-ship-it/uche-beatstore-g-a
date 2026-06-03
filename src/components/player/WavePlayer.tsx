@@ -68,12 +68,7 @@ export function WavePlayer({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { isPlaying, setPlaying, setProgress, volume, currentTrack, setTrack,
-          seekTarget, duckGain, setAnalyserNode } = usePlayer();
-  const audioGraphRef = useRef<{
-    context: AudioContext;
-    source: MediaElementAudioSourceNode;
-    analyser: AnalyserNode;
-  } | null>(null);
+          seekTarget, duckGain } = usePlayer();
 
   // A WavePlayer is the "active" audio source for the app only when its
   // track matches the global current track — see header comment.
@@ -119,7 +114,7 @@ export function WavePlayer({
 
   const {
     ready, currentTime, duration, failed,
-    play, pause, setVolume, seek, instanceRef,
+    play, pause, setVolume, seek,
   } = useWaveSurfer({
     container: containerRef,
     url: resolvedUrl,
@@ -147,52 +142,6 @@ export function WavePlayer({
       onFinish?.();
     },
   });
-
-  useEffect(() => {
-    if (!ready || !isActiveAudio || !instanceRef.current) return;
-
-    if (audioGraphRef.current) {
-      setAnalyserNode(audioGraphRef.current.analyser);
-      return;
-    }
-
-    const media = instanceRef.current.getMediaElement();
-    if (!media) return;
-
-    try {
-      const context = new AudioContext();
-      const source = context.createMediaElementSource(media);
-      const analyser = context.createAnalyser();
-      analyser.fftSize = 1024;
-      analyser.smoothingTimeConstant = 0.78;
-      source.connect(analyser);
-      analyser.connect(context.destination);
-      audioGraphRef.current = { context, source, analyser };
-      setAnalyserNode(analyser);
-    } catch {
-      setAnalyserNode(null);
-    }
-
-    return () => {
-      const graph = audioGraphRef.current;
-      if (!graph) return;
-      if (usePlayer.getState().analyserNode === graph.analyser) {
-        setAnalyserNode(null);
-      }
-      try { graph.source.disconnect(); } catch {}
-      try { graph.analyser.disconnect(); } catch {}
-      try { graph.context.close(); } catch {}
-      audioGraphRef.current = null;
-    };
-  }, [instanceRef, isActiveAudio, ready, setAnalyserNode]);
-
-  useEffect(() => {
-    const graph = audioGraphRef.current;
-    if (!graph || !isPlaying) return;
-    if (graph.context.state === 'suspended') {
-      graph.context.resume().catch(() => {});
-    }
-  }, [isPlaying]);
 
   // Auto-retry once on first failure (transient R2 hiccup).
   useEffect(() => {

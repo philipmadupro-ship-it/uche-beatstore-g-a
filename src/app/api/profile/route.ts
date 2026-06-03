@@ -47,9 +47,6 @@ export async function POST(req: NextRequest) {
       voice_tag_interval_seconds,
       bundle_discount_threshold,
       bundle_discount_percent,
-      dither_mode,
-      dither_color_mode,
-      dither_texture,
     } = body;
 
     const payload = {
@@ -89,10 +86,6 @@ export async function POST(req: NextRequest) {
       // Bundle/quantity discount (migration 077)
       ...(bundle_discount_threshold !== undefined && { bundle_discount_threshold: Math.max(0, Math.min(99, Math.round(Number(bundle_discount_threshold) || 0))) }),
       ...(bundle_discount_percent !== undefined && { bundle_discount_percent: Math.max(0, Math.min(90, Number(bundle_discount_percent) || 0)) }),
-      // Audio-reactive dither style (migration 093)
-      ...(dither_mode && { dither_mode: ['bayer','halftone','noise','crosshatch'].includes(dither_mode) ? dither_mode : 'bayer' }),
-      ...(dither_color_mode && { dither_color_mode: ['original','grayscale','duotone'].includes(dither_color_mode) ? dither_color_mode : 'original' }),
-      ...(dither_texture && { dither_texture: ['paper','film-grain','concrete','scanlines','none'].includes(dither_texture) ? dither_texture : 'paper' }),
     };
 
     const result = await updateCreatorProfile(payload);

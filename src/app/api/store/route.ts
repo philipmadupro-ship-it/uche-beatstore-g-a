@@ -193,7 +193,6 @@ export async function GET() {
           'accent_color', 'font_style', 'text_color_primary',
           'voice_tag_url', 'voice_tag_interval_seconds',
           'bundle_discount_threshold', 'bundle_discount_percent',
-          'dither_mode', 'dither_color_mode', 'dither_texture',
         ].join(', '))
         .eq('user_id', sellerId)
         .maybeSingle();

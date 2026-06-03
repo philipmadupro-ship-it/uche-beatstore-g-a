@@ -16,8 +16,6 @@
 
 import { Download, ShoppingBag, Heart } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
-import { AudioGradient } from '@/components/ui/AudioGradient';
-import { DitherShader } from '@/components/ui/dither-shader';
 import type { Track } from '@/lib/types';
 
 export type BandcampRemixTrack = Track;
@@ -36,11 +34,6 @@ interface BandcampRemixCardProps {
   onAddExclusive: () => void;
   onFreeDownload: () => void;
   accentColor: string;
-  analyserNode?: AnalyserNode | null;
-  /** Producer's chosen dither style — no selector shown to viewers. */
-  ditherMode?: import('@/components/ui/dither-shader').DitherMode;
-  ditherColorMode?: import('@/components/ui/dither-shader').DitherColorMode;
-  ditherTexture?: import('@/components/ui/dither-shader').DitherTexture;
   // Optional so other call sites that don't have a wishlist still work.
   isWishlisted?: boolean;
   onToggleWishlist?: () => void;
@@ -67,10 +60,6 @@ export default function BandcampRemixCard({
   onAddExclusive,
   onFreeDownload,
   accentColor,
-  analyserNode,
-  ditherMode = 'bayer',
-  ditherColorMode = 'original',
-  ditherTexture = 'paper',
   isWishlisted,
   onToggleWishlist,
 }: BandcampRemixCardProps) {
@@ -108,24 +97,12 @@ export default function BandcampRemixCard({
         onClick={onPreview}
       >
         {track.cover_url ? (
-          <div className="relative h-full w-full">
-            <DitherShader
-              src={track.cover_url}
-              alt={track.title}
-              mode={ditherMode}
-              colorMode={ditherColorMode}
-              texture={ditherTexture}
-              reactivity={1.2}
-              detail={1.45}
-              analyserNode={isCurrent ? analyserNode ?? null : null}
-              className="block h-full w-full"
-            />
-            <AudioGradient
-              analyserNode={isCurrent ? analyserNode ?? null : null}
-              accentColor={accentColor}
-              className="pointer-events-none"
-            />
-          </div>
+          <img
+            loading="lazy"
+            src={track.cover_url}
+            alt={track.title}
+            className="w-full h-full object-cover"
+          />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907]" />
         )}
