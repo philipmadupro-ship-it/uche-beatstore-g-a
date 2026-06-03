@@ -79,6 +79,10 @@ const nextConfig: NextConfig = {
   // Silence turbopack/webpack conflict in Next 16
   // @ts-ignore
   turbopack: {
+    // essentia.js UMD build has `require('fs')` inline; alias to empty stub
+    // so the client bundle doesn't crash. upload-sessions.ts previously used
+    // fs too, but has been rewritten to use in-memory storage so it no longer
+    // needs the real fs module on the server side.
     resolveAlias: {
       fs: './src/lib/audio/mocks/empty.ts',
     },
