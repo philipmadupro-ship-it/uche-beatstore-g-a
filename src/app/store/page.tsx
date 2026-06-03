@@ -718,7 +718,7 @@ function StorePage() {
         <div className="flex-1 min-w-0">
           {loading ? (
             viewMode === 'grid' ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-4">
                 {Array.from({ length: 6 }).map((_, i) => <BeatCardSkeleton key={i} />)}
               </div>
             ) : (
@@ -742,7 +742,7 @@ function StorePage() {
               )}
             </div>
           ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-4">
               {filtered.map((t) =>
                 // Remix tracks get the Bandcamp release-card layout to
                 // stand out in the mixed grid; regular beats keep BeatCard.

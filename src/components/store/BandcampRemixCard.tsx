@@ -90,10 +90,9 @@ export default function BandcampRemixCard({
       className={`group rounded-2xl border bg-[#14110d] overflow-hidden transition-all flex flex-col ${borderClass}`}
       style={borderStyle}
     >
-      {/* Square cover — Bandcamp's defining shape. Click opens preview drawer.
-          A floating play button overlay triggers playback directly. */}
+      {/* Cover — square on desktop, 4:3 on mobile so the card stays compact */}
       <div
-        className="relative w-full aspect-square shrink-0 cursor-pointer border-b border-[#1f1a13] bg-[#0a0907]"
+        className="relative w-full aspect-[4/3] sm:aspect-square shrink-0 cursor-pointer border-b border-[#1f1a13] bg-[#0a0907] overflow-hidden"
         onClick={onPreview}
       >
         {track.cover_url ? (
@@ -149,12 +148,12 @@ export default function BandcampRemixCard({
       </div>
 
       {/* Text block — heading title, producer, meta row */}
-      <div className="p-5 flex flex-col gap-3 flex-1">
+      <div className="p-3 sm:p-5 flex flex-col gap-2 sm:gap-3 flex-1">
         <div className="flex flex-col gap-1.5">
           <div className="flex items-start gap-2">
             <button onClick={onPreview} className="text-left flex-1 min-w-0">
               <h3
-                className="font-heading text-[20px] leading-tight text-[#E8DCC8] truncate hover:opacity-80 transition-opacity"
+                className="font-heading text-[16px] sm:text-[20px] leading-tight text-[#E8DCC8] truncate hover:opacity-80 transition-opacity"
                 style={isPreview || isCurrent ? { color: accentColor } : {}}
                 title={track.title}
               >
