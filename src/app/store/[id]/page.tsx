@@ -137,6 +137,8 @@ export default function StoreProductPage({
 
   const { currentTrack, isPlaying, setTrack: playTrack, togglePlay, setQueue } = usePlayer();
   const { addItem, isOpen, setIsOpen } = useCart();
+  // Must be declared before any early returns (Rules of Hooks).
+  const [offerOpen, setOfferOpen] = useState(false);
 
   const { data, isLoading: loading, isError } = useQuery({
     queryKey: ['storeTrack', id],
@@ -204,8 +206,7 @@ export default function StoreProductPage({
     setIsOpen(true);
   };
 
-  // "Make an offer" — negotiation on exclusive beats.
-  const [offerOpen, setOfferOpen] = useState(false);
+  // offerOpen declared above the early returns (Rules of Hooks).
 
   const metaChips = [
     track.type && { label: TYPE_LABELS[track.type] ?? track.type, icon: Tag },
