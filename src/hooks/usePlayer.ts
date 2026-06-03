@@ -11,6 +11,7 @@ interface PlayerState {
   isPlaying: boolean;
   progress: number;
   volume: number;
+  analyserNode: AnalyserNode | null;
   shuffle: boolean;
   repeat: RepeatMode;
   /**
@@ -40,6 +41,7 @@ interface PlayerState {
   setPlaying: (isPlaying: boolean) => void;
   setProgress: (progress: number) => void;
   setVolume: (volume: number) => void;
+  setAnalyserNode: (node: AnalyserNode | null) => void;
   /** Set the transient duck gain (0..1). Used by the voice-tag overlay. */
   setDuckGain: (g: number) => void;
   /** Seek the active audio engine to a fraction 0..1 of the track. */
@@ -76,6 +78,7 @@ export const usePlayer = create<PlayerState>()(
       isPlaying: false,
       progress: 0,
       volume: 0.8,
+      analyserNode: null,
       shuffle: false,
       repeat: 'off',
       seekTarget: null,
@@ -121,6 +124,7 @@ export const usePlayer = create<PlayerState>()(
       setPlaying: (isPlaying) => set({ isPlaying }),
       setProgress: (progress) => set({ progress }),
       setVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)) }),
+      setAnalyserNode: (analyserNode) => set({ analyserNode }),
       setDuckGain: (g) => set({ duckGain: Math.max(0, Math.min(1, g)) }),
       seekTo: (fraction) => set({ seekTarget: Math.max(0, Math.min(1, fraction)) }),
 

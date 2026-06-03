@@ -13,7 +13,7 @@
 import { useMemo } from 'react';
 import { Music } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
-import { CoverImage } from '@/components/ui/CoverImage';
+import { DitherShader } from '@/components/ui/dither-shader';
 
 interface MinTrack {
   id: string;
@@ -68,7 +68,13 @@ export function RecommendationsStrip<T extends MinTrack>({
               {/* Cover */}
               <div className="relative aspect-square bg-[#0a0907] overflow-hidden">
                 {t.cover_url ? (
-                  <CoverImage src={t.cover_url} alt="" sizes="160px" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                  <DitherShader
+                    src={t.cover_url}
+                    alt={t.title}
+                    texture="paper"
+                    analyserNode={null}
+                    className="block h-full w-full transition-transform duration-300 group-hover:scale-[1.03]"
+                  />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-[#3a3328] bg-gradient-to-br from-[#1f1a13] to-[#0a0907]">
                     <Music size={18} />

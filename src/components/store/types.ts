@@ -30,6 +30,10 @@ export interface CreatorProfile {
   accent_color?: string | null;
   font_style?: string | null;
   text_color_primary?: string | null;
+  // Audio-reactive dither style — set by producer, shown to viewers (mig 093)
+  dither_mode?: string | null;
+  dither_color_mode?: string | null;
+  dither_texture?: string | null;
 }
 
 export interface PlaylistTrackItem {

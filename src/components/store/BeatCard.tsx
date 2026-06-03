@@ -4,7 +4,8 @@ import { useMemo } from 'react';
 import { Music, Play, Heart, Download, ShoppingBag } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { MiniWaveform } from '@/components/player/MiniWaveform';
-import { CoverImage } from '@/components/ui/CoverImage';
+import { AudioGradient } from '@/components/ui/AudioGradient';
+import { DitherShader, type DitherColorMode, type DitherMode, type DitherTexture } from '@/components/ui/dither-shader';
 import { getSimilarTracks } from './helpers';
 import { TagChips } from './TagChips';
 import type { StoreTrack } from './types';
@@ -23,6 +24,11 @@ interface Props {
   onAddExclusive: () => void;
   onFreeDownload: () => void;
   accentColor: string;
+  analyserNode?: AnalyserNode | null;
+  /** Producer's chosen dither style — passed from store page, not editable by viewers. */
+  ditherMode?: DitherMode;
+  ditherColorMode?: DitherColorMode;
+  ditherTexture?: DitherTexture;
   isWishlisted?: boolean;
   onToggleWishlist?: () => void;
 }
@@ -30,6 +36,7 @@ interface Props {
 export function BeatCard({
   track, allTracks, priceLease, priceExclusive, isCurrent, isPlaying, isPreview,
   onPlay, onPreview, onAddLease, onAddExclusive, onFreeDownload, accentColor,
+  analyserNode, ditherMode = 'bayer', ditherColorMode = 'original', ditherTexture = 'paper',
   isWishlisted, onToggleWishlist,
 }: Props) {
   // Similar tracks render as small chips at the bottom — bounded so the
@@ -86,12 +93,24 @@ export function BeatCard({
         className="relative w-full aspect-square cursor-pointer"
       >
         {track.cover_url ? (
-          <CoverImage
-            src={track.cover_url}
-            alt=""
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px"
-            className="block w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-          />
+          <div className="relative h-full w-full overflow-hidden bg-[#0a0907]">
+            <DitherShader
+              src={track.cover_url}
+              alt={track.title}
+              mode={ditherMode}
+              colorMode={ditherColorMode}
+              texture={ditherTexture}
+              reactivity={1.25}
+              detail={1.55}
+              analyserNode={isCurrent ? analyserNode ?? null : null}
+              className="block h-full w-full transition-transform duration-500 group-hover:scale-[1.04]"
+            />
+            <AudioGradient
+              analyserNode={isCurrent ? analyserNode ?? null : null}
+              accentColor={accentColor}
+              className="pointer-events-none"
+            />
+          </div>
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center text-[#a08a6a]">
             <Music size={36} />
@@ -171,6 +190,9 @@ export function BeatCard({
 
       {/* Body */}
       <div className="px-4 pt-4 pb-3 flex flex-col flex-1">
+        {/* Dither style is set by the producer in their store editor.
+            Viewers see the chosen aesthetic — no selector shown here. */}
+
         <div>
           <p
             className="text-[15px] font-medium tracking-tight text-[#E8DCC8] truncate transition-colors group-hover:text-white"

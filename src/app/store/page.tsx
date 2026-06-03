@@ -133,7 +133,7 @@ function StorePage() {
   const [freeDownloadTrack, setFreeDownloadTrack] = useState<StoreTrack | null>(null);
 
   const { items, addItem, addItems, clearCart, setIsOpen, setBundleRule } = useCart();
-  const { currentTrack, isPlaying, setTrack, togglePlay, setQueue, progress } = usePlayer();
+  const { currentTrack, isPlaying, setTrack, togglePlay, setQueue, progress, analyserNode } = usePlayer();
 
   // Feed the producer's automatic bundle discount into the cart store so the
   // drawer can show the "Bundle deal applied" banner (mig 077, Task 7).
@@ -423,6 +423,10 @@ function StorePage() {
   const accentColor = creator?.accent_color || '#D4BFA0';
   const textColor = creator?.text_color_primary || '#E8DCC8';
   const fontFamily = FONT_FAMILY_MAP[creator?.font_style ?? 'default'] ?? FONT_FAMILY_MAP.default;
+  // Producer's chosen dither aesthetic — viewers see this, no selector shown to them.
+  const ditherMode = (creator?.dither_mode as import('@/components/ui/dither-shader').DitherMode) || 'bayer';
+  const ditherColorMode = (creator?.dither_color_mode as import('@/components/ui/dither-shader').DitherColorMode) || 'original';
+  const ditherTexture = (creator?.dither_texture as import('@/components/ui/dither-shader').DitherTexture) || 'paper';
 
   return (
     <div
@@ -762,6 +766,10 @@ function StorePage() {
                     onAddExclusive={() => addToCart(t, 'exclusive')}
                     onFreeDownload={() => setFreeDownloadTrack(t)}
                     accentColor={accentColor}
+                    analyserNode={analyserNode}
+                    ditherMode={ditherMode}
+                    ditherColorMode={ditherColorMode}
+                    ditherTexture={ditherTexture}
                     isWishlisted={wishlist.has(t.id)}
                     onToggleWishlist={() => wishlist.toggle(t.id)}
                   />
@@ -781,6 +789,10 @@ function StorePage() {
                     onAddExclusive={() => addToCart(t, 'exclusive')}
                     onFreeDownload={() => setFreeDownloadTrack(t)}
                     accentColor={accentColor}
+                    analyserNode={analyserNode}
+                    ditherMode={ditherMode}
+                    ditherColorMode={ditherColorMode}
+                    ditherTexture={ditherTexture}
                     isWishlisted={wishlist.has(t.id)}
                     onToggleWishlist={() => wishlist.toggle(t.id)}
                   />
@@ -876,5 +888,3 @@ function StorePage() {
     </div>
   );
 }
-
-

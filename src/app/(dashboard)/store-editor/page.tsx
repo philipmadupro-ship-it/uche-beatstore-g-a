@@ -26,6 +26,8 @@ import {
   ShoppingBag, Star, Tag, Trash2, Clock, Mic2, Play,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { DitherModeSelector } from '@/components/store/DitherModeSelector';
+import type { DitherMode, DitherColorMode, DitherTexture } from '@/components/ui/dither-shader';
 import { DEFAULT_TEMPLATE_MD, VARIABLE_LIST } from '@/lib/contracts/license-template';
 import { CARD_STYLE_META, VIDEO_STYLE_META } from '@/lib/share/styles';
 import { LicenseBuilder } from '@/components/store/LicenseBuilder';
@@ -56,6 +58,10 @@ interface ProfileForm {
   seo_title: string;
   seo_description: string;
   og_image_url: string;
+  // Migration 093 — audio-reactive dither style
+  dither_mode: string;
+  dither_color_mode: string;
+  dither_texture: string;
   // Migration 057 — per-producer license-agreement template
   license_template_md: string;
   // Migration 062 — share-card + 9:16 video template
@@ -106,6 +112,9 @@ const EMPTY_PROFILE: ProfileForm = {
   seo_title: '',
   seo_description: '',
   og_image_url: '',
+  dither_mode: 'bayer',
+  dither_color_mode: 'original',
+  dither_texture: 'paper',
   license_template_md: '',
   share_card_style: '',
   share_video_style: '',
@@ -709,6 +718,9 @@ export default function StoreEditorPage() {
           seo_title: p.seo_title ?? '',
           seo_description: p.seo_description ?? '',
           og_image_url: p.og_image_url ?? '',
+          dither_mode: p.dither_mode ?? 'bayer',
+          dither_color_mode: p.dither_color_mode ?? 'original',
+          dither_texture: p.dither_texture ?? 'paper',
           license_template_md: p.license_template_md ?? '',
           share_card_style: p.share_card_style ?? '',
           share_video_style: p.share_video_style ?? '',
@@ -1079,6 +1091,9 @@ export default function StoreEditorPage() {
         seo_title: form.seo_title || null,
         seo_description: form.seo_description || null,
         og_image_url: form.og_image_url || null,
+        dither_mode: form.dither_mode || 'bayer',
+        dither_color_mode: form.dither_color_mode || 'original',
+        dither_texture: form.dither_texture || 'paper',
         license_template_md: form.license_template_md || null,
         share_card_style: form.share_card_style || null,
         share_video_style: form.share_video_style || null,
@@ -1420,6 +1435,21 @@ export default function StoreEditorPage() {
                     </button>
                   ))}
                 </div>
+              </Field>
+
+              {/* Audio-reactive dither style — producer picks, viewers see */}
+              <Field label="Cover Art Style">
+                <p className="text-[10px] text-[#5a5142] font-mono mb-2">
+                  Audio-reactive visual effect on cover art. Your choice — buyers see this style, no controls shown to them.
+                </p>
+                <DitherModeSelector
+                  mode={(form.dither_mode || 'bayer') as DitherMode}
+                  colorMode={(form.dither_color_mode || 'original') as DitherColorMode}
+                  texture={(form.dither_texture || 'paper') as DitherTexture}
+                  onChange={(mode, colorMode, texture) => {
+                    setForm((f) => ({ ...f, dither_mode: mode, dither_color_mode: colorMode, dither_texture: texture }));
+                  }}
+                />
               </Field>
 
               {/* Primary text color */}
