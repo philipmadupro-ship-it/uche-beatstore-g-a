@@ -10,7 +10,7 @@ import {
   Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid,
   SlidersHorizontal, Store, FolderOpen, ListMusic, Users, BarChart2,
   ShoppingBag, ArrowRight, AlertCircle, TrendingUp, DollarSign,
-  Upload, Rocket, ChevronLeft, ChevronRight, ChevronDown, X, Package,
+  Upload, Rocket, ChevronLeft, ChevronRight, ChevronDown, X, Package, Tag,
 } from 'lucide-react';
 import { PlayGlyph } from '@/components/player/TransportIcons';
 import Link from 'next/link';
@@ -30,6 +30,7 @@ import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { listCached } from '@/lib/offline/audio-cache';
 import { TrackGridCard } from '@/components/tracks/TrackGridCard';
 import MusicPortfolio, { type PortfolioTrack } from '@/components/library/MusicPortfolio';
+import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 
@@ -102,6 +103,7 @@ export default function LibraryPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkEditing, setBulkEditing] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkTagPanel, setBulkTagPanel] = useState<'addTags' | 'removeTags' | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [shareTarget, setShareTarget] = useState<Track | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid' | 'portfolio'>('list');
@@ -674,6 +676,7 @@ export default function LibraryPage() {
       cover_url: track.cover_url ?? null,
       bpm: track.bpm,
       key: track.key,
+      scale: track.scale,
       year: track.created_at ? new Date(track.created_at).getFullYear().toString() : '',
     }));
   }, [filtered]);
@@ -1208,8 +1211,8 @@ export default function LibraryPage() {
                 </span>
               </div>
             )}
-            {/* Column header — grid must match TrackCard's 9-col md template */}
-            <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_130px_50px_120px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[9px] font-mono uppercase tracking-wider">
+            {/* Column header — grid must match TrackCard's col template */}
+            <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_110px_32px] lg:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_100px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[9px] font-mono uppercase tracking-wider">
               <span className="text-center flex items-center justify-center text-[#3a3328]">
                 {sortMode === 'store_order' ? (
                   <Store size={10} className="text-[#D4BFA0]" />
@@ -1249,9 +1252,9 @@ export default function LibraryPage() {
                   { label: 'Title', sort: 'title' as SortMode, always: true },
                   { label: 'Type', sort: null, always: false, cls: 'hidden sm:block' },
                   { label: 'BPM · Key', sort: sortMode === 'bpm' ? 'bpm-desc' as SortMode : 'bpm' as SortMode, always: true, activeSort: sortMode === 'bpm' || sortMode === 'bpm-desc' },
-                  { label: 'Len', sort: null, always: false, cls: 'hidden md:block' },
-                  { label: 'Added', sort: 'recent' as SortMode, always: false, cls: 'hidden md:block' },
+                  { label: 'Added', sort: 'recent' as SortMode, always: false, cls: 'hidden sm:block' },
                   { label: '★', sort: 'rating' as SortMode, always: false, cls: 'hidden sm:block text-right' },
+                  { label: 'Tags', sort: null, always: false, cls: 'hidden lg:block' },
                 ] as Array<{ label: string; sort: SortMode | null; always: boolean; cls?: string; activeSort?: boolean }>
               ).map(({ label, sort, cls, activeSort }) => {
                 const isActive = activeSort ?? (sort != null && sortMode === sort);
@@ -1396,6 +1399,8 @@ export default function LibraryPage() {
             intent: bulkEditOpen ? 'primary' : 'default',
             onClick: () => setBulkEditOpen((v) => !v),
           },
+          { label: 'Add tags', icon: <Tag size={11} />, onClick: () => setBulkTagPanel('addTags') },
+          { label: 'Remove tags', icon: <Tag size={11} />, onClick: () => setBulkTagPanel('removeTags') },
           {
             label: 'Create pack',
             icon: <Package size={11} />,
@@ -1528,6 +1533,15 @@ export default function LibraryPage() {
             </div>
           </div>
         </div>
+      )}
+      {bulkTagPanel && (
+        <BulkEditPanel
+          mode={bulkTagPanel}
+          ids={Array.from(selectedIds)}
+          tagsEndpoint="/api/tracks/tags/bulk"
+          onClose={() => setBulkTagPanel(null)}
+          onDone={() => { setBulkTagPanel(null); setSelectedIds(new Set()); setSelectMode(false); fetchTracks(); }}
+        />
       )}
     </DashboardLayout>
   );

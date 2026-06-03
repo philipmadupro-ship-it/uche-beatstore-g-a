@@ -151,7 +151,7 @@ export function ProjectTrackList({
       {/* Track list */}
       <div className="border-t border-[#161310] border-b pb-1 mb-32">
         {/* Header cols must exactly mirror TrackCard row cols */}
-        <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_72px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
+        <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_110px_32px] lg:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_100px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
           {selectable ? (
             <span className="flex items-center justify-center">
               <input
@@ -169,8 +169,9 @@ export function ProjectTrackList({
           <span>Title</span>
           <span className="hidden sm:block">Type</span>
           <span>BPM · Key</span>
-          <span className="hidden md:block">Added</span>
+          <span className="hidden sm:block">Added</span>
           <span className="text-right hidden sm:block">Rating</span>
+          <span className="hidden lg:block">Tags</span>
           <span />
         </div>
 

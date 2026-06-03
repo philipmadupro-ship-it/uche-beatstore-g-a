@@ -158,7 +158,7 @@ export function TrackCard({
           cover_url: track.cover_url ?? null,
         });
       }}
-      className={`group grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_72px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_32px] items-center gap-4 px-4 h-[52px] border-b border-[#161310] hover:bg-[#101010] transition-colors cursor-pointer ${
+      className={`group grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_110px_32px] lg:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_100px_110px_32px] items-center gap-4 px-4 h-[52px] border-b border-[#161310] hover:bg-[#101010] transition-colors cursor-pointer ${
         isCurrent ? 'bg-[#0e0c08]' : ''
       } ${selected ? 'bg-[#15132a]' : ''}`}
     >
@@ -239,9 +239,16 @@ export function TrackCard({
         )}
       </div>
 
-      {/* Type — abbreviated so it never blows the column width */}
-      <div className={`text-[10px] font-mono uppercase tracking-wider hidden sm:block truncate ${typeColor[track.type] || 'text-[#6a5d4a]'}`}>
-        {track.type === 'instrumental' ? 'Inst.' : track.type === 'remix' ? 'Remix' : track.type === 'song' ? 'Song' : track.type === 'beat' ? 'Beat' : track.type}
+      {/* Type + stems badge */}
+      <div className="hidden sm:flex items-center gap-1.5 truncate">
+        <span className={`text-[10px] font-mono uppercase tracking-wider ${typeColor[track.type] || 'text-[#6a5d4a]'}`}>
+          {track.type === 'instrumental' ? 'Inst.' : track.type === 'remix' ? 'Remix' : track.type === 'song' ? 'Song' : track.type === 'beat' ? 'Beat' : track.type}
+        </span>
+        {(track as any).stems_status === 'completed' && (
+          <span className="text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 px-1 py-0.5 rounded shrink-0">
+            Stems
+          </span>
+        )}
       </div>
 
       {/* BPM / Key — BPM muted, key color-coded by scale */}
@@ -258,8 +265,8 @@ export function TrackCard({
         )}
       </div>
 
-      {/* Date added — shown at md+ (the added column) */}
-      <div className="text-[11px] text-[#5a5142] font-mono hidden md:block truncate">{uploadDate}</div>
+      {/* Date added — visible at sm+ */}
+      <div className="text-[11px] text-[#5a5142] font-mono hidden sm:block truncate">{uploadDate}</div>
 
       {/* Rating stars */}
       <div className="hidden sm:flex items-center gap-0.5 justify-end" onClick={(e) => e.stopPropagation()}>
@@ -273,6 +280,18 @@ export function TrackCard({
             />
           </button>
         ))}
+      </div>
+
+      {/* Tags — first 2 chips + overflow, visible lg+ */}
+      <div className="hidden lg:flex items-center gap-1 overflow-hidden">
+        {((track as any).track_tags ?? []).slice(0, 2).map((tt: any) => (
+          <span key={tt.tag} className="text-[8px] font-mono uppercase tracking-wider text-[#a08a6a] bg-[#1a160f] border border-[#2d2620] px-1.5 py-0.5 rounded shrink-0">
+            {tt.tag}
+          </span>
+        ))}
+        {((track as any).track_tags ?? []).length > 2 && (
+          <span className="text-[8px] font-mono text-[#4a4338]">+{(track as any).track_tags.length - 2}</span>
+        )}
       </div>
 
       {/* More */}

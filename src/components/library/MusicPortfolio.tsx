@@ -14,6 +14,7 @@ export interface PortfolioTrack {
     cover_url: string | null;
     bpm?: number | null;
     key?: string | null;
+    scale?: string | null;
     year: string;
     // ── Store-only extras (rendered only when variant === 'embedded'). All
     //    optional so /library calls don't break. They sit in a right-side
@@ -410,9 +411,9 @@ export default function MusicPortfolio({
                                     {track.type}
                                 </span>
 
-                                {/* BPM · Key */}
+                                {/* BPM · Key (with minor suffix) */}
                                 <span className="hidden sm:block text-[11px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] group-hover:text-[#D4BFA0] transition-colors duration-300 w-24 shrink-0 tabular-nums">
-                                    {(track.bpm ?? '-')}{track.key ? ` · ${track.key}` : ''}
+                                    {(track.bpm ?? '-')}{track.key ? ` · ${track.key}${track.scale === 'minor' ? 'm' : ''}` : ''}
                                 </span>
 
                                 {/* Year */}

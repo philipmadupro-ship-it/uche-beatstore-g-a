@@ -19,11 +19,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Loader2, Mail, Phone, Globe, Tag, MapPin,
-  Edit2, Check, X, Send, Trash2, Clock, FileText,
+  Edit2, Check, X, Send, Trash2, Clock, FileText, BellRing, Copy,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { SendBeatModal } from '@/components/crm/SendBeatModal';
 import { ContactTagPicker } from '@/components/crm/ContactTagPicker';
+import { ContactStageCell, relativeDays } from '@/components/crm/contacts-shared';
+import { NudgeModal } from '@/components/crm/NudgeModal';
+import type { CrmStage } from '@/lib/contracts';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import type { Contact, BeatSend } from '@/lib/types';
@@ -45,6 +48,15 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [nudgeModalOpen, setNudgeModalOpen] = useState(false);
+  // Track titles for activity timeline.
+  const [trackTitles, setTrackTitles] = useState<Map<string, { title: string; cover_url?: string | null }>>(new Map());
+  useEffect(() => {
+    fetch('/api/tracks').then((r) => r.ok ? r.json() : { tracks: [] }).then((d) => {
+      const arr: any[] = Array.isArray(d) ? d : d.tracks ?? [];
+      setTrackTitles(new Map(arr.map((t: any) => [t.id, { title: t.title, cover_url: t.cover_url ?? null }])));
+    }).catch(() => {});
+  }, []);
 
   // ── Fetch ───────────────────────────────────────────────────────────
   const fetchAll = async () => {
@@ -86,6 +98,24 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
     const latest = [...sends].sort((a, b) => b.sent_at.localeCompare(a.sent_at))[0];
     return latest.status;
   }, [sends]);
+
+  const latestSend = useMemo(() => {
+    if (sends.length === 0) return null;
+    return [...sends].sort((a, b) => b.sent_at.localeCompare(a.sent_at))[0];
+  }, [sends]);
+
+  const needsNudge = useMemo(() => {
+    if (!latestSend || latestSend.status !== 'sent') return false;
+    return (Date.now() - Date.parse(latestSend.sent_at)) / 86_400_000 > 5;
+  }, [latestSend]);
+
+  const quickStats = useMemo(() => {
+    const total = sends.length;
+    const opened = sends.filter((s) => (s as any).opened_at).length;
+    const openRate = total > 0 ? Math.round((opened / total) * 100) : null;
+    const lastSentAt = latestSend?.sent_at;
+    return { total, opened, openRate, lastSentAt };
+  }, [sends, latestSend]);
 
   // ── Inline edit ─────────────────────────────────────────────────────
   // Single function handles every editable field — name, role, phone,
@@ -144,7 +174,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center pt-32 gap-3">
-          <p className="text-[#6a5d4a] text-sm">{error ? 'Couldn’t load contact' : 'Contact not found'}</p>
+          <p className="text-[#6a5d4a] text-sm">{error ? "Couldn't load contact" : 'Contact not found'}</p>
           {error && <p className="text-[10px] text-[#3a3328] font-mono">{error}</p>}
           <Link href="/contacts" className="text-[11px] text-[#E8D8B8] hover:text-white">Back to contacts</Link>
         </div>
@@ -196,6 +226,19 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                   {!contact.role && !contact.label && <span className="text-[#3a3328]">Role / Label</span>}
                 </div>
 
+                {/* Buyer pipeline badge (store buyers only) */}
+                {contact.buyer_pipeline_status && contact.category === 'buyer' && (
+                  <div className="mt-2">
+                    <span className={`text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                      contact.buyer_pipeline_status === 'purchased' || contact.buyer_pipeline_status === 'repeat_buyer'
+                        ? 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/25'
+                        : 'text-[#D4BFA0] bg-[#D4BFA0]/10 border-[#D4BFA0]/25'
+                    }`}>
+                      {contact.buyer_pipeline_status.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                )}
+
                 {/* Status pills row */}
                 <div className="flex items-center gap-1.5 mt-4 flex-wrap">
                   <EngagementPill tone={engagementTone} />
@@ -207,10 +250,27 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                   )}
                 </div>
 
-                {/* Primary action — Send beat. Glass + amber accent so
-                    it sits in the same visual family as the rest of the
-                    redesigned action buttons. */}
-                <div className="mt-5 flex items-center gap-2">
+                {/* CRM lifecycle stage — inline editable */}
+                <div className="mt-3">
+                  <ContactStageCell
+                    contactId={contact.id}
+                    value={contact.crm_status}
+                    derivedTone={engagementTone}
+                    onChanged={(next) => setContact((c) => c ? { ...c, crm_status: next as CrmStage } : c)}
+                  />
+                </div>
+
+                {/* Quick stats strip */}
+                {quickStats.total > 0 && (
+                  <div className="flex items-center gap-2 mt-3 text-[10px] font-mono text-[#5a5142] flex-wrap">
+                    <span className="tabular-nums">{quickStats.total} send{quickStats.total === 1 ? '' : 's'}</span>
+                    {quickStats.lastSentAt && <><span className="text-[#2d2620]">·</span><span>{relativeDays(quickStats.lastSentAt)}</span></>}
+                    {quickStats.openRate !== null && <><span className="text-[#2d2620]">·</span><span className={quickStats.openRate > 0 ? 'text-[#6DC6A4]' : ''}>{quickStats.openRate}% opened</span></>}
+                  </div>
+                )}
+
+                {/* Primary actions */}
+                <div className="mt-4 flex items-center gap-2">
                   <button
                     onClick={() => setSendModalOpen(true)}
                     className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#E8DCC8] active:scale-[0.98] transition-all"
@@ -218,6 +278,12 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                     <Send size={12} />
                     Send beat
                   </button>
+                  {needsNudge && latestSend && (
+                    <button onClick={() => setNudgeModalOpen(true)} title="Needs a nudge — last send gone cold"
+                      className="px-3 py-2.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 transition-colors">
+                      <BellRing size={12} />
+                    </button>
+                  )}
                   <button
                     onClick={deleteContact}
                     className="px-3 py-2.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#6a5d4a] hover:text-red-400 hover:border-red-500/30 text-[12px] font-medium transition-colors"
@@ -294,44 +360,55 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                     .sort((a, b) => b.sent_at.localeCompare(a.sent_at))
                     .map((s) => {
                       const tone = PIPELINE_TONES[s.status] ?? PIPELINE_TONES.sent;
-                      const trackCount = Array.isArray(s.track_ids) ? s.track_ids.length : 0;
+                      const trackIds: string[] = Array.isArray(s.track_ids) ? s.track_ids : [];
+                      const resolved = trackIds.slice(0, 3).map((id) => trackTitles.get(id));
+                      const titles = resolved.filter(Boolean).map((t) => t!.title);
+                      const covers = resolved.filter((t) => t?.cover_url).map((t) => t!.cover_url!);
+                      const overflow = trackIds.length - 3;
                       return (
                         <li
                           key={s.id}
-                          className="flex items-center gap-3 px-4 py-3 rounded-xl border border-[#1f1a13] bg-[#14110d] hover:bg-[#1a160f] transition-colors"
+                          className="flex items-start gap-3 px-4 py-3 rounded-xl border border-[#1f1a13] bg-[#14110d] hover:bg-[#1a160f] transition-colors"
                         >
-                          <span className={`w-2 h-2 rounded-full ${tone.dot} shrink-0`} />
+                          <span className={`w-2 h-2 rounded-full mt-1.5 ${tone.dot} shrink-0`} />
                           <div className="min-w-0 flex-1">
-                            <p className="text-[12px] text-[#E8DCC8] truncate">
-                              {trackCount} track{trackCount === 1 ? '' : 's'}
-                              {s.message && <span className="text-[#6a5d4a]"> — “{s.message.slice(0, 60)}{s.message.length > 60 ? '…' : ''}”</span>}
-                            </p>
+                            {/* Track covers + titles */}
+                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                              {covers.slice(0, 3).map((url, i) => (
+                                <img key={i} src={url} alt="" className="w-5 h-5 rounded object-cover shrink-0" loading="lazy" />
+                              ))}
+                              <span className="text-[12px] text-[#E8DCC8] truncate">
+                                {titles.length > 0 ? titles.join(', ') + (overflow > 0 ? ` +${overflow} more` : '') : `${trackIds.length} track${trackIds.length === 1 ? '' : 's'}`}
+                              </span>
+                            </div>
+                            {s.message && <p className="text-[11px] text-[#6a5d4a] italic truncate">&ldquo;{s.message.slice(0, 80)}{s.message.length > 80 ? '…' : ''}&rdquo;</p>}
                             <p className="text-[10px] font-mono text-[#6a5d4a] mt-0.5">
                               {new Date(s.sent_at).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                             </p>
                           </div>
-                          {/* Open tracking badge — mig 089. Shows once Resend webhook fires. */}
+                          {/* Open tracking badge */}
                           <div className="flex items-center gap-1.5 shrink-0">
                             {(s as any).opened_at ? (
-                              <span className="text-[9px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 px-1.5 py-0.5 rounded" title={`Opened ${new Date((s as any).opened_at).toLocaleString()}`}>
-                                Opened
-                              </span>
+                              <span className="text-[9px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 px-1.5 py-0.5 rounded">Opened</span>
                             ) : (s as any).email_resend_id ? (
-                              <span className="text-[9px] font-mono uppercase tracking-wider text-[#3a3328]">Not opened</span>
+                              <span className="text-[9px] font-mono text-[#3a3328]">Not opened</span>
                             ) : null}
                             {(s as any).link_clicked_at && (
-                              <span className="text-[9px] font-mono uppercase tracking-wider text-[#9d95e8] bg-[#9d95e8]/10 px-1.5 py-0.5 rounded">Link clicked</span>
+                              <span className="text-[9px] font-mono uppercase tracking-wider text-[#9d95e8] bg-[#9d95e8]/10 px-1.5 py-0.5 rounded">Clicked</span>
                             )}
                           </div>
-                          <span className={`text-[10px] font-medium ${tone.text}`}>{tone.label}</span>
+                          <span className={`text-[10px] font-medium shrink-0 ${tone.text}`}>{tone.label}</span>
                           {s.share_token && (
-                            <Link
-                              href={`/share/${s.share_token}`}
-                              target="_blank"
-                              className="text-[10px] font-mono text-[#6a5d4a] hover:text-white"
-                            >
-                              ↗
-                            </Link>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/share/${s.share_token}`).catch(() => {}); toast.success('Link copied'); }}
+                                className="text-[#5a5142] hover:text-[#E8DCC8] transition-colors p-0.5" title="Copy share link">
+                                <Copy size={11} />
+                              </button>
+                              <Link href={`/share/${s.share_token}`} target="_blank" className="text-[#5a5142] hover:text-white transition-colors p-0.5" title="Open share page">
+                                <ArrowLeft size={11} className="rotate-[135deg]" />
+                              </Link>
+                            </div>
                           )}
                         </li>
                       );
@@ -348,6 +425,14 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
           contact={contact}
           onClose={() => setSendModalOpen(false)}
           onSuccess={() => { setSendModalOpen(false); fetchAll(); }}
+        />
+      )}
+      {nudgeModalOpen && latestSend && (
+        <NudgeModal
+          contact={contact}
+          latestSend={latestSend}
+          onClose={() => setNudgeModalOpen(false)}
+          onSuccess={() => { setNudgeModalOpen(false); fetchAll(); }}
         />
       )}
     </DashboardLayout>

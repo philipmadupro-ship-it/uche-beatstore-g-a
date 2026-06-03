@@ -13,7 +13,7 @@ type Mode = 'stage' | 'addTags' | 'removeTags';
  * BatchActionBar (which can't host popovers). Stage → batch PATCH /api/contacts;
  * tags → POST /api/contacts/tags/bulk (merge / remove, never overwrite).
  */
-export function BulkEditPanel({ mode, ids, onClose, onDone }: { mode: Mode; ids: string[]; onClose: () => void; onDone: () => void }) {
+export function BulkEditPanel({ mode, ids, onClose, onDone, tagsEndpoint = '/api/contacts/tags/bulk' }: { mode: Mode; ids: string[]; onClose: () => void; onDone: () => void; tagsEndpoint?: string }) {
   const [busy, setBusy] = useState(false);
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -39,7 +39,7 @@ export function BulkEditPanel({ mode, ids, onClose, onDone }: { mode: Mode; ids:
     setBusy(true);
     try {
       const body = mode === 'addTags' ? { ids, add: tags } : { ids, remove: tags };
-      const res = await fetch('/api/contacts/tags/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const res = await fetch(tagsEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || `HTTP ${res.status}`);
       toast.success(`${mode === 'addTags' ? 'Added' : 'Removed'} ${tags.length} tag${tags.length === 1 ? '' : 's'} on ${ids.length} contact${ids.length === 1 ? '' : 's'}`);
       onDone();
