@@ -14,7 +14,8 @@
  * render can branch on track.type without rewiring callbacks.
  */
 
-import { Download, ShoppingBag, Heart } from 'lucide-react';
+import { Download, Heart } from 'lucide-react';
+import { seededGradient } from '@/lib/ui/cover-gradient';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import type { Track } from '@/lib/types';
 
@@ -87,163 +88,124 @@ export default function BandcampRemixCard({
   return (
     <div
       id={`beat-${track.id}`}
-      className={`group rounded-2xl border bg-[#14110d] overflow-hidden transition-all flex flex-col ${borderClass}`}
+      role="button"
+      tabIndex={0}
+      onClick={onPreview}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(); } }}
+      className={`group rounded-xl overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#D4BFA0]/40 flex flex-col transition-all duration-200 ${borderClass}`}
       style={borderStyle}
     >
-      {/* Cover — square on desktop, 4:3 on mobile so the card stays compact */}
+      {/* Cover — same overlay pattern as BeatCard for visual consistency */}
       <div
-        className="relative w-full aspect-[4/3] sm:aspect-square shrink-0 cursor-pointer border-b border-[#1f1a13] bg-[#0a0907] overflow-hidden"
-        onClick={onPreview}
+        className="relative w-full aspect-square shrink-0 overflow-hidden bg-[#0a0907]"
+        onClick={(e) => { e.stopPropagation(); onPlay(); }}
       >
         {track.cover_url ? (
           <img
             loading="lazy"
             src={track.cover_url}
             alt={track.title}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907]" />
+          <div className="absolute inset-0" style={seededGradient(track.id)} />
         )}
 
-        {/* Subtle gradient at bottom so the play button stays legible over
-            any cover artwork. */}
-        <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+        {/* Gradient scrim */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-black/10" />
 
-        {/* Play / pause overlay */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onPlay();
-          }}
-          className="absolute bottom-3 right-3 w-11 h-11 rounded-full flex items-center justify-center text-black shadow-lg transition-transform duration-200 ease-out hover:scale-[1.04]"
-          style={{ backgroundColor: accentColor }}
-          aria-label={isPlaying ? 'Pause' : 'Play'}
-        >
-          {isPlaying ? <PauseGlyph size={17} /> : <PlayGlyph size={17} className="ml-0.5" />}
-        </button>
-
-        {isCurrent && (
-          <div className="absolute top-3 left-3 w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] animate-pulse" />
-        )}
-
-        {/* Wishlist heart — only renders when the parent provides a toggle.
-            Top-right, stopPropagation so the cover's preview-click is preserved.
-            Gold fill matches the existing star-rating color (#c8a84b). */}
-        {onToggleWishlist && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onToggleWishlist(); }}
-            aria-pressed={!!isWishlisted}
-            title={isWishlisted ? 'Remove from favorites' : 'Add to favorites'}
-            className={`absolute top-3 right-3 z-20 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur transition-colors ${
-              isWishlisted
-                ? 'bg-[#c8a84b]/20 border border-[#c8a84b]/50 text-[#c8a84b]'
-                : 'bg-black/40 border border-white/10 text-white/80 hover:text-white hover:bg-black/60'
-            }`}
+        {/* Top: Remix badge + wishlist */}
+        <div className="absolute top-0 inset-x-0 flex items-start justify-between p-2.5">
+          <span
+            className="text-[9px] font-mono font-bold uppercase tracking-[0.2em] px-1.5 py-0.5 rounded"
+            style={{ backgroundColor: `${accentColor}22`, color: accentColor, border: `1px solid ${accentColor}40` }}
           >
-            <Heart size={13} fill={isWishlisted ? 'currentColor' : 'none'} />
-          </button>
-        )}
+            Remix
+          </span>
+          {onToggleWishlist && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onToggleWishlist(); }}
+              aria-pressed={!!isWishlisted}
+              className={`w-7 h-7 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors ${
+                isWishlisted ? 'bg-[#c8a84b]/30 text-[#c8a84b]' : 'bg-black/30 text-white/50 hover:text-white'
+              }`}
+            >
+              <Heart size={12} fill={isWishlisted ? 'currentColor' : 'none'} />
+            </button>
+          )}
+        </div>
+
+        {/* Centre: play hover */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+          <div
+            className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+            style={{ backgroundColor: accentColor }}
+          >
+            {isPlaying ? <PauseGlyph size={16} /> : <PlayGlyph size={16} className="ml-0.5 text-black" />}
+          </div>
+        </div>
+
+        {/* Bottom: title + producer + price */}
+        <div className="absolute bottom-0 inset-x-0 p-2.5 flex items-end justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            {isCurrent && <span className="block w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] animate-pulse mb-1.5" />}
+            <p
+              className="text-[12px] sm:text-[14px] font-semibold text-white truncate leading-tight"
+              style={isCurrent ? { color: accentColor } : {}}
+            >
+              {track.title}
+            </p>
+            {creatorName && (
+              <p className="text-[9px] font-mono text-white/40 truncate mt-0.5">{creatorName}</p>
+            )}
+          </div>
+          {!track.free_download_enabled && buyPrice != null && (
+            <span
+              className="shrink-0 text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-lg text-black"
+              style={{ backgroundColor: `${accentColor}E6` }}
+            >
+              ${buyPrice}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Text block — heading title, producer, meta row */}
-      <div className="p-3 sm:p-5 flex flex-col gap-2 sm:gap-3 flex-1">
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-start gap-2">
-            <button onClick={onPreview} className="text-left flex-1 min-w-0">
-              <h3
-                className="font-heading text-[16px] sm:text-[20px] leading-tight text-[#E8DCC8] truncate hover:opacity-80 transition-opacity"
-                style={isPreview || isCurrent ? { color: accentColor } : {}}
-                title={track.title}
-              >
-                {track.title}
-              </h3>
-            </button>
-            <span
-              className="shrink-0 mt-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase tracking-[0.2em]"
-              style={{
-                backgroundColor: `${accentColor}1A`,
-                color: accentColor,
-                border: `1px solid ${accentColor}40`,
-              }}
+      {/* Buy strip */}
+      <div className="bg-[#0e0c08] border-t border-white/[0.06]" onClick={(e) => e.stopPropagation()}>
+        {track.free_download_enabled ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onFreeDownload(); }}
+            className="flex items-center justify-center gap-1.5 w-full h-9 text-[#6DC6A4] text-[9px] font-mono font-bold uppercase tracking-wider hover:bg-[#6DC6A4]/5 transition-colors"
+          >
+            <Download size={10} />
+            Free download
+          </button>
+        ) : (
+          <div className="flex items-stretch divide-x divide-white/[0.06] h-9">
+            <button
+              onClick={(e) => { e.stopPropagation(); onAddLease(); }}
+              disabled={priceLease == null}
+              className="flex-1 flex flex-col items-center justify-center hover:bg-white/[0.04] transition-colors disabled:opacity-25 disabled:cursor-not-allowed gap-px"
             >
-              Remix
-            </span>
+              <span className="text-[7px] font-mono uppercase tracking-[0.18em] text-white/25 leading-none">Lease</span>
+              <span className="text-[12px] font-bold text-[#E8DCC8] tabular-nums leading-none">
+                {priceLease != null ? `$${priceLease}` : '—'}
+              </span>
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onAddExclusive(); }}
+              disabled={priceExclusive == null}
+              className="flex-1 flex flex-col items-center justify-center transition-colors disabled:opacity-25 disabled:cursor-not-allowed gap-px hover:opacity-90"
+              style={{ backgroundColor: `${accentColor}18` }}
+            >
+              <span className="text-[7px] font-mono uppercase tracking-[0.18em] text-white/25 leading-none">Excl.</span>
+              <span className="text-[12px] font-bold tabular-nums leading-none" style={{ color: accentColor }}>
+                {priceExclusive != null ? `$${priceExclusive}` : '—'}
+              </span>
+            </button>
           </div>
-
-          {creatorName && (
-            <p className="text-[12px] text-[#a08a6a] truncate">
-              by <span className="text-[#E8DCC8]">{creatorName}</span>
-            </p>
-          )}
-        </div>
-
-        {/* Meta row — Bandcamp's mono "release info" line */}
-        <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.18em] text-[#6a5d4a]">
-          {track.bpm && <span>{track.bpm} BPM</span>}
-          {track.bpm && keyLabel && <span className="text-[#3a3328]">·</span>}
-          {keyLabel && <span>{keyLabel}</span>}
-          {(track.bpm || keyLabel) && track.duration_seconds && <span className="text-[#3a3328]">·</span>}
-          {track.duration_seconds && <span>{fmtDuration(track.duration_seconds)}</span>}
-        </div>
-
-        {track.description && (
-          <p className="text-[11px] text-[#a08a6a] line-clamp-2 leading-relaxed">{track.description}</p>
         )}
-
-        {/* Primary action — full-width Buy, or Free Download when toggled. */}
-        <div className="mt-auto pt-2 flex flex-col gap-2">
-          {track.free_download_enabled ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onFreeDownload();
-              }}
-              className="flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-md bg-[#6DC6A4]/10 border border-[#6DC6A4]/30 hover:bg-[#6DC6A4]/20 text-[#6DC6A4] text-[11px] font-mono font-bold uppercase tracking-[0.18em] transition-colors"
-            >
-              <Download size={13} />
-              Free Download
-            </button>
-          ) : (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (priceLease != null) {
-                  onAddLease();
-                } else if (priceExclusive != null) {
-                  onAddExclusive();
-                } else {
-                  onPreview();
-                }
-              }}
-              disabled={buyPrice == null}
-              className="flex items-center justify-between gap-2 w-full px-4 py-2.5 rounded-md text-black text-[11px] font-mono font-bold uppercase tracking-[0.18em] transition-opacity hover:opacity-90 disabled:opacity-30"
-              style={{ backgroundColor: accentColor }}
-            >
-              <span className="flex items-center gap-2">
-                <ShoppingBag size={13} />
-                Buy
-              </span>
-              <span className="tabular-nums">
-                {buyPrice != null ? `$${buyPrice.toLocaleString()}` : '—'}
-              </span>
-            </button>
-          )}
-
-          {/* Secondary: open the preview drawer for license picker / details */}
-          {!track.free_download_enabled && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onPreview();
-              }}
-              className="w-full text-center px-3 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-[0.18em] text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors"
-            >
-              More licenses
-            </button>
-          )}
-        </div>
       </div>
     </div>
   );
