@@ -114,12 +114,16 @@ export async function GET(
     // Strip user_id from tracks before responding
     const safeTracks = (tracksRes.data ?? []).map(({ user_id: _u, ...rest }: any) => rest);
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       creator,
       tracks: safeTracks,
       playlists: playlistsRes.data ?? [],
       projects: projectsRes.data ?? [],
     });
+    // Public producer page → CDN-cacheable. Short s-maxage so profile/listing
+    // edits surface within ~30s; SWR serves instantly while revalidating.
+    res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+    return res;
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }

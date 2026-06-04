@@ -94,11 +94,15 @@ export async function GET(
 
     const { user_id: _u, ...safeProject } = project as any;
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       project: { ...safeProject, cover_url: sanitizeUrl(safeProject.cover_url) },
       tracks,
       creator,
     });
+    // Public project-bundle page → CDN-cacheable. Short s-maxage so price /
+    // tracklist edits surface within ~30s; SWR serves instantly meanwhile.
+    res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+    return res;
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
