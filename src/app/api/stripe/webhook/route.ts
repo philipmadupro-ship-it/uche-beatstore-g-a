@@ -91,7 +91,8 @@ async function runFulfillment(params: {
   const admin = createServiceClient();
   const APP_URL = getAppUrl();
 
-  // 1. CRM — upsert buyer into the seller's contacts list
+  // 1. CRM — upsert buyer into the seller's contacts list, then log the
+  // purchase to the contact's activity timeline (the buyer → contact link).
   if (meta.seller_user_id && meta.buyer_email) {
     try {
       const { data: existing } = await admin
@@ -101,8 +102,10 @@ async function runFulfillment(params: {
         .eq('email', meta.buyer_email)
         .maybeSingle();
 
+      let contactId = existing?.id as string | undefined;
+
       if (!existing) {
-        await admin.from('contacts').insert({
+        const { data: inserted } = await admin.from('contacts').insert({
           user_id: meta.seller_user_id,
           name: session.customer_details?.name || 'Customer',
           email: meta.buyer_email,
@@ -110,7 +113,8 @@ async function runFulfillment(params: {
           label: 'buyer',
           notes: `Purchased via ${meta.source_surface === 'store' ? 'store' : 'share link'}`,
           buyer_pipeline_status: 'purchased',
-        });
+        }).select('id').single();
+        contactId = inserted?.id;
       } else {
         // Ensure pipeline status is updated even for returning buyers
         await admin
@@ -118,6 +122,43 @@ async function runFulfillment(params: {
           .update({ buyer_pipeline_status: 'purchased' })
           .eq('user_id', meta.seller_user_id)
           .eq('email', meta.buyer_email);
+      }
+
+      // Activity timeline entry. dedupe_key = stripe session id so retries
+      // and the timeline's derived-purchase path don't double-log. Title is
+      // built from track titles; non-fatal on any failure.
+      if (contactId) {
+        try {
+          const amountUsd = session.amount_total != null ? Number(session.amount_total) / 100 : null;
+          const lic = hasAnyExclusive ? 'Exclusive' : 'Lease';
+          const { data: trackRows } = await admin
+            .from('tracks')
+            .select('id, title')
+            .in('id', trackIds);
+          const titles = (trackRows ?? []).map((t: any) => t.title).filter(Boolean);
+          const what = titles.length === 0 ? 'a track'
+            : titles.length === 1 ? titles[0]
+            : `${titles[0]} + ${titles.length - 1} more`;
+          const amtLabel = amountUsd != null
+            ? ` — $${amountUsd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+            : '';
+          await admin.from('contact_activity').insert({
+            contact_id: contactId,
+            user_id: meta.seller_user_id,
+            kind: 'purchase',
+            title: `Bought ${what}${amtLabel}`,
+            body: `${lic} license`,
+            metadata: {
+              stripe_session_id: session.id,
+              dedupe_key: session.id,
+              track_ids: trackIds,
+              amount_usd: amountUsd,
+              purchase_id: purchaseId,
+            },
+          });
+        } catch (err) {
+          log.warn('activity purchase log failed', { error: errorMessage(err) });
+        }
       }
     } catch (err) {
       log.warn('CRM upsert failed', { error: errorMessage(err) });

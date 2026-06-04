@@ -26,6 +26,7 @@ import { SendBeatModal } from '@/components/crm/SendBeatModal';
 import { ContactTagPicker } from '@/components/crm/ContactTagPicker';
 import { ContactStageCell, relativeDays } from '@/components/crm/contacts-shared';
 import { NudgeModal } from '@/components/crm/NudgeModal';
+import { ContactActivityTimeline } from '@/components/crm/ContactActivityTimeline';
 import type { CrmStage } from '@/lib/contracts';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
@@ -337,85 +338,14 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
               />
             </section>
 
-            {/* Activity timeline — every beat_send to this contact, most
-                recent first. Same shape as the drawer's list but with
-                more room to breathe. */}
-            <section>
-              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-3 flex items-center gap-2">
-                <Clock size={11} /> Activity · {sends.length} send{sends.length === 1 ? '' : 's'}
-              </h2>
-              {sends.length === 0 ? (
-                <div className="text-center py-12 border border-dashed border-[#1f1a13] rounded-xl">
-                  <p className="text-[11px] text-[#6a5d4a] mb-3">No sends yet</p>
-                  <button
-                    onClick={() => setSendModalOpen(true)}
-                    className="inline-flex items-center gap-2 text-[11px] text-[#E8D8B8] hover:text-white"
-                  >
-                    <Send size={11} /> Send your first beat to {contact.name}
-                  </button>
-                </div>
-              ) : (
-                <ol className="space-y-2">
-                  {[...sends]
-                    .sort((a, b) => b.sent_at.localeCompare(a.sent_at))
-                    .map((s) => {
-                      const tone = PIPELINE_TONES[s.status] ?? PIPELINE_TONES.sent;
-                      const trackIds: string[] = Array.isArray(s.track_ids) ? s.track_ids : [];
-                      const resolved = trackIds.slice(0, 3).map((id) => trackTitles.get(id));
-                      const titles = resolved.filter(Boolean).map((t) => t!.title);
-                      const covers = resolved.filter((t) => t?.cover_url).map((t) => t!.cover_url!);
-                      const overflow = trackIds.length - 3;
-                      return (
-                        <li
-                          key={s.id}
-                          className="flex items-start gap-3 px-4 py-3 rounded-xl border border-[#1f1a13] bg-[#14110d] hover:bg-[#1a160f] transition-colors"
-                        >
-                          <span className={`w-2 h-2 rounded-full mt-1.5 ${tone.dot} shrink-0`} />
-                          <div className="min-w-0 flex-1">
-                            {/* Track covers + titles */}
-                            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                              {covers.slice(0, 3).map((url, i) => (
-                                <img key={i} src={url} alt="" className="w-5 h-5 rounded object-cover shrink-0" loading="lazy" />
-                              ))}
-                              <span className="text-[12px] text-[#E8DCC8] truncate">
-                                {titles.length > 0 ? titles.join(', ') + (overflow > 0 ? ` +${overflow} more` : '') : `${trackIds.length} track${trackIds.length === 1 ? '' : 's'}`}
-                              </span>
-                            </div>
-                            {s.message && <p className="text-[11px] text-[#6a5d4a] italic truncate">&ldquo;{s.message.slice(0, 80)}{s.message.length > 80 ? '…' : ''}&rdquo;</p>}
-                            <p className="text-[10px] font-mono text-[#6a5d4a] mt-0.5">
-                              {new Date(s.sent_at).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                            </p>
-                          </div>
-                          {/* Open tracking badge */}
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {(s as any).opened_at ? (
-                              <span className="text-[9px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 px-1.5 py-0.5 rounded">Opened</span>
-                            ) : (s as any).email_resend_id ? (
-                              <span className="text-[9px] font-mono text-[#3a3328]">Not opened</span>
-                            ) : null}
-                            {(s as any).link_clicked_at && (
-                              <span className="text-[9px] font-mono uppercase tracking-wider text-[#9d95e8] bg-[#9d95e8]/10 px-1.5 py-0.5 rounded">Clicked</span>
-                            )}
-                          </div>
-                          <span className={`text-[10px] font-medium shrink-0 ${tone.text}`}>{tone.label}</span>
-                          {s.share_token && (
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button
-                                onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/share/${s.share_token}`).catch(() => {}); toast.success('Link copied'); }}
-                                className="text-[#5a5142] hover:text-[#E8DCC8] transition-colors p-0.5" title="Copy share link">
-                                <Copy size={11} />
-                              </button>
-                              <Link href={`/share/${s.share_token}`} target="_blank" className="text-[#5a5142] hover:text-white transition-colors p-0.5" title="Open share page">
-                                <ArrowLeft size={11} className="rotate-[135deg]" />
-                              </Link>
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
-                </ol>
-              )}
-            </section>
+            {/* Unified CRM activity timeline — beat sends, email opens,
+                link clicks, and purchases (buyer-email matched) merged into
+                one story, plus manual notes. Self-fetching component. */}
+            <ContactActivityTimeline
+              contactId={contact.id}
+              contactName={contact.name}
+              onSendBeat={() => setSendModalOpen(true)}
+            />
           </div>
         </div>
       </div>
