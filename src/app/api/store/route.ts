@@ -156,16 +156,27 @@ export async function GET() {
     // so the main tracks query stays resilient.
 
     // ── Play counts — for popular sort (not exposed to buyers) ─────────
+    // Batch in chunks of 100 so large catalogues don't hit the PostgREST
+    // URL length limit and the query planner can use the index efficiently.
     const trackIds = tracksAny.map((t: any) => t.id).filter(Boolean);
+    const BATCH = 100;
+    const chunkIds = <T>(arr: T[]): T[][] => {
+      const out: T[][] = [];
+      for (let i = 0; i < arr.length; i += BATCH) out.push(arr.slice(i, i + BATCH));
+      return out;
+    };
+
     let playCountByTrack: Record<string, number> = {};
     if (trackIds.length > 0) {
       try {
-        const { data: playRows } = await admin
-          .from('store_plays')
-          .select('track_id')
-          .in('track_id', trackIds);
-        for (const row of (playRows ?? []) as any[]) {
-          playCountByTrack[row.track_id] = (playCountByTrack[row.track_id] ?? 0) + 1;
+        for (const chunk of chunkIds(trackIds)) {
+          const { data: playRows } = await admin
+            .from('store_plays')
+            .select('track_id')
+            .in('track_id', chunk);
+          for (const row of (playRows ?? []) as any[]) {
+            playCountByTrack[row.track_id] = (playCountByTrack[row.track_id] ?? 0) + 1;
+          }
         }
       } catch {
         // non-fatal — popular sort falls back to rating proxy
@@ -176,13 +187,15 @@ export async function GET() {
     let tagsByTrack: Record<string, Array<{ tag: string; category: string | null }>> = {};
     if (trackIds.length > 0) {
       try {
-        const { data: tagRows } = await admin
-          .from('track_tags')
-          .select('track_id, tag, category')
-          .in('track_id', trackIds);
-        for (const row of (tagRows ?? []) as any[]) {
-          if (!tagsByTrack[row.track_id]) tagsByTrack[row.track_id] = [];
-          tagsByTrack[row.track_id].push({ tag: row.tag, category: row.category ?? null });
+        for (const chunk of chunkIds(trackIds)) {
+          const { data: tagRows } = await admin
+            .from('track_tags')
+            .select('track_id, tag, category')
+            .in('track_id', chunk);
+          for (const row of (tagRows ?? []) as any[]) {
+            if (!tagsByTrack[row.track_id]) tagsByTrack[row.track_id] = [];
+            tagsByTrack[row.track_id].push({ tag: row.tag, category: row.category ?? null });
+          }
         }
       } catch {
         // tags are optional enrichment; non-fatal

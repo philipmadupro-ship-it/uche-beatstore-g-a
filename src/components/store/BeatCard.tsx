@@ -49,6 +49,15 @@ export function BeatCard({
       ? { boxShadow: `0 0 0 1px ${accentColor}66` }
       : {};
 
+  // Double-bezel outer shell — the card sits inside a gradient "tray"
+  // that creates physical depth without a border. The inner card has its
+  // own surface, producing the machined-hardware look from the design system.
+  const bezelBg = isPreview
+    ? `linear-gradient(135deg, ${accentColor}55, ${accentColor}22)`
+    : isPlaying
+      ? `linear-gradient(135deg, ${accentColor}33, ${accentColor}11)`
+      : 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)';
+
   return (
     <div
       id={`beat-${track.id}`}
@@ -56,8 +65,12 @@ export function BeatCard({
       tabIndex={0}
       onClick={onPreview}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(); } }}
-      className="group relative rounded-xl overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#D4BFA0]/40 flex flex-col"
-      style={ringStyle}
+      className="group cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#D4BFA0]/40 rounded-[14px] p-[1.5px]"
+      style={{ background: bezelBg, ...ringStyle }}
+    >
+    {/* Inner card — the actual surface */}
+    <div className="relative rounded-[13px] overflow-hidden flex flex-col bg-[#14110d]"
+      style={{ transition: 'box-shadow 500ms cubic-bezier(0.32,0.72,0,1), transform 500ms cubic-bezier(0.32,0.72,0,1)' }}
     >
       {/* ── Cover — fills the card, everything overlaid on top ── */}
       <div
@@ -71,7 +84,7 @@ export function BeatCard({
             src={track.cover_url}
             alt=""
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px"
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-[1.04]"
+            className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.05] [transition:transform_700ms_cubic-bezier(0.32,0.72,0,1)]"
           />
         ) : (
           <div
@@ -106,6 +119,7 @@ export function BeatCard({
               data-card-action
               type="button"
               onClick={stop(onToggleWishlist)}
+              aria-label={isWishlisted ? 'Remove from favorites' : 'Add to favorites'}
               aria-pressed={!!isWishlisted}
               className={`w-7 h-7 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors shrink-0 ${
                 isWishlisted
@@ -119,7 +133,7 @@ export function BeatCard({
         </div>
 
         {/* ── Centre: play button (hover) ── */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none" style={{ transition: 'opacity 300ms cubic-bezier(0.22,1,0.36,1)' }}>
           <div
             className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
             style={{ backgroundColor: accentColor }}
@@ -205,5 +219,8 @@ export function BeatCard({
         )}
       </div>
     </div>
+    {/* close inner card */}
+    </div>
+    /* close double-bezel outer shell */
   );
 }

@@ -85,6 +85,12 @@ export default function BandcampRemixCard({
         ? { borderColor: `${accentColor}4D` }
         : {};
 
+  const bezelBg = isPreview
+    ? `linear-gradient(135deg, ${accentColor}55, ${accentColor}22)`
+    : isPlaying
+      ? `linear-gradient(135deg, ${accentColor}33, ${accentColor}11)`
+      : 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)';
+
   return (
     <div
       id={`beat-${track.id}`}
@@ -92,9 +98,10 @@ export default function BandcampRemixCard({
       tabIndex={0}
       onClick={onPreview}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(); } }}
-      className={`group rounded-xl overflow-hidden cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#D4BFA0]/40 flex flex-col transition-all duration-200 ${borderClass}`}
-      style={borderStyle}
+      className="group cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#D4BFA0]/40 rounded-[14px] p-[1.5px]"
+      style={{ background: bezelBg }}
     >
+    <div className={`relative rounded-[13px] overflow-hidden flex flex-col bg-[#14110d] ${borderClass}`} style={borderStyle}>
       {/* Cover — same overlay pattern as BeatCard for visual consistency */}
       <div
         className="relative w-full aspect-square shrink-0 overflow-hidden bg-[#0a0907]"
@@ -208,5 +215,8 @@ export default function BandcampRemixCard({
         )}
       </div>
     </div>
+    {/* close inner card */}
+    </div>
+    /* close double-bezel outer */
   );
 }

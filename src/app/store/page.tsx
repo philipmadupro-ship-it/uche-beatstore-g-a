@@ -592,14 +592,16 @@ function StorePage() {
           <div className="flex items-center gap-0.5 bg-[#14110d] border border-[#1f1a13] rounded-md p-0.5">
             <button
               onClick={() => setViewMode('grid')}
-              title="Grid view"
+              aria-label="Grid view"
+              aria-pressed={viewMode === 'grid'}
               className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-[#2d2620] text-[#E8DCC8]' : 'text-[#5a5142] hover:text-[#a08a6a]'}`}
             >
               <LayoutGrid size={13} />
             </button>
             <button
               onClick={() => setViewMode('list')}
-              title="List view"
+              aria-label="List view"
+              aria-pressed={viewMode === 'list'}
               className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-[#2d2620] text-[#E8DCC8]' : 'text-[#5a5142] hover:text-[#a08a6a]'}`}
             >
               <List size={13} />
@@ -668,7 +670,7 @@ function StorePage() {
           1600px max — wider than the previous 1400 so list-view rows
           breathe and the grid can comfortably fit 4 columns on
           standard laptops. Sidebar stays sticky on the left. */}
-      <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-8 flex gap-6 items-start">
+      <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-10 md:py-14 flex gap-6 md:gap-8 items-start">
 
         {/* Left sidebar — sticky, visible on lg+ */}
         <StoreSidebar
@@ -742,13 +744,13 @@ function StorePage() {
               )}
             </div>
           ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-4">
-              {filtered.map((t) =>
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
+              {filtered.map((t, _idx) =>
                 // Remix tracks get the Bandcamp release-card layout to
                 // stand out in the mixed grid; regular beats keep BeatCard.
                 t.type === 'remix' ? (
+                  <div key={t.id} className="store-card-enter">
                   <BandcampRemixCard
-                    key={t.id}
                     track={t as unknown as Track}
                     creatorName={creator?.display_name ?? null}
                     priceLease={priceFor(t, 'lease')}
@@ -765,9 +767,10 @@ function StorePage() {
                     isWishlisted={wishlist.has(t.id)}
                     onToggleWishlist={() => wishlist.toggle(t.id)}
                   />
+                  </div>
                 ) : (
+                  <div key={t.id} className="store-card-enter">
                   <BeatCard
-                    key={t.id}
                     track={t}
                     allTracks={filtered}
                     priceLease={priceFor(t, 'lease')}
@@ -784,6 +787,7 @@ function StorePage() {
                     isWishlisted={wishlist.has(t.id)}
                     onToggleWishlist={() => wishlist.toggle(t.id)}
                   />
+                  </div>
                 ),
               )}
             </div>

@@ -641,21 +641,21 @@ function OfferModal({
         ) : (
           <form onSubmit={submit} className="space-y-3" noValidate>
             <div>
-              <label className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Your offer (USD)</label>
+              <label htmlFor="offer-price" className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Your offer (USD)</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a5d4a] text-[14px]">$</span>
-                <input type="number" min="1" step="1" value={priceStr} onChange={(e) => setPriceStr(e.target.value)} placeholder="500"
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a5d4a] text-[14px]" aria-hidden="true">$</span>
+                <input id="offer-price" type="number" min="1" step="1" value={priceStr} onChange={(e) => setPriceStr(e.target.value)} placeholder="500"
                   className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg pl-7 pr-3 py-2.5 text-[14px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] tabular-nums" />
               </div>
             </div>
             <div>
-              <label className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Your email</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" autoComplete="email"
+              <label htmlFor="offer-email" className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Your email</label>
+              <input id="offer-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" autoComplete="email"
                 className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-3 py-2.5 text-[13px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]" />
             </div>
             <div>
-              <label className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Message <span className="text-[#3a3328]">(optional)</span></label>
-              <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={2} maxLength={2000} placeholder="What you'd use it for, timeline, etc."
+              <label htmlFor="offer-message" className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Message <span className="text-[#3a3328]">(optional)</span></label>
+              <textarea id="offer-message" value={message} onChange={(e) => setMessage(e.target.value)} rows={2} maxLength={2000} placeholder="What you'd use it for, timeline, etc."
                 className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-3 py-2 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] resize-none" />
             </div>
             <button type="submit" disabled={!valid || submitting}

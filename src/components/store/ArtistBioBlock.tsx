@@ -75,7 +75,7 @@ export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
       )}
       <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/60 to-[#0a0907]" />
 
-      <div className="relative z-10 max-w-[1400px] mx-auto px-4 md:px-8 pt-10 pb-10 md:pt-24 md:pb-16">
+      <div className="relative z-10 max-w-[1400px] mx-auto px-4 md:px-8 pt-12 pb-12 md:pt-32 md:pb-24">
         <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#a08a6a] mb-3">Beat store</p>
         <h1 className="sr-only">{creator?.display_name || 'Producer'}</h1>
         <div className="max-w-3xl">

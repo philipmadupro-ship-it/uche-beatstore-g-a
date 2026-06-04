@@ -327,6 +327,45 @@ html {
   100% { background-position: 200% 0; }
 }
 
+/* ── Store card entry animation ─────────────────────────────────
+   Each beat card fades up + scales from 97% on viewport entry.
+   Uses the same deceleration curve as cosmosFadeInUp so the whole
+   store reads as one motion language.
+   Applied via .store-card-enter on the grid item wrapper.        */
+@keyframes storeCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.store-card-enter {
+  animation: storeCardEnter 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Stagger siblings 1–8 for the initial grid render */
+.store-card-enter:nth-child(1)  { animation-delay:  30ms; }
+.store-card-enter:nth-child(2)  { animation-delay:  60ms; }
+.store-card-enter:nth-child(3)  { animation-delay:  90ms; }
+.store-card-enter:nth-child(4)  { animation-delay: 120ms; }
+.store-card-enter:nth-child(5)  { animation-delay: 150ms; }
+.store-card-enter:nth-child(6)  { animation-delay: 180ms; }
+.store-card-enter:nth-child(7)  { animation-delay: 210ms; }
+.store-card-enter:nth-child(8)  { animation-delay: 240ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .store-card-enter { animation: none; }
+}
+
+/* Spring easing shorthand — use instead of ease-in-out for all UI transitions */
+:root {
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-decelerate: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .skeleton-shimmer {
   background: linear-gradient(
     90deg,
