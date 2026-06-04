@@ -27,7 +27,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
-import { audioSrc } from '@/lib/audio/url';
+import { cdnAudioSrc } from '@/lib/audio/cdn';
 import { normalizationGain } from '@/lib/audio/loudness';
 import { getOfflineSrc } from '@/lib/offline/audio-cache';
 
@@ -50,7 +50,9 @@ export function SimpleAudioEngine() {
     let cancelled = false;
 
     (async () => {
-      let src = audioSrc(url);
+      // Stream straight from R2 / CDN — a plain <audio> element needs no CORS,
+      // so we skip the /api/audio proxy and keep the origin out of the stream.
+      let src = cdnAudioSrc(url);
       if (trackId) {
         try {
           const offline = await getOfflineSrc(trackId);

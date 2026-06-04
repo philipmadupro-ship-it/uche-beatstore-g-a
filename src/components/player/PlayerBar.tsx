@@ -14,7 +14,7 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { extractCoverColor } from '@/lib/audio/cover-color';
-import { audioSrc } from '@/lib/audio/url';
+import { cdnAudioSrc } from '@/lib/audio/cdn';
 
 /**
  * Floating mini-player pill, centered along the bottom edge.
@@ -50,7 +50,8 @@ export function PlayerBar() {
     if (!upcoming?.audio_url || upcoming.id === currentTrack.id) return;
     const ctrl = new AbortController();
     // Low-priority so it never competes with the current track's stream.
-    fetch(audioSrc(upcoming.audio_url), { signal: ctrl.signal, priority: 'low' as RequestPriority }).catch(() => {});
+    // Warm the SAME direct R2/CDN URL the engine will request (not the proxy).
+    fetch(cdnAudioSrc(upcoming.audio_url), { signal: ctrl.signal, priority: 'low' as RequestPriority }).catch(() => {});
     if (upcoming.peaks_url) {
       fetch(upcoming.peaks_url, { signal: ctrl.signal, cache: 'force-cache' }).catch(() => {});
     }
