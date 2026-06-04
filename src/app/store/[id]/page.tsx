@@ -8,7 +8,7 @@ import {
   Music2, Check, X, Loader2, Globe, Mail,
   AtSign, Download, ChevronRight, Tag, Link2,
 } from 'lucide-react';
-import { MiniWaveform } from '@/components/player/MiniWaveform';
+import { ProgressBar } from '@/components/player/ProgressBar';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -123,7 +123,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 export default function StoreProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const { currentTrack, isPlaying, setTrack: playTrack, togglePlay, setQueue } = usePlayer();
+  const { currentTrack, isPlaying, setTrack: playTrack, togglePlay, setQueue, progress, seekTo } = usePlayer();
   const { addItem, setIsOpen } = useCart();
   const [offerOpen, setOfferOpen] = useState(false);
 
@@ -368,26 +368,21 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
-      {/* ── Full-width waveform — between hero and content ──────── */}
+      {/* ── Full-width progress line — between hero and content ──── */}
       <div className="max-w-7xl mx-auto px-4 md:px-10 -mt-2 mb-10">
         <div
-          className="rounded-2xl px-5 py-4"
+          className="rounded-2xl px-5 py-5"
           style={{ background: '#14110d', border: '1px solid rgba(255,255,255,0.05)' }}
         >
-          <MiniWaveform
-            trackId={track.id}
-            peaksUrl={track.peaks_url}
-            height={64}
-            isActive={isCurrent}
-            onPlay={!isCurrent ? handlePlay : undefined}
+          <ProgressBar
+            progress={isCurrent ? progress : 0}
+            onSeek={(f) => { if (isCurrent) seekTo(f); else handlePlay(); }}
+            accent={accent}
           />
-          <div className="flex items-center justify-between mt-2">
+          <div className="flex items-center justify-between mt-2.5">
             <span className="text-[9px] font-mono text-[#3a3328] tabular-nums">
-              {isCurrent ? fmt(Math.round((data?.track?.duration_seconds ?? 0) * 0)) : '0:00'}
+              {isCurrent ? fmt(Math.round((track.duration_seconds ?? 0) * progress)) : '0:00'}
             </span>
-            {isCurrent && (
-              <span className="text-[9px] font-mono text-[#3a3328]">tap waveform to seek</span>
-            )}
             <span className="text-[9px] font-mono text-[#3a3328] tabular-nums">
               {fmt(track.duration_seconds)}
             </span>

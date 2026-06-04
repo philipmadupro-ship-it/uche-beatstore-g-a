@@ -6,7 +6,8 @@ import {
   X, ExternalLink, Music, ChevronRight, ShoppingBag, Play, Pause,
 } from 'lucide-react';
 import { LicenseSelector } from '@/components/store/LicenseSelector';
-import { MiniWaveform } from '@/components/player/MiniWaveform';
+import { ProgressBar } from '@/components/player/ProgressBar';
+import { usePlayer } from '@/hooks/usePlayer';
 import { fmtDur, getSimilarTracks } from './helpers';
 import { TagChips } from './TagChips';
 import type { StoreTrack, LicenseTier } from './types';
@@ -33,6 +34,7 @@ export function BeatPreviewDrawer({
   track, allTracks, licenses, priceLease, priceExclusive, isCurrent, isPlaying, progress,
   onPlay, onAddLease, onAddExclusive, onFreeDownload, onClose, onSelectTrack, accentColor,
 }: Props) {
+  const seekTo = usePlayer((s) => s.seekTo);
   const defaultLicenseId = priceLease != null ? 'lease' : priceExclusive != null ? 'exclusive' : licenses[0]?.id ?? 'lease';
   const [selectedLicense, setSelectedLicense] = useState<string>(defaultLicenseId);
 
@@ -152,14 +154,12 @@ export function BeatPreviewDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {/* ── Real waveform + time ── */}
+          {/* ── Simple progress line + time ── */}
           <div className="px-5 pt-4 pb-3 border-b border-white/[0.05]">
-            <MiniWaveform
-              trackId={track.id}
-              peaksUrl={track.peaks_url}
-              height={56}
-              isActive={isCurrent}
-              onPlay={!isCurrent ? onPlay : undefined}
+            <ProgressBar
+              progress={isCurrent ? progress : 0}
+              onSeek={(f) => { if (isCurrent) seekTo(f); else onPlay(); }}
+              accent={accentColor}
             />
             <div className="flex justify-between mt-1.5">
               <span className="text-[9px] font-mono text-[#5a5142] tabular-nums">
@@ -169,9 +169,6 @@ export function BeatPreviewDrawer({
                 {dur ? fmt(dur) : '—'}
               </span>
             </div>
-            {isCurrent && (
-              <p className="text-[8px] font-mono text-[#3a3328] text-center mt-1">tap to seek</p>
-            )}
           </div>
 
           {/* ── Studio specs ── */}

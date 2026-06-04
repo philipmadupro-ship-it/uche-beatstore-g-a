@@ -143,11 +143,11 @@ export default function BandcampRemixCard({
           )}
         </div>
 
-        {/* Centre: play hover — overlay is pointer-events-none, circle is clickable */}
+        {/* Centre: play glyph (hover) — decorative; click passes through to
+            the card's onPreview, play happens inside the drawer */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
           <div
-            onClick={(e) => { e.stopPropagation(); onPlay(); }}
-            className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] cursor-pointer pointer-events-auto"
+            className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
             style={{ backgroundColor: accentColor }}
           >
             {isPlaying ? <PauseGlyph size={16} /> : <PlayGlyph size={16} className="ml-0.5 text-black" />}

@@ -137,11 +137,12 @@ export function BeatCard({
           ) : <span />}
         </div>
 
-        {/* ── Centre: play button (hover) ── */}
+        {/* ── Centre: play glyph (hover) — purely a "click to preview"
+             affordance. pointer-events-none so the click passes through to
+             the card's onPreview; you play from inside the drawer. ── */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none" style={{ transition: 'opacity 300ms cubic-bezier(0.22,1,0.36,1)' }}>
           <div
-            onClick={stop(onPlay)}
-            className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] cursor-pointer pointer-events-auto"
+            className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
             style={{ backgroundColor: accentColor }}
           >
             {isCurrent && isPlaying

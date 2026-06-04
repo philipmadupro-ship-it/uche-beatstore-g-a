@@ -8,7 +8,7 @@ import {
 import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';
 import { MarqueeText } from './MarqueeText';
 import { SimpleAudioEngine } from './SimpleAudioEngine';
-import { ProgressBar } from './ProgressBar';
+import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
@@ -194,20 +194,27 @@ export function PlayerBar() {
             </div>
           </div>
 
-          {/* Simple Spotify-style progress line + times — hidden below md
-              (phone pill is cover + transport only). No waveform here: the
-              bottom bar just shows a flat seekable line. Real waveforms live
-              on the beat page + preview drawer (MiniWaveform). */}
+          {/* Waveform + times — hidden below md (phone pill is cover +
+              transport only). The bars are MiniWaveform (pure SVG, peaks
+              when available else a synthetic shape — never the WaveSurfer
+              decode that used to crash playback). Audio plays via the
+              headless SimpleAudioEngine; this is purely the visual + seek. */}
           <div className="hidden md:flex items-center gap-2.5 min-w-0">
             <span className="text-[10px] font-mono text-[#c8b89a] tabular-nums w-9 text-right shrink-0">
               {formatTime(currentSeconds)}
             </span>
-            <ProgressBar
-              progress={progress}
-              onSeek={seekTo}
-              accent="#E8DCC8"
-              className="w-[210px]"
-            />
+            <div className="w-[210px] h-8 flex items-center px-1.5 rounded-xl bg-black/15 shadow-[inset_0_1px_2px_rgba(0,0,0,0.25)]">
+              {currentTrack.audio_url ? (
+                <MiniWaveform
+                  trackId={currentTrack.id}
+                  peaksUrl={currentTrack.peaks_url}
+                  height={26}
+                  isActive
+                />
+              ) : (
+                <div className="w-full h-[2px] bg-white/10 rounded" />
+              )}
+            </div>
             <span className="text-[10px] font-mono text-[#5a5142] tabular-nums w-9 shrink-0">
               {formatTime(totalSeconds)}
             </span>
