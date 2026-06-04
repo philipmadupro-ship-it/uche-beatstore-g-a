@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  X, ExternalLink, Music, ChevronRight, ShoppingBag,
+  X, ExternalLink, Music, ChevronRight, ShoppingBag, Play, Pause,
 } from 'lucide-react';
 import { LicenseSelector } from '@/components/store/LicenseSelector';
 import { MiniWaveform } from '@/components/player/MiniWaveform';
@@ -131,16 +131,22 @@ export function BeatPreviewDrawer({
             <TagChips tags={track.tags ?? []} max={3} accentGenre />
           </div>
 
-          {/* Play button — large, centred */}
+          {/* Play button — centred circle, always visible */}
           <button
             onClick={onPlay}
-            className="absolute inset-0 flex items-center justify-center z-[5]"
             aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
+            className="absolute inset-0 flex items-center justify-center z-[5]"
           >
             <div
-              className="w-14 h-14 rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.5)] opacity-0 group-hover:opacity-100"
-              style={{ backgroundColor: accentColor, transition: 'transform 400ms cubic-bezier(0.32,0.72,0,1)' }}
+              className="w-14 h-14 rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.6)]"
+              style={{
+                backgroundColor: accentColor,
+                transition: 'transform 300ms cubic-bezier(0.32,0.72,0,1), opacity 200ms',
+              }}
             >
+              {isCurrent && isPlaying
+                ? <Pause size={22} fill="black" className="text-black" />
+                : <Play size={22} fill="black" className="text-black ml-1" />}
             </div>
           </button>
         </div>
