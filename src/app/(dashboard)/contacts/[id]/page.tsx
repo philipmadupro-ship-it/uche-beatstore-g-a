@@ -27,6 +27,7 @@ import { ContactTagPicker } from '@/components/crm/ContactTagPicker';
 import { ContactStageCell, relativeDays } from '@/components/crm/contacts-shared';
 import { NudgeModal } from '@/components/crm/NudgeModal';
 import { ContactActivityTimeline } from '@/components/crm/ContactActivityTimeline';
+import { ContactTasks } from '@/components/crm/ContactTasks';
 import type { CrmStage } from '@/lib/contracts';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
@@ -341,6 +342,9 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
             {/* Unified CRM activity timeline — beat sends, email opens,
                 link clicks, and purchases (buyer-email matched) merged into
                 one story, plus manual notes. Self-fetching component. */}
+            {/* Follow-up tasks / reminders for this contact. */}
+            <ContactTasks contactId={contact.id} />
+
             <ContactActivityTimeline
               contactId={contact.id}
               contactName={contact.name}

@@ -16,6 +16,7 @@ import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { isTrackDrag, readTrackDragData, type TrackDragPayload } from '@/lib/dnd';
 import { contactsToCsv, downloadCsv } from '@/lib/contacts/export';
 import { ContactsStatsBar } from '@/components/crm/ContactsStatsBar';
+import { FollowUpsPanel } from '@/components/crm/FollowUpsPanel';
 import { ContactsToolbar, type Segment } from '@/components/crm/ContactsToolbar';
 import { ContactsTable } from '@/components/crm/ContactsTable';
 import { ContactsPagination } from '@/components/crm/ContactsPagination';
@@ -326,6 +327,8 @@ export function ContactsView({
 
       {activeTab === 'network' ? (
         <>
+          <FollowUpsPanel />
+
           <ContactsStatsBar stats={stats} />
 
           <ContactsToolbar
