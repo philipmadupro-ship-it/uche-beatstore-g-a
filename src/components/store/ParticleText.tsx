@@ -76,14 +76,22 @@ export function ParticleText({ text, color = '#D4BFA0', className }: ParticleTex
       const octx = off.getContext('2d');
       if (!octx) return;
 
-      // Font size: 70% of container height, capped so wide containers
-      // don't blow it up beyond legible.
-      const fontSize = Math.min(h * 0.72, w / Math.max(text.length * 0.6, 1));
+      // Font size: start at 72% of container height, then scale down if
+      // the measured text width overflows the canvas. This prevents
+      // long names (e.g. "HE2CRAZYYYY" in Akira Expanded) from getting
+      // clipped at the canvas edges — clipped pixels = missing particles.
+      let fontSize = h * 0.72;
       octx.fillStyle = '#ffffff';
       octx.textBaseline = 'middle';
       octx.textAlign = 'center';
-      // Match the app's primary font for the text shape sampling.
       octx.font = `800 ${fontSize}px "Akira Expanded", "Synkopy", system-ui, sans-serif`;
+      const measured = octx.measureText(text);
+      if (measured.width > w * 0.96) {
+        // Scale font so text uses 96% of canvas width.
+        fontSize = fontSize * (w * 0.96) / measured.width;
+        octx.font = `800 ${Math.floor(fontSize)}px "Akira Expanded", "Synkopy", system-ui, sans-serif`;
+      }
+      // Match the app's primary font for the text shape sampling.
       octx.fillText(text, w / 2, h / 2);
 
       const imgData = octx.getImageData(0, 0, w, h).data;
