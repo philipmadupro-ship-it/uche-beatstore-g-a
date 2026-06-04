@@ -82,60 +82,71 @@ export function BeatPreviewDrawer({
         onClick={onClose}
       />
 
-      <div className="fixed right-0 top-0 h-full w-full max-w-[420px] z-50 flex flex-col bg-[#0c0a08] border-l border-[#1f1a13] shadow-[0_0_60px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-300">
-
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#1f1a13] shrink-0">
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142]">Preview</p>
-          <div className="flex items-center gap-2">
-            <Link
-              href={`/store/${track.id}`}
-              className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#a08a6a] transition-colors flex items-center gap-1"
-            >
-              Full page
-              <ExternalLink size={9} />
-            </Link>
-            <button onClick={onClose} className="w-7 h-7 rounded-lg flex items-center justify-center text-[#4a4338] hover:text-white bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.04] transition-all">
-              <X size={13} />
-            </button>
+      {/* Drawer panel — wider, full-bleed cover hero, spring slide */}
+      <div
+        className="fixed right-0 top-0 h-full w-full max-w-[480px] z-50 flex flex-col bg-[#0a0907]"
+        style={{
+          borderLeft: '1px solid rgba(255,255,255,0.06)',
+          boxShadow: '-60px 0 120px rgba(0,0,0,0.7)',
+          animation: 'drawerSlide 420ms cubic-bezier(0.32,0.72,0,1) both',
+        }}
+      >
+        {/* Full-bleed cover hero */}
+        <div className="relative h-[260px] shrink-0 overflow-hidden bg-[#0a0907]">
+          {track.cover_url ? (
+            <img src={track.cover_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          ) : (
+            <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 40% 50%, ${accentColor}22 0%, transparent 70%), #0a0907` }} />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-[#0a0907]" />
+          {/* Top bar */}
+          <div className="absolute top-0 inset-x-0 flex items-start justify-between p-4 z-10">
+            <span className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/40">Beat Preview</span>
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/store/${track.id}`}
+                className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-white/40 hover:text-white/80 transition-colors"
+              >
+                Open <ExternalLink size={9} />
+              </Link>
+              <button
+                onClick={onClose}
+                className="w-8 h-8 rounded-full flex items-center justify-center bg-white/[0.06] hover:bg-white/[0.12] text-white/60 hover:text-white transition-all"
+                style={{ transition: 'all 300ms cubic-bezier(0.32,0.72,0,1)' }}
+              >
+                <X size={14} />
+              </button>
+            </div>
           </div>
+          {/* Title + type overlay at bottom */}
+          <div className="absolute bottom-0 inset-x-0 p-5 z-10">
+            <p className="text-[11px] font-mono uppercase tracking-[0.2em] mb-1.5" style={{ color: accentColor }}>
+              {track.type}
+            </p>
+            <p className="text-[22px] font-bold text-white leading-tight truncate"
+              style={isCurrent ? { color: accentColor } : {}}>{track.title}</p>
+            <TagChips tags={track.tags ?? []} max={3} accentGenre />
+          </div>
+          {/* Play button — large, centred */}
+          <button
+            onClick={onPlay}
+            className="absolute inset-0 flex items-center justify-center z-[5]"
+            aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
+          >
+            <div
+              className="w-14 h-14 rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+              style={{ backgroundColor: accentColor, transition: 'transform 400ms cubic-bezier(0.32,0.72,0,1)' }}
+            >
+              {isCurrent && isPlaying
+                ? <Pause size={22} fill="black" className="text-black" />
+                : <Play size={22} fill="black" className="text-black ml-1" />}
+            </div>
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="p-5 border-b border-[#1f1a13]">
-            <div className="flex gap-4">
-              <div className="relative w-24 h-24 rounded-xl overflow-hidden bg-[#0a0907] border border-[#1f1a13] shrink-0">
-                {track.cover_url ? (
-                  <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[#3a3328]">
-                    <Music size={28} />
-                  </div>
-                )}
-                <button
-                  onClick={onPlay}
-                  className="absolute inset-0 flex items-center justify-center bg-black/50 hover:bg-black/60 transition-colors"
-                >
-                  {isCurrent && isPlaying
-                    ? <Pause size={20} fill="currentColor" className="text-white" />
-                    : <Play size={20} fill="currentColor" className="text-white ml-0.5" />}
-                </button>
-              </div>
-              <div className="flex-1 min-w-0 pt-1">
-                <p
-                  className="text-[15px] font-medium text-[#E8DCC8] leading-tight truncate"
-                  style={isCurrent ? { color: accentColor } : {}}
-                >
-                  {track.title}
-                </p>
-                <p className="text-[10px] uppercase tracking-widest mt-1 font-bold" style={{ color: accentColor }}>
-                  {track.type}
-                </p>
-                <TagChips tags={track.tags ?? []} max={4} accentGenre />
-              </div>
-            </div>
-          </div>
-
-          <div className="px-5 py-4 border-b border-[#1f1a13]">
+          {/* Waveform + time */}
+          <div className="px-5 py-4 border-b border-white/[0.05]">
             <div className="relative h-14 flex items-center gap-[2px]">
               {bars.map((h, i) => {
                 const frac = i / bars.length;
@@ -159,7 +170,7 @@ export function BeatPreviewDrawer({
             </div>
           </div>
 
-          <div className="px-5 py-4 border-b border-[#1f1a13]">
+          <div className="px-5 py-4 border-b border-white/[0.05]">
             <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-3">Studio specs</p>
             <div className="grid grid-cols-2 gap-2">
               {[
@@ -170,23 +181,23 @@ export function BeatPreviewDrawer({
                 { label: 'Stems', value: track.stems_status === 'done' ? 'Available' : 'Not included' },
                 { label: 'WAV', value: track.wav_url ? 'Uploaded' : 'On request' },
               ].map(({ label, value }) => (
-                <div key={label} className="flex flex-col gap-0.5 bg-[#0a0907] rounded-lg px-3 py-2.5 border border-[#1a160f]">
-                  <span className="text-[8px] font-mono uppercase tracking-wider text-[#4a4338]">{label}</span>
-                  <span className={`text-[11px] font-mono font-medium ${label === 'Stems' && track.stems_status === 'done' ? 'text-[#6DC6A4]' : 'text-[#E8DCC8]'}`}>{value}</span>
+                <div key={label} className="flex flex-col gap-0.5 rounded-xl px-3 py-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <span className="text-[8px] font-mono uppercase tracking-[0.18em] text-white/25">{label}</span>
+                  <span className={`text-[12px] font-semibold ${label === 'Stems' && track.stems_status === 'done' ? 'text-[#6DC6A4]' : 'text-[#E8DCC8]'}`}>{value}</span>
                 </div>
               ))}
             </div>
           </div>
 
           {similar.length > 0 && (
-            <div className="px-5 py-4 border-b border-[#1f1a13]">
+            <div className="px-5 py-4 border-b border-white/[0.05]">
               <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-3">Similar beats</p>
               <div className="space-y-1.5">
                 {similar.map((s) => (
                   <button
                     key={s.id}
                     onClick={() => onSelectTrack(s)}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#16130e] border border-transparent hover:border-[#1f1a13] transition-all text-left group"
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#16130e] border border-transparent hover:border-white/[0.05] transition-all text-left group"
                   >
                     <div className="w-8 h-8 rounded-md overflow-hidden bg-[#0a0907] shrink-0">
                       {s.cover_url
@@ -220,7 +231,7 @@ export function BeatPreviewDrawer({
         </div>
 
         {!track.free_download_enabled && (
-          <div className="shrink-0 border-t border-[#1f1a13] bg-[#0c0a08] px-5 py-4">
+          <div className="shrink-0 border-t border-white/[0.05] bg-[#0a0907] px-5 py-4">
             <div className="flex items-center gap-2">
               {priceLease != null && (
                 <button

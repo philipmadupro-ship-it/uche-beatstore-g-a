@@ -1271,13 +1271,20 @@ export default function StoreEditorPage() {
               <ExternalLink size={12} />
               View Store
             </a>
+            {/* Save — button-in-button island architecture */}
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 rounded-full bg-[#D4BFA0] hover:bg-[#E8D8B8] disabled:opacity-60 text-black text-[12px] font-semibold transition-all"
+              className="flex items-center gap-2 pl-4 pr-1.5 py-1.5 rounded-full disabled:opacity-60 text-black text-[12px] font-semibold active:scale-[0.97]"
+              style={{
+                backgroundColor: '#D4BFA0',
+                transition: 'all 400ms cubic-bezier(0.32,0.72,0,1)',
+              }}
             >
-              {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? 'Saving…' : 'Save changes'}
+              <span className="w-7 h-7 rounded-full bg-black/15 flex items-center justify-center shrink-0">
+                {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+              </span>
             </button>
           </div>
         </div>

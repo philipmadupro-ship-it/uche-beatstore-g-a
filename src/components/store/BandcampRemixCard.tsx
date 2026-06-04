@@ -214,9 +214,7 @@ export default function BandcampRemixCard({
           </div>
         )}
       </div>
+    </div>{/* /inner card */}
     </div>
-    {/* close inner card */}
-    </div>
-    /* close double-bezel outer */
   );
 }

@@ -218,9 +218,7 @@ export function BeatCard({
           </div>
         )}
       </div>
+    </div>{/* /inner card */}
     </div>
-    {/* close inner card */}
-    </div>
-    /* close double-bezel outer shell */
   );
 }

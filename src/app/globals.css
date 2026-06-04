@@ -344,6 +344,8 @@ html {
 }
 .store-card-enter {
   animation: storeCardEnter 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* Ensure click targets work immediately after animation completes */
+  animation-fill-mode: both;
 }
 
 /* Stagger siblings 1–8 for the initial grid render */
@@ -364,6 +366,16 @@ html {
 :root {
   --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-decelerate: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Beat preview drawer slide-in from right */
+@keyframes drawerSlide {
+  from { transform: translateX(100%); opacity: 0.8; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="drawerSlide"] { animation: none !important; }
 }
 
 .skeleton-shimmer {
