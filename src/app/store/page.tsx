@@ -840,6 +840,21 @@ function StorePage() {
       {/* ── Contact form ─────────────────────────────────────────── */}
       <StoreContactForm creator={creator} accentColor={accentColor} />
 
+      {/* ── Store footer ─────────────────────────────────────────── */}
+      <div className="border-t border-[#1f1a13] mt-4 py-6 px-4 md:px-12">
+        <div className="max-w-[1400px] mx-auto flex flex-wrap items-center justify-between gap-4">
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#3a3328]">
+            © {new Date().getFullYear()} {creator?.display_name || 'Beat Store'}
+          </p>
+          <Link
+            href="/store/orders"
+            className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#4a4338] hover:text-[#a08a6a] transition-colors"
+          >
+            Order history / Re-download
+          </Link>
+        </div>
+      </div>
+
       {/* ── Beat preview drawer ──────────────────────────────────── */}
       {previewTrack && (
         <BeatPreviewDrawer
