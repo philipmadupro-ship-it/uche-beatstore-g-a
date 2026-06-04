@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, ShoppingCart, Music, Clock, Gauge,
   Music2, Check, X, Loader2, Globe, Mail,
-  AtSign, Download, ChevronRight, Tag, Link2,
+  AtSign, Download, ChevronRight, Tag, Link2, ArrowRight,
 } from 'lucide-react';
 import { ProgressBar } from '@/components/player/ProgressBar';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
@@ -425,19 +425,24 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
               </div>
             ) : licenses.length > 0 ? (
               <div>
-                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-4">License Options</p>
+                <div className="flex items-baseline justify-between mb-4">
+                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328]">Choose a license</p>
+                  <p className="text-[9px] font-mono text-[#3a3328]">Instant delivery · secure checkout</p>
+                </div>
                 <div className={licenseGridClass}>
-                  {licenses.map((tier) => (
+                  {licenses.map((tier, i) => (
                     <LicenseCard
                       key={tier.id}
                       tier={tier}
+                      accent={accent}
+                      recommended={licenses.length > 1 && i === Math.min(1, licenses.length - 1) && !tier.isExclusive}
                       onAddToCart={() => handleAddToCart(tier)}
                       onMakeOffer={tier.isExclusive ? () => setOfferOpen(true) : undefined}
                     />
                   ))}
                 </div>
                 {creator?.license_notes && (
-                  <p className="mt-3 text-[10px] text-[#5a5142] leading-relaxed">{creator.license_notes}</p>
+                  <p className="mt-4 text-[10px] text-[#5a5142] leading-relaxed border-l-2 border-[#1f1a13] pl-3">{creator.license_notes}</p>
                 )}
               </div>
             ) : (
@@ -602,53 +607,113 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
 
 /* ─── License Card ─────────────────────────────────────────── */
 
-function LicenseCard({ tier, onAddToCart, onMakeOffer }: {
+function LicenseCard({ tier, accent, recommended = false, onAddToCart, onMakeOffer }: {
   tier: LicenseTier;
+  accent: string;
+  recommended?: boolean;
   onAddToCart: () => void;
   onMakeOffer?: () => void;
 }) {
+  const exclusive = tier.isExclusive;
+
+  // Double-bezel: the exclusive + recommended tiers get a richer accent
+  // tray so they read as the premium option; standard tiers get a neutral
+  // hairline tray. The inner core carries the real surface.
+  const bezel = exclusive
+    ? `linear-gradient(150deg, ${accent}66, ${accent}18 55%, rgba(255,255,255,0.03))`
+    : recommended
+      ? `linear-gradient(150deg, ${accent}40, rgba(255,255,255,0.04))`
+      : 'linear-gradient(150deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))';
+
   return (
-    <div className={`relative rounded-2xl border p-5 flex flex-col gap-4 transition-all ${tier.accentClass} ${tier.isExclusive ? '' : 'bg-[#14110d]'}`}>
-      {tier.isExclusive && (
-        <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-[#D4BFA0]/10 border border-[#D4BFA0]/20 text-[8px] font-mono uppercase tracking-wider text-[#D4BFA0]">
-          Exclusive
-        </div>
-      )}
-      <div>
-        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142]">{tier.name}</p>
-        <p className="text-[28px] font-bold text-white leading-none mt-1 tabular-nums">{price(tier.price)}</p>
-        <p className="text-[10px] text-[#6a5d4a] mt-1">{tier.tagline}</p>
-      </div>
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {tier.fileTypes.map((f) => (
-          <span key={f} className="px-2 py-0.5 rounded bg-white/[0.04] border border-white/[0.06] text-[9px] font-mono uppercase tracking-wider text-[#a08a6a]">{f}</span>
-        ))}
-      </div>
-      <ul className="space-y-1.5">
-        {tier.rights.map((r) => (
-          <li key={r} className="flex items-start gap-2 text-[11px] text-[#a08a6a]">
-            <Check size={10} className="text-[#6DC6A4] shrink-0 mt-0.5" />
-            {r}
-          </li>
-        ))}
-      </ul>
-      <div className="mt-auto space-y-2">
-        <button
-          onClick={onAddToCart}
-          className={`w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-bold uppercase tracking-wider transition-all ${tier.buttonClass}`}
-        >
-          <ShoppingCart size={13} />
-          Add to Cart
-        </button>
-        {onMakeOffer && (
-          <button
-            onClick={onMakeOffer}
-            className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-[11px] font-medium uppercase tracking-wider border border-[#2d2620] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#3a3328] transition-all"
+    <div
+      className="group relative rounded-[20px] p-[1.5px] flex transition-transform duration-300 hover:-translate-y-0.5"
+      style={{ background: bezel, boxShadow: exclusive ? `0 18px 50px -20px ${accent}55` : undefined }}
+    >
+      <div className="relative flex flex-col w-full rounded-[19px] bg-[#100d09] overflow-hidden">
+        {/* Ribbon — recommended or exclusive */}
+        {(exclusive || recommended) && (
+          <div
+            className="absolute top-0 right-0 px-2.5 py-1 rounded-bl-[10px] text-[8px] font-mono uppercase tracking-[0.18em]"
+            style={exclusive
+              ? { background: accent, color: '#0a0907' }
+              : { background: `${accent}1f`, color: accent, borderLeft: `1px solid ${accent}33`, borderBottom: `1px solid ${accent}33` }}
           >
-            <Tag size={12} />
-            Make an offer
-          </button>
+            {exclusive ? 'Full ownership' : 'Popular'}
+          </div>
         )}
+
+        <div className="p-5 flex flex-col gap-5 h-full">
+          {/* Header — name + price */}
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-[#6a5d4a]">{tier.name}</p>
+            <div className="flex items-baseline gap-1.5 mt-1.5">
+              <span className="text-[32px] font-bold text-white leading-none tracking-tight tabular-nums">
+                {price(tier.price)}
+              </span>
+              <span className="text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">one-time</span>
+            </div>
+            <p className="text-[11px] text-[#8a7a5f] mt-2 leading-snug">{tier.tagline}</p>
+          </div>
+
+          {/* Files included */}
+          <div>
+            <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#4a4338] mb-1.5">You receive</p>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {tier.fileTypes.map((f) => (
+                <span
+                  key={f}
+                  className="px-2 py-1 rounded-md text-[9px] font-mono font-semibold uppercase tracking-wider"
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: '#b8a888' }}
+                >
+                  {f}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Divider */}
+          <div className="h-px bg-gradient-to-r from-white/[0.07] to-transparent" />
+
+          {/* Rights — refined rows, thin accent tick */}
+          <ul className="space-y-2 flex-1">
+            {tier.rights.map((r) => (
+              <li key={r} className="flex items-start gap-2.5 text-[11.5px] text-[#a08a6a] leading-snug">
+                <Check size={11} className="shrink-0 mt-0.5" style={{ color: accent }} strokeWidth={2.5} />
+                <span>{r}</span>
+              </li>
+            ))}
+          </ul>
+
+          {/* CTA — button-in-button with trailing arrow */}
+          <div className="mt-auto space-y-2">
+            <button
+              onClick={onAddToCart}
+              className="group/btn relative w-full flex items-center justify-center gap-2 rounded-full py-3.5 pl-5 pr-3 text-[12px] font-bold uppercase tracking-wider transition-all active:scale-[0.98]"
+              style={exclusive || recommended
+                ? { backgroundColor: accent, color: '#0a0907' }
+                : { backgroundColor: 'rgba(255,255,255,0.06)', color: '#E8DCC8', border: '1px solid rgba(255,255,255,0.10)' }}
+            >
+              <ShoppingCart size={13} />
+              <span>Add to cart</span>
+              <span
+                className="ml-1 w-6 h-6 rounded-full flex items-center justify-center transition-transform duration-300 group-hover/btn:translate-x-0.5"
+                style={{ background: exclusive || recommended ? 'rgba(0,0,0,0.12)' : 'rgba(255,255,255,0.08)' }}
+              >
+                <ArrowRight size={12} />
+              </span>
+            </button>
+            {onMakeOffer && (
+              <button
+                onClick={onMakeOffer}
+                className="w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-[10px] font-mono uppercase tracking-[0.15em] text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors"
+              >
+                <Tag size={11} />
+                or make an offer
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
