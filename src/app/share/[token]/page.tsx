@@ -10,6 +10,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { Check, X as XIcon } from 'lucide-react';
 import { audioSrc } from '@/lib/audio/url';
+import { cdnAudioSrc } from '@/lib/audio/cdn';
 import { ClientShareVariant } from '@/components/share/variants/ClientShareVariant';
 import { ProducerShareVariant } from '@/components/share/variants/ProducerShareVariant';
 import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
@@ -69,9 +70,14 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   const [ready, setReady] = useState(false);
   const [volume, setVolume] = useState(0.8);
   const [muted, setMuted] = useState(false);
+  // When WaveSurfer can't decode (no peaks + a CORS/decode hiccup on an
+  // externally-opened link), the waveform dies — but the artist must still
+  // hear the beat. This flag flips playback to a plain <audio> fallback.
+  const [wsFailed, setWsFailed] = useState(false);
 
   const waveRef = useRef<HTMLDivElement>(null);
   const ws = useRef<WaveSurferType | null>(null);
+  const fallbackAudioRef = useRef<HTMLAudioElement>(null);
   const tracksRef = useRef<Track[]>([]);
   const activeIndexRef = useRef(0);
 
@@ -149,6 +155,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
     setReady(false);
     setCurrentTime(0);
     setDuration(0);
+    setWsFailed(false);
     if (ws.current) { ws.current.destroy(); ws.current = null; }
 
     // Cancellation flag: if the user skips tracks faster than WaveSurfer's
@@ -176,7 +183,14 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       });
       ws.current = w;
 
-      w.load(audioSrc(activeTrack.audio_url));
+      // Decode failure (no peaks + CORS/network on an external open) → flip
+      // to the plain-audio fallback so the artist still hears the beat.
+      w.on('error', () => { if (!cancelled) setWsFailed(true); });
+      try {
+        w.load(audioSrc(activeTrack.audio_url));
+      } catch {
+        if (!cancelled) setWsFailed(true);
+      }
       w.on('ready', () => {
         if (cancelled) return;
         setDuration(w.getDuration() || 0);
@@ -216,6 +230,19 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   }, [isPlaying, ready]);
 
   useEffect(() => { ws.current?.setVolume(muted ? 0 : volume); }, [volume, muted]);
+
+  // ── Plain-audio fallback (WaveSurfer decode failed) ─────────────────────
+  // Drive the hidden <audio> from the same isPlaying / volume / track state so
+  // the transport keeps working with no waveform. Streams direct from R2/CDN.
+  useEffect(() => {
+    const a = fallbackAudioRef.current;
+    if (!a || !wsFailed) return;
+    const want = cdnAudioSrc(activeTrack?.audio_url);
+    if (want && a.getAttribute('src') !== want) { a.src = want; a.load(); }
+    a.volume = muted ? 0 : volume;
+    if (isPlaying) a.play().catch(() => {});
+    else a.pause();
+  }, [wsFailed, isPlaying, volume, muted, activeTrack?.audio_url]);
 
   const togglePlay = () => setIsPlaying((p) => !p);
   const prevTrack = () => { if (activeIndex > 0) { setActiveIndex(activeIndex - 1); setIsPlaying(true); } };
@@ -338,6 +365,17 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       <>
         {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
+        <FallbackAudio
+          refEl={fallbackAudioRef}
+          active={wsFailed}
+          onTime={(t, d) => { setCurrentTime(t); if (d && !duration) setDuration(d); }}
+          onMeta={(d) => setDuration(d)}
+          onEnd={() => {
+            setIsPlaying(false);
+            const next = activeIndexRef.current + 1;
+            if (next < tracksRef.current.length) { setActiveIndex(next); activeIndexRef.current = next; setIsPlaying(true); }
+          }}
+        />
         <ClientShareVariant
           project={projectMock}
           tracks={tracks}
@@ -372,6 +410,17 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       <>
         {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
+        <FallbackAudio
+          refEl={fallbackAudioRef}
+          active={wsFailed}
+          onTime={(t, d) => { setCurrentTime(t); if (d && !duration) setDuration(d); }}
+          onMeta={(d) => setDuration(d)}
+          onEnd={() => {
+            setIsPlaying(false);
+            const next = activeIndexRef.current + 1;
+            if (next < tracksRef.current.length) { setActiveIndex(next); activeIndexRef.current = next; setIsPlaying(true); }
+          }}
+        />
         <ProducerShareVariant
           project={projectMock}
           tracks={tracks}
@@ -392,6 +441,17 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       <>
         {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
+        <FallbackAudio
+          refEl={fallbackAudioRef}
+          active={wsFailed}
+          onTime={(t, d) => { setCurrentTime(t); if (d && !duration) setDuration(d); }}
+          onMeta={(d) => setDuration(d)}
+          onEnd={() => {
+            setIsPlaying(false);
+            const next = activeIndexRef.current + 1;
+            if (next < tracksRef.current.length) { setActiveIndex(next); activeIndexRef.current = next; setIsPlaying(true); }
+          }}
+        />
         <RapperShareVariant
           project={projectMock}
           tracks={tracks}
@@ -412,6 +472,17 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       <>
         {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
+        <FallbackAudio
+          refEl={fallbackAudioRef}
+          active={wsFailed}
+          onTime={(t, d) => { setCurrentTime(t); if (d && !duration) setDuration(d); }}
+          onMeta={(d) => setDuration(d)}
+          onEnd={() => {
+            setIsPlaying(false);
+            const next = activeIndexRef.current + 1;
+            if (next < tracksRef.current.length) { setActiveIndex(next); activeIndexRef.current = next; setIsPlaying(true); }
+          }}
+        />
         <FriendShareVariant
           project={projectMock}
           tracks={tracks}
@@ -498,6 +569,17 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             {/* Waveform */}
             <div className="bg-[#0c0a08] border border-[#16130e] rounded-lg p-5 mb-4">
               <div ref={waveRef} className="w-full" />
+              <FallbackAudio
+                refEl={fallbackAudioRef}
+                active={wsFailed}
+                onTime={(t, d) => { setCurrentTime(t); if (d && !duration) setDuration(d); }}
+                onMeta={(d) => setDuration(d)}
+                onEnd={() => {
+                  setIsPlaying(false);
+                  const next = activeIndexRef.current + 1;
+                  if (next < tracksRef.current.length) { setActiveIndex(next); activeIndexRef.current = next; setIsPlaying(true); }
+                }}
+              />
               {!ready && (
                 <div className="h-20 flex items-end gap-0.5 justify-center">
                   {Array.from({ length: 60 }).map((_, i) => (
@@ -707,5 +789,35 @@ function LicenseInfoSection({ creator }: { creator: any }) {
         ))}
       </div>
     </div>
+  );
+}
+
+/* ─── Fallback audio element ───────────────────────────────────────────────
+ * Plain <audio> that takes over playback when WaveSurfer fails to decode on
+ * an externally-opened share link. Co-located with each waveform container;
+ * only the mounted variant binds the ref. Silent until `active` is true.
+ */
+function FallbackAudio({
+  refEl, active, onTime, onMeta, onEnd,
+}: {
+  refEl: React.RefObject<HTMLAudioElement | null>;
+  active: boolean;
+  onTime: (currentTime: number, duration: number) => void;
+  onMeta: (duration: number) => void;
+  onEnd: () => void;
+}) {
+  return (
+    <audio
+      ref={refEl}
+      hidden
+      preload="none"
+      onTimeUpdate={(e) => {
+        if (!active) return;
+        const a = e.currentTarget;
+        onTime(a.currentTime, isFinite(a.duration) ? a.duration : 0);
+      }}
+      onLoadedMetadata={(e) => { if (active) onMeta(e.currentTarget.duration || 0); }}
+      onEnded={() => { if (active) onEnd(); }}
+    />
   );
 }

@@ -29,6 +29,7 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { useWaveSurfer } from '@/hooks/useWaveSurfer';
 import { PlayGlyph, PauseGlyph } from './TransportIcons';
 import { audioSrc } from '@/lib/audio/url';
+import { cdnAudioSrc } from '@/lib/audio/cdn';
 import { normalizationGain } from '@/lib/audio/loudness';
 import { getOfflineSrc } from '@/lib/offline/audio-cache';
 import { useRef } from 'react';
@@ -189,6 +190,35 @@ export function WavePlayer({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seekTarget]);
 
+  // ── Plain-audio fallback ────────────────────────────────────────────────
+  // When WaveSurfer fails to decode (no peaks + a CORS/decode hiccup on a
+  // share link opened externally), the waveform dies AND so would playback,
+  // since the same engine owns both. This hidden <audio> takes over so the
+  // listener still HEARS the beat — the waveform shows "unavailable" but the
+  // transport keeps working. Streams direct from R2/CDN (no proxy/CORS).
+  const fallbackRef = useRef<HTMLAudioElement>(null);
+  const fallbackActive = showFailed && isActiveAudio;
+
+  useEffect(() => {
+    const a = fallbackRef.current;
+    if (!a) return;
+    if (!fallbackActive) { a.pause(); return; }
+    const want = cdnAudioSrc(url);
+    if (want && a.getAttribute('src') !== want) { a.src = want; a.load(); }
+    a.volume = Math.max(0, Math.min(1, volume * normGain * duckGain));
+    if (isPlaying) a.play().catch(() => {});
+    else a.pause();
+  }, [fallbackActive, isPlaying, volume, normGain, duckGain, url]);
+
+  // Seek the fallback element when a seekTarget arrives while it's active.
+  useEffect(() => {
+    const a = fallbackRef.current;
+    if (!a || !fallbackActive || seekTarget == null) return;
+    if (isFinite(a.duration) && a.duration > 0) a.currentTime = seekTarget * a.duration;
+    usePlayer.setState({ seekTarget: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seekTarget, fallbackActive]);
+
   const formatTime = (s: number) => {
     if (!isFinite(s) || s < 0) return '0:00';
     return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
@@ -235,7 +265,9 @@ export function WavePlayer({
         )}
         {showFailed && (
           <div className="absolute inset-0 flex items-center justify-center gap-2">
-            <span className="text-[10px] font-mono text-[#4a4338]">waveform unavailable</span>
+            {/* Audio still plays via the fallback element below — only the
+                visual waveform is unavailable. */}
+            <span className="text-[10px] font-mono text-[#4a4338]">{fallbackActive ? 'playing (no waveform)' : 'waveform unavailable'}</span>
             <button
               type="button"
               onClick={(e) => {
@@ -253,6 +285,19 @@ export function WavePlayer({
             </button>
           </div>
         )}
+        {/* Plain-audio fallback element — hidden, only sounds when WaveSurfer
+            has failed AND this instance is the active audio source. */}
+        <audio
+          ref={fallbackRef}
+          hidden
+          preload="none"
+          onTimeUpdate={(e) => {
+            if (!fallbackActive) return;
+            const a = e.currentTarget;
+            if (isFinite(a.duration) && a.duration > 0) setProgress(a.currentTime / a.duration);
+          }}
+          onEnded={() => { if (fallbackActive) { setPlaying(false); onFinish?.(); } }}
+        />
       </div>
 
       {!hideControls && (
