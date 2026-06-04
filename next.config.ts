@@ -39,10 +39,6 @@ const nextConfig: NextConfig = {
     // truncated at the default 10MB.
     serverActions: { bodySizeLimit: '25mb' },
   },
-  // App Router route handlers — same setting (Next 16+).
-  // @ts-ignore  middlewareClientMaxBodySize is a Next 16+ option not yet
-  // in the TS types.
-  middlewareClientMaxBodySize: '25mb',
   // Cover art lives in Cloudflare R2's public bucket. Allowlist it so
   // next/image can optimize (resize + AVIF/WebP) the storefront covers —
   // the single biggest LCP win on the public store. r2.dev serves dev
@@ -79,6 +75,11 @@ const nextConfig: NextConfig = {
   // Silence turbopack/webpack conflict in Next 16
   // @ts-ignore
   turbopack: {
+    // Pin the workspace root to THIS project. Without it, Turbopack walks up
+    // and finds a stray ~/package-lock.json, rooting at the home directory —
+    // which breaks .env.local resolution and the fs alias below. process.cwd()
+    // is the project dir for `npm run dev` / `npm run build`.
+    root: process.cwd(),
     // essentia.js UMD build has `require('fs')` inline; alias to empty stub
     // so the client bundle doesn't crash. upload-sessions.ts previously used
     // fs too, but has been rewritten to use in-memory storage so it no longer
