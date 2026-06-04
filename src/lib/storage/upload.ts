@@ -167,6 +167,36 @@ export async function uploadContractPdf(
  * Local filesystem upload fallback for development.
  * Saves files to /public/uploads/ and returns a URL path.
  */
+/**
+ * Uploads a cover image buffer to R2 (or local fallback).
+ * Centralises image uploads so no caller needs to instantiate their own S3Client.
+ */
+export async function uploadImage(buffer: Buffer, ext: string, contentType: string): Promise<string> {
+  const objectKey = `covers/${nanoid(10)}.${ext}`;
+
+  if (!isR2Configured()) {
+    const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'covers');
+    if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+    const local = path.join(uploadsDir, `${objectKey.split('/').pop()}`);
+    fs.writeFileSync(local, buffer);
+    return `/uploads/covers/${objectKey.split('/').pop()}`;
+  }
+
+  const bucketName = process.env.R2_BUCKET_NAME;
+  const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+  if (!bucketName || !publicUrl) throw new Error('R2 not configured');
+
+  await r2.send(new PutObjectCommand({
+    Bucket: bucketName,
+    Key: objectKey,
+    Body: buffer,
+    ContentType: contentType,
+    CacheControl: 'public, max-age=31536000, immutable',
+  }));
+
+  return `${publicUrl.replace(/\/$/, '')}/${objectKey}`;
+}
+
 function uploadLocal(fileBuffer: Buffer, fileName: string): string {
   const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
   if (!fs.existsSync(uploadsDir)) {
@@ -176,9 +206,9 @@ function uploadLocal(fileBuffer: Buffer, fileName: string): string {
   const ext = path.extname(fileName) || '.mp3';
   const safeName = `${nanoid(10)}${ext}`;
   const filePath = path.join(uploadsDir, safeName);
-  
+
   fs.writeFileSync(filePath, fileBuffer);
-  
+
   return `/uploads/${safeName}`;
 }
 

@@ -36,12 +36,14 @@ export interface UploadSession {
 // Module-level Map — survives the lifetime of the Node.js process.
 const sessions = new Map<string, UploadSession>();
 
-const TTL_MS = 24 * 60 * 60 * 1000;
+const TTL_DONE_MS    = 24 * 60 * 60 * 1000; // completed/aborted: evict after 24h
+const TTL_ACTIVE_MS  =  2 * 60 * 60 * 1000; // in-progress: evict after 2h of no updates
 
 function prune() {
   const now = Date.now();
   for (const [id, s] of sessions) {
-    if (s.status !== 'in_progress' && now - s.updatedAt > TTL_MS) {
+    const age = now - s.updatedAt;
+    if (s.status === 'in_progress' ? age > TTL_ACTIVE_MS : age > TTL_DONE_MS) {
       sessions.delete(id);
     }
   }

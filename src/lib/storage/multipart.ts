@@ -229,19 +229,41 @@ export async function listParts(opts: { uploadId: string; key: string }): Promis
 
 /**
  * Reads the assembled object back into memory for server-side analysis.
- * For R2 uploads: fetches via the public URL (or HEAD). For local: reads file.
+ * For R2 uploads: fetches via the public URL with retry+backoff to handle
+ * R2 eventual consistency (the object may not be readable immediately after
+ * completeMultipart returns). For local: reads file from disk.
  *
  * NOTE: only call this for files <= ~100 MiB — otherwise analysis should be
- * deferred to a background job.
+ * deferred to a background job. Call ONCE and reuse the buffer across all
+ * analysis steps to avoid triple-fetching large files.
  */
-export async function readAssembledBuffer(audioUrl: string): Promise<Buffer> {
+export async function readAssembledBuffer(audioUrl: string, maxAttempts = 4): Promise<Buffer> {
   if (audioUrl.startsWith('/uploads/')) {
     const full = path.join(process.cwd(), 'public', audioUrl);
     return fs.readFileSync(full);
   }
-  // R2 public URL
-  const res = await fetch(audioUrl);
-  if (!res.ok) throw new Error(`Failed to fetch assembled object (${res.status})`);
-  const ab = await res.arrayBuffer();
-  return Buffer.from(ab);
+  // R2 public URL — retry with exponential backoff for eventual consistency.
+  let lastErr: Error = new Error('fetch failed');
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(audioUrl);
+      if (res.ok) {
+        const ab = await res.arrayBuffer();
+        return Buffer.from(ab);
+      }
+      // 404 right after completeMultipart is an eventual-consistency lag — retry.
+      // Other 4xx (403, 400) are configuration errors — don't retry.
+      if (res.status !== 404 && res.status !== 503) {
+        throw new Error(`Failed to fetch assembled object (${res.status})`);
+      }
+      lastErr = new Error(`object not yet available (${res.status})`);
+    } catch (err: any) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+    }
+    if (attempt < maxAttempts) {
+      // 1s, 2s, 4s backoff
+      await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
+    }
+  }
+  throw lastErr;
 }

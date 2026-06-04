@@ -54,38 +54,49 @@ export async function POST(req: NextRequest) {
 
     markStatus(sessionId, 'completed');
 
-    // 2. Run analysis (client > server fallback). Pull bytes back only if needed.
-    let analysis: any = clientAnalysis;
+    // 2. Fetch the assembled buffer ONCE with retry for R2 eventual consistency.
+    // Reuse across all three analyses — analysis, AudD, and peaks — so we never
+    // fetch a large audio file more than once. Client analysis takes precedence
+    // so we skip the fetch entirely when the browser already did the work.
     let audioBuffer: Buffer | null = null;
-
-    if (!analysis) {
+    const needsBuffer = !clientAnalysis; // peaks always needs it; guard below
+    if (needsBuffer) {
       try {
         audioBuffer = await readAssembledBuffer(audioUrl);
-        analysis = await analyzeAudio(audioBuffer);
+      } catch (err) {
+        console.warn('Could not fetch assembled audio for analysis:', err);
+      }
+    }
+
+    let analysis: any = clientAnalysis;
+    if (!analysis) {
+      try {
+        if (audioBuffer) analysis = await analyzeAudio(audioBuffer);
       } catch (err) {
         console.warn('Server analysis failed, using nulls:', err);
+      }
+      if (!analysis) {
         analysis = { bpm: null, key: null, scale: null, loudness: null, duration: null };
       }
     }
 
     let audd = { danceability: 0, energy: 0, valence: 0, acousticness: 0, tempo: 0 };
     try {
-      if (!audioBuffer) audioBuffer = await readAssembledBuffer(audioUrl);
-      audd = await getAuddFeatures(audioBuffer, session.fileName);
+      // If client analysis was provided we skipped the buffer fetch above;
+      // lazy-fetch here so AudD still gets real data without a duplicate round-trip.
+      if (!audioBuffer) audioBuffer = await readAssembledBuffer(audioUrl).catch(() => null);
+      if (audioBuffer) audd = await getAuddFeatures(audioBuffer, session.fileName);
     } catch (err) {
       console.warn('AudD features failed, using zeros:', err);
     }
 
-    // Extract waveform peaks and upload as a JSON sidecar.
-    // Failure is non-fatal — WavePlayer falls back to client decode if
-    // peaks_url is null. Done after audd so a slow Audd request doesn't
-    // block peaks generation, but before DB insert so we can stamp the URL.
+    // Peaks extraction — non-fatal; WavePlayer falls back to client decode.
     let peaksUrl: string | null = null;
     try {
-      if (!audioBuffer) audioBuffer = await readAssembledBuffer(audioUrl);
-      const peaks = await extractPeaks(audioBuffer);
-      if (peaks) {
-        peaksUrl = await uploadPeaksSidecar(audioUrl, JSON.stringify(peaks));
+      if (!audioBuffer) audioBuffer = await readAssembledBuffer(audioUrl).catch(() => null);
+      if (audioBuffer) {
+        const peaks = await extractPeaks(audioBuffer);
+        if (peaks) peaksUrl = await uploadPeaksSidecar(audioUrl, JSON.stringify(peaks));
       }
     } catch (err) {
       console.warn('Peaks extraction/upload failed, continuing without:', err);
