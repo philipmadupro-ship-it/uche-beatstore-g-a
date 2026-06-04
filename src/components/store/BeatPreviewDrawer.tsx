@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  X, ExternalLink, Music, Play, Pause, ChevronRight, ShoppingBag,
+  X, ExternalLink, Music, ChevronRight, ShoppingBag,
 } from 'lucide-react';
 import { LicenseSelector } from '@/components/store/LicenseSelector';
+import { MiniWaveform } from '@/components/player/MiniWaveform';
 import { fmtDur, getSimilarTracks } from './helpers';
 import { TagChips } from './TagChips';
 import type { StoreTrack, LicenseTier } from './types';
@@ -48,20 +49,11 @@ export function BeatPreviewDrawer({
 
   const similar = useMemo(() => getSimilarTracks(track, allTracks, 5), [track, allTracks]);
 
-  const bars = useMemo(() => {
-    const seed = track.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    return Array.from({ length: 36 }, (_, i) => {
-      const s = (seed * (i + 1) * 2654435761) >>> 0;
-      return Math.max(12, Math.min(88, (s % 70) + 15 + Math.sin(i * 0.5 + seed) * 10));
-    });
-  }, [track.id]);
-
   const dur = track.duration_seconds ?? 0;
   const fmt = (s: number) => {
     if (!isFinite(s) || s < 0) return '0:00';
     return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
   };
-
   const currentSec = isCurrent ? progress * dur : 0;
 
   const activeLicenses: LicenseTier[] = licenses.length > 0
@@ -77,12 +69,13 @@ export function BeatPreviewDrawer({
 
   return (
     <>
+      {/* Backdrop */}
       <div
         className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
 
-      {/* Drawer panel — wider, full-bleed cover hero, spring slide */}
+      {/* Drawer panel */}
       <div
         className="fixed right-0 top-0 h-full w-full max-w-[480px] z-50 flex flex-col bg-[#0a0907]"
         style={{
@@ -99,34 +92,45 @@ export function BeatPreviewDrawer({
             <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 40% 50%, ${accentColor}22 0%, transparent 70%), #0a0907` }} />
           )}
           <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-[#0a0907]" />
-          {/* Top bar */}
+
+          {/* Top bar: close only — "Open page" moves to a dedicated CTA */}
           <div className="absolute top-0 inset-x-0 flex items-start justify-between p-4 z-10">
-            <span className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/40">Beat Preview</span>
-            <div className="flex items-center gap-2">
-              <Link
-                href={`/store/${track.id}`}
-                className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-white/40 hover:text-white/80 transition-colors"
-              >
-                Open <ExternalLink size={9} />
-              </Link>
-              <button
-                onClick={onClose}
-                className="w-8 h-8 rounded-full flex items-center justify-center bg-white/[0.06] hover:bg-white/[0.12] text-white/60 hover:text-white transition-all"
-                style={{ transition: 'all 300ms cubic-bezier(0.32,0.72,0,1)' }}
-              >
-                <X size={14} />
-              </button>
-            </div>
+            <span className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/40">Preview</span>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full flex items-center justify-center bg-white/[0.06] hover:bg-white/[0.12] text-white/60 hover:text-white transition-all"
+              style={{ transition: 'all 300ms cubic-bezier(0.32,0.72,0,1)' }}
+            >
+              <X size={14} />
+            </button>
           </div>
+
           {/* Title + type overlay at bottom */}
           <div className="absolute bottom-0 inset-x-0 p-5 z-10">
             <p className="text-[11px] font-mono uppercase tracking-[0.2em] mb-1.5" style={{ color: accentColor }}>
               {track.type}
             </p>
-            <p className="text-[22px] font-bold text-white leading-tight truncate"
-              style={isCurrent ? { color: accentColor } : {}}>{track.title}</p>
+            <div className="flex items-start justify-between gap-3">
+              <p
+                className="text-[22px] font-bold text-white leading-tight truncate flex-1"
+                style={isCurrent ? { color: accentColor } : {}}
+              >
+                {track.title}
+              </p>
+              {/* Open full page CTA — prominent, easy to tap */}
+              <Link
+                href={`/store/${track.id}`}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all hover:opacity-90"
+                style={{ backgroundColor: `${accentColor}22`, color: accentColor, border: `1px solid ${accentColor}40` }}
+                title="View full page"
+              >
+                <ExternalLink size={11} />
+                <span className="hidden sm:inline">Full page</span>
+              </Link>
+            </div>
             <TagChips tags={track.tags ?? []} max={3} accentGenre />
           </div>
+
           {/* Play button — large, centred */}
           <button
             onClick={onPlay}
@@ -134,42 +138,37 @@ export function BeatPreviewDrawer({
             aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
           >
             <div
-              className="w-14 h-14 rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+              className="w-14 h-14 rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.5)] opacity-0 group-hover:opacity-100"
               style={{ backgroundColor: accentColor, transition: 'transform 400ms cubic-bezier(0.32,0.72,0,1)' }}
             >
-              {isCurrent && isPlaying
-                ? <Pause size={22} fill="black" className="text-black" />
-                : <Play size={22} fill="black" className="text-black ml-1" />}
             </div>
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {/* Waveform + time */}
-          <div className="px-5 py-4 border-b border-white/[0.05]">
-            <div className="relative h-14 flex items-center gap-[2px]">
-              {bars.map((h, i) => {
-                const frac = i / bars.length;
-                const active = isCurrent && frac < progress;
-                return (
-                  <div
-                    key={i}
-                    className="flex-1 rounded-full transition-all duration-75"
-                    style={{
-                      height: `${h}%`,
-                      backgroundColor: active ? accentColor : '#1c1a16',
-                      opacity: active ? 1 : 0.6,
-                    }}
-                  />
-                );
-              })}
-            </div>
+          {/* ── Real waveform + time ── */}
+          <div className="px-5 pt-4 pb-3 border-b border-white/[0.05]">
+            <MiniWaveform
+              trackId={track.id}
+              peaksUrl={track.peaks_url}
+              height={56}
+              isActive={isCurrent}
+              onPlay={!isCurrent ? onPlay : undefined}
+            />
             <div className="flex justify-between mt-1.5">
-              <span className="text-[9px] font-mono text-[#5a5142] tabular-nums">{fmt(currentSec)}</span>
-              <span className="text-[9px] font-mono text-[#5a5142] tabular-nums">{fmt(dur)}</span>
+              <span className="text-[9px] font-mono text-[#5a5142] tabular-nums">
+                {isCurrent ? fmt(currentSec) : '0:00'}
+              </span>
+              <span className="text-[9px] font-mono text-[#5a5142] tabular-nums">
+                {dur ? fmt(dur) : '—'}
+              </span>
             </div>
+            {isCurrent && (
+              <p className="text-[8px] font-mono text-[#3a3328] text-center mt-1">tap to seek</p>
+            )}
           </div>
 
+          {/* ── Studio specs ── */}
           <div className="px-5 py-4 border-b border-white/[0.05]">
             <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-3">Studio specs</p>
             <div className="grid grid-cols-2 gap-2">
@@ -189,6 +188,7 @@ export function BeatPreviewDrawer({
             </div>
           </div>
 
+          {/* ── Similar beats ── */}
           {similar.length > 0 && (
             <div className="px-5 py-4 border-b border-white/[0.05]">
               <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-3">Similar beats</p>
@@ -217,7 +217,8 @@ export function BeatPreviewDrawer({
             </div>
           )}
 
-          <div className="px-5 py-4 pb-24">
+          {/* ── License selector ── */}
+          <div className="px-5 py-4 pb-8">
             <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-3">License</p>
             <LicenseSelector
               tiers={activeLicenses}
@@ -227,9 +228,19 @@ export function BeatPreviewDrawer({
               isFreeDownload={track.free_download_enabled ?? false}
               onFreeDownload={onFreeDownload}
             />
+
+            {/* Open full page — bottom of scrollable area, very visible */}
+            <Link
+              href={`/store/${track.id}`}
+              className="mt-6 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-[11px] font-mono uppercase tracking-wider transition-colors border border-[#2d2620] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#3a3328]"
+            >
+              <ExternalLink size={12} />
+              View full beat page
+            </Link>
           </div>
         </div>
 
+        {/* Sticky buy bar */}
         {!track.free_download_enabled && (
           <div className="shrink-0 border-t border-white/[0.05] bg-[#0a0907] px-5 py-4">
             <div className="flex items-center gap-2">
