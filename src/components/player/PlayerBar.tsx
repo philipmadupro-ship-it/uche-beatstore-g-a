@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';
 import { MarqueeText } from './MarqueeText';
-import { WavePlayer } from './WavePlayer';
+import { SimpleAudioEngine } from './SimpleAudioEngine';
+import { ProgressBar } from './ProgressBar';
 import { QueueDrawer } from './QueueDrawer';
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
@@ -126,6 +127,11 @@ export function PlayerBar() {
 
   return (
     <>
+      {/* Global audio engine — plain <audio>, plays on every viewport
+          (the old WaveSurfer player only rendered at md+, so phones got
+          no sound). Headless; renders nothing visible. */}
+      <SimpleAudioEngine />
+
       <div className="fixed bottom-3 md:bottom-5 left-2 right-2 md:left-1/2 md:right-auto md:-translate-x-1/2 z-50 pointer-events-none flex justify-center">
         <div
           className={cn(
@@ -188,35 +194,20 @@ export function PlayerBar() {
             </div>
           </div>
 
-          {/* Waveform + scrub + times — hidden below md (phone pill is
-              cover + transport only). md+ keeps the inline waveform. */}
+          {/* Simple Spotify-style progress line + times — hidden below md
+              (phone pill is cover + transport only). No waveform here: the
+              bottom bar just shows a flat seekable line. Real waveforms live
+              on the beat page + preview drawer (MiniWaveform). */}
           <div className="hidden md:flex items-center gap-2.5 min-w-0">
             <span className="text-[10px] font-mono text-[#c8b89a] tabular-nums w-9 text-right shrink-0">
               {formatTime(currentSeconds)}
             </span>
-            <div className="relative w-[210px] h-8 flex items-center px-1.5 rounded-xl bg-black/15 shadow-[inset_0_1px_2px_rgba(0,0,0,0.25)]">
-              {currentTrack.audio_url ? (
-                <WavePlayer
-                  url={currentTrack.audio_url}
-                  trackId={currentTrack.id}
-                  peaksUrl={currentTrack.peaks_url ?? null}
-                  hideControls
-                  onFinish={next}
-                  height={28}
-                />
-              ) : (
-                <div className="w-full h-[2px] bg-white/10 rounded" />
-              )}
-              {/* Progression playhead — a slim warm line that tracks the song
-                  across the waveform, glowing softly. Driven by the global
-                  `progress` (0..1); offset by the 6px wrapper padding. */}
-              {currentTrack.audio_url && totalSeconds > 0 && (
-                <div
-                  className="absolute top-1 bottom-1 w-[2px] bg-[#F0E6D2] rounded-full pointer-events-none shadow-[0_0_8px_rgba(240,230,210,0.8)] transition-[left] duration-150 ease-linear"
-                  style={{ left: `calc(6px + ${Math.min(1, Math.max(0, progress))} * (100% - 12px))` }}
-                />
-              )}
-            </div>
+            <ProgressBar
+              progress={progress}
+              onSeek={seekTo}
+              accent="#E8DCC8"
+              className="w-[210px]"
+            />
             <span className="text-[10px] font-mono text-[#5a5142] tabular-nums w-9 shrink-0">
               {formatTime(totalSeconds)}
             </span>
