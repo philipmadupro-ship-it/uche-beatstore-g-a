@@ -17,6 +17,7 @@ import { toast } from '@/hooks/useToast';
 import { slugify } from '@/lib/slug';
 import { BeatComments } from '@/components/store/BeatComments';
 import { ShareMenu } from '@/components/store/ShareMenu';
+import { seededGradient } from '@/lib/ui/cover-gradient';
 import type { Track } from '@/lib/types';
 
 /* ─── Types ────────────────────────────────────────────────── */
@@ -207,6 +208,7 @@ export default function StoreProductPage({
   };
 
   // offerOpen declared above the early returns (Rules of Hooks).
+  const accent = creator?.accent_color || '#D4BFA0';
 
   const metaChips = [
     track.type && { label: TYPE_LABELS[track.type] ?? track.type, icon: Tag },
@@ -231,7 +233,7 @@ export default function StoreProductPage({
   return (
     <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8]">
       {/* ── Back breadcrumb ── */}
-      <div className="max-w-6xl mx-auto px-4 md:px-10 pt-6">
+      <div className="max-w-7xl mx-auto px-4 md:px-10 pt-6">
         <Link
           href="/store"
           className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#a08a6a] transition-colors"
@@ -242,89 +244,97 @@ export default function StoreProductPage({
       </div>
 
       {/* ── Main product layout ── */}
-      <div className="max-w-6xl mx-auto px-4 md:px-10 py-8 md:py-12">
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(260px,360px)_1fr] gap-6 md:gap-14 items-start">
+      <div className="max-w-7xl mx-auto px-4 md:px-10 py-8 md:py-14">
+        {/* Two-column: [cover 320-420px sticky] + [details flex-1] */}
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(280px,420px)_1fr] gap-8 md:gap-12 lg:gap-16 items-start">
 
-          {/* ── LEFT: Cover + play ── */}
+          {/* ── LEFT: Cover + waveform + producer (sticky on desktop) ── */}
           <div className="flex flex-col gap-4 md:sticky md:top-24">
-            {/* Cover art */}
-            <button
-              onClick={handlePlay}
-              className="relative w-full aspect-square rounded-2xl overflow-hidden bg-[#14110d] border border-[#1f1a13] group shadow-[0_16px_60px_rgba(0,0,0,0.6)]"
-            >
-              {track.cover_url ? (
-                <CoverImage
-                  src={track.cover_url}
-                  alt={track.title}
-                  priority
-                  sizes="(max-width: 1024px) 100vw, 480px"
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#2A2418] to-[#0a0907] text-[#5a5142]">
-                  <Music size={56} />
-                </div>
-              )}
-              {/* Play overlay */}
-              <div className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity duration-200 ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                <div className="w-20 h-20 rounded-full bg-white text-black flex items-center justify-center shadow-2xl transform transition-transform duration-200 group-hover:scale-105">
-                  {isCurrentPlaying
-                    ? <PauseGlyph size={30} />
-                    : <PlayGlyph size={30} className="ml-1" />}
-                </div>
-              </div>
-              {/* Currently playing indicator */}
-              {isCurrent && (
-                <div className="absolute top-3 left-3 px-2 py-1 rounded-full bg-black/70 backdrop-blur text-[9px] font-mono uppercase tracking-wider text-[#D4BFA0] flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#6DC6A4] animate-pulse" />
-                  {isCurrentPlaying ? 'Now playing' : 'Paused'}
-                </div>
-              )}
-            </button>
 
-            {/* Waveform seek strip — shows below the cover art */}
-            <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-3 py-3">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-[9px] font-mono uppercase tracking-wider text-[#3a3328]">
-                  Waveform Preview
-                </span>
-                {isCurrent && (
-                  <span className="text-[9px] font-mono text-[#6DC6A4] flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#6DC6A4] animate-pulse inline-block" />
-                    {isCurrentPlaying ? 'Playing' : 'Paused'}
-                  </span>
+            {/* Cover — double-bezel outer shell + inner card */}
+            <div
+              className="rounded-[20px] p-[2px]"
+              style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 100%)' }}
+            >
+              <button
+                onClick={handlePlay}
+                className="relative w-full aspect-square rounded-[18px] overflow-hidden bg-[#14110d] group block"
+                aria-label={isCurrentPlaying ? 'Pause' : 'Play'}
+                style={{ boxShadow: '0 24px 80px rgba(0,0,0,0.7)' }}
+              >
+                {track.cover_url ? (
+                  <CoverImage
+                    src={track.cover_url}
+                    alt={track.title}
+                    priority
+                    sizes="(max-width: 1024px) 100vw, 480px"
+                    className="w-full h-full object-cover [transition:transform_700ms_cubic-bezier(0.32,0.72,0,1)] group-hover:scale-[1.04]"
+                  />
+                ) : (
+                  <div className="absolute inset-0" style={seededGradient(track.id)}>
+                    <div className="w-full h-full flex items-center justify-center text-[#3a3328]">
+                      <Music size={56} />
+                    </div>
+                  </div>
                 )}
-              </div>
+                {/* Gradient scrim — always visible for bottom readability */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+                {/* Play overlay — spring in/out */}
+                <div
+                  className={`absolute inset-0 flex items-center justify-center ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                  style={{ background: 'rgba(0,0,0,0.35)', transition: 'opacity 300ms cubic-bezier(0.22,1,0.36,1)' }}
+                >
+                  <div
+                    className="w-20 h-20 rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.6)]"
+                    style={{ backgroundColor: accent, transition: 'transform 400ms cubic-bezier(0.32,0.72,0,1)' }}
+                  >
+                    {isCurrentPlaying
+                      ? <PauseGlyph size={30} />
+                      : <PlayGlyph size={30} className="ml-1 text-black" />}
+                  </div>
+                </div>
+                {/* Playing badge */}
+                {isCurrent && (
+                  <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-sm text-[9px] font-mono uppercase tracking-wider" style={{ color: accent }}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#6DC6A4] animate-pulse" />
+                    {isCurrentPlaying ? 'Now playing' : 'Paused'}
+                  </div>
+                )}
+              </button>
+            </div>
+
+            {/* Waveform — integrated below cover, no box border */}
+            <div className="px-1">
               <MiniWaveform
                 trackId={track.id}
                 peaksUrl={track.peaks_url}
-                height={48}
+                height={40}
                 isActive={isCurrent}
                 onPlay={!isCurrent ? handlePlay : undefined}
               />
               {isCurrent && (
-                <p className="text-[9px] font-mono text-[#3a3328] mt-1.5 text-center">
-                  Click to seek
-                </p>
+                <p className="text-[9px] font-mono text-[#3a3328] mt-1 text-center">click to seek</p>
               )}
             </div>
 
-            {/* Producer strip */}
+            {/* Producer card */}
             {creator && (
-              <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] p-4">
-                <p className="text-[9px] font-mono uppercase tracking-widest text-[#5a5142] mb-2">Producer</p>
+              <div className="rounded-[14px] p-[1.5px]" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))' }}>
+              <div className="rounded-[13px] bg-[#14110d] p-4">
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-3">Producer</p>
                 {creator.display_name ? (
                   <Link
                     href={`/store/producer/${slugify(creator.display_name)}`}
-                    className="inline-block max-w-full text-[14px] font-semibold text-[#E8DCC8] hover:text-[#D4BFA0] transition-colors break-words"
+                    className="block text-[16px] font-bold leading-tight break-words hover:opacity-80 transition-opacity"
+                    style={{ color: accent }}
                   >
                     {creator.display_name}
                   </Link>
                 ) : (
-                  <p className="text-[14px] font-semibold text-[#E8DCC8]">Producer</p>
+                  <p className="text-[16px] font-bold text-[#E8DCC8]">Producer</p>
                 )}
                 {creator.bio && (
-                  <p className="text-[11px] text-[#6a5d4a] mt-1.5 leading-relaxed line-clamp-3">
+                  <p className="text-[11px] text-[#6a5d4a] mt-2 leading-relaxed line-clamp-3">
                     {creator.bio}
                   </p>
                 )}
@@ -376,15 +386,16 @@ export default function StoreProductPage({
                   )}
                 </div>
               </div>
+              </div>
             )}
           </div>
 
           {/* ── RIGHT: Details + licenses ── */}
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-8">
             {/* Title + meta */}
             <div>
               <div className="flex items-start justify-between gap-4">
-                <h1 className="text-2xl md:text-4xl font-bold text-white leading-tight tracking-tight">
+                <h1 className="text-3xl md:text-[42px] font-bold text-white leading-tight tracking-tight">
                   {track.title}
                 </h1>
                 {/* Single share affordance — popover with URL share /
@@ -410,13 +421,14 @@ export default function StoreProductPage({
               )}
 
               {/* Metadata chips */}
-              <div className="flex flex-wrap items-center gap-2 mt-4">
+              <div className="flex flex-wrap items-center gap-2 mt-5">
                 {metaChips.map(({ label, icon: Icon }) => (
                   <div
                     key={label}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#14110d] border border-[#1f1a13] text-[10px] font-mono uppercase tracking-wider text-[#a08a6a]"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-mono uppercase tracking-wider text-[#a08a6a]"
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}
                   >
-                    <Icon size={9} />
+                    <Icon size={10} />
                     {label}
                   </div>
                 ))}
@@ -467,7 +479,7 @@ export default function StoreProductPage({
               </div>
             ) : licenses.length > 0 ? (
               <div>
-                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-3">
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-4">
                   License Options
                 </p>
                 <div className={licenseGridClass}>

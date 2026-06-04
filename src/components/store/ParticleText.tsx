@@ -167,6 +167,19 @@ export function ParticleText({ text, color = '#D4BFA0', className }: ParticleTex
     rebuild();
     raf = requestAnimationFrame(frame);
 
+    // Custom fonts (Akira Expanded) may not be loaded when the component
+    // mounts. If the font isn't ready, canvas text rasterisation uses a
+    // fallback glyph — particles end up at the wrong positions and the
+    // name appears blank. Wait for document.fonts.ready and rebuild once
+    // fonts are confirmed loaded.
+    let fontRebuildDone = false;
+    document.fonts.ready.then(() => {
+      if (!fontRebuildDone) {
+        fontRebuildDone = true;
+        rebuild();
+      }
+    });
+
     const onResize = () => rebuild();
     const onMove = (e: MouseEvent) => {
       if (!wrap) return;
