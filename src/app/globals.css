@@ -119,6 +119,11 @@
   --text-primary: hsl(var(--text-primary-hsl));
   --text-secondary: hsl(var(--text-secondary-hsl));
   --text-tertiary: #3a3328;
+  /* Readable floor for SMALL content text. The faded tertiary tints
+   * (#3a3328…#6a5d4a) are part of the mood but fail WCAG AA on the dark
+   * bg (1.5–3.8:1); use this (~5:1 on #0a0907) anywhere a user must read
+   * the value, while leaving purely-decorative fades alone. */
+  --text-readable: #8a7a5c;
   /* Accent — burnt amber + two adjacents (lighter for hover/active,
    * dimmer for pressed/borders). Star stays gold; close enough to
    * the new family that it doesn't need updating. */
@@ -129,6 +134,43 @@
   --star: #c8a84b;
   --border: #1f1a13;
   --border-hover: #2d2620;
+}
+
+/* ── Touch hit-area expansion ──────────────────────────────────────────
+ * Many icon buttons are intentionally small (28–32px) for the look. `.tap`
+ * keeps the VISUAL size but extends the clickable area to ≥44px via an
+ * invisible ::before — only on coarse (touch) pointers, so mouse precision
+ * and hover are untouched on desktop. inset:-8px adds 16px → 28px becomes
+ * 44px, 32px becomes 48px. */
+.tap { position: relative; }
+@media (pointer: coarse) {
+  .tap::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+  }
+}
+
+/* ── Range slider thumbs ≥28px for touch ──────────────────────────────
+ * Native thumbs are ~12–16px and impossible to grab on a phone. Apply
+ * `.range-tap` to <input type="range"> in the store filters. */
+.range-tap { -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
+.range-tap::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 18px; height: 18px; border-radius: 9999px;
+  background: var(--accent); border: 3px solid var(--bg-page);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  margin-top: -7px; /* center on a 4px track */
+}
+.range-tap::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 9999px;
+  background: var(--accent); border: 3px solid var(--bg-page);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+@media (pointer: coarse) {
+  /* Bigger grab target on touch without changing the visual thumb much. */
+  .range-tap::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: -9px; }
+  .range-tap::-moz-range-thumb { width: 22px; height: 22px; }
 }
 
 @theme inline {

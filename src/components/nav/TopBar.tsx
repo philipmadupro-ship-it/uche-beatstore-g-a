@@ -24,6 +24,9 @@ import {
   RotateCcw,
   AlertTriangle,
   Tag,
+  Library,
+  BarChart3,
+  Send,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
@@ -57,29 +60,74 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-// Settings is intentionally NOT in this list — it moved to a dedicated
-// gear button in the top-right (next to the activity bell) so the
-// horizontal nav is reserved for surfaces the user reaches every day.
-// Mobile drawer still has it for the same reason it has Offline:
-// long-tail destinations the user does want eventually.
-const NAV_ITEMS = [
-  { label: 'Home',      icon: Home,      href: '/library'   },
-  { label: 'Projects',  icon: Layers,    href: '/projects'  },
-  { label: 'Playlists', icon: ListMusic, href: '/playlists' },
-  { label: 'Studio',    icon: Sliders,   href: '/studio'    },
-  { label: 'Contacts',  icon: Users,     href: '/contacts'  },
-  { label: 'Calendar',  icon: Calendar,  href: '/calendar'  },
-  { label: 'Links',     icon: Link2,     href: '/links'     },
-  { label: 'Store',     icon: Store,     href: '/store-editor' },
-  { label: 'Offline',   icon: CloudOff,  href: '/offline'   },
+/**
+ * Navigation model — Spotify-style hubs.
+ *
+ * The 12+ dashboard surfaces are grouped into 3 primary HUBS (Catalog / Store
+ * / CRM) plus an Account group reached via the avatar. Routes are unchanged —
+ * this is purely how the nav is presented:
+ *   - Row 1 (desktop): the 3 hub buttons. Clicking a hub goes to its first
+ *     surface. The hub you're in is highlighted.
+ *   - Row 2: the active hub's surfaces as sub-tabs (the "you're in Catalog,
+ *     here's what's in it" strip). Works on mobile as a scroll row.
+ *   - Mobile: hub switching happens in the drawer (grouped with headers);
+ *     sub-tab switching happens in Row 2.
+ *
+ * Collapsing a scrolling row of 9 into 3 destinations is the whole point —
+ * "you always know where you are."
+ */
+interface NavItem { label: string; href: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>; }
+interface NavGroup { key: string; label: string; icon: NavItem['icon']; items: NavItem[]; }
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    key: 'catalog', label: 'Catalog', icon: Library,
+    items: [
+      { label: 'Library', href: '/library', icon: Home },
+      { label: 'Projects', href: '/projects', icon: Layers },
+      { label: 'Playlists', href: '/playlists', icon: ListMusic },
+      { label: 'Studio', href: '/studio', icon: Sliders },
+      { label: 'Offline', href: '/offline', icon: CloudOff },
+    ],
+  },
+  {
+    key: 'store', label: 'Store', icon: Store,
+    items: [
+      { label: 'Editor', href: '/store-editor', icon: Store },
+      { label: 'Sales', href: '/sales', icon: ShoppingBag },
+      { label: 'Analytics', href: '/analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    key: 'crm', label: 'CRM', icon: Users,
+    items: [
+      { label: 'Contacts', href: '/contacts', icon: Users },
+      { label: 'Campaigns', href: '/campaigns', icon: Send },
+      { label: 'Calendar', href: '/calendar', icon: Calendar },
+      { label: 'Links', href: '/links', icon: Link2 },
+    ],
+  },
 ];
 
-// Mobile drawer keeps Settings reachable since there's no gear icon
-// in the cramped mobile header.
-const MOBILE_EXTRA_ITEMS = [
-  { label: 'Profile',   icon: User,      href: '/profile'   },
-  { label: 'Settings',  icon: Settings,  href: '/settings'  },
-];
+// Reached via the avatar (not a primary hub button), but still a valid group
+// so the sub-tab strip stays populated on /profile and /settings.
+const ACCOUNT_GROUP: NavGroup = {
+  key: 'account', label: 'Account', icon: User,
+  items: [
+    { label: 'Profile', href: '/profile', icon: User },
+    { label: 'Settings', href: '/settings', icon: Settings },
+  ],
+};
+
+const ALL_GROUPS = [...NAV_GROUPS, ACCOUNT_GROUP];
+
+function isItemActive(href: string, pathname: string): boolean {
+  return pathname === href || pathname.startsWith(href + '/');
+}
+
+function activeGroupFor(pathname: string): NavGroup {
+  return ALL_GROUPS.find((g) => g.items.some((it) => isItemActive(it.href, pathname))) ?? NAV_GROUPS[0];
+}
 
 export function TopBar() {
   const pathname = usePathname();
@@ -87,6 +135,8 @@ export function TopBar() {
   const [activityOpen, setActivityOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  const group = activeGroupFor(pathname);
 
   // ── Notifications ──────────────────────────────────────────────
   const [notifs, setNotifs] = useState<Notification[]>([]);
@@ -140,178 +190,204 @@ export function TopBar() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 h-14 bg-[#0a0907]/95 backdrop-blur-md border-b border-[#1a160f] z-30 flex items-center px-4 md:px-6 gap-3 md:gap-6">
-        {/* Mobile hamburger — visible below md, opens the slide-in menu */}
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="md:hidden w-8 h-8 rounded-md flex items-center justify-center text-[#a08a6a] hover:text-white hover:bg-white/[0.04] transition-colors"
-          aria-label="Open navigation menu"
-        >
-          <Menu size={16} />
-        </button>
+      <header className="fixed top-0 left-0 right-0 bg-[#0a0907]/95 backdrop-blur-md border-b border-[#1a160f] z-30">
+        {/* ── Row 1: brand · hubs · utilities ─────────────────────── */}
+        <div className="h-14 flex items-center px-4 md:px-6 gap-3 md:gap-5">
+          {/* Mobile hamburger */}
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="tap md:hidden w-9 h-9 rounded-md flex items-center justify-center text-[#a08a6a] hover:text-white hover:bg-white/[0.04] transition-colors"
+            aria-label="Open navigation menu"
+          >
+            <Menu size={18} />
+          </button>
 
-        {/* Brand */}
-        <Link href="/library" className="flex items-center gap-2.5 group shrink-0">
-          <div className="w-6 h-6 rounded-[6px] bg-[#E8DCC8] flex items-center justify-center">
-            <span className="text-[10px] font-black text-black tracking-tighter">U2C</span>
+          {/* Brand */}
+          <Link href="/library" className="flex items-center gap-2.5 group shrink-0">
+            <div className="w-6 h-6 rounded-[6px] bg-[#E8DCC8] flex items-center justify-center">
+              <span className="text-[10px] font-black text-black tracking-tighter">U2C</span>
+            </div>
+            <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-[#E8DCC8] group-hover:text-white hidden lg:inline">
+              u2c beatstore
+            </span>
+          </Link>
+
+          {/* Primary hubs — desktop only (mobile switches hubs via drawer) */}
+          <nav className="hidden md:flex items-center gap-1 flex-1">
+            {NAV_GROUPS.map((g) => {
+              const active = group.key === g.key;
+              const Icon = g.icon;
+              return (
+                <Link
+                  key={g.key}
+                  href={g.items[0].href}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-medium tracking-tight transition-colors',
+                    active
+                      ? 'bg-[#16130e] text-white'
+                      : 'text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-[#101010]',
+                  )}
+                >
+                  <Icon size={15} strokeWidth={1.75} />
+                  <span>{g.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Spacer on mobile so the right cluster hugs the edge */}
+          <div className="flex-1 md:hidden" />
+
+          {/* Search (⌘K) — desktop */}
+          <button
+            onClick={() => openPalette(true)}
+            className="hidden md:flex items-center gap-2 w-48 lg:w-56 bg-[#14110d] border border-[#1a160f] rounded-md py-1.5 px-3 text-[11px] text-[#6a5d4a] hover:border-[#2d2620] hover:text-[#a08a6a] transition-colors shrink-0"
+            title="Search (⌘K)"
+          >
+            <Search size={12} />
+            <span className="flex-1 text-left">Search</span>
+            <kbd className="text-[9px] font-mono border border-[#1a160f] rounded px-1 py-0.5">⌘K</kbd>
+          </button>
+
+          {/* Search icon — mobile (opens ⌘K palette) */}
+          <button
+            onClick={() => openPalette(true)}
+            className="tap md:hidden w-9 h-9 rounded-full flex items-center justify-center text-[#a08a6a] hover:text-white hover:bg-white/[0.04] transition-colors"
+            aria-label="Search"
+          >
+            <Search size={16} />
+          </button>
+
+          {/* View public storefront */}
+          <Link
+            href="/store"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="View public storefront"
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#D4BFA0] hover:bg-[#16130e] border border-transparent hover:border-[#1f1a13] transition-all shrink-0"
+          >
+            <Store size={11} />
+            <span>Store</span>
+            <ExternalLink size={9} className="opacity-60" />
+          </Link>
+
+          {/* Notifications */}
+          <div className="relative shrink-0" ref={notifRef}>
+            <button
+              onClick={openNotifs}
+              className="tap w-9 h-9 rounded-full flex items-center justify-center text-[#a08a6a] hover:text-white hover:bg-white/[0.04] transition-colors relative"
+              aria-label="Notifications"
+              title="Notifications"
+            >
+              <Bell size={15} />
+              {unread > 0 && (
+                <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-[#6DC6A4] text-black text-[8px] font-black flex items-center justify-center leading-none">
+                  {unread > 9 ? '9+' : unread}
+                </span>
+              )}
+            </button>
+
+            {notifOpen && (
+              <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-[#1f1a13] rounded-2xl shadow-2xl z-50 overflow-hidden">
+                <div className="px-4 py-3 border-b border-[#1a160f] flex items-center justify-between">
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#a08a6a]">Notifications</span>
+                  <button
+                    onClick={() => setActivityOpen(true)}
+                    className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#a08a6a] transition-colors"
+                  >
+                    Activity log →
+                  </button>
+                </div>
+                <div className="max-h-80 overflow-y-auto">
+                  {notifs.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-[11px] text-[#6a5d4a]">
+                      No notifications yet
+                    </div>
+                  ) : (
+                    notifs.map((n) => (
+                      <div
+                        key={n.id}
+                        className={`flex items-start gap-3 px-4 py-3 border-b border-[#1a160f]/60 last:border-0 transition-colors ${n.read ? 'opacity-60' : 'bg-[#14110d]/40'}`}
+                      >
+                        <div className="w-6 h-6 rounded-lg bg-[#1a160f] border border-[#2d2620] flex items-center justify-center shrink-0 mt-0.5">
+                          {notifIcon(n.kind)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-medium text-[#E8DCC8] leading-tight">{n.title}</p>
+                          {n.body && <p className="text-[10px] text-[#8a7a5c] mt-0.5 leading-snug">{n.body}</p>}
+                          <p className="text-[9px] font-mono text-[#6a5d4a] mt-1">{timeAgo(n.created_at)}</p>
+                        </div>
+                        {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shrink-0 mt-1.5" />}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-          <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-[#E8DCC8] group-hover:text-white hidden sm:inline">
-            u2c beatstore
-          </span>
-        </Link>
 
-        {/* Desktop nav — hidden below md (replaced by the mobile drawer) */}
-        <nav className="hidden md:flex items-center gap-0.5 flex-1 overflow-x-auto no-scrollbar">
-          {NAV_ITEMS.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + '/');
-            const Icon = item.icon;
+          {/* Settings — desktop */}
+          <Link
+            href="/settings"
+            aria-label="Open settings"
+            title="Settings"
+            aria-current={isItemActive('/settings', pathname) ? 'page' : undefined}
+            className={cn(
+              'tap hidden md:flex w-9 h-9 rounded-full items-center justify-center transition-colors shrink-0',
+              isItemActive('/settings', pathname)
+                ? 'bg-[#16130e] text-white'
+                : 'text-[#a08a6a] hover:text-white hover:bg-white/[0.04]',
+            )}
+          >
+            <Settings size={15} />
+          </Link>
+
+          {/* Profile */}
+          <Link
+            href="/profile"
+            aria-label="Creator profile"
+            title="Profile"
+            aria-current={isItemActive('/profile', pathname) ? 'page' : undefined}
+            className={cn(
+              'tap flex items-center justify-center shrink-0 w-8 h-8 rounded-full transition-colors',
+              isItemActive('/profile', pathname)
+                ? 'bg-[#D4BFA0]/20 border border-[#D4BFA0]/40'
+                : 'bg-[#1a160f] border border-[#2d2620] hover:border-[#D4BFA0]/30',
+            )}
+          >
+            <User size={13} className={isItemActive('/profile', pathname) ? 'text-[#D4BFA0]' : 'text-[#a08a6a]'} />
+          </Link>
+        </div>
+
+        {/* ── Row 2: sub-tabs of the active hub ───────────────────── */}
+        <div className="h-11 flex items-center gap-1 px-3 md:px-6 border-t border-[#1a160f]/60 overflow-x-auto no-scrollbar">
+          {/* On mobile, show which hub you're in (since hub buttons are in the drawer) */}
+          <span className="md:hidden flex items-center gap-1.5 pr-2 mr-1 border-r border-[#1a160f] text-[10px] font-mono uppercase tracking-[0.15em] text-[#6a5d4a] shrink-0">
+            <group.icon size={12} />
+            {group.label}
+          </span>
+          {group.items.map((it) => {
+            const active = isItemActive(it.href, pathname);
+            const Icon = it.icon;
             return (
               <Link
-                key={item.label}
-                href={item.href}
+                key={it.href}
+                href={it.href}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex items-center gap-2 px-3 py-1.5 rounded-md text-[12px] transition-colors shrink-0',
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium tracking-tight transition-colors shrink-0 whitespace-nowrap',
                   active
-                    ? 'bg-[#16130e] text-white'
-                    : 'text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-[#101010]',
+                    ? 'text-[#D4BFA0] bg-[#16130e]'
+                    : 'text-[#8a7a5c] hover:text-[#E8DCC8] hover:bg-[#101010]',
                 )}
               >
-                <Icon size={13} strokeWidth={1.75} className={active ? 'text-white' : ''} />
-                <span className="font-medium tracking-tight">{item.label}</span>
+                <Icon size={13} strokeWidth={1.75} />
+                <span>{it.label}</span>
               </Link>
             );
           })}
-        </nav>
-
-        {/* Spacer — only when mobile nav is hidden so the right-side
-            controls hug the right edge instead of left-floating. */}
-        <div className="flex-1 md:hidden" />
-
-        {/* Search trigger — hidden below md to save horizontal room.
-            Mobile users can still hit ⌘K / Ctrl+K. */}
-        <button
-          onClick={() => openPalette(true)}
-          className="hidden md:flex items-center gap-2 w-56 bg-[#14110d] border border-[#1a160f] rounded-md py-1.5 px-3 text-[11px] text-[#3a3328] hover:border-[#2d2620] hover:text-[#6a5d4a] transition-colors shrink-0"
-          title="Search (⌘K)"
-        >
-          <Search size={12} />
-          <span className="flex-1 text-left">Search</span>
-          <kbd className="text-[9px] font-mono border border-[#1a160f] rounded px-1 py-0.5">⌘K</kbd>
-        </button>
-
-        {/* View Storefront — external link to /store. Hidden below md
-            where the mobile drawer has a Store nav item already. */}
-        <Link
-          href="/store"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="View public storefront"
-          className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#D4BFA0] hover:bg-[#16130e] border border-transparent hover:border-[#1f1a13] transition-all shrink-0"
-        >
-          <Store size={11} />
-          <span>Store</span>
-          <ExternalLink size={9} className="opacity-60" />
-        </Link>
-
-        {/* Notifications bell ─ badge shows unread count; dropdown on click */}
-        <div className="relative shrink-0" ref={notifRef}>
-          <button
-            onClick={openNotifs}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#a08a6a] hover:text-white hover:bg-white/[0.04] transition-colors relative"
-            aria-label="Notifications"
-            title="Notifications"
-          >
-            <Bell size={14} />
-            {unread > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#6DC6A4] text-black text-[8px] font-black flex items-center justify-center leading-none">
-                {unread > 9 ? '9+' : unread}
-              </span>
-            )}
-          </button>
-
-          {notifOpen && (
-            <div className="absolute right-0 top-full mt-2 w-80 bg-[#0e0c09] border border-[#1f1a13] rounded-2xl shadow-2xl z-50 overflow-hidden">
-              <div className="px-4 py-3 border-b border-[#1a160f] flex items-center justify-between">
-                <span className="text-[11px] font-mono uppercase tracking-wider text-[#a08a6a]">Notifications</span>
-                <button
-                  onClick={() => setActivityOpen(true)}
-                  className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#a08a6a] transition-colors"
-                >
-                  Activity log →
-                </button>
-              </div>
-              <div className="max-h-80 overflow-y-auto">
-                {notifs.length === 0 ? (
-                  <div className="px-4 py-8 text-center text-[11px] text-[#3a3328]">
-                    No notifications yet
-                  </div>
-                ) : (
-                  notifs.map((n) => (
-                    <div
-                      key={n.id}
-                      className={`flex items-start gap-3 px-4 py-3 border-b border-[#1a160f]/60 last:border-0 transition-colors ${n.read ? 'opacity-60' : 'bg-[#14110d]/40'}`}
-                    >
-                      <div className="w-6 h-6 rounded-lg bg-[#1a160f] border border-[#2d2620] flex items-center justify-center shrink-0 mt-0.5">
-                        {notifIcon(n.kind)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium text-[#E8DCC8] leading-tight">{n.title}</p>
-                        {n.body && <p className="text-[10px] text-[#5a5142] mt-0.5 leading-snug">{n.body}</p>}
-                        <p className="text-[9px] font-mono text-[#3a3328] mt-1">{timeAgo(n.created_at)}</p>
-                      </div>
-                      {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shrink-0 mt-1.5" />}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
         </div>
-
-        {/* Activity panel — still accessible via "Activity log →" link above */}
-        <button
-          onClick={() => setActivityOpen(true)}
-          className="hidden w-8 h-8 rounded-full items-center justify-center text-[#a08a6a] hover:text-white hover:bg-white/[0.04] transition-colors shrink-0"
-          aria-label="Open activity"
-          title="Activity"
-        >
-          <Bell size={14} />
-        </button>
-
-        {/* Settings gear — moved out of the horizontal nav so it lives
-            next to the activity bell on every page. Desktop only;
-            mobile users reach it via the drawer below. The active
-            state ring makes it clear when the user IS on /settings. */}
-        <Link
-          href="/settings"
-          aria-label="Open settings"
-          title="Settings"
-          className={cn(
-            'hidden md:flex w-8 h-8 rounded-full items-center justify-center transition-colors shrink-0',
-            pathname === '/settings' || pathname.startsWith('/settings/')
-              ? 'bg-[#16130e] text-white'
-              : 'text-[#a08a6a] hover:text-white hover:bg-white/[0.04]',
-          )}
-        >
-          <Settings size={14} />
-        </Link>
-
-        {/* User badge — links to creator profile */}
-        <Link
-          href="/profile"
-          aria-label="Creator profile"
-          title="Profile"
-          className={cn(
-            'flex items-center gap-2 shrink-0 w-7 h-7 rounded-full transition-colors',
-            pathname === '/profile' || pathname.startsWith('/profile/')
-              ? 'bg-[#D4BFA0]/20 border border-[#D4BFA0]/40'
-              : 'bg-[#1a160f] border border-[#2d2620] hover:border-[#D4BFA0]/30',
-          )}
-        >
-          <div className="w-full h-full rounded-full flex items-center justify-center">
-            <User size={12} className={pathname === '/profile' ? 'text-[#D4BFA0]' : 'text-[#a08a6a]'} />
-          </div>
-        </Link>
 
         <style jsx>{`
           .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -319,8 +395,7 @@ export function TopBar() {
         `}</style>
       </header>
 
-      {/* Mobile menu drawer — slide-in from the left below md.
-          Backdrop is a darkened glass overlay; clicking it closes. */}
+      {/* ── Mobile drawer — grouped by hub ──────────────────────── */}
       {mobileOpen && (
         <>
           <div
@@ -328,7 +403,8 @@ export function TopBar() {
             className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in duration-200"
           />
           <aside
-            className="md:hidden fixed top-0 left-0 bottom-0 w-72 z-50 bg-[#0a0907] border-r border-white/[0.06] flex flex-col animate-in slide-in-from-left duration-300"
+            className="md:hidden fixed top-0 left-0 bottom-0 w-[min(85vw,300px)] z-50 bg-[#0a0907] border-r border-white/[0.06] flex flex-col animate-in slide-in-from-left duration-300"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
               <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-[#E8DCC8]">
@@ -336,33 +412,44 @@ export function TopBar() {
               </span>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-[#6a5d4a] hover:text-white hover:bg-white/[0.04] transition-colors"
+                className="tap w-9 h-9 rounded-full flex items-center justify-center text-[#a08a6a] hover:text-white hover:bg-white/[0.04] transition-colors"
                 aria-label="Close menu"
               >
-                <X size={14} />
+                <X size={16} />
               </button>
             </div>
-            <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-              {[...NAV_ITEMS, ...MOBILE_EXTRA_ITEMS].map((item) => {
-                const active = pathname === item.href || pathname.startsWith(item.href + '/');
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    onClick={() => setMobileOpen(false)}
-                    className={cn(
-                      'flex items-center gap-3 px-3 py-2.5 rounded-md text-[13px] transition-colors',
-                      active
-                        ? 'bg-[#16130e] text-white'
-                        : 'text-[#a08a6a] hover:text-white hover:bg-white/[0.04]',
-                    )}
-                  >
-                    <Icon size={15} strokeWidth={1.75} />
-                    <span className="font-medium tracking-tight">{item.label}</span>
-                  </Link>
-                );
-              })}
+            <nav className="flex-1 px-3 py-4 overflow-y-auto">
+              {ALL_GROUPS.map((g) => (
+                <div key={g.key} className="mb-4 last:mb-0">
+                  <p className="px-3 mb-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] flex items-center gap-1.5">
+                    <g.icon size={11} />
+                    {g.label}
+                  </p>
+                  <div className="space-y-0.5">
+                    {g.items.map((it) => {
+                      const active = isItemActive(it.href, pathname);
+                      const Icon = it.icon;
+                      return (
+                        <Link
+                          key={it.href}
+                          href={it.href}
+                          onClick={() => setMobileOpen(false)}
+                          aria-current={active ? 'page' : undefined}
+                          className={cn(
+                            'flex items-center gap-3 px-3 py-2.5 rounded-md text-[13px] transition-colors',
+                            active
+                              ? 'bg-[#16130e] text-white'
+                              : 'text-[#a08a6a] hover:text-white hover:bg-white/[0.04]',
+                          )}
+                        >
+                          <Icon size={15} strokeWidth={1.75} />
+                          <span className="font-medium tracking-tight">{it.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </nav>
           </aside>
         </>

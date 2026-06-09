@@ -8,7 +8,8 @@ export default function DashboardGroupLayout({ children }: { children: React.Rea
   return (
     <div className="min-h-screen">
       <TopBar />
-      <main className="pt-14 pb-28 min-h-screen">
+      {/* Top padding clears the two-row nav (h-14 hubs + h-11 sub-tabs = 100px). */}
+      <main className="pt-[100px] pb-28 min-h-screen">
         {children}
       </main>
       <PlayerBar />
