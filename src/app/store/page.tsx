@@ -424,7 +424,7 @@ function StorePage() {
 
   return (
     <div
-      className="min-h-screen bg-[#0a0907]"
+      className="min-h-screen bg-[#0a0907] pb-28"
       style={{
         '--store-accent': accentColor,
         '--store-text': textColor,

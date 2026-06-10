@@ -133,7 +133,10 @@ export function PlayerBar() {
           no sound). Headless; renders nothing visible. */}
       <SimpleAudioEngine />
 
-      <div className="fixed bottom-3 md:bottom-5 left-2 right-2 md:left-1/2 md:right-auto md:-translate-x-1/2 z-50 pointer-events-none flex justify-center">
+      <div
+        className="fixed bottom-3 md:bottom-5 left-2 right-2 md:left-1/2 md:right-auto md:-translate-x-1/2 z-50 pointer-events-none flex justify-center"
+        style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+      >
         <div
           className={cn(
             'pointer-events-auto relative flex items-center gap-2 md:gap-3 pl-2 pr-2 md:pr-3 py-2 rounded-[28px]',
