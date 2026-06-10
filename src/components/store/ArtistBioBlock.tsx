@@ -76,7 +76,7 @@ export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
       {/* Gradient: darker at top so particles stand out against any hero image */}
       <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/75 via-black/65 to-[#0a0907]" />
 
-      <div className="relative z-10 max-w-[1400px] mx-auto pt-10 pb-10 md:pt-28 md:pb-20">
+      <div className="relative z-10 max-w-[1400px] mx-auto pt-8 pb-8 md:pt-20 md:pb-14">
         <div className="px-4 md:px-8">
           <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#a08a6a] mb-2">Beat store</p>
           <h1 className="sr-only">{creator?.display_name || 'Producer'}</h1>
@@ -116,36 +116,42 @@ export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
               <ChevronDown size={11} className={`transition-transform ${licenseExpanded ? 'rotate-180' : ''}`} />
             </button>
             {licenseExpanded && (
-              <p className="mt-2 text-[11px] font-mono text-[#5a5142] leading-relaxed whitespace-pre-wrap bg-[#14110d]/60 rounded-lg px-3 py-2 border border-[#1f1a13]">
+              <p className="mt-2 text-[11px] font-mono text-[var(--text-readable)] leading-relaxed whitespace-pre-wrap bg-[#14110d]/60 rounded-lg px-3 py-2 border border-[#1f1a13]">
                 {creator.license_notes}
               </p>
             )}
           </div>
         )}
 
-        <div className="mt-6 flex flex-wrap items-center gap-3">
+        {/* Calm chrome: one quiet text link + icon-only socials, so the
+            hero stays a gallery header, not a button bar. */}
+        <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3">
           {creator?.display_name && (
             <Link
               href={`/store/producer/${slugify(creator.display_name)}`}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/20 text-[#E8DCC8] hover:bg-white/10 hover:border-white/30 transition-all text-[11px] font-mono uppercase tracking-wider"
+              className="group flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-[#a08a6a] hover:text-[#E8DCC8] transition-colors"
             >
               View full profile
-              <ArrowRight size={11} />
+              <ArrowRight size={11} className="transition-transform group-hover:translate-x-0.5" />
             </Link>
           )}
-          {socialLinks.map(({ href, label, icon, color }) => (
-            <a
-              key={href}
-              href={href}
-              target={href.startsWith('mailto:') ? undefined : '_blank'}
-              rel="noopener noreferrer"
-              title={label}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/30 border border-white/10 text-[#a08a6a] ${color} hover:bg-black/50 hover:border-white/20 transition-all text-[11px] font-medium`}
-            >
-              {icon}
-              <span className="hidden sm:inline text-[10px] font-mono uppercase tracking-wider">{label}</span>
-            </a>
-          ))}
+          {socialLinks.length > 0 && (
+            <span className="flex items-center gap-1.5">
+              {socialLinks.map(({ href, label, icon, color }) => (
+                <a
+                  key={href}
+                  href={href}
+                  target={href.startsWith('mailto:') ? undefined : '_blank'}
+                  rel="noopener noreferrer"
+                  title={label}
+                  aria-label={label}
+                  className={`tap flex w-9 h-9 items-center justify-center rounded-full text-[#6a5d4a] ${color} transition-colors`}
+                >
+                  {icon}
+                </a>
+              ))}
+            </span>
+          )}
         </div>
         </div>
       </div>

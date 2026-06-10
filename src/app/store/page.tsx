@@ -560,13 +560,14 @@ function StorePage() {
 
           {/* Search */}
           <div className="relative flex-1 min-w-[160px] max-w-sm">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3a3328]" />
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a5d4a]" />
             <input
               type="text"
+              aria-label="Search beats"
               placeholder="Search title, key, BPM, tag…"
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full bg-[#14110d] border border-[#1f1a13] rounded-full py-2 pl-8 pr-3 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]"
+              className="w-full bg-[#14110d] border border-[#1f1a13] rounded-full py-2 pl-8 pr-3 text-[12px] text-[#E8DCC8] placeholder:text-[#6a5d4a] focus:outline-none focus:border-[#2d2620]"
             />
           </div>
 
@@ -606,45 +607,48 @@ function StorePage() {
             </button>
           </div>
 
+          {/* Secondary actions — quiet ghost icons so only Cart carries
+              accent weight (Untitled-calm: one primary action, the rest
+              recede). DJ Mode shows the accent only while active. */}
           {/* DJ Mode — continuous harmonic-compatible mix of the catalogue */}
           <button
             onClick={handleDjMode}
-            title="Play a continuous, key-matched mix"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-mono uppercase tracking-wider transition-colors"
+            title="DJ Mode — play a continuous, key-matched mix"
+            aria-label="DJ Mode"
+            aria-pressed={djActive}
+            className="tap hidden sm:flex w-9 h-9 items-center justify-center rounded-full transition-colors"
             style={djActive
-              ? { backgroundColor: accentColor, color: '#0a0907', borderColor: accentColor }
-              : { borderColor: '#1f1a13', color: '#6a5d4a' }}
+              ? { backgroundColor: accentColor, color: '#0a0907' }
+              : { color: '#6a5d4a' }}
           >
-            <Disc3 size={11} className={djActive ? 'animate-[spin_3s_linear_infinite]' : ''} />
-            DJ Mode
+            <Disc3 size={15} className={djActive ? 'animate-[spin_3s_linear_infinite]' : ''} />
           </button>
 
           {/* Copy store link */}
           <button
             onClick={handleCopyLink}
             title="Copy store link"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620] text-[10px] font-mono uppercase tracking-wider transition-colors"
+            aria-label="Copy store link"
+            className="tap hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors"
           >
-            <Link2 size={11} />
-            Share
+            <Link2 size={15} />
           </button>
 
           {/* My Account */}
           <Link
             href="/store/account/me"
             title={isSignedIn ? 'My Account' : 'Sign in'}
-            className="flex items-center gap-1.5 px-2.5 py-2 rounded-full border border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-colors"
+            aria-label={isSignedIn ? 'My Account' : 'Sign in'}
+            className="tap flex w-9 h-9 items-center justify-center rounded-full text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors"
           >
-            <User size={13} fill={isSignedIn ? 'currentColor' : 'none'} />
-            <span className="hidden sm:inline text-[10px] font-mono uppercase tracking-wider">
-              {isSignedIn ? 'Account' : 'Sign in'}
-            </span>
+            <User size={15} fill={isSignedIn ? 'currentColor' : 'none'} />
           </Link>
 
-          {/* Cart */}
+          {/* Cart — the one prominent action */}
           <button
             onClick={() => setIsOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-full text-black hover:opacity-90 text-[11px] font-bold uppercase tracking-wider transition-opacity disabled:opacity-40"
+            aria-label={`Cart${items.length > 0 ? ` (${items.length})` : ''}`}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-full text-black hover:opacity-90 text-[11px] font-bold uppercase tracking-wider transition-opacity disabled:opacity-40"
             style={{ backgroundColor: accentColor }}
             disabled={items.length === 0}
           >
