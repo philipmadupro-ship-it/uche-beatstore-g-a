@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { PageHeader, PageContainer } from '@/components/layout/PageHeader';
 import { Loader2, Music, Layers, Plus, Play, Clock, ShoppingBag, Globe, Pin } from 'lucide-react';
 import { seededGradient } from '@/lib/ui/cover-gradient';
 import Link from 'next/link';
@@ -229,39 +230,23 @@ export default function ProjectsPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10">
-        {/* Header */}
-        <div className="relative mb-6 sm:mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#2A2418]/30 via-[#1a160f]/20 to-[#0a0907] p-5 sm:p-7 md:p-8">
-          {/* Abstract Image Background */}
-          <div
-            className="absolute inset-0 z-0 bg-[url('/images/hero-abstract-2.jpg')] bg-cover bg-center opacity-20 mix-blend-overlay"
-          />
-          <div
-            className="absolute -top-32 -right-32 w-80 h-80 rounded-full pointer-events-none opacity-20 z-0"
-            style={{ background: 'radial-gradient(circle, #D4BFA0 0%, transparent 70%)' }}
-          />
-          
-          <div className="relative z-10 flex items-end justify-between">
-            <div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] mb-2">Work in progress</p>
-              <h1 className="text-[28px] sm:text-[36px] md:text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">Projects</h1>
-              <p className="text-[11px] text-[#a08a6a] max-w-md">Active production. Tracks you&apos;re still working on — with stems, versions, and references.</p>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="text-[11px] font-mono text-[#E8D8B8] uppercase tracking-wider">
-                {filtered.length} project{filtered.length !== 1 ? 's' : ''}
-              </span>
-              <button
-                onClick={createProject}
-                disabled={creating}
-                className="flex items-center gap-2 bg-white text-black px-4 py-2.5 rounded-full text-[12px] font-medium hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-              >
-                {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                New project
-              </button>
-            </div>
-          </div>
-        </div>
+      <PageContainer>
+        <PageHeader
+          eyebrow="Work in progress"
+          title="Projects"
+          description="Active production — tracks you're still working on, with stems, versions, and references."
+          meta={`${filtered.length} project${filtered.length !== 1 ? 's' : ''}`}
+          actions={(
+            <button
+              onClick={createProject}
+              disabled={creating}
+              className="flex items-center gap-2 bg-white text-black px-4 py-2.5 rounded-full text-[12px] font-medium hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all min-h-[44px]"
+            >
+              {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              New project
+            </button>
+          )}
+        />
 
         {/* Folder chips + search + collapsible tag/status/sort filters. */}
         <ProjectFilterBar
@@ -485,7 +470,7 @@ export default function ProjectsPage() {
           </div>
           </>
         )}
-      </div>
+      </PageContainer>
     </DashboardLayout>
   );
 }
