@@ -111,31 +111,31 @@ export function PlaylistSuggestions({
         onClick={toggleOpen}
         className={`w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border text-left transition-colors ${
           open
-            ? 'border-[#1f1a13] bg-[#0e0c08] rounded-b-none'
-            : 'border-[#1f1a13] bg-[#14110d] hover:border-[#2d2620] hover:bg-[#1a160f]'
+            ? 'border-[#2B2821] bg-[#11100D] rounded-b-none'
+            : 'border-[#2B2821] bg-[#171511] hover:border-[#3B372F] hover:bg-[#211F1A]'
         }`}
       >
-        <Sparkles size={13} className="text-[#a08a6a] shrink-0" />
-        <span className="text-[11px] font-medium text-[#E8DCC8]">Add similar tracks</span>
-        <span className="text-[10px] font-mono text-[#5a5142] hidden sm:inline">
+        <Sparkles size={13} className="text-[#D0C3AF] shrink-0" />
+        <span className="text-[11px] font-medium text-[#F7EBDD]">Add similar tracks</span>
+        <span className="text-[10px] font-mono text-[#9B9282] hidden sm:inline">
           {results ? `${results.filter((r) => !added.has(r.track.id)).length} suggestions` : 'based on this playlist\'s vibe'}
         </span>
         <div className="flex-1" />
-        {loading && <Loader2 size={12} className="animate-spin text-[#5a5142]" />}
-        <span className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a]">{open ? 'Hide' : 'Show'}</span>
-        <ChevronDown size={13} className={`text-[#5a5142] transition-transform ${open ? 'rotate-180' : ''}`} />
+        {loading && <Loader2 size={12} className="animate-spin text-[#9B9282]" />}
+        <span className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99]">{open ? 'Hide' : 'Show'}</span>
+        <ChevronDown size={13} className={`text-[#9B9282] transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
-        <div className="border border-t-0 border-[#1f1a13] rounded-b-xl bg-[#0c0a08] p-3">
+        <div className="border border-t-0 border-[#2B2821] rounded-b-xl bg-[#11100D] p-3">
           {loading ? (
-            <div className="flex items-center justify-center gap-2 py-6 text-[#5a5142]">
+            <div className="flex items-center justify-center gap-2 py-6 text-[#9B9282]">
               <Loader2 size={14} className="animate-spin" />
               <span className="text-[11px] font-mono">Finding matches…</span>
             </div>
           ) : !results || results.length === 0 ? (
             <div className="py-6 text-center">
-              <p className="text-[11px] text-[#5a5142]">
+              <p className="text-[11px] text-[#9B9282]">
                 {playlistTracks.length === 0
                   ? 'Add some tracks first, then come back for suggestions.'
                   : 'No similar tracks found in your library — upload more and try again.'}
@@ -148,22 +148,22 @@ export function PlaylistSuggestions({
                 const isBusy = adding.has(r.track.id);
                 const pct = matchPct(r.distance);
                 return (
-                  <div key={r.track.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-[#14110d] border border-[#1f1a13] hover:border-[#2d2620] transition-colors">
-                    <div className="w-9 h-9 rounded-md overflow-hidden bg-[#0a0907] border border-[#1f1a13] shrink-0">
+                  <div key={r.track.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-[#171511] border border-[#2B2821] hover:border-[#3B372F] transition-colors">
+                    <div className="w-9 h-9 rounded-md overflow-hidden bg-[#090907] border border-[#2B2821] shrink-0">
                       {r.track.cover_url
                         ? <img loading="lazy" src={r.track.cover_url} alt="" className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={12} /></div>}
+                        : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={12} /></div>}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[12px] font-medium text-[#E8DCC8] truncate">{r.track.title}</p>
-                      <p className="text-[9px] font-mono text-[#6a5d4a] uppercase tracking-wider mt-0.5 truncate">
+                      <p className="text-[12px] font-medium text-[#F7EBDD] truncate">{r.track.title}</p>
+                      <p className="text-[9px] font-mono text-[#B4AA99] uppercase tracking-wider mt-0.5 truncate">
                         {r.track.type}
                         {r.track.bpm ? ` · ${r.track.bpm} bpm` : ''}
                         {r.track.key ? ` · ${r.track.key}${r.track.scale === 'minor' ? 'm' : ''}` : ''}
                       </p>
                     </div>
                     <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full tabular-nums shrink-0 ${
-                      pct >= 75 ? 'bg-[#D4BFA0]/15 text-[#E8D8B8]' : 'bg-white/[0.03] text-[#5a5142]'
+                      pct >= 75 ? 'bg-[#E7D7BE]/15 text-[#F3E6D1]' : 'bg-white/[0.03] text-[#9B9282]'
                     }`}>{pct}%</span>
                     <button
                       onClick={() => addTrack(r.track.id)}
@@ -171,7 +171,7 @@ export function PlaylistSuggestions({
                       className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                         isDone
                           ? 'bg-[#6DC6A4]/15 text-[#6DC6A4] border border-[#6DC6A4]/25'
-                          : 'bg-[#2A2418] text-[#E8D8B8] border border-[#8A7A5C]/40 hover:bg-[#332b1d] active:scale-90 disabled:opacity-50'
+                          : 'bg-[#342F27] text-[#F3E6D1] border border-[#C9BCA8]/40 hover:bg-[#332b1d] active:scale-90 disabled:opacity-50'
                       }`}
                       aria-label={isDone ? 'Added' : 'Add to playlist'}
                     >
@@ -183,7 +183,7 @@ export function PlaylistSuggestions({
               <button
                 onClick={load}
                 disabled={loading}
-                className="w-full mt-2 py-2 text-[10px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#a08a6a] transition-colors"
+                className="w-full mt-2 py-2 text-[10px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
               >
                 Refresh suggestions
               </button>

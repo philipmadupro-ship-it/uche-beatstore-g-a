@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { completeMultipart, readAssembledBuffer } from '@/lib/storage/multipart';
 import { getSession, markStatus, deleteSession } from '@/lib/storage/upload-sessions';
 import { analyzeAudio } from '@/lib/audio/analyze.server';
+import type { AudioFeatures } from '@/lib/audio/analyze.server';
 import { getAuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
 import { extractPeaks } from '@/lib/audio/peaks';
@@ -9,6 +10,7 @@ import { uploadPeaksSidecar } from '@/lib/storage/upload';
 import { isSupabaseConfigured, insert, update, getAll } from '@/lib/local-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { titleFromFilename, nextVersionLabel } from '@/lib/naming';
+import { errorMessage } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -44,10 +46,10 @@ export async function POST(req: NextRequest) {
         fileName: session.fileName,
         parts: session.parts,
       });
-    } catch (err: any) {
+    } catch (err) {
       console.error('completeMultipart failed:', err);
       return NextResponse.json(
-        { error: `Storage finalize failed: ${err?.message || 'unknown'}` },
+        { error: `Storage finalize failed: ${errorMessage(err)}` },
         { status: 500 }
       );
     }
@@ -68,15 +70,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    let analysis: any = clientAnalysis;
-    if (!analysis) {
+    let serverAnalysis: AudioFeatures | null = null;
+    if (!clientAnalysis) {
       try {
-        if (audioBuffer) analysis = await analyzeAudio(audioBuffer);
+        if (audioBuffer) serverAnalysis = await analyzeAudio(audioBuffer);
       } catch (err) {
         console.warn('Server analysis failed, using nulls:', err);
       }
-      if (!analysis) {
-        analysis = { bpm: null, key: null, scale: null, loudness: null, duration: null };
+      if (!serverAnalysis) {
+        serverAnalysis = { bpm: null, key: null, scale: null, loudness: null, duration: null };
       }
     }
 
@@ -102,7 +104,7 @@ export async function POST(req: NextRequest) {
       console.warn('Peaks extraction/upload failed, continuing without:', err);
     }
 
-    const merged = mergeFeatures({ client: clientAnalysis, server: analysis, audd });
+    const merged = mergeFeatures({ client: clientAnalysis, server: serverAnalysis, audd });
     const trackData = {
       title: titleFromFilename(session.fileName),
       type: session.type,
@@ -113,7 +115,7 @@ export async function POST(req: NextRequest) {
     };
 
     // 3. Persist track row (replace-with-versioning OR insert new)
-    let track: any;
+    let track: Record<string, unknown> | null = null;
 
     if (isSupabaseConfigured()) {
       try {
@@ -178,29 +180,19 @@ export async function POST(req: NextRequest) {
           track = data;
 
           if (session.projectId) {
-            const { data: proj } = await supabase
-              .from('projects')
-              .select('id')
-              .eq('id', session.projectId)
-              .maybeSingle();
-            if (proj) {
-              await supabase.from('project_tracks').insert({
-                project_id: session.projectId,
-                track_id: track.id,
-                role: 'main',
-                position: 0,
-              });
-            } else {
-              await supabase.from('playlist_tracks').insert({
-                playlist_id: session.projectId,
-                track_id: track.id,
-                position: 0,
-              });
-            }
+            const savedTrack = track;
+            const trackId = savedTrack && typeof savedTrack.id === 'string' ? savedTrack.id : null;
+            if (!trackId) throw new Error('Upload saved without a track id');
+            await attachTrackToDestination(supabase, session.projectId, trackId, userId);
           }
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error('Supabase op failed, falling back to local store:', err);
+        const message = errorMessage(err) || 'Database save failed';
+        if (/destination|attach/i.test(message)) {
+          const status = /forbidden/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 500;
+          return NextResponse.json({ error: message }, { status });
+        }
         track = writeLocal(trackData, session.replaceTrackId, session.projectId);
       }
     } else {
@@ -209,18 +201,73 @@ export async function POST(req: NextRequest) {
 
     deleteSession(sessionId);
     return NextResponse.json({ success: true, track });
-  } catch (err: any) {
+  } catch (err) {
     console.error('upload/complete error:', err);
-    return NextResponse.json({ error: err?.message || 'complete failed' }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(err) || 'complete failed' }, { status: 500 });
   }
 }
 
-function writeLocal(trackData: any, replaceTrackId: string | null, projectId: string | null) {
+async function attachTrackToDestination(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  destinationId: string,
+  trackId: string,
+  userId: string | null,
+) {
+  const ownsDestination = (row: { user_id?: string | null } | null) => {
+    if (!row) return false;
+    return !row.user_id || Boolean(userId && row.user_id === userId);
+  };
+
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('id,user_id')
+    .eq('id', destinationId)
+    .maybeSingle();
+  if (projectError) throw new Error(`Project lookup failed: ${projectError.message}`);
+  if (project) {
+    if (!ownsDestination(project)) throw new Error('Forbidden project destination');
+    const { error } = await supabase.from('project_tracks').insert({
+      project_id: destinationId,
+      track_id: trackId,
+      role: 'main',
+      position: 0,
+    });
+    if (error) throw new Error(`Project attach failed: ${error.message}`);
+    return;
+  }
+
+  const { data: playlist, error: playlistError } = await supabase
+    .from('playlists')
+    .select('id,user_id')
+    .eq('id', destinationId)
+    .maybeSingle();
+  if (playlistError) throw new Error(`Playlist lookup failed: ${playlistError.message}`);
+  if (playlist) {
+    if (!ownsDestination(playlist)) throw new Error('Forbidden playlist destination');
+    const { error } = await supabase.from('playlist_tracks').insert({
+      playlist_id: destinationId,
+      track_id: trackId,
+      position: 0,
+    });
+    if (error) throw new Error(`Playlist attach failed: ${error.message}`);
+    return;
+  }
+
+  throw new Error('Upload destination not found');
+}
+
+function writeLocal(
+  trackData: Record<string, unknown>,
+  replaceTrackId: string | null,
+  projectId: string | null,
+): Record<string, unknown> | null {
   if (replaceTrackId) {
-    const existingTracks = getAll('tracks');
-    const existing = existingTracks.find((t: any) => t.id === replaceTrackId);
+    const existingTracks = getAll('tracks') as Record<string, unknown>[];
+    const existing = existingTracks.find((t) => t.id === replaceTrackId);
     if (existing) {
-      const vs = getAll('track_versions').filter((v: any) => v.track_id === replaceTrackId);
+      const vs = (getAll('track_versions') as Record<string, unknown>[])
+        .filter((v) => v.track_id === replaceTrackId)
+        .map((v) => ({ version_number: Number(v.version_number) || 0 }));
       const { number, label } = nextVersionLabel(vs);
       insert('track_versions', {
         track_id: replaceTrackId,
@@ -249,10 +296,10 @@ function writeLocal(trackData: any, replaceTrackId: string | null, projectId: st
     rating: null,
     cover_url: null,
     notes: '',
-  });
+  }) as Record<string, unknown>;
   if (projectId) {
-    const projects = getAll('projects');
-    const isProject = projects.some((p: any) => p.id === projectId);
+    const projects = getAll('projects') as Record<string, unknown>[];
+    const isProject = projects.some((p) => p.id === projectId);
     if (isProject) {
       insert('project_tracks', {
         project_id: projectId,

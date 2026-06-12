@@ -28,13 +28,13 @@ interface Props {
 }
 
 const KIND_META: Record<ActivityKind, { icon: React.ComponentType<{ size?: number }>; tint: string; ring: string }> = {
-  beat_sent:    { icon: Send,                tint: '#8A7A5C', ring: 'rgba(138,122,92,0.25)' },
+  beat_sent:    { icon: Send,                tint: '#C9BCA8', ring: 'rgba(138,122,92,0.25)' },
   email_opened: { icon: MailOpen,            tint: '#6DC6A4', ring: 'rgba(109,198,164,0.25)' },
   link_clicked: { icon: MousePointerClick,   tint: '#6DC6A4', ring: 'rgba(109,198,164,0.25)' },
   track_played: { icon: Play,                tint: '#9d95e8', ring: 'rgba(157,149,232,0.25)' },
-  purchase:     { icon: ShoppingBag,         tint: '#D4BFA0', ring: 'rgba(212,191,160,0.30)' },
-  note:         { icon: StickyNote,          tint: '#a08a6a', ring: 'rgba(160,138,106,0.20)' },
-  stage_change: { icon: GitBranch,           tint: '#a08a6a', ring: 'rgba(160,138,106,0.20)' },
+  purchase:     { icon: ShoppingBag,         tint: '#E7D7BE', ring: 'rgba(231,215,190,0.30)' },
+  note:         { icon: StickyNote,          tint: '#D0C3AF', ring: 'rgba(160,138,106,0.20)' },
+  stage_change: { icon: GitBranch,           tint: '#D0C3AF', ring: 'rgba(160,138,106,0.20)' },
 };
 
 function relativeTime(iso: string): string {
@@ -107,7 +107,7 @@ export function ContactActivityTimeline({ contactId, contactName, onSendBeat }: 
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] flex items-center gap-2">
+        <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] flex items-center gap-2">
           <Clock size={11} /> Activity
         </h2>
         {lead && (
@@ -130,14 +130,14 @@ export function ContactActivityTimeline({ contactId, contactName, onSendBeat }: 
               key={c.label}
               className="flex flex-col items-center px-3.5 py-2 rounded-xl border min-w-[64px]"
               style={{
-                background: c.accent ? 'rgba(212,191,160,0.08)' : 'rgba(255,255,255,0.02)',
-                borderColor: c.accent ? 'rgba(212,191,160,0.25)' : '#1f1a13',
+                background: c.accent ? 'rgba(231,215,190,0.08)' : 'rgba(255,255,255,0.02)',
+                borderColor: c.accent ? 'rgba(231,215,190,0.25)' : '#2B2821',
               }}
             >
-              <span className="text-[15px] font-bold tabular-nums" style={{ color: c.accent ? '#D4BFA0' : '#E8DCC8' }}>
+              <span className="text-[15px] font-bold tabular-nums" style={{ color: c.accent ? '#E7D7BE' : '#F7EBDD' }}>
                 {c.value}
               </span>
-              <span className="text-[8px] font-mono uppercase tracking-[0.15em] text-[#5a5142] mt-0.5">{c.label}</span>
+              <span className="text-[8px] font-mono uppercase tracking-[0.15em] text-[#9B9282] mt-0.5">{c.label}</span>
             </div>
           ))}
         </div>
@@ -149,12 +149,12 @@ export function ContactActivityTimeline({ contactId, contactName, onSendBeat }: 
           value={noteText}
           onChange={(e) => setNoteText(e.target.value)}
           placeholder="Add a note to the timeline…"
-          className="flex-1 bg-white/[0.02] border border-[#1f1a13] rounded-lg px-3 py-2 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]"
+          className="flex-1 bg-white/[0.02] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
         />
         <button
           type="submit"
           disabled={!noteText.trim() || savingNote}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.05] border border-white/[0.08] text-[11px] font-mono uppercase tracking-wider text-[#a08a6a] hover:text-[#E8DCC8] disabled:opacity-40 transition-colors"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.05] border border-white/[0.08] text-[11px] font-mono uppercase tracking-wider text-[#D0C3AF] hover:text-[#F7EBDD] disabled:opacity-40 transition-colors"
         >
           {savingNote ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
           Note
@@ -164,22 +164,22 @@ export function ContactActivityTimeline({ contactId, contactName, onSendBeat }: 
       {/* Timeline */}
       {loading ? (
         <div className="flex items-center justify-center py-10">
-          <Loader2 size={16} className="animate-spin text-[#3a3328]" />
+          <Loader2 size={16} className="animate-spin text-[#6E685B]" />
         </div>
       ) : timeline.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-[#1f1a13] rounded-xl">
-          <p className="text-[11px] text-[#6a5d4a] mb-3">No activity yet</p>
+        <div className="text-center py-12 border border-dashed border-[#2B2821] rounded-xl">
+          <p className="text-[11px] text-[#B4AA99] mb-3">No activity yet</p>
           {onSendBeat && (
             <button
               onClick={onSendBeat}
-              className="inline-flex items-center gap-2 text-[11px] text-[#E8D8B8] hover:text-white"
+              className="inline-flex items-center gap-2 text-[11px] text-[#F3E6D1] hover:text-white"
             >
               <Send size={11} /> Send your first beat to {contactName}
             </button>
           )}
         </div>
       ) : (
-        <ol className="relative space-y-1 before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-px before:bg-[#1f1a13]">
+        <ol className="relative space-y-1 before:absolute before:left-[15px] before:top-2 before:bottom-2 before:w-px before:bg-[#2B2821]">
           {timeline.map((a) => {
             const meta = KIND_META[a.kind] ?? KIND_META.note;
             const Icon = meta.icon;
@@ -188,15 +188,15 @@ export function ContactActivityTimeline({ contactId, contactName, onSendBeat }: 
                 {/* Node */}
                 <span
                   className="relative z-10 shrink-0 w-8 h-8 rounded-full flex items-center justify-center"
-                  style={{ background: '#14110d', border: `1px solid ${meta.ring}`, color: meta.tint }}
+                  style={{ background: '#171511', border: `1px solid ${meta.ring}`, color: meta.tint }}
                 >
                   <Icon size={13} />
                 </span>
                 {/* Body */}
                 <div className="min-w-0 flex-1 pt-0.5">
-                  <p className="text-[12.5px] text-[#E8DCC8] leading-snug">{a.title}</p>
-                  {a.body && <p className="text-[11px] text-[#6a5d4a] mt-0.5">{a.body}</p>}
-                  <p className="text-[10px] font-mono text-[#5a5142] mt-1">{relativeTime(a.occurredAt)}</p>
+                  <p className="text-[12.5px] text-[#F7EBDD] leading-snug">{a.title}</p>
+                  {a.body && <p className="text-[11px] text-[#B4AA99] mt-0.5">{a.body}</p>}
+                  <p className="text-[10px] font-mono text-[#9B9282] mt-1">{relativeTime(a.occurredAt)}</p>
                 </div>
               </li>
             );

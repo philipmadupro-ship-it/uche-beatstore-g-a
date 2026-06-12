@@ -21,6 +21,7 @@ export interface ProjectListItem {
   bpm_target?: number | null;
   key_target?: string | null;
   track_count?: number;
+  preview_covers?: string[];
   created_at?: string;
   updated_at?: string;
   store_featured?: boolean;

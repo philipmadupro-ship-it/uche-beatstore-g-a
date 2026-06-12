@@ -245,26 +245,26 @@ async function runFulfillment(params: {
             to: producerEmail,
             subject: `Exclusive sold — upload stems for ${titles.length} track${titles.length === 1 ? '' : 's'}`,
             html: `
-              <div style="font-family: sans-serif; background: #0a0907; color: #E8DCC8; padding: 40px; border-radius: 20px; max-width: 560px;">
-                <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #D4BFA0; margin: 0 0 20px;">
+              <div style="font-family: sans-serif; background: #090907; color: #F7EBDD; padding: 40px; border-radius: 20px; max-width: 560px;">
+                <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #E7D7BE; margin: 0 0 20px;">
                   Action needed
                 </h1>
                 <p style="font-size: 15px; line-height: 1.7;">
                   ${producerName ? `Hi ${producerName}, ` : ''}a buyer just purchased an exclusive license, but the track${titles.length === 1 ? "" : "s"} below ${titles.length === 1 ? "doesn't" : "don't"} have a WAV or finished stems on file yet. Please upload them so the buyer can complete their download.
                 </p>
-                <div style="margin: 24px 0; padding: 16px; background: #14110d; border-radius: 12px; border: 1px solid #1f1a13; font-size: 12px; color: #a08a6a; font-family: monospace; line-height: 1.8;">
+                <div style="margin: 24px 0; padding: 16px; background: #171511; border-radius: 12px; border: 1px solid #2B2821; font-size: 12px; color: #D0C3AF; font-family: monospace; line-height: 1.8;">
                   ${titles.map((t: string) => `• ${t}`).join('<br/>')}
                 </div>
-                <p style="font-size: 13px; color: #a08a6a;">
+                <p style="font-size: 13px; color: #D0C3AF;">
                   Buyer: ${meta.buyer_email ?? 'unknown'} · Amount: $${((session.amount_total ?? 0) / 100).toFixed(2)}
                 </p>
                 <div style="margin-top: 32px;">
                   <a href="${APP_URL}/library"
-                     style="background: #D4BFA0; color: #0a0907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">
+                     style="background: #E7D7BE; color: #090907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">
                     Upload in Library
                   </a>
                 </div>
-                <p style="margin-top: 32px; font-size: 10px; color: #4a4338; text-transform: uppercase; letter-spacing: 0.25em;">
+                <p style="margin-top: 32px; font-size: 10px; color: #837B6D; text-transform: uppercase; letter-spacing: 0.25em;">
                   This purchase is also flagged in /sales with an "Awaiting stems" badge.
                 </p>
               </div>
@@ -394,8 +394,8 @@ async function runFulfillment(params: {
         : '';
 
       const contractLine = contractPdfUrl
-        ? `<p style="margin-top: 20px; font-size: 12px; color: #a08a6a;">
-             📜 Your signed-style <a href="${contractPdfUrl}" style="color: #D4BFA0; text-decoration: underline;">license agreement (PDF)</a> is attached to this email.
+        ? `<p style="margin-top: 20px; font-size: 12px; color: #D0C3AF;">
+             📜 Your signed-style <a href="${contractPdfUrl}" style="color: #E7D7BE; text-decoration: underline;">license agreement (PDF)</a> is attached to this email.
            </p>`
         : '';
 
@@ -410,33 +410,33 @@ async function runFulfillment(params: {
             }]
           : undefined,
         html: `
-          <div style="font-family: sans-serif; background: #0a0907; color: #E8DCC8; padding: 40px; border-radius: 20px; max-width: 560px;">
-            <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #D4BFA0; margin: 0 0 20px;">
+          <div style="font-family: sans-serif; background: #090907; color: #F7EBDD; padding: 40px; border-radius: 20px; max-width: 560px;">
+            <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #E7D7BE; margin: 0 0 20px;">
               Purchase complete
             </h1>
-            <p style="font-size: 15px; line-height: 1.7; color: #E8DCC8;">
+            <p style="font-size: 15px; line-height: 1.7; color: #F7EBDD;">
               Thanks for your purchase. Your license${lineItems.length > 1 ? 's are' : ' is'} now active and your files are ready to download.
             </p>
-            <div style="margin: 24px 0; padding: 16px; background: #14110d; border-radius: 12px; border: 1px solid #1f1a13; font-size: 12px; color: #a08a6a; font-family: monospace; line-height: 1.8;">
+            <div style="margin: 24px 0; padding: 16px; background: #171511; border-radius: 12px; border: 1px solid #2B2821; font-size: 12px; color: #D0C3AF; font-family: monospace; line-height: 1.8;">
               ${itemSummaries.join('<br/>')}
-              <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #1f1a13;">
-                <div style="display:flex;justify-content:space-between;font-size:11px;color:#a08a6a;">
+              <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #2B2821;">
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:#D0C3AF;">
                   <span>Subtotal</span><span>${fmt(subtotalCents)}</span>
                 </div>
                 ${promoLine}
-                <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:bold;color:#E8DCC8;margin-top:8px;">
+                <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:bold;color:#F7EBDD;margin-top:8px;">
                   <span>Total paid</span><span>${fmt(totalCents)}</span>
                 </div>
               </div>
             </div>
             <div style="margin-top: 36px;">
               <a href="${downloadUrl}"
-                 style="background: #E8DCC8; color: #0a0907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">
+                 style="background: #F7EBDD; color: #090907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">
                 Download your files
               </a>
             </div>
             ${contractLine}
-            <p style="margin-top: 48px; font-size: 10px; color: #4a4338; text-transform: uppercase; letter-spacing: 0.5em;">
+            <p style="margin-top: 48px; font-size: 10px; color: #837B6D; text-transform: uppercase; letter-spacing: 0.5em;">
               Questions? Reply to this email or contact support.
             </p>
           </div>
@@ -524,20 +524,20 @@ async function runProjectFulfillment(params: {
         to: meta.buyer_email,
         subject: `Your project "${projName}" is ready`,
         html: `
-          <div style="font-family: sans-serif; background: #0a0907; color: #E8DCC8; padding: 40px; border-radius: 20px; max-width: 560px;">
-            <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #D4BFA0; margin: 0 0 20px;">
+          <div style="font-family: sans-serif; background: #090907; color: #F7EBDD; padding: 40px; border-radius: 20px; max-width: 560px;">
+            <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #E7D7BE; margin: 0 0 20px;">
               Project purchase complete
             </h1>
-            <p style="font-size: 15px; line-height: 1.7; color: #E8DCC8;">
+            <p style="font-size: 15px; line-height: 1.7; color: #F7EBDD;">
               Thanks for your purchase. You now have full access to all tracks in <strong>${projName}</strong>.
             </p>
             <div style="margin-top: 36px;">
               <a href="${accessUrl}"
-                 style="background: #E8DCC8; color: #0a0907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">
+                 style="background: #F7EBDD; color: #090907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">
                 Access your project
               </a>
             </div>
-            <p style="margin-top: 48px; font-size: 10px; color: #4a4338; text-transform: uppercase; letter-spacing: 0.5em;">
+            <p style="margin-top: 48px; font-size: 10px; color: #837B6D; text-transform: uppercase; letter-spacing: 0.5em;">
               The link above lets you stream and download every track in the project.
             </p>
           </div>

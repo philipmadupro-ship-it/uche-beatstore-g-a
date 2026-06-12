@@ -63,29 +63,29 @@ export async function POST(req: NextRequest) {
       replyTo: email,
       subject: subjectLine,
       html: `
-        <div style="font-family: 'Inter', system-ui, sans-serif; background:#0a0907; color:#E8DCC8; padding:40px 32px; max-width:560px; margin:0 auto; border-radius:16px;">
-          <p style="font-size:10px; text-transform:uppercase; letter-spacing:0.3em; color:#5a5142; margin-bottom:24px;">
+        <div style="font-family: 'Inter', system-ui, sans-serif; background:#090907; color:#F7EBDD; padding:40px 32px; max-width:560px; margin:0 auto; border-radius:16px;">
+          <p style="font-size:10px; text-transform:uppercase; letter-spacing:0.3em; color:#9B9282; margin-bottom:24px;">
             Beat Store — Visitor Message
           </p>
           <table style="width:100%; border-collapse:collapse; margin-bottom:24px;">
             <tr>
-              <td style="padding:6px 0; font-size:11px; color:#6a5d4a; text-transform:uppercase; letter-spacing:0.15em; width:80px;">From</td>
-              <td style="padding:6px 0; font-size:13px; color:#E8DCC8;">${escHtml(name)}</td>
+              <td style="padding:6px 0; font-size:11px; color:#B4AA99; text-transform:uppercase; letter-spacing:0.15em; width:80px;">From</td>
+              <td style="padding:6px 0; font-size:13px; color:#F7EBDD;">${escHtml(name)}</td>
             </tr>
             <tr>
-              <td style="padding:6px 0; font-size:11px; color:#6a5d4a; text-transform:uppercase; letter-spacing:0.15em;">Email</td>
-              <td style="padding:6px 0; font-size:13px;"><a href="mailto:${escHtml(email)}" style="color:#D4BFA0;">${escHtml(email)}</a></td>
+              <td style="padding:6px 0; font-size:11px; color:#B4AA99; text-transform:uppercase; letter-spacing:0.15em;">Email</td>
+              <td style="padding:6px 0; font-size:13px;"><a href="mailto:${escHtml(email)}" style="color:#E7D7BE;">${escHtml(email)}</a></td>
             </tr>
             ${subject?.trim() ? `
             <tr>
-              <td style="padding:6px 0; font-size:11px; color:#6a5d4a; text-transform:uppercase; letter-spacing:0.15em;">Subject</td>
-              <td style="padding:6px 0; font-size:13px; color:#E8DCC8;">${escHtml(subject)}</td>
+              <td style="padding:6px 0; font-size:11px; color:#B4AA99; text-transform:uppercase; letter-spacing:0.15em;">Subject</td>
+              <td style="padding:6px 0; font-size:13px; color:#F7EBDD;">${escHtml(subject)}</td>
             </tr>` : ''}
           </table>
-          <div style="background:#14110d; border:1px solid #1f1a13; border-radius:12px; padding:20px;">
-            <p style="font-size:13px; line-height:1.7; color:#E8DCC8; white-space:pre-wrap; margin:0;">${escHtml(message)}</p>
+          <div style="background:#171511; border:1px solid #2B2821; border-radius:12px; padding:20px;">
+            <p style="font-size:13px; line-height:1.7; color:#F7EBDD; white-space:pre-wrap; margin:0;">${escHtml(message)}</p>
           </div>
-          <p style="margin-top:40px; font-size:10px; color:#3a3328; text-transform:uppercase; letter-spacing:0.4em;">
+          <p style="margin-top:40px; font-size:10px; color:#6E685B; text-transform:uppercase; letter-spacing:0.4em;">
             Sent via U2C Beat Store contact form
           </p>
         </div>

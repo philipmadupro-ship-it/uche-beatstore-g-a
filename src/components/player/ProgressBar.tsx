@@ -21,7 +21,7 @@ interface Props {
   className?: string;
 }
 
-export function ProgressBar({ progress, onSeek, accent = '#E8DCC8', className }: Props) {
+export function ProgressBar({ progress, onSeek, accent = '#F7EBDD', className }: Props) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const [dragFrac, setDragFrac] = useState(0);

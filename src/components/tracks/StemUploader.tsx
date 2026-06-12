@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Upload, Check, Loader2, X, AudioLines, Plus, Trash2 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
@@ -115,12 +115,12 @@ export function StemUploader({ trackId, initial, onChange }: Props) {
   useEffect(() => { loadFiles(); }, [loadFiles]);
 
   return (
-    <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] p-5">
+    <div className="rounded-xl border border-[#2B2821] bg-[#171511] p-5">
       <div className="flex items-center gap-2 mb-1">
-        <AudioLines size={11} className="text-[#a08a6a]" />
-        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#a08a6a]">Stems</p>
+        <AudioLines size={11} className="text-[#D0C3AF]" />
+        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">Stems</p>
       </div>
-      <p className="text-[10px] text-[#6a5d4a] mb-4 leading-relaxed">
+      <p className="text-[10px] text-[#B4AA99] mb-4 leading-relaxed">
         Attach exported stems. Recipients with a producer/engineer share can download them.
       </p>
 
@@ -140,9 +140,9 @@ export function StemUploader({ trackId, initial, onChange }: Props) {
       </div>
 
       {/* Additional stems — arbitrary, labeled, repeatable */}
-      <div className="mt-5 pt-4 border-t border-[#1f1a13]">
+      <div className="mt-5 pt-4 border-t border-[#2B2821]">
         <div className="flex items-center justify-between mb-2.5">
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142]">
+          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
             Additional stems{files.length > 0 ? ` · ${files.length}` : ''}
           </p>
         </div>
@@ -172,42 +172,48 @@ function StemSlot({
   onFile: (f: File) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputId = useId();
   const [drag, setDrag] = useState(false);
   const handleFiles = (files: FileList | null) => { const f = files?.[0]; if (f) onFile(f); };
 
   return (
-    <div
-      onClick={() => inputRef.current?.click()}
-      onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={(e) => { e.preventDefault(); setDrag(false); handleFiles(e.dataTransfer.files); }}
-      className={cn(
-        'group relative px-3 py-3 rounded-lg border cursor-pointer transition-colors',
-        drag
-          ? 'border-[#8A7A5C] bg-[#2A2418]'
-          : url
-            ? 'border-[#1f1a13] bg-[#1a160f] hover:border-[#2d2620]'
-            : 'border-dashed border-[#1f1a13] bg-[#0c0a08] hover:border-[#2d2620] hover:bg-[#14110d]',
-      )}
-    >
+    <div>
       <input
+        id={inputId}
         ref={inputRef}
         type="file"
         accept="audio/*,.wav,.mp3,.flac,.aiff,.aif,.m4a,.ogg"
         className="hidden"
         onChange={(e) => handleFiles(e.target.files)}
       />
+      <button
+      type="button"
+      onClick={() => inputRef.current?.click()}
+      onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+      onDragLeave={() => setDrag(false)}
+      onDrop={(e) => { e.preventDefault(); setDrag(false); handleFiles(e.dataTransfer.files); }}
+      aria-describedby={error ? `${inputId}-error` : undefined}
+      className={cn(
+        'tap group relative w-full min-h-14 px-3 py-3 rounded-lg border text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E7D7BE]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#171511]',
+        drag
+          ? 'border-[#C9BCA8] bg-[#342F27]'
+          : url
+            ? 'border-[#2B2821] bg-[#211F1A] hover:border-[#3B372F]'
+            : 'border-dashed border-[#2B2821] bg-[#11100D] hover:border-[#3B372F] hover:bg-[#171511]',
+      )}
+    >
       <div className="flex items-center gap-2">
         <div className={cn('w-6 h-6 rounded flex items-center justify-center shrink-0', color)}>
           {pending ? <Loader2 size={12} className="animate-spin" /> : url ? <Check size={12} /> : error ? <X size={12} className="text-red-400" /> : <Upload size={12} />}
         </div>
         <div className="min-w-0 flex-1">
-          <p className={cn('text-[11px] font-medium uppercase tracking-wider', url ? color : 'text-[#a08a6a]')}>{label}</p>
-          <p className="text-[9px] text-[#6a5d4a] truncate font-mono">
+          <p className={cn('text-[11px] font-medium uppercase tracking-wider', url ? color : 'text-[#D0C3AF]')}>{label}</p>
+          <p id={error ? `${inputId}-error` : undefined} className="text-[9px] text-[#B4AA99] truncate font-mono">
             {pending ? 'Uploading…' : url ? 'Loaded — click to replace' : error ? error : 'Drop or click'}
           </p>
         </div>
       </div>
+      </button>
     </div>
   );
 }
@@ -227,16 +233,16 @@ function ExtraStemRow({ trackId, file, onRemoved }: { trackId: string; file: Ste
     }
   };
   return (
-    <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-[#1f1a13] bg-[#1a160f]">
+    <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-[#2B2821] bg-[#211F1A]">
       <Check size={12} className="text-[#6DC6A4] shrink-0" />
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-medium text-[#E8DCC8] truncate">{file.label}</p>
-        <p className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a]">{file.category}</p>
+        <p className="text-[11px] font-medium text-[#F7EBDD] truncate">{file.label}</p>
+        <p className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99]">{file.category}</p>
       </div>
       <button
         onClick={remove}
         disabled={removing}
-        className="text-[#5a5142] hover:text-red-400 transition-colors shrink-0 disabled:opacity-40"
+        className="tap grid size-11 shrink-0 place-items-center rounded-full text-[#9B9282] transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
         aria-label="Remove stem"
       >
         {removing ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
@@ -247,6 +253,8 @@ function ExtraStemRow({ trackId, file, onRemoved }: { trackId: string; file: Ste
 
 function AddStemRow({ trackId, onAdded }: { trackId: string; onAdded: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const labelId = useId();
+  const categoryId = useId();
   const [label, setLabel] = useState('');
   const [category, setCategory] = useState('other');
   const [uploading, setUploading] = useState(false);
@@ -275,19 +283,34 @@ function AddStemRow({ trackId, onAdded }: { trackId: string; onAdded: () => void
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <input
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
-        placeholder="Label (e.g. Lead, 808, Adlibs)"
-        className="flex-1 min-w-[140px] bg-[#0c0a08] border border-[#1f1a13] rounded-md px-2.5 py-2 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#8A7A5C] transition-colors"
-      />
-      <select
-        value={category}
-        onChange={(e) => setCategory(e.target.value)}
-        className="bg-[#0c0a08] border border-[#1f1a13] rounded-md px-2 py-2 text-[11px] text-[#E8DCC8] focus:outline-none focus:border-[#8A7A5C] transition-colors font-mono"
-      >
-        {CATEGORIES.map((c) => <option key={c.value} value={c.value} className="bg-[#0a0907]">{c.label}</option>)}
-      </select>
+      <div className="min-w-[150px] flex-1">
+        <label htmlFor={labelId} className="mb-1 block text-[8px] font-mono uppercase tracking-[0.18em] text-[#9B9282]">
+          Stem label
+        </label>
+        <input
+          id={labelId}
+          name="stem-label"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Lead, 808, Adlibs…"
+          autoComplete="off"
+          className="min-h-11 w-full rounded-md border border-[#2B2821] bg-[#11100D] px-2.5 py-2 text-[11px] text-[#F7EBDD] transition-colors placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8]"
+        />
+      </div>
+      <div>
+        <label htmlFor={categoryId} className="mb-1 block text-[8px] font-mono uppercase tracking-[0.18em] text-[#9B9282]">
+          Category
+        </label>
+        <select
+          id={categoryId}
+          name="stem-category"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          className="min-h-11 rounded-md border border-[#2B2821] bg-[#11100D] px-2 py-2 font-mono text-[11px] text-[#F7EBDD] transition-colors focus:outline-none focus:border-[#C9BCA8]"
+        >
+          {CATEGORIES.map((c) => <option key={c.value} value={c.value} className="bg-[#090907]">{c.label}</option>)}
+        </select>
+      </div>
       <input
         ref={inputRef}
         type="file"
@@ -298,7 +321,7 @@ function AddStemRow({ trackId, onAdded }: { trackId: string; onAdded: () => void
       <button
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
-        className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-[#2A2418] border border-[#8A7A5C]/40 text-[#E8D8B8] text-[11px] font-medium hover:bg-[#332b1d] transition-colors disabled:opacity-50"
+        className="tap mt-4 flex min-h-11 items-center gap-1.5 rounded-md border border-[#C9BCA8]/40 bg-[#342F27] px-3 py-2 text-[11px] font-medium text-[#F3E6D1] transition-colors hover:bg-[#332b1d] disabled:opacity-50"
       >
         {uploading ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
         Add stem

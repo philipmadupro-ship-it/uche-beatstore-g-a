@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { asCardStyle, type CardStyle } from '@/lib/share/styles';
+import { normalizeThemeColor } from '@/lib/theme/colors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -29,7 +30,7 @@ export async function GET(req: NextRequest) {
   let title = 'Untitled Track';
   let producer = 'U2C Beatstore';
   let cover: string | null = null;
-  let accent = '#D4BFA0';
+  let accent = '#E7D7BE';
   let preferredStyle: string | null = null;
 
   if (trackId && isSupabaseConfigured()) {
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
             .eq('user_id', sellerId)
             .maybeSingle();
           producer = (prof as any)?.display_name ?? producer;
-          accent = (prof as any)?.accent_color || accent;
+          accent = normalizeThemeColor((prof as any)?.accent_color, accent);
           preferredStyle = (prof as any)?.share_card_style ?? null;
         }
       }
@@ -93,14 +94,14 @@ function renderCard(props: RenderProps): React.ReactElement {
 
 function Minimal({ title, producer, cover, accent, eyebrow }: RenderProps) {
   return (
-    <div style={{ width: 1080, height: 1920, display: 'flex', flexDirection: 'column', background: '#0a0907', color: '#E8DCC8', position: 'relative', fontFamily: 'sans-serif' }}>
+    <div style={{ width: 1080, height: 1920, display: 'flex', flexDirection: 'column', background: '#090907', color: '#F7EBDD', position: 'relative', fontFamily: 'sans-serif' }}>
       {cover && (
         <div style={{ position: 'absolute', inset: 0, backgroundImage: `url(${cover})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.35, filter: 'blur(60px)', transform: 'scale(1.15)' }} />
       )}
-      <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, ${accent}40 0%, rgba(10,9,7,0.92) 50%, #0a0907 100%)` }} />
+      <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, ${accent}40 0%, rgba(10,9,7,0.92) 50%, #090907 100%)` }} />
       <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1, padding: '120px 80px 200px', textAlign: 'center' }}>
         <div style={{ fontSize: 28, letterSpacing: 8, textTransform: 'uppercase', color: accent, marginBottom: 60, fontWeight: 600 }}>{eyebrow}</div>
-        <div style={{ display: 'flex', width: 600, height: 600, borderRadius: 40, overflow: 'hidden', background: '#14110d', boxShadow: '0 60px 120px rgba(0,0,0,0.6)', marginBottom: 80, border: '4px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display: 'flex', width: 600, height: 600, borderRadius: 40, overflow: 'hidden', background: '#171511', boxShadow: '0 60px 120px rgba(0,0,0,0.6)', marginBottom: 80, border: '4px solid rgba(255,255,255,0.06)' }}>
           {cover
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={cover} alt="" width={600} height={600} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -120,7 +121,7 @@ function Minimal({ title, producer, cover, accent, eyebrow }: RenderProps) {
 
 function Magazine({ title, producer, cover, accent, eyebrow }: RenderProps) {
   return (
-    <div style={{ width: 1080, height: 1920, display: 'flex', background: '#0a0907', color: '#E8DCC8', position: 'relative', fontFamily: 'sans-serif', overflow: 'hidden' }}>
+    <div style={{ width: 1080, height: 1920, display: 'flex', background: '#090907', color: '#F7EBDD', position: 'relative', fontFamily: 'sans-serif', overflow: 'hidden' }}>
       {cover && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={cover} alt="" style={{ position: 'absolute', right: -120, top: 200, width: 1100, height: 1100, objectFit: 'cover', borderRadius: 30, boxShadow: '-40px 60px 120px rgba(0,0,0,0.7)', transform: 'rotate(-2deg)' }} />
@@ -149,11 +150,11 @@ function Magazine({ title, producer, cover, accent, eyebrow }: RenderProps) {
 
 function Mono({ title, producer, cover, accent, eyebrow }: RenderProps) {
   return (
-    <div style={{ width: 1080, height: 1920, display: 'flex', flexDirection: 'column', background: '#0a0907', color: '#fff', fontFamily: 'sans-serif', position: 'relative' }}>
+    <div style={{ width: 1080, height: 1920, display: 'flex', flexDirection: 'column', background: '#090907', color: '#fff', fontFamily: 'sans-serif', position: 'relative' }}>
       <div style={{ height: 14, background: accent }} />
       <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: 80, flex: 1 }}>
         <div style={{ fontSize: 22, letterSpacing: 10, textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: 60 }}>{eyebrow}</div>
-        <div style={{ display: 'flex', width: 920, height: 920, background: '#0a0907', border: '2px solid rgba(255,255,255,0.18)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', width: 920, height: 920, background: '#090907', border: '2px solid rgba(255,255,255,0.18)', overflow: 'hidden' }}>
           {cover
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={cover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(0.6) contrast(1.05)' }} />
@@ -176,11 +177,11 @@ function Mono({ title, producer, cover, accent, eyebrow }: RenderProps) {
 
 function Glow({ title, producer, cover, accent, eyebrow }: RenderProps) {
   return (
-    <div style={{ width: 1080, height: 1920, display: 'flex', flexDirection: 'column', background: '#0a0907', color: '#fff', fontFamily: 'sans-serif', position: 'relative', overflow: 'hidden' }}>
+    <div style={{ width: 1080, height: 1920, display: 'flex', flexDirection: 'column', background: '#090907', color: '#fff', fontFamily: 'sans-serif', position: 'relative', overflow: 'hidden' }}>
       {cover && (
         <div style={{ position: 'absolute', inset: -100, backgroundImage: `url(${cover})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(80px) saturate(1.4)', opacity: 0.75 }} />
       )}
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, rgba(10,9,7,0.3) 0%, rgba(10,9,7,0.85) 65%, #0a0907 100%)' }} />
+      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, rgba(10,9,7,0.3) 0%, rgba(10,9,7,0.85) 65%, #090907 100%)' }} />
 
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 80, textAlign: 'center' }}>
         <div style={{ fontSize: 24, letterSpacing: 10, textTransform: 'uppercase', color: accent, marginBottom: 36 }}>{eyebrow}</div>
@@ -209,7 +210,7 @@ function BrandStrip() {
 
 function PlaceholderCover() {
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #2A2418, #0a0907)', color: '#5a5142', fontSize: 96 }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #342F27, #090907)', color: '#9B9282', fontSize: 96 }}>
       ♫
     </div>
   );

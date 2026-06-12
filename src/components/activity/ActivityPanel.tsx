@@ -24,11 +24,11 @@ interface Props {
 }
 
 const KIND_META: Record<ActivityItem['kind'], { icon: React.ElementType; color: string }> = {
-  upload:  { icon: Upload,        color: 'text-[#E8D8B8]' },
+  upload:  { icon: Upload,        color: 'text-[#F3E6D1]' },
   version: { icon: GitBranch,     color: 'text-[#6DC6A4]' },
   comment: { icon: MessageSquare, color: 'text-[#e8b76a]' },
   send:    { icon: Send,          color: 'text-[#7aa8e8]' },
-  rating:  { icon: Star,          color: 'text-[#c8a84b]' },
+  rating:  { icon: Star,          color: 'text-[#D6BE7A]' },
 };
 
 /**
@@ -98,21 +98,21 @@ export function ActivityPanel({ open, onClose }: Props) {
           the rest of the recent UI work (player bar, drawer header). */}
       <aside
         className="fixed top-0 right-0 bottom-0 z-[90] w-[360px] flex flex-col
-                   bg-gradient-to-b from-[#101012]/95 via-[#0a0907]/95 to-[#0a0907]/95
+                   bg-gradient-to-b from-[#101012]/95 via-[#090907]/95 to-[#090907]/95
                    backdrop-blur-2xl border-l border-white/[0.06]
                    shadow-[-12px_0_40px_rgba(0,0,0,0.5)]
                    animate-in slide-in-from-right duration-300"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
           <div className="flex items-center gap-2">
-            <Bell size={13} className="text-[#E8D8B8]" />
-            <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#E8DCC8]">
+            <Bell size={13} className="text-[#F3E6D1]" />
+            <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#F7EBDD]">
               Activity
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="w-7 h-7 rounded-full flex items-center justify-center text-[#6a5d4a] hover:text-white hover:bg-white/[0.06] transition-colors"
+            className="w-7 h-7 rounded-full flex items-center justify-center text-[#B4AA99] hover:text-white hover:bg-white/[0.06] transition-colors"
             aria-label="Close activity panel"
           >
             <X size={13} />
@@ -137,13 +137,13 @@ export function ActivityPanel({ open, onClose }: Props) {
                   className={cn(
                     'shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider transition-colors border',
                     active
-                      ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/60'
-                      : 'bg-transparent text-[#6a5d4a] border-white/[0.06] hover:text-[#E8DCC8] hover:border-white/[0.12]',
+                      ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/60'
+                      : 'bg-transparent text-[#B4AA99] border-white/[0.06] hover:text-[#F7EBDD] hover:border-white/[0.12]',
                   )}
                 >
-                  {Icon && <Icon size={9} className={active ? 'text-[#E8D8B8]' : meta!.color} />}
+                  {Icon && <Icon size={9} className={active ? 'text-[#F3E6D1]' : meta!.color} />}
                   <span>{k === 'all' ? 'All' : k}</span>
-                  <span className={cn('font-bold tabular-nums', active ? 'text-[#E8D8B8]' : 'text-[#5a5142]')}>
+                  <span className={cn('font-bold tabular-nums', active ? 'text-[#F3E6D1]' : 'text-[#9B9282]')}>
                     {count}
                   </span>
                 </button>
@@ -154,28 +154,28 @@ export function ActivityPanel({ open, onClose }: Props) {
 
         <div className="flex-1 overflow-y-auto px-2 py-3">
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-[#4a4338]">
+            <div className="flex items-center justify-center py-16 text-[#837B6D]">
               <Loader2 size={16} className="animate-spin" />
             </div>
           ) : error ? (
             <div className="px-3 py-8 text-center">
-              <p className="text-[11px] text-[#c8a84b] mb-2">Couldn’t load activity</p>
-              <p className="text-[10px] text-[#5a5142] font-mono">{error}</p>
+              <p className="text-[11px] text-[#D6BE7A] mb-2">Couldn’t load activity</p>
+              <p className="text-[10px] text-[#9B9282] font-mono">{error}</p>
             </div>
           ) : items.length === 0 ? (
-            <div className="px-3 py-16 text-center text-[#4a4338]">
+            <div className="px-3 py-16 text-center text-[#837B6D]">
               <p className="text-[12px]">Nothing yet in the last 7 days.</p>
-              <p className="text-[10px] mt-1.5 text-[#3a3328]">Uploads, comments, sends and ratings will land here.</p>
+              <p className="text-[10px] mt-1.5 text-[#6E685B]">Uploads, comments, sends and ratings will land here.</p>
             </div>
           ) : (() => {
             const visible = filter === 'all' ? items : items.filter((i) => i.kind === filter);
             if (visible.length === 0) {
               return (
-                <div className="px-3 py-16 text-center text-[#4a4338]">
+                <div className="px-3 py-16 text-center text-[#837B6D]">
                   <p className="text-[12px]">No {filter} activity in the last 7 days.</p>
                   <button
                     onClick={() => setFilter('all')}
-                    className="text-[10px] mt-2 text-[#E8D8B8] hover:text-white transition-colors underline underline-offset-2"
+                    className="text-[10px] mt-2 text-[#F3E6D1] hover:text-white transition-colors underline underline-offset-2"
                   >
                     Show all
                   </button>
@@ -216,10 +216,10 @@ function ActivityRow({ item, onNavigate }: { item: ActivityItem; onNavigate: () 
         <Icon size={12} className={color} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[12px] text-[#E8DCC8] leading-snug line-clamp-2 group-hover:text-white transition-colors">
+        <p className="text-[12px] text-[#F7EBDD] leading-snug line-clamp-2 group-hover:text-white transition-colors">
           {item.title}
         </p>
-        <p className="text-[10px] text-[#5a5142] mt-0.5 font-mono tabular-nums">
+        <p className="text-[10px] text-[#9B9282] mt-0.5 font-mono tabular-nums">
           {time}
         </p>
       </div>

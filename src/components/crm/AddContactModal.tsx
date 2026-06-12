@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { X, User, Mail, Globe, Tag, Loader2, Phone, FileText } from 'lucide-react';
+import { User, Mail, Globe, Tag, Phone, FileText } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { Button } from '@/components/ui/Button';
+import { Field } from '@/components/ui/Field';
+import { Modal } from '@/components/ui/Modal';
 
 // Order matters — the first five (after the blank) are the CRM
 // "segments" the /contacts page filters by (rappers / producers / a&r
@@ -69,157 +72,119 @@ export function AddContactModal({ onClose, onSuccess }: AddContactModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="w-full max-w-md bg-[#16130e] border border-[#1f1a13] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-        <div className="px-6 py-4 border-b border-[#1f1a13] flex justify-between items-center bg-[#0a0907]">
-          <h2 className="text-sm font-black uppercase tracking-[0.2em] text-[#E8DCC8]">Add New Contact</h2>
-          <button onClick={onClose} className="text-[#4a4338] hover:text-[#E8DCC8] transition-colors">
-            <X size={20} />
-          </button>
+    <Modal
+      onClose={onClose}
+      title="Add new contact"
+      description="Capture the artist, role, socials, and notes you will need before sending beats."
+      icon={<User size={18} aria-hidden="true" />}
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field
+          required
+          type="text"
+          label="Full name"
+          placeholder="E.G. METRO BOOMIN"
+          icon={<User size={16} />}
+          inputClassName="uppercase tracking-widest"
+          value={formData.name}
+          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+        />
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field
+            type="text"
+            label="Role"
+            placeholder="PRODUCER"
+            inputClassName="uppercase tracking-widest"
+            value={formData.role}
+            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+          />
+          <Field
+            type="text"
+            label="Label"
+            placeholder="OVO"
+            icon={<Tag size={14} />}
+            inputClassName="uppercase tracking-widest"
+            value={formData.label}
+            onChange={(e) => setFormData({ ...formData, label: e.target.value })}
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <Field
+          type="email"
+          label="Email address"
+          placeholder="PRODUCER@EXAMPLE.COM"
+          icon={<Mail size={16} />}
+          inputClassName="uppercase tracking-widest"
+          value={formData.email}
+          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+        />
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field
+            type="tel"
+            label="Phone"
+            placeholder="+1 555 0100"
+            icon={<Phone size={14} />}
+            inputClassName="uppercase tracking-widest"
+            value={formData.phone}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+          />
           <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Full Name</label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4338]" size={16} />
-              <input
-                required
-                type="text"
-                placeholder="E.G. METRO BOOMIN"
-                className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 pl-10 pr-4 text-xs uppercase tracking-widest text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
-            </div>
+            <label className="ml-1 block font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-readable)]">
+              Category
+            </label>
+            <Dropdown
+              value={formData.category || 'none'}
+              onChange={(val) => setFormData({ ...formData, category: val === 'none' ? '' : val })}
+              options={CONTACT_CATEGORIES.map((c) => ({
+                value: c || 'none',
+                label: c ? c.toUpperCase() : 'NONE',
+              }))}
+              aria-label="Contact category"
+              className="min-h-11 w-full rounded-xl border-[var(--border)] bg-[var(--bg-page)] px-4 py-3 text-xs uppercase tracking-widest text-[var(--text-primary)] focus:border-[var(--accent)]"
+            />
           </div>
+        </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Role</label>
-              <input
-                type="text"
-                placeholder="PRODUCER"
-                className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 px-4 text-xs uppercase tracking-widest text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Label</label>
-              <div className="relative">
-              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4338]" size={14} />
-                <input
-                  type="text"
-                  placeholder="OVO"
-                  className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 pl-10 pr-4 text-xs uppercase tracking-widest text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                  value={formData.label}
-                  onChange={(e) => setFormData({ ...formData, label: e.target.value })}
-                />
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field
+            type="text"
+            label="Instagram"
+            placeholder="METROBOOMIN"
+            icon={<Globe size={14} />}
+            inputClassName="uppercase tracking-widest"
+            value={formData.instagram}
+            onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
+          />
+          <Field
+            type="text"
+            label="Twitter / X"
+            placeholder="@HANDLE"
+            inputClassName="uppercase tracking-widest"
+            value={formData.twitter}
+            onChange={(e) => setFormData({ ...formData, twitter: e.target.value })}
+          />
+        </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Email Address</label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4338]" size={16} />
-              <input
-                type="email"
-                placeholder="PRODUCER@EXAMLE.COM"
-                className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 pl-10 pr-4 text-xs uppercase tracking-widest text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              />
-            </div>
-          </div>
+        <Field
+          multiline
+          rows={3}
+          label="Notes"
+          placeholder="ANY CONTEXT YOU'LL WANT LATER..."
+          icon={<FileText size={14} />}
+          inputClassName="tracking-wider"
+          value={formData.notes}
+          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+        />
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Phone</label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4338]" size={14} />
-                <input
-                  type="tel"
-                  placeholder="+1 555 0100"
-                  className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 pl-10 pr-4 text-xs uppercase tracking-widest text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Category</label>
-              <Dropdown
-                value={formData.category || 'none'}
-                onChange={(val) => setFormData({ ...formData, category: val === 'none' ? '' : val })}
-                options={CONTACT_CATEGORIES.map((c) => ({
-                  value: c || 'none',
-                  label: c ? c.toUpperCase() : 'NONE',
-                }))}
-                className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 px-4 text-xs uppercase tracking-widest text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Instagram</label>
-              <div className="relative">
-                <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4338]" size={14} />
-                <input
-                  type="text"
-                  placeholder="METROBOOMIN"
-                  className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 pl-10 pr-4 text-xs uppercase tracking-widest text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                  value={formData.instagram}
-                  onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Twitter / X</label>
-              <input
-                type="text"
-                placeholder="@HANDLE"
-                className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 px-4 text-xs uppercase tracking-widest text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                value={formData.twitter}
-                onChange={(e) => setFormData({ ...formData, twitter: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Notes</label>
-            <div className="relative">
-              <FileText className="absolute left-3 top-3 text-[#4a4338]" size={14} />
-              <textarea
-                rows={3}
-                placeholder="ANY CONTEXT YOU'LL WANT LATER…"
-                className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 pl-10 pr-4 text-xs tracking-wider text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors resize-none"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="pt-4">
-            <button
-              disabled={loading}
-              type="submit"
-              className="w-full bg-[#D4BFA0] hover:bg-[#8A7A5C] disabled:bg-[#4a4338] text-white py-4 rounded-xl text-xs font-black uppercase tracking-[0.2em] transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Processing
-                </>
-              ) : (
-                'Create Contact'
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="pt-2">
+          <Button loading={loading} type="submit" variant="accent" className="w-full">
+            {loading ? 'Processing' : 'Create contact'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

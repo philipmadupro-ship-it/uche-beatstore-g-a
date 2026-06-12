@@ -4,6 +4,7 @@ import { initMultipart, DEFAULT_PART_SIZE, MAX_PARTS, MIN_PART_SIZE } from '@/li
 import { createSession } from '@/lib/storage/upload-sessions';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { errorMessage } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -60,11 +61,22 @@ export async function POST(req: NextRequest) {
 
     let userId: string | null = null;
     if (isSupabaseConfigured()) {
+      const supabase = await createServerClient();
       try {
-        const supabase = await createServerClient();
         const { data } = await supabase.auth.getUser();
         userId = data.user?.id || null;
-      } catch {}
+      } catch (err) {
+        if (projectId) {
+          return NextResponse.json(
+            { error: `Could not verify upload destination owner: ${errorMessage(err)}` },
+            { status: 401 },
+          );
+        }
+      }
+      if (projectId) {
+        const destination = await resolveUploadDestination(supabase, projectId, userId);
+        if (!destination.ok) return destination.res;
+      }
     }
 
     const contentType = detectContentType(ext, fileType);
@@ -95,8 +107,66 @@ export async function POST(req: NextRequest) {
       totalParts,
       uploadId,
     });
-  } catch (err: any) {
+  } catch (err) {
     console.error('upload/init error:', err);
-    return NextResponse.json({ error: err?.message || 'Failed to init upload' }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(err) || 'Failed to init upload' }, { status: 500 });
   }
+}
+
+async function resolveUploadDestination(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  destinationId: string,
+  userId: string | null,
+) {
+  const ownsDestination = (row: { user_id?: string | null } | null) => {
+    if (!row) return false;
+    return !row.user_id || Boolean(userId && row.user_id === userId);
+  };
+
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('id,user_id')
+    .eq('id', destinationId)
+    .maybeSingle();
+  if (projectError) {
+    return {
+      ok: false as const,
+      res: NextResponse.json({ error: `Project lookup failed: ${projectError.message}` }, { status: 500 }),
+    };
+  }
+  if (project) {
+    if (!ownsDestination(project)) {
+      return {
+        ok: false as const,
+        res: NextResponse.json({ error: 'Forbidden project destination' }, { status: 403 }),
+      };
+    }
+    return { ok: true as const };
+  }
+
+  const { data: playlist, error: playlistError } = await supabase
+    .from('playlists')
+    .select('id,user_id')
+    .eq('id', destinationId)
+    .maybeSingle();
+  if (playlistError) {
+    return {
+      ok: false as const,
+      res: NextResponse.json({ error: `Playlist lookup failed: ${playlistError.message}` }, { status: 500 }),
+    };
+  }
+  if (playlist) {
+    if (!ownsDestination(playlist)) {
+      return {
+        ok: false as const,
+        res: NextResponse.json({ error: 'Forbidden playlist destination' }, { status: 403 }),
+      };
+    }
+    return { ok: true as const };
+  }
+
+  return {
+    ok: false as const,
+    res: NextResponse.json({ error: 'Upload destination not found' }, { status: 404 }),
+  };
 }

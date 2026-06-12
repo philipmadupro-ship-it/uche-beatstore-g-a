@@ -172,9 +172,9 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
 
       const w = WaveSurferLib.create({
         container: waveRef.current,
-        waveColor: '#1f1a13',
-        progressColor: '#D4BFA0',
-        cursorColor: '#8A7A5C',
+        waveColor: '#2B2821',
+        progressColor: '#E7D7BE',
+        cursorColor: '#C9BCA8',
         barWidth: 3,
         barGap: 2,
         barRadius: 2,
@@ -275,30 +275,30 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   if (isLoading) return (
-    <div className="min-h-screen bg-[#0a0907] flex items-center justify-center">
-      <Loader2 size={20} className="animate-spin text-[#4a4338]" />
+    <div className="min-h-screen bg-[#090907] flex items-center justify-center">
+      <Loader2 size={20} className="animate-spin text-[#837B6D]" />
     </div>
   );
 
   if (requiresPassword) return (
-    <div className="min-h-screen bg-[#0a0907] flex items-center justify-center p-6">
+    <div className="min-h-screen bg-[#090907] flex items-center justify-center p-6">
       <form onSubmit={handleUnlock} className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#14110d] border border-[#1a160f] flex items-center justify-center">
-            <Lock size={16} className="text-[#5a5142]" />
+          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#171511] border border-[#211F1A] flex items-center justify-center">
+            <Lock size={16} className="text-[#9B9282]" />
           </div>
           <h1 className="text-[18px] font-medium text-white mb-1">Password required</h1>
-          <p className="text-[12px] text-[#5a5142]">This link is protected</p>
+          <p className="text-[12px] text-[#9B9282]">This link is protected</p>
         </div>
         <input
           type="password" value={password} onChange={(e) => setPassword(e.target.value)}
           placeholder="Enter password"
-          className="w-full bg-[#14110d] border border-[#1a160f] rounded-lg px-4 py-3 text-[13px] text-white placeholder:text-[#4a4338] focus:outline-none focus:border-[#2d2620] mb-3"
+          className="w-full bg-[#171511] border border-[#211F1A] rounded-lg px-4 py-3 text-[13px] text-white placeholder:text-[#837B6D] focus:outline-none focus:border-[#3B372F] mb-3"
           autoFocus
         />
         {passwordError && <p className="text-[11px] text-red-400 mb-3">{passwordError}</p>}
         <button type="submit" disabled={unlocking || !password}
-          className="w-full bg-white text-black py-3 rounded-lg text-[12px] font-medium hover:bg-[#E8DCC8] disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+          className="w-full bg-white text-black py-3 rounded-lg text-[12px] font-medium hover:bg-[#F7EBDD] disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
         >
           {unlocking ? <Loader2 size={13} className="animate-spin" /> : null}
           Unlock
@@ -308,11 +308,11 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   );
 
   if (error) return (
-    <div className="min-h-screen bg-[#0a0907] flex items-center justify-center p-6">
+    <div className="min-h-screen bg-[#090907] flex items-center justify-center p-6">
       <div className="text-center max-w-sm">
         <Shield size={28} className="text-red-400 mx-auto mb-4" />
         <h1 className="text-[18px] font-medium text-white mb-2">Link unavailable</h1>
-        <p className="text-[12px] text-[#5a5142]">{error}</p>
+        <p className="text-[12px] text-[#9B9282]">{error}</p>
       </div>
     </div>
   );
@@ -332,7 +332,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
           className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] max-w-[90vw] sm:max-w-md px-5 py-3 rounded-full border backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] flex items-center gap-3 animate-in slide-in-from-top-4 fade-in duration-300 ${
             purchaseBanner === 'success'
               ? 'bg-[#0e1f17]/95 border-[#6DC6A4]/30 text-[#9fe5c1]'
-              : 'bg-[#1f1410]/95 border-[#8A7A5C]/30 text-[#E8D8B8]'
+              : 'bg-[#1f1410]/95 border-[#C9BCA8]/30 text-[#F3E6D1]'
           }`}
         >
           {purchaseBanner === 'success' ? (
@@ -344,7 +344,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             </>
           ) : (
             <>
-              <XIcon size={14} className="text-[#a08a6a] shrink-0" />
+              <XIcon size={14} className="text-[#D0C3AF] shrink-0" />
               <span className="text-[12px] font-medium">Checkout cancelled.</span>
             </>
           )}
@@ -501,16 +501,16 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   return (
     <>
     {purchaseBannerNode}
-    <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#090907] text-[#F7EBDD] flex flex-col font-sans">
       {/* Header */}
-      <header className="px-8 py-5 border-b border-[#16130e] flex items-center justify-between">
+      <header className="px-8 py-5 border-b border-[#1A1813] flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="w-6 h-6 rounded-[5px] bg-white flex items-center justify-center">
             <span className="text-[9px] font-black text-black">AG</span>
           </div>
-          <span className="text-[11px] font-medium tracking-[0.2em] uppercase text-[#a08a6a]">U2C Beatstore</span>
+          <span className="text-[11px] font-medium tracking-[0.2em] uppercase text-[#D0C3AF]">U2C Beatstore</span>
         </div>
-        <span className="text-[10px] font-mono text-[#4a4338] uppercase tracking-wider truncate max-w-xs">{shareTitle}</span>
+        <span className="text-[10px] font-mono text-[#837B6D] uppercase tracking-wider truncate max-w-xs">{shareTitle}</span>
       </header>
 
       <main className="flex-1 max-w-2xl mx-auto w-full px-6 py-12 pb-20">
@@ -534,7 +534,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
                   {activeTrack.cover_url ? (
                     <img loading="lazy" src={activeTrack.cover_url} alt="" className="w-full h-full object-cover" draggable={false} />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-4xl font-light text-[#1f1a13] bg-gradient-to-br from-[#161520] to-[#0a0907]">
+                    <div className="w-full h-full flex items-center justify-center text-4xl font-light text-[#2B2821] bg-gradient-to-br from-[#161520] to-[#090907]">
                       {activeTrack.title[0]}
                     </div>
                   )}
@@ -552,22 +552,22 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
                   {/* Label — small circular disc in the center, slightly
                       lifted off the artwork to read as the printed
                       paper label on a real record. */}
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-gradient-to-br from-[#D4BFA0] to-[#3a2a8a] border border-black/40 shadow-[inset_0_0_8px_rgba(0,0,0,0.5)]" />
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-gradient-to-br from-[#E7D7BE] to-[#3a2a8a] border border-black/40 shadow-[inset_0_0_8px_rgba(0,0,0,0.5)]" />
                   {/* Spindle hole — single dot in the dead center. */}
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-black" />
                 </div>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">
+                <p className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">
                   {activeTrack.type}{activeTrack.bpm ? ` · ${activeTrack.bpm} bpm` : ''}{activeTrack.key ? ` · ${activeTrack.key}` : ''}
                 </p>
                 <h2 className="text-2xl font-medium tracking-tight text-white leading-tight truncate">{activeTrack.title}</h2>
-                <p className="text-[11px] font-mono text-[#5a5142] mt-1">{activeIndex + 1} of {tracks.length}</p>
+                <p className="text-[11px] font-mono text-[#9B9282] mt-1">{activeIndex + 1} of {tracks.length}</p>
               </div>
             </div>
 
             {/* Waveform */}
-            <div className="bg-[#0c0a08] border border-[#16130e] rounded-lg p-5 mb-4">
+            <div className="bg-[#11100D] border border-[#1A1813] rounded-lg p-5 mb-4">
               <div ref={waveRef} className="w-full" />
               <FallbackAudio
                 refEl={fallbackAudioRef}
@@ -583,7 +583,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
               {!ready && (
                 <div className="h-20 flex items-end gap-0.5 justify-center">
                   {Array.from({ length: 60 }).map((_, i) => (
-                    <div key={i} className="w-[3px] bg-[#1f1a13] rounded-sm"
+                    <div key={i} className="w-[3px] bg-[#2B2821] rounded-sm"
                       style={{ height: `${12 + Math.abs(Math.sin(i * 0.35) * 52)}px` }} />
                   ))}
                 </div>
@@ -592,24 +592,24 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
 
             {/* Scrub bar */}
             <div className="flex items-center gap-3 mb-5">
-              <span className="text-[10px] font-mono text-[#5a5142] tabular-nums">{fmt(currentTime)}</span>
-              <div className="flex-1 h-px bg-[#1a160f] relative cursor-pointer group"
+              <span className="text-[10px] font-mono text-[#9B9282] tabular-nums">{fmt(currentTime)}</span>
+              <div className="flex-1 h-px bg-[#211F1A] relative cursor-pointer group"
                 onClick={(e) => {
                   const r = e.currentTarget.getBoundingClientRect();
                   ws.current?.seekTo(Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)));
                 }}
               >
-                <div className="h-full bg-[#D4BFA0] absolute left-0 top-0" style={{ width: `${progressPct}%` }} />
+                <div className="h-full bg-[#E7D7BE] absolute left-0 top-0" style={{ width: `${progressPct}%` }} />
                 <div className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-white opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
                   style={{ left: `${progressPct}%`, transform: 'translate(-50%, -50%)' }} />
               </div>
-              <span className="text-[10px] font-mono text-[#5a5142] tabular-nums">{fmt(duration)}</span>
+              <span className="text-[10px] font-mono text-[#9B9282] tabular-nums">{fmt(duration)}</span>
             </div>
 
             {/* Controls */}
             <div className="flex items-center gap-3">
               <button onClick={prevTrack} disabled={activeIndex === 0}
-                className="w-8 h-8 flex items-center justify-center text-[#5a5142] hover:text-white disabled:opacity-20 transition-colors">
+                className="w-8 h-8 flex items-center justify-center text-[#9B9282] hover:text-white disabled:opacity-20 transition-colors">
                 <SkipBack size={16} fill="currentColor" />
               </button>
               <button onClick={togglePlay}
@@ -617,12 +617,12 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
                 {isPlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="ml-0.5" />}
               </button>
               <button onClick={nextTrack} disabled={activeIndex === tracks.length - 1}
-                className="w-8 h-8 flex items-center justify-center text-[#5a5142] hover:text-white disabled:opacity-20 transition-colors">
+                className="w-8 h-8 flex items-center justify-center text-[#9B9282] hover:text-white disabled:opacity-20 transition-colors">
                 <SkipForward size={16} fill="currentColor" />
               </button>
 
               <div className="flex items-center gap-2 ml-3">
-                <button onClick={() => setMuted(!muted)} className="text-[#5a5142] hover:text-white transition-colors">
+                <button onClick={() => setMuted(!muted)} className="text-[#9B9282] hover:text-white transition-colors">
                   {muted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
                 </button>
                 <input type="range" min="0" max="1" step="0.01" value={muted ? 0 : volume}
@@ -634,14 +634,14 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
 
               {allowDownloads ? (
                 <button onClick={() => downloadTrack(activeTrack)}
-                  className="flex items-center gap-1.5 text-[11px] font-medium text-[#a08a6a] hover:text-white border border-[#1a160f] hover:border-[#2d2620] px-3 py-2 rounded-md transition-colors">
+                  className="flex items-center gap-1.5 text-[11px] font-medium text-[#D0C3AF] hover:text-white border border-[#211F1A] hover:border-[#3B372F] px-3 py-2 rounded-md transition-colors">
                   <Download size={12} />
                   Download
                 </button>
               ) : (
                 <div
                   title="The sender disabled downloads on this link."
-                  className="flex items-center gap-1.5 text-[11px] font-medium text-[#4a4338] border border-[#161616] px-3 py-2 rounded-md cursor-not-allowed">
+                  className="flex items-center gap-1.5 text-[11px] font-medium text-[#837B6D] border border-[#161616] px-3 py-2 rounded-md cursor-not-allowed">
                   <Lock size={11} />
                   Downloads disabled
                 </div>
@@ -652,40 +652,40 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
 
         {/* Tracklist */}
         <div>
-          <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-4">{tracks.length} track{tracks.length !== 1 ? 's' : ''}</p>
-          <div className="border border-[#1a160f] rounded-lg divide-y divide-[#161310]">
+          <p className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-4">{tracks.length} track{tracks.length !== 1 ? 's' : ''}</p>
+          <div className="border border-[#211F1A] rounded-lg divide-y divide-[#24211B]">
             {tracks.map((track, i) => {
               const active = i === activeIndex;
               return (
                 <div key={track.id} onClick={() => selectTrack(i)}
-                  className={`group flex items-center gap-4 px-4 h-14 cursor-pointer transition-colors ${active ? 'bg-[#0e0c08]' : 'hover:bg-[#0c0a08]'}`}>
+                  className={`group flex items-center gap-4 px-4 h-14 cursor-pointer transition-colors ${active ? 'bg-[#11100D]' : 'hover:bg-[#11100D]'}`}>
                   <div className="w-5 text-center shrink-0">
                     {active && isPlaying ? (
                       <div className="flex gap-0.5 items-end h-3 justify-center">
-                        <div className="w-0.5 bg-[#D4BFA0] animate-pulse h-2" />
-                        <div className="w-0.5 bg-[#D4BFA0] animate-pulse h-3" style={{ animationDelay: '150ms' }} />
-                        <div className="w-0.5 bg-[#D4BFA0] animate-pulse h-1.5" style={{ animationDelay: '300ms' }} />
+                        <div className="w-0.5 bg-[#E7D7BE] animate-pulse h-2" />
+                        <div className="w-0.5 bg-[#E7D7BE] animate-pulse h-3" style={{ animationDelay: '150ms' }} />
+                        <div className="w-0.5 bg-[#E7D7BE] animate-pulse h-1.5" style={{ animationDelay: '300ms' }} />
                       </div>
                     ) : (
-                      <span className={`text-[11px] font-mono ${active ? 'text-[#D4BFA0]' : 'text-[#3a3328]'}`}>{i + 1}</span>
+                      <span className={`text-[11px] font-mono ${active ? 'text-[#E7D7BE]' : 'text-[#6E685B]'}`}>{i + 1}</span>
                     )}
                   </div>
-                  <div className="w-8 h-8 bg-[#16130e] rounded border border-[#1a160f] overflow-hidden shrink-0">
+                  <div className="w-8 h-8 bg-[#1A1813] rounded border border-[#211F1A] overflow-hidden shrink-0">
                     {track.cover_url
                       ? <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center text-[#2d2620]"><Music size={11} /></div>
+                      : <div className="w-full h-full flex items-center justify-center text-[#3B372F]"><Music size={11} /></div>
                     }
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-[13px] font-medium truncate ${active ? 'text-[#E8D8B8]' : 'text-[#E8DCC8]'}`}>{track.title}</p>
-                    <p className="text-[10px] font-mono text-[#5a5142] mt-0.5">{track.type}{track.bpm ? ` · ${track.bpm}` : ''}</p>
+                    <p className={`text-[13px] font-medium truncate ${active ? 'text-[#F3E6D1]' : 'text-[#F7EBDD]'}`}>{track.title}</p>
+                    <p className="text-[10px] font-mono text-[#9B9282] mt-0.5">{track.type}{track.bpm ? ` · ${track.bpm}` : ''}</p>
                   </div>
                   {track.duration_seconds && (
-                    <span className="text-[11px] font-mono text-[#5a5142] tabular-nums">{fmt(track.duration_seconds)}</span>
+                    <span className="text-[11px] font-mono text-[#9B9282] tabular-nums">{fmt(track.duration_seconds)}</span>
                   )}
                   {allowDownloads && (
                     <button onClick={(e) => { e.stopPropagation(); downloadTrack(track); }}
-                      className="p-2 text-[#4a4338] hover:text-white transition-colors opacity-0 group-hover:opacity-100">
+                      className="p-2 text-[#837B6D] hover:text-white transition-colors opacity-0 group-hover:opacity-100">
                       <Download size={12} />
                     </button>
                   )}
@@ -739,46 +739,46 @@ function LicenseInfoSection({ creator }: { creator: any }) {
   if (tiers.length === 0 && !creator?.license_notes && !creator?.license_agreement) return null;
 
   return (
-    <div className="mt-12 border-t border-[#1a160f] pt-8 space-y-4">
-      <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142]">Licensing</p>
+    <div className="mt-12 border-t border-[#211F1A] pt-8 space-y-4">
+      <p className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">Licensing</p>
 
       {creator?.license_notes && (
-        <p className="text-[12px] text-[#a08a6a] leading-relaxed">{creator.license_notes}</p>
+        <p className="text-[12px] text-[#D0C3AF] leading-relaxed">{creator.license_notes}</p>
       )}
 
       <div className="space-y-2">
         {tiers.map(tier => (
-          <div key={tier.key} className="border border-[#1a160f] rounded-lg overflow-hidden">
+          <div key={tier.key} className="border border-[#211F1A] rounded-lg overflow-hidden">
             <button
               onClick={() => setOpen(open === tier.key ? null : tier.key)}
-              className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#0c0a08] transition-colors text-left"
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#11100D] transition-colors text-left"
             >
               <div className="flex items-center gap-3">
-                <span className="text-[13px] font-medium text-[#E8DCC8]">{tier.label}</span>
+                <span className="text-[13px] font-medium text-[#F7EBDD]">{tier.label}</span>
                 {tier.price && (
-                  <span className="text-[11px] font-mono text-[#D4BFA0]">{tier.price}</span>
+                  <span className="text-[11px] font-mono text-[#E7D7BE]">{tier.price}</span>
                 )}
               </div>
-              <span className="text-[10px] text-[#5a5142]">{open === tier.key ? '▲' : '▼'}</span>
+              <span className="text-[10px] text-[#9B9282]">{open === tier.key ? '▲' : '▼'}</span>
             </button>
             {open === tier.key && (
-              <div className="px-4 pb-4 space-y-2 border-t border-[#1a160f] pt-3">
+              <div className="px-4 pb-4 space-y-2 border-t border-[#211F1A] pt-3">
                 {tier.includes.map(item => (
-                  <div key={item} className="flex items-center gap-2 text-[11px] text-[#a08a6a]">
+                  <div key={item} className="flex items-center gap-2 text-[11px] text-[#D0C3AF]">
                     <span className="text-green-400 shrink-0">✓</span> {item}
                   </div>
                 ))}
                 {tier.excludes.map(item => (
-                  <div key={item} className="flex items-center gap-2 text-[11px] text-[#5a5142]">
-                    <span className="text-[#3a3328] shrink-0">✗</span> {item}
+                  <div key={item} className="flex items-center gap-2 text-[11px] text-[#9B9282]">
+                    <span className="text-[#6E685B] shrink-0">✗</span> {item}
                   </div>
                 ))}
                 {tier.key === 'exclusive' && creator?.license_agreement && (
                   <details className="mt-3">
-                    <summary className="text-[10px] font-mono text-[#5a5142] cursor-pointer hover:text-[#a08a6a] transition-colors">
+                    <summary className="text-[10px] font-mono text-[#9B9282] cursor-pointer hover:text-[#D0C3AF] transition-colors">
                       View full agreement
                     </summary>
-                    <pre className="mt-2 text-[10px] text-[#5a5142] whitespace-pre-wrap leading-relaxed font-mono border border-[#1a160f] rounded p-3 bg-[#0a0907] max-h-48 overflow-y-auto">
+                    <pre className="mt-2 text-[10px] text-[#9B9282] whitespace-pre-wrap leading-relaxed font-mono border border-[#211F1A] rounded p-3 bg-[#090907] max-h-48 overflow-y-auto">
                       {creator.license_agreement}
                     </pre>
                   </details>

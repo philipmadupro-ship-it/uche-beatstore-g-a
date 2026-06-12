@@ -42,6 +42,6 @@ export function dueLabel(dueAt: string | null | undefined, now: number = Date.no
 export const DUE_META: Record<DueBucket, { color: string; bg: string }> = {
   overdue:  { color: '#E8896A', bg: 'rgba(232,137,106,0.12)' },
   today:    { color: '#E8C86A', bg: 'rgba(232,200,106,0.12)' },
-  upcoming: { color: '#a08a6a', bg: 'rgba(160,138,106,0.10)' },
-  someday:  { color: '#5a5142', bg: 'rgba(255,255,255,0.03)' },
+  upcoming: { color: '#D0C3AF', bg: 'rgba(160,138,106,0.10)' },
+  someday:  { color: '#9B9282', bg: 'rgba(255,255,255,0.03)' },
 };

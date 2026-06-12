@@ -55,24 +55,24 @@ export function StoreContactForm({ creator, accentColor }: Props) {
   };
 
   return (
-    <div className="border-t border-[#1a160f]">
+    <div className="border-t border-[#211F1A]">
       <div className="max-w-xl mx-auto px-4 md:px-10 py-16">
         <div className="text-center mb-8">
-          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#3a3328] mb-2">Get in touch</p>
-          <h2 className="text-xl font-medium text-[#E8DCC8]">
+          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#6E685B] mb-2">Get in touch</p>
+          <h2 className="text-xl font-medium text-[#F7EBDD]">
             Work with {creator?.display_name || 'the producer'}
           </h2>
-          <p className="mt-2 text-[12px] text-[#5a5142]">
+          <p className="mt-2 text-[12px] text-[#9B9282]">
             Licensing inquiries, custom beats, features — drop a message.
           </p>
         </div>
 
         {sent ? (
-          <div className="text-center py-10 px-6 rounded-2xl bg-[#14110d] border border-[#1f1a13]">
+          <div className="text-center py-10 px-6 rounded-2xl bg-[#171511] border border-[#2B2821]">
             <CheckCircle2 size={28} className="text-[#6DC6A4] mx-auto mb-3" />
-            <p className="text-[14px] font-medium text-[#E8DCC8] mb-1">Message sent!</p>
-            <p className="text-[12px] text-[#5a5142]">You'll hear back soon.</p>
-            <button onClick={() => setSent(false)} className="mt-4 text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors">
+            <p className="text-[14px] font-medium text-[#F7EBDD] mb-1">Message sent!</p>
+            <p className="text-[12px] text-[#9B9282]">You'll hear back soon.</p>
+            <button onClick={() => setSent(false)} className="mt-4 text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F7EBDD] transition-colors">
               Send another
             </button>
           </div>
@@ -80,8 +80,8 @@ export function StoreContactForm({ creator, accentColor }: Props) {
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">
-                  Your name <span className="text-[#3a3328]">*</span>
+                <label className="block text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">
+                  Your name <span className="text-[#6E685B]">*</span>
                 </label>
                 <input
                   type="text"
@@ -90,13 +90,13 @@ export function StoreContactForm({ creator, accentColor }: Props) {
                   onChange={(e) => setName(e.target.value)}
                   onBlur={() => touch('name')}
                   placeholder="Artist or real name"
-                  className={`w-full bg-[#14110d] border rounded-lg px-3 py-2.5 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none transition-colors ${nameErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-[#1f1a13] focus:border-[#2d2620]'}`}
+                  className={`w-full bg-[#171511] border rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none transition-colors ${nameErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-[#2B2821] focus:border-[#3B372F]'}`}
                 />
                 {nameErr && <p className="mt-1 text-[10px] text-red-400">{nameErr}</p>}
               </div>
               <div>
-                <label className="block text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">
-                  Email <span className="text-[#3a3328]">*</span>
+                <label className="block text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">
+                  Email <span className="text-[#6E685B]">*</span>
                 </label>
                 <input
                   type="email"
@@ -105,25 +105,25 @@ export function StoreContactForm({ creator, accentColor }: Props) {
                   onChange={(e) => setEmail(e.target.value)}
                   onBlur={() => touch('email')}
                   placeholder="your@email.com"
-                  className={`w-full bg-[#14110d] border rounded-lg px-3 py-2.5 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none transition-colors ${emailErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-[#1f1a13] focus:border-[#2d2620]'}`}
+                  className={`w-full bg-[#171511] border rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none transition-colors ${emailErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-[#2B2821] focus:border-[#3B372F]'}`}
                 />
                 {emailErr && <p className="mt-1 text-[10px] text-red-400">{emailErr}</p>}
               </div>
             </div>
             <div>
-              <label className="block text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Subject</label>
+              <label className="block text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">Subject</label>
               <input
                 type="text"
                 autoComplete="off"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Beat licensing, custom request, feature…"
-                className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-3 py-2.5 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] transition-colors"
+                className="w-full bg-[#171511] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] transition-colors"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">
-                Message <span className="text-[#3a3328]">*</span>
+              <label className="block text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">
+                Message <span className="text-[#6E685B]">*</span>
               </label>
               <textarea
                 value={message}
@@ -132,13 +132,13 @@ export function StoreContactForm({ creator, accentColor }: Props) {
                 rows={5}
                 maxLength={2000}
                 placeholder="Tell me about your project or what you're looking for…"
-                className={`w-full bg-[#14110d] border rounded-lg px-3 py-2.5 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none transition-colors resize-none leading-relaxed ${msgErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-[#1f1a13] focus:border-[#2d2620]'}`}
+                className={`w-full bg-[#171511] border rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none transition-colors resize-none leading-relaxed ${msgErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-[#2B2821] focus:border-[#3B372F]'}`}
               />
               <div className="flex items-center justify-between mt-1">
                 {msgErr
                   ? <p className="text-[10px] text-red-400">{msgErr}</p>
                   : <span />}
-                <p className="text-right text-[9px] font-mono text-[#3a3328]">{message.length}/2000</p>
+                <p className="text-right text-[9px] font-mono text-[#6E685B]">{message.length}/2000</p>
               </div>
             </div>
             {error && (
@@ -156,10 +156,10 @@ export function StoreContactForm({ creator, accentColor }: Props) {
           </form>
         )}
 
-        <div className="mt-10 pt-6 border-t border-[#1a160f] text-center">
+        <div className="mt-10 pt-6 border-t border-[#211F1A] text-center">
           <Link
             href="/store/account"
-            className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] hover:text-[#a08a6a] transition-colors"
+            className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
           >
             <User size={11} />
             Already purchased? View my account

@@ -10,11 +10,10 @@ import type { CreatorProfile } from './types';
 
 interface Props {
   creator: CreatorProfile | null;
-  trackCount: number;
   accentColor?: string;
 }
 
-export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
+export function ArtistBioBlock({ creator, accentColor }: Props) {
   const [licenseExpanded, setLicenseExpanded] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
   const bioIsLong = (creator?.bio?.length ?? 0) > 160;
@@ -60,10 +59,10 @@ export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
     });
   }
   if (creator?.website_url) {
-    socialLinks.push({ href: creator.website_url, label: 'Website', color: 'hover:text-[#E8DCC8]', icon: <Globe size={16} /> });
+    socialLinks.push({ href: creator.website_url, label: 'Website', color: 'hover:text-[#F7EBDD]', icon: <Globe size={16} /> });
   }
   if (creator?.contact_email) {
-    socialLinks.push({ href: `mailto:${creator.contact_email}`, label: creator.contact_email, color: 'hover:text-[#E8DCC8]', icon: <Mail size={15} /> });
+    socialLinks.push({ href: `mailto:${creator.contact_email}`, label: creator.contact_email, color: 'hover:text-[#F7EBDD]', icon: <Mail size={15} /> });
   }
 
   return (
@@ -71,14 +70,14 @@ export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
       {hero ? (
         <img loading="eager" src={hero} alt="" className="absolute inset-0 z-0 w-full h-full object-cover" />
       ) : (
-        <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#2A2418] via-[#14110d] to-[#0a0907]" />
+        <div className="absolute inset-0 z-0 bg-gradient-to-br from-[#342F27] via-[#171511] to-[#090907]" />
       )}
       {/* Gradient: darker at top so particles stand out against any hero image */}
-      <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/75 via-black/65 to-[#0a0907]" />
+      <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/75 via-black/65 to-[#090907]" />
 
       <div className="relative z-10 max-w-[1400px] mx-auto pt-8 pb-8 md:pt-20 md:pb-14">
         <div className="px-4 md:px-8">
-          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#a08a6a] mb-2">Beat store</p>
+          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#D0C3AF] mb-2">Beat store</p>
           <h1 className="sr-only">{creator?.display_name || 'Producer'}</h1>
         </div>
         {/* ParticleText sits outside the horizontal padding so the canvas
@@ -86,19 +85,19 @@ export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
             wide — every pixel counts before the font-scale-down kicks in. */}
         <ParticleText
           text={creator?.display_name || 'Producer'}
-          color={accentColor || '#D4BFA0'}
+          color={accentColor || '#E7D7BE'}
           className="relative w-full h-[100px] md:h-[160px]"
         />
         <div className="px-4 md:px-8">
         {creator?.bio && (
           <div className="mt-4">
-            <p className={`text-[14px] text-[#E8DCC8]/80 max-w-2xl leading-relaxed transition-all ${bioIsLong && !bioExpanded ? 'line-clamp-3' : ''}`}>
+            <p className={`text-[14px] text-[#F7EBDD]/80 max-w-2xl leading-relaxed transition-all ${bioIsLong && !bioExpanded ? 'line-clamp-3' : ''}`}>
               {creator.bio}
             </p>
             {bioIsLong && (
               <button
                 onClick={() => setBioExpanded((o) => !o)}
-                className="mt-1.5 text-[11px] font-mono text-[#6a5d4a] hover:text-[#a08a6a] transition-colors flex items-center gap-1"
+                className="mt-1.5 text-[11px] font-mono text-[#B4AA99] hover:text-[#D0C3AF] transition-colors flex items-center gap-1"
               >
                 {bioExpanded ? 'Read less' : 'Read more'}
                 <ChevronDown size={10} className={`transition-transform ${bioExpanded ? 'rotate-180' : ''}`} />
@@ -110,13 +109,13 @@ export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
           <div className="mt-5 max-w-2xl">
             <button
               onClick={() => setLicenseExpanded((o) => !o)}
-              className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] hover:text-[#a08a6a] transition-colors"
+              className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] hover:text-[#D0C3AF] transition-colors"
             >
               License Terms
               <ChevronDown size={11} className={`transition-transform ${licenseExpanded ? 'rotate-180' : ''}`} />
             </button>
             {licenseExpanded && (
-              <p className="mt-2 text-[11px] font-mono text-[var(--text-readable)] leading-relaxed whitespace-pre-wrap bg-[#14110d]/60 rounded-lg px-3 py-2 border border-[#1f1a13]">
+              <p className="mt-2 text-[11px] font-mono text-[var(--text-readable)] leading-relaxed whitespace-pre-wrap bg-[#171511]/60 rounded-lg px-3 py-2 border border-[#2B2821]">
                 {creator.license_notes}
               </p>
             )}
@@ -129,7 +128,7 @@ export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
           {creator?.display_name && (
             <Link
               href={`/store/producer/${slugify(creator.display_name)}`}
-              className="group flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-[#a08a6a] hover:text-[#E8DCC8] transition-colors"
+              className="tap group inline-flex min-h-11 items-center gap-1.5 rounded-full border border-[#2B2821] bg-[#171511]/70 px-3 text-[11px] font-mono uppercase tracking-wider text-[#D0C3AF] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD]"
             >
               View full profile
               <ArrowRight size={11} className="transition-transform group-hover:translate-x-0.5" />
@@ -145,7 +144,7 @@ export function ArtistBioBlock({ creator, trackCount, accentColor }: Props) {
                   rel="noopener noreferrer"
                   title={label}
                   aria-label={label}
-                  className={`tap flex w-9 h-9 items-center justify-center rounded-full text-[#6a5d4a] ${color} transition-colors`}
+                  className={`tap flex w-9 h-9 items-center justify-center rounded-full text-[#B4AA99] ${color} transition-colors`}
                 >
                   {icon}
                 </a>

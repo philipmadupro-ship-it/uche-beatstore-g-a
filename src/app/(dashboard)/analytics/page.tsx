@@ -11,11 +11,15 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
-  Loader2, Headphones, Music, AlertCircle, BarChart3,
+  Headphones, Music, AlertCircle, BarChart3,
   TrendingUp, Radio, ExternalLink, SlidersHorizontal, X, ChevronDown, ChevronUp, Link2,
 } from 'lucide-react';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { SkeletonStatStrip, SkeletonList } from '@/components/ui/Skeleton';
+import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
+import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Field } from '@/components/ui/Field';
 
 // ── Types ────────────────────────────────────────────────────────
 interface Totals { plays: number; sales_count: number; gross_usd: number }
@@ -48,9 +52,9 @@ type TypeFilter = 'all' | 'beat' | 'instrumental' | 'song' | 'remix';
 
 const STATUS_OPTIONS = [
   { value: 'maq',        label: 'MAQ',      color: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
-  { value: 'needs_work', label: 'WIP',      color: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]'   },
+  { value: 'needs_work', label: 'WIP',      color: 'bg-[#1f1a0a] text-[#D6BE7A] border-[#3a2f1f]'   },
   { value: 'finished',   label: 'Finished', color: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]'   },
-  { value: 'archived',   label: 'Archived', color: 'bg-[#16130e] text-[#6a5d4a] border-[#1f1a13]'   },
+  { value: 'archived',   label: 'Archived', color: 'bg-[#1A1813] text-[#B4AA99] border-[#2B2821]'   },
 ];
 
 function fmtDate(iso: string): string {
@@ -93,8 +97,18 @@ export default function AnalyticsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  const toggleGenre = (g: string) => setSelectedGenres((prev) => { const n = new Set(prev); n.has(g) ? n.delete(g) : n.add(g); return n; });
-  const toggleStatus = (s: string) => setSelectedStatuses((prev) => { const n = new Set(prev); n.has(s) ? n.delete(s) : n.add(s); return n; });
+  const toggleGenre = (g: string) => setSelectedGenres((prev) => {
+    const n = new Set(prev);
+    if (n.has(g)) n.delete(g);
+    else n.add(g);
+    return n;
+  });
+  const toggleStatus = (s: string) => setSelectedStatuses((prev) => {
+    const n = new Set(prev);
+    if (n.has(s)) n.delete(s);
+    else n.add(s);
+    return n;
+  });
 
   const hasActiveFilters = datePreset !== '30d' || typeFilter !== 'all' || selectedGenres.size > 0 || selectedStatuses.size > 0 || bpmMin !== '' || bpmMax !== '';
   const activeFilterCount = [datePreset !== '30d', typeFilter !== 'all', selectedGenres.size > 0, selectedStatuses.size > 0, bpmMin !== '' || bpmMax !== ''].filter(Boolean).length;
@@ -124,8 +138,8 @@ export default function AnalyticsPage() {
           }
           setTrackMeta(meta);
         }
-      } catch (err: any) {
-        setError(err.message || 'Failed to load analytics');
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to load analytics');
       } finally {
         setLoading(false);
       }
@@ -199,19 +213,23 @@ export default function AnalyticsPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10 pb-32">
-
-        {/* Header + cross-link */}
-        <div className="flex items-start justify-between mb-5 gap-4">
-          <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#a08a6a] mb-1">Dashboard</p>
-            <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight text-white leading-none font-heading">Analytics</h1>
-            <p className="text-[12px] text-[#6a5d4a] mt-1.5">Plays and track engagement — not revenue.</p>
-          </div>
-          <Link href="/sales" className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full border border-[#1f1a13] bg-[#14110d] text-[10px] font-mono text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all">
-            Revenue & sales <ExternalLink size={10} />
-          </Link>
-        </div>
+      <PageContainer className="max-w-[1100px] pb-32">
+        <PageHeader
+          eyebrow="Dashboard"
+          title="Analytics"
+          description="Plays and track engagement — not revenue."
+          actions={
+            <Link
+              href="/sales"
+              className="tap inline-flex min-h-9 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-readable)] transition-colors hover:border-[var(--border-hover)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+            >
+              Revenue & sales
+              <span className="grid size-6 place-items-center rounded-full bg-white/[0.06]" aria-hidden="true">
+                <ExternalLink size={10} />
+              </span>
+            </Link>
+          }
+        />
 
         {/* ── Filter bar ──────────────────────────────────────────── */}
         <div className="mb-5">
@@ -224,7 +242,7 @@ export default function AnalyticsPage() {
                 className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors ${
                   datePreset === value
                     ? 'bg-white text-black'
-                    : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-white hover:bg-white/[0.08]'
+                    : 'bg-white/[0.04] border border-white/[0.06] text-[#D0C3AF] hover:text-white hover:bg-white/[0.08]'
                 }`}
               >{label}</button>
             ))}
@@ -232,30 +250,30 @@ export default function AnalyticsPage() {
               onClick={() => setShowFilters((v) => !v)}
               className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-colors ${
                 showFilters || hasActiveFilters
-                  ? 'bg-[#2A2418] border-[#8A7A5C]/40 text-[#E8D8B8]'
-                  : 'bg-white/[0.04] border-white/[0.06] text-[#a08a6a] hover:text-[#E8DCC8]'
+                  ? 'bg-[#342F27] border-[#C9BCA8]/40 text-[#F3E6D1]'
+                  : 'bg-white/[0.04] border-white/[0.06] text-[#D0C3AF] hover:text-[#F7EBDD]'
               }`}
             >
               <SlidersHorizontal size={12} />
               Filters
               {activeFilterCount > 0 && (
-                <span className="w-4 h-4 rounded-full bg-[#D4BFA0] text-black text-[8px] font-bold flex items-center justify-center leading-none">{activeFilterCount}</span>
+                <span className="w-4 h-4 rounded-full bg-[#E7D7BE] text-black text-[8px] font-bold flex items-center justify-center leading-none">{activeFilterCount}</span>
               )}
             </button>
           </div>
 
           {/* Expanded filter panel */}
           {showFilters && (
-            <div className="mt-3 bg-[#0e0c08] border border-[#1a160f] rounded-xl p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="mt-3 bg-[#11100D] border border-[#211F1A] rounded-xl p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
 
               {/* Genre — first-class */}
               <div>
-                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Genre</p>
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Genre</p>
                 <div className="flex flex-wrap gap-1.5">
                   {TAG_TAXONOMY.genre.map((g) => (
                     <button key={g} onClick={() => toggleGenre(g)}
                       className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                        selectedGenres.has(g) ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'
+                        selectedGenres.has(g) ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]'
                       }`}>{g}</button>
                   ))}
                 </div>
@@ -263,12 +281,12 @@ export default function AnalyticsPage() {
 
               {/* State — first-class */}
               <div>
-                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">State</p>
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">State</p>
                 <div className="flex flex-wrap gap-1.5">
                   {STATUS_OPTIONS.map(({ value, label, color }) => (
                     <button key={value} onClick={() => toggleStatus(value)}
                       className={`px-3 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                        selectedStatuses.has(value) ? color : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'
+                        selectedStatuses.has(value) ? color : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]'
                       }`}>{label}</button>
                   ))}
                 </div>
@@ -276,30 +294,44 @@ export default function AnalyticsPage() {
 
               {/* Advanced: type + BPM */}
               <div>
-                <button onClick={() => setAdvancedOpen((v) => !v)} className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] hover:text-[#a08a6a] transition-colors">
+                <button onClick={() => setAdvancedOpen((v) => !v)} className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] hover:text-[#D0C3AF] transition-colors">
                   {advancedOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                   Advanced (type, BPM)
                 </button>
                 {advancedOpen && (
                   <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Track type</p>
+                      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Track type</p>
                       <div className="flex flex-wrap gap-1.5">
                         {TYPE_OPTIONS.map(({ value, label }) => (
                           <button key={value} onClick={() => setTypeFilter(value)}
-                            className={`px-2.5 py-1 rounded-md text-[10px] font-medium border transition-colors ${typeFilter === value ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'}`}
+                            className={`px-2.5 py-1 rounded-md text-[10px] font-medium border transition-colors ${typeFilter === value ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#3B372F]'}`}
                           >{label}</button>
                         ))}
                       </div>
                     </div>
                     <div>
-                      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">BPM range</p>
+                      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">BPM range</p>
                       <div className="flex items-center gap-2">
-                        <input type="number" placeholder="min" value={bpmMin} onChange={(e) => setBpmMin(e.target.value)}
-                          className="w-20 bg-[#14110d] border border-[#1a160f] rounded px-2 py-1.5 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] tabular-nums" />
-                        <span className="text-[#3a3328] text-[10px]">–</span>
-                        <input type="number" placeholder="max" value={bpmMax} onChange={(e) => setBpmMax(e.target.value)}
-                          className="w-20 bg-[#14110d] border border-[#1a160f] rounded px-2 py-1.5 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] tabular-nums" />
+                        <Field
+                          type="number"
+                          label="Min BPM"
+                          placeholder="min"
+                          value={bpmMin}
+                          onChange={(e) => setBpmMin(e.target.value)}
+                          className="w-24"
+                          inputClassName="min-h-9 py-1.5 text-[11px] tabular-nums"
+                        />
+                        <span className="text-[#6E685B] text-[10px]">–</span>
+                        <Field
+                          type="number"
+                          label="Max BPM"
+                          placeholder="max"
+                          value={bpmMax}
+                          onChange={(e) => setBpmMax(e.target.value)}
+                          className="w-24"
+                          inputClassName="min-h-9 py-1.5 text-[11px] tabular-nums"
+                        />
                       </div>
                     </div>
                   </div>
@@ -307,7 +339,7 @@ export default function AnalyticsPage() {
               </div>
 
               {hasActiveFilters && (
-                <button onClick={resetFilters} className="flex items-center gap-1.5 text-[10px] font-mono text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors">
+                <button onClick={resetFilters} className="flex items-center gap-1.5 text-[10px] font-mono text-[#B4AA99] hover:text-[#F7EBDD] transition-colors">
                   <X size={11} /> Reset all filters
                 </button>
               )}
@@ -326,22 +358,33 @@ export default function AnalyticsPage() {
             <p className="text-[12px] text-red-300 font-medium">{error}</p>
           </div>
         ) : isEmpty ? (
-          <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] px-6 py-16 text-center">
-            <Radio size={28} className="text-[#3a3328] mx-auto mb-3" />
-            <p className="text-[14px] text-[#E8DCC8] font-medium mb-1">No plays yet</p>
-            <p className="text-[12px] text-[#6a5d4a] max-w-md mx-auto mb-5">
-              Once someone streams a beat via a share link or your store, plays appear here by track and by day.
-            </p>
-            <div className="flex items-center justify-center gap-3 flex-wrap">
-              <Link href="/store-editor" className="text-[10px] font-mono uppercase tracking-wider px-3 py-2 rounded-md bg-[#D4BFA0] text-[#14110d] hover:bg-[#E8DCC8] transition-colors">List tracks for sale</Link>
-              <Link href="/contacts" className="text-[10px] font-mono uppercase tracking-wider px-3 py-2 rounded-md border border-[#2d2620] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#3a3328] transition-colors">Send a beat</Link>
-            </div>
-          </div>
+          <EmptyState
+            icon={<Radio size={28} aria-hidden="true" />}
+            title="No plays yet"
+            description="Once someone streams a beat via a share link or your store, plays appear here by track and by day."
+            action={
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <Link
+                  href="/store-editor"
+                  className="tap inline-flex min-h-9 items-center rounded-full border border-transparent bg-[var(--accent)] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#090907] transition-colors hover:bg-[var(--accent-light)]"
+                >
+                  List tracks
+                </Link>
+                <Link
+                  href="/contacts"
+                  className="tap inline-flex min-h-9 items-center rounded-full border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-readable)] transition-colors hover:border-[var(--border-hover)] hover:text-[var(--text-primary)]"
+                >
+                  Send a beat
+                </Link>
+              </div>
+            }
+            className="py-16"
+          />
         ) : (
           <>
             {/* Engagement KPIs */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-5">
-              <EngagementCard label={`Total plays (${DATE_OPTIONS.find(d => d.value === datePreset)?.label ?? ''})`} value={String(filteredByTrack.length > 0 ? filteredTotalPlays : totals?.plays ?? 0)} icon={<Headphones size={14} />} accent="#D4BFA0" />
+              <EngagementCard label={`Total plays (${DATE_OPTIONS.find(d => d.value === datePreset)?.label ?? ''})`} value={String(filteredByTrack.length > 0 ? filteredTotalPlays : totals?.plays ?? 0)} icon={<Headphones size={14} />} accent="#E7D7BE" />
               <EngagementCard label="Tracks with plays" value={String(filteredByTrack.filter((t) => t.plays > 0).length)} icon={<Music size={14} />} accent="#9d95e8" />
               <EngagementCard
                 label="Avg plays / track"
@@ -355,10 +398,10 @@ export default function AnalyticsPage() {
 
             {/* Activity chart */}
             {activityLine && activityLine.vals.some(Boolean) && (
-              <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] px-5 py-4 mb-5">
+              <div className="rounded-2xl border border-[#2B2821] bg-[#171511] px-5 py-4 mb-5">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142]">Activity · {DATE_OPTIONS.find(d => d.value === datePreset)?.label}</p>
-                  <p className="text-[9px] font-mono text-[#3a3328]">
+                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">Activity · {DATE_OPTIONS.find(d => d.value === datePreset)?.label}</p>
+                  <p className="text-[9px] font-mono text-[#6E685B]">
                     {filteredByDay[0] ? fmtDate(filteredByDay[0].date) : ''} → today
                   </p>
                 </div>
@@ -378,13 +421,13 @@ export default function AnalyticsPage() {
             {/* Filter summary chips */}
             {hasActiveFilters && (
               <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <span className="text-[9px] font-mono text-[#5a5142] uppercase tracking-wider">Active filters:</span>
+                <span className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider">Active filters:</span>
                 {datePreset !== '30d' && <Chip label={DATE_OPTIONS.find(d => d.value === datePreset)?.label ?? ''} onRemove={() => setDatePreset('30d')} />}
                 {Array.from(selectedGenres).map((g) => <Chip key={g} label={g} onRemove={() => toggleGenre(g)} />)}
                 {Array.from(selectedStatuses).map((s) => <Chip key={s} label={STATUS_OPTIONS.find(o => o.value === s)?.label ?? s} onRemove={() => toggleStatus(s)} />)}
                 {typeFilter !== 'all' && <Chip label={TYPE_OPTIONS.find(t => t.value === typeFilter)?.label ?? ''} onRemove={() => setTypeFilter('all')} />}
                 {(bpmMin !== '' || bpmMax !== '') && <Chip label={`${bpmMin || '?'}–${bpmMax || '?'} BPM`} onRemove={() => { setBpmMin(''); setBpmMax(''); }} />}
-                <span className="text-[10px] font-mono text-[#5a5142] ml-1">
+                <span className="text-[10px] font-mono text-[#9B9282] ml-1">
                   Showing {filteredByTrack.length} / {byTrack.length} tracks
                 </span>
               </div>
@@ -392,33 +435,33 @@ export default function AnalyticsPage() {
 
             {/* Top tracks leaderboard — plays only, no revenue */}
             {filteredByTrack.length > 0 ? (
-              <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] mb-5 overflow-hidden">
-                <div className="px-5 py-3 border-b border-[#1a160f] flex items-center justify-between">
+              <div className="rounded-2xl border border-[#2B2821] bg-[#171511] mb-5 overflow-hidden">
+                <div className="px-5 py-3 border-b border-[#211F1A] flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <BarChart3 size={12} className="text-[#a08a6a]" />
-                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#a08a6a]">Top tracks by plays</p>
+                    <BarChart3 size={12} className="text-[#D0C3AF]" />
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">Top tracks by plays</p>
                   </div>
-                  <p className="text-[9px] font-mono text-[#3a3328]">{filteredByTrack.length} tracks</p>
+                  <p className="text-[9px] font-mono text-[#6E685B]">{filteredByTrack.length} tracks</p>
                 </div>
-                <div className="divide-y divide-[#1a160f]">
+                <div className="divide-y divide-[#211F1A]">
                   {filteredByTrack.slice(0, 15).map((t, rank) => {
                     const meta = trackMeta.get(t.track_id);
                     return (
-                      <div key={t.track_id} className="flex items-center gap-3 px-5 py-3 hover:bg-[#16130e] transition-colors">
-                        <span className="text-[10px] font-mono text-[#3a3328] tabular-nums w-5 shrink-0">{rank + 1}</span>
+                      <div key={t.track_id} className="flex items-center gap-3 px-5 py-3 hover:bg-[#1A1813] transition-colors">
+                        <span className="text-[10px] font-mono text-[#6E685B] tabular-nums w-5 shrink-0">{rank + 1}</span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1.5 gap-2">
-                            <Link href={`/library/${t.track_id}`} className="text-[12px] text-[#E8DCC8] truncate hover:text-[#D4BFA0] transition-colors flex-1">
+                            <Link href={`/library/${t.track_id}`} className="text-[12px] text-[#F7EBDD] truncate hover:text-[#E7D7BE] transition-colors flex-1">
                               {t.title}
                             </Link>
                             <div className="flex items-center gap-3 shrink-0">
-                              {meta?.bpm && <span className="text-[9px] font-mono text-[#3a3328]">{meta.bpm} BPM</span>}
-                              {meta?.type && <span className="text-[9px] font-mono text-[#5a5142] capitalize">{meta.type}</span>}
-                              <span className="text-[11px] font-mono font-bold text-[#D4BFA0] tabular-nums">{t.plays} plays</span>
+                              {meta?.bpm && <span className="text-[9px] font-mono text-[#6E685B]">{meta.bpm} BPM</span>}
+                              {meta?.type && <span className="text-[9px] font-mono text-[#9B9282] capitalize">{meta.type}</span>}
+                              <span className="text-[11px] font-mono font-bold text-[#E7D7BE] tabular-nums">{t.plays} plays</span>
                             </div>
                           </div>
-                          <div className="h-[3px] rounded-full bg-[#1f1a13] overflow-hidden">
-                            <div className="h-full rounded-full bg-[#D4BFA0]/60 transition-all duration-500"
+                          <div className="h-[3px] rounded-full bg-[#2B2821] overflow-hidden">
+                            <div className="h-full rounded-full bg-[#E7D7BE]/60 transition-all duration-500"
                               style={{ width: `${Math.max(2, (t.plays / maxPlays) * 100).toFixed(1)}%` }} />
                           </div>
                         </div>
@@ -428,85 +471,87 @@ export default function AnalyticsPage() {
                 </div>
               </div>
             ) : (
-              <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] px-6 py-10 text-center mb-5">
-                <Music size={20} className="text-[#3a3328] mx-auto mb-2" />
-                <p className="text-[12px] text-[#6a5d4a]">No tracks match the current filters.</p>
-              </div>
+              <EmptyState
+                icon={<Music size={20} aria-hidden="true" />}
+                title="No matching tracks"
+                description="No tracks match the current filters."
+                className="mb-5 py-10"
+              />
             )}
 
             {/* Share-link analytics (Task 6) — per-token engagement + source */}
             {byShareLink.length > 0 && (
-              <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] mb-5 overflow-hidden">
-                <div className="px-5 py-3 border-b border-[#1a160f] flex items-center justify-between">
+              <div className="rounded-2xl border border-[#2B2821] bg-[#171511] mb-5 overflow-hidden">
+                <div className="px-5 py-3 border-b border-[#211F1A] flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Link2 size={12} className="text-[#a08a6a]" />
-                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#a08a6a]">Share links</p>
+                    <Link2 size={12} className="text-[#D0C3AF]" />
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">Share links</p>
                   </div>
-                  <p className="text-[9px] font-mono text-[#3a3328]">{byShareLink.length} opened</p>
+                  <p className="text-[9px] font-mono text-[#6E685B]">{byShareLink.length} opened</p>
                 </div>
                 {/* Column headers */}
-                <div className="hidden sm:flex items-center gap-3 px-5 py-2 border-b border-[#1a160f] text-[8px] font-mono uppercase tracking-[0.18em] text-[#3a3328]">
+                <div className="hidden sm:flex items-center gap-3 px-5 py-2 border-b border-[#211F1A] text-[8px] font-mono uppercase tracking-[0.18em] text-[#6E685B]">
                   <span className="flex-1">Link</span>
                   <span className="w-16 text-right">Plays</span>
                   <span className="w-20 text-right">Unique</span>
                   <span className="w-28 text-right">Source</span>
                 </div>
-                <div className="divide-y divide-[#1a160f]">
+                <div className="divide-y divide-[#211F1A]">
                   {byShareLink.slice(0, 20).map((s) => (
-                    <div key={s.token} className="flex items-center gap-3 px-5 py-3 hover:bg-[#16130e] transition-colors">
+                    <div key={s.token} className="flex items-center gap-3 px-5 py-3 hover:bg-[#1A1813] transition-colors">
                       <div className="flex-1 min-w-0">
                         <a
                           href={`/share/${s.token}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[12px] text-[#E8DCC8] hover:text-[#D4BFA0] transition-colors font-mono truncate inline-flex items-center gap-1.5"
+                          className="text-[12px] text-[#F7EBDD] hover:text-[#E7D7BE] transition-colors font-mono truncate inline-flex items-center gap-1.5"
                           title={s.token}
                         >
                           /{s.token.slice(0, 12)}{s.token.length > 12 ? '…' : ''}
-                          <ExternalLink size={9} className="text-[#5a5142] shrink-0" />
+                          <ExternalLink size={9} className="text-[#9B9282] shrink-0" />
                         </a>
-                        <p className="text-[9px] font-mono text-[#5a5142] mt-0.5">
+                        <p className="text-[9px] font-mono text-[#9B9282] mt-0.5">
                           {s.track_count} track{s.track_count === 1 ? '' : 's'}
                           {s.recipient_kind ? ` · ${s.recipient_kind}` : ''}
                         </p>
                       </div>
-                      <span className="w-16 text-right text-[11px] font-mono font-bold text-[#D4BFA0] tabular-nums">{s.plays}</span>
-                      <span className="w-20 text-right text-[11px] font-mono text-[#a08a6a] tabular-nums">{s.unique_opens}</span>
-                      <span className="w-28 text-right text-[10px] font-mono text-[#a08a6a] truncate" title={s.top_source}>{s.top_source}</span>
+                      <span className="w-16 text-right text-[11px] font-mono font-bold text-[#E7D7BE] tabular-nums">{s.plays}</span>
+                      <span className="w-20 text-right text-[11px] font-mono text-[#D0C3AF] tabular-nums">{s.unique_opens}</span>
+                      <span className="w-28 text-right text-[10px] font-mono text-[#D0C3AF] truncate" title={s.top_source}>{s.top_source}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            <p className="text-[9px] font-mono text-[#3a3328] text-center mt-6">
-              For revenue and order history → <Link href="/sales" className="text-[#6a5d4a] hover:text-[#a08a6a] underline underline-offset-2 transition-colors">Sales</Link>
+            <p className="text-[9px] font-mono text-[#6E685B] text-center mt-6">
+              For revenue and order history → <Link href="/sales" className="text-[#B4AA99] hover:text-[#D0C3AF] underline underline-offset-2 transition-colors">Sales</Link>
             </p>
           </>
         )}
-      </div>
+      </PageContainer>
     </DashboardLayout>
   );
 }
 
 function EngagementCard({ label, value, icon, accent }: { label: string; value: string; icon: React.ReactNode; accent: string }) {
   return (
-    <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-4 py-3">
+    <Card className="rounded-xl px-4 py-3">
       <div className="flex items-center gap-1.5 mb-1.5" style={{ color: accent }}>
         {icon}
-        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] truncate">{label}</span>
+        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] truncate">{label}</span>
       </div>
       <p className="text-[22px] font-bold text-white tabular-nums leading-none">{value}</p>
-    </div>
+    </Card>
   );
 }
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#2A2418] border border-[#8A7A5C]/30 text-[9px] font-mono text-[#E8D8B8]">
+    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#342F27] border border-[#C9BCA8]/30 text-[9px] font-mono text-[#F3E6D1]">
       {label}
-      <button onClick={onRemove} className="text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors ml-0.5">
-        <X size={9} />
+      <button onClick={onRemove} aria-label={`Remove ${label} filter`} className="text-[#B4AA99] hover:text-[#F7EBDD] transition-colors ml-0.5">
+        <X size={9} aria-hidden="true" />
       </button>
     </span>
   );

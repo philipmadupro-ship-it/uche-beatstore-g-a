@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAppUrl } from '@/lib/env';
 import { isSupabaseConfigured, getById, update, requireRowOwnership } from '@/lib/db';
 import { analyzeAudio } from '@/lib/audio/analyze.server';
+import type { AudioFeatures } from '@/lib/audio/analyze.server';
 import { getAuddFeatures } from '@/lib/audio/audd';
+import type { AuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
@@ -11,6 +13,25 @@ const log = createLogger('api.tracks.analyze');
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
+
+type TrackForAnalysis = {
+  id: string;
+  audio_url?: string | null;
+  energy?: number | null;
+  danceability?: number | null;
+  valence?: number | null;
+  acousticness?: number | null;
+};
+
+type ClientFeatures = Partial<AudioFeatures>;
+type ClientChord = { time: number; chord: string };
+type AnalysisPatch = Record<string, string | number | ClientChord[]>;
+type OwnershipOk = Extract<Awaited<ReturnType<typeof requireRowOwnership>>, { ok: true }>;
+type AnalysisAdmin = OwnershipOk['admin'];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
 /**
  * Re-analyze a track's audio using server-side analysis.
@@ -24,17 +45,17 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   try {
-    let track: any;
-    let admin: any = null;
+    let track: TrackForAnalysis | null;
+    let admin: AnalysisAdmin | null = null;
     if (isSupabaseConfigured()) {
       const owner = await requireRowOwnership('tracks', id);
       if (!owner.ok) return owner.res;
       admin = owner.admin;
       const { data, error } = await admin.from('tracks').select('*').eq('id', id).single();
       if (error) throw error;
-      track = data;
+      track = data as TrackForAnalysis | null;
     } else {
-      track = getById('tracks', id);
+      track = getById('tracks', id) as TrackForAnalysis | null;
     }
     if (!track) return NextResponse.json({ error: 'Track not found' }, { status: 404 });
     if (!track.audio_url) return NextResponse.json({ error: 'No audio_url on track' }, { status: 400 });
@@ -43,20 +64,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // analysis. But a *malformed* body (caller sent garbage JSON) should
     // 400 rather than silently skip Essentia, which would land the user
     // back on the slow server path with no explanation.
-    let clientFeatures: any = null;
+    let clientFeatures: ClientFeatures | null = null;
     let clientChords: Array<{ time: number; chord: string }> | null = null;
     const rawText = await req.text();
     if (rawText.trim().length > 0) {
       try {
-        const body = JSON.parse(rawText);
-        clientFeatures = body?.features || null;
+        const body = JSON.parse(rawText) as unknown;
+        clientFeatures = isRecord(body) && isRecord(body.features)
+          ? body.features as ClientFeatures
+          : null;
         // Chord timeline (Task 8) — client-detected via Essentia HPCP. Validate
         // shape + cap length so a bad payload can't bloat the row.
-        if (Array.isArray(body?.chords)) {
+        if (isRecord(body) && Array.isArray(body.chords)) {
           clientChords = body.chords
-            .filter((c: any) => c && typeof c.chord === 'string' && Number.isFinite(c.time))
+            .filter((c: unknown): c is { time: number; chord: string } =>
+              isRecord(c) && typeof c.chord === 'string' && Number.isFinite(c.time))
             .slice(0, 2000)
-            .map((c: any) => ({ time: Math.max(0, Number(c.time)), chord: String(c.chord).slice(0, 8) }));
+            .map((c) => ({ time: Math.max(0, Number(c.time)), chord: String(c.chord).slice(0, 8) }));
         }
       } catch {
         return NextResponse.json(
@@ -91,8 +115,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     // Re-analyze runs through the same precedence as upload:
     //   client (Essentia) > AudD vibe-fields > server heuristics.
-    let serverFeatures: any = null;
-    let auddFeatures: any = null;
+    let serverFeatures: AudioFeatures | null = null;
+    let auddFeatures: AuddFeatures | null = null;
     let buf: Buffer | null = null;
 
     if (!clientUsable) {
@@ -220,7 +244,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Strip nulls + underscore-prefixed diagnostics so we never blow
     // away an existing value with a null or try to write to columns
     // that don't exist.
-    const patch: Record<string, any> = {};
+    const patch: AnalysisPatch = {};
     for (const [k, v] of Object.entries(merged)) {
       if (v != null && !k.startsWith('_')) patch[k] = v;
     }

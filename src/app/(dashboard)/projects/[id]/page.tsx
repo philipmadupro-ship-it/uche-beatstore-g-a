@@ -6,7 +6,9 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { PageContainer } from '@/components/layout/PageHeader';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { DropZone } from '@/components/upload/DropZone';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
@@ -14,21 +16,39 @@ import { ProjectCommentsPanel } from '@/components/projects/ProjectCommentsPanel
 import { AddFromLibraryModal } from '@/components/projects/AddFromLibraryModal';
 import { ProjectDetailHeader } from '@/components/projects/ProjectDetailHeader';
 import { ProjectTrackList } from '@/components/projects/ProjectTrackList';
-import { ProjectChecklist } from '@/components/projects/ProjectChecklist';
+import { ProjectChecklist, type ChecklistItem } from '@/components/projects/ProjectChecklist';
 import { ToplineRecorder } from '@/components/lyrics/ToplineRecorder';
 import { ProjectAnalyticsPanel } from '@/components/projects/ProjectAnalyticsPanel';
-import { Loader2, Camera, Send, ListPlus } from 'lucide-react';
+import { Loader2, Camera, ListPlus } from 'lucide-react';
 import { Track } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { seededGradient } from '@/lib/ui/cover-gradient';
 
-const STATUSES = ['in_progress', 'final', 'archived'] as const;
+type ProjectStatus = 'in_progress' | 'final' | 'archived';
+
+type ProjectDetail = {
+  id: string;
+  name: string;
+  cover_url: string | null;
+  description?: string | null;
+  price_usd?: number | null;
+  store_featured?: boolean;
+  bpm_target?: number | null;
+  key_target?: string | null;
+  checklist?: ChecklistItem[];
+  status?: ProjectStatus;
+};
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback;
+}
 
 export default function ProjectWorkspacePage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = React.use(paramsPromise);
-  const [project, setProject] = useState<any>(null);
+  const searchParams = useSearchParams();
+  const [project, setProject] = useState<ProjectDetail | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadingArt, setUploadingArt] = useState(false);
@@ -55,6 +75,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
 
   const { setTrack: setGlobalTrack, setQueue } = usePlayer();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const startHandledRef = useRef(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -84,6 +105,18 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
   useEffect(() => {
     fetchData();
   }, [params.id]);
+
+  useEffect(() => {
+    if (startHandledRef.current || loading || !project) return;
+    const start = searchParams.get('start');
+    if (start === 'library') {
+      setShowAddFromLibrary(true);
+      startHandledRef.current = true;
+    } else if (start === 'upload') {
+      setShowUpload(true);
+      startHandledRef.current = true;
+    }
+  }, [loading, project, searchParams]);
 
   const filtered = tracks.filter((t) => {
     if (activeTab !== 'All') {
@@ -147,7 +180,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
         toast.error('Save failed', j?.error || `HTTP ${res.status}`);
         return false;
       }
-      setProject((p: any) => ({ ...p, ...patch }));
+      setProject((p) => p ? ({ ...p, ...patch }) : p);
       if (successLabel) toast.success(successLabel);
       return true;
     } catch (err) {
@@ -172,7 +205,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
     if (ok) setEditingTargets(false);
   };
 
-  const setStatus = async (status: typeof STATUSES[number]) => {
+  const setStatus = async (status: ProjectStatus) => {
     await patchProject({ status });
   };
 
@@ -235,8 +268,8 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
       }
       fetchData();
       toast.success('Removed from project');
-    } catch (err: any) {
-      toast.error('Remove failed', err?.message);
+    } catch (err: unknown) {
+      toast.error('Remove failed', errorMessage(err, 'Network error'));
     }
   };
 
@@ -256,8 +289,8 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
       }
       fetchData();
       toast.success('Track deleted');
-    } catch (err: any) {
-      toast.error('Delete failed', err?.message);
+    } catch (err: unknown) {
+      toast.error('Delete failed', errorMessage(err, 'Network error'));
     }
   };
 
@@ -319,7 +352,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-full">
-          <Loader2 size={18} className="animate-spin text-[#4a4338]" />
+          <Loader2 size={18} className="animate-spin text-[#837B6D]" />
         </div>
       </DashboardLayout>
     );
@@ -327,24 +360,24 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1400px] mx-auto px-10 pt-10">
+      <PageContainer>
         {/* Side-by-side layout: cover LEFT (sticky on tall viewports),
             everything else RIGHT (header meta, upload zone, tabs, track
             list). Below the lg breakpoint we stack so phones / narrow
             laptop screens still read well. */}
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_1fr] gap-10 mb-10">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_1fr] gap-5 sm:gap-8 lg:gap-10 mb-8 sm:mb-10">
           {/* Cover column — large square, click-to-replace. Renders here
               instead of inside the header so it can be the dominant
               visual anchor on the project page. */}
           <div className="lg:sticky lg:top-10 lg:self-start">
             <div
-              className="aspect-square w-full bg-[#14110d] rounded-2xl border border-white/[0.05] overflow-hidden group relative cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+              className="mx-auto aspect-square w-full max-w-[270px] sm:max-w-[360px] lg:max-w-none bg-[#171511] rounded-[24px] sm:rounded-[28px] lg:rounded-2xl border border-white/[0.05] overflow-hidden group relative cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
               onClick={() => fileInputRef.current?.click()}
             >
               {project?.cover_url ? (
                 <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[120px] font-light text-white/[0.07]" style={seededGradient(project?.id ?? 'p')}>
+                <div className="w-full h-full flex items-center justify-center text-[88px] sm:text-[112px] lg:text-[120px] font-light text-white/[0.07]" style={seededGradient(project?.id ?? 'p')}>
                   {project?.name?.[0] || 'P'}
                 </div>
               )}
@@ -408,76 +441,12 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           </div>
         )}
 
-        {/* Storefront — description + price for the public /store project page. */}
-        <div className="mb-8 rounded-2xl border border-[#1f1a13] bg-[#14110d] p-5">
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#a08a6a] mb-3">
-            Storefront
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-4">
-            <div>
-              <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] block mb-1.5">
-                Description
-              </label>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={4}
-                maxLength={10000}
-                placeholder="Describe this project…"
-                className="w-full bg-[#0c0a08] border border-[#1f1a13] rounded-lg px-3 py-2 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#8A7A5C] transition-colors resize-none leading-relaxed"
-              />
-            </div>
-            <div>
-              <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] block mb-1.5">
-                Price (USD)
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#5a5142]">$</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={priceUsd}
-                  onChange={(e) => setPriceUsd(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full bg-[#0c0a08] border border-[#1f1a13] rounded-lg pl-7 pr-3 py-2 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#8A7A5C] transition-colors"
-                />
-              </div>
-              <p className="text-[9px] font-mono text-[#3a3328] mt-1.5">
-                Leave blank to hide from store.
-              </p>
-            </div>
-          </div>
-          <div className="flex justify-end mt-4">
-            <button
-              type="button"
-              onClick={saveStorefront}
-              disabled={savingStorefront}
-              className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#D4BFA0] hover:bg-[#E8D8B8] disabled:opacity-60 text-black text-[11px] font-semibold transition-all"
-            >
-              {savingStorefront ? <Loader2 size={12} className="animate-spin" /> : null}
-              {savingStorefront ? 'Saving…' : 'Save storefront'}
-            </button>
-          </div>
-        </div>
-
         {/* Topline recorder — quick voice-memo session for melody ideas
             over a project's reference beat. Reuses track_stem_files (mig 080)
             with a shared project-level topline track id (first track). */}
         {project && tracks.length > 0 && (
           <div className="mb-6">
             <ToplineRecorder trackId={tracks[0].id} />
-          </div>
-        )}
-
-        {/* Production checklist (mig 084) */}
-        {project && (
-          <div className="mb-6">
-            <ProjectChecklist
-              projectId={params.id}
-              items={project.checklist ?? []}
-              onChanged={(items) => setProject((p: any) => p ? { ...p, checklist: items } : p)}
-            />
           </div>
         )}
 
@@ -516,22 +485,111 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
             {/* Analytics strip */}
             {project && <ProjectAnalyticsPanel projectId={params.id} />}
 
+            {/* Production checklist (mig 084) — secondary, collapsed and
+                underneath the active track work so it reads like admin,
+                not the main project surface. */}
+            {project && (
+              <details className="mt-6 rounded-2xl border border-[#2B2821] bg-[#11100D]/70 p-3">
+                <summary className="cursor-pointer list-none text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99]">
+                  Checklist {project.checklist?.length ? `· ${project.checklist.filter((item) => item.done).length}/${project.checklist.length}` : ''}
+                </summary>
+                <div className="mt-3">
+                  <ProjectChecklist
+                    projectId={params.id}
+                    items={project.checklist ?? []}
+                    onChanged={(items) => setProject((p) => p ? { ...p, checklist: items } : p)}
+                  />
+                </div>
+              </details>
+            )}
+
+            {/* Storefront — moved below creation controls so commerce does
+                not compete with the primary project workspace on mobile. */}
+            <div className="mt-6 rounded-2xl border border-[#2B2821] bg-[#171511]/80 p-4 sm:p-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">
+                  Storefront
+                </p>
+                <button
+                  type="button"
+                  onClick={toggleStoreFeatured}
+                  disabled={togglingStoreFeatured}
+                  className={`rounded-full border px-3 py-1.5 text-[10px] font-medium transition-all disabled:opacity-40 ${
+                    project?.store_featured
+                      ? 'border-[#E7D7BE]/40 bg-[#E7D7BE]/15 text-[#E7D7BE]'
+                      : 'border-[#2B2821] text-[#B4AA99] hover:border-[#3B372F] hover:text-[#F7EBDD]'
+                  }`}
+                >
+                  {togglingStoreFeatured ? 'Saving...' : project?.store_featured ? 'In store' : 'List in store'}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_180px]">
+                <div>
+                  <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] block mb-1.5">
+                    Description
+                  </label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={3}
+                    maxLength={10000}
+                    placeholder="Describe this project..."
+                    className="w-full bg-[#11100D] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] transition-colors resize-none leading-relaxed"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] block mb-1.5">
+                    Price (USD)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#9B9282]">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={priceUsd}
+                      onChange={(e) => setPriceUsd(e.target.value)}
+                      placeholder="0.00"
+                      className="w-full bg-[#11100D] border border-[#2B2821] rounded-lg pl-7 pr-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] transition-colors"
+                    />
+                  </div>
+                  <p className="text-[9px] font-mono text-[#6E685B] mt-1.5">
+                    Leave blank to hide from store.
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end mt-4">
+                <button
+                  type="button"
+                  onClick={saveStorefront}
+                  disabled={savingStorefront}
+                  className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#E7D7BE] hover:bg-[#F3E6D1] disabled:opacity-60 text-black text-[11px] font-semibold transition-all"
+                >
+                  {savingStorefront ? <Loader2 size={12} className="animate-spin" /> : null}
+                  {savingStorefront ? 'Saving...' : 'Save storefront'}
+                </button>
+              </div>
+            </div>
+
             {/* end right column (min-w-0) */}
           </div>
           {/* end side-by-side grid */}
         </div>
-      </div>
+      </PageContainer>
 
       {/* Project-level feedback. Lives below the tracklist so owners scrolling
           the project see new comments without changing context. Pings every
           15s; that's good enough until we wire Supabase Realtime. */}
       {project && (
-        <div className="px-8 pb-12 max-w-[1400px] mx-auto">
-          <ProjectCommentsPanel
-            projectId={params.id as string}
-            tracks={tracks.map((t) => ({ id: t.id, title: t.title }))}
-          />
-        </div>
+        <PageContainer className="pt-0 pb-12">
+          <div className="rounded-2xl border border-[#2B2821]/70 bg-[#11100D]/55 p-3 sm:p-4">
+            <ProjectCommentsPanel
+              projectId={params.id as string}
+              tracks={tracks.map((t) => ({ id: t.id, title: t.title }))}
+              compact
+            />
+          </div>
+        </PageContainer>
       )}
 
       {selectedTrack && (

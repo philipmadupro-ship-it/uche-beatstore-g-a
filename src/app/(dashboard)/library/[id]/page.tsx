@@ -8,6 +8,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { PageContainer } from '@/components/layout/PageHeader';
 import { Loader2, Camera, Check, X, Edit2, Music, Download, Share2, Activity, Sliders } from 'lucide-react';
 import { PlayGlyph } from '@/components/player/TransportIcons';
 import { useRouter } from 'next/navigation';
@@ -33,9 +34,9 @@ import { TrackListingEditor } from '@/components/tracks/TrackListingEditor';
 
 const STATUS_OPTIONS: { value: TrackStatus; label: string; color: string }[] = [
   { value: 'maq',         label: 'MAQ',        color: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
-  { value: 'needs_work',  label: 'WIP',        color: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]' },
+  { value: 'needs_work',  label: 'WIP',        color: 'bg-[#1f1a0a] text-[#D6BE7A] border-[#3a2f1f]' },
   { value: 'finished',    label: 'Finished',   color: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
-  { value: 'archived',    label: 'Archived',   color: 'bg-[#16130e] text-[#6a5d4a] border-[#1f1a13]' },
+  { value: 'archived',    label: 'Archived',   color: 'bg-[#1A1813] text-[#B4AA99] border-[#2B2821]' },
 ];
 
 const TYPE_OPTIONS: { value: TrackType; label: string }[] = [
@@ -44,6 +45,16 @@ const TYPE_OPTIONS: { value: TrackType; label: string }[] = [
   { value: 'song',         label: 'Song' },
   { value: 'remix',        label: 'Remix' },
 ];
+
+type AnalyzeResponse = Partial<Track> & {
+  track?: Track;
+  error?: string;
+  source?: string;
+};
+
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback;
+}
 
 // TrackVersion is re-exported from components/library/LibraryVersionHistory
 // — single source of truth, prevents the shape from drifting between
@@ -174,12 +185,18 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
   };
 
   const handleReanalyze = async () => {
-    if (!track?.audio_url || reanalyzing) return;
+    if (reanalyzing) return;
+    if (!track?.audio_url) {
+      const message = 'Upload or replace this track’s source audio before running analysis.';
+      setAnalysisError(message);
+      toast.error('No audio file', message);
+      return;
+    }
     setReanalyzing(true);
     setAnalysisError(null);
     try {
       // Try client-side Essentia first (more accurate, gets key+scale)
-      let features: any = null;
+      let features: unknown = null;
       try {
         const res = await fetch(audioSrc(track.audio_url));
         if (!res.ok) throw new Error(`audio ${res.status}`);
@@ -197,7 +214,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const data = await r.json();
+      const data = (await r.json()) as AnalyzeResponse;
       if (!r.ok) throw new Error(data.error || 'Analysis failed');
       if (data.track) setTrack(data.track);
 
@@ -220,9 +237,10 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
           'Audio analyzed but BPM and key extractors couldn’t lock a confident signal.',
         );
       }
-    } catch (err: any) {
-      setAnalysisError(err.message || 'Analysis failed');
-      toast.error('Re-analyze failed', err?.message || 'Unknown error');
+    } catch (err: unknown) {
+      const message = errorMessage(err, 'Analysis failed');
+      setAnalysisError(message);
+      toast.error('Re-analyze failed', message);
     } finally {
       setReanalyzing(false);
     }
@@ -250,7 +268,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-full">
-          <Loader2 size={18} className="animate-spin text-[#4a4338]" />
+          <Loader2 size={18} className="animate-spin text-[#837B6D]" />
         </div>
       </DashboardLayout>
     );
@@ -260,15 +278,15 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center h-full gap-3">
-          <p className="text-[#5a5142] text-sm">
+          <p className="text-[#9B9282] text-sm">
             {fetchError ? 'Couldn’t load this track' : 'Track not found'}
           </p>
           {fetchError && (
             <>
-              <p className="text-[10px] text-[#4a4338] font-mono max-w-md text-center">{fetchError}</p>
+              <p className="text-[10px] text-[#837B6D] font-mono max-w-md text-center">{fetchError}</p>
               <button
                 onClick={fetchData}
-                className="text-[11px] text-[#D4BFA0] hover:text-[#E8D8B8] font-medium"
+                className="text-[11px] text-[#E7D7BE] hover:text-[#F3E6D1] font-medium"
               >
                 Try again
               </button>
@@ -281,24 +299,24 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1400px] mx-auto px-10 pt-10">
+      <PageContainer className="pt-5 sm:pt-8 lg:pt-10 pb-32">
         {/* Side-by-side layout: big square cover LEFT (sticky on tall
             viewports), all meta + actions + metadata + history + tags +
             lyrics + notes stacked RIGHT. Same shape as the project
             detail page so library and project pages share one mental
             model. Stacks vertically below the lg breakpoint. */}
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_1fr] gap-10">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_1fr] gap-6 sm:gap-8 lg:gap-10">
           {/* Cover column. Click anywhere on the square to swap the
               cover image — same affordance as the project detail page. */}
           <div className="lg:sticky lg:top-10 lg:self-start">
             <div
-              className="aspect-square w-full bg-[#14110d] rounded-2xl border border-white/[0.05] overflow-hidden group relative cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+              className="aspect-square w-full bg-[#171511] rounded-2xl border border-white/[0.05] overflow-hidden group relative cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
               onClick={() => fileInputRef.current?.click()}
             >
               {track.cover_url ? (
                 <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#1a160f] bg-gradient-to-br from-[#161520] to-[#0a0907]">
+                <div className="w-full h-full flex items-center justify-center text-[#211F1A] bg-gradient-to-br from-[#161520] to-[#090907]">
                   <Music size={64} strokeWidth={1.2} />
                 </div>
               )}
@@ -311,16 +329,16 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
 
           {/* Right column — meta + all sub-panels. */}
           <div className="min-w-0">
-            <div className="flex flex-col gap-4 pb-8 mb-8 border-b border-white/[0.04]">
+            <div className="flex flex-col gap-3 sm:gap-4 pb-5 sm:pb-8 mb-6 sm:mb-8 border-b border-white/[0.04]">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 mb-2 overflow-x-auto scrollbar-hide pb-1">
                 <select
                   value={track.type}
                   onChange={(e) => patchTrack({ type: e.target.value as TrackType })}
-                  className="bg-transparent text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] border border-[#1f1a13] rounded px-2 py-1 hover:border-[#2d2620] focus:outline-none focus:border-[#D4BFA0] cursor-pointer"
+                  className="shrink-0 bg-transparent text-[9px] sm:text-[10px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.2em] text-[#F3E6D1] border border-[#2B2821] rounded px-2 py-1 hover:border-[#3B372F] focus:outline-none focus:border-[#E7D7BE] cursor-pointer"
                 >
                   {TYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value} className="bg-[#0a0907]">{opt.label}</option>
+                    <option key={opt.value} value={opt.value} className="bg-[#090907]">{opt.label}</option>
                   ))}
                 </select>
                 {/* Instrumental flag (mig 079) — distinct from type; drives the
@@ -329,10 +347,10 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                   value={track.instrumental ? 'yes' : 'no'}
                   onChange={(e) => patchTrack({ instrumental: e.target.value === 'yes' })}
                   title="Does this track have vocals?"
-                  className="bg-transparent text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] border border-[#1f1a13] rounded px-2 py-1 hover:border-[#2d2620] focus:outline-none focus:border-[#D4BFA0] cursor-pointer"
+                  className="shrink-0 bg-transparent text-[9px] sm:text-[10px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.2em] text-[#F3E6D1] border border-[#2B2821] rounded px-2 py-1 hover:border-[#3B372F] focus:outline-none focus:border-[#E7D7BE] cursor-pointer"
                 >
-                  <option value="no" className="bg-[#0a0907]">Has Vocals</option>
-                  <option value="yes" className="bg-[#0a0907]">Instrumental</option>
+                  <option value="no" className="bg-[#090907]">Has Vocals</option>
+                  <option value="yes" className="bg-[#090907]">Instrumental</option>
                 </select>
                 {STATUS_OPTIONS.map((opt) => {
                   const active = (track.status || 'needs_work') === opt.value;
@@ -340,37 +358,37 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                     <button
                       key={opt.value}
                       onClick={() => patchTrack({ status: opt.value })}
-                      className={`px-2 py-1 rounded text-[9px] font-mono uppercase tracking-[0.2em] border transition-colors ${
-                        active ? opt.color : 'bg-transparent text-[#4a4338] border-[#1f1a13] hover:border-[#2d2620] hover:text-[#6a5d4a]'
+                      className={`shrink-0 px-2 py-1 rounded text-[8px] sm:text-[9px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.2em] border transition-colors ${
+                        active ? opt.color : 'bg-transparent text-[#837B6D] border-[#2B2821] hover:border-[#3B372F] hover:text-[#B4AA99]'
                       }`}
                     >
                       {opt.label}
                     </button>
                   );
                 })}
-                {savingMeta && <Loader2 size={11} className="animate-spin text-[#4a4338]" />}
+                {savingMeta && <Loader2 size={11} className="animate-spin text-[#837B6D]" />}
               </div>
               {isEditingTitle ? (
                 <div className="flex items-center gap-2 mb-3">
                   <input
                     autoFocus
-                    className="bg-transparent border-b border-[#2d2620] text-3xl font-medium tracking-tight outline-none text-white flex-1 focus:border-[#D4BFA0]"
+                    className="bg-transparent border-b border-[#3B372F] text-3xl font-medium tracking-tight outline-none text-white flex-1 focus:border-[#E7D7BE]"
                     value={tempTitle}
                     onChange={(e) => setTempTitle(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRename()}
                   />
-                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#16130e] text-[#D4BFA0]"><Check size={14} /></button>
-                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(track?.title || ''); }} className="p-1.5 rounded hover:bg-[#16130e] text-[#5a5142]"><X size={14} /></button>
+                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#1A1813] text-[#E7D7BE]"><Check size={14} /></button>
+                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(track?.title || ''); }} className="p-1.5 rounded hover:bg-[#1A1813] text-[#9B9282]"><X size={14} /></button>
                 </div>
               ) : (
-                <div className="group flex items-center gap-2 mb-3">
-                  <h1 className="text-3xl font-medium text-white leading-none tracking-tight truncate font-heading">{track.title}</h1>
-                  <button onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-[#5a5142] hover:text-white transition-all">
+                <div className="group flex items-center gap-2 mb-2 sm:mb-3">
+                  <h1 className="text-[24px] sm:text-3xl font-medium text-white leading-tight sm:leading-none tracking-tight truncate font-heading">{track.title}</h1>
+                  <button onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-[#9B9282] hover:text-white transition-all">
                     <Edit2 size={13} />
                   </button>
                 </div>
               )}
-              <div className="flex items-center gap-3 text-[11px] font-mono text-[#5a5142] uppercase tracking-wider">
+              <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-[11px] font-mono text-[#9B9282] uppercase tracking-wider overflow-x-auto scrollbar-hide pb-1">
                 <span>{fmtDuration(track.duration_seconds)}</span>
                 <span>·</span>
                 <span>{fmtBpm(track.bpm)}</span>
@@ -394,26 +412,26 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
             {/* Action row — every button shares the exact same height /
                 padding / radius. Emphasis comes from fill colour, not size:
                 Play is the primary white, Re-analyze is accent-filled. */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <button
                 onClick={() => setGlobalTrack(track)}
-                className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md text-[12px] font-medium transition-colors bg-white text-black hover:bg-[#E8DCC8]"
+                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-black transition-colors hover:bg-[#F7EBDD] sm:gap-2 sm:px-4 sm:text-[12px]"
               >
                 <PlayGlyph size={13} className="ml-0.5" />
                 Play
               </button>
               <button
                 onClick={handleReanalyze}
-                disabled={reanalyzing}
-                title="Re-extract BPM, key and loudness"
-                className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md text-[12px] font-medium transition-colors bg-[#D4BFA0] text-[#0a0907] hover:bg-[#E2CDA8] disabled:opacity-50"
+                disabled={reanalyzing || !track.audio_url}
+                title={track.audio_url ? 'Re-extract BPM, key and loudness' : 'Upload source audio before analyzing'}
+                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-[#E7D7BE] px-3 text-[11px] font-medium text-[#090907] transition-colors hover:bg-[#E2CDA8] disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-[12px]"
               >
                 {reanalyzing ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}
                 {reanalyzing ? 'Analyzing…' : 'Analyze'}
               </button>
               <button
                 onClick={() => setShareOpen(true)}
-                className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md text-[12px] font-medium transition-colors bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] hover:border-[#2d2620]"
+                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-[#211F1A] bg-[#171511] px-3 text-[11px] font-medium text-[#F7EBDD] transition-colors hover:border-[#3B372F] sm:gap-2 sm:px-4 sm:text-[12px]"
               >
                 <Share2 size={12} />
                 Share
@@ -421,7 +439,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
               <button
                 onClick={() => router.push(`/studio?track=${track.id}`)}
                 title="Open this track in the studio (loop / pitch / stems / record)"
-                className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md text-[12px] font-medium transition-colors bg-[#14110d] border border-[#1a160f] text-[#E8D8B8] hover:border-[#8A7A5C]/40 hover:bg-[#2A2418]"
+                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[12px] font-medium transition-colors bg-[#171511] border border-[#211F1A] text-[#F3E6D1] hover:border-[#C9BCA8]/40 hover:bg-[#342F27]"
               >
                 <Sliders size={12} />
                 Studio
@@ -430,7 +448,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 <a
                   href={audioSrc(track.audio_url)}
                   download={`${track.title || 'track'}.wav`}
-                  className="inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md text-[12px] font-medium transition-colors bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] hover:border-[#2d2620]"
+                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[12px] font-medium transition-colors bg-[#171511] border border-[#211F1A] text-[#F7EBDD] hover:border-[#3B372F]"
                 >
                   <Download size={12} />
                   Download
@@ -450,7 +468,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 references, hooks, mix decisions; autosaves on blur. Includes a
                 topline recorder for singing melody ideas straight over the beat. */}
             <div className="mb-8">
-              <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-2">Notes</p>
+              <p className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-2">Notes</p>
               <textarea
                 defaultValue={track.notes || ''}
                 onBlur={(e) => {
@@ -458,7 +476,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                   if (v !== (track.notes || '')) patchTrack({ notes: v || null });
                 }}
                 placeholder="Session notes, references, hook ideas, mix decisions…"
-                className="w-full min-h-[80px] bg-[#0e0c08] border border-[#1a160f] rounded-lg px-4 py-3 text-[13px] text-[#E8DCC8] placeholder:text-[#4a4338] focus:outline-none focus:border-[#2d2620] resize-y leading-relaxed"
+                className="w-full min-h-[80px] bg-[#11100D] border border-[#211F1A] rounded-lg px-4 py-3 text-[13px] text-[#F7EBDD] placeholder:text-[#837B6D] focus:outline-none focus:border-[#3B372F] resize-y leading-relaxed"
               />
               <div className="mt-2">
                 <ToplineRecorder trackId={track.id} />
@@ -514,7 +532,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
 
         {/* Tags */}
         <div className="mb-10">
-          <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-3">Tags &amp; genre</p>
+          <p className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-3">Tags &amp; genre</p>
           <TagPicker
             trackId={track.id}
             features={{
@@ -538,7 +556,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
           {/* end right column */}
         </div>
         {/* end side-by-side grid */}
-      </div>
+      </PageContainer>
 
       {shareOpen && (
         <ContentShareModal

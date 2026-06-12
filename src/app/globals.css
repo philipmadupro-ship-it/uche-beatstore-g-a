@@ -89,51 +89,53 @@
   font-display: swap;
 }
 
-/* Design tokens — first pass against the moodboard (Soutter / Bacon /
- * warm-aubergine family). The earlier violet accent (#D4BFA0) was
- * fighting the brief; the new accent is a burnt amber drawn from the
- * Soutter "Le H Ros" column. Neutrals shift slightly warm so the
- * page reads as ink-on-bone rather than cold-OLED.
+/* Design tokens — luxury beige revision.
+ * The interface keeps its private-studio darkness, but the old coffee /
+ * brown undertone has been cooled into graphite, parchment, and champagne.
+ * The beige is now the premium material, not a muddy amber.
  *
  * Component code should reference these vars and never hardcode the
- * hex — but the legacy violet values still live in many files; a
- * follow-up sweep replaces them in place. */
+ * hex. Legacy hardcoded values have been swept toward this palette. */
 :root {
   /* HSL base values for high-fidelity dynamic opacity blending */
-  --bg-page-hsl: 30 15% 4%;
-  --bg-card-hsl: 27 23% 7%;
-  --bg-hover-hsl: 27 20% 8%;
-  --text-primary-hsl: 38 41% 85%;
-  --text-secondary-hsl: 36 17% 35%;
-  --accent-hsl: 35 39% 73%;
-  --accent-light-hsl: 39 49% 82%;
-  --accent-dim-hsl: 39 20% 45%;
-  --accent-tint-hsl: 35 20% 13%;
+  --bg-page-hsl: 60 10% 3%;
+  --bg-card-hsl: 40 15% 8%;
+  --bg-hover-hsl: 40 16% 9%;
+  --text-primary-hsl: 34 62% 92%;
+  --text-secondary-hsl: 36 27% 75%;
+  --accent-hsl: 37 46% 83%;
+  --accent-light-hsl: 37 59% 89%;
+  --accent-dim-hsl: 36 24% 72%;
+  --accent-tint-hsl: 37 14% 18%;
 
-  /* Page surfaces — black, but warm. The brief said "white in the
-   * moodboard becomes black in the app" — the moodboard's bone/cream
-   * inverts to this warm near-black instead of pure #000. */
+  /* Page surfaces — dark graphite, not brown-black. */
   --bg-page: hsl(var(--bg-page-hsl));
   --bg-card: hsl(var(--bg-card-hsl));
   --bg-hover: hsl(var(--bg-hover-hsl));
   --text-primary: hsl(var(--text-primary-hsl));
   --text-secondary: hsl(var(--text-secondary-hsl));
-  --text-tertiary: #3a3328;
+  --text-tertiary: #6E685B;
   /* Readable floor for SMALL content text. The faded tertiary tints
-   * (#3a3328…#6a5d4a) are part of the mood but fail WCAG AA on the dark
-   * bg (1.5–3.8:1); use this (~5:1 on #0a0907) anywhere a user must read
+   * (#6E685B…#B4AA99) are part of the mood but fail WCAG AA on the dark
+   * bg (1.5–3.8:1); use this (~5:1 on #090907) anywhere a user must read
    * the value, while leaving purely-decorative fades alone. */
-  --text-readable: #8a7a5c;
-  /* Accent — burnt amber + two adjacents (lighter for hover/active,
-   * dimmer for pressed/borders). Star stays gold; close enough to
-   * the new family that it doesn't need updating. */
+  --text-readable: #B4AA99;
+  /* Accent — champagne beige + two adjacents (lighter for hover/active,
+   * dimmer for pressed/borders). */
   --accent: hsl(var(--accent-hsl));
   --accent-light: hsl(var(--accent-light-hsl));
   --accent-dim: hsl(var(--accent-dim-hsl));
   --accent-tint: hsl(var(--accent-tint-hsl));
-  --star: #c8a84b;
-  --border: #1f1a13;
-  --border-hover: #2d2620;
+  --star: #D6BE7A;
+  --border: #2B2821;
+  --border-hover: #3B372F;
+  --z-popover: 200;
+  --z-drawer: 220;
+  --z-modal: 240;
+  --dur-fast: 160ms;
+  --dur-med: 260ms;
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-decelerate: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ── Touch hit-area expansion ──────────────────────────────────────────
@@ -404,28 +406,74 @@ html {
   .store-card-enter { animation: none; }
 }
 
-/* Spring easing shorthand — use instead of ease-in-out for all UI transitions */
-:root {
-  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
-  --ease-decelerate: cubic-bezier(0.22, 1, 0.36, 1);
-}
-
 /* Beat preview drawer slide-in from right */
 @keyframes drawerSlide {
   from { transform: translateX(100%); opacity: 0.8; }
   to   { transform: translateX(0);    opacity: 1; }
 }
 
+@keyframes modalScrimIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalPanelIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes drawerPanelRightIn {
+  from { opacity: 0.85; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes drawerPanelLeftIn {
+  from { opacity: 0.85; transform: translateX(-100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes drawerPanelBottomIn {
+  from { opacity: 0.9; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ui-scrim {
+  animation: modalScrimIn var(--dur-med) var(--ease-decelerate) both;
+}
+
+.ui-modal-panel {
+  animation: modalPanelIn var(--dur-med) var(--ease-spring) both;
+}
+
+.ui-drawer-right {
+  animation: drawerPanelRightIn var(--dur-med) var(--ease-spring) both;
+}
+
+.ui-drawer-left {
+  animation: drawerPanelLeftIn var(--dur-med) var(--ease-spring) both;
+}
+
+.ui-drawer-bottom {
+  animation: drawerPanelBottomIn var(--dur-med) var(--ease-spring) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   [style*="drawerSlide"] { animation: none !important; }
+  .ui-scrim,
+  .ui-modal-panel,
+  .ui-drawer-right,
+  .ui-drawer-left,
+  .ui-drawer-bottom {
+    animation: none !important;
+  }
 }
 
 .skeleton-shimmer {
   background: linear-gradient(
     90deg,
-    #16130e 25%,
-    #211c14 50%,
-    #16130e 75%
+    #1A1813 25%,
+    #2F2B23 50%,
+    #1A1813 75%
   );
   background-size: 200% 100%;
   animation: skeletonShimmer 1.6s ease-in-out infinite;
@@ -465,12 +513,12 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1f1a13;
+  background: #2B2821;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #2d2620;
+  background: #3B372F;
 }
 
 /* Wavesurfer overrides */
@@ -493,7 +541,7 @@ input[type=range] {
 
 input[type=range]::-webkit-slider-runnable-track {
   height: 2px;
-  background: #1f1a13;
+  background: #2B2821;
   border-radius: 1px;
 }
 
@@ -502,7 +550,7 @@ input[type=range]::-webkit-slider-thumb {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #E8DCC8;
+  background: #F7EBDD;
   margin-top: -4px;
   cursor: pointer;
 }

@@ -27,7 +27,7 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/lib/auth/ownership', () => ({
   createServiceClient: () => ({
-    from: (_table: string) => ({
+    from: () => ({
       select: () => ({
         eq: () => ({
           maybeSingle: () => mockMaybeSingle(),

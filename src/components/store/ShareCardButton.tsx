@@ -35,7 +35,7 @@ interface ModalProps {
 
 /** Controlled modal. Renders nothing when open is false. */
 export function ShareCardModal({
-  trackId, trackTitle, kind = 'playing', accentColor = '#D4BFA0', open, onClose,
+  trackId, trackTitle, kind = 'playing', accentColor = '#E7D7BE', open, onClose,
 }: ModalProps) {
   const [sharing, setSharing] = useState(false);
   const cardUrl = `/api/store/share-card?track_id=${encodeURIComponent(trackId)}&kind=${kind}`;
@@ -72,7 +72,7 @@ export function ShareCardModal({
       onClick={onClose}
     >
       <div
-        className="relative bg-[#14110d] border border-white/[0.10] rounded-2xl p-5 max-w-md w-full"
+        className="relative bg-[#171511] border border-white/[0.10] rounded-2xl p-5 max-w-md w-full"
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -87,11 +87,11 @@ export function ShareCardModal({
         <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-3">
           Share to Stories
         </p>
-        <h3 className="text-[14px] font-semibold text-[#E8DCC8] mb-4 pr-8 break-words">
+        <h3 className="text-[14px] font-semibold text-[#F7EBDD] mb-4 pr-8 break-words">
           {trackTitle}
         </h3>
 
-        <div className="rounded-xl overflow-hidden border border-white/[0.06] bg-[#0a0907] mb-4">
+        <div className="rounded-xl overflow-hidden border border-white/[0.06] bg-[#090907] mb-4">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={cardUrl}
@@ -137,7 +137,7 @@ interface ButtonProps {
 
 /** Self-contained pill that opens its own modal. */
 export function ShareCardButton({
-  trackId, trackTitle, kind = 'playing', variant = 'pill', accentColor = '#D4BFA0',
+  trackId, trackTitle, kind = 'playing', variant = 'pill', accentColor = '#E7D7BE',
 }: ButtonProps) {
   const [open, setOpen] = useState(false);
   return (
@@ -149,7 +149,7 @@ export function ShareCardButton({
         className={
           variant === 'icon'
             ? 'w-9 h-9 rounded-full flex items-center justify-center bg-white/[0.04] border border-white/[0.08] text-white/65 hover:text-white hover:bg-white/[0.10] transition-colors'
-            : 'flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.06] border border-white/[0.10] text-[#E8DCC8] text-[11px] font-mono uppercase tracking-[0.18em] hover:bg-white/[0.10] transition-colors'
+            : 'flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.06] border border-white/[0.10] text-[#F7EBDD] text-[11px] font-mono uppercase tracking-[0.18em] hover:bg-white/[0.10] transition-colors'
         }
       >
         <Share2 size={variant === 'icon' ? 14 : 11} />

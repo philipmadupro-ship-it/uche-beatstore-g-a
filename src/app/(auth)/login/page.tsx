@@ -108,11 +108,11 @@ export default function LoginPage() {
   const formDisabled = isLoading || googleLoading;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0a0907] p-4 text-[#E8DCC8]">
-      <div className="w-full max-w-sm space-y-8 bg-[#16130e] p-8 rounded-lg border border-[#1f1a13]">
+    <div className="flex min-h-screen items-center justify-center bg-[#090907] p-4 text-[#F7EBDD]">
+      <div className="w-full max-w-sm space-y-8 bg-[#1A1813] p-8 rounded-lg border border-[#2B2821]">
         <div className="text-center">
           <h1 className="text-2xl font-bold tracking-tight uppercase">U2C Beatstore</h1>
-          <p className="mt-2 text-sm text-[#a08a6a]">
+          <p className="mt-2 text-sm text-[#D0C3AF]">
             {isSignUp ? 'Create an account' : 'Sign in to continue'}
           </p>
         </div>
@@ -121,21 +121,21 @@ export default function LoginPage() {
           type="button"
           onClick={handleGoogle}
           disabled={formDisabled}
-          className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded bg-white text-black hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-50 transition-all text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#D4BFA0] focus:ring-offset-2 focus:ring-offset-[#16130e]"
+          className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded bg-white text-black hover:bg-[#F7EBDD] active:scale-[0.98] disabled:opacity-50 transition-all text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#E7D7BE] focus:ring-offset-2 focus:ring-offset-[#1A1813]"
         >
           <GoogleGlyph />
           {googleLoading ? 'Redirecting…' : 'Continue with Google'}
         </button>
 
         <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-[#1f1a13]" />
-          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#4a4338]">or</span>
-          <div className="flex-1 h-px bg-[#1f1a13]" />
+          <div className="flex-1 h-px bg-[#2B2821]" />
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#837B6D]">or</span>
+          <div className="flex-1 h-px bg-[#2B2821]" />
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
           <div>
-            <label htmlFor="email" className="block text-xs font-medium uppercase text-[#4a4338] mb-1">
+            <label htmlFor="email" className="block text-xs font-medium uppercase text-[#837B6D] mb-1">
               Email Address
             </label>
             <input
@@ -145,7 +145,7 @@ export default function LoginPage() {
               disabled={formDisabled}
               aria-invalid={!!errors.email}
               aria-describedby={errors.email ? "email-error" : undefined}
-              className={`w-full bg-[#0a0907] border ${errors.email ? 'border-red-500/50' : 'border-[#1f1a13]'} px-3 py-2 text-[#E8DCC8] placeholder-[#4a4338] focus:outline-none focus:border-[#D4BFA0] rounded disabled:opacity-50 transition-colors`}
+              className={`w-full bg-[#090907] border ${errors.email ? 'border-red-500/50' : 'border-[#2B2821]'} px-3 py-2 text-[#F7EBDD] placeholder-[#837B6D] focus:outline-none focus:border-[#E7D7BE] rounded disabled:opacity-50 transition-colors`}
               placeholder="you@example.com"
               {...register('email')}
             />
@@ -155,7 +155,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-xs font-medium uppercase text-[#4a4338] mb-1">
+            <label htmlFor="password" className="block text-xs font-medium uppercase text-[#837B6D] mb-1">
               Password
             </label>
             <div className="relative">
@@ -166,7 +166,7 @@ export default function LoginPage() {
                 disabled={formDisabled}
                 aria-invalid={!!errors.password}
                 aria-describedby={errors.password ? "password-error" : undefined}
-                className={`w-full bg-[#0a0907] border ${errors.password ? 'border-red-500/50' : 'border-[#1f1a13]'} px-3 py-2 pr-10 text-[#E8DCC8] placeholder-[#4a4338] focus:outline-none focus:border-[#D4BFA0] rounded disabled:opacity-50 transition-colors`}
+                className={`w-full bg-[#090907] border ${errors.password ? 'border-red-500/50' : 'border-[#2B2821]'} px-3 py-2 pr-10 text-[#F7EBDD] placeholder-[#837B6D] focus:outline-none focus:border-[#E7D7BE] rounded disabled:opacity-50 transition-colors`}
                 placeholder="••••••••"
                 {...register('password')}
               />
@@ -174,7 +174,7 @@ export default function LoginPage() {
                 type="button"
                 tabIndex={-1}
                 disabled={formDisabled}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-[#4a4338] hover:text-[#a08a6a] disabled:opacity-50 focus:outline-none"
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-[#837B6D] hover:text-[#D0C3AF] disabled:opacity-50 focus:outline-none"
                 onClick={() => setShowPassword(!showPassword)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
@@ -188,7 +188,7 @@ export default function LoginPage() {
               <div className="mt-1.5 text-right">
                 <a
                   href="/reset-password"
-                  className="text-xs text-[#a08a6a] hover:text-[#D4BFA0] transition-colors"
+                  className="text-xs text-[#D0C3AF] hover:text-[#E7D7BE] transition-colors"
                 >
                   Forgot password?
                 </a>
@@ -198,7 +198,7 @@ export default function LoginPage() {
 
           {isSignUp && (
             <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-              <label htmlFor="confirmPassword" className="block text-xs font-medium uppercase text-[#4a4338] mb-1">
+              <label htmlFor="confirmPassword" className="block text-xs font-medium uppercase text-[#837B6D] mb-1">
                 Confirm Password
               </label>
               <div className="relative">
@@ -209,7 +209,7 @@ export default function LoginPage() {
                   disabled={formDisabled}
                   aria-invalid={!!errors.confirmPassword}
                   aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
-                  className={`w-full bg-[#0a0907] border ${errors.confirmPassword ? 'border-red-500/50' : 'border-[#1f1a13]'} px-3 py-2 text-[#E8DCC8] placeholder-[#4a4338] focus:outline-none focus:border-[#D4BFA0] rounded disabled:opacity-50 transition-colors`}
+                  className={`w-full bg-[#090907] border ${errors.confirmPassword ? 'border-red-500/50' : 'border-[#2B2821]'} px-3 py-2 text-[#F7EBDD] placeholder-[#837B6D] focus:outline-none focus:border-[#E7D7BE] rounded disabled:opacity-50 transition-colors`}
                   placeholder="••••••••"
                   {...register('confirmPassword')}
                 />
@@ -234,12 +234,12 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={formDisabled}
-            className="w-full flex justify-center py-3 px-4 mt-6 border border-[#8A7A5C] rounded text-sm font-medium text-white bg-[#D4BFA0] hover:bg-[#8A7A5C] focus:outline-none focus:ring-2 focus:ring-[#D4BFA0] focus:ring-offset-2 focus:ring-offset-[#16130e] disabled:opacity-50 transition-all uppercase tracking-widest"
+            className="w-full flex justify-center py-3 px-4 mt-6 border border-[#C9BCA8] rounded text-sm font-medium text-white bg-[#E7D7BE] hover:bg-[#C9BCA8] focus:outline-none focus:ring-2 focus:ring-[#E7D7BE] focus:ring-offset-2 focus:ring-offset-[#1A1813] disabled:opacity-50 transition-all uppercase tracking-widest"
           >
             {isLoading ? 'Processing…' : isSignUp ? 'Create Account' : 'Sign In'}
           </button>
 
-          <div className="mt-6 text-center text-sm text-[#a08a6a]">
+          <div className="mt-6 text-center text-sm text-[#D0C3AF]">
             <span className="mr-2">
               {isSignUp ? 'Already have an account?' : "Don't have an account?"}
             </span>
@@ -247,7 +247,7 @@ export default function LoginPage() {
               type="button"
               onClick={toggleAuthMode}
               disabled={formDisabled}
-              className="text-[#D4BFA0] hover:text-white transition-colors focus:outline-none focus:underline disabled:opacity-50"
+              className="text-[#E7D7BE] hover:text-white transition-colors focus:outline-none focus:underline disabled:opacity-50"
             >
               {isSignUp ? 'Sign In' : 'Sign Up'}
             </button>

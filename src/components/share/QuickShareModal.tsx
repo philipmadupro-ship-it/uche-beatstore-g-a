@@ -125,14 +125,14 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full md:max-w-[560px] max-h-[90vh] rounded-t-3xl md:rounded-2xl overflow-hidden flex flex-col bg-gradient-to-b from-[#121214]/95 via-[#0e0e10]/95 to-[#0a0907]/98 backdrop-blur-2xl border border-white/[0.06] shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset] animate-in slide-in-from-bottom-4 md:zoom-in-95 duration-300"
+        className="w-full md:max-w-[560px] max-h-[90vh] rounded-t-3xl md:rounded-2xl overflow-hidden flex flex-col bg-gradient-to-b from-[#121214]/95 via-[#0e0e10]/95 to-[#090907]/98 backdrop-blur-2xl border border-white/[0.06] shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset] animate-in slide-in-from-bottom-4 md:zoom-in-95 duration-300"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.04]">
           <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] mb-1">Quick share</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#F3E6D1] mb-1">Quick share</p>
             <h2 className="text-[15px] font-medium text-white">Pick tracks · send a link</h2>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[#6a5d4a] hover:text-white hover:bg-white/[0.06]">
+          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[#B4AA99] hover:text-white hover:bg-white/[0.06]">
             <X size={14} />
           </button>
         </div>
@@ -140,26 +140,26 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
         {createdUrl ? (
           // Done-state — same glass card + copy/dismiss as ProjectShareModal.
           <div className="p-6 space-y-4">
-            <div className="flex items-center gap-2 bg-white/[0.02] border border-[#8A7A5C]/30 rounded-xl px-3 py-2.5">
-              <Link2 size={12} className="text-[#E8D8B8] shrink-0" />
+            <div className="flex items-center gap-2 bg-white/[0.02] border border-[#C9BCA8]/30 rounded-xl px-3 py-2.5">
+              <Link2 size={12} className="text-[#F3E6D1] shrink-0" />
               <input
                 readOnly
                 value={createdUrl}
                 onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
-                className="flex-1 bg-transparent text-[11px] text-[#E8DCC8] font-mono focus:outline-none truncate"
+                className="flex-1 bg-transparent text-[11px] text-[#F7EBDD] font-mono focus:outline-none truncate"
               />
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={doCopy}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#E8DCC8] transition-all active:scale-[0.98]"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#F7EBDD] transition-all active:scale-[0.98]"
               >
                 {copied ? <Check size={13} /> : <Copy size={13} />}
                 {copied ? 'Copied' : 'Copy link'}
               </button>
               <button
                 onClick={onClose}
-                className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#E8DCC8] text-[12px] hover:bg-white/[0.08] transition-colors"
+                className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#F7EBDD] text-[12px] hover:bg-white/[0.08] transition-colors"
               >
                 Done
               </button>
@@ -169,31 +169,31 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
           <>
             <div className="px-6 pt-5 pb-3 border-b border-white/[0.04] space-y-3">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3a3328]" size={12} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" size={12} />
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search library… title, key, BPM"
-                  className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-md py-2 pl-8 pr-3 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]"
+                  className="w-full bg-[#090907] border border-[#2B2821] rounded-md py-2 pl-8 pr-3 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
                 />
               </div>
               <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider">
-                <span className="text-[#5a5142]">
+                <span className="text-[#9B9282]">
                   {selectedIds.size} selected · {filtered.length} shown
                 </span>
                 {selectedIds.size > 0 && (
-                  <button onClick={() => setSelectedIds(new Set())} className="text-[#6a5d4a] hover:text-[#E8DCC8]">Clear</button>
+                  <button onClick={() => setSelectedIds(new Set())} className="text-[#B4AA99] hover:text-[#F7EBDD]">Clear</button>
                 )}
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto px-3 py-2">
               {loading ? (
-                <div className="flex items-center justify-center py-10 text-[#5a5142]">
+                <div className="flex items-center justify-center py-10 text-[#9B9282]">
                   <Loader2 size={14} className="animate-spin" />
                 </div>
               ) : filtered.length === 0 ? (
-                <p className="text-center py-10 text-[11px] text-[#5a5142]">No tracks match.</p>
+                <p className="text-center py-10 text-[11px] text-[#9B9282]">No tracks match.</p>
               ) : (
                 <ul className="space-y-0.5">
                   {filtered.map((t) => {
@@ -203,21 +203,21 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
                         <button
                           onClick={() => toggleOne(t.id)}
                           className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${
-                            selected ? 'bg-[#2A2418]/30 border border-[#8A7A5C]/30' : 'border border-transparent hover:bg-white/[0.02]'
+                            selected ? 'bg-[#342F27]/30 border border-[#C9BCA8]/30' : 'border border-transparent hover:bg-white/[0.02]'
                           }`}
                         >
                           <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                            selected ? 'bg-[#D4BFA0] border-[#E8D8B8]' : 'border-[#2d2620]'
+                            selected ? 'bg-[#E7D7BE] border-[#F3E6D1]' : 'border-[#3B372F]'
                           }`}>
                             {selected && <Check size={9} className="text-black" strokeWidth={3} />}
                           </div>
-                          <div className="w-8 h-8 rounded bg-[#14110d] border border-[#1f1a13] overflow-hidden shrink-0">
+                          <div className="w-8 h-8 rounded bg-[#171511] border border-[#2B2821] overflow-hidden shrink-0">
                             {t.cover_url ? <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" /> :
-                              <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={10} /></div>}
+                              <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={10} /></div>}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-[12px] text-[#E8DCC8] truncate">{t.title}</p>
-                            <p className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mt-0.5">
+                            <p className="text-[12px] text-[#F7EBDD] truncate">{t.title}</p>
+                            <p className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mt-0.5">
                               {t.type}{t.bpm ? ` · ${t.bpm} bpm` : ''}{t.key ? ` · ${t.key}${t.scale ? ' ' + t.scale : ''}` : ''}
                             </p>
                           </div>
@@ -229,12 +229,12 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-white/[0.04] space-y-3 bg-[#0a0907]/40">
+            <div className="px-6 py-4 border-t border-white/[0.04] space-y-3 bg-[#090907]/40">
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Title (optional) — e.g. 'For Phil — March pack'"
-                className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-md px-3 py-2 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]"
+                className="w-full bg-[#090907] border border-[#2B2821] rounded-md px-3 py-2 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
               />
               <div className="flex items-center gap-2">
                 <Dropdown
@@ -247,12 +247,12 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
                     { value: '14', label: '14 days' },
                     { value: '30', label: '30 days' },
                   ]}
-                  className="flex-1 bg-[#0a0907] border border-[#1f1a13] rounded-md text-[11px] text-[#E8DCC8]"
+                  className="flex-1 bg-[#090907] border border-[#2B2821] rounded-md text-[11px] text-[#F7EBDD]"
                 />
                 <button
                   onClick={() => setAllowDownloads((v) => !v)}
                   className={`px-3 py-2 rounded-md border text-[10px] font-mono uppercase tracking-wider transition-colors ${
-                    allowDownloads ? 'bg-[#2A2418] border-[#8A7A5C]/50 text-[#E8D8B8]' : 'bg-[#0a0907] border-[#1f1a13] text-[#5a5142]'
+                    allowDownloads ? 'bg-[#342F27] border-[#C9BCA8]/50 text-[#F3E6D1]' : 'bg-[#090907] border-[#2B2821] text-[#9B9282]'
                   }`}
                   title="Allow downloads"
                 >
@@ -262,7 +262,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
               <button
                 onClick={generateLink}
                 disabled={creating || selectedIds.size === 0}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black hover:bg-[#E8DCC8] disabled:opacity-40 text-[12px] font-medium transition-all active:scale-[0.98]"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black hover:bg-[#F7EBDD] disabled:opacity-40 text-[12px] font-medium transition-all active:scale-[0.98]"
               >
                 {creating ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
                 Generate link {selectedIds.size > 0 ? `· ${selectedIds.size} track${selectedIds.size === 1 ? '' : 's'}` : ''}

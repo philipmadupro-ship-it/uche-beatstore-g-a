@@ -58,7 +58,7 @@ export function DeliveryPackButton({ projectId, projectName }: Props) {
       <button
         onClick={() => (open ? setOpen(false) : files ? setOpen(true) : fetchManifest())}
         disabled={loading}
-        className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/[0.06] bg-transparent text-[#a08a6a] text-[12px] font-medium hover:text-[#E8DCC8] hover:border-white/[0.1] transition-all disabled:opacity-50"
+        className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/[0.06] bg-transparent text-[#D0C3AF] text-[12px] font-medium hover:text-[#F7EBDD] hover:border-white/[0.1] transition-all disabled:opacity-50"
         title="Export delivery pack (WAVs + stems)"
       >
         {loading ? <Loader2 size={13} className="animate-spin" /> : <PackageOpen size={13} />}
@@ -67,25 +67,25 @@ export function DeliveryPackButton({ projectId, projectName }: Props) {
 
       {open && files && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-[#1f1a13] bg-[#0e0c08] shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="px-5 py-4 border-b border-[#1a160f] flex items-center justify-between">
+          <div className="w-full max-w-md rounded-2xl border border-[#2B2821] bg-[#11100D] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-[#211F1A] flex items-center justify-between">
               <div>
-                <h3 className="text-[13px] font-semibold text-[#E8DCC8]">Delivery pack</h3>
-                <p className="text-[10px] text-[#5a5142] mt-0.5">{projectName}</p>
+                <h3 className="text-[13px] font-semibold text-[#F7EBDD]">Delivery pack</h3>
+                <p className="text-[10px] text-[#9B9282] mt-0.5">{projectName}</p>
               </div>
-              <span className="text-[10px] font-mono text-[#3a3328]">{files.length} file{files.length !== 1 ? 's' : ''}</span>
+              <span className="text-[10px] font-mono text-[#6E685B]">{files.length} file{files.length !== 1 ? 's' : ''}</span>
             </div>
 
             {files.length === 0 ? (
               <div className="px-5 py-8 text-center">
-                <p className="text-[12px] text-[#5a5142]">No downloadable files yet — upload WAV masters or stems to the tracks in this project.</p>
+                <p className="text-[12px] text-[#9B9282]">No downloadable files yet — upload WAV masters or stems to the tracks in this project.</p>
               </div>
             ) : (
               <>
                 <div className="max-h-64 overflow-y-auto px-3 py-3 space-y-2">
                   {masters.length > 0 && (
                     <div>
-                      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-1.5 px-1">Masters</p>
+                      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-1.5 px-1">Masters</p>
                       {masters.map((f) => (
                         <FileRow key={f.name} file={f} />
                       ))}
@@ -93,17 +93,17 @@ export function DeliveryPackButton({ projectId, projectName }: Props) {
                   )}
                   {stems.length > 0 && (
                     <div>
-                      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-1.5 px-1 mt-2">Stems</p>
+                      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-1.5 px-1 mt-2">Stems</p>
                       {stems.map((f) => (
                         <FileRow key={f.name} file={f} />
                       ))}
                     </div>
                   )}
                 </div>
-                <div className="px-4 py-3 border-t border-[#1a160f] flex items-center justify-end gap-2">
-                  <button onClick={() => setOpen(false)} className="px-3 py-2 text-[11px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#E8DCC8]">Cancel</button>
+                <div className="px-4 py-3 border-t border-[#211F1A] flex items-center justify-end gap-2">
+                  <button onClick={() => setOpen(false)} className="px-3 py-2 text-[11px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F7EBDD]">Cancel</button>
                   <button onClick={downloadAll}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#D4BFA0] text-black text-[11px] font-bold hover:bg-[#E8D8B8] transition-colors">
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#E7D7BE] text-black text-[11px] font-bold hover:bg-[#F3E6D1] transition-colors">
                     <Download size={12} /> Download all ({files.length})
                   </button>
                 </div>
@@ -119,9 +119,9 @@ export function DeliveryPackButton({ projectId, projectName }: Props) {
 function FileRow({ file }: { file: { name: string; url: string } }) {
   return (
     <a href={file.url} download={file.name}
-      className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#14110d] hover:bg-[#1a160f] transition-colors group">
-      <Download size={11} className="text-[#5a5142] group-hover:text-[#D4BFA0] shrink-0" />
-      <span className="text-[11px] text-[#E8DCC8] truncate flex-1">{file.name}</span>
+      className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#171511] hover:bg-[#211F1A] transition-colors group">
+      <Download size={11} className="text-[#9B9282] group-hover:text-[#E7D7BE] shrink-0" />
+      <span className="text-[11px] text-[#F7EBDD] truncate flex-1">{file.name}</span>
     </a>
   );
 }

@@ -248,8 +248,8 @@ export default function MusicPortfolio({
 
     if (sortedTracks.length === 0) {
         return (
-            <div className="flex items-center justify-center h-full" style={{ background: '#0a0907' }}>
-                <p className="text-[#6a5d4a] text-[11px] font-mono uppercase tracking-[0.2em]">No tracks to display</p>
+            <div className="flex items-center justify-center h-full" style={{ background: '#090907' }}>
+                <p className="text-[#B4AA99] text-[11px] font-mono uppercase tracking-[0.2em]">No tracks to display</p>
             </div>
         );
     }
@@ -262,7 +262,7 @@ export default function MusicPortfolio({
             className={`relative w-full overflow-hidden select-none ${
                 isEmbedded ? 'min-h-[480px] rounded-2xl' : 'h-full'
             }`}
-            style={{ background: '#0a0907' }}
+            style={{ background: '#090907' }}
         >
             {/* Background image reveal */}
             <div
@@ -278,7 +278,7 @@ export default function MusicPortfolio({
                 className="absolute inset-0 pointer-events-none"
                 style={{
                     background:
-                        'linear-gradient(to right, #0a0907 0%, rgba(10,9,7,0.6) 50%, rgba(10,9,7,0.3) 100%)',
+                        'linear-gradient(to right, #090907 0%, rgba(10,9,7,0.6) 50%, rgba(10,9,7,0.3) 100%)',
                 }}
             />
 
@@ -290,7 +290,7 @@ export default function MusicPortfolio({
                     type="button"
                     onClick={onExit}
                     aria-label="Exit portfolio view"
-                    className="absolute top-4 right-4 md:top-6 md:right-6 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/55 backdrop-blur border border-white/[0.08] text-[10px] font-mono uppercase tracking-[0.2em] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-white/[0.18] transition-colors"
+                    className="absolute top-4 right-4 md:top-6 md:right-6 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/55 backdrop-blur border border-white/[0.08] text-[10px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-white/[0.18] transition-colors"
                 >
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                         <path d="M2 2L8 8M8 2L2 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -328,9 +328,9 @@ export default function MusicPortfolio({
                                 onMouseLeave={() => handleRowLeave(track.id)}
                                 className={`
                   group flex items-center gap-4 md:gap-6 lg:gap-8 py-3 md:py-4 cursor-pointer
-                  border-b border-[#1f1a13] transition-colors duration-300
-                  ${isHovered ? 'text-[#D4BFA0]' : 'text-[#a08a6a]'}
-                  ${isCurrent ? 'text-[#D4BFA0]' : ''}
+                  border-b border-[#2B2821] transition-colors duration-300
+                  ${isHovered ? 'text-[#E7D7BE]' : 'text-[#D0C3AF]'}
+                  ${isCurrent ? 'text-[#E7D7BE]' : ''}
                 `}
                                 style={{ opacity: 1 }}
                             >
@@ -338,12 +338,12 @@ export default function MusicPortfolio({
                                 <div className="w-6 shrink-0 flex items-center justify-center">
                                     {isCurrent && isPlaying ? (
                                         <span className="relative flex h-2.5 w-2.5">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#D4BFA0] opacity-75" />
-                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#D4BFA0]" />
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#E7D7BE] opacity-75" />
+                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#E7D7BE]" />
                                         </span>
                                     ) : (
                                         <span
-                                            className={`text-[11px] font-mono tabular-nums ${isHovered ? 'text-[#D4BFA0]' : 'text-[#6a5d4a]'
+                                            className={`text-[11px] font-mono tabular-nums ${isHovered ? 'text-[#E7D7BE]' : 'text-[#B4AA99]'
                                                 }`}
                                         >
                                             {String(idx + 1).padStart(2, '0')}
@@ -370,7 +370,7 @@ export default function MusicPortfolio({
                                             className="w-full h-full object-cover"
                                         />
                                     ) : (
-                                        <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907]" />
+                                        <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907]" />
                                     )}
                                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-center justify-center">
                                         {isCurrent && isPlaying ? (
@@ -407,17 +407,17 @@ export default function MusicPortfolio({
                                 </div>
 
                                 {/* Type */}
-                                <span className="hidden md:block text-[11px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] group-hover:text-[#D4BFA0] transition-colors duration-300 w-20 shrink-0">
+                                <span className="hidden md:block text-[11px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] group-hover:text-[#E7D7BE] transition-colors duration-300 w-20 shrink-0">
                                     {track.type}
                                 </span>
 
                                 {/* BPM · Key (with minor suffix) */}
-                                <span className="hidden sm:block text-[11px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] group-hover:text-[#D4BFA0] transition-colors duration-300 w-24 shrink-0 tabular-nums">
+                                <span className="hidden sm:block text-[11px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] group-hover:text-[#E7D7BE] transition-colors duration-300 w-24 shrink-0 tabular-nums">
                                     {(track.bpm ?? '-')}{track.key ? ` · ${track.key}${track.scale === 'minor' ? 'm' : ''}` : ''}
                                 </span>
 
                                 {/* Year */}
-                                <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] group-hover:text-[#D4BFA0] transition-colors duration-300 w-12 shrink-0 text-right">
+                                <span className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] group-hover:text-[#E7D7BE] transition-colors duration-300 w-12 shrink-0 text-right">
                                     {track.year}
                                 </span>
 
@@ -431,14 +431,14 @@ export default function MusicPortfolio({
                                         {(track.tags ?? []).slice(0, 2).map((tag) => (
                                             <span
                                                 key={tag}
-                                                className="px-2 py-1 rounded-md text-[10px] font-mono uppercase tracking-[0.15em] text-[#a08a6a] bg-[#14110d]/80 border border-white/[0.08] backdrop-blur-sm"
+                                                className="px-2 py-1 rounded-md text-[10px] font-mono uppercase tracking-[0.15em] text-[#D0C3AF] bg-[#171511]/80 border border-white/[0.08] backdrop-blur-sm"
                                             >
                                                 {tag}
                                             </span>
                                         ))}
                                         {/* Duration */}
                                         {track.durationSeconds != null && (
-                                            <span className="text-[11px] font-mono text-[#a08a6a] tabular-nums w-10 text-right">
+                                            <span className="text-[11px] font-mono text-[#D0C3AF] tabular-nums w-10 text-right">
                                                 {fmtDuration(track.durationSeconds)}
                                             </span>
                                         )}
@@ -453,21 +453,21 @@ export default function MusicPortfolio({
                                             <div className="flex items-center gap-1.5">
                                                 {track.priceLease != null && (
                                                     <span className="flex flex-col items-center px-2 py-1 rounded-md bg-white/[0.06] border border-white/[0.10] backdrop-blur-sm leading-none">
-                                                        <span className="text-[12px] font-bold text-[#E8DCC8] tabular-nums">${track.priceLease}</span>
-                                                        <span className="text-[7px] font-mono uppercase tracking-wider text-[#6a5d4a] mt-0.5">Lease</span>
+                                                        <span className="text-[12px] font-bold text-[#F7EBDD] tabular-nums">${track.priceLease}</span>
+                                                        <span className="text-[7px] font-mono uppercase tracking-wider text-[#B4AA99] mt-0.5">Lease</span>
                                                     </span>
                                                 )}
                                                 {track.priceExclusive != null && (
                                                     <span
                                                         className="flex flex-col items-center px-2 py-1 rounded-md leading-none"
-                                                        style={{ backgroundColor: '#D4BFA0', color: '#000' }}
+                                                        style={{ backgroundColor: '#E7D7BE', color: '#000' }}
                                                     >
                                                         <span className="text-[12px] font-bold tabular-nums">${track.priceExclusive}</span>
                                                         <span className="text-[7px] font-mono uppercase tracking-wider text-black/55 mt-0.5">Excl.</span>
                                                     </span>
                                                 )}
                                                 {track.priceLease == null && track.priceExclusive == null && (
-                                                    <span className="text-[11px] font-mono text-[#5a5142]">No price</span>
+                                                    <span className="text-[11px] font-mono text-[#9B9282]">No price</span>
                                                 )}
                                             </div>
                                         )}
@@ -480,8 +480,8 @@ export default function MusicPortfolio({
                                                 title={isWishlisted?.(track.id) ? 'Remove from favorites' : 'Add to favorites'}
                                                 className={`pointer-events-auto w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
                                                     isWishlisted?.(track.id)
-                                                        ? 'text-[#c8a84b]'
-                                                        : 'text-[#5a5142] hover:text-[#a08a6a]'
+                                                        ? 'text-[#D6BE7A]'
+                                                        : 'text-[#9B9282] hover:text-[#D0C3AF]'
                                                 }`}
                                             >
                                                 <svg width="13" height="13" viewBox="0 0 24 24" fill={isWishlisted?.(track.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

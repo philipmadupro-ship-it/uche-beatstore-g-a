@@ -221,7 +221,7 @@ export function PlayerCanvas({
     <div className="w-full space-y-3">
       {/* Waveform canvas — horizontal scroll appears automatically when
           zoom exceeds the container width. */}
-      <div className="relative w-full overflow-x-auto bg-[#0a0907] border border-[#1a160f] rounded-md scrollbar-hide">
+      <div className="relative w-full overflow-x-auto bg-[#090907] border border-[#211F1A] rounded-md scrollbar-hide">
         <div className="relative w-full">
           <div ref={containerRef} className="w-full relative z-0" style={{ minHeight: height }} />
           
@@ -246,10 +246,10 @@ export function PlayerCanvas({
                     <div className="w-2.5 h-2.5 rounded-full bg-[#7F77DD] border border-white/20 shadow-[0_0_8px_#7F77DD] hover:scale-125 transition-transform" />
                     
                     {/* Premium Floating Tooltip */}
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 hidden group-hover/pin:block w-48 p-2.5 rounded-md border border-[#8A7A5C]/30 bg-[#0c0a08]/95 backdrop-blur-md shadow-xl text-left pointer-events-none z-50">
-                      <p className="text-[9px] font-bold text-[#E8D8B8] truncate">{c.author_name}</p>
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 hidden group-hover/pin:block w-48 p-2.5 rounded-md border border-[#C9BCA8]/30 bg-[#11100D]/95 backdrop-blur-md shadow-xl text-left pointer-events-none z-50">
+                      <p className="text-[9px] font-bold text-[#F3E6D1] truncate">{c.author_name}</p>
                       <p className="text-[10px] text-[#bbb] mt-0.5 line-clamp-3 leading-snug">{c.body}</p>
-                      <p className="text-[8px] font-mono text-[#5a5142] mt-1">{fmt(Number(c.region_start))}</p>
+                      <p className="text-[8px] font-mono text-[#9B9282] mt-1">{fmt(Number(c.region_start))}</p>
                     </div>
                   </div>
                 );
@@ -260,14 +260,14 @@ export function PlayerCanvas({
 
         {!ready && !failed && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-[#5a5142]">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-[#9B9282]">
               Loading…
             </div>
           </div>
         )}
         {failed && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-[10px] font-mono text-[#6a5d4a]">waveform unavailable</span>
+            <span className="text-[10px] font-mono text-[#B4AA99]">waveform unavailable</span>
           </div>
         )}
       </div>
@@ -279,7 +279,7 @@ export function PlayerCanvas({
           <div className="flex items-center gap-2">
             <button
               onClick={() => seek(Math.max(0, currentTime - 5))}
-              className="text-[#a08a6a] hover:text-white transition-colors"
+              className="text-[#D0C3AF] hover:text-white transition-colors"
               title="Back 5s (← also works, shift+← = 10s)"
             >
               <SkipBack size={14} fill="currentColor" />
@@ -301,14 +301,14 @@ export function PlayerCanvas({
             </button>
             <button
               onClick={() => seek(Math.min(duration, currentTime + 5))}
-              className="text-[#a08a6a] hover:text-white transition-colors"
+              className="text-[#D0C3AF] hover:text-white transition-colors"
               title="Forward 5s (→ also works, shift+→ = 10s)"
             >
               <SkipForward size={14} fill="currentColor" />
             </button>
             <button
               onClick={() => { pause(); seek(0); }}
-              className="text-[#6a5d4a] hover:text-white transition-colors ml-1"
+              className="text-[#B4AA99] hover:text-white transition-colors ml-1"
               title="Stop (return to start)"
             >
               <StopIcon size={12} fill="currentColor" />
@@ -316,9 +316,9 @@ export function PlayerCanvas({
           </div>
 
           {/* Timecode */}
-          <div className="flex items-center gap-1 text-[11px] font-mono text-[#a08a6a] tabular-nums">
-            <span className="text-[#E8DCC8]">{fmt(currentTime)}</span>
-            <span className="text-[#4a4338]">/</span>
+          <div className="flex items-center gap-1 text-[11px] font-mono text-[#D0C3AF] tabular-nums">
+            <span className="text-[#F7EBDD]">{fmt(currentTime)}</span>
+            <span className="text-[#837B6D]">/</span>
             <span>{fmt(duration)}</span>
           </div>
 
@@ -329,7 +329,7 @@ export function PlayerCanvas({
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-wider transition-colors ${
                 showComposer
                   ? 'bg-[#7F77DD]/20 border-[#7F77DD] text-[#AFA9EC]'
-                  : 'border-[#1f1a13] text-[#a08a6a] hover:text-white hover:border-[#8A7A5C]'
+                  : 'border-[#2B2821] text-[#D0C3AF] hover:text-white hover:border-[#C9BCA8]'
               }`}
               title="Add comment at current timestamp"
             >
@@ -345,8 +345,8 @@ export function PlayerCanvas({
                 onClick={() => setShowSpectrogram((v) => !v)}
                 className={`p-1.5 border rounded transition-colors ${
                   showSpectrogram
-                    ? 'bg-[#2A2418] border-[#8A7A5C] text-[#E8D8B8]'
-                    : 'border-[#1a160f] text-[#6a5d4a] hover:text-white hover:border-[#2d2620]'
+                    ? 'bg-[#342F27] border-[#C9BCA8] text-[#F3E6D1]'
+                    : 'border-[#211F1A] text-[#B4AA99] hover:text-white hover:border-[#3B372F]'
                 }`}
                 title={
                   showSpectrogram
@@ -359,17 +359,17 @@ export function PlayerCanvas({
             )}
             <button
               onClick={() => zoom(Math.max(0, currentZoom - ZOOM_STEP))}
-              className="p-1.5 text-[#6a5d4a] hover:text-white border border-[#1a160f] hover:border-[#2d2620] rounded transition-colors"
+              className="p-1.5 text-[#B4AA99] hover:text-white border border-[#211F1A] hover:border-[#3B372F] rounded transition-colors"
               title="Zoom out  [  "
             >
               <ZoomOut size={11} />
             </button>
-            <span className="text-[10px] font-mono text-[#6a5d4a] min-w-[50px] text-center tabular-nums">
+            <span className="text-[10px] font-mono text-[#B4AA99] min-w-[50px] text-center tabular-nums">
               {currentZoom > 0 ? `${Math.round(currentZoom)}px/s` : 'fit'}
             </span>
             <button
               onClick={() => zoom(currentZoom + ZOOM_STEP)}
-              className="p-1.5 text-[#6a5d4a] hover:text-white border border-[#1a160f] hover:border-[#2d2620] rounded transition-colors"
+              className="p-1.5 text-[#B4AA99] hover:text-white border border-[#211F1A] hover:border-[#3B372F] rounded transition-colors"
               title="Zoom in  ]  "
             >
               <ZoomIn size={11} />
@@ -381,22 +381,22 @@ export function PlayerCanvas({
       {/* Region toolbar — only when regions are enabled */}
       {enableRegions && !hideRegionToolbar && (
         <div className="flex items-center gap-2 px-1">
-          <span className="text-[10px] font-mono uppercase tracking-widest text-[#5a5142]">
+          <span className="text-[10px] font-mono uppercase tracking-widest text-[#9B9282]">
             Drag on the waveform to mark a region
             {loopRegions && (
-              <span className="ml-2 inline-flex items-center gap-1 text-[#E8D8B8]">
+              <span className="ml-2 inline-flex items-center gap-1 text-[#F3E6D1]">
                 <Repeat size={10} /> looping
               </span>
             )}
           </span>
           {regions.length > 0 && (
             <>
-              <span className="text-[10px] font-mono text-[#6a5d4a] ml-2">
+              <span className="text-[10px] font-mono text-[#B4AA99] ml-2">
                 {regions.length} region{regions.length === 1 ? '' : 's'}
               </span>
               <button
                 onClick={clearRegions}
-                className="ml-auto text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-red-400 px-2 py-1 border border-[#1a160f] hover:border-red-400/40 rounded transition-colors"
+                className="ml-auto text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-red-400 px-2 py-1 border border-[#211F1A] hover:border-red-400/40 rounded transition-colors"
               >
                 Clear
               </button>
@@ -407,14 +407,14 @@ export function PlayerCanvas({
 
       {/* Inline Comment Composer */}
       {showComposer && (
-        <div className="p-4 rounded-lg border border-[#8A7A5C]/25 bg-[#0c0a08]/90 backdrop-blur-md space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="p-4 rounded-lg border border-[#C9BCA8]/25 bg-[#11100D]/90 backdrop-blur-md space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-center justify-between">
-            <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#E8D8B8]">
-              Add pinned comment at <span className="font-mono text-[#D4BFA0]">{fmt(currentTime)}</span>
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-[#F3E6D1]">
+              Add pinned comment at <span className="font-mono text-[#E7D7BE]">{fmt(currentTime)}</span>
             </h4>
             <button
               onClick={() => setShowComposer(false)}
-              className="text-[#6a5d4a] hover:text-white transition-colors"
+              className="text-[#B4AA99] hover:text-white transition-colors"
             >
               <CloseIcon size={12} />
             </button>
@@ -425,24 +425,24 @@ export function PlayerCanvas({
             onChange={(e) => setComposerText(e.target.value)}
             placeholder="Type your feedback here..."
             rows={2}
-            className="w-full bg-[#0a0907] border border-[#1a160f] rounded px-3 py-2 text-[12px] text-white placeholder:text-[#4a4338] focus:outline-none focus:border-[#7F77DD] resize-none"
+            className="w-full bg-[#090907] border border-[#211F1A] rounded px-3 py-2 text-[12px] text-white placeholder:text-[#837B6D] focus:outline-none focus:border-[#7F77DD] resize-none"
           />
           
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[9px] text-[#5a5142]">
+            <p className="text-[9px] text-[#9B9282]">
               Picks up active selection range if dragged on waveform.
             </p>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowComposer(false)}
-                className="px-3.5 py-1.5 border border-[#1f1a13] hover:border-[#2d2620] rounded text-[10px] font-bold uppercase tracking-wider text-[#6a5d4a] hover:text-white transition-colors"
+                className="px-3.5 py-1.5 border border-[#2B2821] hover:border-[#3B372F] rounded text-[10px] font-bold uppercase tracking-wider text-[#B4AA99] hover:text-white transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handlePostComment}
                 disabled={postingComment || !composerText.trim()}
-                className="flex items-center gap-1.5 bg-[#D4BFA0] hover:bg-[#8A7A5C] disabled:opacity-40 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded transition-colors"
+                className="flex items-center gap-1.5 bg-[#E7D7BE] hover:bg-[#C9BCA8] disabled:opacity-40 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded transition-colors"
               >
                 {postingComment ? (
                   <Loader2 size={11} className="animate-spin" />

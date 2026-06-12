@@ -44,10 +44,10 @@ export function RecommendationsStrip<T extends MinTrack>({
   return (
     <section className="mt-12 max-w-[1400px] mx-auto px-4 md:px-8">
       <div className="flex items-baseline justify-between mb-3">
-        <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#a08a6a]">
+        <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF]">
           {label}
         </p>
-        <p className="text-[9px] font-mono uppercase tracking-wider text-[#3a3328] tabular-nums">
+        <p className="text-[9px] font-mono uppercase tracking-wider text-[#6E685B] tabular-nums">
           {display.length} {display.length === 1 ? 'pick' : 'picks'}
         </p>
       </div>
@@ -63,14 +63,14 @@ export function RecommendationsStrip<T extends MinTrack>({
               key={t.id}
               type="button"
               onClick={() => onPreview(t)}
-              className="group shrink-0 w-[140px] sm:w-[160px] text-left rounded-xl border border-[#1f1a13] bg-[#14110d] hover:border-[#2d2620] transition-colors overflow-hidden flex flex-col"
+              className="group shrink-0 w-[140px] sm:w-[160px] text-left rounded-xl border border-[#2B2821] bg-[#171511] hover:border-[#3B372F] transition-colors overflow-hidden flex flex-col"
             >
               {/* Cover */}
-              <div className="relative aspect-square bg-[#0a0907] overflow-hidden">
+              <div className="relative aspect-square bg-[#090907] overflow-hidden">
                 {t.cover_url ? (
                   <CoverImage src={t.cover_url} alt="" sizes="160px" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[#3a3328] bg-gradient-to-br from-[#1f1a13] to-[#0a0907]">
+                  <div className="w-full h-full flex items-center justify-center text-[#6E685B] bg-gradient-to-br from-[#2B2821] to-[#090907]">
                     <Music size={18} />
                   </div>
                 )}
@@ -93,13 +93,13 @@ export function RecommendationsStrip<T extends MinTrack>({
 
               {/* Body */}
               <div className="p-2.5 flex flex-col gap-1 min-w-0">
-                <p className={`text-[12px] font-medium truncate ${isCurrent ? '' : 'text-[#E8DCC8]'}`}
+                <p className={`text-[12px] font-medium truncate ${isCurrent ? '' : 'text-[#F7EBDD]'}`}
                   style={isCurrent ? { color: accentColor } : {}}
                 >
                   {t.title}
                 </p>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] truncate">
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] truncate">
                     {t.type}{t.bpm ? ` · ${t.bpm}` : ''}
                   </span>
                   {free ? (
@@ -107,11 +107,11 @@ export function RecommendationsStrip<T extends MinTrack>({
                       Free
                     </span>
                   ) : lease != null ? (
-                    <span className="text-[11px] font-mono font-bold text-[#E8DCC8] tabular-nums">
+                    <span className="text-[11px] font-mono font-bold text-[#F7EBDD] tabular-nums">
                       ${lease}
                     </span>
                   ) : (
-                    <span className="text-[10px] font-mono text-[#3a3328]">—</span>
+                    <span className="text-[10px] font-mono text-[#6E685B]">—</span>
                   )}
                 </div>
               </div>

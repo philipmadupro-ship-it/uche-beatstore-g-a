@@ -3,15 +3,16 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
+import { cn } from '@/lib/utils';
 
 const CHROMATIC_KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#', 'G#', 'D#', 'A#', 'F'];
 
 // Status options including MAQ — ordered by workflow stage
 const STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
   { value: 'maq',        label: 'MAQ',      color: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
-  { value: 'needs_work', label: 'WIP',      color: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]'   },
+  { value: 'needs_work', label: 'WIP',      color: 'bg-[#1f1a0a] text-[#D6BE7A] border-[#3a2f1f]'   },
   { value: 'finished',   label: 'Finished', color: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]'   },
-  { value: 'archived',   label: 'Archived', color: 'bg-[#16130e] text-[#6a5d4a] border-[#1f1a13]'    },
+  { value: 'archived',   label: 'Archived', color: 'bg-[#1A1813] text-[#B4AA99] border-[#2B2821]'    },
 ];
 
 export interface LibraryFilters {
@@ -73,9 +74,19 @@ export function serializeFilters(f: LibraryFilters): Record<string, unknown> {
   };
 }
 
+type SerializedLibraryFilters = {
+  genres?: unknown;
+  statuses?: unknown;
+  bpmMin?: unknown;
+  bpmMax?: unknown;
+  keys?: unknown;
+  scale?: unknown;
+  rating?: unknown;
+};
+
 /** Rehydrate filters from a stored JSON object (arrays → Sets). */
-export function deserializeFilters(raw: any): LibraryFilters {
-  const r = raw ?? {};
+export function deserializeFilters(raw: unknown): LibraryFilters {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as SerializedLibraryFilters;
   return {
     genres: new Set<string>(Array.isArray(r.genres) ? r.genres : []),
     statuses: new Set<string>(Array.isArray(r.statuses) ? r.statuses : []),
@@ -90,9 +101,10 @@ export function deserializeFilters(raw: any): LibraryFilters {
 interface FilterBarProps {
   filters: LibraryFilters;
   onChange: (f: LibraryFilters) => void;
+  embedded?: boolean;
 }
 
-export function FilterBar({ filters, onChange }: FilterBarProps) {
+export function FilterBar({ filters, onChange, embedded = false }: FilterBarProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const set = (partial: Partial<LibraryFilters>) => onChange({ ...filters, ...partial });
 
@@ -115,11 +127,14 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
   };
 
   return (
-    <div className="bg-[#0e0c08] border border-[#1a160f] rounded-xl p-4 mb-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+    <div className={cn(
+      'space-y-4 animate-in fade-in slide-in-from-top-2 duration-200',
+      embedded ? 'pb-2' : 'bg-[#11100D] border border-[#211F1A] rounded-xl p-4 mb-4',
+    )}>
 
       {/* ── Genre (first-class) ─────────────────────────────────── */}
       <div>
-        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Genre</p>
+        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Genre</p>
         <div className="flex flex-wrap gap-1.5">
           {TAG_TAXONOMY.genre.map((g) => {
             const active = filters.genres.has(g);
@@ -129,8 +144,8 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
                 onClick={() => toggleGenre(g)}
                 className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
                   active
-                    ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]'
-                    : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'
+                    ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]'
+                    : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]'
                 }`}
               >{g}</button>
             );
@@ -140,7 +155,7 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
 
       {/* ── State (first-class) ─────────────────────────────────── */}
       <div>
-        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">State</p>
+        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">State</p>
         <div className="flex flex-wrap gap-1.5">
           {STATUS_OPTIONS.map(({ value, label, color }) => {
             const active = filters.statuses.has(value);
@@ -149,7 +164,7 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
                 key={value}
                 onClick={() => toggleStatus(value)}
                 className={`px-3 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                  active ? `${color}` : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'
+                  active ? `${color}` : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]'
                 }`}
               >{label}</button>
             );
@@ -161,12 +176,12 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
       <div>
         <button
           onClick={() => setAdvancedOpen((v) => !v)}
-          className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] hover:text-[#a08a6a] transition-colors"
+          className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
         >
           {advancedOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
           Advanced filters
           {(filters.bpmMin != null || filters.bpmMax != null || filters.keys.size > 0 || filters.scale !== 'all' || filters.rating != null) && (
-            <span className="w-4 h-4 rounded-full bg-[#3a3020] text-[#a08a6a] text-[8px] font-bold flex items-center justify-center ml-1">
+            <span className="w-4 h-4 rounded-full bg-[#3a3020] text-[#D0C3AF] text-[8px] font-bold flex items-center justify-center ml-1">
               {[filters.bpmMin != null || filters.bpmMax != null, filters.keys.size > 0, filters.scale !== 'all', filters.rating != null].filter(Boolean).length}
             </span>
           )}
@@ -177,21 +192,21 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* BPM range */}
               <div>
-                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">BPM range</p>
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">BPM range</p>
                 <div className="flex items-center gap-2">
                   <input type="number" placeholder="Min" min={0} max={999} value={filters.bpmMin ?? ''}
                     onChange={(e) => set({ bpmMin: e.target.value ? Number(e.target.value) : null })}
-                    className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-2.5 py-1.5 text-[12px] text-[#E8DCC8] placeholder-[#3a3328] focus:outline-none focus:border-[#3a3328] tabular-nums" />
-                  <span className="text-[#3a3328] text-[10px] shrink-0">–</span>
+                    className="w-full bg-[#171511] border border-[#2B2821] rounded-lg px-2.5 py-1.5 text-[12px] text-[#F7EBDD] placeholder-[#6E685B] focus:outline-none focus:border-[#6E685B] tabular-nums" />
+                  <span className="text-[#6E685B] text-[10px] shrink-0">–</span>
                   <input type="number" placeholder="Max" min={0} max={999} value={filters.bpmMax ?? ''}
                     onChange={(e) => set({ bpmMax: e.target.value ? Number(e.target.value) : null })}
-                    className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-2.5 py-1.5 text-[12px] text-[#E8DCC8] placeholder-[#3a3328] focus:outline-none focus:border-[#3a3328] tabular-nums" />
+                    className="w-full bg-[#171511] border border-[#2B2821] rounded-lg px-2.5 py-1.5 text-[12px] text-[#F7EBDD] placeholder-[#6E685B] focus:outline-none focus:border-[#6E685B] tabular-nums" />
                 </div>
               </div>
 
               {/* Scale */}
               <div>
-                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Scale</p>
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Scale</p>
                 <div className="flex gap-1.5">
                   {(['all', 'major', 'minor'] as const).map((s) => (
                     <button key={s} onClick={() => set({ scale: s })}
@@ -200,7 +215,7 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
                           ? s === 'minor' ? 'bg-[#1a1833] border border-[#534AB7]/40 text-[#9d95e8]'
                             : s === 'major' ? 'bg-[#1f1a10] border border-[#3d3020]/60 text-[#c8a47a]'
                             : 'bg-white text-black'
-                          : 'bg-[#14110d] border border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a]'
+                          : 'bg-[#171511] border border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF]'
                       }`}
                     >{s === 'all' ? 'Any' : s}</button>
                   ))}
@@ -209,12 +224,12 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
 
               {/* Min rating */}
               <div>
-                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Min rating</p>
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Min rating</p>
                 <div className="flex gap-0.5">
                   {[1,2,3,4,5].map((star) => (
                     <button key={star} onClick={() => set({ rating: filters.rating === star ? null : star })}
                       className={`w-7 h-7 rounded-lg flex items-center justify-center text-[14px] transition-colors ${
-                        filters.rating != null && star <= filters.rating ? 'text-[#c8a84b]' : 'text-[#2d2620] hover:text-[#c8a84b]/60'
+                        filters.rating != null && star <= filters.rating ? 'text-[#D6BE7A]' : 'text-[#3B372F] hover:text-[#D6BE7A]/60'
                       }`}>★</button>
                   ))}
                 </div>
@@ -223,14 +238,14 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
 
             {/* Key picker */}
             <div>
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Key</p>
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Key</p>
               <div className="flex gap-1.5 flex-wrap">
                 {CHROMATIC_KEYS.map((k) => (
                   <button key={k} onClick={() => toggleKey(k)}
                     className={`w-9 h-9 rounded-lg text-[11px] font-mono font-bold transition-all ${
                       filters.keys.has(k)
-                        ? 'bg-[#2A2418] border border-[#D4BFA0]/40 text-[#E8D8B8] shadow-[0_0_6px_rgba(212,191,160,0.12)]'
-                        : 'bg-[#14110d] border border-[#1f1a13] text-[#5a5142] hover:text-[#a08a6a] hover:border-[#2d2620]'
+                        ? 'bg-[#342F27] border border-[#E7D7BE]/40 text-[#F3E6D1] shadow-[0_0_6px_rgba(231,215,190,0.12)]'
+                        : 'bg-[#171511] border border-[#2B2821] text-[#9B9282] hover:text-[#D0C3AF] hover:border-[#3B372F]'
                     }`}>{k}</button>
                 ))}
               </div>
@@ -241,8 +256,8 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
 
       {/* Active filter chips */}
       {hasActiveFilters(filters) && (
-        <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-[#1a160f]">
-          <span className="text-[9px] font-mono uppercase tracking-wider text-[#4a4338]">Active:</span>
+        <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-[#211F1A]">
+          <span className="text-[9px] font-mono uppercase tracking-wider text-[#837B6D]">Active:</span>
           {Array.from(filters.genres).map((g) => <Chip key={g} label={g} onRemove={() => toggleGenre(g)} />)}
           {Array.from(filters.statuses).map((s) => {
             const opt = STATUS_OPTIONS.find((o) => o.value === s);
@@ -256,7 +271,7 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
           {filters.rating != null && <Chip label={`★ ≥ ${filters.rating}`} onRemove={() => set({ rating: null })} />}
           <button
             onClick={() => onChange({ ...DEFAULT_FILTERS, genres: new Set(), statuses: new Set(), keys: new Set() })}
-            className="text-[9px] font-mono text-[#6a5d4a] hover:text-[#E8DCC8] ml-1 transition-colors"
+            className="text-[9px] font-mono text-[#B4AA99] hover:text-[#F7EBDD] ml-1 transition-colors"
           >Clear all</button>
         </div>
       )}
@@ -266,9 +281,9 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 bg-[#1a160f] border border-[#2d2620] rounded-full pl-2.5 pr-1.5 py-1 text-[10px] text-[#E8DCC8] font-mono">
+    <span className="inline-flex items-center gap-1 bg-[#211F1A] border border-[#3B372F] rounded-full pl-2.5 pr-1.5 py-1 text-[10px] text-[#F7EBDD] font-mono">
       {label}
-      <button onClick={onRemove} className="text-[#6a5d4a] hover:text-white transition-colors leading-none">
+      <button onClick={onRemove} className="text-[#B4AA99] hover:text-white transition-colors leading-none">
         <X size={9} />
       </button>
     </span>

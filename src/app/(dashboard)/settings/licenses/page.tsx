@@ -10,6 +10,7 @@
 
 import { useRouter } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { LicenseBuilder } from '@/components/store/LicenseBuilder';
 
@@ -17,28 +18,27 @@ export default function LicensesSettingsPage() {
   const router = useRouter();
   return (
     <DashboardLayout>
-      <div className="max-w-[780px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10 pb-32">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
+      <PageContainer className="max-w-[780px] pb-32">
+        <PageHeader
+          eyebrow="Settings / Store"
+          title="License Builder"
+          description="Define the tiers buyers see across checkout, shares, and the storefront."
+          actions={
           <button
             onClick={() => router.push('/settings')}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#6a5d4a] hover:text-white hover:bg-white/[0.04] transition-colors"
+            className="inline-flex h-9 items-center gap-2 rounded-full border border-[#2B2821] bg-[#171511] px-3 text-[11px] font-medium text-[#D0C3AF] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD]"
           >
             <ArrowLeft size={14} />
+            Settings
           </button>
-          <div>
-            <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#5a5142]">
-              Settings / Store
-            </p>
-            <h1 className="text-[22px] font-bold text-white tracking-tight">License Builder</h1>
-          </div>
-        </div>
+          }
+        />
 
         {/* Redirect notice */}
-        <div className="rounded-xl border border-[#D4BFA0]/20 bg-[#D4BFA0]/5 p-4 mb-6 flex items-start gap-3">
-          <ExternalLink size={13} className="text-[#D4BFA0] shrink-0 mt-0.5" />
-          <div className="text-[11px] text-[#a08a6a] leading-relaxed">
-            <p className="font-medium text-[#D4BFA0] mb-1">This section has moved</p>
+        <div className="rounded-xl border border-[#E7D7BE]/20 bg-[#E7D7BE]/5 p-4 mb-6 flex items-start gap-3">
+          <ExternalLink size={13} className="text-[#E7D7BE] shrink-0 mt-0.5" />
+          <div className="text-[11px] text-[#D0C3AF] leading-relaxed">
+            <p className="font-medium text-[#E7D7BE] mb-1">This section has moved</p>
             <p>
               License tiers are now managed in the{' '}
               <button
@@ -53,7 +53,7 @@ export default function LicensesSettingsPage() {
         </div>
 
         <LicenseBuilder />
-      </div>
+      </PageContainer>
     </DashboardLayout>
   );
 }

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { asVideoStyle } from '@/lib/share/styles';
+import { normalizeThemeColor } from '@/lib/theme/colors';
 
 interface TrackShape {
   id: string;
@@ -52,8 +53,8 @@ export default function VerticalSharePage({
 }) {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#0a0907] flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-[#5a5142]" />
+      <div className="min-h-screen bg-[#090907] flex items-center justify-center">
+        <Loader2 size={20} className="animate-spin text-[#9B9282]" />
       </div>
     }>
       <VerticalShareContent params={params} />
@@ -83,7 +84,7 @@ function VerticalShareContent({
   });
   const track = data?.track ?? null;
   const creator = data?.creator ?? null;
-  const accent = creator?.accent_color || '#D4BFA0';
+  const accent = normalizeThemeColor(creator?.accent_color);
 
   const searchParams = useSearchParams();
   const styleOverride = searchParams?.get('style');
@@ -226,12 +227,12 @@ function VerticalShareContent({
         return;
       }
       // Background — accent gradient over dark
-      ctx.fillStyle = '#0a0907';
+      ctx.fillStyle = '#090907';
       ctx.fillRect(0, 0, 1080, 1920);
       const gradient = ctx.createLinearGradient(0, 0, 0, 1920);
       gradient.addColorStop(0, `${accent}55`);
       gradient.addColorStop(0.55, 'rgba(10,9,7,0.92)');
-      gradient.addColorStop(1, '#0a0907');
+      gradient.addColorStop(1, '#090907');
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, 1080, 1920);
 
@@ -245,7 +246,7 @@ function VerticalShareContent({
       if (coverImg) {
         ctx.drawImage(coverImg, -300, -300, 600, 600);
       } else {
-        ctx.fillStyle = '#1a160f';
+        ctx.fillStyle = '#211F1A';
         ctx.fillRect(-300, -300, 600, 600);
       }
       ctx.restore();
@@ -310,29 +311,29 @@ function VerticalShareContent({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#0a0907] flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-[#5a5142]" />
+      <div className="min-h-screen bg-[#090907] flex items-center justify-center">
+        <Loader2 size={20} className="animate-spin text-[#9B9282]" />
       </div>
     );
   }
   if (isError || !track) {
     return (
-      <div className="min-h-screen bg-[#0a0907] flex flex-col items-center justify-center gap-4 text-[#5a5142] px-6">
+      <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-[#9B9282] px-6">
         <Music size={28} />
         <p className="text-[14px]">This share preview isn't available.</p>
-        <Link href="/store" className="text-[11px] underline hover:text-[#E8DCC8]">Back to store</Link>
+        <Link href="/store" className="text-[11px] underline hover:text-[#F7EBDD]">Back to store</Link>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-[#E8DCC8] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-black text-[#F7EBDD] flex items-center justify-center p-4">
       {/* Floating controls (outside the stage so they don't appear in a
           screen-recorded frame) */}
       <div className="fixed top-3 left-3 right-3 z-20 flex items-center gap-2 justify-between">
         <Link
           href={`/store/${id}`}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-[#14110d]/80 backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-[#171511]/80 backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
         >
           <ArrowLeft size={11} />
           Exit
@@ -343,7 +344,7 @@ function VerticalShareContent({
               type="button"
               onClick={startRecord}
               disabled={recording}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-[#14110d]/80 backdrop-blur border border-white/[0.10] text-[#E8DCC8] text-[11px] font-mono uppercase tracking-wider hover:bg-[#1a160f]/90 transition-colors disabled:opacity-40"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-[#171511]/80 backdrop-blur border border-white/[0.10] text-[#F7EBDD] text-[11px] font-mono uppercase tracking-wider hover:bg-[#211F1A]/90 transition-colors disabled:opacity-40"
               title="Capture a 15-second WebM (Chromium browsers only)"
             >
               {recording ? <Loader2 size={11} className="animate-spin" /> : <Video size={11} />}
@@ -353,7 +354,7 @@ function VerticalShareContent({
           <button
             type="button"
             onClick={copyLink}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-[#14110d]/80 backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-[#171511]/80 backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
           >
             <Copy size={11} />
             Copy link
@@ -379,7 +380,7 @@ function VerticalShareContent({
           aria-hidden
           className="absolute inset-0"
           style={{
-            background: `linear-gradient(180deg, ${accent}55 0%, rgba(10,9,7,0.85) 50%, #0a0907 100%)`,
+            background: `linear-gradient(180deg, ${accent}55 0%, rgba(10,9,7,0.85) 50%, #090907 100%)`,
           }}
         />
 
@@ -400,7 +401,7 @@ function VerticalShareContent({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" style={coverFilter ? { filter: coverFilter } : undefined} />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center text-white/40">
+              <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907] flex items-center justify-center text-white/40">
                 <Music size={40} />
               </div>
             )}

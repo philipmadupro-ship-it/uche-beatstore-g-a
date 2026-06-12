@@ -172,29 +172,29 @@ export function CommandPalette() {
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-full max-w-xl bg-[#0a0907] border border-[#1f1a13] rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-200"
+        className="w-full max-w-xl bg-[#090907] border border-[#2B2821] rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-[#1a160f]">
-          <Search size={14} className="text-[#4a4338] shrink-0" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-[#211F1A]">
+          <Search size={14} className="text-[#837B6D] shrink-0" />
           <input
             ref={inputRef}
             value={q}
             onChange={(e) => { setQ(e.target.value); setActiveIdx(0); }}
             onKeyDown={onKey}
             placeholder="Search tracks, projects, contacts, or jump to…"
-            className="flex-1 bg-transparent text-[13px] text-[#E8DCC8] placeholder-[#4a4338] focus:outline-none"
+            className="flex-1 bg-transparent text-[13px] text-[#F7EBDD] placeholder-[#837B6D] focus:outline-none"
           />
-          {loading && <Loader2 size={12} className="animate-spin text-[#6a5d4a]" />}
-          <kbd className="text-[9px] font-mono text-[#4a4338] border border-[#1f1a13] rounded px-1.5 py-0.5 hidden sm:block">ESC</kbd>
+          {loading && <Loader2 size={12} className="animate-spin text-[#B4AA99]" />}
+          <kbd className="text-[9px] font-mono text-[#837B6D] border border-[#2B2821] rounded px-1.5 py-0.5 hidden sm:block">ESC</kbd>
         </div>
 
         {/* Results */}
         <div className="max-h-[50vh] overflow-y-auto">
           {flat.length === 0 ? (
             <div className="px-4 py-12 text-center">
-              <p className="text-[11px] text-[#5a5142]">
+              <p className="text-[11px] text-[#9B9282]">
                 {q.trim() ? 'No matches' : 'Start typing to search'}
               </p>
             </div>
@@ -209,15 +209,15 @@ export function CommandPalette() {
                     onClick={item.action}
                     onMouseEnter={() => setActiveIdx(i)}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                      active ? 'bg-[#16130e]' : 'hover:bg-[#101010]'
+                      active ? 'bg-[#1A1813]' : 'hover:bg-[#101010]'
                     }`}
                   >
-                    <Icon size={13} className={active ? 'text-[#D4BFA0]' : 'text-[#6a5d4a]'} />
-                    <span className="flex-1 text-[12px] text-[#E8DCC8] truncate">{item.label}</span>
+                    <Icon size={13} className={active ? 'text-[#E7D7BE]' : 'text-[#B4AA99]'} />
+                    <span className="flex-1 text-[12px] text-[#F7EBDD] truncate">{item.label}</span>
                     {item.sub && (
-                      <span className="text-[9px] font-mono text-[#5a5142] uppercase tracking-wider">{item.sub}</span>
+                      <span className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider">{item.sub}</span>
                     )}
-                    {active && <ArrowRight size={11} className="text-[#D4BFA0]" />}
+                    {active && <ArrowRight size={11} className="text-[#E7D7BE]" />}
                   </button>
                 );
               })}
@@ -226,7 +226,7 @@ export function CommandPalette() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2 border-t border-[#1a160f] flex items-center justify-between text-[9px] font-mono text-[#4a4338] uppercase tracking-wider">
+        <div className="px-4 py-2 border-t border-[#211F1A] flex items-center justify-between text-[9px] font-mono text-[#837B6D] uppercase tracking-wider">
           <span>↑↓ navigate · ↵ select</span>
           <span>⌘K to toggle</span>
         </div>

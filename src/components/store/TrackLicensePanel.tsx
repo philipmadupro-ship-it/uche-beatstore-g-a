@@ -82,14 +82,14 @@ export function TrackLicensePanel({ trackId, globalLicenses }: {
 
   if (loading) return (
     <div className="flex items-center justify-center py-4">
-      <Loader2 size={13} className="animate-spin text-[#4a4338]" />
+      <Loader2 size={13} className="animate-spin text-[#837B6D]" />
     </div>
   );
 
   if (globalLicenses.length === 0) return (
-    <p className="text-[10px] text-[#5a5142] font-mono py-3">
+    <p className="text-[10px] text-[#9B9282] font-mono py-3">
       No license tiers yet — build them in{' '}
-      <a href="/settings/licenses" className="text-[#a08a6a] underline underline-offset-2">Settings → Licenses</a>.
+      <a href="/settings/licenses" className="text-[#D0C3AF] underline underline-offset-2">Settings → Licenses</a>.
     </p>
   );
 
@@ -98,7 +98,7 @@ export function TrackLicensePanel({ trackId, globalLicenses }: {
   return (
     <div className="space-y-2">
       {!anyLinked && (
-        <p className="text-[9px] text-[#4a4338] font-mono">
+        <p className="text-[9px] text-[#837B6D] font-mono">
           Using all global tiers. Toggle a tier to set per-beat overrides.
         </p>
       )}
@@ -106,19 +106,19 @@ export function TrackLicensePanel({ trackId, globalLicenses }: {
         const row = rowFor(gl.id);
         const isBusy = saving === gl.id;
         return (
-          <div key={gl.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-colors ${row.enabled ? 'border-[#2d2620] bg-[#14110d]' : 'border-[#1a160f] bg-[#0e0c08] opacity-60'}`}>
+          <div key={gl.id} className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-colors ${row.enabled ? 'border-[#3B372F] bg-[#171511]' : 'border-[#211F1A] bg-[#11100D] opacity-60'}`}>
             {/* Enable toggle */}
             <button
               onClick={() => save(gl.id, { enabled: !row.enabled })}
               disabled={isBusy}
-              className={`w-8 h-4 shrink-0 rounded-full border-2 border-transparent transition-colors relative ${row.enabled ? 'bg-[#6DC6A4]' : 'bg-[#1f1a13]'}`}
+              className={`w-8 h-4 shrink-0 rounded-full border-2 border-transparent transition-colors relative ${row.enabled ? 'bg-[#6DC6A4]' : 'bg-[#2B2821]'}`}
             >
               <span className={`absolute top-0 w-3 h-3 rounded-full bg-white shadow transition-transform ${row.enabled ? 'translate-x-4' : 'translate-x-0'}`} />
             </button>
             {/* Tier info */}
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-medium text-[#E8DCC8] truncate">{gl.name}</p>
-              <p className="text-[9px] font-mono text-[#5a5142]">
+              <p className="text-[11px] font-medium text-[#F7EBDD] truncate">{gl.name}</p>
+              <p className="text-[9px] font-mono text-[#9B9282]">
                 {gl.is_exclusive ? 'Exclusive' : 'Non-exclusive'}
                 {gl.is_free ? ' · Free' : ''}
               </p>
@@ -126,7 +126,7 @@ export function TrackLicensePanel({ trackId, globalLicenses }: {
             {/* Price override */}
             {!gl.is_free && row.enabled && (
               <div className="flex items-center gap-1 shrink-0">
-                <span className="text-[10px] text-[#5a5142]">$</span>
+                <span className="text-[10px] text-[#9B9282]">$</span>
                 <input
                   type="number"
                   min="0"
@@ -137,11 +137,11 @@ export function TrackLicensePanel({ trackId, globalLicenses }: {
                     const val = e.target.value.trim() === '' ? null : parseFloat(e.target.value);
                     save(gl.id, { price_override_usd: val });
                   }}
-                  className="w-16 bg-[#0a0907] border border-[#1f1a13] rounded px-1.5 py-0.5 text-[11px] text-[#E8DCC8] focus:outline-none focus:border-[#2d2620] font-mono tabular-nums"
+                  className="w-16 bg-[#090907] border border-[#2B2821] rounded px-1.5 py-0.5 text-[11px] text-[#F7EBDD] focus:outline-none focus:border-[#3B372F] font-mono tabular-nums"
                 />
               </div>
             )}
-            {isBusy && <Loader2 size={11} className="animate-spin text-[#4a4338] shrink-0" />}
+            {isBusy && <Loader2 size={11} className="animate-spin text-[#837B6D] shrink-0" />}
             {!isBusy && row.linked && <Check size={11} className="text-[#6DC6A4] shrink-0" />}
           </div>
         );

@@ -40,7 +40,7 @@ export function StemPlayer({ vocalsUrl, drumsUrl, bassUrl, otherUrl }: StemPlaye
         // Match the app-wide waveform palette: frosted unplayed bars + warm
         // accent played, thin rounded "liquid" bars.
         waveColor: 'rgba(232,220,200,0.18)',
-        progressColor: '#D4BFA0',
+        progressColor: '#E7D7BE',
         height: 40,
         barWidth: 2,
         barGap: 1.6,
@@ -88,21 +88,21 @@ export function StemPlayer({ vocalsUrl, drumsUrl, bassUrl, otherUrl }: StemPlaye
   };
 
   const StemRow = ({ name, iconColor }: { name: string, iconColor: string }) => (
-    <div className="flex flex-col gap-3 p-6 bg-[#0a0907] border border-[#1f1a13] rounded-2xl">
+    <div className="flex flex-col gap-3 p-6 bg-[#090907] border border-[#2B2821] rounded-2xl">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className={`w-2 h-2 rounded-full ${iconColor}`} />
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E8DCC8]">{name}</span>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#F7EBDD]">{name}</span>
         </div>
         <div className="flex items-center gap-4">
-          <button onClick={() => toggleMute(name.toLowerCase())} className={`${mutes[name.toLowerCase() as keyof typeof mutes] ? 'text-red-500' : 'text-[#4a4338] hover:text-[#E8DCC8]'} transition-colors`}>
+          <button onClick={() => toggleMute(name.toLowerCase())} className={`${mutes[name.toLowerCase() as keyof typeof mutes] ? 'text-red-500' : 'text-[#837B6D] hover:text-[#F7EBDD]'} transition-colors`}>
             {mutes[name.toLowerCase() as keyof typeof mutes] ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </button>
           <input 
             type="range" min="0" max="1" step="0.01" 
             value={volumes[name.toLowerCase() as keyof typeof volumes]}
             onChange={(e) => handleVolumeChange(name.toLowerCase(), parseFloat(e.target.value))}
-            className="w-24 h-1 bg-[#1f1a13] rounded-full appearance-none cursor-pointer accent-[#D4BFA0]"
+            className="w-24 h-1 bg-[#2B2821] rounded-full appearance-none cursor-pointer accent-[#E7D7BE]"
           />
         </div>
       </div>
@@ -111,16 +111,16 @@ export function StemPlayer({ vocalsUrl, drumsUrl, bassUrl, otherUrl }: StemPlaye
   );
 
   return (
-    <div className="space-y-4 bg-[#16130e] p-8 rounded-3xl border border-[#1f1a13]">
+    <div className="space-y-4 bg-[#1A1813] p-8 rounded-3xl border border-[#2B2821]">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h3 className="text-sm font-black uppercase tracking-[0.3em] text-[#E8DCC8]">Stem Mixer</h3>
-          <p className="text-[9px] font-bold uppercase tracking-widest text-[#4a4338] mt-1">4-Channel Spectral Isolation</p>
+          <h3 className="text-sm font-black uppercase tracking-[0.3em] text-[#F7EBDD]">Stem Mixer</h3>
+          <p className="text-[9px] font-bold uppercase tracking-widest text-[#837B6D] mt-1">4-Channel Spectral Isolation</p>
         </div>
         <button 
           onClick={() => setIsPlaying(!isPlaying)}
           disabled={loading}
-          className="w-12 h-12 rounded-full bg-[#D4BFA0] text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-[#D4BFA0]/20"
+          className="w-12 h-12 rounded-full bg-[#E7D7BE] text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-[#E7D7BE]/20"
         >
           {loading ? <Loader2 size={20} className="animate-spin" /> : (isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-1" />)}
         </button>

@@ -2,10 +2,13 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import {
-  X, Send, Mail, Clock, CheckCircle, ArrowUpRight, XCircle, Music, ExternalLink, Loader2, ChevronDown,
+  Send, Mail, Clock, CheckCircle, ArrowUpRight, XCircle, Music, ExternalLink, Loader2, ChevronDown,
 } from 'lucide-react';
 import { BeatSend, Contact, Track } from '@/lib/types';
 import { toast } from '@/hooks/useToast';
+import { Button } from '@/components/ui/Button';
+import { Drawer } from '@/components/ui/Drawer';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 // Module-level cache so re-opening the drawer (or opening it on
 // successive contacts in one session) doesn't refetch the whole
@@ -139,66 +142,44 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
   }, [allTrackIds.join('|')]);
 
   return (
-    <>
-      <div
-        className="fixed inset-0 bg-black/60 z-[60] backdrop-blur-sm animate-in fade-in duration-200"
-        onClick={onClose}
-      />
-      <div
-        className="fixed right-0 top-0 bottom-0 w-[440px] max-w-[100vw] bg-[#0a0907] border-l border-[#1f1a13] z-[70] flex flex-col shadow-2xl animate-in slide-in-from-right duration-300"
-        role="dialog"
-        aria-modal="true"
-        aria-label={`Send history for ${contact.name}`}
-      >
-        {/* Header */}
-        <div className="px-6 py-5 border-b border-[#1f1a13] bg-gradient-to-b from-[#16130e] to-[#0a0907] shrink-0">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-full bg-[#1a160f] border border-[#1f1a13] flex items-center justify-center text-[12px] font-medium text-[#E8D8B8] shrink-0">
-                {contact.name[0]?.toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#D4BFA0] mb-0.5">Send history</p>
-                <h2 className="text-[15px] font-medium text-white truncate">{contact.name}</h2>
-                {contact.email && (
-                  <p className="text-[10px] font-mono text-[#5a5142] flex items-center gap-1 mt-0.5">
-                    <Mail size={9} />
-                    <span className="truncate">{contact.email}</span>
-                  </p>
-                )}
-              </div>
-            </div>
-            <button onClick={onClose} className="p-1 text-[#4a4338] hover:text-white transition-colors shrink-0">
-              <X size={18} />
-            </button>
-          </div>
-          <div className="flex items-center justify-between mt-4">
-            <p className="text-[10px] font-mono text-[#6a5d4a]">
-              {sorted.length === 0
-                ? 'No sends yet'
-                : `${sorted.length} send${sorted.length === 1 ? '' : 's'} on record`}
-            </p>
-            <button
-              onClick={onSendAgain}
-              disabled={!contact.email}
-              className="flex items-center gap-1.5 bg-[#D4BFA0] hover:bg-[#8A7A5C] disabled:bg-[#1a160f] disabled:text-[#4a4338] text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded transition-colors"
-            >
-              <Send size={11} />
-              Send again
-            </button>
-          </div>
+    <Drawer
+      onClose={onClose}
+      title="Send history"
+      description={contact.email ? `${contact.name} · ${contact.email}` : contact.name}
+      icon={
+        <span className="text-[12px] font-medium text-[var(--text-primary)]">
+          {contact.name[0]?.toUpperCase()}
+        </span>
+      }
+      size="md"
+      closeLabel={`Close send history for ${contact.name}`}
+      contentClassName="px-4 py-4 space-y-3"
+      headerAction={
+        <div className="flex w-full items-center justify-between gap-3">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-[var(--text-readable)]">
+            {sorted.length === 0
+              ? 'No sends yet'
+              : `${sorted.length} send${sorted.length === 1 ? '' : 's'} on record`}
+          </p>
+          <Button
+            onClick={onSendAgain}
+            disabled={!contact.email}
+            variant="accent"
+            size="sm"
+            leadingIcon={<Send size={11} aria-hidden="true" />}
+          >
+            Send again
+          </Button>
         </div>
-
-        {/* History list */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-4 space-y-3">
+      }
+    >
           {sorted.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center text-[#4a4338]">
-              <Clock size={32} className="opacity-20 mb-4" />
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] mb-1">No sends yet</p>
-              <p className="text-[10px] uppercase tracking-widest text-[#5a5142]">
-                Sends to this contact will appear here.
-              </p>
-            </div>
+            <EmptyState
+              icon={<Clock size={24} aria-hidden="true" />}
+              title="No sends yet"
+              description="Sends to this contact will appear here."
+              className="border-dashed py-16"
+            />
           ) : (
             sorted.map((s) => {
               const status = statusConfig(s.status);
@@ -209,7 +190,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
               return (
                 <div
                   key={s.id}
-                  className="border border-[#1a160f] bg-[#0e0c08] rounded-lg p-4 hover:border-[#2d2620] transition-colors"
+                  className="border border-[#211F1A] bg-[#11100D] rounded-lg p-4 hover:border-[#3B372F] transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2 mb-2">
                     {/* Status as a self-contained dropdown — click to
@@ -237,7 +218,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
                             className="fixed inset-0 z-[80]"
                             onClick={() => setOpenStatusId(null)}
                           />
-                          <div className="absolute top-full left-0 mt-1 z-[81] bg-[#0a0907] border border-[#1f1a13] rounded-md shadow-2xl py-1 min-w-[140px]">
+                          <div className="absolute top-full left-0 mt-1 z-[81] bg-[#090907] border border-[#2B2821] rounded-md shadow-2xl py-1 min-w-[140px]">
                             {STATUS_OPTIONS.map((opt) => {
                               const cfg = statusConfig(opt);
                               const OptIcon = cfg.icon;
@@ -249,7 +230,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
                                   className={`w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-left transition-colors ${
                                     isCurrent
                                       ? `${cfg.bg} ${cfg.color}`
-                                      : `text-[#a08a6a] hover:bg-[#16130e] hover:text-white`
+                                      : `text-[#D0C3AF] hover:bg-[#1A1813] hover:text-white`
                                   }`}
                                 >
                                   <OptIcon size={10} />
@@ -262,7 +243,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
                         </>
                       )}
                     </div>
-                    <span className="text-[9px] font-mono text-[#5a5142]">
+                    <span className="text-[9px] font-mono text-[#9B9282]">
                       {s.sent_at
                         ? new Date(s.sent_at).toLocaleString('en-US', {
                           month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -273,10 +254,10 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
 
                   {/* Track list — uses hydrated titles when available */}
                   <div className="flex items-start gap-2 mb-2">
-                    <Music size={11} className="text-[#6a5d4a] mt-0.5 shrink-0" />
+                    <Music size={11} className="text-[#B4AA99] mt-0.5 shrink-0" />
                     <div className="text-[11px] text-[#bbb] leading-relaxed">
                       {totalCount === 0 ? (
-                        <span className="text-[#5a5142]">No tracks recorded</span>
+                        <span className="text-[#9B9282]">No tracks recorded</span>
                       ) : (
                         <>
                           {titles
@@ -284,13 +265,13 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
                             .slice(0, 5)
                             .join(', ')}
                           {knownCount < totalCount && (
-                            <span className="text-[#5a5142]">
+                            <span className="text-[#9B9282]">
                               {' '}
                               {hydrating ? '· loading…' : `· +${totalCount - knownCount} more`}
                             </span>
                           )}
                           {knownCount === 0 && !hydrating && (
-                            <span className="text-[#5a5142]">{totalCount} track{totalCount === 1 ? '' : 's'}</span>
+                            <span className="text-[#9B9282]">{totalCount} track{totalCount === 1 ? '' : 's'}</span>
                           )}
                         </>
                       )}
@@ -299,7 +280,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
 
                   {/* Message preview */}
                   {s.message && (
-                    <p className="text-[11px] text-[#a08a6a] leading-relaxed bg-[#0a0907] border-l-2 border-[#8A7A5C]/40 pl-3 py-1.5 my-2 italic">
+                    <p className="text-[11px] text-[#D0C3AF] leading-relaxed bg-[#090907] border-l-2 border-[#C9BCA8]/40 pl-3 py-1.5 my-2 italic">
                       {s.message}
                     </p>
                   )}
@@ -310,7 +291,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
                       href={`/share/${s.share_token}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[10px] font-mono text-[#D4BFA0] hover:text-[#E8D8B8] mt-2"
+                      className="inline-flex items-center gap-1 text-[10px] font-mono text-[#E7D7BE] hover:text-[#F3E6D1] mt-2"
                     >
                       <ExternalLink size={9} />
                       Open share link
@@ -322,31 +303,23 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
           )}
 
           {hydrating && sorted.length > 0 && (
-            <div className="flex items-center justify-center py-3 text-[10px] text-[#5a5142]">
+            <div className="flex items-center justify-center py-3 text-[10px] text-[#9B9282]">
               <Loader2 size={11} className="animate-spin mr-2" />
               Resolving track titles…
             </div>
           )}
-        </div>
-
-        <style jsx>{`
-          .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-          .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-          .custom-scrollbar::-webkit-scrollbar-thumb { background: #1f1a13; border-radius: 10px; }
-        `}</style>
-      </div>
-    </>
+    </Drawer>
   );
 }
 
 function statusConfig(status: BeatSend['status']) {
   switch (status) {
-    case 'sent':        return { icon: Mail, color: 'text-[#a08a6a]', bg: 'bg-[#1a160f]', label: 'Sent' };
+    case 'sent':        return { icon: Mail, color: 'text-[#D0C3AF]', bg: 'bg-[#211F1A]', label: 'Sent' };
     case 'opened':      return { icon: Clock, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Opened' };
-    case 'interested':  return { icon: ArrowUpRight, color: 'text-[#c8a84b]', bg: 'bg-[#c8a84b]/10', label: 'Interested' };
+    case 'interested':  return { icon: ArrowUpRight, color: 'text-[#D6BE7A]', bg: 'bg-[#D6BE7A]/10', label: 'Interested' };
     case 'negotiating': return { icon: Clock, color: 'text-purple-400', bg: 'bg-purple-400/10', label: 'Negotiating' };
     case 'placed':      return { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10', label: 'Placed' };
     case 'pass':        return { icon: XCircle, color: 'text-red-500', bg: 'bg-red-500/10', label: 'Pass' };
-    default:            return { icon: Mail, color: 'text-[#5a5142]', bg: 'bg-[#1a160f]', label: String(status) };
+    default:            return { icon: Mail, color: 'text-[#9B9282]', bg: 'bg-[#211F1A]', label: String(status) };
   }
 }

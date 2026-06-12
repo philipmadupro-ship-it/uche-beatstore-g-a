@@ -8,12 +8,14 @@
  * mounted once in the store layout rather than duplicated per page.
  */
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShoppingCart, X, Music, Loader2, Tag } from 'lucide-react';
+import { ShoppingCart, X, Music } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
-import { toast } from '@/hooks/useToast';
+import { useHydrated } from '@/hooks/useHydrated';
 import type { Track } from '@/lib/types';
+import { Drawer } from '@/components/ui/Drawer';
+import { Button } from '@/components/ui/Button';
 
 interface CartItem {
   id: string;
@@ -43,7 +45,7 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
   // an empty cart while the client renders the persisted state, causing
   // a hydration mismatch on the total. Use the SSR-shape (empty + 0)
   // on the first paint, then swap to the real values after mount.
-  const [mounted, setMounted] = useState(false);
+  const mounted = useHydrated();
   const bundleRule = useCart((s) => s.bundleRule);
   const items = mounted ? rawItems : [];
   const total = mounted ? rawTotal : 0;
@@ -54,12 +56,12 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
   const bundleTotal = bundleQualifies ? total * (1 - bundleRule!.percent / 100) : total;
 
   useEffect(() => {
-    setMounted(true);
+    if (!mounted) return;
     const stored = localStorage.getItem('antigravity-buyer-email');
-    if (stored) {
-      setBuyerEmail(stored);
-    }
-  }, []);
+    if (!stored) return;
+    const frame = requestAnimationFrame(() => setBuyerEmail(stored));
+    return () => cancelAnimationFrame(frame);
+  }, [mounted]);
 
   const handleCheckout = () => {
     if (items.length === 0) return;
@@ -76,85 +78,28 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
   };
 
   return (
-    <>
-      {/* Backdrop — pointer-events toggled so it doesn't block interaction when closed */}
-      <div
-        onClick={onClose}
-        className={`fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
-          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
-        aria-hidden={!open}
-      />
-
-      {/* Drawer — always mounted, translate-x for slide animation */}
-      <aside
-        className={`fixed top-0 right-0 bottom-0 z-[90] w-full sm:w-[420px] bg-gradient-to-b from-[#101012]/95 via-[#0a0907]/95 to-[#0a0907]/95 backdrop-blur-2xl border-l border-white/[0.06] shadow-[-12px_0_40px_rgba(0,0,0,0.5)] flex flex-col transition-transform duration-300 ${
-          open ? 'translate-x-0' : 'translate-x-full pointer-events-none'
-        }`}
-        aria-hidden={!open}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
-          <h2 className="text-[12px] font-mono uppercase tracking-[0.2em] text-[#E8DCC8] flex items-center gap-2">
-            <ShoppingCart size={13} className="text-[#E8D8B8]" />
-            Cart · {items.length}
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#6a5d4a] hover:text-white hover:bg-white/[0.06]"
-          >
-            <X size={14} />
-          </button>
-        </div>
-
-        {/* Items */}
-        <div className="flex-1 overflow-y-auto px-3 py-3">
-          {items.length === 0 ? (
-            <div className="text-center py-16 text-[#5a5142] text-[12px]">Cart empty</div>
-          ) : (
-            <ul className="space-y-2">
-              {items.map((i) => (
-                <li
-                  key={i.id}
-                  className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.05]"
-                >
-                  <div className="w-10 h-10 rounded bg-[#0a0907] border border-[#1f1a13] overflow-hidden shrink-0">
-                    {i.track.cover_url
-                      ? <img loading="lazy" src={i.track.cover_url} alt="" className="w-full h-full object-cover" />
-                      : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={14} /></div>}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[12px] font-medium text-[#E8DCC8] truncate">{i.track.title}</p>
-                    <p className="text-[10px] font-mono text-[#6a5d4a] uppercase tracking-wider mt-0.5">
-                      {i.license.name} · ${i.license.price_usd.toLocaleString()}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => removeItem(i.id)}
-                    className="text-[#6a5d4a] hover:text-red-400 transition-colors"
-                    aria-label="Remove"
-                  >
-                    <X size={13} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="border-t border-white/[0.04] px-5 py-4 space-y-3 bg-[#0a0907]/40">
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title={`Cart · ${items.length}`}
+      icon={<ShoppingCart size={16} aria-hidden="true" />}
+      side="right"
+      size="md"
+      className="bg-gradient-to-b from-[#101012]/95 via-[var(--bg-page)]/95 to-[var(--bg-page)]/95 backdrop-blur-2xl"
+      contentClassName="px-3 py-3"
+      footer={(
+        <div className="space-y-3">
           {bundleQualifies && (
             <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-[#6DC6A4]/10 border border-[#6DC6A4]/30">
-              <span className="text-[11px] font-semibold text-[#6DC6A4]">Bundle deal applied 🎉</span>
+              <span className="text-[11px] font-semibold text-[#6DC6A4]">Bundle deal applied</span>
               <span className="text-[11px] font-mono font-bold text-[#6DC6A4]">-{bundleRule!.percent}%</span>
             </div>
           )}
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a]">Total</span>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-[#B4AA99]">Total</span>
             {bundleQualifies ? (
               <span className="flex items-baseline gap-2">
-                <span className="text-[12px] font-mono text-[#5a5142] line-through tabular-nums">${total.toLocaleString()}</span>
+                <span className="text-[12px] font-mono text-[#9B9282] line-through tabular-nums">${total.toLocaleString()}</span>
                 <span className="text-[18px] font-bold text-white tabular-nums">${bundleTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
               </span>
             ) : (
@@ -166,29 +111,62 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
             value={buyerEmail}
             onChange={(e) => setBuyerEmail(e.target.value)}
             placeholder="Your email for the license"
-            className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-md py-2.5 px-3 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]"
+            className="w-full bg-[#090907] border border-[#2B2821] rounded-md py-2.5 px-3 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
           />
           <input
             type="text"
             value={promoCode}
             onChange={(e) => setPromoCode(e.target.value)}
             placeholder="Promo code"
-            className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-md py-2.5 px-3 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] uppercase"
+            className="w-full bg-[#090907] border border-[#2B2821] rounded-md py-2.5 px-3 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] uppercase"
           />
-          <button
+          <Button
             onClick={handleCheckout}
             disabled={items.length === 0}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-[#D4BFA0] hover:bg-[#E8D8B8] disabled:opacity-40 text-black text-[12px] font-bold uppercase tracking-wider transition-all"
+            variant="primary"
+            className="w-full"
           >
             <ShoppingCart size={13} />
             Checkout
-          </button>
-          <p className="text-[10px] text-[#5a5142] text-center font-mono">
+          </Button>
+          <p className="text-[10px] text-[#9B9282] text-center font-mono">
             Secure checkout via Stripe
           </p>
         </div>
-      </aside>
-    </>
+      )}
+    >
+      {items.length === 0 ? (
+        <div className="text-center py-16 text-[#9B9282] text-[12px]">Cart empty</div>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((i) => (
+            <li
+              key={i.id}
+              className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.05]"
+            >
+              <div className="w-10 h-10 rounded bg-[#090907] border border-[#2B2821] overflow-hidden shrink-0">
+                {i.track.cover_url
+                  ? <img loading="lazy" src={i.track.cover_url} alt="" className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={14} /></div>}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] font-medium text-[#F7EBDD] truncate">{i.track.title}</p>
+                <p className="text-[10px] font-mono text-[#B4AA99] uppercase tracking-wider mt-0.5">
+                  {i.license.name} · ${i.license.price_usd.toLocaleString()}
+                </p>
+              </div>
+              <button
+                onClick={() => removeItem(i.id)}
+                className="tap flex size-9 shrink-0 items-center justify-center rounded-full text-[#B4AA99] transition-colors hover:bg-white/[0.06] hover:text-red-400"
+                aria-label={`Remove ${i.track.title} from cart`}
+              >
+                <X size={13} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Drawer>
   );
 }
 
@@ -198,15 +176,14 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
  */
 export function FloatingCartButton() {
   const { items, isOpen, setIsOpen, cartTotal } = useCart();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  const mounted = useHydrated();
 
   if (!mounted || items.length === 0) return null;
 
   return (
     <button
       onClick={() => setIsOpen(true)}
-      className={`fixed bottom-[7rem] sm:bottom-[8rem] right-4 sm:right-6 z-[70] flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#D4BFA0] hover:bg-[#E8D8B8] text-black shadow-lg shadow-black/40 transition-all ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+      className={`fixed bottom-[7rem] sm:bottom-[8rem] right-4 sm:right-6 z-[70] flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#E7D7BE] hover:bg-[#F3E6D1] text-black shadow-lg shadow-black/40 transition-all ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
     >
       <ShoppingCart size={14} />
       <span className="text-[11px] font-bold uppercase tracking-wider">

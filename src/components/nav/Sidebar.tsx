@@ -57,7 +57,7 @@ const NAV_ITEMS = [
 // hue pairs picked to read well on the dark background; no clashing
 // neon, no muddy browns. Hash → index keeps it portable.
 const PROJECT_GRADIENTS: [string, string][] = [
-  ['#D4BFA0', '#3a2a8a'], // signature purple
+  ['#E7D7BE', '#3a2a8a'], // signature purple
   ['#f8a4c8', '#7a3a7a'], // pink → magenta
   ['#6DC6A4', '#1f5a4a'], // mint
   ['#e8b76a', '#8a4a2a'], // amber
@@ -134,23 +134,23 @@ export function Sidebar() {
   useRealtimeTable({ table: 'projects', onChange: fetchProjects });
 
   return (
-    <aside className="w-60 h-screen bg-[#0a0907] border-r border-[#1a160f] flex flex-col fixed left-0 top-0 z-30">
+    <aside className="w-60 h-screen bg-[#090907] border-r border-[#211F1A] flex flex-col fixed left-0 top-0 z-30">
       {/* Brand + Activity bell. The bell opens a slide-in panel listing
           the last 7 days of uploads / comments / sends / ratings — same
           stream the calendar page uses, surfaced here for everyday
           glance-ability. */}
       <div className="px-6 pt-7 pb-8 flex items-center justify-between">
         <Link href="/library" className="flex items-center gap-2.5 group min-w-0">
-          <div className="w-6 h-6 rounded-[6px] bg-[#E8DCC8] flex items-center justify-center shrink-0">
+          <div className="w-6 h-6 rounded-[6px] bg-[#F7EBDD] flex items-center justify-center shrink-0">
             <span className="text-[10px] font-black text-black tracking-tighter">AG</span>
           </div>
-          <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-[#E8DCC8] group-hover:text-white truncate font-heading">
+          <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-[#F7EBDD] group-hover:text-white truncate font-heading">
             antigravity
           </span>
         </Link>
         <button
           onClick={() => setActivityOpen(true)}
-          className="w-7 h-7 rounded-full flex items-center justify-center text-[#6a5d4a] hover:text-white hover:bg-white/[0.04] transition-colors shrink-0"
+          className="w-7 h-7 rounded-full flex items-center justify-center text-[#B4AA99] hover:text-white hover:bg-white/[0.04] transition-colors shrink-0"
           aria-label="Open activity panel"
           title="Activity"
         >
@@ -161,7 +161,7 @@ export function Sidebar() {
       {/* Search — live track lookup with floating results dropdown */}
       <div className="px-4 mb-6" ref={searchRef}>
         <div className="relative">
-          <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3a3328] pointer-events-none" />
+          <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B] pointer-events-none" />
           <input
             ref={searchInputRef}
             type="text"
@@ -175,23 +175,23 @@ export function Sidebar() {
                 setSearchQuery(''); setSearchResults([]);
               }
             }}
-            className="w-full bg-[#14110d] border border-[#1a160f] rounded-md py-2 pl-8 pr-7 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] transition-colors"
+            className="w-full bg-[#171511] border border-[#211F1A] rounded-md py-2 pl-8 pr-7 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] transition-colors"
           />
           {searchQuery && (
             <button
               onClick={() => { setSearchQuery(''); setSearchResults([]); }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-[#3a3328] hover:text-[#a08a6a] transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[#6E685B] hover:text-[#D0C3AF] transition-colors"
             >
               <X size={11} />
             </button>
           )}
           {/* Results dropdown */}
           {searchQuery && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-[#0e0c09] border border-[#1f1a13] rounded-lg overflow-hidden z-50 shadow-xl">
+            <div className="absolute top-full left-0 right-0 mt-1 bg-[#0e0c09] border border-[#2B2821] rounded-lg overflow-hidden z-50 shadow-xl">
               {searchLoading ? (
-                <div className="px-3 py-3 text-[10px] font-mono text-[#4a4338] text-center">Searching…</div>
+                <div className="px-3 py-3 text-[10px] font-mono text-[#837B6D] text-center">Searching…</div>
               ) : searchResults.length === 0 ? (
-                <div className="px-3 py-3 text-[10px] font-mono text-[#4a4338] text-center">No tracks found</div>
+                <div className="px-3 py-3 text-[10px] font-mono text-[#837B6D] text-center">No tracks found</div>
               ) : (
                 <ul>
                   {searchResults.map((t) => (
@@ -201,15 +201,15 @@ export function Sidebar() {
                         onClick={() => { setSearchQuery(''); setSearchResults([]); }}
                         className="flex items-center gap-2.5 px-3 py-2 hover:bg-white/[0.03] transition-colors"
                       >
-                        <div className="w-7 h-7 rounded bg-[#14110d] border border-[#1f1a13] overflow-hidden shrink-0 flex items-center justify-center text-[#3a3328]">
+                        <div className="w-7 h-7 rounded bg-[#171511] border border-[#2B2821] overflow-hidden shrink-0 flex items-center justify-center text-[#6E685B]">
                           {t.cover_url
                             ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
                             : <Music size={10} />}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[11px] text-[#E8DCC8] truncate font-medium">{t.title}</p>
+                          <p className="text-[11px] text-[#F7EBDD] truncate font-medium">{t.title}</p>
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[9px] font-mono text-[#4a4338] uppercase">{t.type}</span>
+                            <span className="text-[9px] font-mono text-[#837B6D] uppercase">{t.type}</span>
                             {t.key && (
                               <span className={`text-[8px] font-mono font-bold px-1 rounded ${
                                 t.scale === 'minor' ? 'text-[#9d95e8]' : 'text-[#c8a47a]'
@@ -220,7 +220,7 @@ export function Sidebar() {
                           </div>
                         </div>
                         {currentTrack?.id === t.id && (
-                          <Play size={9} className="text-[#D4BFA0] shrink-0" fill="currentColor" />
+                          <Play size={9} className="text-[#E7D7BE] shrink-0" fill="currentColor" />
                         )}
                       </Link>
                     </li>
@@ -247,17 +247,17 @@ export function Sidebar() {
               title={item.description}
               className={`flex items-center gap-3 px-3 py-2 rounded-md text-[12px] transition-colors ${
                 active
-                  ? 'bg-[#16130e] text-white'
-                  : 'text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-[#101010]'
+                  ? 'bg-[#1A1813] text-white'
+                  : 'text-[#B4AA99] hover:text-[#F7EBDD] hover:bg-[#101010]'
               }`}
             >
               <Icon size={14} strokeWidth={1.75} className={active ? 'text-white' : ''} />
               <span className="font-medium tracking-tight font-heading flex-1">{item.label}</span>
               {isPlayingHere && (
                 <span className="flex gap-0.5 items-end h-3 shrink-0">
-                  <span className="w-0.5 bg-[#D4BFA0] animate-bounce rounded-full" style={{ height: '6px', animationDelay: '0ms' }} />
-                  <span className="w-0.5 bg-[#D4BFA0] animate-bounce rounded-full" style={{ height: '10px', animationDelay: '120ms' }} />
-                  <span className="w-0.5 bg-[#D4BFA0] animate-bounce rounded-full" style={{ height: '7px', animationDelay: '240ms' }} />
+                  <span className="w-0.5 bg-[#E7D7BE] animate-bounce rounded-full" style={{ height: '6px', animationDelay: '0ms' }} />
+                  <span className="w-0.5 bg-[#E7D7BE] animate-bounce rounded-full" style={{ height: '10px', animationDelay: '120ms' }} />
+                  <span className="w-0.5 bg-[#E7D7BE] animate-bounce rounded-full" style={{ height: '7px', animationDelay: '240ms' }} />
                 </span>
               )}
             </Link>
@@ -270,7 +270,7 @@ export function Sidebar() {
             same project always carries the same visual identity. */}
         {projects.length > 0 && (
           <div className="pt-6">
-            <p className="px-3 mb-2 text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328]">
+            <p className="px-3 mb-2 text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B]">
               Library
             </p>
             <div className="space-y-0.5">
@@ -285,8 +285,8 @@ export function Sidebar() {
                     className={cn(
                       'flex items-center gap-3 px-3 py-1.5 rounded-md text-[12px] transition-colors',
                       active
-                        ? 'bg-[#16130e] text-white'
-                        : 'text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-[#101010]',
+                        ? 'bg-[#1A1813] text-white'
+                        : 'text-[#B4AA99] hover:text-[#F7EBDD] hover:bg-[#101010]',
                     )}
                   >
                     <div
@@ -307,29 +307,29 @@ export function Sidebar() {
       </nav>
 
       {/* Footer — now-playing mini strip when a track is active */}
-      <div className="border-t border-[#1a160f]">
+      <div className="border-t border-[#211F1A]">
         {currentTrack && (
-          <div className="px-4 py-2.5 border-b border-[#1a160f] flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded bg-[#14110d] border border-[#1f1a13] overflow-hidden shrink-0">
+          <div className="px-4 py-2.5 border-b border-[#211F1A] flex items-center gap-2.5">
+            <div className="w-6 h-6 rounded bg-[#171511] border border-[#2B2821] overflow-hidden shrink-0">
               {currentTrack.cover_url
                 ? <img src={currentTrack.cover_url} alt="" className="w-full h-full object-cover" />
-                : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={9} /></div>}
+                : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={9} /></div>}
             </div>
-            <p className="text-[10px] text-[#a08a6a] truncate flex-1 font-medium">{currentTrack.title || 'Untitled'}</p>
+            <p className="text-[10px] text-[#D0C3AF] truncate flex-1 font-medium">{currentTrack.title || 'Untitled'}</p>
             <span className="flex gap-0.5 items-end h-2.5 shrink-0">
-              <span className="w-0.5 bg-[#D4BFA0] animate-bounce rounded-full" style={{ height: '5px', animationDelay: '0ms' }} />
-              <span className="w-0.5 bg-[#D4BFA0] animate-bounce rounded-full" style={{ height: '9px', animationDelay: '120ms' }} />
-              <span className="w-0.5 bg-[#D4BFA0] animate-bounce rounded-full" style={{ height: '6px', animationDelay: '240ms' }} />
+              <span className="w-0.5 bg-[#E7D7BE] animate-bounce rounded-full" style={{ height: '5px', animationDelay: '0ms' }} />
+              <span className="w-0.5 bg-[#E7D7BE] animate-bounce rounded-full" style={{ height: '9px', animationDelay: '120ms' }} />
+              <span className="w-0.5 bg-[#E7D7BE] animate-bounce rounded-full" style={{ height: '6px', animationDelay: '240ms' }} />
             </span>
           </div>
         )}
         <div className="px-5 py-4 flex items-center gap-3">
-          <div className="w-7 h-7 rounded-full bg-[#1a160f] border border-[#2d2620] flex items-center justify-center">
-            <span className="text-[9px] font-bold text-[#a08a6a]">AG</span>
+          <div className="w-7 h-7 rounded-full bg-[#211F1A] border border-[#3B372F] flex items-center justify-center">
+            <span className="text-[9px] font-bold text-[#D0C3AF]">AG</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-medium text-[#E8DCC8] truncate">Creator</p>
-            <Link href="/settings" className="text-[9px] text-[#5a5142] font-mono uppercase tracking-wider hover:text-[#a08a6a] transition-colors">Settings</Link>
+            <p className="text-[11px] font-medium text-[#F7EBDD] truncate">Creator</p>
+            <Link href="/settings" className="text-[9px] text-[#9B9282] font-mono uppercase tracking-wider hover:text-[#D0C3AF] transition-colors">Settings</Link>
           </div>
         </div>
       </div>

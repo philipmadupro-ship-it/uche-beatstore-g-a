@@ -85,7 +85,7 @@ export function DropCountdown({ accentColor }: { accentColor: string }) {
   return (
     <div className="max-w-[1600px] mx-auto px-4 md:px-8 pt-6">
       <div
-        className="relative rounded-2xl border border-white/[0.08] bg-[#14110d]/70 backdrop-blur-xl overflow-hidden p-4 md:p-5"
+        className="relative rounded-2xl border border-white/[0.08] bg-[#171511]/70 backdrop-blur-xl overflow-hidden p-4 md:p-5"
         style={{ boxShadow: `0 0 0 1px ${accentColor}1a` }}
       >
         {next.cover_url && (
@@ -98,10 +98,10 @@ export function DropCountdown({ accentColor }: { accentColor: string }) {
 
         <div className="flex flex-col md:flex-row md:items-center gap-4">
           <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="w-14 h-14 rounded-lg overflow-hidden bg-[#0a0907] border border-white/[0.08] shrink-0">
+            <div className="w-14 h-14 rounded-lg overflow-hidden bg-[#090907] border border-white/[0.08] shrink-0">
               {next.cover_url
                 ? <img src={next.cover_url} alt="" className="w-full h-full object-cover" />
-                : <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907]" />}
+                : <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907]" />}
             </div>
             <div className="min-w-0">
               <p className="text-[9px] font-mono uppercase tracking-[0.3em]" style={{ color: accentColor }}>
@@ -137,7 +137,7 @@ export function DropCountdown({ accentColor }: { accentColor: string }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
-                  className="bg-[#0a0907] border border-[#1f1a13] rounded-full px-3 py-2 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] min-w-0 w-44 md:w-56"
+                  className="bg-[#090907] border border-[#2B2821] rounded-full px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] min-w-0 w-44 md:w-56"
                 />
                 <button
                   type="button"

@@ -161,17 +161,17 @@ export function Dropdown<T extends string = string>({
         onClick={() => !disabled && setOpen((o) => !o)}
         className={cn(
           'inline-flex items-center justify-between gap-2 px-3 py-2 rounded-md',
-          'bg-[#14110d] border border-[#1a160f] text-[11px] text-[#E8DCC8]',
-          'hover:border-[#2d2620] transition-colors',
-          'focus:outline-none focus:border-[#D4BFA0]/40 focus:ring-1 focus:ring-[#D4BFA0]/20',
+          'bg-[#171511] border border-[#211F1A] text-[11px] text-[#F7EBDD]',
+          'hover:border-[#3B372F] transition-colors',
+          'focus:outline-none focus:border-[#E7D7BE]/40 focus:ring-1 focus:ring-[#E7D7BE]/20',
           'disabled:opacity-40 disabled:cursor-not-allowed',
-          open && 'border-[#2d2620]',
+          open && 'border-[#3B372F]',
           className,
         )}
       >
-        {label && <span className="text-[#6a5d4a] font-mono uppercase tracking-wider text-[10px]">{label}</span>}
+        {label && <span className="text-[#B4AA99] font-mono uppercase tracking-wider text-[10px]">{label}</span>}
         <span className="flex-1 text-left truncate">{display}</span>
-        <ChevronDown size={11} className={cn('text-[#6a5d4a] transition-transform shrink-0', open && 'rotate-180')} />
+        <ChevronDown size={11} className={cn('text-[#B4AA99] transition-transform shrink-0', open && 'rotate-180')} />
       </button>
 
       {/* Portaled menu. Top-level z-200 keeps it above modals
@@ -182,7 +182,7 @@ export function Dropdown<T extends string = string>({
           role="listbox"
           className={cn(
             'fixed z-[200] py-1 rounded-lg overflow-y-auto max-h-[60vh]',
-            'bg-[#0a0907]/95 backdrop-blur-xl border border-white/[0.08]',
+            'bg-[#090907]/95 backdrop-blur-xl border border-white/[0.08]',
             'shadow-[0_4px_24px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset]',
             'animate-in fade-in zoom-in-95 duration-100',
           )}
@@ -206,16 +206,16 @@ export function Dropdown<T extends string = string>({
                 onMouseEnter={() => setHighlight(i)}
                 onClick={() => { onChange(opt.value); setOpen(false); triggerRef.current?.focus(); }}
                 className={cn(
-                  'w-full text-left flex items-center gap-2 px-2.5 py-1.5 text-[11px] text-[#E8DCC8]',
+                  'w-full text-left flex items-center gap-2 px-2.5 py-1.5 text-[11px] text-[#F7EBDD]',
                   'transition-colors',
                   highlight === i ? 'bg-white/[0.04]' : '',
                 )}
               >
                 <span className="w-3.5 flex items-center justify-center">
-                  {opt.value === value && <Check size={11} className="text-[#E8D8B8]" />}
+                  {opt.value === value && <Check size={11} className="text-[#F3E6D1]" />}
                 </span>
                 <span className="flex-1 truncate">{opt.label}</span>
-                {opt.hint && <span className="text-[10px] text-[#5a5142] font-mono">{opt.hint}</span>}
+                {opt.hint && <span className="text-[10px] text-[#9B9282] font-mono">{opt.hint}</span>}
               </button>
             </div>
           ))}

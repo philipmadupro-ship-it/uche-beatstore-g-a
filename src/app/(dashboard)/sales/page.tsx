@@ -18,6 +18,10 @@ import {
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { SkeletonList } from '@/components/ui/Skeleton';
+import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface Sale {
   id: string;
@@ -56,10 +60,10 @@ interface Offer {
 }
 
 const OFFER_STATUS_STYLES: Record<Offer['status'], string> = {
-  pending: 'text-[#D4BFA0] bg-[#D4BFA0]/10 border-[#D4BFA0]/20',
+  pending: 'text-[#E7D7BE] bg-[#E7D7BE]/10 border-[#E7D7BE]/20',
   accepted: 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/20',
   countered: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-  declined: 'text-[#a08a6a] bg-white/[0.04] border-white/[0.06]',
+  declined: 'text-[#D0C3AF] bg-white/[0.04] border-white/[0.06]',
 };
 
 function fmtDate(iso: string): string {
@@ -74,10 +78,10 @@ function fmtMoney(n: number | null): string {
 
 const STATUS_STYLES: Record<Sale['status'], string> = {
   paid: 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/20',
-  refunded: 'text-[#a08a6a] bg-white/[0.04] border-white/[0.06]',
+  refunded: 'text-[#D0C3AF] bg-white/[0.04] border-white/[0.06]',
   disputed: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
   failed: 'text-red-400 bg-red-500/10 border-red-500/20',
-  expired: 'text-[#a08a6a] bg-white/[0.04] border-white/[0.06]',
+  expired: 'text-[#D0C3AF] bg-white/[0.04] border-white/[0.06]',
 };
 
 export default function SalesPage() {
@@ -102,8 +106,8 @@ export default function SalesPage() {
         const data = await res.json();
         setSales(data.sales ?? []);
         setTotals(data.totals ?? null);
-      } catch (err: any) {
-        setError(err.message || 'Failed to load sales');
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to load sales');
       } finally {
         setLoading(false);
       }
@@ -181,57 +185,64 @@ export default function SalesPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10 pb-32">
-        {/* ── Header ──────────────────────────────────────────────── */}
-        <div className="flex items-start justify-between mb-6 gap-4">
-          <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#a08a6a] mb-1">Dashboard</p>
-            <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight text-white leading-none font-heading">Sales</h1>
-            <p className="text-[12px] text-[#6a5d4a] mt-1.5">Revenue, orders, and license breakdown.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const rows = [
-                  ['Date', 'Type', 'Item', 'Buyer', 'Amount (USD)', 'License', 'Status'],
-                  ...visibleSales.map((s) => [
-                    new Date(s.created_at).toISOString().slice(0, 10),
-                    s.kind,
-                    s.item_label,
-                    s.buyer_email,
-                    s.amount_usd != null ? s.amount_usd.toFixed(2) : '',
-                    s.license_type ?? '',
-                    s.status,
-                  ]),
-                ];
-                const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
-                const blob = new Blob([csv], { type: 'text/csv' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `sales-${new Date().toISOString().slice(0, 10)}.csv`;
-                a.click();
-                setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-              }}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-[#1f1a13] bg-[#14110d] text-[10px] font-mono text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all"
-              title="Export visible sales as CSV"
-            >
-              <Download size={11} />
-              Export CSV
-            </button>
-            <Link href="/analytics" className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-full border border-[#1f1a13] bg-[#14110d] text-[10px] font-mono text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all">
-              Plays & engagement →
-            </Link>
-          </div>
-        </div>
+      <PageContainer className="max-w-[1100px] pb-32">
+        <PageHeader
+          eyebrow="Dashboard"
+          title="Sales"
+          description="Revenue, orders, and license breakdown."
+          meta={totals ? `${totals.count} order${totals.count === 1 ? '' : 's'}` : undefined}
+          actions={
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => {
+                  const rows = [
+                    ['Date', 'Type', 'Item', 'Buyer', 'Amount (USD)', 'License', 'Status'],
+                    ...visibleSales.map((s) => [
+                      new Date(s.created_at).toISOString().slice(0, 10),
+                      s.kind,
+                      s.item_label,
+                      s.buyer_email,
+                      s.amount_usd != null ? s.amount_usd.toFixed(2) : '',
+                      s.license_type ?? '',
+                      s.status,
+                    ]),
+                  ];
+                  const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const a = document.createElement('a');
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `sales-${new Date().toISOString().slice(0, 10)}.csv`;
+                  a.click();
+                  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+                }}
+                variant="secondary"
+                size="sm"
+                leadingIcon={<Download size={11} aria-hidden="true" />}
+                title="Export visible sales as CSV"
+              >
+                Export CSV
+              </Button>
+              <Link
+                href="/analytics"
+                className="tap inline-flex min-h-9 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[var(--text-readable)] transition-colors hover:border-[var(--border-hover)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+              >
+                Plays
+                <span className="grid size-6 place-items-center rounded-full bg-white/[0.06]" aria-hidden="true">
+                  <ExternalLink size={10} />
+                </span>
+              </Link>
+            </div>
+          }
+        />
 
         {/* ── KPI strip — 4 cols on small, 8 on large ─────────────── */}
         {totals && (
           <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2 mb-4">
             <KpiCard label="All time" value={fmtMoney(totals.revenue_usd)} icon={<DollarSign size={13} />} accent="#6DC6A4" />
-            <KpiCard label="Last 90d" value={fmtMoney(kpis.rev90)} icon={<TrendingUp size={13} />} accent="#D4BFA0" />
-            <KpiCard label="Last 30d" value={fmtMoney(kpis.rev30)} icon={<TrendingUp size={13} />} accent="#D4BFA0" />
-            <KpiCard label="Last 7d" value={fmtMoney(kpis.rev7)} icon={<ArrowUpRight size={13} />} accent="#c8a84b" />
-            <KpiCard label="Orders" value={String(totals.count)} icon={<ShoppingBag size={13} />} accent="#a08a6a" />
+            <KpiCard label="Last 90d" value={fmtMoney(kpis.rev90)} icon={<TrendingUp size={13} />} accent="#E7D7BE" />
+            <KpiCard label="Last 30d" value={fmtMoney(kpis.rev30)} icon={<TrendingUp size={13} />} accent="#E7D7BE" />
+            <KpiCard label="Last 7d" value={fmtMoney(kpis.rev7)} icon={<ArrowUpRight size={13} />} accent="#D6BE7A" />
+            <KpiCard label="Orders" value={String(totals.count)} icon={<ShoppingBag size={13} />} accent="#D0C3AF" />
             <KpiCard label="Avg sale" value={totals.count > 0 ? fmtMoney(kpis.avgSale) : '—'} icon={<Tag size={13} />} accent="#9d95e8" />
             <KpiCard label="Leases" value={String(kpis.leases)} icon={<Tag size={13} />} accent="#9d95e8" />
             <KpiCard label="Exclusives" value={String(kpis.exclusives)} icon={<Crown size={13} />} accent="#e8a06a" />
@@ -242,8 +253,8 @@ export default function SalesPage() {
         {sales.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-5">
             {/* Revenue chart */}
-            <div className="sm:col-span-2 rounded-2xl border border-[#1f1a13] bg-[#14110d] px-5 py-4">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-3">Revenue · last 30 days</p>
+            <div className="sm:col-span-2 rounded-2xl border border-[#2B2821] bg-[#171511] px-5 py-4">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-3">Revenue · last 30 days</p>
               <svg viewBox={`0 0 400 52`} className="w-full" preserveAspectRatio="none" style={{ height: 52 }}>
                 <defs>
                   <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
@@ -267,24 +278,24 @@ export default function SalesPage() {
                   strokeLinecap="round"
                 />
               </svg>
-              <p className="text-[9px] font-mono text-[#3a3328] mt-2">
+              <p className="text-[9px] font-mono text-[#6E685B] mt-2">
                 {sparkline.vals.filter(Boolean).length} days with sales
               </p>
             </div>
             {/* Top track */}
-            <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] px-5 py-4 flex flex-col justify-between">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-3">Top seller</p>
+            <div className="rounded-2xl border border-[#2B2821] bg-[#171511] px-5 py-4 flex flex-col justify-between">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-3">Top seller</p>
               {kpis.topTrack ? (
                 <>
                   <div className="flex items-center gap-2 mt-1">
-                    <Crown size={16} className="text-[#c8a84b] shrink-0" />
-                    <p className="text-[13px] font-semibold text-[#E8DCC8] truncate leading-snug">{kpis.topTrack.label}</p>
+                    <Crown size={16} className="text-[#D6BE7A] shrink-0" />
+                    <p className="text-[13px] font-semibold text-[#F7EBDD] truncate leading-snug">{kpis.topTrack.label}</p>
                   </div>
                   <p className="text-[20px] font-bold text-white tabular-nums mt-2">{fmtMoney(kpis.topTrack.rev)}</p>
-                  <p className="text-[9px] font-mono text-[#5a5142]">from track licenses</p>
+                  <p className="text-[9px] font-mono text-[#9B9282]">from track licenses</p>
                 </>
               ) : (
-                <p className="text-[12px] text-[#5a5142]">No track sales yet</p>
+                <p className="text-[12px] text-[#9B9282]">No track sales yet</p>
               )}
             </div>
           </div>
@@ -296,19 +307,19 @@ export default function SalesPage() {
             type="button"
             onClick={() => setView('sales')}
             className={`px-4 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider border transition-colors ${
-              view === 'sales' ? 'bg-white text-black border-white' : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+              view === 'sales' ? 'bg-white text-black border-white' : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#3B372F]'
             }`}
           >Sales</button>
           <button
             type="button"
             onClick={() => setView('offers')}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider border transition-colors ${
-              view === 'offers' ? 'bg-white text-black border-white' : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+              view === 'offers' ? 'bg-white text-black border-white' : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#3B372F]'
             }`}
           >
             Offers
             {pendingOffers > 0 && (
-              <span className={`w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center leading-none ${view === 'offers' ? 'bg-black text-white' : 'bg-[#D4BFA0] text-black'}`}>{pendingOffers}</span>
+              <span className={`w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center leading-none ${view === 'offers' ? 'bg-black text-white' : 'bg-[#E7D7BE] text-black'}`}>{pendingOffers}</span>
             )}
           </button>
         </div>
@@ -324,21 +335,21 @@ export default function SalesPage() {
               onClick={() => setFilter(f)}
               className={`px-3 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider border transition-colors ${
                 filter === f
-                  ? 'bg-[#2A2418] border-[#8A7A5C]/40 text-[#E8D8B8]'
-                  : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+                  ? 'bg-[#342F27] border-[#C9BCA8]/40 text-[#F3E6D1]'
+                  : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#3B372F]'
               }`}
             >
               {f}
             </button>
           ))}
           <div className="relative ml-auto w-full sm:w-64">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3a3328]" />
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search buyer, item, session…"
-              className="w-full bg-[#14110d] border border-[#1f1a13] rounded-full pl-8 pr-3 py-1.5 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#8A7A5C] transition-colors"
+              className="w-full bg-[#171511] border border-[#2B2821] rounded-full pl-8 pr-3 py-1.5 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] transition-colors"
             />
           </div>
         </div>
@@ -351,34 +362,31 @@ export default function SalesPage() {
             <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
             <div>
               <p className="text-[12px] text-red-300 font-medium">Could not load sales</p>
-              <p className="text-[10px] text-[#a08a6a] mt-1 font-mono">{error}</p>
+              <p className="text-[10px] text-[#D0C3AF] mt-1 font-mono">{error}</p>
             </div>
           </div>
         ) : visibleSales.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#1f1a13] bg-[#14110d]/40 py-16 px-6 text-center">
-            <Receipt size={28} className="text-[#3a3328] mx-auto mb-3" />
-            <p className="text-[13px] text-[#a08a6a] font-medium">
-              {sales.length === 0 ? 'No sales yet.' : 'No sales match your filters.'}
-            </p>
-            <p className="text-[11px] text-[#5a5142] mt-1">
-              {sales.length === 0
-                ? 'Once a buyer completes checkout this is where they show up.'
-                : 'Try clearing the search or switching filters.'}
-            </p>
-            {sales.length === 0 && (
+          <EmptyState
+            icon={<Receipt size={28} aria-hidden="true" />}
+            title={sales.length === 0 ? 'No sales yet' : 'No matching sales'}
+            description={sales.length === 0
+              ? 'Once a buyer completes checkout this is where they show up.'
+              : 'Try clearing the search or switching filters.'}
+            action={sales.length === 0 ? (
               <Link
                 href="/store-editor"
-                className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-full bg-[#D4BFA0] hover:bg-[#E8D8B8] text-black text-[10px] font-bold uppercase tracking-wider transition-colors"
+                className="tap inline-flex min-h-9 items-center gap-2 rounded-full border border-transparent bg-[var(--accent)] px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-[#090907] transition-colors hover:bg-[var(--accent-light)]"
               >
                 Open store editor
-                <ExternalLink size={11} />
+                <ExternalLink size={11} aria-hidden="true" />
               </Link>
-            )}
-          </div>
+            ) : undefined}
+            className="border-dashed py-16"
+          />
         ) : (
-          <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] overflow-hidden">
+          <div className="rounded-2xl border border-[#2B2821] bg-[#171511] overflow-hidden">
             {/* Header row (desktop only) */}
-            <div className="hidden md:grid grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-5 py-3 border-b border-[#1a160f] text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142]">
+            <div className="hidden md:grid grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-5 py-3 border-b border-[#211F1A] text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
               <span>Date</span>
               <span>Type</span>
               <span>Item</span>
@@ -387,7 +395,7 @@ export default function SalesPage() {
               <span>Status</span>
               <span />
             </div>
-            <div className="divide-y divide-[#1a160f]">
+            <div className="divide-y divide-[#211F1A]">
               {visibleSales.map((s) => (
                 <SaleRow key={`${s.kind}:${s.id}`} sale={s} />
               ))}
@@ -399,11 +407,12 @@ export default function SalesPage() {
 
         {view === 'offers' && (
           offers.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#1f1a13] bg-[#14110d]/40 py-16 px-6 text-center">
-              <Tag size={28} className="text-[#3a3328] mx-auto mb-3" />
-              <p className="text-[13px] text-[#a08a6a] font-medium">No offers yet.</p>
-              <p className="text-[11px] text-[#5a5142] mt-1">When a buyer makes an offer on an exclusive beat, it shows up here to accept, counter, or decline.</p>
-            </div>
+            <EmptyState
+              icon={<Tag size={28} aria-hidden="true" />}
+              title="No offers yet"
+              description="When a buyer makes an offer on an exclusive beat, it shows up here to accept, counter, or decline."
+              className="border-dashed py-16"
+            />
           ) : (
             <div className="space-y-2.5">
               {offers.map((o) => (
@@ -412,7 +421,7 @@ export default function SalesPage() {
             </div>
           )
         )}
-      </div>
+      </PageContainer>
     </DashboardLayout>
   );
 }
@@ -443,8 +452,8 @@ function OfferRow({ offer, onStatusChange }: { offer: Offer; onStatusChange: (id
           ? (data.payment_url ? 'Offer accepted — payment link emailed to buyer' : 'Offer accepted — buyer notified')
           : action === 'counter' ? 'Counter sent to buyer' : 'Offer declined',
       );
-    } catch (err: any) {
-      toast.error('Could not respond', err.message);
+    } catch (err: unknown) {
+      toast.error('Could not respond', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setBusy(null);
     }
@@ -453,50 +462,50 @@ function OfferRow({ offer, onStatusChange }: { offer: Offer; onStatusChange: (id
   const isPending = offer.status === 'pending';
 
   return (
-    <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] px-4 sm:px-5 py-4">
+    <div className="rounded-2xl border border-[#2B2821] bg-[#171511] px-4 sm:px-5 py-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <Tag size={12} className="text-[#D4BFA0] shrink-0" />
-            <p className="text-[13px] font-semibold text-[#E8DCC8] truncate">{offer.track_title || 'Untitled'}</p>
+            <Tag size={12} className="text-[#E7D7BE] shrink-0" />
+            <p className="text-[13px] font-semibold text-[#F7EBDD] truncate">{offer.track_title || 'Untitled'}</p>
             <span className={`inline-flex items-center px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider border shrink-0 ${OFFER_STATUS_STYLES[offer.status]}`}>{offer.status}</span>
           </div>
-          <p className="text-[11px] text-[#a08a6a] truncate" title={offer.buyer_email}>{offer.buyer_email} · {fmtDate(offer.created_at)}</p>
-          {offer.message && <p className="text-[11px] text-[#6a5d4a] mt-1.5 italic">“{offer.message}”</p>}
+          <p className="text-[11px] text-[#D0C3AF] truncate" title={offer.buyer_email}>{offer.buyer_email} · {fmtDate(offer.created_at)}</p>
+          {offer.message && <p className="text-[11px] text-[#B4AA99] mt-1.5 italic">“{offer.message}”</p>}
         </div>
         <div className="text-right shrink-0">
-          <p className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142]">Offer</p>
+          <p className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">Offer</p>
           <p className="text-[22px] font-bold text-white tabular-nums leading-none">{fmtMoney(offer.offered_price_usd)}</p>
         </div>
       </div>
 
       {isPending && (
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#1a160f] flex-wrap">
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#211F1A] flex-wrap">
           <button onClick={() => respond('accept')} disabled={!!busy}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#6DC6A4]/15 border border-[#6DC6A4]/30 text-[#6DC6A4] hover:bg-[#6DC6A4]/25 transition-colors disabled:opacity-40">
             {busy === 'accept' ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}Accept
           </button>
           {!counterOpen ? (
             <button onClick={() => setCounterOpen(true)} disabled={!!busy}
-              className="px-3 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-wider border border-[#2d2620] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#3a3328] transition-colors disabled:opacity-40">
+              className="px-3 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-wider border border-[#3B372F] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#6E685B] transition-colors disabled:opacity-40">
               Counter
             </button>
           ) : (
             <div className="flex items-center gap-1.5">
               <div className="relative">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6a5d4a] text-[12px]">$</span>
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#B4AA99] text-[12px]">$</span>
                 <input type="number" min="1" value={counterPrice} onChange={(e) => setCounterPrice(e.target.value)} placeholder="price" autoFocus
-                  className="w-24 bg-[#0a0907] border border-[#1f1a13] rounded-full pl-6 pr-2 py-1.5 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] tabular-nums" />
+                  className="w-24 bg-[#090907] border border-[#2B2821] rounded-full pl-6 pr-2 py-1.5 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] tabular-nums" />
               </div>
               <button onClick={() => respond('counter')} disabled={!!busy}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#D4BFA0] text-black hover:bg-[#E8D8B8] transition-colors disabled:opacity-40">
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#E7D7BE] text-black hover:bg-[#F3E6D1] transition-colors disabled:opacity-40">
                 {busy === 'counter' ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}Send
               </button>
-              <button onClick={() => { setCounterOpen(false); setCounterPrice(''); }} className="text-[#5a5142] hover:text-[#E8DCC8]"><X size={13} /></button>
+              <button onClick={() => { setCounterOpen(false); setCounterPrice(''); }} className="text-[#9B9282] hover:text-[#F7EBDD]"><X size={13} /></button>
             </div>
           )}
           <button onClick={() => respond('decline')} disabled={!!busy}
-            className="ml-auto px-3 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-wider border border-[#1f1a13] text-[#5a5142] hover:text-red-300 hover:border-red-900/40 transition-colors disabled:opacity-40">
+            className="ml-auto px-3 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-wider border border-[#2B2821] text-[#9B9282] hover:text-red-300 hover:border-red-900/40 transition-colors disabled:opacity-40">
             {busy === 'decline' ? <Loader2 size={11} className="animate-spin" /> : 'Decline'}
           </button>
         </div>
@@ -505,15 +514,15 @@ function OfferRow({ offer, onStatusChange }: { offer: Offer; onStatusChange: (id
   );
 }
 
-function KpiCard({ label, value, icon, accent = '#a08a6a' }: { label: string; value: string; icon: React.ReactNode; accent?: string }) {
+function KpiCard({ label, value, icon, accent = '#D0C3AF' }: { label: string; value: string; icon: React.ReactNode; accent?: string }) {
   return (
-    <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-4 py-3">
+    <Card className="rounded-xl px-4 py-3">
       <div className="flex items-center gap-1.5 mb-1.5" style={{ color: accent }}>
         {icon}
-        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142]">{label}</span>
+        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">{label}</span>
       </div>
       <p className="text-[20px] font-bold text-white tabular-nums leading-none">{value}</p>
-    </div>
+    </Card>
   );
 }
 
@@ -538,8 +547,8 @@ function SaleRow({ sale }: { sale: Sale }) {
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       setDelivered(true);
       toast.success('Stems delivered', `${sale.buyer_email} was emailed the download link.`);
-    } catch (err: any) {
-      toast.error('Could not deliver', err.message);
+    } catch (err: unknown) {
+      toast.error('Could not deliver', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setDelivering(false);
     }
@@ -556,24 +565,24 @@ function SaleRow({ sale }: { sale: Sale }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       toast.success('Delivery email resent', `Sent to ${sale.buyer_email}`);
-    } catch (err: any) {
-      toast.error('Resend failed', err.message);
+    } catch (err: unknown) {
+      toast.error('Resend failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setResending(false);
     }
   };
 
   return (
-    <div className="md:grid md:grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-5 py-3.5 flex flex-col gap-2 hover:bg-[#16130e] transition-colors">
-      <span className="text-[11px] font-mono text-[#a08a6a] tabular-nums">{fmtDate(sale.created_at)}</span>
+    <div className="md:grid md:grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-5 py-3.5 flex flex-col gap-2 hover:bg-[#1A1813] transition-colors">
+      <span className="text-[11px] font-mono text-[#D0C3AF] tabular-nums">{fmtDate(sale.created_at)}</span>
 
-      <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a]">
-        <Icon size={11} className="text-[#5a5142]" />
+      <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#B4AA99]">
+        <Icon size={11} className="text-[#9B9282]" />
         {sale.kind}
       </span>
 
       <div className="min-w-0">
-        <p className="text-[12px] text-[#E8DCC8] truncate flex items-center gap-2">
+        <p className="text-[12px] text-[#F7EBDD] truncate flex items-center gap-2">
           <span className="truncate">{sale.item_label}</span>
           {sale.needs_stems_upload && !delivered && (
             <span className="shrink-0 inline-flex items-center gap-1.5">
@@ -601,13 +610,13 @@ function SaleRow({ sale }: { sale: Sale }) {
           )}
         </p>
         {sale.license_type && (
-          <p className="text-[9px] font-mono text-[#5a5142] uppercase tracking-wider mt-0.5">
+          <p className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider mt-0.5">
             {sale.license_type}
           </p>
         )}
       </div>
 
-      <span className="text-[11px] text-[#a08a6a] truncate" title={sale.buyer_email}>
+      <span className="text-[11px] text-[#D0C3AF] truncate" title={sale.buyer_email}>
         {sale.buyer_email}
       </span>
 
@@ -626,7 +635,7 @@ function SaleRow({ sale }: { sale: Sale }) {
           type="button"
           onClick={handleResend}
           disabled={resending || sale.status !== 'paid'}
-          className="text-[#3a3328] hover:text-[#E8DCC8] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="text-[#6E685B] hover:text-[#F7EBDD] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           title={sale.status !== 'paid' ? `Cannot resend (${sale.status})` : `Resend delivery email to ${sale.buyer_email}`}
           aria-label="Resend delivery email"
         >
@@ -637,7 +646,7 @@ function SaleRow({ sale }: { sale: Sale }) {
             href={stripeUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[#3a3328] hover:text-[#E8DCC8] transition-colors"
+            className="text-[#6E685B] hover:text-[#F7EBDD] transition-colors"
             title="Open in Stripe Dashboard"
           >
             <ExternalLink size={12} />

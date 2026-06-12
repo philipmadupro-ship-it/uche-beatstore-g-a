@@ -22,8 +22,8 @@ interface TrackGridCardProps {
 }
 
 const TYPE_COLOR: Record<string, string> = {
-  beat: 'text-[#a08a6a]',
-  instrumental: 'text-[#E8D8B8]',
+  beat: 'text-[#D0C3AF]',
+  instrumental: 'text-[#F3E6D1]',
   song: 'text-[#8ecf9f]',
   remix: 'text-[#eca9a9]',
 };
@@ -77,7 +77,7 @@ export function TrackGridCard({
 
   return (
     <div
-      className={`group relative flex flex-col cursor-pointer ${selected ? 'ring-2 ring-[#D4BFA0]/60 rounded-xl' : ''}`}
+      className={`group relative flex flex-col cursor-pointer ${selected ? 'ring-2 ring-[#E7D7BE]/60 rounded-xl' : ''}`}
       onClick={handleCardClick}
       draggable
       onDragStart={(e) => {
@@ -88,10 +88,10 @@ export function TrackGridCard({
       {/* Cover art */}
       <div className={`relative aspect-square rounded-xl overflow-hidden border transition-all duration-200 mb-2.5 ${
         isCurrent
-          ? 'border-[#D4BFA0]/40 shadow-lg shadow-[#D4BFA0]/10'
+          ? 'border-[#E7D7BE]/40 shadow-lg shadow-[#E7D7BE]/10'
           : selected
-            ? 'border-[#D4BFA0]/50'
-            : 'border-[#1a160f] group-hover:border-[#2d2620]'
+            ? 'border-[#E7D7BE]/50'
+            : 'border-[#211F1A] group-hover:border-[#3B372F]'
       }`}>
         {track.cover_url ? (
           <img
@@ -101,8 +101,8 @@ export function TrackGridCard({
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center">
-            <Music size={28} className="text-[#2d2620]" />
+          <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907] flex items-center justify-center">
+            <Music size={28} className="text-[#3B372F]" />
           </div>
         )}
 
@@ -110,10 +110,10 @@ export function TrackGridCard({
         {isActive && (
           <div className="absolute inset-0 bg-black/30 flex items-end justify-center pb-3">
             <div className="flex gap-0.5 items-end h-5">
-              <div className="w-1 bg-[#D4BFA0] rounded-full animate-pulse" style={{ height: '60%' }} />
-              <div className="w-1 bg-[#D4BFA0] rounded-full animate-pulse" style={{ height: '100%', animationDelay: '120ms' }} />
-              <div className="w-1 bg-[#D4BFA0] rounded-full animate-pulse" style={{ height: '40%', animationDelay: '240ms' }} />
-              <div className="w-1 bg-[#D4BFA0] rounded-full animate-pulse" style={{ height: '80%', animationDelay: '60ms' }} />
+              <div className="w-1 bg-[#E7D7BE] rounded-full animate-pulse" style={{ height: '60%' }} />
+              <div className="w-1 bg-[#E7D7BE] rounded-full animate-pulse" style={{ height: '100%', animationDelay: '120ms' }} />
+              <div className="w-1 bg-[#E7D7BE] rounded-full animate-pulse" style={{ height: '40%', animationDelay: '240ms' }} />
+              <div className="w-1 bg-[#E7D7BE] rounded-full animate-pulse" style={{ height: '80%', animationDelay: '60ms' }} />
             </div>
           </div>
         )}
@@ -139,7 +139,7 @@ export function TrackGridCard({
         {/* Selection checkbox */}
         {selectable && (
           <div className={`absolute top-2 right-2 w-6 h-6 rounded-md flex items-center justify-center backdrop-blur-md border transition-colors ${
-            selected ? 'bg-[#D4BFA0] border-[#E8D8B8]' : 'bg-black/50 border-white/20'
+            selected ? 'bg-[#E7D7BE] border-[#F3E6D1]' : 'bg-black/50 border-white/20'
           }`}>
             {selected && <span className="text-black text-[10px] font-bold leading-none">✓</span>}
           </div>
@@ -148,7 +148,7 @@ export function TrackGridCard({
         {/* BPM + Key badges — bottom left on hover */}
         <div className="absolute bottom-2 left-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {track.bpm && (
-            <span className="text-[8px] font-mono font-bold bg-black/70 backdrop-blur-sm text-[#E8D8B8] px-1.5 py-0.5 rounded tabular-nums">
+            <span className="text-[8px] font-mono font-bold bg-black/70 backdrop-blur-sm text-[#F3E6D1] px-1.5 py-0.5 rounded tabular-nums">
               {track.bpm}
             </span>
           )}
@@ -177,34 +177,34 @@ export function TrackGridCard({
               <MoreHorizontal size={13} />
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-8 z-30 w-48 bg-[#0a0907] border border-[#1f1a13] rounded-lg shadow-2xl py-1 animate-in fade-in slide-in-from-top-1">
+              <div className="absolute right-0 top-8 z-30 w-48 bg-[#090907] border border-[#2B2821] rounded-lg shadow-2xl py-1 animate-in fade-in slide-in-from-top-1">
                 {onClickDetails && (
                   <button
                     onClick={() => { setMenuOpen(false); onClickDetails(track); }}
-                    className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#E8DCC8] hover:bg-[#16130e]"
+                    className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
                   >
-                    <Info size={12} className="text-[#D4BFA0]" /> View details
+                    <Info size={12} className="text-[#E7D7BE]" /> View details
                   </button>
                 )}
                 {onShare && (
                   <button
                     onClick={() => { setMenuOpen(false); onShare(track); }}
-                    className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#E8DCC8] hover:bg-[#16130e]"
+                    className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
                   >
-                    <Share2 size={12} className="text-[#D4BFA0]" /> Share track
+                    <Share2 size={12} className="text-[#E7D7BE]" /> Share track
                   </button>
                 )}
                 {onRemoveFromContext && (
                   <button
                     onClick={() => { setMenuOpen(false); onRemoveFromContext(track); }}
-                    className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#E8DCC8] hover:bg-[#16130e]"
+                    className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
                   >
-                    <MinusCircle size={12} className="text-[#a08a6a]" /> {removeLabel}
+                    <MinusCircle size={12} className="text-[#D0C3AF]" /> {removeLabel}
                   </button>
                 )}
                 {onDelete && (
                   <>
-                    <div className="my-1 border-t border-[#1a160f]" />
+                    <div className="my-1 border-t border-[#211F1A]" />
                     <button
                       onClick={() => { setMenuOpen(false); onDelete(track); }}
                       className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-red-400 hover:bg-red-950/30"
@@ -222,12 +222,12 @@ export function TrackGridCard({
       {/* Meta below art */}
       <div className="px-0.5">
         <h4 className={`text-[13px] font-semibold truncate leading-tight mb-1 transition-colors ${
-          isCurrent ? 'text-[#E8D8B8]' : 'text-[#E8DCC8] group-hover:text-white'
+          isCurrent ? 'text-[#F3E6D1]' : 'text-[#F7EBDD] group-hover:text-white'
         }`}>
           {track.title}
         </h4>
         <div className="flex items-center justify-between gap-2">
-          <span className={`text-[9px] font-mono uppercase tracking-wider ${TYPE_COLOR[track.type] || 'text-[#6a5d4a]'}`}>
+          <span className={`text-[9px] font-mono uppercase tracking-wider ${TYPE_COLOR[track.type] || 'text-[#B4AA99]'}`}>
             {track.type}
           </span>
           {/* Star rating inline */}
@@ -236,9 +236,9 @@ export function TrackGridCard({
               <button key={star} onClick={(e) => handleRating(e, star)} className="p-0.5">
                 <Star
                   size={9}
-                  fill={track.rating && track.rating >= star ? '#c8a84b' : 'none'}
+                  fill={track.rating && track.rating >= star ? '#D6BE7A' : 'none'}
                   strokeWidth={1.5}
-                  className={track.rating && track.rating >= star ? 'text-[#c8a84b]' : 'text-[#2d2620] hover:text-[#c8a84b] transition-colors'}
+                  className={track.rating && track.rating >= star ? 'text-[#D6BE7A]' : 'text-[#3B372F] hover:text-[#D6BE7A] transition-colors'}
                 />
               </button>
             ))}

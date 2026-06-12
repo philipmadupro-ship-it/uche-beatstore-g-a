@@ -80,8 +80,8 @@ export async function POST(req: NextRequest) {
           to: email,
           subject,
           html: `
-            <div style="font-family: sans-serif; background: #0a0907; color: #E8DCC8; padding: 40px; border-radius: 20px; max-width: 560px;">
-              <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #D4BFA0; margin: 0 0 20px;">
+            <div style="font-family: sans-serif; background: #090907; color: #F7EBDD; padding: 40px; border-radius: 20px; max-width: 560px;">
+              <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #E7D7BE; margin: 0 0 20px;">
                 Sign in
               </h1>
               <p style="font-size: 15px; line-height: 1.7;">
@@ -91,11 +91,11 @@ export async function POST(req: NextRequest) {
               </p>
               <div style="margin-top: 32px;">
                 <a href="${url}"
-                   style="background: #D4BFA0; color: #0a0907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">
+                   style="background: #E7D7BE; color: #090907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">
                   Open my account
                 </a>
               </div>
-              <p style="margin-top: 32px; font-size: 11px; color: #6a5d4a;">
+              <p style="margin-top: 32px; font-size: 11px; color: #B4AA99;">
                 This link expires in 24 hours. Don't share it — anyone with the link can see your purchases.
               </p>
             </div>

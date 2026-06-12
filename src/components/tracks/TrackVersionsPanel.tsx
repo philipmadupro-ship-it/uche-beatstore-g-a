@@ -112,29 +112,29 @@ export function TrackVersionsPanel({
   };
 
   return (
-    <div className="border-b border-[#1f1a13]">
+    <div className="border-b border-[#2B2821]">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-8 py-4 hover:bg-[#101010] transition-colors"
       >
         <div className="flex items-center gap-2">
-          <HistoryIcon size={11} className="text-[#6a5d4a]" />
-          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a08a6a]">Version history</h3>
+          <HistoryIcon size={11} className="text-[#B4AA99]" />
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D0C3AF]">Version history</h3>
           {versions && versions.length > 0 && (
-            <span className="text-[9px] font-mono text-[#4a4338]">{versions.length}</span>
+            <span className="text-[9px] font-mono text-[#837B6D]">{versions.length}</span>
           )}
         </div>
-        {open ? <ChevronDown size={14} className="text-[#4a4338]" /> : <ChevronRight size={14} className="text-[#4a4338]" />}
+        {open ? <ChevronDown size={14} className="text-[#837B6D]" /> : <ChevronRight size={14} className="text-[#837B6D]" />}
       </button>
 
       {open && (
         <div className="px-4 pb-4">
           {loading ? (
             <div className="flex items-center justify-center py-6">
-              <Loader2 size={14} className="animate-spin text-[#4a4338]" />
+              <Loader2 size={14} className="animate-spin text-[#837B6D]" />
             </div>
           ) : !versions || versions.length === 0 ? (
-            <p className="text-[11px] text-[#5a5142] px-4 py-4 leading-relaxed">
+            <p className="text-[11px] text-[#9B9282] px-4 py-4 leading-relaxed">
               No prior versions. When you replace this track&rsquo;s audio, the previous file is archived here.
             </p>
           ) : (
@@ -142,15 +142,15 @@ export function TrackVersionsPanel({
               {versions.map((v) => (
                 <div
                   key={v.id}
-                  className="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#16130e] border border-transparent hover:border-[#1f1a13] transition-all"
+                  className="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#1A1813] border border-transparent hover:border-[#2B2821] transition-all"
                 >
-                  <div className="w-7 h-7 rounded-md bg-[#2A2418] border border-[#8A7A5C]/30 flex items-center justify-center shrink-0">
-                    <span className="text-[9px] font-black text-[#E8D8B8]">v{v.version_number}</span>
+                  <div className="w-7 h-7 rounded-md bg-[#342F27] border border-[#C9BCA8]/30 flex items-center justify-center shrink-0">
+                    <span className="text-[9px] font-black text-[#F3E6D1]">v{v.version_number}</span>
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] text-[#E8DCC8] truncate font-medium">{v.version_label}</p>
-                    <p className="text-[9px] font-mono text-[#5a5142] uppercase tracking-wider mt-0.5">
+                    <p className="text-[11px] text-[#F7EBDD] truncate font-medium">{v.version_label}</p>
+                    <p className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider mt-0.5">
                       {new Date(v.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       {v.bpm ? ` · ${v.bpm} BPM` : ''}
                       {v.key ? ` · ${v.key}${v.scale ? ' ' + v.scale : ''}` : ''}
@@ -160,7 +160,7 @@ export function TrackVersionsPanel({
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => handleDownload(v)}
-                      className="p-1.5 rounded text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-[#1a160f]"
+                      className="p-1.5 rounded text-[#B4AA99] hover:text-[#F7EBDD] hover:bg-[#211F1A]"
                       title="Download this version"
                     >
                       <Download size={11} />
@@ -168,7 +168,7 @@ export function TrackVersionsPanel({
                     <button
                       onClick={() => handleRevert(v)}
                       disabled={revertingId === v.id}
-                      className="p-1.5 rounded text-[#6a5d4a] hover:text-[#D4BFA0] hover:bg-[#1a160f] disabled:opacity-50"
+                      className="p-1.5 rounded text-[#B4AA99] hover:text-[#E7D7BE] hover:bg-[#211F1A] disabled:opacity-50"
                       title="Make this version live"
                     >
                       {revertingId === v.id ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}

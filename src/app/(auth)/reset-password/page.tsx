@@ -35,26 +35,26 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0a0907] p-4 text-[#E8DCC8]">
-      <div className="w-full max-w-sm space-y-6 bg-[#16130e] p-8 rounded-lg border border-[#1f1a13]">
+    <div className="flex min-h-screen items-center justify-center bg-[#090907] p-4 text-[#F7EBDD]">
+      <div className="w-full max-w-sm space-y-6 bg-[#1A1813] p-8 rounded-lg border border-[#2B2821]">
         <div>
           <Link
             href="/login"
-            className="inline-flex items-center gap-1.5 text-xs text-[#a08a6a] hover:text-[#D4BFA0] transition-colors mb-6"
+            className="inline-flex items-center gap-1.5 text-xs text-[#D0C3AF] hover:text-[#E7D7BE] transition-colors mb-6"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Back to login
           </Link>
 
           <h1 className="text-xl font-bold tracking-tight uppercase">Reset Password</h1>
-          <p className="mt-2 text-sm text-[#a08a6a]">
+          <p className="mt-2 text-sm text-[#D0C3AF]">
             Enter your email and we&apos;ll send you a link to reset your password.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="reset-email" className="block text-xs font-medium uppercase text-[#4a4338] mb-1">
+            <label htmlFor="reset-email" className="block text-xs font-medium uppercase text-[#837B6D] mb-1">
               Email Address
             </label>
             <div className="relative">
@@ -66,10 +66,10 @@ export default function ResetPasswordPage() {
                 disabled={isLoading}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-[#0a0907] border border-[#1f1a13] px-3 py-2 pl-10 text-[#E8DCC8] placeholder-[#4a4338] focus:outline-none focus:border-[#D4BFA0] rounded disabled:opacity-50 transition-colors"
+                className="w-full bg-[#090907] border border-[#2B2821] px-3 py-2 pl-10 text-[#F7EBDD] placeholder-[#837B6D] focus:outline-none focus:border-[#E7D7BE] rounded disabled:opacity-50 transition-colors"
                 placeholder="you@example.com"
               />
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#4a4338]" />
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#837B6D]" />
             </div>
           </div>
 
@@ -89,7 +89,7 @@ export default function ResetPasswordPage() {
           <button
             type="submit"
             disabled={isLoading || !email.trim()}
-            className="w-full flex justify-center py-3 px-4 border border-[#8A7A5C] rounded text-sm font-medium text-white bg-[#D4BFA0] hover:bg-[#8A7A5C] focus:outline-none focus:ring-2 focus:ring-[#D4BFA0] focus:ring-offset-2 focus:ring-offset-[#16130e] disabled:opacity-50 transition-all uppercase tracking-widest"
+            className="w-full flex justify-center py-3 px-4 border border-[#C9BCA8] rounded text-sm font-medium text-white bg-[#E7D7BE] hover:bg-[#C9BCA8] focus:outline-none focus:ring-2 focus:ring-[#E7D7BE] focus:ring-offset-2 focus:ring-offset-[#1A1813] disabled:opacity-50 transition-all uppercase tracking-widest"
           >
             {isLoading ? 'Sending…' : 'Send Reset Link'}
           </button>

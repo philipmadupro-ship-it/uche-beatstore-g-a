@@ -124,13 +124,13 @@ export async function GET(req: NextRequest) {
           to: contact.email,
           subject: copy.subject,
           html: `
-            <div style="font-family: sans-serif; background: #0a0907; color: #E8DCC8; padding: 40px; border-radius: 20px;">
-              <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 14px; color: #D4BFA0;">${copy.subject}</h1>
+            <div style="font-family: sans-serif; background: #090907; color: #F7EBDD; padding: 40px; border-radius: 20px;">
+              <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 14px; color: #E7D7BE;">${copy.subject}</h1>
               <p style="font-size: 15px; line-height: 1.7; white-space: pre-wrap;">${copy.body(contact.name)}</p>
               <div style="margin-top: 40px;">
-                <a href="${shareUrl}" style="background: #E8DCC8; color: #0a0907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px;">Listen again</a>
+                <a href="${shareUrl}" style="background: #F7EBDD; color: #090907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px;">Listen again</a>
               </div>
-              <p style="margin-top: 60px; font-size: 10px; color: #4a4338; text-transform: uppercase; letter-spacing: 0.5em;">Sent via U2C</p>
+              <p style="margin-top: 60px; font-size: 10px; color: #837B6D; text-transform: uppercase; letter-spacing: 0.5em;">Sent via U2C</p>
             </div>
           `,
         });

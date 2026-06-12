@@ -1,9 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Send, Loader2, Mail, Clock, ShieldAlert } from 'lucide-react';
+import { Send, Mail, Clock } from 'lucide-react';
 import { Contact, Track, BeatSend } from '@/lib/types';
 import { toast } from '@/hooks/useToast';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Field } from '@/components/ui/Field';
+import { Modal } from '@/components/ui/Modal';
 
 interface NudgeModalProps {
   contact: Contact;
@@ -87,30 +91,19 @@ export function NudgeModal({ contact, latestSend, onClose, onSuccess }: NudgeMod
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="relative w-full max-w-lg border border-[#8A7A5C]/25 bg-[#0c0a08]/95 backdrop-blur-md rounded-lg shadow-2xl overflow-hidden p-6 space-y-5">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-[#1f1a13]">
-          <div className="flex items-center gap-2">
-            <Mail size={15} className="text-[#D4BFA0]" />
-            <h3 className="text-[12px] font-bold uppercase tracking-wider font-akira text-[#E8DCC8]">
-              NUDGE CAMPAIGN FOLLOW-UP
-            </h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-[#5a5142] hover:text-white transition-colors"
-          >
-            <X size={15} />
-          </button>
-        </div>
-
+    <Modal
+      onClose={onClose}
+      title="Nudge campaign follow-up"
+      description="Review the draft before sending a polite follow-up email."
+      icon={<Mail size={18} aria-hidden="true" />}
+      size="lg"
+    >
+      <div className="space-y-5">
         {/* Campaign Info */}
-        <div className="p-3.5 rounded bg-[#100e0c] border border-[#1f1a13] space-y-2 text-[11px] font-mono text-[#a08a6a]">
+        <Card className="space-y-2 p-3.5 font-mono text-[11px] text-[var(--text-readable)]">
           <div className="flex justify-between">
             <span>Recipient:</span>
-            <span className="text-[#E8DCC8] font-bold">{contact.name} ({contact.email || 'no email'})</span>
+            <span className="font-bold text-[var(--text-primary)]">{contact.name} ({contact.email || 'no email'})</span>
           </div>
           <div className="flex justify-between">
             <span>Last Send Status:</span>
@@ -118,55 +111,50 @@ export function NudgeModal({ contact, latestSend, onClose, onSuccess }: NudgeMod
           </div>
           <div className="flex justify-between items-center">
             <span>Original Campaign Tracks:</span>
-            <span className="text-[#E8D8B8] truncate max-w-[220px]">
+            <span className="text-[#F3E6D1] truncate max-w-[220px]">
               {loadingTracks ? 'Loading...' : tracks.map((t) => t.title.toUpperCase()).join(', ') || 'None'}
             </span>
           </div>
-        </div>
+        </Card>
 
         {/* Message Editor */}
-        <div className="space-y-1.5">
-          <label className="text-[9px] font-bold uppercase tracking-widest text-[#5a5142]">
-            Draft Follow-Up Email
-          </label>
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            rows={8}
-            className="w-full bg-[#070605] border border-[#1f1a13] rounded p-3 text-[12px] text-white placeholder-[#3a3328] focus:outline-none focus:border-[#D4BFA0] resize-none leading-relaxed"
-          />
-        </div>
+        <Field
+          multiline
+          label="Draft follow-up email"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          rows={8}
+          inputClassName="text-[12px] leading-relaxed normal-case tracking-normal"
+        />
 
         {/* Footer Actions */}
-        <div className="flex items-center justify-between gap-3 pt-3 border-t border-[#1f1a13]">
-          <div className="flex items-center gap-1.5 text-[9px] text-[#5a5142] font-mono">
+        <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-1.5 text-[9px] text-[#9B9282] font-mono">
             <Clock size={10} />
             <span>Sends via Resend Client</span>
           </div>
           
           <div className="flex items-center gap-2">
-            <button
+            <Button
               onClick={onClose}
-              className="px-4 py-2 border border-[#1f1a13] hover:border-[#2d2620] rounded text-[10px] font-bold uppercase tracking-wider text-[#6a5d4a] hover:text-white transition-colors"
+              variant="secondary"
+              size="sm"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleSendNudge}
               disabled={sending || !contact.email || loadingTracks}
-              className="flex items-center gap-2 bg-[#D4BFA0] hover:bg-[#8A7A5C] text-white text-[10px] font-bold uppercase tracking-widest px-5 py-2.5 rounded transition-colors disabled:opacity-40"
+              loading={sending}
+              variant="accent"
+              size="sm"
+              leadingIcon={<Send size={11} aria-hidden="true" />}
             >
-              {sending ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <Send size={11} />
-              )}
               <span>Send Nudge</span>
-            </button>
+            </Button>
           </div>
         </div>
-
       </div>
-    </div>
+    </Modal>
   );
 }

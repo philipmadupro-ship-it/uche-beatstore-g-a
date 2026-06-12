@@ -51,7 +51,7 @@ export function StudioWaveform({
   duration,
   onSeek,
   height = 64,
-  accent = '#D4BFA0',
+  accent = '#E7D7BE',
   className,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -210,7 +210,7 @@ export function StudioWaveform({
       onMouseLeave={handleLeave}
       className={cn(
         'relative w-full cursor-pointer select-none rounded-lg overflow-hidden',
-        'bg-gradient-to-b from-[#0a0907] to-[#070707] border border-white/[0.04]',
+        'bg-gradient-to-b from-[#090907] to-[#070707] border border-white/[0.04]',
         className,
       )}
       style={{ height }}
@@ -222,7 +222,7 @@ export function StudioWaveform({
           offset so the bubble doesn't sit directly under the pointer. */}
       {hoverX != null && hoverTime != null && (
         <div
-          className="absolute top-1 -translate-x-1/2 pointer-events-none px-1.5 py-0.5 rounded bg-[#1a160f] border border-[#2d2620] text-[9px] font-mono text-[#E8DCC8] whitespace-nowrap shadow-lg"
+          className="absolute top-1 -translate-x-1/2 pointer-events-none px-1.5 py-0.5 rounded bg-[#211F1A] border border-[#3B372F] text-[9px] font-mono text-[#F7EBDD] whitespace-nowrap shadow-lg"
           style={{ left: hoverX }}
         >
           {fmtTime(hoverTime)}

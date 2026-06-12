@@ -137,30 +137,30 @@ export function SimilarTracks({ trackId, onPick }: Props) {
         className={cn(
           'w-full flex items-center gap-2.5 px-4 py-3 rounded-xl border transition-colors text-left',
           expanded
-            ? 'border-[#1f1a13] bg-[#0e0c08] rounded-b-none'
-            : 'border-[#1f1a13] bg-[#14110d] hover:border-[#2d2620] hover:bg-[#1a160f]',
+            ? 'border-[#2B2821] bg-[#11100D] rounded-b-none'
+            : 'border-[#2B2821] bg-[#171511] hover:border-[#3B372F] hover:bg-[#211F1A]',
         )}
       >
-        <Layers size={13} className="text-[#a08a6a] shrink-0" />
-        <span className="text-[11px] font-medium text-[#E8DCC8]">Discover &amp; match</span>
-        <span className="text-[10px] font-mono text-[#5a5142] hidden sm:inline">
+        <Layers size={13} className="text-[#D0C3AF] shrink-0" />
+        <span className="text-[11px] font-medium text-[#F7EBDD]">Discover &amp; match</span>
+        <span className="text-[10px] font-mono text-[#9B9282] hidden sm:inline">
           {results ? `${filtered.length} of ${results.length} matches` : 'compatible beats & instrumentals'}
         </span>
         <div className="flex-1" />
-        {loading && <Loader2 size={12} className="animate-spin text-[#5a5142]" />}
-        <span className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a]">
+        {loading && <Loader2 size={12} className="animate-spin text-[#9B9282]" />}
+        <span className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99]">
           {expanded ? 'Hide' : 'Show'}
         </span>
-        <ChevronDown size={14} className={cn('text-[#5a5142] transition-transform', expanded && 'rotate-180')} />
+        <ChevronDown size={14} className={cn('text-[#9B9282] transition-transform', expanded && 'rotate-180')} />
       </button>
 
       {!expanded ? null : (
-      <div className="border border-t-0 border-[#1f1a13] rounded-b-xl bg-[#0c0a08] p-3">
+      <div className="border border-t-0 border-[#2B2821] rounded-b-xl bg-[#11100D] p-3">
       <div className="flex items-center justify-end mb-2.5">
         <button
           onClick={fetchSimilar}
           disabled={loading}
-          className="text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors disabled:opacity-40"
+          className="text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F7EBDD] transition-colors disabled:opacity-40"
         >
           {loading ? 'Loading…' : 'Refresh'}
         </button>
@@ -168,17 +168,17 @@ export function SimilarTracks({ trackId, onPick }: Props) {
 
       {/* Filter bar */}
       {results && results.length > 0 && (
-        <div className="rounded-xl border border-[#1f1a13] bg-[#0e0c08] p-3 mb-3 space-y-2.5">
+        <div className="rounded-xl border border-[#2B2821] bg-[#11100D] p-3 mb-3 space-y-2.5">
           <div className="flex items-center gap-2">
-            <Search size={12} className="text-[#4a4338] shrink-0" />
+            <Search size={12} className="text-[#837B6D] shrink-0" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search matches by title…"
-              className="flex-1 bg-transparent text-[12px] text-[#E8DCC8] placeholder:text-[#4a4338] focus:outline-none"
+              className="flex-1 bg-transparent text-[12px] text-[#F7EBDD] placeholder:text-[#837B6D] focus:outline-none"
             />
             {activeFilters > 0 && (
-              <button onClick={clearAll} className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#E8DCC8] flex items-center gap-1">
+              <button onClick={clearAll} className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F7EBDD] flex items-center gap-1">
                 <X size={10} /> Clear
               </button>
             )}
@@ -201,16 +201,16 @@ export function SimilarTracks({ trackId, onPick }: Props) {
       )}
 
       {results === null || (loading && results === null) ? (
-        <div className="px-4 py-8 rounded-lg border border-[#1a160f] flex items-center justify-center gap-2 text-[11px] text-[#5a5142]">
+        <div className="px-4 py-8 rounded-lg border border-[#211F1A] flex items-center justify-center gap-2 text-[11px] text-[#9B9282]">
           <Loader2 size={12} className="animate-spin" /> Finding matches in your library…
         </div>
       ) : results.length === 0 ? (
-        <div className="px-4 py-8 rounded-lg border border-[#1a160f] text-center text-[11px] text-[#5a5142]">
+        <div className="px-4 py-8 rounded-lg border border-[#211F1A] text-center text-[11px] text-[#9B9282]">
           No comparable tracks yet — upload a few more and refresh.
         </div>
       ) : filtered.length === 0 ? (
-        <div className="px-4 py-6 rounded-lg border border-[#1a160f] text-center text-[11px] text-[#5a5142]">
-          No matches fit these filters. <button onClick={clearAll} className="text-[#a08a6a] hover:text-[#E8DCC8] underline underline-offset-2">Clear filters</button>
+        <div className="px-4 py-6 rounded-lg border border-[#211F1A] text-center text-[11px] text-[#9B9282]">
+          No matches fit these filters. <button onClick={clearAll} className="text-[#D0C3AF] hover:text-[#F7EBDD] underline underline-offset-2">Clear filters</button>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -219,17 +219,17 @@ export function SimilarTracks({ trackId, onPick }: Props) {
             const harmonicHit = r.breakdown.key <= HARMONIC_MAX;
             const tempoHit = r.breakdown.bpm <= TEMPO_MAX;
             const card = (
-              <div className="group flex items-center gap-3 px-3 py-2.5 rounded-lg border border-[#1f1a13] bg-[#14110d] hover:border-[#2d2620] hover:bg-[#1a160f] transition-colors cursor-pointer h-full">
-                <div className="relative w-10 h-10 rounded-md overflow-hidden bg-[#0a0907] border border-[#1f1a13] shrink-0">
+              <div className="group flex items-center gap-3 px-3 py-2.5 rounded-lg border border-[#2B2821] bg-[#171511] hover:border-[#3B372F] hover:bg-[#211F1A] transition-colors cursor-pointer h-full">
+                <div className="relative w-10 h-10 rounded-md overflow-hidden bg-[#090907] border border-[#2B2821] shrink-0">
                   {r.track.cover_url ? (
                     <img loading="lazy" src={r.track.cover_url} alt="" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={14} /></div>
+                    <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={14} /></div>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[12px] font-medium text-[#E8DCC8] truncate">{r.track.title}</p>
-                  <p className="text-[9px] font-mono text-[#6a5d4a] uppercase tracking-wider mt-0.5 truncate">
+                  <p className="text-[12px] font-medium text-[#F7EBDD] truncate">{r.track.title}</p>
+                  <p className="text-[9px] font-mono text-[#B4AA99] uppercase tracking-wider mt-0.5 truncate">
                     {r.track.type}
                     {r.track.bpm ? ` · ${r.track.bpm} bpm` : ''}
                     {r.track.key ? ` · ${r.track.key}${r.track.scale ? ' ' + r.track.scale : ''}` : ''}
@@ -237,22 +237,22 @@ export function SimilarTracks({ trackId, onPick }: Props) {
                   {(harmonicHit || tempoHit) && (
                     <div className="flex items-center gap-1 mt-1">
                       {harmonicHit && <span className="text-[8px] font-mono uppercase tracking-wider text-[#9d95e8] bg-[#1a1833]/60 px-1 py-0.5 rounded">key</span>}
-                      {tempoHit && <span className="text-[8px] font-mono uppercase tracking-wider text-[#D4BFA0] bg-[#D4BFA0]/10 px-1 py-0.5 rounded">tempo</span>}
+                      {tempoHit && <span className="text-[8px] font-mono uppercase tracking-wider text-[#E7D7BE] bg-[#E7D7BE]/10 px-1 py-0.5 rounded">tempo</span>}
                     </div>
                   )}
                 </div>
                 <div className="shrink-0 flex items-center gap-2">
                   <span className={cn(
                     'text-[10px] font-mono font-bold px-2 py-0.5 rounded-full tabular-nums',
-                    pct >= 75 ? 'bg-[#D4BFA0]/15 text-[#E8D8B8] ring-1 ring-[#8A7A5C]/40'
-                      : pct >= 50 ? 'bg-white/[0.04] text-[#a08a6a] ring-1 ring-[#2d2620]'
-                        : 'bg-white/[0.02] text-[#5a5142] ring-1 ring-[#1f1a13]',
+                    pct >= 75 ? 'bg-[#E7D7BE]/15 text-[#F3E6D1] ring-1 ring-[#C9BCA8]/40'
+                      : pct >= 50 ? 'bg-white/[0.04] text-[#D0C3AF] ring-1 ring-[#3B372F]'
+                        : 'bg-white/[0.02] text-[#9B9282] ring-1 ring-[#2B2821]',
                   )}>
                     {pct}%
                   </span>
                   {onPick
-                    ? <Plus size={14} className="text-[#6a5d4a] group-hover:text-[#E8DCC8] transition-colors" />
-                    : <ChevronRight size={14} className="text-[#3a3328] group-hover:text-[#E8DCC8] transition-colors" />}
+                    ? <Plus size={14} className="text-[#B4AA99] group-hover:text-[#F7EBDD] transition-colors" />
+                    : <ChevronRight size={14} className="text-[#6E685B] group-hover:text-[#F7EBDD] transition-colors" />}
                 </div>
               </div>
             );
@@ -277,8 +277,8 @@ function FilterChip({ active, onClick, label }: { active: boolean; onClick: () =
       className={cn(
         'text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded-full border transition-colors',
         active
-          ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/40'
-          : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]',
+          ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/40'
+          : 'border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]',
       )}
     >
       {label}
@@ -294,12 +294,12 @@ function Segment({ value, onChange, options }: { value: string; onChange: (v: st
       className={cn(
         'text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded-full border bg-transparent cursor-pointer transition-colors focus:outline-none',
         value !== 'all'
-          ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/40'
-          : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]',
+          ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/40'
+          : 'border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]',
       )}
     >
       {options.map(([v, label]) => (
-        <option key={v} value={v} className="bg-[#0a0907] text-[#E8DCC8] normal-case">{label}</option>
+        <option key={v} value={v} className="bg-[#090907] text-[#F7EBDD] normal-case">{label}</option>
       ))}
     </select>
   );

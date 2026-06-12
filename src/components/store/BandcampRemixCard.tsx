@@ -71,12 +71,12 @@ export default function BandcampRemixCard({
   // Border treatment mirrors BeatCard's "active" affordances so a remix card
   // visually responds to play / preview state in the same vocabulary.
   const borderClass = isPreview
-    ? 'border-[#D4BFA0]/50 shadow-lg shadow-[#D4BFA0]/5'
+    ? 'border-[#E7D7BE]/50 shadow-lg shadow-[#E7D7BE]/5'
     : isPlaying
       ? 'shadow-md'
       : isCurrent
-        ? 'border-[#D4BFA0]/30'
-        : 'border-[#1f1a13] hover:border-[#2d2620]';
+        ? 'border-[#E7D7BE]/30'
+        : 'border-[#2B2821] hover:border-[#3B372F]';
 
   const borderStyle = isPreview
     ? { borderColor: `${accentColor}80` }
@@ -99,13 +99,13 @@ export default function BandcampRemixCard({
       tabIndex={0}
       onClick={onPreview}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(); } }}
-      className="group cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#D4BFA0]/40 rounded-[14px] p-[1.5px]"
+      className="group cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/40 rounded-[14px] p-[1.5px]"
       style={{ background: bezelBg }}
     >
-    <div className={`relative rounded-[13px] overflow-hidden flex flex-col bg-[#14110d] ${borderClass}`} style={borderStyle}>
+    <div className={`relative rounded-[13px] overflow-hidden flex flex-col bg-[#171511] ${borderClass}`} style={borderStyle}>
       {/* Cover — clicking opens preview drawer; play circle inside plays */}
       <div
-        className="relative w-full aspect-square shrink-0 overflow-hidden bg-[#0a0907]"
+        className="relative w-full aspect-square shrink-0 overflow-hidden bg-[#090907]"
       >
         {track.cover_url ? (
           <CoverImage
@@ -135,7 +135,7 @@ export default function BandcampRemixCard({
               onClick={(e) => { e.stopPropagation(); onToggleWishlist(); }}
               aria-pressed={!!isWishlisted}
               className={`w-7 h-7 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors ${
-                isWishlisted ? 'bg-[#c8a84b]/30 text-[#c8a84b]' : 'bg-black/30 text-white/50 hover:text-white'
+                isWishlisted ? 'bg-[#D6BE7A]/30 text-[#D6BE7A]' : 'bg-black/30 text-white/50 hover:text-white'
               }`}
             >
               <Heart size={12} fill={isWishlisted ? 'currentColor' : 'none'} />
@@ -180,7 +180,7 @@ export default function BandcampRemixCard({
       </div>
 
       {/* Buy strip */}
-      <div className="bg-[#0e0c08] border-t border-white/[0.06]" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-[#11100D] border-t border-white/[0.06]" onClick={(e) => e.stopPropagation()}>
         {track.free_download_enabled ? (
           <button
             onClick={(e) => { e.stopPropagation(); onFreeDownload(); }}
@@ -197,7 +197,7 @@ export default function BandcampRemixCard({
               className="flex-1 flex flex-col items-center justify-center hover:bg-white/[0.04] transition-colors disabled:opacity-25 disabled:cursor-not-allowed gap-px"
             >
               <span className="text-[7px] font-mono uppercase tracking-[0.18em] text-white/25 leading-none">Lease</span>
-              <span className="text-[12px] font-bold text-[#E8DCC8] tabular-nums leading-none">
+              <span className="text-[12px] font-bold text-[#F7EBDD] tabular-nums leading-none">
                 {priceLease != null ? `$${priceLease}` : '—'}
               </span>
             </button>

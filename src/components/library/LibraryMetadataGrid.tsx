@@ -29,7 +29,7 @@ export function LibraryMetadataGrid({ track }: Props) {
     {
       label: 'BPM',
       value: fmtBpm(track.bpm),
-      accent: 'text-[#E8D8B8]',
+      accent: 'text-[#F3E6D1]',
       large: true,
     },
     {
@@ -43,17 +43,17 @@ export function LibraryMetadataGrid({ track }: Props) {
       // tools to find compatible beats/instrumentals.
       label: 'Keypoint',
       value: camelot ?? '—',
-      accent: 'text-[#D4BFA0]',
+      accent: 'text-[#E7D7BE]',
     },
     {
       label: 'Loudness',
       value: fmtLUFS(track.loudness),
-      accent: 'text-[#a08a6a]',
+      accent: 'text-[#D0C3AF]',
     },
     {
       label: 'Duration',
       value: fmtDuration(track.duration_seconds),
-      accent: 'text-[#E8DCC8]',
+      accent: 'text-[#F7EBDD]',
     },
   ];
 
@@ -62,13 +62,13 @@ export function LibraryMetadataGrid({ track }: Props) {
       {cells.map((cell) => (
         <div
           key={cell.label}
-          className="relative overflow-hidden bg-[#0e0c08] border border-[#1a160f] rounded-xl px-4 py-4"
+          className="relative overflow-hidden bg-[#11100D] border border-[#211F1A] rounded-xl px-4 py-4"
         >
 
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">
+          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">
             {cell.label}
           </p>
-          <p className={`font-mono font-bold leading-none ${cell.accent ?? 'text-[#E8DCC8]'} ${
+          <p className={`font-mono font-bold leading-none ${cell.accent ?? 'text-[#F7EBDD]'} ${
             cell.large ? 'text-[22px]' : 'text-[16px]'
           }`}>
             {cell.value}

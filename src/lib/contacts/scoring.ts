@@ -95,7 +95,7 @@ export function scoreLead(input: ScoreInput): LeadScore {
 /** Display metadata for a tier (color + label), centralized for the UI. */
 export const TIER_META: Record<LeadTier, { label: string; color: string; bg: string }> = {
   hot:  { label: 'Hot',  color: '#E8896A', bg: 'rgba(232,137,106,0.14)' },
-  warm: { label: 'Warm', color: '#D4BFA0', bg: 'rgba(212,191,160,0.12)' },
+  warm: { label: 'Warm', color: '#E7D7BE', bg: 'rgba(231,215,190,0.12)' },
   cold: { label: 'Cold', color: '#7d92b0', bg: 'rgba(125,146,176,0.12)' },
-  new:  { label: 'New',  color: '#6a5d4a', bg: 'rgba(255,255,255,0.04)' },
+  new:  { label: 'New',  color: '#B4AA99', bg: 'rgba(255,255,255,0.04)' },
 };

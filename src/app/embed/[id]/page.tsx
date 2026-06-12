@@ -64,14 +64,14 @@ export default function EmbedPage({ params }: { params: Promise<{ id: string }> 
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0a0907] text-[#6a5d4a] text-[13px] font-mono">
+      <div className="min-h-screen flex items-center justify-center bg-[#090907] text-[#B4AA99] text-[13px] font-mono">
         Track unavailable.
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0907] flex flex-col items-center justify-center p-3">
+    <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center p-3">
       {track ? <EmbedCard track={track} /> : <CardSkeleton />}
       {topLevel && track && <EmbedSnippet id={id} />}
     </div>
@@ -80,13 +80,13 @@ export default function EmbedPage({ params }: { params: Promise<{ id: string }> 
 
 function CardSkeleton() {
   return (
-    <div className="w-full max-w-md rounded-2xl border border-[#1f1a13] bg-[#14110d] p-4 animate-pulse">
+    <div className="w-full max-w-md rounded-2xl border border-[#2B2821] bg-[#171511] p-4 animate-pulse">
       <div className="flex gap-4">
-        <div className="w-20 h-20 rounded-xl bg-[#1f1a13] shrink-0" />
+        <div className="w-20 h-20 rounded-xl bg-[#2B2821] shrink-0" />
         <div className="flex-1 space-y-2 py-1">
-          <div className="h-4 bg-[#1f1a13] rounded w-2/3" />
-          <div className="h-3 bg-[#1f1a13] rounded w-1/3" />
-          <div className="h-8 bg-[#1f1a13] rounded w-full mt-3" />
+          <div className="h-4 bg-[#2B2821] rounded w-2/3" />
+          <div className="h-3 bg-[#2B2821] rounded w-1/3" />
+          <div className="h-8 bg-[#2B2821] rounded w-full mt-3" />
         </div>
       </div>
     </div>
@@ -154,7 +154,7 @@ function EmbedCard({ track }: { track: EmbedTrack }) {
   ].filter(Boolean);
 
   return (
-    <div className="w-full max-w-md rounded-2xl border border-[#1f1a13] bg-[#14110d] p-4 shadow-[0_18px_44px_rgba(0,0,0,0.55)]">
+    <div className="w-full max-w-md rounded-2xl border border-[#2B2821] bg-[#171511] p-4 shadow-[0_18px_44px_rgba(0,0,0,0.55)]">
       <div className="flex gap-4">
         {/* Cover + play */}
         <button
@@ -166,12 +166,12 @@ function EmbedCard({ track }: { track: EmbedTrack }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center text-[#a08a6a]">
+            <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907] flex items-center justify-center text-[#D0C3AF]">
               <Music size={24} />
             </div>
           )}
           <div className="absolute inset-0 flex items-center justify-center bg-black/35 group-hover:bg-black/45 transition-colors">
-            <div className="w-9 h-9 rounded-full bg-[#D4BFA0] flex items-center justify-center text-black">
+            <div className="w-9 h-9 rounded-full bg-[#E7D7BE] flex items-center justify-center text-black">
               {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
             </div>
           </div>
@@ -179,9 +179,9 @@ function EmbedCard({ track }: { track: EmbedTrack }) {
 
         {/* Title + meta + waveform */}
         <div className="flex-1 min-w-0">
-          <p className="text-[14px] font-semibold text-[#E8DCC8] truncate">{track.title}</p>
+          <p className="text-[14px] font-semibold text-[#F7EBDD] truncate">{track.title}</p>
           {meta.length > 0 && (
-            <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#6a5d4a] mt-0.5 truncate">
+            <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#B4AA99] mt-0.5 truncate">
               {meta.join(' · ')}
             </p>
           )}
@@ -203,7 +203,7 @@ function EmbedCard({ track }: { track: EmbedTrack }) {
                   className="flex-1 rounded-full"
                   style={{
                     height: `${Math.max(8, h * 100)}%`,
-                    backgroundColor: played ? '#D4BFA0' : '#3a3328',
+                    backgroundColor: played ? '#E7D7BE' : '#6E685B',
                   }}
                 />
               );
@@ -217,7 +217,7 @@ function EmbedCard({ track }: { track: EmbedTrack }) {
         href={storeUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-4 flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl bg-[#D4BFA0] text-black text-[12px] font-bold uppercase tracking-[0.18em] hover:opacity-90 transition-opacity"
+        className="mt-4 flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl bg-[#E7D7BE] text-black text-[12px] font-bold uppercase tracking-[0.18em] hover:opacity-90 transition-opacity"
       >
         Buy on U2C Beatstore
         <ExternalLink size={13} />
@@ -264,12 +264,12 @@ function EmbedSnippet({ id }: { id: string }) {
 
   return (
     <div className="w-full max-w-md mt-4">
-      <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#5a5142] mb-2">Embed this beat</p>
-      <div className="rounded-xl border border-[#1f1a13] bg-[#0e0c08] p-3">
-        <code className="block text-[10px] text-[#a08a6a] font-mono break-all leading-relaxed">{snippet}</code>
+      <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#9B9282] mb-2">Embed this beat</p>
+      <div className="rounded-xl border border-[#2B2821] bg-[#11100D] p-3">
+        <code className="block text-[10px] text-[#D0C3AF] font-mono break-all leading-relaxed">{snippet}</code>
         <button
           onClick={copy}
-          className="mt-2.5 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.10] text-[#E8DCC8] text-[10px] font-bold uppercase tracking-wider hover:bg-white/[0.10] transition-colors"
+          className="mt-2.5 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.10] text-[#F7EBDD] text-[10px] font-bold uppercase tracking-wider hover:bg-white/[0.10] transition-colors"
         >
           {copied ? <Check size={11} className="text-[#6DC6A4]" /> : <Copy size={11} />}
           {copied ? 'Copied' : 'Copy embed code'}

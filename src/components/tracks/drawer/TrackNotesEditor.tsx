@@ -61,9 +61,9 @@ export function TrackNotesEditor({ track, onOptimistic, onRollback, onSaved }: P
   };
 
   return (
-    <div className="p-8 border-b border-[#1f1a13] space-y-6">
+    <div className="p-8 border-b border-[#2B2821] space-y-6">
       <div className="flex items-center gap-2 mb-2">
-        <FileText size={16} className="text-[#D4BFA0]" />
+        <FileText size={16} className="text-[#E7D7BE]" />
         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Private Notes</h3>
       </div>
       <div className="relative group">
@@ -71,13 +71,13 @@ export function TrackNotesEditor({ track, onOptimistic, onRollback, onSaved }: P
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           onBlur={saveNotes}
-          className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl p-4 text-[11px] text-[#E8DCC8] placeholder:text-[#2d2620] focus:outline-none focus:border-[#D4BFA0] transition-all h-32 resize-none font-medium leading-relaxed"
+          className="w-full bg-[#090907] border border-[#2B2821] rounded-xl p-4 text-[11px] text-[#F7EBDD] placeholder:text-[#3B372F] focus:outline-none focus:border-[#E7D7BE] transition-all h-32 resize-none font-medium leading-relaxed"
           placeholder="ADD PRODUCTION NOTES, COLLABORATORS, OR MIX VERSION DETAILS..."
         />
         {isSaving && (
-          <div className="absolute top-3 right-3 flex items-center gap-2 px-2 py-1 bg-[#2A2418] rounded-md border border-[#D4BFA0]/20 animate-in fade-in">
-            <Loader2 size={10} className="animate-spin text-[#D4BFA0]" />
-            <span className="text-[8px] font-bold text-[#D4BFA0] uppercase tracking-widest">Saving</span>
+          <div className="absolute top-3 right-3 flex items-center gap-2 px-2 py-1 bg-[#342F27] rounded-md border border-[#E7D7BE]/20 animate-in fade-in">
+            <Loader2 size={10} className="animate-spin text-[#E7D7BE]" />
+            <span className="text-[8px] font-bold text-[#E7D7BE] uppercase tracking-widest">Saving</span>
           </div>
         )}
       </div>

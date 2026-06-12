@@ -25,6 +25,9 @@ interface Props {
   onReorder?: (orderedIds: string[]) => void;
 }
 
+type InlineTrackTag = { tag: string; category?: string | null };
+type TrackWithInlineTags = Track & { track_tags?: InlineTrackTag[] };
+
 /**
  * Tabs row + search + track table for the project detail page.
  *
@@ -46,7 +49,7 @@ export function ProjectTrackList({
   const availableTags = useMemo(() => {
     const s = new Set<string>();
     for (const t of filtered) {
-      for (const tt of (t as any).track_tags ?? []) s.add(tt.tag);
+      for (const tt of (t as TrackWithInlineTags).track_tags ?? []) s.add(tt.tag);
     }
     return [...s].sort();
   }, [filtered]);
@@ -54,13 +57,18 @@ export function ProjectTrackList({
   const visibleTracks = useMemo(() => {
     if (selectedTags.size === 0) return filtered;
     return filtered.filter((t) => {
-      const tags = ((t as any).track_tags ?? []).map((tt: any) => tt.tag as string);
+      const tags = ((t as TrackWithInlineTags).track_tags ?? []).map((tt) => tt.tag);
       return [...selectedTags].every((sel) => tags.includes(sel));
     });
   }, [filtered, selectedTags]);
 
   const toggleTag = (tag: string) =>
-    setSelectedTags((prev) => { const n = new Set(prev); n.has(tag) ? n.delete(tag) : n.add(tag); return n; });
+    setSelectedTags((prev) => {
+      const n = new Set(prev);
+      if (n.has(tag)) n.delete(tag);
+      else n.add(tag);
+      return n;
+    });
 
   const selectable = !!(selectedIds && onToggleSelect);
   const allSelected = selectable && visibleTracks.length > 0 && visibleTracks.every((t) => selectedIds!.has(t.id));
@@ -105,7 +113,7 @@ export function ProjectTrackList({
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors ${
-                activeTab === tab ? 'bg-[#16130e] text-white' : 'text-[#5a5142] hover:text-[#E8DCC8]'
+                activeTab === tab ? 'bg-[#1A1813] text-white' : 'text-[#9B9282] hover:text-[#F7EBDD]'
               }`}
             >
               {tab}
@@ -113,11 +121,11 @@ export function ProjectTrackList({
           ))}
         </div>
         <div className="relative w-56 sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3a3328]" size={12} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" size={12} />
           <input
             type="text"
             placeholder="Search tracks or tags"
-            className="w-full bg-[#14110d] border border-[#1a160f] rounded-md py-2 pl-8 pr-3 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] transition-colors"
+            className="w-full bg-[#171511] border border-[#211F1A] rounded-md py-2 pl-8 pr-3 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] transition-colors"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -127,13 +135,13 @@ export function ProjectTrackList({
       {/* Tag chips — only when there are tags to filter on */}
       {availableTags.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap mb-4">
-          <Tag size={11} className="text-[#3a3328] shrink-0" />
+          <Tag size={11} className="text-[#6E685B] shrink-0" />
           {availableTags.map((tag) => {
             const on = selectedTags.has(tag);
             return (
               <button key={tag} onClick={() => toggleTag(tag)}
                 className={`px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${
-                  on ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'
+                  on ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]'
                 }`}>
                 {tag}
               </button>
@@ -141,7 +149,7 @@ export function ProjectTrackList({
           })}
           {selectedTags.size > 0 && (
             <button onClick={() => setSelectedTags(new Set())}
-              className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#E8DCC8] transition-colors ml-1">
+              className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#F7EBDD] transition-colors ml-1">
               <X size={10} /> Clear
             </button>
           )}
@@ -149,9 +157,10 @@ export function ProjectTrackList({
       )}
 
       {/* Track list */}
-      <div className="border-t border-[#161310] border-b pb-1 mb-32">
-        {/* Header cols must exactly mirror TrackCard row cols */}
-        <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_110px_32px] lg:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_100px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
+      <div className="space-y-1.5 pb-1 mb-32">
+        {/* Header mirrors the Store-style product row: cover/play,
+            title/meta, vibe, time, rating/offline, actions. */}
+        <div className="hidden md:grid md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_70px_112px_32px] items-center gap-4 px-3 h-8 text-[9px] font-mono uppercase tracking-wider text-[#6E685B]">
           {selectable ? (
             <span className="flex items-center justify-center">
               <input
@@ -159,38 +168,35 @@ export function ProjectTrackList({
                 checked={allSelected}
                 onChange={() => onSelectAll?.()}
                 aria-label="Select all visible tracks"
-                className="accent-[#D4BFA0] cursor-pointer"
+                className="accent-[#E7D7BE] cursor-pointer"
               />
             </span>
           ) : (
-            <span className="text-center">#</span>
+            <span />
           )}
-          <span />
           <span>Title</span>
-          <span className="hidden sm:block">Type</span>
-          <span>BPM · Key</span>
-          <span className="hidden sm:block">Added</span>
-          <span className="text-right hidden sm:block">Rating</span>
-          <span className="hidden lg:block">Tags</span>
+          <span className="hidden md:block">Tags · Rating</span>
+          <span className="hidden md:block text-right">Time</span>
+          <span className="hidden md:block text-right">State</span>
           <span />
         </div>
 
         {!visibleTracks.length ? (
           <div className="py-24 flex flex-col items-center justify-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#14110d] border border-[#1a160f] flex items-center justify-center">
-              <Music size={16} className="text-[#3a3328]" />
+            <div className="w-10 h-10 rounded-lg bg-[#171511] border border-[#211F1A] flex items-center justify-center">
+              <Music size={16} className="text-[#6E685B]" />
             </div>
             {selectedTags.size > 0 || searchQuery ? (
-              <p className="text-[11px] font-mono uppercase tracking-wider text-[#3a3328]">No tracks match</p>
+              <p className="text-[11px] font-mono uppercase tracking-wider text-[#6E685B]">No tracks match</p>
             ) : (
               <>
-                <p className="text-[11px] font-mono uppercase tracking-wider text-[#3a3328]">No tracks in this project</p>
+                <p className="text-[11px] font-mono uppercase tracking-wider text-[#6E685B]">No tracks in this project</p>
                 <div className="flex items-center gap-3 mt-1">
-                  <button onClick={onAddFromLibrary} className="text-[11px] text-[#D4BFA0] hover:text-[#E8D8B8] font-medium flex items-center gap-1">
+                  <button onClick={onAddFromLibrary} className="text-[11px] text-[#E7D7BE] hover:text-[#F3E6D1] font-medium flex items-center gap-1">
                     <Library size={11} /> Add from library
                   </button>
-                  <span className="text-[#2d2620]">·</span>
-                  <button onClick={onShowUpload} className="text-[11px] text-[#D4BFA0] hover:text-[#E8D8B8] font-medium flex items-center gap-1">
+                  <span className="text-[#3B372F]">·</span>
+                  <button onClick={onShowUpload} className="text-[11px] text-[#E7D7BE] hover:text-[#F3E6D1] font-medium flex items-center gap-1">
                     <Plus size={11} /> Upload audio
                   </button>
                 </div>
@@ -205,7 +211,7 @@ export function ProjectTrackList({
               onDrop={onReorder ? handleDrop(i) : undefined}
               onDragEnd={() => { dragIdxRef.current = null; setDragOverIdx(null); }}
               className={`group relative transition-colors ${
-                dragOverIdx === i ? 'bg-[#D4BFA0]/5 border-t-2 border-[#D4BFA0]/60' : ''
+                dragOverIdx === i ? 'bg-[#E7D7BE]/5 border-t-2 border-[#E7D7BE]/60' : ''
               }`}
             >
               {/* Grip handle — THIS element is draggable, not the whole row.
@@ -215,7 +221,7 @@ export function ProjectTrackList({
                 <div
                   draggable
                   onDragStart={handleGripDragStart(i)}
-                  className="absolute left-0 inset-y-0 flex items-center pl-1 cursor-grab active:cursor-grabbing z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[#3a3328] hover:text-[#a08a6a]"
+                  className="absolute left-0 inset-y-0 flex items-center pl-1 cursor-grab active:cursor-grabbing z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[#6E685B] hover:text-[#D0C3AF]"
                   title="Drag to reorder"
                 >
                   <GripVertical size={13} />

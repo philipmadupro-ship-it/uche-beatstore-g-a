@@ -26,16 +26,16 @@ function seedFromString(s: string): number {
 
 // Curated palette — warm, premium, on-brand. Each entry: [from-color, to-color].
 const GRADIENT_PAIRS = [
-  ['#2A1F14', '#0a0907'],   // warm amber smoke
-  ['#1a1233', '#0a0907'],   // deep violet night
-  ['#0d2318', '#0a0907'],   // forest emerald
+  ['#2A1F14', '#090907'],   // warm amber smoke
+  ['#1a1233', '#090907'],   // deep violet night
+  ['#0d2318', '#090907'],   // forest emerald
   ['#2A1810', '#0c0907'],   // copper ember
-  ['#1a0d2e', '#0a0907'],   // indigo dusk
-  ['#22150a', '#0a0907'],   // aged leather
-  ['#102018', '#0a0907'],   // muted sage
-  ['#2a1428', '#0a0907'],   // plum haze
-  ['#1f1a08', '#0a0907'],   // pale gold dust
-  ['#0d1a2e', '#0a0907'],   // ocean midnight
+  ['#1a0d2e', '#090907'],   // indigo dusk
+  ['#22150a', '#090907'],   // aged leather
+  ['#102018', '#090907'],   // muted sage
+  ['#2a1428', '#090907'],   // plum haze
+  ['#1f1a08', '#090907'],   // pale gold dust
+  ['#0d1a2e', '#090907'],   // ocean midnight
 ] as const;
 
 const DIRECTIONS = ['to-br', 'to-b', 'to-bl', 'to-r'] as const;

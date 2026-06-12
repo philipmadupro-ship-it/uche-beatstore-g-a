@@ -15,3 +15,8 @@ export const PROJECT_TYPE_OPTIONS = [
   'Client', 'Demo', 'Released', 'WIP',
 ] as const;
 export type ProjectTypeTag = (typeof PROJECT_TYPE_OPTIONS)[number];
+
+// Collection-level content buckets used when creating projects/playlists and
+// when filtering cover-art collections. Kept out of per-track tag UIs.
+export const CONTENT_BUCKET_OPTIONS = ['Beats', 'Instrumentals', 'Songs', 'Remixes'] as const;
+export type ContentBucketTag = (typeof CONTENT_BUCKET_OPTIONS)[number];

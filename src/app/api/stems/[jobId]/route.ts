@@ -3,6 +3,22 @@ import { pollJob, downloadStem } from '@/lib/stems/dispatch';
 import { isSupabaseConfigured, getAll, update, getById, createServiceClient } from '@/lib/db';
 import { uploadAudio } from '@/lib/storage/upload';
 import { stemName } from '@/lib/naming';
+import { autoDeliverStems } from '@/lib/stems/auto-deliver';
+import { errorMessage } from '@/lib/errors';
+
+const CORE_STEMS = ['vocals', 'drums', 'bass', 'other'] as const;
+
+interface StemRow {
+  id: string;
+  track_id?: string | null;
+  job_id: string;
+  status?: string | null;
+  vocals_url?: string | null;
+  drums_url?: string | null;
+  bass_url?: string | null;
+  other_url?: string | null;
+  created_at?: string | null;
+}
 
 /**
  * GET /api/stems/[jobId]
@@ -24,7 +40,7 @@ export async function GET(
 
     if (!job) {
       const allStems = getAll('stems');
-      const localJob = allStems.find((s: any) => s.job_id === jobId);
+      const localJob = allStems.find((s: StemRow) => s.job_id === jobId);
       if (!localJob) return NextResponse.json({ error: 'Job not found' }, { status: 404 });
       return NextResponse.json({ job: localJob });
     }
@@ -58,7 +74,7 @@ export async function GET(
       }
     }
 
-    let stemUrls: Record<string, string> = {};
+    const stemUrls: Record<string, string> = {};
     if (job.status === 'done') {
       // Resolve track title for semantic naming
       const trackTitle = await resolveTrackTitle(jobId);
@@ -79,22 +95,57 @@ export async function GET(
       }
     }
 
-    if (job.status === 'done' && Object.keys(stemUrls).length > 0) {
+    const uploadedAllCoreStems = CORE_STEMS.every((name) => !!stemUrls[name]);
+
+    if (job.status === 'done') {
       const dbUpdate = {
-        status: 'completed',
+        status: uploadedAllCoreStems ? 'done' : 'failed',
         vocals_url: stemUrls['vocals'] ?? null,
         drums_url: stemUrls['drums'] ?? null,
         bass_url: stemUrls['bass'] ?? null,
         other_url: stemUrls['other'] ?? null,
       };
+      let trackId: string | null = null;
 
       if (isSupabaseConfigured()) {
         const supabase = createServiceClient();
+        const { data: stemRow } = await supabase
+          .from('stems')
+          .select('track_id')
+          .eq('job_id', jobId)
+          .maybeSingle();
+        trackId = stemRow?.track_id ?? null;
         await supabase.from('stems').update(dbUpdate).eq('job_id', jobId);
+        if (trackId) {
+          await supabase
+            .from('tracks')
+            .update({ stems_status: uploadedAllCoreStems ? 'done' : 'failed' })
+            .eq('id', trackId);
+        }
+        if (uploadedAllCoreStems && trackId) {
+          void autoDeliverStems(supabase, trackId);
+        }
       } else {
         const allStems = getAll('stems');
-        const localJob = allStems.find((s: any) => s.job_id === jobId);
-        if (localJob) update('stems', localJob.id, dbUpdate);
+        const localJob = allStems.find((s: StemRow) => s.job_id === jobId);
+        if (localJob) {
+          trackId = localJob.track_id ?? null;
+          update('stems', localJob.id, dbUpdate);
+          if (trackId) update('tracks', trackId, { stems_status: uploadedAllCoreStems ? 'done' : 'failed' });
+        }
+      }
+
+      if (!uploadedAllCoreStems) {
+        return NextResponse.json({
+          job: {
+            job_id: jobId,
+            status: 'failed',
+            progress: 100,
+            model: job.model,
+            stems: stemUrls,
+            error: 'Stem extraction finished, but one or more stems could not be stored. Retry the split or upload stems manually.',
+          },
+        });
       }
     }
 
@@ -108,20 +159,20 @@ export async function GET(
         error: job.error ?? null,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Stem poll error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }
 
-async function loadStemRow(jobId: string): Promise<any | null> {
+async function loadStemRow(jobId: string): Promise<StemRow | null> {
   if (isSupabaseConfigured()) {
     const supabase = createServiceClient();
     const { data } = await supabase.from('stems').select('*').eq('job_id', jobId).maybeSingle();
     return data ?? null;
   }
   const all = getAll('stems');
-  return all.find((s: any) => s.job_id === jobId) ?? null;
+  return all.find((s: StemRow) => s.job_id === jobId) ?? null;
 }
 
 async function resolveTrackTitle(jobId: string): Promise<string> {
@@ -134,7 +185,7 @@ async function resolveTrackTitle(jobId: string): Promise<string> {
         if (track?.title) return track.title;
       }
     } else {
-      const stemRow = getAll('stems').find((s: any) => s.job_id === jobId);
+      const stemRow = getAll('stems').find((s: StemRow) => s.job_id === jobId);
       if (stemRow?.track_id) {
         const track = getById('tracks', stemRow.track_id);
         if (track?.title) return track.title;

@@ -91,55 +91,55 @@ export function TrackHeatmap({ trackId, durationSeconds }: TrackHeatmapProps) {
 
   if (loading) {
     return (
-      <div className="h-28 w-full flex items-center justify-center bg-[#0c0a08]/50 border border-[#1f1a13]/50 rounded-xl">
-        <Loader2 size={16} className="animate-spin text-[#a08a6a]" />
+      <div className="h-28 w-full flex items-center justify-center bg-[#11100D]/50 border border-[#2B2821]/50 rounded-xl">
+        <Loader2 size={16} className="animate-spin text-[#D0C3AF]" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="h-28 w-full flex items-center justify-center bg-[#0c0a08]/50 border border-red-950/20 rounded-xl px-4 text-center">
+      <div className="h-28 w-full flex items-center justify-center bg-[#11100D]/50 border border-red-950/20 rounded-xl px-4 text-center">
         <p className="text-[11px] text-red-400">Failed to render listener density: {error}</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-[#14110d] border border-[#1a160f] rounded-2xl p-6 shadow-xl relative overflow-hidden">
+    <div className="bg-[#171511] border border-[#211F1A] rounded-2xl p-6 shadow-xl relative overflow-hidden">
       {/* Abstract background subtle pattern */}
       <div className="absolute inset-0 bg-gradient-to-t from-[#7F77DD]/[0.02] to-transparent pointer-events-none" />
 
       <div className="flex items-center justify-between mb-4 relative z-10">
         <div>
-          <h4 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] flex items-center gap-1.5">
+          <h4 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] flex items-center gap-1.5">
             <TrendingUp size={11} className="text-[#7F77DD]" />
             Audience Heatmap Analytics
           </h4>
-          <p className="text-[10px] text-[#5a5142] mt-0.5 font-bold uppercase tracking-widest">
+          <p className="text-[10px] text-[#9B9282] mt-0.5 font-bold uppercase tracking-widest">
             Visual density of real-time listener playhead retention
           </p>
         </div>
 
-        <div className="flex items-center gap-4 text-[10px] font-mono text-[#a08a6a]">
+        <div className="flex items-center gap-4 text-[10px] font-mono text-[#D0C3AF]">
           <span className="flex items-center gap-1">
-            <Users size={11} className="text-[#6a5d4a]" />
+            <Users size={11} className="text-[#B4AA99]" />
             {pings.length} total coordinates logged
           </span>
         </div>
       </div>
 
       {pings.length === 0 ? (
-        <div className="h-24 flex flex-col items-center justify-center border border-dashed border-[#1f1a13] rounded-xl bg-[#0c0a08]/30">
-          <p className="text-[11px] text-[#5a5142]">No playhead coordinates captured yet.</p>
-          <p className="text-[9px] text-[#3a3328] mt-1 font-mono uppercase tracking-wider">
+        <div className="h-24 flex flex-col items-center justify-center border border-dashed border-[#2B2821] rounded-xl bg-[#11100D]/30">
+          <p className="text-[11px] text-[#9B9282]">No playhead coordinates captured yet.</p>
+          <p className="text-[9px] text-[#6E685B] mt-1 font-mono uppercase tracking-wider">
             Share layout pings will compile coordinates automatically
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           {/* Heat Density Bar Chart */}
-          <div className="h-16 flex items-end gap-[2px] w-full pt-4 relative bg-[#0a0907]/40 border border-[#1f1a13] p-3 rounded-xl overflow-hidden">
+          <div className="h-16 flex items-end gap-[2px] w-full pt-4 relative bg-[#090907]/40 border border-[#2B2821] p-3 rounded-xl overflow-hidden">
             {heatmapData.map((val, idx) => {
               const pct = val > 0 ? (val / maxVal) * 100 : 8; // subtle baseline noise
               const isHot = val === maxVal && val > 0;
@@ -155,11 +155,11 @@ export function TrackHeatmap({ trackId, durationSeconds }: TrackHeatmapProps) {
                         ? 'bg-[#7F77DD] shadow-[0_0_8px_rgba(127,119,221,0.5)]'
                         : val > 0
                           ? 'bg-gradient-to-t from-[#7F77DD]/40 to-[#7F77DD]/80 hover:from-[#7F77DD]/60 hover:to-[#7F77DD]'
-                          : 'bg-[#1f1a13]'
+                          : 'bg-[#2B2821]'
                     }`}
                   />
                   {/* Tooltip on hover */}
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block bg-black border border-[#2d2620] text-white px-2 py-1 rounded text-[8px] font-mono whitespace-nowrap pointer-events-none z-50 shadow-xl">
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block bg-black border border-[#3B372F] text-white px-2 py-1 rounded text-[8px] font-mono whitespace-nowrap pointer-events-none z-50 shadow-xl">
                     {val} playhead logs
                   </div>
                 </div>
@@ -169,13 +169,13 @@ export function TrackHeatmap({ trackId, durationSeconds }: TrackHeatmapProps) {
 
           {/* Metrics summary */}
           {hotSpotInfo && (
-            <div className="bg-[#0c0a08]/40 border border-[#1f1a13] rounded-xl p-3.5 flex items-center justify-between text-[11px]">
+            <div className="bg-[#11100D]/40 border border-[#2B2821] rounded-xl p-3.5 flex items-center justify-between text-[11px]">
               <div>
-                <span className="text-[#5a5142] font-mono uppercase tracking-wider text-[9px] block">Hot Retention Segment</span>
-                <span className="text-[#E8DCC8] font-bold font-mono tracking-tight mt-0.5 block">{hotSpotInfo.timeRange}</span>
+                <span className="text-[#9B9282] font-mono uppercase tracking-wider text-[9px] block">Hot Retention Segment</span>
+                <span className="text-[#F7EBDD] font-bold font-mono tracking-tight mt-0.5 block">{hotSpotInfo.timeRange}</span>
               </div>
               <div className="text-right">
-                <span className="text-[#5a5142] font-mono uppercase tracking-wider text-[9px] block">Peak Density Count</span>
+                <span className="text-[#9B9282] font-mono uppercase tracking-wider text-[9px] block">Peak Density Count</span>
                 <span className="text-[#7F77DD] font-bold font-mono tracking-tight mt-0.5 block">{hotSpotInfo.pings} coordinates</span>
               </div>
             </div>

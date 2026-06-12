@@ -48,7 +48,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
   const [editingNotepad, setEditingNotepad] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8] font-sans flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-[#090907] text-[#F7EBDD] font-sans flex flex-col relative overflow-hidden">
       {/* Ambient background accent */}
       <div 
         className="absolute w-[800px] h-[800px] rounded-full pointer-events-none opacity-[0.03] blur-[150px]"
@@ -87,7 +87,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
         <div className="flex flex-col min-w-0">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#a08a6a]">
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">
                 Vocalist Workspace
               </p>
               <h2 className="text-2xl font-bold uppercase tracking-wider text-white mt-1">
@@ -106,7 +106,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
                   </span>
                 )}
                 {currentTrack.bpm && (
-                  <span className="text-[10px] font-mono text-[#6a5d4a] bg-[#14110d] border border-[#1f1a13] px-2.5 py-1 rounded-lg tabular-nums">
+                  <span className="text-[10px] font-mono text-[#B4AA99] bg-[#171511] border border-[#2B2821] px-2.5 py-1 rounded-lg tabular-nums">
                     {currentTrack.bpm} BPM
                   </span>
                 )}
@@ -117,8 +117,8 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
           {currentTrack ? (
             <LyricsStudio trackId={currentTrack.id} />
           ) : (
-            <div className="flex-1 min-h-[450px] bg-[#14110d]/40 border border-[#1f1a13] rounded-2xl p-8 flex items-center justify-center text-[#6a5d4a]">
-              <p className="text-sm font-bold uppercase tracking-wider text-[#a08a6a]">No track selected</p>
+            <div className="flex-1 min-h-[450px] bg-[#171511]/40 border border-[#2B2821] rounded-2xl p-8 flex items-center justify-center text-[#B4AA99]">
+              <p className="text-sm font-bold uppercase tracking-wider text-[#D0C3AF]">No track selected</p>
             </div>
           )}
         </div>
@@ -129,21 +129,21 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
         <div className="flex flex-col gap-8">
 
           {/* Interactive Writers Notepad — lyric sheet style */}
-          <div className="bg-[#0e0c09] border border-[#1f1a13] rounded-2xl shadow-xl flex-1 flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-[#1f1a13] bg-[#14110d]">
-              <div className="flex items-center gap-2 text-[#a08a6a]">
+          <div className="bg-[#0e0c09] border border-[#2B2821] rounded-2xl shadow-xl flex-1 flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#2B2821] bg-[#171511]">
+              <div className="flex items-center gap-2 text-[#D0C3AF]">
                 <Edit3 size={12} />
                 <span className="text-[9px] font-mono uppercase tracking-[0.25em]">Session Notepad</span>
               </div>
               <div className="flex items-center gap-3">
                 {sessionNotes && (
-                  <span className="text-[9px] font-mono text-[#4a4338] tabular-nums">
+                  <span className="text-[9px] font-mono text-[#837B6D] tabular-nums">
                     {sessionNotes.split('\n').length} lines · {sessionNotes.replace(/\s/g, '').length} chars
                   </span>
                 )}
                 <button
                   onClick={() => setEditingNotepad(!editingNotepad)}
-                  className="text-[9px] font-mono uppercase tracking-wider text-[#D4BFA0] hover:text-[#8A7A5C] transition-colors"
+                  className="text-[9px] font-mono uppercase tracking-wider text-[#E7D7BE] hover:text-[#C9BCA8] transition-colors"
                 >
                   {editingNotepad ? 'Done' : 'Edit'}
                 </button>
@@ -152,9 +152,9 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
 
             <div className="flex flex-1 min-h-[240px] font-mono text-xs">
               {/* Line numbers */}
-              <div className="shrink-0 w-8 bg-[#0a0907] border-r border-[#1f1a13] pt-3 pb-3 text-right pr-2 select-none">
+              <div className="shrink-0 w-8 bg-[#090907] border-r border-[#2B2821] pt-3 pb-3 text-right pr-2 select-none">
                 {(sessionNotes || ' ').split('\n').map((_, i) => (
-                  <div key={i} className="leading-6 text-[9px] text-[#2d2620]">{i + 1}</div>
+                  <div key={i} className="leading-6 text-[9px] text-[#3B372F]">{i + 1}</div>
                 ))}
               </div>
               {/* Content */}
@@ -164,7 +164,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
                   onChange={(e) => setSessionNotes(e.target.value)}
                   autoFocus
                   placeholder={"Hook:\n\nVerse 1:\n\nBridge:"}
-                  className="flex-1 bg-[#0a0907] px-3 pt-3 pb-3 text-[12px] text-[#E8DCC8] placeholder:text-[#2d2620] focus:outline-none resize-none leading-6 tracking-wide"
+                  className="flex-1 bg-[#090907] px-3 pt-3 pb-3 text-[12px] text-[#F7EBDD] placeholder:text-[#3B372F] focus:outline-none resize-none leading-6 tracking-wide"
                   style={{ fontFamily: 'monospace' }}
                 />
               ) : (
@@ -174,8 +174,8 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
                   style={{ fontFamily: 'monospace' }}
                 >
                   {sessionNotes
-                    ? <span className="text-[#E8DCC8]">{sessionNotes}</span>
-                    : <span className="text-[#2d2620]">Click to write bars, hooks, or session notes…</span>
+                    ? <span className="text-[#F7EBDD]">{sessionNotes}</span>
+                    : <span className="text-[#3B372F]">Click to write bars, hooks, or session notes…</span>
                   }
                 </div>
               )}
@@ -184,8 +184,8 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
 
           {/* Projects Track List (if multiple tracks) */}
           {tracks.length > 1 && (
-            <div className="bg-[#14110d]/30 border border-[#1f1a13] rounded-2xl p-5 shadow-xl">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-3">Workspace Tracks</p>
+            <div className="bg-[#171511]/30 border border-[#2B2821] rounded-2xl p-5 shadow-xl">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] mb-3">Workspace Tracks</p>
               <div className="space-y-1 max-h-40 overflow-y-auto">
                 {tracks.map((t, i) => {
                   const active = playingId === t.id;
@@ -194,12 +194,12 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
                       key={t.id}
                       onClick={() => onPlay(t)}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/[0.02] transition-colors text-left text-xs ${
-                        active ? 'bg-[#14110d]/80 border border-[#1f1a13]' : 'border border-transparent'
+                        active ? 'bg-[#171511]/80 border border-[#2B2821]' : 'border border-transparent'
                       }`}
                     >
-                      <span className="font-mono text-[#6a5d4a]">{String(i + 1).padStart(2, '0')}</span>
-                      <span className={`flex-1 font-medium truncate ${active ? 'text-[#D4BFA0]' : 'text-white/80'}`}>{t.title}</span>
-                      <span className="text-[9px] font-mono text-[#4a4338] uppercase tracking-wider">{t.key || 'Key'}</span>
+                      <span className="font-mono text-[#B4AA99]">{String(i + 1).padStart(2, '0')}</span>
+                      <span className={`flex-1 font-medium truncate ${active ? 'text-[#E7D7BE]' : 'text-white/80'}`}>{t.title}</span>
+                      <span className="text-[9px] font-mono text-[#837B6D] uppercase tracking-wider">{t.key || 'Key'}</span>
                     </button>
                   );
                 })}

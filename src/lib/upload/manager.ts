@@ -13,6 +13,20 @@
  */
 
 import { create } from 'zustand';
+import { errorMessage, isError } from '@/lib/errors';
+
+type UploadAnalysis = {
+  bpm?: number | null;
+  key?: string | null;
+  scale?: string | null;
+  loudness?: number | null;
+  duration?: number | null;
+  energy?: number | null;
+  danceability?: number | null;
+  valence?: number | null;
+  acousticness?: number | null;
+};
+type UploadedTrack = { id?: string; [key: string]: unknown };
 
 export type UploadStatus =
   | 'queued'
@@ -49,9 +63,9 @@ export interface UploadItem {
   projectId: string | null;
   replaceTrackId: string | null;
   // Optional client-side analysis JSON to forward (BPM/key)
-  analysis: any | null;
+  analysis: UploadAnalysis | null;
   // Track returned from /complete on success
-  track: any | null;
+  track: UploadedTrack | null;
 }
 
 interface ManagerState {
@@ -73,8 +87,8 @@ export interface EnqueueOpts {
   type?: string;
   projectId?: string | null;
   replaceTrackId?: string | null;
-  analysis?: any | null;
-  onSuccess?: (track: any) => void;
+  analysis?: UploadAnalysis | null;
+  onSuccess?: (track: UploadedTrack) => void;
 }
 
 const LS_KEY = 'antigravity:uploads:v1';
@@ -82,7 +96,7 @@ const MAX_CONCURRENT_PARTS = 3;
 const MAX_CHUNK_RETRIES = 5;
 
 // Side-channel for onSuccess callbacks (not serialized).
-const successCallbacks: Record<string, ((track: any) => void) | undefined> = {};
+const successCallbacks: Record<string, ((track: UploadedTrack) => void) | undefined> = {};
 
 /* ─────────── persistence ─────────── */
 
@@ -491,9 +505,11 @@ async function runUpload(id: string) {
           }
           // exponential backoff: 500ms, 1s, 2s, 4s, 8s
           const wait = 500 * Math.pow(2, attempt - 1);
+          const latest = useUploadManager.getState().uploads[id];
+          if (!latest) return;
           useUploadManager.getState()._patch(id, {
             error: `Chunk ${partNumber} retrying (attempt ${attempt}/${MAX_CHUNK_RETRIES})…`,
-            retries: useUploadManager.getState().uploads[id].retries + 1,
+            retries: latest.retries + 1,
           });
           await sleep(wait);
         }
@@ -509,10 +525,10 @@ async function runUpload(id: string) {
 
     // 4. Finalize
     await finalize(id);
-  } catch (err: any) {
-    if (err?.name === 'AbortError') return;
+  } catch (err) {
+    if (isError(err) && err.name === 'AbortError') return;
     console.error('upload runner error:', err);
-    useUploadManager.getState()._patch(id, { status: 'error', error: err?.message || 'upload failed' });
+    useUploadManager.getState()._patch(id, { status: 'error', error: errorMessage(err) || 'upload failed' });
   } finally {
     delete abortControllers[id];
   }
@@ -529,13 +545,13 @@ async function finalize(id: string) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: u.sessionId, analysis: u.analysis }),
     });
-    const json = await res.json();
+    const json = await res.json() as { error?: string; track?: UploadedTrack };
     if (!res.ok) throw new Error(json.error || 'complete failed');
-    m._patch(id, { status: 'success', track: json.track, bytesUploaded: u.fileSize });
-    successCallbacks[id]?.(json.track);
+    m._patch(id, { status: 'success', track: json.track ?? null, bytesUploaded: u.fileSize });
+    if (json.track) successCallbacks[id]?.(json.track);
     delete successCallbacks[id];
-  } catch (err: any) {
-    m._patch(id, { status: 'error', error: err?.message || 'finalize failed' });
+  } catch (err) {
+    m._patch(id, { status: 'error', error: errorMessage(err) || 'finalize failed' });
   }
 }
 

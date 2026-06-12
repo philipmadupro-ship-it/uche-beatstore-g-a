@@ -55,10 +55,10 @@ export async function POST(req: NextRequest) {
         to: email,
         subject: `You've been invited to join U2C Beatstore`,
         html: `
-          <div style="background-color: #0a0907; color: #E8DCC8; padding: 40px; font-family: sans-serif;">
-            <h1 style="color: #D4BFA0;">ANTIGRAVITY</h1>
+          <div style="background-color: #090907; color: #F7EBDD; padding: 40px; font-family: sans-serif;">
+            <h1 style="color: #E7D7BE;">ANTIGRAVITY</h1>
             <p>You have been invited to join the team as a <strong>${role}</strong>.</p>
-            <a href="${inviteUrl}" style="background-color: #D4BFA0; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin-top: 20px;">
+            <a href="${inviteUrl}" style="background-color: #E7D7BE; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block; margin-top: 20px;">
               ACCEPT INVITE
             </a>
           </div>

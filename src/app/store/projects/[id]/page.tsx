@@ -19,6 +19,7 @@ import {
 import { usePlayer } from '@/hooks/usePlayer';
 import { GlassPage } from '@/components/store/GlassPage';
 import { ProducerProfile } from '@/components/store/ProducerProfile';
+import { normalizeThemeColor } from '@/lib/theme/colors';
 import type { Track } from '@/lib/types';
 
 interface ProjectTrack {
@@ -110,7 +111,7 @@ export default function StoreProjectPage({
   const creator = data?.creator ?? null;
   const notFound = isError || (!loading && !project);
 
-  const accent = creator?.accent_color || '#D4BFA0';
+  const accent = normalizeThemeColor(creator?.accent_color);
   const totalDuration = useMemo(
     () => tracks.reduce((acc, t) => acc + (t.duration_seconds ?? 0), 0),
     [tracks],
@@ -134,18 +135,18 @@ export default function StoreProjectPage({
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0907] flex items-center justify-center">
-        <Loader2 size={24} className="animate-spin text-[#5a5142]" />
+      <div className="min-h-screen bg-[#090907] flex items-center justify-center">
+        <Loader2 size={24} className="animate-spin text-[#9B9282]" />
       </div>
     );
   }
 
   if (notFound || !project) {
     return (
-      <div className="min-h-screen bg-[#0a0907] flex flex-col items-center justify-center gap-4 text-[#5a5142]">
+      <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-[#9B9282]">
         <Layers size={36} />
         <p className="text-[14px]">Project not found or not listed.</p>
-        <Link href="/store" className="text-[12px] underline hover:text-[#E8DCC8]">← Back to store</Link>
+        <Link href="/store" className="text-[12px] underline hover:text-[#F7EBDD]">← Back to store</Link>
       </div>
     );
   }
@@ -220,7 +221,7 @@ export default function StoreProjectPage({
           <>
             {project.description && (
               <GlassPage.Section eyebrow="About this project">
-                <p className="text-[13px] text-[#a08a6a] leading-relaxed whitespace-pre-line max-w-3xl">
+                <p className="text-[13px] text-[#D0C3AF] leading-relaxed whitespace-pre-line max-w-3xl">
                   {project.description}
                 </p>
               </GlassPage.Section>
@@ -288,8 +289,8 @@ function TrackList({
   if (tracks.length === 0) {
     return (
       <div className="px-6 md:px-10 py-10 text-center">
-        <Music size={20} className="text-[#3a3328] mx-auto mb-2" />
-        <p className="text-[12px] text-[#6a5d4a]">No tracks in this project yet.</p>
+        <Music size={20} className="text-[#6E685B] mx-auto mb-2" />
+        <p className="text-[12px] text-[#B4AA99]">No tracks in this project yet.</p>
       </div>
     );
   }
@@ -313,10 +314,10 @@ function TrackList({
               onMouseLeave={() => setHovered((v) => (v === t.id ? null : v))}
               className={`grid grid-cols-[44px_minmax(0,1fr)_auto] md:grid-cols-[44px_minmax(0,1.4fr)_minmax(0,1fr)_70px] gap-3 items-center px-4 md:px-6 py-2.5 rounded-2xl transition-colors ${isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
             >
-              <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-[#0a0907] border border-white/[0.06] shrink-0">
+              <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-[#090907] border border-white/[0.06] shrink-0">
                 {t.cover_url
                   ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={14} /></div>}
+                  : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={14} /></div>}
                 {(isHov || isCur) && (
                   <button
                     onClick={(e) => {
@@ -338,7 +339,7 @@ function TrackList({
               <div className="min-w-0">
                 <p
                   className="text-[14px] truncate"
-                  style={isCur ? { color: accent, fontWeight: 600 } : { color: '#E8DCC8' }}
+                  style={isCur ? { color: accent, fontWeight: 600 } : { color: '#F7EBDD' }}
                 >
                   {t.title}
                 </p>

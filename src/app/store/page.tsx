@@ -33,6 +33,7 @@ import {
   TYPE_FILTERS, FONT_FAMILY_MAP,
 } from '@/components/store/types';
 import { sanitizeUrl, fmtDur, getSimilarTracks } from '@/components/store/helpers';
+import { normalizeThemeColor } from '@/lib/theme/colors';
 import { FreeDownloadModal } from '@/components/store/FreeDownloadModal';
 import { StoreContactForm } from '@/components/store/StoreContactForm';
 import { ArtistBioBlock } from '@/components/store/ArtistBioBlock';
@@ -51,7 +52,7 @@ import { BeatPreviewDrawer } from '@/components/store/BeatPreviewDrawer';
 
 export default function StorePageWrapper() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0a0907]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-[#090907]" />}>
       <StorePage />
     </Suspense>
   );
@@ -369,6 +370,17 @@ function StorePage() {
     toast.success(`Added: ${t.title} (${type})`);
   };
 
+  const addLicenseToCart = (t: StoreTrack, license: LicenseTier) => {
+    addItem(t as Track, {
+      id: license.id,
+      name: license.name,
+      price_usd: Number(license.price_usd ?? 0),
+      file_types: license.file_types?.length ? license.file_types : ['MP3'],
+      is_exclusive: !!license.is_exclusive,
+    });
+    toast.success(`Added: ${t.title} (${license.name})`);
+  };
+
   const addAllToCart = (trackList: PlaylistTrackItem[], type: 'lease' | 'exclusive') => {
     const pairs: Array<{ track: Track; license: import('@/hooks/useCart').CartLicense }> = [];
     for (const t of trackList) {
@@ -418,13 +430,13 @@ function StorePage() {
     }
   }
 
-  const accentColor = creator?.accent_color || '#D4BFA0';
-  const textColor = creator?.text_color_primary || '#E8DCC8';
+  const accentColor = normalizeThemeColor(creator?.accent_color);
+  const textColor = creator?.text_color_primary || '#F7EBDD';
   const fontFamily = FONT_FAMILY_MAP[creator?.font_style ?? 'default'] ?? FONT_FAMILY_MAP.default;
 
   return (
     <div
-      className="min-h-screen bg-[#0a0907] pb-28"
+      className="min-h-screen bg-[#090907] pb-28"
       style={{
         '--store-accent': accentColor,
         '--store-text': textColor,
@@ -455,7 +467,7 @@ function StorePage() {
       )}
 
       {/* ── Artist bio block ──────────────────────────────────── */}
-      <ArtistBioBlock creator={creator} trackCount={tracks.length} accentColor={accentColor} />
+      <ArtistBioBlock creator={creator} accentColor={accentColor} />
 
       {/* ── Next-drop countdown (only renders when there's an
           upcoming scheduled_publish_at on a draft track) ──────── */}
@@ -539,13 +551,13 @@ function StorePage() {
 
       {/* ── Toolbar — sticky glass header ──────────────────────── */}
       <div className="sticky top-0 z-30" style={{ backdropFilter: 'blur(24px)', background: 'rgba(10,9,7,0.88)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-        <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-2.5 flex items-center gap-3">
+        <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-2.5 flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
           {/* Mobile filters toggle */}
           <button
             onClick={() => setSidebarOpen((o) => !o)}
-            className={`lg:hidden flex items-center gap-1.5 px-3 py-2 rounded-full border text-[10px] font-mono uppercase tracking-wider transition-colors ${sidebarOpen || hasActiveFilters
-                ? 'border-[#D4BFA0]/40 text-[#D4BFA0] bg-[#D4BFA0]/5'
-                : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8]'
+            className={`tap lg:hidden flex min-h-11 items-center gap-1.5 rounded-full border px-4 py-2 text-[10px] font-mono uppercase tracking-wider transition-colors ${sidebarOpen || hasActiveFilters
+                ? 'border-[#E7D7BE]/40 text-[#E7D7BE] bg-[#E7D7BE]/5'
+                : 'border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD]'
               }`}
           >
             <SlidersHorizontal size={11} />
@@ -559,15 +571,15 @@ function StorePage() {
           </button>
 
           {/* Search */}
-          <div className="relative flex-1 min-w-[160px] max-w-sm">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a5d4a]" />
+          <div className="relative order-2 min-w-0 basis-full sm:order-none sm:basis-auto sm:flex-1 sm:min-w-[160px] sm:max-w-sm">
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B4AA99]" />
             <input
               type="text"
               aria-label="Search beats"
               placeholder="Search title, key, BPM, tag…"
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full bg-[#14110d] border border-[#1f1a13] rounded-full py-2 pl-8 pr-3 text-[12px] text-[#E8DCC8] placeholder:text-[#6a5d4a] focus:outline-none focus:border-[#2d2620]"
+              className="w-full min-h-11 bg-[#171511] border border-[#2B2821] rounded-full py-2 pl-8 pr-3 text-[12px] text-[#F7EBDD] placeholder:text-[#B4AA99] focus:outline-none focus:border-[#3B372F]"
             />
           </div>
 
@@ -577,7 +589,7 @@ function StorePage() {
                 <button
                   key={f}
                   onClick={() => setTypeFilter(f)}
-                  className={`px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider rounded-full transition-colors whitespace-nowrap ${typeFilter === f ? 'text-[#E8DCC8] border border-[#D4BFA0]/40 bg-[#D4BFA0]/10' : 'bg-transparent text-[#4a4338] hover:text-[#a08a6a]'
+                  className={`px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider rounded-full transition-colors whitespace-nowrap ${typeFilter === f ? 'text-[#F7EBDD] border border-[#E7D7BE]/40 bg-[#E7D7BE]/10' : 'bg-transparent text-[#837B6D] hover:text-[#D0C3AF]'
                     }`}
                 >
                   {f}
@@ -585,15 +597,15 @@ function StorePage() {
               ))}
             </div>
 
-          <div className="flex-1" />
+          <div className="hidden flex-1 sm:block" />
 
           {/* Grid / List toggle */}
-          <div className="flex items-center gap-0.5 bg-[#14110d] border border-[#1f1a13] rounded-md p-0.5">
+          <div className="flex items-center gap-0.5 bg-[#171511] border border-[#2B2821] rounded-md p-0.5">
             <button
               onClick={() => setViewMode('grid')}
               aria-label="Grid view"
               aria-pressed={viewMode === 'grid'}
-              className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-[#2d2620] text-[#E8DCC8]' : 'text-[#5a5142] hover:text-[#a08a6a]'}`}
+              className={`tap grid size-11 place-items-center rounded transition-colors ${viewMode === 'grid' ? 'bg-[#3B372F] text-[#F7EBDD]' : 'text-[#9B9282] hover:text-[#D0C3AF]'}`}
             >
               <LayoutGrid size={13} />
             </button>
@@ -601,7 +613,7 @@ function StorePage() {
               onClick={() => setViewMode('list')}
               aria-label="List view"
               aria-pressed={viewMode === 'list'}
-              className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-[#2d2620] text-[#E8DCC8]' : 'text-[#5a5142] hover:text-[#a08a6a]'}`}
+              className={`tap grid size-11 place-items-center rounded transition-colors ${viewMode === 'list' ? 'bg-[#3B372F] text-[#F7EBDD]' : 'text-[#9B9282] hover:text-[#D0C3AF]'}`}
             >
               <List size={13} />
             </button>
@@ -618,8 +630,8 @@ function StorePage() {
             aria-pressed={djActive}
             className="tap hidden sm:flex w-9 h-9 items-center justify-center rounded-full transition-colors"
             style={djActive
-              ? { backgroundColor: accentColor, color: '#0a0907' }
-              : { color: '#6a5d4a' }}
+              ? { backgroundColor: accentColor, color: '#090907' }
+              : { color: '#B4AA99' }}
           >
             <Disc3 size={15} className={djActive ? 'animate-[spin_3s_linear_infinite]' : ''} />
           </button>
@@ -629,7 +641,7 @@ function StorePage() {
             onClick={handleCopyLink}
             title="Copy store link"
             aria-label="Copy store link"
-            className="tap hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors"
+            className="tap hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-[#B4AA99] hover:text-[#F7EBDD] transition-colors"
           >
             <Link2 size={15} />
           </button>
@@ -639,7 +651,7 @@ function StorePage() {
             href="/store/account/me"
             title={isSignedIn ? 'My Account' : 'Sign in'}
             aria-label={isSignedIn ? 'My Account' : 'Sign in'}
-            className="tap flex w-9 h-9 items-center justify-center rounded-full text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors"
+            className="tap hidden h-11 w-11 items-center justify-center rounded-full text-[#B4AA99] transition-colors hover:text-[#F7EBDD] sm:flex"
           >
             <User size={15} fill={isSignedIn ? 'currentColor' : 'none'} />
           </Link>
@@ -648,7 +660,7 @@ function StorePage() {
           <button
             onClick={() => setIsOpen(true)}
             aria-label={`Cart${items.length > 0 ? ` (${items.length})` : ''}`}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-full text-black hover:opacity-90 text-[11px] font-bold uppercase tracking-wider transition-opacity disabled:opacity-40"
+            className="tap hidden min-h-11 items-center gap-2 rounded-full px-3.5 py-2 text-[11px] font-bold uppercase tracking-wider text-black transition-opacity hover:opacity-90 disabled:opacity-40 sm:flex"
             style={{ backgroundColor: accentColor }}
             disabled={items.length === 0}
           >
@@ -726,16 +738,16 @@ function StorePage() {
               </div>
             )
           ) : filtered.length === 0 ? (
-            <div className="text-center py-32 border border-dashed border-[#1f1a13] rounded-lg">
-              <Music size={28} className="text-[#3a3328] mx-auto mb-3" />
-              <p className="text-sm text-[#E8DCC8] mb-1">
+            <div className="text-center py-32 border border-dashed border-[#2B2821] rounded-lg">
+              <Music size={28} className="text-[#6E685B] mx-auto mb-3" />
+              <p className="text-sm text-[#F7EBDD] mb-1">
                 {tracks.length === 0 ? 'No beats in the store yet' : 'No beats match your filters'}
               </p>
-              <p className="text-[11px] text-[#5a5142]">
+              <p className="text-[11px] text-[#9B9282]">
                 {tracks.length === 0 ? 'Check back soon.' : 'Try adjusting or resetting filters.'}
               </p>
               {hasActiveFilters && (
-                <button onClick={resetFilters} className="mt-4 text-[10px] font-mono uppercase tracking-wider text-[#D4BFA0] hover:text-white transition-colors">
+                <button onClick={resetFilters} className="mt-4 text-[10px] font-mono uppercase tracking-wider text-[#E7D7BE] hover:text-white transition-colors">
                   Reset filters
                 </button>
               )}
@@ -840,14 +852,14 @@ function StorePage() {
       <StoreContactForm creator={creator} accentColor={accentColor} />
 
       {/* ── Store footer ─────────────────────────────────────────── */}
-      <div className="border-t border-[#1f1a13] mt-4 py-6 px-4 md:px-12">
+      <div className="border-t border-[#2B2821] mt-4 py-6 px-4 md:px-12">
         <div className="max-w-[1400px] mx-auto flex flex-wrap items-center justify-between gap-4">
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#3a3328]">
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6E685B]">
             © {new Date().getFullYear()} {creator?.display_name || 'Beat Store'}
           </p>
           <Link
             href="/store/orders"
-            className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#4a4338] hover:text-[#a08a6a] transition-colors"
+            className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#837B6D] hover:text-[#D0C3AF] transition-colors"
           >
             Order history / Re-download
           </Link>
@@ -868,6 +880,7 @@ function StorePage() {
           onPlay={() => handlePlay(previewTrack)}
           onAddLease={() => addToCart(previewTrack, 'lease')}
           onAddExclusive={() => addToCart(previewTrack, 'exclusive')}
+          onAddLicense={(license) => addLicenseToCart(previewTrack, license)}
           onFreeDownload={() => setFreeDownloadTrack(previewTrack)}
           onClose={() => setPreviewTrack(null)}
           onSelectTrack={(t) => setPreviewTrack(t)}
@@ -887,10 +900,8 @@ function StorePage() {
       <style>{`
         .no-scrollbar::-webkit-scrollbar{display:none}
         .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
-        @keyframes beat-pulse{0%,100%{box-shadow:0 0 0 1px var(--pulse-clr,rgba(212,191,160,0.2))}50%{box-shadow:0 0 0 3px var(--pulse-clr,rgba(212,191,160,0.15))}}
+        @keyframes beat-pulse{0%,100%{box-shadow:0 0 0 1px var(--pulse-clr,rgba(231,215,190,0.2))}50%{box-shadow:0 0 0 3px var(--pulse-clr,rgba(231,215,190,0.15))}}
       `}</style>
     </div>
   );
 }
-
-

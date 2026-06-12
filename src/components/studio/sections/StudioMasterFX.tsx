@@ -32,17 +32,17 @@ export function StudioMasterFX({
   delayFeedback, setDelayFeedback,
 }: Props) {
   return (
-    <div className="border border-[#16130e] rounded-lg p-5 bg-[#0a0907]">
-      <div className="flex items-center justify-between mb-4">
+    <aside className="rounded-2xl border border-[#1A1813] bg-[#0D0B09] p-3 sm:p-4 xl:sticky xl:top-6 xl:self-start">
+      <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Headphones size={12} className="text-[#E8D8B8]" />
-          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#E8DCC8]">Master + FX</p>
+          <Headphones size={12} className="text-[#F3E6D1]" />
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#F7EBDD]">Master + FX</p>
         </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
         <Knob label="Master" value={`${Math.round(masterVol * 100)}`}>
           <Slider value={masterVol} onChange={setMasterVol} min={0} max={1} step={0.01}
-            accent="#E8DCC8" showTooltip variant="studio"
+            accent="#F7EBDD" showTooltip variant="studio"
             formatTooltip={(v) => `${Math.round(v * 100)}`} aria-label="Master" />
         </Knob>
         <Knob label="Reverb return" value={`${Math.round(reverbReturn * 100)}`}>
@@ -66,16 +66,16 @@ export function StudioMasterFX({
             formatTooltip={(v) => `${Math.round(v * 100)}`} aria-label="Delay feedback" />
         </Knob>
       </div>
-    </div>
+    </aside>
   );
 }
 
 function Knob({ label, value, children }: { label: string; value: string; children: React.ReactNode }) {
   return (
-    <div>
-      <div className="flex items-center justify-between mb-2">
-        <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142]">{label}</label>
-        <span className="text-[11px] text-[#E8D8B8] font-mono">{value}</span>
+    <div className="rounded-xl border border-[#17130F] bg-[#090907] p-2.5">
+      <div className="mb-2 flex items-center justify-between">
+        <label className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">{label}</label>
+        <span className="text-[11px] text-[#F3E6D1] font-mono">{value}</span>
       </div>
       {children}
     </div>

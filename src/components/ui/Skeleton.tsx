@@ -17,7 +17,7 @@ export function SkeletonStatStrip({ count = 4 }: { count?: number }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-4 py-3">
+        <div key={i} className="rounded-xl border border-[#2B2821] bg-[#171511] px-4 py-3">
           <Skeleton className="h-2.5 w-12 mb-2" />
           <Skeleton className="h-5 w-16" />
         </div>
@@ -47,7 +47,7 @@ export function SkeletonCardRow({ count = 6 }: { count?: number }) {
 /** A vertical list of rows — mirrors a table/list view. */
 export function SkeletonList({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] divide-y divide-[#1a160f] overflow-hidden">
+    <div className="rounded-2xl border border-[#2B2821] bg-[#171511] divide-y divide-[#211F1A] overflow-hidden">
       {Array.from({ length: rows }).map((_, i) => (
         <div key={i} className="flex items-center gap-3 px-4 py-3">
           <Skeleton className="w-9 h-9 rounded-md shrink-0" />

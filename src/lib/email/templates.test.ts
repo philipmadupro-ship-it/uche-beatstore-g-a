@@ -6,7 +6,7 @@ describe('email templates', () => {
     const html = emailShell('New drop', '<p>hi</p>');
     expect(html).toContain('New drop');
     expect(html).toContain('<p>hi</p>');
-    expect(html).toContain('#0a0907');
+    expect(html).toContain('#090907');
   });
 
   it('renders a button with the href', () => {

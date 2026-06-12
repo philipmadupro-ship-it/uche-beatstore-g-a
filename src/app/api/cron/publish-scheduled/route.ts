@@ -88,13 +88,13 @@ export async function GET(req: NextRequest) {
               to: s.email,
               subject: `🔔 ${title} is live`,
               html: `
-                <div style="font-family: sans-serif; background: #0a0907; color: #E8DCC8; padding: 40px; border-radius: 20px; max-width: 560px;">
-                  <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #D4BFA0; margin: 0 0 20px;">It's live</h1>
+                <div style="font-family: sans-serif; background: #090907; color: #F7EBDD; padding: 40px; border-radius: 20px; max-width: 560px;">
+                  <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #E7D7BE; margin: 0 0 20px;">It's live</h1>
                   <p style="font-size: 15px; line-height: 1.7;"><strong>${title}</strong> just dropped on the store. You asked us to ping you.</p>
                   <div style="margin-top: 28px;">
-                    <a href="${url}" style="background: #D4BFA0; color: #0a0907; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">Listen now</a>
+                    <a href="${url}" style="background: #E7D7BE; color: #090907; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">Listen now</a>
                   </div>
-                  <p style="margin-top: 32px; font-size: 10px; color: #4a4338;">You're getting this because you subscribed to this drop on the store. No future emails are queued.</p>
+                  <p style="margin-top: 32px; font-size: 10px; color: #837B6D;">You're getting this because you subscribed to this drop on the store. No future emails are queued.</p>
                 </div>
               `,
             });

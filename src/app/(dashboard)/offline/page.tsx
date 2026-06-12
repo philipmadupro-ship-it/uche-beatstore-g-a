@@ -5,6 +5,10 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { CloudOff, Trash2, Music2, Wifi, WifiOff } from 'lucide-react';
 import { listCached, removeCached, clearAllCached, OfflineMeta } from '@/lib/offline/audio-cache';
 import { confirmToast } from '@/hooks/useToast';
+import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 function formatMB(bytes: number) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
@@ -40,13 +44,14 @@ export default function OfflinePage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10">
-        <div className="flex items-end justify-between mb-8 pb-6 border-b border-[#16130e]">
-          <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Available offline</p>
-            <h1 className="text-[28px] font-medium tracking-tight text-white leading-none font-heading">Offline</h1>
-          </div>
-          <div className="flex items-center gap-3">
+      <PageContainer>
+        <PageHeader
+          eyebrow="Available offline"
+          title="Offline"
+          description="Tracks cached locally for sessions without a reliable connection."
+          meta={`${items.length} track${items.length === 1 ? '' : 's'} · ${formatMB(totalBytes)}`}
+          actions={
+            <div className="flex items-center gap-3">
             <div
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[10px] font-mono uppercase tracking-wider ${
                 online
@@ -58,7 +63,7 @@ export default function OfflinePage() {
               {online ? 'Online' : 'Offline'}
             </div>
             {items.length > 0 && (
-              <button
+              <Button
                 onClick={async () => {
                   const ok = await confirmToast(
                     'Clear all cached tracks?',
@@ -69,54 +74,59 @@ export default function OfflinePage() {
                   await clearAllCached();
                   refresh();
                 }}
-                className="flex items-center gap-2 px-3 py-2 rounded-md border border-[#1a160f] bg-[#14110d] text-[#a08a6a] hover:text-red-400 hover:border-red-900/50 text-[11px] font-medium transition-colors"
+                variant="danger"
+                size="sm"
+                leadingIcon={<Trash2 size={11} aria-hidden="true" />}
               >
-                <Trash2 size={11} /> Clear all
-              </button>
+                Clear all
+              </Button>
             )}
           </div>
-        </div>
+          }
+        />
 
         {!loading && items.length === 0 ? (
-          <div className="text-center py-32 border border-dashed border-[#1a160f] rounded-lg">
-            <CloudOff size={28} className="text-[#3a3328] mx-auto mb-4" />
-            <p className="text-sm text-[#E8DCC8] mb-1">Nothing saved offline yet</p>
-            <p className="text-[11px] text-[#5a5142]">Tap &ldquo;Save offline&rdquo; on any track to cache it locally</p>
-          </div>
+          <EmptyState
+            icon={<CloudOff size={28} aria-hidden="true" />}
+            title="Nothing saved offline yet"
+            description='Tap "Save offline" on any track to cache it locally.'
+            className="border-dashed py-32"
+          />
         ) : (
           <>
-            <p className="text-[11px] text-[#5a5142] mb-4 font-mono uppercase tracking-wider">
-              {items.length} track{items.length === 1 ? '' : 's'} · {formatMB(totalBytes)}
-            </p>
-            <div className="border border-[#16130e] rounded-lg overflow-hidden">
+            <Card className="overflow-hidden">
               {items.map((m) => (
                 <div
                   key={m.id}
-                  className="grid grid-cols-[40px_1fr_120px_120px_60px] items-center gap-4 px-4 h-14 border-b border-[#161310] last:border-b-0 hover:bg-[#101010] transition-colors"
+                  className="grid grid-cols-[40px_1fr_88px_40px] items-center gap-4 border-b border-[var(--border)] px-4 py-3 transition-colors last:border-b-0 hover:bg-[var(--bg-hover)] sm:grid-cols-[40px_1fr_120px_120px_60px]"
                 >
-                  <div className="w-8 h-8 rounded bg-[#16130e] border border-[#1a160f] flex items-center justify-center">
-                    <Music2 size={12} className="text-[#E8D8B8]" />
+                  <div className="flex size-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg-page)]">
+                    <Music2 size={12} className="text-[#F3E6D1]" />
                   </div>
-                  <p className="text-[12px] text-[#E8DCC8] truncate">{m.title || m.id}</p>
-                  <p className="text-[10px] font-mono text-[#5a5142]">{formatMB(m.size)}</p>
-                  <p className="text-[10px] font-mono text-[#5a5142]">
+                  <p className="truncate text-[12px] text-[var(--text-primary)]">{m.title || m.id}</p>
+                  <p className="font-mono text-[10px] text-[var(--text-readable)]">{formatMB(m.size)}</p>
+                  <p className="hidden font-mono text-[10px] text-[var(--text-readable)] sm:block">
                     {new Date(m.cached_at).toLocaleDateString()}
                   </p>
-                  <button
+                  <Button
                     onClick={async () => {
                       await removeCached(m.id);
                       refresh();
                     }}
-                    className="text-[#5a5142] hover:text-red-400 transition-colors flex justify-end"
+                    variant="ghost"
+                    size="sm"
+                    iconOnly
+                    aria-label={`Remove ${m.title || m.id} from offline cache`}
+                    className="justify-self-end"
                   >
-                    <Trash2 size={12} />
-                  </button>
+                    <Trash2 size={12} aria-hidden="true" />
+                  </Button>
                 </div>
               ))}
-            </div>
+            </Card>
           </>
         )}
-      </div>
+      </PageContainer>
     </DashboardLayout>
   );
 }

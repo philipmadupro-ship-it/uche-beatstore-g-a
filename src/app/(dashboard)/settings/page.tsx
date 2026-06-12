@@ -5,6 +5,12 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { UserPlus, Settings as SettingsIcon, Loader2, LogOut, CheckCircle2, Shield, User, ArrowRight, FileText } from 'lucide-react';
+import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Dropdown } from '@/components/ui/Dropdown';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Field } from '@/components/ui/Field';
 
 interface TeamMember {
   user_id: string;
@@ -87,44 +93,42 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-[900px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10 pb-32">
-        {/* Header */}
-        <div className="relative mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#14110d]/50 via-[#0a0907]/30 to-[#0a0907] p-5 sm:p-7 md:p-8">
-          {/* Abstract Image Background */}
-          <div className="absolute inset-0 z-0 bg-[url('/images/hero-abstract-3.jpg')] bg-cover bg-center opacity-20 mix-blend-overlay" />
-          
-          <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] mb-2">Workspace</p>
-              <h1 className="text-[28px] sm:text-[36px] md:text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-1 text-uppercase">Settings</h1>
-            </div>
-            <button
+      <PageContainer className="pb-32">
+        <PageHeader
+          eyebrow="Workspace"
+          title="Settings"
+          description="Workspace access, preferences, and account controls."
+          meta={user?.email}
+          actions={
+            <Button
               onClick={() => signOut()}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/[0.06] text-[12px] font-medium text-[#a08a6a] hover:text-red-400 hover:border-red-400/30 hover:bg-white/[0.02] transition-all"
+              variant="secondary"
+              leadingIcon={<LogOut size={13} aria-hidden="true" />}
             >
-              <LogOut size={13} />
               Sign out
-            </button>
-          </div>
-        </div>
+            </Button>
+          }
+        />
 
-        <div className="space-y-12">
+        <div className="mx-auto max-w-[900px] space-y-12">
           
           {/* Creator Profile — link card to canonical /profile page */}
           <section>
             <Link
               href="/profile"
-              className="flex items-center gap-5 bg-[#14110d] border border-[#1a160f] rounded-2xl p-6 hover:border-[#2d2620] hover:bg-[#16130e] transition-all group"
+              className="group block"
             >
-              <div className="w-12 h-12 rounded-xl bg-[#1a160f] border border-[#2d2620] flex items-center justify-center shrink-0 group-hover:border-[#D4BFA0]/30 transition-colors">
-                <User size={20} className="text-[#a08a6a]" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-0.5">Creator identity</p>
-                <h2 className="text-[14px] font-semibold text-[#E8DCC8]">Creator Profile</h2>
-                <p className="text-[11px] text-[#5a5142] mt-0.5">Bio, hero image, licensing tiers, social links, and license agreement.</p>
-              </div>
-              <ArrowRight size={16} className="text-[#5a5142] group-hover:text-[#a08a6a] shrink-0 transition-colors" />
+              <Card interactive className="flex items-center gap-5 p-6">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-[var(--border-hover)] bg-[#211F1A] transition-colors group-hover:border-[var(--accent)]/30">
+                  <User size={20} className="text-[var(--text-readable)]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="mb-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-readable)]">Creator identity</p>
+                  <h2 className="text-[14px] font-semibold text-[var(--text-primary)]">Creator Profile</h2>
+                  <p className="mt-0.5 text-[11px] text-[var(--text-readable)]">Bio, hero image, licensing tiers, social links, and license agreement.</p>
+                </div>
+                <ArrowRight size={16} className="shrink-0 text-[#9B9282] transition-colors group-hover:text-[var(--text-primary)]" />
+              </Card>
             </Link>
           </section>
 
@@ -132,105 +136,108 @@ export default function SettingsPage() {
           <section>
             <Link
               href="/settings/licenses"
-              className="flex items-center gap-5 bg-[#14110d] border border-[#1a160f] rounded-2xl p-6 hover:border-[#2d2620] hover:bg-[#16130e] transition-all group"
+              className="group block"
             >
-              <div className="w-12 h-12 rounded-xl bg-[#1a160f] border border-[#2d2620] flex items-center justify-center shrink-0 group-hover:border-[#D4BFA0]/30 transition-colors">
-                <FileText size={20} className="text-[#a08a6a]" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-0.5">Storefront</p>
-                <h2 className="text-[14px] font-semibold text-[#E8DCC8]">License Builder</h2>
-                <p className="text-[11px] text-[#5a5142] mt-0.5">Create up to 4 license tiers with custom pricing, rights, and file delivery.</p>
-              </div>
-              <ArrowRight size={16} className="text-[#5a5142] group-hover:text-[#a08a6a] shrink-0 transition-colors" />
+              <Card interactive className="flex items-center gap-5 p-6">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-[var(--border-hover)] bg-[#211F1A] transition-colors group-hover:border-[var(--accent)]/30">
+                  <FileText size={20} className="text-[var(--text-readable)]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="mb-0.5 font-mono text-[10px] uppercase tracking-[0.2em] text-[var(--text-readable)]">Storefront</p>
+                  <h2 className="text-[14px] font-semibold text-[var(--text-primary)]">License Builder</h2>
+                  <p className="mt-0.5 text-[11px] text-[var(--text-readable)]">Create up to 4 license tiers with custom pricing, rights, and file delivery.</p>
+                </div>
+                <ArrowRight size={16} className="shrink-0 text-[#9B9282] transition-colors group-hover:text-[var(--text-primary)]" />
+              </Card>
             </Link>
           </section>
 
           {/* Team */}
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <Shield size={14} className="text-[#5a5142]" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#E8DCC8]">Team members</h2>
+              <Shield size={14} className="text-[#9B9282]" />
+              <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#F7EBDD]">Team members</h2>
             </div>
             {loading ? (
-              <div className="py-12 flex justify-center"><Loader2 size={16} className="animate-spin text-[#4a4338]" /></div>
+              <div className="py-12 flex justify-center"><Loader2 size={16} className="animate-spin text-[#837B6D]" /></div>
             ) : team.length === 0 ? (
-              <div className="bg-[#14110d] border border-[#1a160f] rounded-2xl p-6 text-center">
-                <p className="text-[11px] text-[#5a5142]">No team members yet. Invite collaborators below.</p>
-              </div>
+              <EmptyState
+                title="No team members yet"
+                description="Invite collaborators below."
+                className="py-10"
+              />
             ) : (
-              <div className="border border-[#1a160f] rounded-2xl divide-y divide-[#161310] overflow-hidden">
+              <Card className="divide-y divide-[#24211B] overflow-hidden">
                 {team.map((m) => (
-                  <div key={m.user_id} className="flex items-center justify-between px-4 py-3 bg-[#14110d]/50">
+                  <div key={m.user_id} className="flex items-center justify-between px-4 py-3 bg-[#171511]/50">
                     <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full bg-[#16130e] border border-[#1a160f] flex items-center justify-center text-[10px] font-medium text-[#a08a6a]">
+                      <div className="w-7 h-7 rounded-full bg-[#1A1813] border border-[#211F1A] flex items-center justify-center text-[10px] font-medium text-[#D0C3AF]">
                         {m.name?.[0] || m.email[0]}
                       </div>
                       <div>
-                        <p className="text-[12px] font-medium text-[#E8DCC8]">{m.name || m.email}</p>
-                        {m.name && <p className="text-[10px] font-mono text-[#5a5142]">{m.email}</p>}
+                        <p className="text-[12px] font-medium text-[#F7EBDD]">{m.name || m.email}</p>
+                        {m.name && <p className="text-[10px] font-mono text-[#9B9282]">{m.email}</p>}
                       </div>
                     </div>
-                    <span className={`text-[10px] font-mono uppercase tracking-wider ${m.role === 'owner' ? 'text-[#E8D8B8]' : 'text-[#5a5142]'}`}>
+                    <span className={`text-[10px] font-mono uppercase tracking-wider ${m.role === 'owner' ? 'text-[#F3E6D1]' : 'text-[#9B9282]'}`}>
                       {m.role}
                     </span>
                   </div>
                 ))}
-              </div>
+              </Card>
             )}
           </section>
 
           {/* Invite */}
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <UserPlus size={14} className="text-[#5a5142]" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#E8DCC8]">Invite collaborator</h2>
+              <UserPlus size={14} className="text-[#9B9282]" />
+              <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#F7EBDD]">Invite collaborator</h2>
             </div>
-            <form onSubmit={handleInvite} className="bg-[#14110d] border border-[#1a160f] rounded-2xl p-6 space-y-4">
+            <Card>
+              <form onSubmit={handleInvite} className="space-y-4 p-6">
+              <Field
+                required
+                type="email"
+                label="Email"
+                placeholder="name@email.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+              />
               <div>
-                <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Email</label>
-                <input
-                  required
-                  type="email"
-                  placeholder="name@email.com"
-                  className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
+                <label className="mb-1.5 block font-mono text-[10px] uppercase tracking-wider text-[var(--text-readable)]">Role</label>
+                <Dropdown
+                  value={inviteRole}
+                  onChange={(value) => setInviteRole(value)}
+                  options={[
+                    { value: 'collaborator', label: 'Collaborator' },
+                    { value: 'admin', label: 'Admin' },
+                  ]}
+                  aria-label="Invite role"
+                  className="min-h-11 w-full rounded-xl border-[var(--border)] bg-[var(--bg-page)] px-4 py-3 text-xs text-[var(--text-primary)] focus:border-[var(--accent)]"
                 />
               </div>
-              <div>
-                <label className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5 block">Role</label>
-                <select
-                  className="w-full bg-[#0c0a08] border border-[#1a160f] rounded-lg py-3 px-4 text-xs text-white focus:outline-none focus:border-[#D4BFA0] transition-colors appearance-none cursor-pointer"
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as any)}
-                >
-                  <option value="collaborator">Collaborator</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <button
+              <Button
                 disabled={sending || success}
                 type="submit"
-                className={`w-full py-3.5 rounded-xl text-[11px] font-bold uppercase tracking-[0.2em] transition-colors flex items-center justify-center gap-2 ${
-                  success
-                    ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                    : 'bg-white text-black hover:bg-[#E8DCC8] disabled:opacity-50'
-                }`}
+                variant={success ? 'secondary' : 'primary'}
+                className={success ? 'w-full border-green-500/20 bg-green-500/10 text-green-400' : 'w-full'}
+                loading={sending}
+                leadingIcon={success ? <CheckCircle2 size={13} aria-hidden="true" /> : <UserPlus size={13} aria-hidden="true" />}
               >
-                {sending ? <Loader2 size={13} className="animate-spin" /> : success ? <CheckCircle2 size={13} /> : <UserPlus size={13} />}
                 {sending ? 'Sending...' : success ? 'Invite sent' : 'Send invite'}
-              </button>
-            </form>
+              </Button>
+              </form>
+            </Card>
           </section>
 
           {/* Preferences */}
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <SettingsIcon size={14} className="text-[#5a5142]" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#E8DCC8]">Preferences</h2>
+              <SettingsIcon size={14} className="text-[#9B9282]" />
+              <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#F7EBDD]">Preferences</h2>
             </div>
-            <div className="border border-[#1a160f] rounded-2xl divide-y divide-[#161310] overflow-hidden">
+            <Card className="divide-y divide-[#24211B] overflow-hidden">
               <ToggleRow
                 title="Lossless exports"
                 description="Prefer WAV/AIFF for shared links"
@@ -243,10 +250,10 @@ export default function SettingsPage() {
                 on={prefs.auto_tagging}
                 onToggle={(v) => savePrefs({ ...prefs, auto_tagging: v })}
               />
-            </div>
+            </Card>
           </section>
         </div>
-      </div>
+      </PageContainer>
 
     </DashboardLayout>
   );
@@ -254,14 +261,20 @@ export default function SettingsPage() {
 
 function ToggleRow({ title, description, on, onToggle }: { title: string; description: string; on: boolean; onToggle: (v: boolean) => void }) {
   return (
-    <div className="flex items-center justify-between px-6 py-4 bg-[#14110d]/50 hover:bg-[#14110d] transition-colors cursor-pointer" onClick={() => onToggle(!on)}>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      className="flex w-full cursor-pointer items-center justify-between bg-[#171511]/50 px-6 py-4 text-left transition-colors hover:bg-[#171511] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/45 focus-visible:ring-inset"
+      onClick={() => onToggle(!on)}
+    >
       <div>
-        <p className="text-[12px] font-medium text-[#E8DCC8]">{title}</p>
-        <p className="text-[10px] text-[#5a5142] mt-0.5">{description}</p>
+        <p className="text-[12px] font-medium text-[#F7EBDD]">{title}</p>
+        <p className="mt-0.5 text-[10px] text-[var(--text-readable)]">{description}</p>
       </div>
-      <div className={`w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-[#D4BFA0]' : 'bg-[#1a160f] border border-[#2d2620]'}`}>
-        <div className={`w-3.5 h-3.5 rounded-full absolute top-[3px] transition-all ${on ? 'right-[3px] bg-white' : 'left-[3px] bg-[#5a5142]'}`} />
+      <div className={`w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-[#E7D7BE]' : 'bg-[#211F1A] border border-[#3B372F]'}`}>
+        <div className={`w-3.5 h-3.5 rounded-full absolute top-[3px] transition-all ${on ? 'right-[3px] bg-white' : 'left-[3px] bg-[#9B9282]'}`} />
       </div>
-    </div>
+    </button>
   );
 }

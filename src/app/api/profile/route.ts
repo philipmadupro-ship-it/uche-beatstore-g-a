@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       website_url: website_url || null,
       contact_email: contact_email || null,
       // Storefront theme (migration 034)
-      accent_color: accent_color || '#D4BFA0',
+      accent_color: accent_color || '#E7D7BE',
       font_style: font_style || 'default',
       // Storefront SEO + share card (migration 055)
       seo_title: seo_title || null,

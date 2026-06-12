@@ -245,11 +245,11 @@ function CheckoutContent() {
 
   if (items.length === 0 && !isProjectPurchase) {
     return (
-      <div className="min-h-screen bg-[#0a0907] flex items-center justify-center p-6">
+      <div className="min-h-screen bg-[#090907] flex items-center justify-center p-6">
         <div className="text-center">
           <h1 className="text-[16px] font-bold text-white uppercase tracking-wider mb-2">Your Cart is Empty</h1>
-          <p className="text-[#6a5d4a] text-[12px] mb-6">Add tracks from the store to purchase licenses.</p>
-          <Link href="/store" className="text-[#D4BFA0] hover:text-white text-[11px] font-mono uppercase tracking-wider">← Back to store</Link>
+          <p className="text-[#B4AA99] text-[12px] mb-6">Add tracks from the store to purchase licenses.</p>
+          <Link href="/store" className="text-[#E7D7BE] hover:text-white text-[11px] font-mono uppercase tracking-wider">← Back to store</Link>
         </div>
       </div>
     );
@@ -269,7 +269,7 @@ function CheckoutContent() {
         <div className="flex items-center justify-between pb-4 border-b border-white/[0.04]">
           <Link
             href="/store"
-            className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#a08a6a] transition-colors"
+            className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
           >
             <ArrowLeft size={11} />
             Back to store
@@ -279,39 +279,39 @@ function CheckoutContent() {
               <Lock size={9} />
               Secure
             </span>
-            <span className="hidden sm:inline-flex text-[9px] font-mono uppercase tracking-widest text-[#3a3328] bg-white/[0.02] border border-white/[0.05] px-2 py-0.5 rounded">
+            <span className="hidden sm:inline-flex text-[9px] font-mono uppercase tracking-widest text-[#6E685B] bg-white/[0.02] border border-white/[0.05] px-2 py-0.5 rounded">
               Guest Checkout
             </span>
           </div>
         </div>
 
         {/* 1. Contact Form */}
-        <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] p-5 md:p-6 transition-all duration-300">
+        <div className="rounded-2xl border border-[#2B2821] bg-[#171511] p-5 md:p-6 transition-all duration-300">
           <div className="flex items-center gap-3 mb-5">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-mono font-bold ${isEmailSubmitted ? 'bg-[#6DC6A4] text-black' : 'bg-[#D4BFA0] text-black'}`}>
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-mono font-bold ${isEmailSubmitted ? 'bg-[#6DC6A4] text-black' : 'bg-[#E7D7BE] text-black'}`}>
               {isEmailSubmitted ? <Check size={12} /> : '1'}
             </div>
             <div>
               <h2 className="text-[12px] font-mono uppercase tracking-wider text-white">Contact Information</h2>
-              <p className="text-[10px] text-[#6a5d4a]">Where to send your purchase and license key</p>
+              <p className="text-[10px] text-[#B4AA99]">Where to send your purchase and license key</p>
             </div>
           </div>
 
           {!isEmailSubmitted ? (
             <form onSubmit={handleEmailSubmit} className="space-y-4">
               <div>
-                <label htmlFor="checkout-email" className="block text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] mb-2">
+                <label htmlFor="checkout-email" className="block text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] mb-2">
                   Email Address <span className="text-red-400">*</span>
                 </label>
                 <div className="relative">
-                  <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#3a3328]" />
+                  <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6E685B]" />
                   <input
                     id="checkout-email"
                     type="email"
                     placeholder="you@example.com"
                     value={email}
                     onChange={handleEmailChange}
-                    className={`w-full bg-[#0a0907] border rounded-xl py-3 pl-10 pr-4 text-[13px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none transition-colors ${emailError ? 'border-red-500/50 focus:border-red-500' : 'border-[#1f1a13] focus:border-[#2d2620]'
+                    className={`w-full bg-[#090907] border rounded-xl py-3 pl-10 pr-4 text-[13px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none transition-colors ${emailError ? 'border-red-500/50 focus:border-red-500' : 'border-[#2B2821] focus:border-[#3B372F]'
                       }`}
                     required
                   />
@@ -325,13 +325,13 @@ function CheckoutContent() {
               </div>
               <button
                 type="submit"
-                className="w-full py-3.5 rounded-xl bg-[#D4BFA0] hover:bg-[#E8D8B8] active:scale-[0.99] text-black text-[11px] font-bold uppercase tracking-wider transition-all"
+                className="w-full py-3.5 rounded-xl bg-[#E7D7BE] hover:bg-[#F3E6D1] active:scale-[0.99] text-black text-[11px] font-bold uppercase tracking-wider transition-all"
               >
                 Continue to Payment
               </button>
-              <p className="text-[10px] text-[#5a5142] text-center pt-1">
+              <p className="text-[10px] text-[#9B9282] text-center pt-1">
                 Want to save purchases &amp; favorites?{' '}
-                <Link href="/store/account" className="text-[#a08a6a] hover:text-[#E8DCC8] underline underline-offset-2 transition-colors">
+                <Link href="/store/account" className="text-[#D0C3AF] hover:text-[#F7EBDD] underline underline-offset-2 transition-colors">
                   Create your free U2C account
                 </Link>
               </p>
@@ -339,15 +339,15 @@ function CheckoutContent() {
           ) : (
             <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.01] border border-white/[0.03]">
               <div className="flex items-center gap-3">
-                <Mail size={14} className="text-[#a08a6a]" />
-                <span className="text-[12px] text-[#E8DCC8] font-medium">{email}</span>
+                <Mail size={14} className="text-[#D0C3AF]" />
+                <span className="text-[12px] text-[#F7EBDD] font-medium">{email}</span>
               </div>
               {!clientSecret && isInitializing ? (
-                <Loader2 size={13} className="animate-spin text-[#5a5142]" />
+                <Loader2 size={13} className="animate-spin text-[#9B9282]" />
               ) : (
                 <button
                   onClick={handleResetEmail}
-                  className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#E8DCC8] underline transition-colors"
+                  className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F7EBDD] underline transition-colors"
                 >
                   Change Email
                 </button>
@@ -357,15 +357,15 @@ function CheckoutContent() {
         </div>
 
         {/* 2. Payment Section */}
-        <div className={`rounded-2xl border transition-all duration-300 ${isEmailSubmitted ? 'border-[#1f1a13] bg-[#14110d]' : 'border-[#1f1a13]/30 bg-[#14110d]/30 opacity-50 pointer-events-none'
+        <div className={`rounded-2xl border transition-all duration-300 ${isEmailSubmitted ? 'border-[#2B2821] bg-[#171511]' : 'border-[#2B2821]/30 bg-[#171511]/30 opacity-50 pointer-events-none'
           } p-5 md:p-6`}>
           <div className="flex items-center gap-3 mb-5">
-            <div className="w-7 h-7 rounded-full bg-[#14110d] border border-[#1f1a13] flex items-center justify-center text-[11px] font-mono text-[#a08a6a] font-bold">
+            <div className="w-7 h-7 rounded-full bg-[#171511] border border-[#2B2821] flex items-center justify-center text-[11px] font-mono text-[#D0C3AF] font-bold">
               2
             </div>
             <div>
               <h2 className="text-[12px] font-mono uppercase tracking-wider text-white">Payment Details</h2>
-              <p className="text-[10px] text-[#6a5d4a]">Secure, encrypted connection powered by Stripe</p>
+              <p className="text-[10px] text-[#B4AA99]">Secure, encrypted connection powered by Stripe</p>
             </div>
           </div>
 
@@ -379,7 +379,7 @@ function CheckoutContent() {
               in the deployment environment. Checkout will not work until this is fixed.
             </div>
           ) : stripePublishableKey.startsWith('pk_test') && (
-            <div className="mb-5 p-3 rounded-xl bg-[#2A2418]/60 border border-[#D4BFA0]/10 text-[10px] text-[#a08a6a] font-mono leading-relaxed">
+            <div className="mb-5 p-3 rounded-xl bg-[#342F27]/60 border border-[#E7D7BE]/10 text-[10px] text-[#D0C3AF] font-mono leading-relaxed">
               💡 <strong>Test Mode Active:</strong> You can complete purchases using Stripe test cards (e.g. 4242 4242 4242 4242).
             </div>
           )}
@@ -404,8 +404,8 @@ function CheckoutContent() {
 
           {isEmailSubmitted && isInitializing && (
             <div className="py-12 flex flex-col items-center justify-center gap-3 text-center">
-              <Loader2 size={24} className="animate-spin text-[#D4BFA0]" />
-              <p className="text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">Securing payment channel…</p>
+              <Loader2 size={24} className="animate-spin text-[#E7D7BE]" />
+              <p className="text-[10px] font-mono text-[#9B9282] uppercase tracking-wider">Securing payment channel…</p>
             </div>
           )}
 
@@ -413,7 +413,7 @@ function CheckoutContent() {
           <div id="checkout-element" className="transition-all duration-300 min-h-[150px]" />
 
           {clientSecret && !initError && (
-            <div className="mt-6 pt-5 border-t border-white/[0.03] flex items-center justify-center gap-2 text-[10px] font-mono text-[#3a3328]">
+            <div className="mt-6 pt-5 border-t border-white/[0.03] flex items-center justify-center gap-2 text-[10px] font-mono text-[#6E685B]">
               <Lock size={10} />
               <span>SSL Gated Session · Powered by Stripe Elements</span>
             </div>
@@ -426,10 +426,10 @@ function CheckoutContent() {
       <div className="space-y-5 lg:sticky lg:top-24">
 
         {/* Order Summary Box */}
-        <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] overflow-hidden flex flex-col">
+        <div className="rounded-2xl border border-[#2B2821] bg-[#171511] overflow-hidden flex flex-col">
           <div className="px-5 py-4 border-b border-white/[0.04]">
-            <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8DCC8] flex items-center gap-2">
-              <ShoppingBag size={12} className="text-[#a08a6a]" />
+            <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#F7EBDD] flex items-center gap-2">
+              <ShoppingBag size={12} className="text-[#D0C3AF]" />
               Order Summary
             </h3>
           </div>
@@ -439,18 +439,18 @@ function CheckoutContent() {
             <ul className="divide-y divide-white/[0.03] px-5 max-h-[280px] overflow-y-auto">
               {items.map((i) => (
                 <li key={i.id} className="py-4 flex gap-3.5 items-start">
-                  <div className="w-12 h-12 rounded-lg bg-[#0a0907] border border-[#1f1a13] overflow-hidden shrink-0">
+                  <div className="w-12 h-12 rounded-lg bg-[#090907] border border-[#2B2821] overflow-hidden shrink-0">
                     {i.track.cover_url ? (
                       <img loading="lazy" src={i.track.cover_url} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[#3a3328]">
+                      <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
                         <Music size={16} />
                       </div>
                     )}
                   </div>
                   <div className="min-w-0 flex-1 space-y-0.5">
                     <p className="text-[12px] font-semibold text-white truncate">{i.track.title}</p>
-                    <p className="text-[9px] font-mono text-[#6a5d4a] uppercase tracking-wider">
+                    <p className="text-[9px] font-mono text-[#B4AA99] uppercase tracking-wider">
                       {i.license.name} Tier
                     </p>
                   </div>
@@ -461,25 +461,25 @@ function CheckoutContent() {
               ))}
             </ul>
           ) : (
-            <div className="px-5 py-5 bg-[#0a0907]/30 border-b border-white/[0.04]">
+            <div className="px-5 py-5 bg-[#090907]/30 border-b border-white/[0.04]">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg bg-[#14110d] border border-[#1f1a13] flex items-center justify-center shrink-0">
-                  <Package size={20} className="text-[#D4BFA0]" />
+                <div className="w-12 h-12 rounded-lg bg-[#171511] border border-[#2B2821] flex items-center justify-center shrink-0">
+                  <Package size={20} className="text-[#E7D7BE]" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[12px] font-semibold text-white">Full Project Bundle</p>
-                  <p className="text-[10px] text-[#6a5d4a] font-mono truncate">Project ID: {projectIdForPurchase.slice(0, 8)}…</p>
+                  <p className="text-[10px] text-[#B4AA99] font-mono truncate">Project ID: {projectIdForPurchase.slice(0, 8)}…</p>
                 </div>
-                <span className="text-[12px] font-mono font-bold text-[#D4BFA0]">See price in Stripe</span>
+                <span className="text-[12px] font-mono font-bold text-[#E7D7BE]">See price in Stripe</span>
               </div>
-              <p className="mt-3 text-[10px] text-[#6a5d4a]">All tracks in the project will be delivered with full access via your private link.</p>
+              <p className="mt-3 text-[10px] text-[#B4AA99]">All tracks in the project will be delivered with full access via your private link.</p>
             </div>
           )}
 
 
           {/* Promo code */}
           {!isProjectPurchase && (
-            <div className="px-5 py-3 bg-[#0a0907]/30 border-t border-white/[0.04]">
+            <div className="px-5 py-3 bg-[#090907]/30 border-t border-white/[0.04]">
               {promoTerms ? (
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -488,7 +488,7 @@ function CheckoutContent() {
                       {promoCode.trim().toUpperCase()} — {discountDisplay}
                     </span>
                   </div>
-                  <button onClick={clearPromo} className="text-[#5a5142] hover:text-white transition-colors">
+                  <button onClick={clearPromo} className="text-[#9B9282] hover:text-white transition-colors">
                     <X size={12} />
                   </button>
                 </div>
@@ -500,12 +500,12 @@ function CheckoutContent() {
                     onChange={(e) => setPromoCode(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); checkPromo(); } }}
                     placeholder="Promo code"
-                    className="flex-1 bg-[#0a0907] border border-[#1f1a13] rounded-lg py-2 px-3 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] uppercase"
+                    className="flex-1 bg-[#090907] border border-[#2B2821] rounded-lg py-2 px-3 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] uppercase"
                   />
                   <button
                     onClick={checkPromo}
                     disabled={isCheckingPromo || !promoCode.trim()}
-                    className="px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[10px] font-mono uppercase tracking-wider text-[#E8DCC8] hover:bg-white/[0.08] disabled:opacity-40 transition-colors"
+                    className="px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[10px] font-mono uppercase tracking-wider text-[#F7EBDD] hover:bg-white/[0.08] disabled:opacity-40 transition-colors"
                   >
                     {isCheckingPromo ? <Loader2 size={10} className="animate-spin" /> : 'Apply'}
                   </button>
@@ -519,8 +519,8 @@ function CheckoutContent() {
 
           {/* Totals (only for track cart; Stripe shows amount for project) */}
           {!isProjectPurchase && (
-            <div className="px-5 py-4 bg-[#0a0907]/40 border-t border-white/[0.04] space-y-1">
-              <div className="flex justify-between items-center text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">
+            <div className="px-5 py-4 bg-[#090907]/40 border-t border-white/[0.04] space-y-1">
+              <div className="flex justify-between items-center text-[10px] font-mono text-[#9B9282] uppercase tracking-wider">
                 <span>Subtotal</span>
                 <span>${cartTotal()}</span>
               </div>
@@ -530,12 +530,12 @@ function CheckoutContent() {
                   <span>-{discountDisplay}</span>
                 </div>
               )}
-              <div className="flex justify-between items-center text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">
+              <div className="flex justify-between items-center text-[10px] font-mono text-[#9B9282] uppercase tracking-wider">
                 <span>Processing Fee</span>
                 <span>$0.00</span>
               </div>
               <div className="flex justify-between items-center pt-2 mt-1 border-t border-white/[0.02]">
-                <span className="text-[10px] font-mono text-[#a08a6a] uppercase tracking-wider">Total amount</span>
+                <span className="text-[10px] font-mono text-[#D0C3AF] uppercase tracking-wider">Total amount</span>
                 <span className="text-[18px] font-bold text-white tabular-nums">
                   ${cartTotal()}
                 </span>
@@ -548,26 +548,26 @@ function CheckoutContent() {
         {/* Accepted payment methods — text badges, no third-party logos so
             we don't pull in brand assets we don't have licenses for. Stripe
             handles all the actual mark rendering inside the iframe. */}
-        <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] p-4">
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Pay with</p>
+        <div className="rounded-2xl border border-[#2B2821] bg-[#171511] p-4">
+          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Pay with</p>
           <div className="flex flex-wrap gap-1.5">
             {['Visa', 'Mastercard', 'Amex', 'Apple Pay', 'Google Pay', 'Link'].map((m) => (
               <span
                 key={m}
-                className="px-2 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider text-[#a08a6a] bg-white/[0.03] border border-white/[0.06]"
+                className="px-2 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider text-[#D0C3AF] bg-white/[0.03] border border-white/[0.06]"
               >
                 {m}
               </span>
             ))}
           </div>
-          <p className="text-[9px] font-mono text-[#3a3328] mt-2">
+          <p className="text-[9px] font-mono text-[#6E685B] mt-2">
             Got a promo code? Apply it in the secure payment form above.
           </p>
         </div>
 
         {/* Trust & Reassurance Badges */}
-        <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] p-5 space-y-4">
-          <h4 className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142]">Purchase Guarantees</h4>
+        <div className="rounded-2xl border border-[#2B2821] bg-[#171511] p-5 space-y-4">
+          <h4 className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">Purchase Guarantees</h4>
 
           <div className="space-y-3.5">
             <div className="flex gap-3 items-start">
@@ -575,8 +575,8 @@ function CheckoutContent() {
                 <Check size={11} />
               </div>
               <div>
-                <p className="text-[11px] font-bold text-[#E8DCC8]">Instant Digital Delivery</p>
-                <p className="text-[9px] text-[#6a5d4a] leading-relaxed mt-0.5">Receive high-quality audio files (MP3/WAV) immediately after payment.</p>
+                <p className="text-[11px] font-bold text-[#F7EBDD]">Instant Digital Delivery</p>
+                <p className="text-[9px] text-[#B4AA99] leading-relaxed mt-0.5">Receive high-quality audio files (MP3/WAV) immediately after payment.</p>
               </div>
             </div>
 
@@ -585,8 +585,8 @@ function CheckoutContent() {
                 <FileText size={11} />
               </div>
               <div>
-                <p className="text-[11px] font-bold text-[#E8DCC8]">Legal License Agreement</p>
-                <p className="text-[9px] text-[#6a5d4a] leading-relaxed mt-0.5">Get a PDF contract detailing streaming/distribution rights for your projects.</p>
+                <p className="text-[11px] font-bold text-[#F7EBDD]">Legal License Agreement</p>
+                <p className="text-[9px] text-[#B4AA99] leading-relaxed mt-0.5">Get a PDF contract detailing streaming/distribution rights for your projects.</p>
               </div>
             </div>
 
@@ -595,8 +595,8 @@ function CheckoutContent() {
                 <ShieldCheck size={11} />
               </div>
               <div>
-                <p className="text-[11px] font-bold text-[#E8DCC8]">Secure SSL Payment</p>
-                <p className="text-[9px] text-[#6a5d4a] leading-relaxed mt-0.5">Transactions processed safely by Stripe. Card numbers are never stored.</p>
+                <p className="text-[11px] font-bold text-[#F7EBDD]">Secure SSL Payment</p>
+                <p className="text-[9px] text-[#B4AA99] leading-relaxed mt-0.5">Transactions processed safely by Stripe. Card numbers are never stored.</p>
               </div>
             </div>
 
@@ -605,16 +605,16 @@ function CheckoutContent() {
                 <Lock size={11} />
               </div>
               <div>
-                <p className="text-[11px] font-bold text-[#E8DCC8]">One-Time Payment</p>
-                <p className="text-[9px] text-[#6a5d4a] leading-relaxed mt-0.5">No recurring fees or monthly subscriptions. Pay once and keep forever.</p>
+                <p className="text-[11px] font-bold text-[#F7EBDD]">One-Time Payment</p>
+                <p className="text-[9px] text-[#B4AA99] leading-relaxed mt-0.5">No recurring fees or monthly subscriptions. Pay once and keep forever.</p>
               </div>
             </div>
           </div>
 
           <div className="pt-4 border-t border-white/[0.04] text-center">
-            <p className="text-[10px] text-[#5a5142] font-mono leading-relaxed">
+            <p className="text-[10px] text-[#9B9282] font-mono leading-relaxed">
               Need assistance? Email us at <br />
-              <span className="text-[#a08a6a]">support@antigravity.fm</span>
+              <span className="text-[#D0C3AF]">support@antigravity.fm</span>
             </p>
           </div>
         </div>
@@ -625,9 +625,9 @@ function CheckoutContent() {
           on small screens where the order-summary column is collapsed. The
           extra pb-32 on the grid above reserves the space so the bar
           doesn't cover the last form fields. */}
-      <div className="lg:hidden fixed left-0 right-0 bottom-0 z-30 bg-[#0a0907]/95 backdrop-blur border-t border-[#1f1a13] px-4 py-3 flex items-center justify-between gap-3">
+      <div className="lg:hidden fixed left-0 right-0 bottom-0 z-30 bg-[#090907]/95 backdrop-blur border-t border-[#2B2821] px-4 py-3 flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#5a5142]">
+          <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
             {isProjectPurchase ? 'Project bundle' : `${items.length} item${items.length === 1 ? '' : 's'}`}
           </p>
           <p className="text-[18px] font-bold text-white tabular-nums leading-tight">
@@ -639,7 +639,7 @@ function CheckoutContent() {
             <Lock size={9} />
             SSL
           </span>
-          <span className="text-[9px] font-mono uppercase tracking-widest text-[#5a5142]">
+          <span className="text-[9px] font-mono uppercase tracking-widest text-[#9B9282]">
             {clientSecret ? 'Pay in form ↑' : isEmailSubmitted ? 'Loading…' : 'Enter email ↑'}
           </span>
         </div>
@@ -651,10 +651,10 @@ function CheckoutContent() {
 
 export default function CheckoutPage() {
   return (
-    <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8] pt-4 pb-20">
+    <div className="min-h-screen bg-[#090907] text-[#F7EBDD] pt-4 pb-20">
       <Suspense fallback={
         <div className="min-h-[70vh] flex items-center justify-center">
-          <Loader2 size={24} className="animate-spin text-[#5a5142]" />
+          <Loader2 size={24} className="animate-spin text-[#9B9282]" />
         </div>
       }>
         <CheckoutContent />

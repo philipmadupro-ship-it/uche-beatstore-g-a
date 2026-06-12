@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, CheckCircle2, Loader2, FileAudio } from 'lucide-react';
+import { AlertTriangle, Upload, CheckCircle2, Loader2, FileAudio } from 'lucide-react';
 import { analyzeAudio } from '@/lib/audio/analyze.client';
 import { useUploadManager } from '@/lib/upload/manager';
 import type { TrackType } from '@/lib/types';
@@ -28,9 +28,9 @@ const FORMAT_STYLE: Record<string, string> = {
   flac: 'text-[#8ecf9f] bg-[#0a1f0a]/60 border-[#1f3a1f]',
   aiff: 'text-[#8ecf9f] bg-[#0a1f0a]/60 border-[#1f3a1f]',
   aif:  'text-[#8ecf9f] bg-[#0a1f0a]/60 border-[#1f3a1f]',
-  mp3:  'text-[#c8a84b] bg-[#1f1a0a]/60 border-[#3a2f1f]',
-  m4a:  'text-[#a08a6a] bg-[#1a160f]/60 border-[#2d2620]',
-  ogg:  'text-[#a08a6a] bg-[#1a160f]/60 border-[#2d2620]',
+  mp3:  'text-[#D6BE7A] bg-[#1f1a0a]/60 border-[#3a2f1f]',
+  m4a:  'text-[#D0C3AF] bg-[#211F1A]/60 border-[#3B372F]',
+  ogg:  'text-[#D0C3AF] bg-[#211F1A]/60 border-[#3B372F]',
 };
 
 function fmtBytes(b: number): string {
@@ -42,7 +42,9 @@ interface FileCard {
   file: File;
   ext: string;
   analyzing: boolean;
+  queued: boolean;
   done: boolean;
+  analysisError?: boolean;
   bpm?: number | null;
   key?: string | null;
   scale?: string | null;
@@ -61,6 +63,7 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
       file: f,
       ext: f.name.split('.').pop()?.toLowerCase() || 'audio',
       analyzing: true,
+      queued: false,
       done: false,
     }));
     setCards(initial);
@@ -77,7 +80,9 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
           ));
           return result;
         } catch {
-          setCards((prev) => prev.map((c, ci) => ci === i ? { ...c, analyzing: false } : c));
+          setCards((prev) => prev.map((c, ci) =>
+            ci === i ? { ...c, analyzing: false, analysisError: true } : c,
+          ));
           return null;
         }
       }),
@@ -94,6 +99,7 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
           onUploadSuccess?.();
         },
       });
+      setCards((prev) => prev.map((c, ci) => ci === i ? { ...c, queued: true } : c));
     });
 
     // Clear cards after 4 seconds so the zone resets for the next batch.
@@ -115,22 +121,23 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
   });
 
   const analyzing = cards.some((c) => c.analyzing);
+  const allQueued = cards.length > 0 && cards.every((c) => c.queued);
   const allDone = cards.length > 0 && cards.every((c) => c.done);
 
   return (
     <div className="space-y-3">
       {/* Type picker */}
       <div className="flex items-center gap-1.5">
-        <span className="text-[10px] font-mono uppercase tracking-widest text-[#4a4338] mr-1">Upload as</span>
+        <span className="text-[10px] font-mono uppercase tracking-widest text-[#837B6D] mr-1">Upload as</span>
         {TYPE_PICKER.map((opt) => (
           <button
             key={opt.value}
             type="button"
             onClick={(e) => { e.stopPropagation(); setSelectedType(opt.value); }}
-            className={`text-[10px] font-mono uppercase tracking-wider px-2.5 py-1 rounded-lg border transition-all ${
+            className={`tap min-h-11 rounded-lg border px-3 py-2 font-mono text-[10px] uppercase tracking-wider transition-[background-color,border-color,color,transform] ${
               selectedType === opt.value
-                ? 'bg-[#2A2418] border-[#8A7A5C]/50 text-[#E8D8B8]'
-                : 'bg-[#14110d] border-[#1a160f] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+                ? 'bg-[#342F27] border-[#C9BCA8]/50 text-[#F3E6D1]'
+                : 'bg-[#171511] border-[#211F1A] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#3B372F]'
             }`}
           >
             {opt.label}
@@ -143,12 +150,12 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
         {...getRootProps()}
         className={`
           relative overflow-hidden group cursor-pointer
-          border-2 border-dashed rounded-2xl transition-all duration-300
+          border-2 border-dashed rounded-2xl transition-[transform,background-color,border-color,box-shadow] duration-300
           ${isDragActive
-            ? 'border-[#D4BFA0] bg-[#2A2418]/25 scale-[0.99] shadow-[0_0_40px_rgba(212,191,160,0.08)]'
+            ? 'border-[#E7D7BE] bg-[#342F27]/25 scale-[0.99] shadow-[0_0_40px_rgba(231,215,190,0.08)]'
             : allDone
               ? 'border-green-500/40 bg-green-500/[0.03]'
-              : 'border-[#1f1a13] hover:border-[#3a3328] hover:bg-[#0e0c09]'}
+              : 'border-[#2B2821] hover:border-[#6E685B] hover:bg-[#0e0c09]'}
         `}
       >
         <input {...getInputProps()} />
@@ -164,24 +171,29 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
                   className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
                     card.done
                       ? 'bg-green-500/[0.04] border-green-500/20'
-                      : 'bg-[#14110d] border-[#1f1a13]'
+                      : 'bg-[#171511] border-[#2B2821]'
                   }`}
                 >
                   {/* Format icon */}
-                  <div className="w-8 h-8 rounded-lg bg-[#0a0907] border border-[#1f1a13] flex items-center justify-center shrink-0">
-                    <FileAudio size={14} className="text-[#4a4338]" />
+                  <div className="w-8 h-8 rounded-lg bg-[#090907] border border-[#2B2821] flex items-center justify-center shrink-0">
+                    <FileAudio size={14} className="text-[#837B6D]" />
                   </div>
 
                   {/* File info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-medium text-[#E8DCC8] truncate">{card.file.name.replace(/\.[^.]+$/, '')}</p>
+                    <p className="text-[11px] font-medium text-[#F7EBDD] truncate">{card.file.name.replace(/\.[^.]+$/, '')}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className={`text-[8px] font-mono font-black uppercase px-1.5 py-0.5 rounded border ${fmtCls}`}>
                         {card.ext.toUpperCase()}
                       </span>
-                      <span className="text-[9px] font-mono text-[#4a4338]">{fmtBytes(card.file.size)}</span>
+                      <span className="text-[9px] font-mono text-[#837B6D]">{fmtBytes(card.file.size)}</span>
+                      {!card.analyzing && card.analysisError && (
+                        <span className="text-[8px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border text-[#E2C16D] bg-[#1f1a0a]/50 border-[#3a2f1f]">
+                          Analysis skipped
+                        </span>
+                      )}
                       {!card.analyzing && card.bpm && (
-                        <span className="text-[9px] font-mono text-[#6a5d4a] tabular-nums">{card.bpm} BPM</span>
+                        <span className="text-[9px] font-mono text-[#B4AA99] tabular-nums">{card.bpm} BPM</span>
                       )}
                       {!card.analyzing && card.key && (
                         <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${
@@ -198,24 +210,31 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
                   {/* State icon */}
                   <div className="shrink-0">
                     {card.analyzing ? (
-                      <Loader2 size={14} className="animate-spin text-[#D4BFA0]" />
+                      <Loader2 size={14} className="animate-spin text-[#E7D7BE]" />
                     ) : card.done ? (
                       <CheckCircle2 size={14} className="text-green-400" />
+                    ) : card.analysisError ? (
+                      <AlertTriangle size={14} className="text-[#E2C16D]" />
                     ) : (
-                      <div className="w-2 h-2 rounded-full bg-[#D4BFA0] animate-pulse" />
+                      <div className="w-2 h-2 rounded-full bg-[#E7D7BE] animate-pulse" />
                     )}
                   </div>
                 </div>
               );
             })}
             {analyzing && (
-              <p className="text-[9px] font-mono uppercase tracking-wider text-[#4a4338] text-center pt-1">
+              <p className="text-[9px] font-mono uppercase tracking-wider text-[#837B6D] text-center pt-1">
                 Analyzing audio — BPM and key detected automatically
+              </p>
+            )}
+            {!allDone && allQueued && (
+              <p className="text-[9px] font-mono uppercase tracking-wider text-[#E7D7BE]/70 text-center pt-1">
+                Queued in Uploads tray — upload continues in the background
               </p>
             )}
             {allDone && (
               <p className="text-[9px] font-mono uppercase tracking-wider text-green-400/70 text-center pt-1">
-                All queued — uploading in background
+                Upload complete — library refreshes automatically
               </p>
             )}
           </div>
@@ -225,16 +244,16 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
             <div className={`
               w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300
               ${isDragActive
-                ? 'bg-[#2A2418] text-[#D4BFA0] scale-110'
-                : 'bg-[#1a160f] text-[#4a4338] group-hover:bg-[#2A2418] group-hover:text-[#D4BFA0]'}
+                ? 'bg-[#342F27] text-[#E7D7BE] scale-110'
+                : 'bg-[#211F1A] text-[#837B6D] group-hover:bg-[#342F27] group-hover:text-[#E7D7BE]'}
             `}>
               <Upload size={16} className="transition-transform group-hover:scale-110 duration-300" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-[#E8DCC8]">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[#F7EBDD]">
                 {isDragActive ? 'Drop to ingest' : 'Drop beats or click to upload'}
               </p>
-              <p className="text-[9px] font-mono text-[#3a3328] mt-0.5">
+              <p className="text-[9px] font-mono text-[#6E685B] mt-0.5">
                 WAV · FLAC · AIFF · MP3 · M4A · up to 500 MB
               </p>
             </div>

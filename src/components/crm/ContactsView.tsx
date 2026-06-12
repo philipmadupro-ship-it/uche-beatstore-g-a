@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Users, Upload, Send, Mail } from 'lucide-react';
+import { Users, Upload, Send, Mail } from 'lucide-react';
 import { Contact, BeatSend } from '@/lib/types';
-import { filterAndSortContacts, paginate, type ContactFilterState, type ContactSortMode, type SortDir } from '@/lib/contacts/filters';
+import { filterAndSortContacts, paginate, type ContactCategoryFilter, type ContactFilterState, type ContactSortMode, type ContactStatusFilter, type SortDir } from '@/lib/contacts/filters';
 import type { CrmStage } from '@/lib/contracts';
 import { AddContactModal } from '@/components/crm/AddContactModal';
 import { SendBeatModal } from '@/components/crm/SendBeatModal';
@@ -22,6 +22,23 @@ import { ContactsTable } from '@/components/crm/ContactsTable';
 import { ContactsPagination } from '@/components/crm/ContactsPagination';
 import { ContactsTableSkeleton, type ActivityTone } from '@/components/crm/contacts-shared';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
+import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
+
+const categoryFilters: ContactCategoryFilter[] = ['all', 'buyers', 'rappers', 'producers', 'a&r', 'friends', 'nudge'];
+const statusFilters: ContactStatusFilter[] = ['all', 'active', 'engaged', 'cold'];
+const sortModes: ContactSortMode[] = ['recent', 'name', 'category', 'lastSent', 'sends', 'lead'];
+
+function asCategoryFilter(value: string | undefined): ContactCategoryFilter {
+  return categoryFilters.includes(value as ContactCategoryFilter) ? value as ContactCategoryFilter : 'all';
+}
+
+function asStatusFilter(value: string | undefined): ContactStatusFilter {
+  return statusFilters.includes(value as ContactStatusFilter) ? value as ContactStatusFilter : 'all';
+}
+
+function asSortMode(value: string | undefined): ContactSortMode {
+  return sortModes.includes(value as ContactSortMode) ? value as ContactSortMode : 'recent';
+}
 
 /**
  * Client island that owns the interactive layer of /contacts.
@@ -48,8 +65,8 @@ export function ContactsView({
   const [historyContact, setHistoryContact] = useState<Contact | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'network' | 'activity'>('network');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'engaged' | 'cold'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<ContactCategoryFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<ContactStatusFilter>('all');
   const [sortMode, setSortMode] = useState<ContactSortMode>('recent');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
@@ -61,7 +78,7 @@ export function ContactsView({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [dropHoverId, setDropHoverId] = useState<string | null>(null);
   const [prefilledTrackIds, setPrefilledTrackIds] = useState<string[] | null>(null);
-  const [nudgeContact, setNudgeContact] = useState<{ contact: Contact; latestSend: any } | null>(null);
+  const [nudgeContact, setNudgeContact] = useState<{ contact: Contact; latestSend: BeatSend } | null>(null);
   // Bulk-edit panel: which batch operation is open.
   const [bulkPanel, setBulkPanel] = useState<'stage' | 'addTags' | 'removeTags' | null>(null);
 
@@ -96,9 +113,9 @@ export function ContactsView({
 
   const applySegment = (seg: Segment) => {
     setActiveSegmentId(seg.id);
-    setCategoryFilter(seg.filters.category ?? 'all');
-    setStatusFilter((seg.filters.status as any) ?? 'all');
-    setSortMode((seg.filters.sort as any) ?? 'recent');
+    setCategoryFilter(asCategoryFilter(seg.filters.category));
+    setStatusFilter(asStatusFilter(seg.filters.status));
+    setSortMode(asSortMode(seg.filters.sort));
     setSearchQuery(seg.filters.search ?? '');
   };
 
@@ -213,7 +230,7 @@ export function ContactsView({
     const responseRate = sends > 0 ? Math.round((responded / sends) * 100) : 0;
     const pipeline: Record<string, number> = { sent: 0, opened: 0, interested: 0, negotiating: 0, placed: 0, pass: 0 };
     for (const s of beatSends) { const st = (s.status as string) ?? 'sent'; if (st in pipeline) pipeline[st]++; }
-    const openedCount = beatSends.filter((s) => (s as any).opened_at).length;
+    const openedCount = beatSends.filter((s) => s.opened_at).length;
     const needNudge = contacts.reduce((n, c) => n + (needsNudge(c.id) ? 1 : 0), 0);
     return { total, sends, active, needNudge, responseRate, pipeline, openedCount };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -249,7 +266,7 @@ export function ContactsView({
   };
 
   const filtered = useMemo(() => {
-    const fState: ContactFilterState = { search: searchQuery, category: categoryFilter as any, status: statusFilter, sort: sortMode, sortDir, tags: tagFilter };
+    const fState: ContactFilterState = { search: searchQuery, category: categoryFilter, status: statusFilter, sort: sortMode, sortDir, tags: tagFilter };
     return filterAndSortContacts(contacts, fState, { lastSentByContact, needsNudgeIds, sendCountByContact, leadScoreByContact });
   }, [contacts, searchQuery, categoryFilter, sortMode, sortDir, statusFilter, tagFilter, lastSentByContact, needsNudgeIds, sendCountByContact, leadScoreByContact]);
 
@@ -260,7 +277,12 @@ export function ContactsView({
 
   const selectedContacts = useMemo(() => contacts.filter((c) => selectedIds.has(c.id)), [contacts, selectedIds]);
 
-  const toggleSelect = (id: string) => setSelectedIds((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleSelect = (id: string) => setSelectedIds((prev) => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  });
   const pageIds = paginated.map((c) => c.id);
   const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
   const toggleSelectPage = () => setSelectedIds((prev) => {
@@ -302,28 +324,29 @@ export function ContactsView({
   const staleSelected = selectedContacts.filter((c) => needsNudge(c.id) && c.email);
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 md:px-10 pt-6 md:pt-10">
-      {/* Header */}
-      <div className="flex items-end justify-between gap-4 mb-5 flex-wrap">
-        <div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-2">CRM</p>
-          <h1 className="text-[32px] md:text-[40px] font-bold tracking-tight text-white leading-none font-heading">Contacts</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-md p-0.5">
-            {(['network', 'activity'] as const).map((t) => (
-              <button key={t} onClick={() => setActiveTab(t)}
-                className={`px-3 py-1.5 text-[11px] font-medium rounded capitalize transition-colors ${activeTab === t ? 'bg-[#2A2418] text-white' : 'text-[#6a5d4a] hover:text-[#E8DCC8]'}`}>
-                {t}
-              </button>
-            ))}
+    <PageContainer className="pb-32">
+      <PageHeader
+        eyebrow="CRM"
+        title="Contacts"
+        description="Track artists, buyers, follow-ups, and every beat you send."
+        meta={`${contacts.length} contact${contacts.length === 1 ? '' : 's'}`}
+        actions={
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-md p-0.5">
+              {(['network', 'activity'] as const).map((t) => (
+                <button key={t} onClick={() => setActiveTab(t)}
+                  className={`px-3 py-1.5 text-[11px] font-medium rounded capitalize transition-colors ${activeTab === t ? 'bg-[#342F27] text-white' : 'text-[#B4AA99] hover:text-[#F7EBDD]'}`}>
+                  {t}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setShowImportModal(true)}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-[var(--border)] bg-[var(--bg-card)] text-[#F7EBDD] hover:border-[var(--border-hover)] text-[11px] font-medium transition-colors">
+              <Upload size={13} /> Import
+            </button>
           </div>
-          <button onClick={() => setShowImportModal(true)}
-            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-[var(--border)] bg-[var(--bg-card)] text-[#E8DCC8] hover:border-[var(--border-hover)] text-[11px] font-medium transition-colors">
-            <Upload size={13} /> Import
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {activeTab === 'network' ? (
         <>
@@ -333,10 +356,15 @@ export function ContactsView({
 
           <ContactsToolbar
             searchQuery={searchQuery} setSearchQuery={setSearchQuery}
-            categoryFilter={categoryFilter} setCategoryFilter={(v) => { setCategoryFilter(v); setActiveSegmentId(null); }}
-            statusFilter={statusFilter} setStatusFilter={(v) => setStatusFilter(v as any)}
+            categoryFilter={categoryFilter} setCategoryFilter={(v) => { setCategoryFilter(asCategoryFilter(v)); setActiveSegmentId(null); }}
+            statusFilter={statusFilter} setStatusFilter={(v) => setStatusFilter(asStatusFilter(v))}
             allTags={allTags} tagFilter={tagFilter}
-            toggleTag={(t) => setTagFilter((prev) => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n; })}
+            toggleTag={(t) => setTagFilter((prev) => {
+              const n = new Set(prev);
+              if (n.has(t)) n.delete(t);
+              else n.add(t);
+              return n;
+            })}
             clearTags={() => setTagFilter(new Set())}
             categoryCount={categoryCount}
             segments={segments} activeSegmentId={activeSegmentId}
@@ -350,25 +378,25 @@ export function ContactsView({
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-24 border border-dashed border-[var(--border)] rounded-xl bg-[var(--bg-card)]">
-              <Users size={26} className="text-[#3a3328] mx-auto mb-4" />
+              <Users size={26} className="text-[#6E685B] mx-auto mb-4" />
               {fetchError ? (
                 <>
-                  <p className="text-sm text-[#E8DCC8] mb-1">Couldn&apos;t load contacts</p>
-                  <p className="text-[11px] text-[#5a5142] mb-5 font-mono">{fetchError}</p>
-                  <button onClick={refetch} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-white text-black text-[12px] font-medium hover:bg-[#E8DCC8] transition-colors">Try again</button>
+                  <p className="text-sm text-[#F7EBDD] mb-1">Couldn&apos;t load contacts</p>
+                  <p className="text-[11px] text-[#9B9282] mb-5 font-mono">{fetchError}</p>
+                  <button onClick={refetch} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-white text-black text-[12px] font-medium hover:bg-[#F7EBDD] transition-colors">Try again</button>
                 </>
               ) : isFiltered ? (
                 <>
-                  <p className="text-sm text-[#E8DCC8] mb-1">No matches</p>
-                  <p className="text-[11px] text-[#5a5142] mb-5">{contacts.length} contact{contacts.length === 1 ? '' : 's'} total — try widening your filters.</p>
+                  <p className="text-sm text-[#F7EBDD] mb-1">No matches</p>
+                  <p className="text-[11px] text-[#9B9282] mb-5">{contacts.length} contact{contacts.length === 1 ? '' : 's'} total — try widening your filters.</p>
                   <button onClick={() => { setSearchQuery(''); setCategoryFilter('all'); setStatusFilter('all'); setTagFilter(new Set()); setActiveSegmentId(null); }}
-                    className="text-[#a08a6a] hover:text-[#E8DCC8] text-[11px] underline underline-offset-2">Clear filters</button>
+                    className="text-[#D0C3AF] hover:text-[#F7EBDD] text-[11px] underline underline-offset-2">Clear filters</button>
                 </>
               ) : (
                 <>
-                  <p className="text-sm text-[#E8DCC8] mb-1">No contacts yet</p>
-                  <p className="text-[11px] text-[#5a5142] mb-5">Add your first contact or import a CSV.</p>
-                  <button onClick={() => setShowAddModal(true)} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-white text-black text-[12px] font-medium hover:bg-[#E8DCC8] transition-colors">Add contact</button>
+                  <p className="text-sm text-[#F7EBDD] mb-1">No contacts yet</p>
+                  <p className="text-[11px] text-[#9B9282] mb-5">Add your first contact or import a CSV.</p>
+                  <button onClick={() => setShowAddModal(true)} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-white text-black text-[12px] font-medium hover:bg-[#F7EBDD] transition-colors">Add contact</button>
                 </>
               )}
             </div>
@@ -516,11 +544,11 @@ export function ContactsView({
       {selectedIds.size > 0 && selectedIds.size < filtered.length && (
         <div className="fixed bottom-44 left-1/2 -translate-x-1/2 z-40">
           <button onClick={selectAllFiltered}
-            className="text-[10px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-full bg-[#0e0c08] border border-[var(--border-hover)] text-[#a08a6a] hover:text-[#E8DCC8] shadow-lg transition-colors">
+            className="text-[10px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-full bg-[#11100D] border border-[var(--border-hover)] text-[#D0C3AF] hover:text-[#F7EBDD] shadow-lg transition-colors">
             Select all {filtered.length} filtered
           </button>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

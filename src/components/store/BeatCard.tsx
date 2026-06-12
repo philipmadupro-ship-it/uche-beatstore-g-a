@@ -34,8 +34,8 @@ interface Props {
 }
 
 export function BeatCard({
-  track, allTracks: _allTracks, priceLease, priceExclusive, isCurrent, isPlaying, isPreview,
-  onPlay, onPreview, onAddLease, onAddExclusive, onFreeDownload, accentColor,
+  track, priceLease, priceExclusive, isCurrent, isPlaying, isPreview,
+  onPreview, onAddLease, onAddExclusive, onFreeDownload, accentColor,
   isWishlisted, onToggleWishlist,
 }: Props) {
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
@@ -65,7 +65,7 @@ export function BeatCard({
       tabIndex={0}
       onClick={onPreview}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(); } }}
-      className="group cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#D4BFA0]/40 rounded-[14px] p-[1.5px]"
+      className="group cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/40 rounded-[14px] p-[1.5px]"
       style={{
         background: bezelBg,
         ...ringStyle,
@@ -74,7 +74,7 @@ export function BeatCard({
     >
     {/* Inner card — the actual surface */}
     <div
-      className="relative rounded-[13px] overflow-hidden flex flex-col bg-[#14110d] group-hover:shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
+      className="relative rounded-[13px] overflow-hidden flex flex-col bg-[#171511] group-hover:shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
       style={{ transition: 'box-shadow 400ms cubic-bezier(0.32,0.72,0,1)' }}
     >
       {/* ── Cover — clicking anywhere on cover opens the preview drawer.
@@ -105,7 +105,7 @@ export function BeatCard({
         <div className="absolute top-0 inset-x-0 flex items-start justify-between p-2.5 gap-2">
           {/* BPM or status chip */}
           {track.exclusive_sold ? (
-            <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-black/60 text-[#D4BFA0]/80 border border-[#D4BFA0]/25 backdrop-blur-sm">
+            <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-black/60 text-[#E7D7BE]/80 border border-[#E7D7BE]/25 backdrop-blur-sm">
               Sold
             </span>
           ) : track.free_download_enabled ? (
@@ -126,9 +126,9 @@ export function BeatCard({
               onClick={stop(onToggleWishlist)}
               aria-label={isWishlisted ? 'Remove from favorites' : 'Add to favorites'}
               aria-pressed={!!isWishlisted}
-              className={`w-7 h-7 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors shrink-0 ${
+              className={`tap -mr-2 -mt-2 flex size-11 shrink-0 items-center justify-center rounded-full backdrop-blur-sm transition-colors ${
                 isWishlisted
-                  ? 'bg-[#c8a84b]/30 text-[#c8a84b]'
+                  ? 'bg-[#D6BE7A]/30 text-[#D6BE7A]'
                   : 'bg-black/30 text-white/50 hover:text-white'
               }`}
             >
@@ -185,36 +185,36 @@ export function BeatCard({
       <div
         data-card-action
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#0e0c08] border-t border-white/[0.06]"
+        className="bg-[#11100D] border-t border-white/[0.06]"
       >
         {track.exclusive_sold ? (
-          <div className="flex items-center justify-center h-9 text-[#D4BFA0]/40 text-[9px] font-mono uppercase tracking-wider">
+          <div className="flex min-h-11 items-center justify-center text-[#E7D7BE]/40 text-[9px] font-mono uppercase tracking-wider">
             Exclusive sold
           </div>
         ) : track.free_download_enabled ? (
           <button
             onClick={stop(onFreeDownload)}
-            className="flex items-center justify-center gap-1.5 w-full h-9 text-[#6DC6A4] text-[9px] font-mono font-bold uppercase tracking-wider hover:bg-[#6DC6A4]/5 transition-colors"
+            className="tap flex min-h-11 w-full items-center justify-center gap-1.5 text-[#6DC6A4] text-[9px] font-mono font-bold uppercase tracking-wider hover:bg-[#6DC6A4]/5 transition-colors"
           >
             <Download size={10} />
             Free download
           </button>
         ) : (
-          <div className="flex items-stretch divide-x divide-white/[0.06] h-9">
+          <div className="flex min-h-11 items-stretch divide-x divide-white/[0.06]">
             <button
               onClick={stop(onAddLease)}
               disabled={priceLease == null}
-              className="flex-1 flex flex-col items-center justify-center hover:bg-white/[0.04] transition-colors disabled:opacity-25 disabled:cursor-not-allowed gap-px"
+              className="tap flex flex-1 flex-col items-center justify-center gap-px transition-colors hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-25"
             >
               <span className="text-[7px] font-mono uppercase tracking-[0.18em] text-white/25 leading-none">Lease</span>
-              <span className="text-[12px] font-bold text-[#E8DCC8] tabular-nums leading-none">
+              <span className="text-[12px] font-bold text-[#F7EBDD] tabular-nums leading-none">
                 {priceLease != null ? `$${priceLease}` : '—'}
               </span>
             </button>
             <button
               onClick={stop(onAddExclusive)}
               disabled={priceExclusive == null}
-              className="flex-1 flex flex-col items-center justify-center transition-colors disabled:opacity-25 disabled:cursor-not-allowed gap-px hover:opacity-90"
+              className="tap flex flex-1 flex-col items-center justify-center gap-px transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-25"
               style={{ backgroundColor: `${accentColor}18` }}
             >
               <span className="text-[7px] font-mono uppercase tracking-[0.18em] text-white/25 leading-none">Excl.</span>

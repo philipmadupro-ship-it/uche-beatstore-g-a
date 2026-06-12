@@ -9,14 +9,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader, PageContainer } from '@/components/layout/PageHeader';
-import { Loader2, Music, Layers, Plus, Play, Clock, ShoppingBag, Globe, Pin } from 'lucide-react';
-import { seededGradient } from '@/lib/ui/cover-gradient';
+import { Loader2, Music, Layers, Plus, Clock, Pin } from 'lucide-react';
 import Link from 'next/link';
-import { fmtBpm, fmtKey } from '@/lib/audio/format';
+import { useRouter } from 'next/navigation';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
-import { toast } from '@/hooks/useToast';
 import { ProjectFilterBar } from '@/components/projects/ProjectFilterBar';
 import { ProjectOptionsMenu } from '@/components/projects/ProjectOptionsMenu';
+import { CreateProjectModal } from '@/components/layout/CreateProjectModal';
 import {
   filterAndSortProjects,
   DEFAULT_PROJECT_FILTERS,
@@ -27,13 +26,14 @@ import {
 interface Project extends ProjectListItem {
   status?: 'in_progress' | 'final' | 'archived';
   cover_url?: string | null;
+  preview_covers?: string[];
   bpm_target?: number | null;
   key_target?: string | null;
   is_public?: boolean;
   pinned?: boolean;
 }
 
-interface FolderRow { id: string; name: string; color?: string | null; cover_url?: string | null }
+interface FolderRow { id: string; name: string; color?: string | null; cover_urls?: string[] }
 
 const RECENTLY_OPENED_KEY = 'antigravity-recent-projects';
 const MAX_RECENT = 8;
@@ -46,30 +46,6 @@ function trackRecentOpen(id: string) {
   const prev = loadRecentIds().filter((x) => x !== id);
   localStorage.setItem(RECENTLY_OPENED_KEY, JSON.stringify([id, ...prev].slice(0, MAX_RECENT)));
 }
-
-const STATUS_STYLE: Record<string, string> = {
-  in_progress: 'text-[#c8a84b] border-[#3a2f10] bg-[#1a1505]/80',
-  final: 'text-[#8ecf9f] border-[#0a3a1a] bg-[#0a1f0f]/80',
-  archived: 'text-[#6a5d4a] border-[#1a160f] bg-[#0e0c08]/80',
-};
-
-const STATUS_BORDER: Record<string, string> = {
-  in_progress: 'border-[#3a2f10]/60 hover:border-[#c8a84b]/30',
-  final: 'border-[#0a3a1a]/60 hover:border-[#8ecf9f]/30',
-  archived: 'border-[#1a160f] hover:border-[#2d2620]',
-};
-
-const STATUS_GRADIENT: Record<string, string> = {
-  in_progress: 'bg-gradient-to-t from-[#1a1505]/90 via-transparent to-transparent',
-  final: 'bg-gradient-to-t from-[#0a1f0f]/90 via-transparent to-transparent',
-  archived: 'bg-gradient-to-t from-[#0e0c08]/90 via-transparent to-transparent',
-};
-
-const STATUS_EMPTY_BG: Record<string, string> = {
-  in_progress: 'bg-gradient-to-br from-[#2a2010] to-[#0e0c08]',
-  final: 'bg-gradient-to-br from-[#0a2010] to-[#0a0907]',
-  archived: 'bg-gradient-to-br from-[#14110d] to-[#0a0907]',
-};
 
 function relativeDate(date: Date): string {
   const diff = Date.now() - date.getTime();
@@ -87,13 +63,13 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [folders, setFolders] = useState<FolderRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [filters, setFilters] = useState<ProjectFilterState>(() => ({ ...DEFAULT_PROJECT_FILTERS, tags: new Set() }));
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [togglingStore, setTogglingStore] = useState<string | null>(null);
   const [togglingPin, setTogglingPin] = useState<string | null>(null);
   const [recentIds, setRecentIds] = useState<string[]>([]);
   const hasMounted = useRef(false);
+  const router = useRouter();
   useEffect(() => { setRecentIds(loadRecentIds()); hasMounted.current = true; }, []);
 
   const togglePin = async (project: Project, e: React.MouseEvent) => {
@@ -109,43 +85,6 @@ export default function ProjectsPage() {
     } catch {
       setProjects((prev) => prev.map((p) => p.id === project.id ? { ...p, pinned: !next } : p));
     } finally { setTogglingPin(null); }
-  };
-
-  const toggleStoreFeatured = async (project: Project, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const next = !project.store_featured;
-    // When adding to store, also make the project public so it passes the
-    // store API's is_public guard. A private project that is store_featured
-    // would never render — auto-publish avoids a confusing two-step flow.
-    const patch: Record<string, unknown> = { store_featured: next };
-    if (next && !project.is_public) patch.is_public = true;
-
-    setTogglingStore(project.id);
-    // Optimistic update
-    setProjects((prev) => prev.map((p) =>
-      p.id === project.id ? { ...p, store_featured: next, is_public: next ? true : p.is_public } : p,
-    ));
-    try {
-      const res = await fetch(`/api/projects/${project.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `HTTP ${res.status}`);
-      }
-      toast.success(next ? 'Project added to store ✓' : 'Project removed from store');
-    } catch (err: any) {
-      // Rollback
-      setProjects((prev) => prev.map((p) =>
-        p.id === project.id ? { ...p, store_featured: !next, is_public: project.is_public } : p,
-      ));
-      toast.error('Failed to update', err.message);
-    } finally {
-      setTogglingStore(null);
-    }
   };
 
   const fetchProjects = async () => {
@@ -173,6 +112,10 @@ export default function ProjectsPage() {
       // best-effort
     }
   };
+  const refreshProjectsAndFolders = () => {
+    fetchProjects();
+    fetchFolders();
+  };
 
   useEffect(() => {
     fetchProjects();
@@ -185,28 +128,9 @@ export default function ProjectsPage() {
   useRealtimeTable({ table: 'projects', onChange: fetchProjects });
   useRealtimeTable({ table: 'project_tags', onChange: fetchProjects });
   useRealtimeTable({ table: 'project_folder_items', onChange: fetchProjects });
+  useRealtimeTable({ table: 'project_tracks', onChange: fetchProjects });
+  useRealtimeTable({ table: 'tracks', onChange: fetchProjects });
   useRealtimeTable({ table: 'project_folders', onChange: fetchFolders });
-
-  const createProject = async () => {
-    setCreating(true);
-    try {
-      const res = await fetch('/api/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.project?.id) {
-        throw new Error(data?.error || `Could not create project (HTTP ${res.status})`);
-      }
-      window.location.href = `/projects/${data.project.id}`;
-    } catch (err) {
-      console.error('Create project error:', err);
-      toast.error('Create failed', err instanceof Error ? err.message : 'Try again.');
-    } finally {
-      setCreating(false);
-    }
-  };
 
   // Filter + sort delegated to the pure, tested helper (lib/projects/filters).
   // Pinned projects float to the very top within the sorted results.
@@ -228,6 +152,16 @@ export default function ProjectsPage() {
     return recentIds.map((id) => byId.get(id)).filter(Boolean).slice(0, 4) as Project[];
   }, [recentIds, projects]);
 
+  const foldersWithCovers = useMemo(() => folders.map((folder) => ({
+    ...folder,
+    cover_urls: projects
+      .filter((project) => (project.folder_ids ?? []).includes(folder.id))
+      .flatMap((project) => [project.cover_url, ...(project.preview_covers ?? [])])
+      .filter(Boolean)
+      .filter((cover, index, all) => all.indexOf(cover) === index)
+      .slice(0, 4) as string[],
+  })), [folders, projects]);
+
   return (
     <DashboardLayout>
       <PageContainer>
@@ -238,11 +172,10 @@ export default function ProjectsPage() {
           meta={`${filtered.length} project${filtered.length !== 1 ? 's' : ''}`}
           actions={(
             <button
-              onClick={createProject}
-              disabled={creating}
-              className="flex items-center gap-2 bg-white text-black px-4 py-2.5 rounded-full text-[12px] font-medium hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all min-h-[44px]"
+              onClick={() => setCreateOpen(true)}
+              className="flex items-center gap-2 bg-white text-black px-4 py-2.5 rounded-full text-[12px] font-medium hover:bg-[#F7EBDD] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all min-h-[44px]"
             >
-              {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+              <Plus size={14} />
               New project
             </button>
           )}
@@ -252,28 +185,28 @@ export default function ProjectsPage() {
         <ProjectFilterBar
           value={filters}
           onChange={setFilters}
-          folders={folders}
+          folders={foldersWithCovers}
           onFoldersChanged={fetchFolders}
           resultCount={filtered.length}
         />
 
         {loading ? (
           <div className="flex items-center justify-center py-32">
-            <Loader2 size={18} className="animate-spin text-[#4a4338]" />
+            <Loader2 size={18} className="animate-spin text-[#837B6D]" />
           </div>
         ) : fetchError ? (
           // Fetch errored — surface the real reason + retry button so the
           // user isn't staring at the "No projects yet" copy thinking
           // their data is gone.
           <div className="text-center py-32">
-            <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-[#14110d] border border-[#1a160f] flex items-center justify-center">
-              <Layers size={22} className="text-[#c8a84b]" />
+            <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-[#171511] border border-[#211F1A] flex items-center justify-center">
+              <Layers size={22} className="text-[#D6BE7A]" />
             </div>
-            <p className="text-sm text-[#E8DCC8] mb-1">Couldn’t load projects</p>
-            <p className="text-[11px] text-[#5a5142] mb-6 font-mono">{fetchError}</p>
+            <p className="text-sm text-[#F7EBDD] mb-1">Couldn’t load projects</p>
+            <p className="text-[11px] text-[#9B9282] mb-6 font-mono">{fetchError}</p>
             <button
               onClick={fetchProjects}
-              className="inline-flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#2d2620] transition-colors"
+              className="inline-flex items-center gap-2 bg-[#171511] border border-[#211F1A] text-[#F7EBDD] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#3B372F] transition-colors"
             >
               Try again
             </button>
@@ -285,32 +218,31 @@ export default function ProjectsPage() {
           (() => {
             return (
               <div className="text-center py-32">
-                <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-[#14110d] border border-[#1a160f] flex items-center justify-center">
-                  <Layers size={22} className="text-[#3a3328]" />
+                <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-[#171511] border border-[#211F1A] flex items-center justify-center">
+                  <Layers size={22} className="text-[#6E685B]" />
                 </div>
                 {isFiltered ? (
                   <>
-                    <p className="text-sm text-[#E8DCC8] mb-1">No matches</p>
-                    <p className="text-[11px] text-[#5a5142] mb-6">
+                    <p className="text-sm text-[#F7EBDD] mb-1">No matches</p>
+                    <p className="text-[11px] text-[#9B9282] mb-6">
                       {projects.length} project{projects.length !== 1 ? 's' : ''} hidden by the current filter or search.
                     </p>
                     <button
                       onClick={() => setFilters({ ...DEFAULT_PROJECT_FILTERS, tags: new Set() })}
-                      className="inline-flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#2d2620] transition-colors"
+                      className="inline-flex items-center gap-2 bg-[#171511] border border-[#211F1A] text-[#F7EBDD] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#3B372F] transition-colors"
                     >
                       Clear filters
                     </button>
                   </>
                 ) : (
                   <>
-                    <p className="text-sm text-[#E8DCC8] mb-1">No projects yet</p>
-                    <p className="text-[11px] text-[#5a5142] mb-6">Create a project to group references, stems and versions</p>
+                    <p className="text-sm text-[#F7EBDD] mb-1">No projects yet</p>
+                    <p className="text-[11px] text-[#9B9282] mb-6">Create a project to group references, stems and versions</p>
                     <button
-                      onClick={createProject}
-                      disabled={creating}
-                      className="inline-flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#2d2620] disabled:opacity-40 transition-colors"
+                      onClick={() => setCreateOpen(true)}
+                      className="inline-flex items-center gap-2 bg-[#171511] border border-[#211F1A] text-[#F7EBDD] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#3B372F] disabled:opacity-40 transition-colors"
                     >
-                      {creating ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                      <Plus size={12} />
                       Create first project
                     </button>
                   </>
@@ -324,153 +256,103 @@ export default function ProjectsPage() {
               when not searching/filtering and there are genuine recents. */}
           {!isFiltered && recentProjects.length > 0 && (
             <div className="mb-6">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-3 flex items-center gap-2">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] mb-3 flex items-center gap-2">
                 <Clock size={10} /> Recently opened
               </p>
               <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
                 {recentProjects.map((p) => (
                   <Link key={p.id} href={`/projects/${p.id}`} onClick={() => trackRecentOpen(p.id)}
-                    className="shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1f1a13] bg-[#14110d] hover:border-[#2d2620] hover:bg-[#1a160f] transition-colors min-w-[180px] max-w-[240px]">
-                    <div className="w-8 h-8 rounded-md overflow-hidden bg-[#0a0907] shrink-0">
-                      {p.cover_url ? <img src={p.cover_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={12} /></div>}
+                    className="shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#2B2821] bg-[#171511] hover:border-[#3B372F] hover:bg-[#211F1A] transition-colors min-w-[180px] max-w-[240px]">
+                    <div className="w-8 h-8 rounded-md overflow-hidden bg-[#090907] shrink-0">
+                      {p.cover_url || p.preview_covers?.[0] ? <img src={p.cover_url ?? p.preview_covers?.[0]} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={12} /></div>}
                     </div>
-                    <span className="text-[11px] font-medium text-[#E8DCC8] truncate">{p.name}</span>
+                    <span className="text-[11px] font-medium text-[#F7EBDD] truncate">{p.name}</span>
                   </Link>
                 ))}
               </div>
             </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
             {filtered.map((project) => {
-              const status = project.status || 'in_progress';
               const updatedAt = project.updated_at ? new Date(project.updated_at) : null;
               const relativeTime = updatedAt ? relativeDate(updatedAt) : null;
+              const previewCovers = project.preview_covers?.filter(Boolean) ?? [];
 
               return (
-                <div key={project.id} className="flex flex-col">
-                  <Link href={`/projects/${project.id}`} onClick={() => trackRecentOpen(project.id)} className="group flex flex-col">
-                    {/* Cover card */}
-                    <div className={`relative aspect-square rounded-xl mb-3 overflow-hidden border transition-all duration-200 ${STATUS_BORDER[status]} group-hover:scale-[1.02]`}>
-                      {/* Status-tinted gradient overlay at bottom */}
-                      <div className={`absolute inset-0 ${STATUS_GRADIENT[status]} opacity-60`} />
-
+                <article
+                  key={project.id}
+                  className="group min-w-0"
+                >
+                  <Link href={`/projects/${project.id}`} onClick={() => trackRecentOpen(project.id)} className="block min-w-0">
+                    <div className="relative mb-2.5 aspect-square overflow-hidden rounded-[22px] bg-[#202020] transition-transform duration-200 group-hover:-translate-y-0.5">
                       {project.cover_url ? (
-                        <img loading="lazy" src={project.cover_url} alt={project.name} className="absolute inset-0 w-full h-full object-cover" />
+                        <img loading="lazy" src={project.cover_url} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                      ) : previewCovers.length > 1 ? (
+                        <div className="absolute inset-0 grid grid-cols-2 gap-px bg-[#202020]">
+                          {previewCovers.slice(0, 4).map((cover, index) => (
+                            <img key={`${cover}-${index}`} loading="lazy" src={cover} alt="" className="h-full w-full object-cover" />
+                          ))}
+                        </div>
+                      ) : previewCovers.length === 1 ? (
+                        <img loading="lazy" src={previewCovers[0]} alt="" className="absolute inset-0 h-full w-full object-cover" />
                       ) : (
-                        <div className="absolute inset-0 flex items-center justify-center" style={seededGradient(project.id)}>
-                          <Music size={28} className="text-white/10" />
+                        <div className="absolute inset-0 flex items-center justify-center bg-[#202020]">
+                          <Music size={28} className="text-white/16" />
                         </div>
                       )}
-
-                      {/* Play overlay on hover */}
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <div className="w-12 h-12 rounded-full bg-white/95 flex items-center justify-center shadow-xl">
-                          <Play size={18} fill="black" className="text-black ml-0.5" />
-                        </div>
-                      </div>
-
-                      {/* Status badge */}
-                      <div className={`absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[8px] font-mono font-bold uppercase tracking-wider border backdrop-blur-sm ${STATUS_STYLE[status]}`}>
-                        {status.replace('_', ' ')}
-                      </div>
-
-                      {/* Pin button — top-left next to status */}
                       {project.pinned && (
                         <button
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); togglePin(project, e); }}
+                          onClick={(e) => togglePin(project, e)}
                           disabled={togglingPin === project.id}
-                          className="absolute top-2 left-2 z-20 w-6 h-6 rounded-full bg-[#D4BFA0] text-black flex items-center justify-center shadow-sm"
+                          className="absolute right-9 top-2 z-20 grid size-6 place-items-center rounded-full bg-[#E7D7BE] text-black shadow-sm"
                           title="Unpin"
                         >
                           <Pin size={10} fill="currentColor" />
                         </button>
                       )}
-                      {/* Options menu (⋯) — top-right. Its handlers stopPropagation
-                          so opening/using it never navigates into the project. */}
-                      <div className="absolute top-2 right-2 z-10">
-                        <ProjectOptionsMenu project={project} onChanged={fetchProjects} onDeleted={fetchProjects} />
-                      </div>
-
-                      {/* Store badge — bottom-left when store_featured */}
-                      {project.store_featured && (
-                        <div className="absolute bottom-2.5 left-2.5 px-1.5 py-0.5 rounded-full text-[7px] font-mono font-bold uppercase tracking-wider bg-[#D4BFA0] text-black border border-[#D4BFA0]/80">
-                          In Store
-                        </div>
-                      )}
-
-                      {/* Track count badge */}
-                      <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1 bg-black/60 backdrop-blur-sm px-2 py-0.5 rounded-full">
-                        <Music size={9} className="text-[#a08a6a]" />
-                        <span className="text-[9px] font-mono text-[#E8DCC8]">{project.track_count || 0}</span>
+                      <div className="absolute right-2 top-2 z-10">
+                        <ProjectOptionsMenu project={project} onChanged={refreshProjectsAndFolders} onDeleted={fetchProjects} />
                       </div>
                     </div>
 
-                    {/* Title — the dominant element; large + bold so it reads at a glance */}
-                    <h3 className="text-[15px] font-bold text-white truncate leading-tight mb-1 group-hover:text-[#E8D8B8] transition-colors">
+                    <h3 className="truncate text-[13px] font-bold leading-tight text-[#F7EBDD] transition-colors group-hover:text-white sm:text-[15px]">
                       {project.name}
                     </h3>
-
-                    <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
-                      {project.bpm_target != null && (
-                        <span className="text-[9px] font-mono text-[#5a5142] bg-[#14110d] border border-[#1f1a13] px-1.5 py-0.5 rounded tabular-nums">
-                          {fmtBpm(project.bpm_target)}
-                        </span>
-                      )}
-                      {project.key_target && (
-                        <span className="text-[9px] font-mono text-[#5a5142] bg-[#14110d] border border-[#1f1a13] px-1.5 py-0.5 rounded uppercase">
-                          {fmtKey(project.key_target, null)}
-                        </span>
-                      )}
+                    <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-[#837B6D]">
+                      <span>{project.track_count || 0} track{project.track_count === 1 ? '' : 's'}</span>
                       {relativeTime && (
-                        <span className="text-[9px] font-mono text-[#3a3328] flex items-center gap-1 ml-auto">
-                          <Clock size={8} />
-                          {relativeTime}
-                        </span>
+                        <>
+                          <span className="text-[#3B372F]">·</span>
+                          <span className="inline-flex items-center gap-1"><Clock size={8} /> {relativeTime}</span>
+                        </>
+                      )}
+                      {(project.tags?.length ?? 0) > 0 && (
+                        <>
+                          <span className="text-[#3B372F]">·</span>
+                          <span className="truncate">{project.tags!.slice(0, 2).map((t) => t.tag).join(' / ')}</span>
+                        </>
                       )}
                     </div>
-
-                    {/* Tag chips — first few, so tagging is visible at a glance. */}
-                    {(project.tags?.length ?? 0) > 0 && (
-                      <div className="flex items-center gap-1 flex-wrap mb-2">
-                        {project.tags!.slice(0, 3).map((t) => (
-                          <span key={t.tag} className="text-[8px] font-mono uppercase tracking-wider text-[#a08a6a] bg-[#1a160f] border border-[#2d2620] px-1.5 py-0.5 rounded">
-                            {t.tag}
-                          </span>
-                        ))}
-                        {project.tags!.length > 3 && (
-                          <span className="text-[8px] font-mono text-[#4a4338]">+{project.tags!.length - 3}</span>
-                        )}
-                      </div>
-                    )}
                   </Link>
-
-                  {/* Show in Store toggle — outside Link to prevent navigation */}
-                  <button
-                    onClick={(e) => toggleStoreFeatured(project, e)}
-                    disabled={togglingStore === project.id}
-                    title={project.store_featured ? 'Remove from store' : 'Add to store (will also make project public)'}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-mono uppercase tracking-wider border transition-all w-full justify-center disabled:opacity-60 ${
-                      project.store_featured
-                        ? 'bg-[#D4BFA0]/10 border-[#D4BFA0]/30 text-[#D4BFA0] hover:bg-[#D4BFA0]/20'
-                        : 'bg-transparent border-[#1f1a13] text-[#6a5d4a] hover:border-[#D4BFA0]/30 hover:text-[#D4BFA0]'
-                    }`}
-                  >
-                    {togglingStore === project.id
-                      ? <Loader2 size={9} className="animate-spin" />
-                      : project.store_featured
-                      ? <ShoppingBag size={9} />
-                      : <Globe size={9} />
-                    }
-                    {project.store_featured ? 'In store' : 'Add to store'}
-                  </button>
-                </div>
+                </article>
               );
             })}
           </div>
           </>
         )}
       </PageContainer>
+      {createOpen && (
+        <CreateProjectModal
+          kind="project"
+          onClose={() => setCreateOpen(false)}
+          onSuccess={(project, flow) => {
+            setCreateOpen(false);
+            fetchProjects();
+            router.push(`/projects/${project.id}${flow === 'empty' ? '' : `?start=${flow}`}`);
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }

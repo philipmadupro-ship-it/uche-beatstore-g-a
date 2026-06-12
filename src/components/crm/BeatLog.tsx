@@ -11,10 +11,10 @@ interface BeatLogProps {
 }
 
 const STATUS_CONFIG: Record<string, { icon: typeof Mail; dot: string; text: string; ring: string; label: string }> = {
-  sent:        { icon: Mail,        dot: 'bg-[#6a5d4a]', text: 'text-[#a08a6a]', ring: 'ring-[#2d2620]',    label: 'Sent' },
+  sent:        { icon: Mail,        dot: 'bg-[#B4AA99]', text: 'text-[#D0C3AF]', ring: 'ring-[#3B372F]',    label: 'Sent' },
   opened:      { icon: Clock,       dot: 'bg-[#7aa8e8]', text: 'text-[#7aa8e8]', ring: 'ring-[#3a4a6a]',    label: 'Opened' },
-  interested:  { icon: ArrowUpRight,dot: 'bg-[#E8D8B8]', text: 'text-[#E8D8B8]', ring: 'ring-[#8A7A5C]/40', label: 'Interested' },
-  negotiating: { icon: Clock,       dot: 'bg-[#e8a86a]', text: 'text-[#e8a86a]', ring: 'ring-[#8A7A5C]/40', label: 'Negotiating' },
+  interested:  { icon: ArrowUpRight,dot: 'bg-[#F3E6D1]', text: 'text-[#F3E6D1]', ring: 'ring-[#C9BCA8]/40', label: 'Interested' },
+  negotiating: { icon: Clock,       dot: 'bg-[#e8a86a]', text: 'text-[#e8a86a]', ring: 'ring-[#C9BCA8]/40', label: 'Negotiating' },
   placed:      { icon: CheckCircle, dot: 'bg-[#6DC6A4]', text: 'text-[#6DC6A4]', ring: 'ring-[#1f5a4a]',    label: 'Placed' },
   pass:        { icon: XCircle,     dot: 'bg-[#e88a8a]', text: 'text-[#e88a8a]', ring: 'ring-[#6a2a2a]',    label: 'Pass' },
 };
@@ -22,10 +22,10 @@ const STATUS_CONFIG: Record<string, { icon: typeof Mail; dot: string; text: stri
 const AVATAR_PALETTES = [
   { bg: 'bg-[#1a1230]', text: 'text-[#9d95e8]', border: 'border-[#534AB7]/30' },
   { bg: 'bg-[#0a1f0f]', text: 'text-[#6DC6A4]', border: 'border-[#1f5a4a]/40' },
-  { bg: 'bg-[#1f1a0a]', text: 'text-[#c8a84b]', border: 'border-[#3a2f1f]/60' },
+  { bg: 'bg-[#1f1a0a]', text: 'text-[#D6BE7A]', border: 'border-[#3a2f1f]/60' },
   { bg: 'bg-[#1f0f0a]', text: 'text-[#e87a6a]', border: 'border-[#6a2a1f]/40' },
   { bg: 'bg-[#0a1420]', text: 'text-[#7aa8e8]', border: 'border-[#3a4a6a]/40' },
-  { bg: 'bg-[#1a1410]', text: 'text-[#E8D8B8]', border: 'border-[#8A7A5C]/30' },
+  { bg: 'bg-[#1a1410]', text: 'text-[#F3E6D1]', border: 'border-[#C9BCA8]/30' },
 ];
 
 function nameToAvatar(name: string) {
@@ -51,19 +51,19 @@ export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
   );
 
   return (
-    <div className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl overflow-hidden">
+    <div className="w-full bg-[#090907] border border-[#2B2821] rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-[#1f1a13] flex items-center justify-between">
+      <div className="px-6 py-4 border-b border-[#2B2821] flex items-center justify-between">
         <div>
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-1">CRM · Pipeline</p>
-          <h3 className="text-[13px] font-bold text-[#E8DCC8]">Beat Sends</h3>
+          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] mb-1">CRM · Pipeline</p>
+          <h3 className="text-[13px] font-bold text-[#F7EBDD]">Beat Sends</h3>
         </div>
-        <span className="text-[10px] font-mono text-[#5a5142] tabular-nums">{sends.length} record{sends.length !== 1 ? 's' : ''}</span>
+        <span className="text-[10px] font-mono text-[#9B9282] tabular-nums">{sends.length} record{sends.length !== 1 ? 's' : ''}</span>
       </div>
 
       {/* Column headers */}
       {sorted.length > 0 && (
-        <div className="grid grid-cols-[40px_1.8fr_0.9fr_1fr_100px_60px] items-center gap-4 px-5 h-8 border-b border-[#1f1a13] text-[9px] font-mono uppercase tracking-wider text-[#3a3328] bg-[#0a0907]">
+        <div className="grid grid-cols-[40px_1.8fr_0.9fr_1fr_100px_60px] items-center gap-4 px-5 h-8 border-b border-[#2B2821] text-[9px] font-mono uppercase tracking-wider text-[#6E685B] bg-[#090907]">
           <span />
           <span>Contact</span>
           <span>Tracks</span>
@@ -73,7 +73,7 @@ export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
         </div>
       )}
 
-      <div className="divide-y divide-[#1a160f]">
+      <div className="divide-y divide-[#211F1A]">
         {sorted.map((send) => {
           const cfg = STATUS_CONFIG[send.status] ?? STATUS_CONFIG.sent;
           const contact = contactById.get(send.contact_id);
@@ -86,7 +86,7 @@ export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
           return (
             <div
               key={send.id}
-              className="grid grid-cols-[40px_1.8fr_0.9fr_1fr_100px_60px] items-center gap-4 px-5 h-14 hover:bg-[#16130e] transition-colors"
+              className="grid grid-cols-[40px_1.8fr_0.9fr_1fr_100px_60px] items-center gap-4 px-5 h-14 hover:bg-[#1A1813] transition-colors"
             >
               {/* Avatar */}
               <div className={`w-8 h-8 rounded-full ${av.bg} border ${av.border} flex items-center justify-center text-[11px] font-bold ${av.text} shrink-0`}>
@@ -96,32 +96,32 @@ export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
               {/* Name + timestamp */}
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[12px] font-medium text-[#E8DCC8] truncate">{name}</span>
+                  <span className="text-[12px] font-medium text-[#F7EBDD] truncate">{name}</span>
                   {needsNudge && (
                     <span className="bg-amber-500/15 border border-amber-500/40 text-amber-400 text-[7px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded animate-pulse shrink-0">
                       Nudge
                     </span>
                   )}
                 </div>
-                <p className="text-[9px] font-mono text-[#5a5142] mt-0.5">{relativeDays(send.sent_at)}</p>
+                <p className="text-[9px] font-mono text-[#9B9282] mt-0.5">{relativeDays(send.sent_at)}</p>
               </div>
 
               {/* Track count */}
               <div className="flex items-center gap-1.5">
-                <Music size={10} className="text-[#4a4338] shrink-0" />
-                <span className="text-[11px] font-mono text-[#a08a6a] tabular-nums">
+                <Music size={10} className="text-[#837B6D] shrink-0" />
+                <span className="text-[11px] font-mono text-[#D0C3AF] tabular-nums">
                   {trackCount} track{trackCount !== 1 ? 's' : ''}
                 </span>
               </div>
 
               {/* Message preview */}
-              <p className="text-[10px] text-[#6a5d4a] truncate">
-                {send.message || <span className="text-[#3a3328] italic">No message</span>}
+              <p className="text-[10px] text-[#B4AA99] truncate">
+                {send.message || <span className="text-[#6E685B] italic">No message</span>}
               </p>
 
               {/* Status pill */}
               <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-inset ${cfg.ring} ${cfg.text} w-fit`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${cfg.dot === 'bg-[#6a5d4a]' ? '' : 'animate-pulse'}`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${cfg.dot === 'bg-[#B4AA99]' ? '' : 'animate-pulse'}`} />
                 {cfg.label}
               </span>
 
@@ -129,7 +129,7 @@ export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
               <div className="flex justify-end">
                 <Link
                   href={`/share/${send.share_token}`}
-                  className="w-7 h-7 rounded-full border border-[#2d2620] hover:border-[#4a4338] flex items-center justify-center text-[#5a5142] hover:text-[#E8DCC8] transition-all"
+                  className="w-7 h-7 rounded-full border border-[#3B372F] hover:border-[#837B6D] flex items-center justify-center text-[#9B9282] hover:text-[#F7EBDD] transition-all"
                   title="Open share link"
                 >
                   <ArrowUpRight size={12} />
@@ -141,12 +141,12 @@ export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
 
         {sends.length === 0 && (
           <div className="py-16 flex flex-col items-center justify-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-[#14110d] border border-[#1f1a13] flex items-center justify-center">
-              <Mail size={18} className="text-[#3a3328]" />
+            <div className="w-12 h-12 rounded-xl bg-[#171511] border border-[#2B2821] flex items-center justify-center">
+              <Mail size={18} className="text-[#6E685B]" />
             </div>
             <div className="text-center">
-              <p className="text-[12px] text-[#E8DCC8] mb-1">No sends yet</p>
-              <p className="text-[10px] text-[#5a5142]">Send a beat to a contact to start tracking your pipeline</p>
+              <p className="text-[12px] text-[#F7EBDD] mb-1">No sends yet</p>
+              <p className="text-[10px] text-[#9B9282]">Send a beat to a contact to start tracking your pipeline</p>
             </div>
           </div>
         )}

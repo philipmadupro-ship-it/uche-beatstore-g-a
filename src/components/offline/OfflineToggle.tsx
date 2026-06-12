@@ -24,7 +24,7 @@ export function OfflineToggle({ trackId, audioUrl, title, variant = 'button' }: 
   if (variant === 'compact') {
     if (downloading) {
       return (
-        <div className="inline-flex items-center gap-1.5 text-[10px] text-[#E8D8B8] font-mono">
+        <div className="inline-flex items-center gap-1.5 text-[10px] text-[#F3E6D1] font-mono">
           <Loader2 size={10} className="animate-spin" />
           {Math.round(progress * 100)}%
         </div>
@@ -45,7 +45,7 @@ export function OfflineToggle({ trackId, audioUrl, title, variant = 'button' }: 
       <button
         onClick={() => download(audioUrl, title)}
         title="Save offline"
-        className="inline-flex items-center gap-1 text-[10px] text-[#5a5142] hover:text-[#E8D8B8]"
+        className="inline-flex items-center gap-1 text-[10px] text-[#9B9282] hover:text-[#F3E6D1]"
       >
         <Download size={10} />
       </button>
@@ -56,7 +56,7 @@ export function OfflineToggle({ trackId, audioUrl, title, variant = 'button' }: 
     return (
       <button
         disabled
-        className="flex items-center gap-2 px-3 py-2 rounded-md border border-[#1a160f] bg-[#14110d] text-[#E8D8B8] text-[11px] font-medium"
+        className="flex items-center gap-2 px-3 py-2 rounded-md border border-[#211F1A] bg-[#171511] text-[#F3E6D1] text-[11px] font-medium"
       >
         <Loader2 size={11} className="animate-spin" />
         Caching… {Math.round(progress * 100)}%
@@ -81,7 +81,7 @@ export function OfflineToggle({ trackId, audioUrl, title, variant = 'button' }: 
     <div className="flex flex-col items-end gap-1">
       <button
         onClick={() => download(audioUrl, title)}
-        className="flex items-center gap-2 px-3 py-2 rounded-md border border-[#1a160f] bg-[#14110d] text-[#a08a6a] hover:text-white hover:bg-[#1a160f] text-[11px] font-medium transition-colors"
+        className="flex items-center gap-2 px-3 py-2 rounded-md border border-[#211F1A] bg-[#171511] text-[#D0C3AF] hover:text-white hover:bg-[#211F1A] text-[11px] font-medium transition-colors"
       >
         <Download size={11} />
         Save offline

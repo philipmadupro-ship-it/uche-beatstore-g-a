@@ -150,11 +150,11 @@ export function ToplineRecorder({ trackId }: { trackId: string }) {
   const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   return (
-    <div className="rounded-lg border border-[#1a160f] bg-[#0c0a08] p-3">
+    <div className="rounded-lg border border-[#211F1A] bg-[#11100D] p-3">
       <div className="flex items-center gap-2 mb-2.5">
-        <AudioLines size={11} className="text-[#a08a6a]" />
-        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a]">Topline</span>
-        {items.length > 0 && <span className="text-[9px] font-mono text-[#3a3328]">· {items.length}</span>}
+        <AudioLines size={11} className="text-[#D0C3AF]" />
+        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#B4AA99]">Topline</span>
+        {items.length > 0 && <span className="text-[9px] font-mono text-[#6E685B]">· {items.length}</span>}
         <div className="flex-1" />
         {recording ? (
           <button
@@ -169,7 +169,7 @@ export function ToplineRecorder({ trackId }: { trackId: string }) {
           <button
             onClick={start}
             disabled={uploading}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#2A2418] border border-[#8A7A5C]/40 text-[#E8D8B8] text-[10px] font-medium hover:bg-[#332b1d] transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#342F27] border border-[#C9BCA8]/40 text-[#F3E6D1] text-[10px] font-medium hover:bg-[#332b1d] transition-colors disabled:opacity-50"
           >
             {uploading ? <Loader2 size={11} className="animate-spin" /> : <Mic size={11} />}
             {uploading ? 'Saving…' : 'Record topline'}
@@ -178,25 +178,25 @@ export function ToplineRecorder({ trackId }: { trackId: string }) {
       </div>
 
       {items.length === 0 ? (
-        <p className="text-[10px] text-[#4a4338] leading-relaxed">
+        <p className="text-[10px] text-[#837B6D] leading-relaxed">
           Hum or sing a melody idea over the beat — it records from your mic and stays attached to this track. Not a deliverable stem.
         </p>
       ) : (
         <div className="space-y-1.5">
           {items.map((t) => (
-            <div key={t.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-md bg-[#14110d] border border-[#1a160f]">
+            <div key={t.id} className="flex items-center gap-2.5 px-2.5 py-2 rounded-md bg-[#171511] border border-[#211F1A]">
               <button
                 onClick={() => togglePlay(t)}
                 className={cn('w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors',
-                  playingId === t.id ? 'bg-[#D4BFA0] text-black' : 'bg-[#1a160f] text-[#a08a6a] hover:text-[#E8DCC8]')}
+                  playingId === t.id ? 'bg-[#E7D7BE] text-black' : 'bg-[#211F1A] text-[#D0C3AF] hover:text-[#F7EBDD]')}
                 aria-label={playingId === t.id ? 'Pause' : 'Play'}
               >
                 {playingId === t.id ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" className="ml-0.5" />}
               </button>
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] text-[#E8DCC8] truncate">{t.label}</p>
+                <p className="text-[11px] text-[#F7EBDD] truncate">{t.label}</p>
               </div>
-              <button onClick={() => remove(t)} className="text-[#5a5142] hover:text-red-400 transition-colors shrink-0" aria-label="Delete topline">
+              <button onClick={() => remove(t)} className="text-[#9B9282] hover:text-red-400 transition-colors shrink-0" aria-label="Delete topline">
                 <Trash2 size={12} />
               </button>
             </div>

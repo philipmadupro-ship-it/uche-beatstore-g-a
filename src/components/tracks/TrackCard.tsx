@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Track } from '@/lib/types';
 import { MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2, Share2, ChevronUp, ChevronDown } from 'lucide-react';
-import { PlayGlyph } from '@/components/player/TransportIcons';
+import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { setTrackDragData } from '@/lib/dnd';
@@ -36,6 +36,15 @@ interface TrackCardProps {
   isLastInOrder?: boolean;
 }
 
+type TrackTag = {
+  tag: string;
+  category?: string | null;
+};
+
+type TrackWithInlineTags = Track & {
+  track_tags?: TrackTag[];
+};
+
 export function TrackCard({
   track,
   index,
@@ -53,9 +62,13 @@ export function TrackCard({
   isFirstInOrder = false,
   isLastInOrder = false,
 }: TrackCardProps) {
+  void index;
   const { currentTrack, isPlaying, setTrack, togglePlay } = usePlayer();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const trackTags = (track as TrackWithInlineTags).track_tags ?? [];
+  const stemStatus = track.stems_status as string | null | undefined;
+  const hasCompletedStems = stemStatus === 'done' || stemStatus === 'completed';
 
   // Offline Caching integration
   const [isCached, setIsCached] = useState(false);
@@ -127,16 +140,12 @@ export function TrackCard({
 
   const uploadDate = new Date(track.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const { rate: rateTrack } = useRating(track.id, track.rating || 0);
+  const durationLabel = formatDuration(track.duration_seconds ?? null);
+  const genreMoodTags = trackTags.filter((tt) => tt.category === 'genre' || tt.category === 'mood');
 
   const handleRating = (e: React.MouseEvent, star: number) => {
     e.stopPropagation();
     rateTrack(star);
-  };
-
-  const typeColor: Record<string, string> = {
-    instrumental: 'text-[#E8D8B8]',
-    song: 'text-[#8ecf9f]',
-    remix: 'text-[#eca9a9]',
   };
 
   return (
@@ -158,23 +167,41 @@ export function TrackCard({
           cover_url: track.cover_url ?? null,
         });
       }}
-      className={`group grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_110px_32px] lg:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_100px_110px_32px] items-center gap-4 px-4 h-[52px] border-b border-[#161310] hover:bg-[#101010] transition-colors cursor-pointer ${
-        isCurrent ? 'bg-[#0e0c08]' : ''
-      } ${selected ? 'bg-[#15132a]' : ''}`}
+      className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 overflow-hidden rounded-[14px] border px-2.5 py-2 transition-all cursor-pointer md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_70px_112px_32px] md:gap-4 md:px-3 ${
+        isCurrent
+          ? 'border-transparent bg-[#1F1B14]/92 shadow-[inset_2px_0_0_#E7D7BE]'
+          : selected
+            ? 'border-[#E7D7BE]/30 bg-[#1A1813]/82'
+            : 'border-transparent bg-[#15130F]/74 hover:bg-[#1A1813]/82'
+      }`}
     >
-      {/* Index — replaced by checkbox in selectable mode, or ↑↓ arrows in
-          reorder mode, so the column retains its width in all states. */}
-      <div className={`text-[11px] font-mono text-center tabular-nums ${isCurrent ? 'text-[#D4BFA0]' : 'text-[#3a3328]'}`}
-        onClick={(e) => { if (onMoveUp || onMoveDown) e.stopPropagation(); }}
+      {track.cover_url && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-0 blur-2xl saturate-125 transition-opacity duration-500 group-hover:opacity-[0.16]"
+          style={{
+            backgroundImage: `url(${track.cover_url})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            transform: 'scale(1.16)',
+          }}
+        />
+      )}
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#090907]/24 via-transparent to-[#090907]/34" />
+
+      {/* Cover/play cell — mirrors the Store list row. In select or store
+          order mode this cell becomes the control, keeping actions left. */}
+      <div
+        className="relative z-10"
+        onClick={(e) => { if (onMoveUp || onMoveDown || selectable) e.stopPropagation(); }}
       >
         {onMoveUp !== undefined || onMoveDown !== undefined ? (
-          /* Store reorder mode — ↑/↓ arrow stack */
-          <div className="flex flex-col items-center justify-center gap-0.5 -my-0.5">
+          <div className="flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-lg border border-[#211F1A] bg-[#090907]/80">
             <button
               type="button"
               disabled={isFirstInOrder}
               onClick={(e) => { e.stopPropagation(); onMoveUp?.(); }}
-              className={`p-0.5 rounded transition-colors ${isFirstInOrder ? 'text-[#1f1a13] cursor-default' : 'text-[#5a5142] hover:text-[#D4BFA0] hover:bg-[#1f1a13]'}`}
+              className={`p-0.5 rounded transition-colors ${isFirstInOrder ? 'text-[#2B2821] cursor-default' : 'text-[#9B9282] hover:text-[#E7D7BE] hover:bg-[#2B2821]'}`}
               aria-label="Move up"
             >
               <ChevronUp size={11} />
@@ -183,151 +210,147 @@ export function TrackCard({
               type="button"
               disabled={isLastInOrder}
               onClick={(e) => { e.stopPropagation(); onMoveDown?.(); }}
-              className={`p-0.5 rounded transition-colors ${isLastInOrder ? 'text-[#1f1a13] cursor-default' : 'text-[#5a5142] hover:text-[#D4BFA0] hover:bg-[#1f1a13]'}`}
+              className={`p-0.5 rounded transition-colors ${isLastInOrder ? 'text-[#2B2821] cursor-default' : 'text-[#9B9282] hover:text-[#E7D7BE] hover:bg-[#2B2821]'}`}
               aria-label="Move down"
             >
               <ChevronDown size={11} />
             </button>
           </div>
         ) : selectable ? (
-          <div className={`w-4 h-4 mx-auto rounded flex items-center justify-center transition-colors ${
-            selected ? 'bg-[#D4BFA0] border border-[#E8D8B8]' : 'border border-[#2d2620] hover:border-[#4a4338]'
-          }`}>
-            {selected && <span className="text-white text-[10px] leading-none">✓</span>}
-          </div>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onSelectChange?.(track, !selected); }}
+            className={`h-10 w-10 rounded-lg flex items-center justify-center transition-colors ${
+            selected ? 'bg-[#E7D7BE] border border-[#F3E6D1]' : 'border border-[#3B372F]/70 hover:border-[#837B6D]'
+          }`}
+            aria-pressed={selected}
+            aria-label={selected ? 'Deselect track' : 'Select track'}
+          >
+            {selected && <span className="text-black text-[10px] leading-none">✓</span>}
+          </button>
         ) : (
-          <>
-            {isActive ? (
-              <div className="flex gap-0.5 items-end h-3 justify-center">
-                <div className="w-0.5 bg-[#D4BFA0] animate-pulse h-2" />
-                <div className="w-0.5 bg-[#D4BFA0] animate-pulse h-3" style={{ animationDelay: '120ms' }} />
-                <div className="w-0.5 bg-[#D4BFA0] animate-pulse h-1.5" style={{ animationDelay: '240ms' }} />
-              </div>
+          <button
+            type="button"
+            onClick={handlePlay}
+            className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-white/[0.045] bg-[#090907] text-white shadow-[0_8px_18px_rgba(0,0,0,0.24)]"
+            aria-label={isActive ? 'Pause track' : 'Play track'}
+          >
+            {track.cover_url ? (
+              <img loading="lazy" src={track.cover_url} alt="" className="h-full w-full object-cover" />
             ) : (
-              <span className="group-hover:hidden">{String(index).padStart(2, '0')}</span>
+              <div className="flex h-full w-full items-center justify-center text-[#6E685B]">
+                <Music size={13} />
+              </div>
             )}
-            <button
-              onClick={handlePlay}
-              className={`hidden ${isActive ? '' : 'group-hover:flex'} w-6 h-6 items-center justify-center rounded-full bg-white text-black hover:scale-110 transition-transform mx-auto`}
-            >
-              <PlayGlyph size={11} className="ml-0.5" />
-            </button>
-          </>
+            <span className={`absolute inset-0 flex items-center justify-center bg-black/55 transition-opacity ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+              {isActive ? <PauseGlyph size={13} /> : <PlayGlyph size={13} className="ml-0.5" />}
+            </span>
+          </button>
         )}
       </div>
 
-      {/* Thumbnail */}
-      <div className="w-8 h-8 bg-[#16130e] rounded overflow-hidden border border-[#1a160f] shrink-0">
-        {track.cover_url ? (
-          <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-[#2d2620]">
-            <Music size={12} />
-          </div>
-        )}
-      </div>
-
-      {/* Title */}
-      <div className="min-w-0 flex items-center gap-2">
-        <h4 className={`text-[13px] font-medium truncate ${isCurrent ? 'text-[#E8D8B8]' : 'text-[#E8DCC8]'}`}>
+      {/* Title + core metadata */}
+      <div className="relative z-10 min-w-0">
+        <h4 className={`truncate text-[14px] font-semibold leading-tight sm:text-[15px] ${isCurrent ? 'text-[#E7D7BE]' : 'text-[#F7EBDD]'}`}>
           {track.title}
         </h4>
-        {isCached && (
-          <span className="text-[8px] font-bold text-[#AFA9EC] bg-[#1a1833] border border-[#534AB7] rounded px-1.5 py-0.5 uppercase tracking-wider font-mono shrink-0">
-            Offline
+        <p className="mt-1 truncate text-[10px] font-mono uppercase tracking-[0.12em] text-white/42">
+          {[
+            track.bpm ? `${track.bpm} BPM` : null,
+            track.key ? `${track.key}${track.scale === 'minor' ? 'm' : ''}` : null,
+            track.type,
+          ].filter(Boolean).join(' · ') || '—'}
+        </p>
+      </div>
+
+      {/* Tags + rating — secondary support, same hierarchy as Store list. */}
+      <div className="relative z-10 hidden min-w-0 items-center gap-2 md:flex">
+        {genreMoodTags.slice(0, 2).map((tt) => (
+          <span
+            key={`${tt.category}-${tt.tag}`}
+            className={`truncate text-[11px] font-medium ${tt.category === 'genre' ? 'text-[#E7D7BE]' : 'text-white/55'}`}
+          >
+            #{tt.tag}
+          </span>
+        ))}
+        {genreMoodTags.length === 0 && (
+          <span className="text-[10px] font-mono text-white/35">—</span>
+        )}
+        {track.rating != null && Number(track.rating) > 0 && (
+          <span className="ml-auto shrink-0 text-[11px] font-mono text-[#D6BE7A]">
+            ★ {Number(track.rating).toFixed(1)}
           </span>
         )}
       </div>
 
-      {/* Type + stems badge */}
-      <div className="hidden sm:flex items-center gap-1.5 truncate">
-        <span className={`text-[10px] font-mono uppercase tracking-wider ${typeColor[track.type] || 'text-[#6a5d4a]'}`}>
-          {track.type === 'instrumental' ? 'Inst.' : track.type === 'remix' ? 'Remix' : track.type === 'song' ? 'Song' : track.type === 'beat' ? 'Beat' : track.type}
-        </span>
-        {(track as any).stems_status === 'completed' && (
-          <span className="text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 px-1 py-0.5 rounded shrink-0">
-            Stems
-          </span>
-        )}
+      {/* Time / added */}
+      <div className="relative z-10 hidden text-right md:block">
+        <p className="text-[11px] font-mono tabular-nums text-white/45">{durationLabel}</p>
+        <p className="mt-0.5 text-[8px] font-mono uppercase tracking-[0.14em] text-white/25">{uploadDate}</p>
       </div>
-
-      {/* BPM / Key — BPM muted, key color-coded by scale */}
-      <div className="flex items-center gap-1.5 font-mono truncate">
-        <span className="text-[11px] text-[#6a5d4a] tabular-nums">{track.bpm || '—'}</span>
-        {track.key && (
-          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0 ${
-            track.scale === 'minor'
-              ? 'text-[#9d95e8] bg-[#1a1833]/60 border border-[#534AB7]/20'
-              : 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/30'
-          }`}>
-            {track.key}{track.scale === 'minor' ? 'm' : ''}
-          </span>
-        )}
-      </div>
-
-      {/* Date added — visible at sm+ */}
-      <div className="text-[11px] text-[#5a5142] font-mono hidden sm:block truncate">{uploadDate}</div>
 
       {/* Rating stars */}
-      <div className="hidden sm:flex items-center gap-0.5 justify-end" onClick={(e) => e.stopPropagation()}>
-        {[1, 2, 3, 4, 5].map((star) => (
-          <button key={star} onClick={(e) => handleRating(e, star)} className="cursor-pointer p-0.5">
-            <Star
-              size={11}
-              fill={track.rating && track.rating >= star ? '#c8a84b' : 'none'}
-              strokeWidth={1.5}
-              className={track.rating && track.rating >= star ? 'text-[#c8a84b]' : 'text-[#3a3328] hover:text-[#c8a84b] transition-colors'}
-            />
-          </button>
-        ))}
-      </div>
-
-      {/* Tags — first 2 chips + overflow, visible lg+ */}
-      <div className="hidden lg:flex items-center gap-1 overflow-hidden">
-        {((track as any).track_tags ?? []).slice(0, 2).map((tt: any) => (
-          <span key={tt.tag} className="text-[8px] font-mono uppercase tracking-wider text-[#a08a6a] bg-[#1a160f] border border-[#2d2620] px-1.5 py-0.5 rounded shrink-0">
-            {tt.tag}
-          </span>
-        ))}
-        {((track as any).track_tags ?? []).length > 2 && (
-          <span className="text-[8px] font-mono text-[#4a4338]">+{(track as any).track_tags.length - 2}</span>
-        )}
+      <div className="relative z-10 hidden items-center justify-end gap-2 md:flex" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-0.5">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <button key={star} onClick={(e) => handleRating(e, star)} className="cursor-pointer p-0.5">
+              <Star
+                size={11}
+                fill={track.rating && track.rating >= star ? '#D6BE7A' : 'none'}
+                strokeWidth={1.5}
+                className={track.rating && track.rating >= star ? 'text-[#D6BE7A]' : 'text-[#6E685B] hover:text-[#D6BE7A] transition-colors'}
+              />
+            </button>
+          ))}
+        </div>
+        <div className="flex min-w-[42px] justify-end">
+          {isCached && (
+            <span className="rounded border border-[#534AB7] bg-[#1a1833] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#AFA9EC]">
+              Offline
+            </span>
+          )}
+          {!isCached && hasCompletedStems && (
+            <span className="rounded border border-[#6DC6A4]/20 bg-[#6DC6A4]/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4]">
+              Stems
+            </span>
+          )}
+        </div>
       </div>
 
       {/* More */}
-      <div ref={menuRef} className="relative flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+      <div ref={menuRef} className="relative z-20 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
-          className="text-[#3a3328] hover:text-[#E8DCC8] transition-colors flex items-center justify-center p-1 rounded hover:bg-[#1a160f]"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-[#6E685B] transition-colors hover:bg-white/[0.06] hover:text-[#F7EBDD]"
           aria-label="Track actions"
         >
           <MoreHorizontal size={14} />
         </button>
         {menuOpen && (
           <div
-            className="absolute right-0 top-7 z-30 w-52 bg-[#0a0907] border border-[#1f1a13] rounded-lg shadow-2xl py-1 animate-in fade-in slide-in-from-top-1"
+            className="absolute right-0 top-7 z-30 w-52 bg-[#090907] border border-[#2B2821] rounded-lg shadow-2xl py-1 animate-in fade-in slide-in-from-top-1"
           >
             {onClickDetails && (
               <button
                 onClick={() => { setMenuOpen(false); onClickDetails(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#E8DCC8] hover:bg-[#16130e]"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
               >
-                <Info size={12} className="text-[#D4BFA0]" /> View details
+                <Info size={12} className="text-[#E7D7BE]" /> View details
               </button>
             )}
             {onShare && (
               <button
                 onClick={() => { setMenuOpen(false); onShare(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#E8DCC8] hover:bg-[#16130e]"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
               >
-                <Share2 size={12} className="text-[#D4BFA0]" /> Share track
+                <Share2 size={12} className="text-[#E7D7BE]" /> Share track
               </button>
             )}
             
             {isCached ? (
               <button
                 onClick={(e) => { setMenuOpen(false); handleRemoveSync(e); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-amber-500 hover:bg-[#16130e]"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-amber-500 hover:bg-[#1A1813]"
               >
                 <MinusCircle size={12} className="text-amber-500 shrink-0" /> Remove offline cache
               </button>
@@ -335,7 +358,7 @@ export function TrackCard({
               <button
                 onClick={(e) => { handleSync(e); }}
                 disabled={syncProgress !== null}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#E8DCC8] hover:bg-[#16130e] disabled:opacity-50"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813] disabled:opacity-50"
               >
                 {syncProgress !== null ? (
                   <>
@@ -353,14 +376,14 @@ export function TrackCard({
             {onRemoveFromContext && (
               <button
                 onClick={() => { setMenuOpen(false); onRemoveFromContext(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#E8DCC8] hover:bg-[#16130e]"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
               >
-                <MinusCircle size={12} className="text-[#a08a6a]" /> {removeLabel}
+                <MinusCircle size={12} className="text-[#D0C3AF]" /> {removeLabel}
               </button>
             )}
             {onDelete && (
               <>
-                <div className="my-1 border-t border-[#1a160f]" />
+                <div className="my-1 border-t border-[#211F1A]" />
                 <button
                   onClick={() => { setMenuOpen(false); onDelete(track); }}
                   className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-red-400 hover:bg-red-950/30"
@@ -374,4 +397,11 @@ export function TrackCard({
       </div>
     </div>
   );
+}
+
+function formatDuration(seconds: number | null): string {
+  if (!seconds || !Number.isFinite(seconds)) return '—';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }

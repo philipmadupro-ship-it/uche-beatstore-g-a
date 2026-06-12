@@ -85,10 +85,10 @@ export async function GET(req: NextRequest) {
       const beatRows = beats.slice(0, 12).map((b) =>
         `<tr>
            <td style="padding:8px 0;width:56px">${b.cover_url ? `<img src="${b.cover_url}" width="48" height="48" style="border-radius:8px;object-fit:cover" />` : ''}</td>
-           <td style="padding:8px 0;color:#E8DCC8;font-size:14px"><a href="${appUrl}/store/${b.id}" style="color:#E8DCC8;text-decoration:none">${b.title}</a></td>
+           <td style="padding:8px 0;color:#F7EBDD;font-size:14px"><a href="${appUrl}/store/${b.id}" style="color:#F7EBDD;text-decoration:none">${b.title}</a></td>
          </tr>`,
       ).join('');
-      const more = beats.length > 12 ? `<p style="color:#6a5d4a;font-size:12px;margin:4px 0 0">+${beats.length - 12} more</p>` : '';
+      const more = beats.length > 12 ? `<p style="color:#B4AA99;font-size:12px;margin:4px 0 0">+${beats.length - 12} more</p>` : '';
       const headline = beats.length === 1 ? `${producerName} dropped a new beat` : `${producerName} dropped ${beats.length} new beats`;
 
       const resend = new Resend(resendKey);

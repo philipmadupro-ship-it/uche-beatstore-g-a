@@ -10,17 +10,17 @@ import { toast } from '@/hooks/useToast';
 export const STAGE_META: Record<CrmStage, { label: string; dot: string; text: string }> = {
   prospect:  { label: 'Prospect',  dot: 'bg-[#7aa8e8]', text: 'text-[#7aa8e8]' },
   active:    { label: 'Active',    dot: 'bg-[#6DC6A4]', text: 'text-[#6DC6A4]' },
-  engaged:   { label: 'Engaged',   dot: 'bg-[#D4BFA0]', text: 'text-[#D4BFA0]' },
-  cold:      { label: 'Cold',      dot: 'bg-[#6a5d4a]', text: 'text-[#6a5d4a]' },
-  archived:  { label: 'Archived',  dot: 'bg-[#3a3328]', text: 'text-[#3a3328]' },
+  engaged:   { label: 'Engaged',   dot: 'bg-[#E7D7BE]', text: 'text-[#E7D7BE]' },
+  cold:      { label: 'Cold',      dot: 'bg-[#B4AA99]', text: 'text-[#B4AA99]' },
+  archived:  { label: 'Archived',  dot: 'bg-[#6E685B]', text: 'text-[#6E685B]' },
 };
 
 // ── Derived activity tone (read-only) ─────────────────────────────────────
 export type ActivityTone = 'active' | 'engaged' | 'cold';
 const ACTIVITY_META: Record<ActivityTone, { label: string; dot: string; text: string }> = {
   active:  { label: 'Active',  dot: 'bg-[#6DC6A4]', text: 'text-[#6DC6A4]' },
-  engaged: { label: 'Engaged', dot: 'bg-[#D4BFA0]', text: 'text-[#a08a6a]' },
-  cold:    { label: 'Cold',    dot: 'bg-[#4a4338]', text: 'text-[#5a5142]' },
+  engaged: { label: 'Engaged', dot: 'bg-[#E7D7BE]', text: 'text-[#D0C3AF]' },
+  cold:    { label: 'Cold',    dot: 'bg-[#837B6D]', text: 'text-[#9B9282]' },
 };
 
 /** Compact dot + label, no big bubble. Read-only by default; clickable to filter. */
@@ -36,7 +36,7 @@ export function ActivityDot({ tone, onClick, active }: { tone: ActivityTone; onC
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onClick(tone); }}
-      className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md transition-colors ${active ? 'bg-[var(--accent-tint)] ring-1 ring-[var(--accent-dim)]/40' : 'hover:bg-[#1a160f]'}`}
+      className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md transition-colors ${active ? 'bg-[var(--accent-tint)] ring-1 ring-[var(--accent-dim)]/40' : 'hover:bg-[#211F1A]'}`}
     >
       <span className={`w-1.5 h-1.5 rounded-full ${m.dot} ${tone === 'active' ? 'animate-pulse' : ''}`} />
       <span className={`text-[11px] font-medium ${m.text}`}>{m.label}</span>
@@ -91,17 +91,17 @@ export function ContactStageCell({
         options={options}
         placeholder={`Auto · ${ACTIVITY_META[derivedTone].label}`}
         menuWidth={150}
-        className={`!h-7 !py-0.5 !px-2 !text-[11px] !rounded-md border-transparent hover:border-[var(--border-hover)] ${m ? m.text : 'text-[#5a5142]'} ${!value ? 'italic' : 'font-medium'}`}
+        className={`!h-7 !py-0.5 !px-2 !text-[11px] !rounded-md border-transparent hover:border-[var(--border-hover)] ${m ? m.text : 'text-[#9B9282]'} ${!value ? 'italic' : 'font-medium'}`}
         aria-label="CRM stage"
       />
-      {saving && <Loader2 size={10} className="animate-spin text-[#5a5142] shrink-0" />}
+      {saving && <Loader2 size={10} className="animate-spin text-[#9B9282] shrink-0" />}
     </div>
   );
 }
 
 // ── Avatar ────────────────────────────────────────────────────────────────
 const AVATAR_PALETTES = [
-  { bg: 'bg-[#2A2418]', text: 'text-[#E8D8B8]', border: 'border-[#8A7A5C]/40' },
+  { bg: 'bg-[#342F27]', text: 'text-[#F3E6D1]', border: 'border-[#C9BCA8]/40' },
   { bg: 'bg-[#1a1833]', text: 'text-[#AFA9EC]', border: 'border-[#534AB7]/40' },
   { bg: 'bg-[#0d2318]', text: 'text-[#6DC6A4]', border: 'border-[#6DC6A4]/30' },
   { bg: 'bg-[#2a1810]', text: 'text-[#e8a86a]', border: 'border-[#e8a86a]/30' },
@@ -137,11 +137,11 @@ export function relativeDays(iso: string | undefined): string {
 // ── Pipeline pill (send-status progress) ──────────────────────────────────
 const PIPELINE_STAGES = ['sent', 'opened', 'interested', 'negotiating', 'placed'] as const;
 const STAGE_FILL: Record<string, string> = {
-  sent: 'bg-[#6a5d4a]', opened: 'bg-[#7aa8e8]', interested: 'bg-[#E8D8B8]',
+  sent: 'bg-[#B4AA99]', opened: 'bg-[#7aa8e8]', interested: 'bg-[#F3E6D1]',
   negotiating: 'bg-[#e8a86a]', placed: 'bg-[#6DC6A4]',
 };
 export function PipelinePill({ status }: { status: string | null }) {
-  if (!status) return <span className="text-[11px] text-[#3a3328]">—</span>;
+  if (!status) return <span className="text-[11px] text-[#6E685B]">—</span>;
   if (status === 'pass') {
     return <span className="text-[10px] font-medium text-red-400/80 bg-red-500/10 px-1.5 py-0.5 rounded">Pass</span>;
   }
@@ -150,10 +150,10 @@ export function PipelinePill({ status }: { status: string | null }) {
     <div className="flex items-center gap-1.5">
       <div className="flex items-center gap-0.5">
         {PIPELINE_STAGES.map((s, i) => (
-          <span key={s} className={`w-1.5 h-1.5 rounded-full ${i <= idx ? STAGE_FILL[s] : 'bg-[#1f1a13]'}`} />
+          <span key={s} className={`w-1.5 h-1.5 rounded-full ${i <= idx ? STAGE_FILL[s] : 'bg-[#2B2821]'}`} />
         ))}
       </div>
-      <span className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142] capitalize">{status}</span>
+      <span className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282] capitalize">{status}</span>
     </div>
   );
 }

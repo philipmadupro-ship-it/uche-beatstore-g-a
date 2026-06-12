@@ -24,13 +24,13 @@ import { Map as MapIcon } from 'lucide-react';
 
 const SEGMENT_TONES: Record<string, { bg: string; ring: string; text: string }> = {
   intro:   { bg: 'bg-[#2a3a5a]/40', ring: 'ring-[#7aa8e8]/40',  text: 'text-[#a8c4e8]' },
-  verse:   { bg: 'bg-[#2A2418]/50', ring: 'ring-[#8A7A5C]/40',  text: 'text-[#E8D8B8]' },
+  verse:   { bg: 'bg-[#342F27]/50', ring: 'ring-[#C9BCA8]/40',  text: 'text-[#F3E6D1]' },
   chorus:  { bg: 'bg-[#3a2a5a]/50', ring: 'ring-[#a89adc]/40',  text: 'text-[#cbb8f0]' },
   bridge:  { bg: 'bg-[#5a3a2a]/40', ring: 'ring-[#e8a86a]/40',  text: 'text-[#f0c498]' },
   drop:    { bg: 'bg-[#5a2a4a]/50', ring: 'ring-[#e88abc]/40',  text: 'text-[#f0a8c8]' },
   hook:    { bg: 'bg-[#3a4a2a]/40', ring: 'ring-[#a8c46a]/40',  text: 'text-[#c8e090]' },
   outro:   { bg: 'bg-[#1f5a4a]/40', ring: 'ring-[#6DC6A4]/40',  text: 'text-[#94d9bc]' },
-  default: { bg: 'bg-white/[0.03]', ring: 'ring-white/[0.08]',  text: 'text-[#a08a6a]' },
+  default: { bg: 'bg-white/[0.03]', ring: 'ring-white/[0.08]',  text: 'text-[#D0C3AF]' },
 };
 
 function toneFor(label: string) {
@@ -107,11 +107,11 @@ export function ArrangementOverlay({ trackId, durationSeconds, onSeek, currentTi
   return (
     <div className="mb-3">
       <div className="flex items-center justify-between mb-1.5">
-        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] flex items-center gap-1.5">
+        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] flex items-center gap-1.5">
           <MapIcon size={10} />
           Arrangement
         </p>
-        <p className="text-[9px] font-mono text-[#3a3328]">
+        <p className="text-[9px] font-mono text-[#6E685B]">
           {segments.length} section{segments.length === 1 ? '' : 's'}
         </p>
       </div>

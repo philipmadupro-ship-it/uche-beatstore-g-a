@@ -9,6 +9,57 @@ const log = createLogger('api.store.delivery');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+type PurchaseRow = {
+  id: string;
+  buyer_email: string;
+  amount_usd: number | string | null;
+  created_at: string;
+  status: string;
+  download_unlocked: boolean;
+  track_ids?: unknown;
+  line_items?: unknown;
+};
+
+type ProjectAccessRow = {
+  id: string;
+  project_id: string;
+  buyer_email: string;
+  amount_usd?: number | string | null;
+  created_at: string;
+  stripe_session_id: string;
+};
+
+type ProjectTrackRow = { track_id: string };
+
+type DeliveryLineItem = {
+  track_id: string;
+  license_type: string;
+};
+
+type DeliveryTrackRow = {
+  id: string;
+  title?: string | null;
+  type?: string | null;
+  cover_url?: string | null;
+  audio_url?: string | null;
+  wav_url?: string | null;
+  peaks_url?: string | null;
+  duration_seconds?: number | null;
+  bpm?: number | null;
+  key?: string | null;
+  scale?: string | null;
+  stems_status?: string | null;
+};
+
+type StemRow = {
+  track_id: string;
+  status?: string | null;
+  vocals_url?: string | null;
+  drums_url?: string | null;
+  bass_url?: string | null;
+  other_url?: string | null;
+};
+
 /**
  * GET /api/store/delivery?session_id=cs_xxx
  *
@@ -62,17 +113,17 @@ export async function GET(req: NextRequest) {
     if (pErr) throw pErr;
 
     let isProjectPurchase = false;
-    let projectAccess: any = null;
+    let projectAccess: ProjectAccessRow | null = null;
     if (!purchase) {
       // Check for project storefront purchase
       const { data: access } = await admin
         .from('project_access_links')
-        .select('id, project_id, buyer_email, created_at, stripe_session_id')
+        .select('id, project_id, buyer_email, amount_usd, created_at, stripe_session_id')
         .eq('stripe_session_id', sessionId)
         .maybeSingle();
       if (access) {
         isProjectPurchase = true;
-        projectAccess = access;
+        projectAccess = access as ProjectAccessRow;
       } else {
         return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
       }
@@ -93,28 +144,34 @@ export async function GET(req: NextRequest) {
         .select('track_id')
         .eq('project_id', projectAccess.project_id)
         .order('position', { ascending: true });
-      trackIds = (junctions ?? []).map((j: any) => j.track_id);
+      trackIds = ((junctions ?? []) as ProjectTrackRow[]).map((j) => j.track_id);
       // treat as exclusive for stems inclusion
       lineItems = trackIds.map((tid) => ({ track_id: tid, license_type: 'exclusive' }));
     } else if (purchase) {
-      trackIds = Array.isArray(purchase.track_ids) ? purchase.track_ids : [];
-      lineItems = Array.isArray(purchase.line_items) ? purchase.line_items : [];
+      const purchaseRow = purchase as PurchaseRow;
+      trackIds = Array.isArray(purchaseRow.track_ids) ? purchaseRow.track_ids.filter((id): id is string => typeof id === 'string') : [];
+      lineItems = Array.isArray(purchaseRow.line_items)
+        ? purchaseRow.line_items.filter((item): item is DeliveryLineItem =>
+            typeof item === 'object' &&
+            item !== null &&
+            typeof (item as { track_id?: unknown }).track_id === 'string')
+        : [];
     }
 
-    let tracks: any[] = [];
+    let tracks: DeliveryTrackRow[] = [];
     if (trackIds.length > 0) {
       const { data: trackRows } = await admin
         .from('tracks')
         .select('id, title, type, cover_url, audio_url, wav_url, peaks_url, duration_seconds, bpm, key, scale, stems_status')
         .in('id', trackIds);
-      tracks = trackRows ?? [];
+      tracks = (trackRows ?? []) as DeliveryTrackRow[];
     }
 
     // ── WAV urls (migration 039, non-fatal if column absent) ──────────────
     // wav_url is already in the select above. No extra query needed.
 
     // ── Stems (done rows for these tracks) ────────────────────────────────
-    let stemsByTrack: Record<string, any> = {};
+    const stemsByTrack: Record<string, StemRow> = {};
     if (trackIds.length > 0) {
       try {
         const { data: stemRows } = await admin
@@ -122,7 +179,7 @@ export async function GET(req: NextRequest) {
           .select('track_id, status, vocals_url, drums_url, bass_url, other_url')
           .in('track_id', trackIds)
           .eq('status', 'done');
-        for (const r of (stemRows ?? []) as any[]) {
+        for (const r of (stemRows ?? []) as StemRow[]) {
           stemsByTrack[r.track_id] = r;
         }
       } catch {
@@ -171,7 +228,7 @@ export async function GET(req: NextRequest) {
       if (licenseType === 'exclusive') {
         const stem = stemsByTrack[t.id];
         if (stem) {
-          const stemMap = [
+          const stemMap: Array<{ format: string; label: string; urlKey: keyof StemRow }> = [
             { format: 'vocals', label: 'Vocals Stem', urlKey: 'vocals_url' },
             { format: 'drums',  label: 'Drums Stem',  urlKey: 'drums_url' },
             { format: 'bass',   label: 'Bass Stem',   urlKey: 'bass_url' },
@@ -205,7 +262,7 @@ export async function GET(req: NextRequest) {
       ? {
           id: projectAccess.id,
           buyer_email: projectAccess.buyer_email,
-          amount_usd: 0, // will be shown in email / Stripe receipt
+          amount_usd: Number(projectAccess.amount_usd ?? 0),
           created_at: projectAccess.created_at,
           status: 'paid',
         }

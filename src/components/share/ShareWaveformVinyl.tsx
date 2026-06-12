@@ -85,17 +85,17 @@ export function ShareWaveformVinyl({
 
         {/* Center label — slightly inset, holds the cover art with a
             tiny spindle hole punched through. */}
-        <div className={`${dim.inner} rounded-full overflow-hidden border-4 border-[#0a0907] relative`}>
+        <div className={`${dim.inner} rounded-full overflow-hidden border-4 border-[#090907] relative`}>
           {cover ? (
             <img loading="lazy" src={cover} alt="" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-[#2A2418] to-[#0a0907] flex items-center justify-center text-[#a08a6a]">
+            <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907] flex items-center justify-center text-[#D0C3AF]">
               <Music size={32} />
             </div>
           )}
           {/* Spindle hole — the bit that holds the record on the
               turntable. Drawn as a tiny inset circle. */}
-          <div className="absolute inset-0 m-auto w-3 h-3 rounded-full bg-[#0a0907] border border-black/60" />
+          <div className="absolute inset-0 m-auto w-3 h-3 rounded-full bg-[#090907] border border-black/60" />
         </div>
 
         {/* Center play button — appears on hover OR when paused, so
@@ -122,7 +122,7 @@ export function ShareWaveformVinyl({
           quick meta line. */}
       <div className="text-center w-full mb-4 px-4">
         {caption && (
-          <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#a08a6a] mb-1">
+          <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF] mb-1">
             {caption}
           </p>
         )}
@@ -130,7 +130,7 @@ export function ShareWaveformVinyl({
           {track.title}
         </h3>
         {(track.bpm || track.key) && (
-          <p className="text-[10px] font-mono text-[#6a5d4a] uppercase tracking-widest mt-1">
+          <p className="text-[10px] font-mono text-[#B4AA99] uppercase tracking-widest mt-1">
             {track.bpm ? `${track.bpm} bpm` : ''}
             {track.bpm && track.key ? ' · ' : ''}
             {track.key ? `${track.key}${track.scale ? ' ' + track.scale : ''}` : ''}
@@ -141,7 +141,7 @@ export function ShareWaveformVinyl({
       {/* Waveform visual — if parent waveRef is supplied, we let the parent's
           WaveSurfer handle layout/rendering directly to prevent audio collisions.
           Otherwise fall back to the standalone WavePlayer component. */}
-      <div className="w-full max-w-2xl bg-[#0c0a08]/30 rounded-lg p-2 border border-white/[0.02]">
+      <div className="w-full max-w-2xl bg-[#11100D]/30 rounded-lg p-2 border border-white/[0.02]">
         {waveRef ? (
           <div ref={waveRef} className="w-full" style={{ minHeight: 48 }} />
         ) : (

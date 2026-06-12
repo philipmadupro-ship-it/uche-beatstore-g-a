@@ -88,10 +88,10 @@ export function StudioDrumPads({ onTrigger }: Props) {
   }, []);
 
   return (
-    <div className="border border-[#16130e] rounded-lg p-5 bg-[#0a0907]">
+    <div className="border border-[#1A1813] rounded-lg p-5 bg-[#090907]">
       <div className="flex items-center justify-between mb-4">
-        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#E8DCC8]">Drum Pads</p>
-        <p className="text-[9px] font-mono text-[#5a5142]">Keys 1–5 · click to trigger</p>
+        <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#F7EBDD]">Drum Pads</p>
+        <p className="text-[9px] font-mono text-[#9B9282]">Keys 1–5 · click to trigger</p>
       </div>
       <div className="grid grid-cols-4 gap-2.5">
         {PAD_LAYOUT.map((pad, i) => {
@@ -110,7 +110,7 @@ export function StudioDrumPads({ onTrigger }: Props) {
                 'aspect-square rounded-xl relative overflow-hidden transition-all duration-100',
                 'border',
                 isEmpty
-                  ? 'border-[#16130e] bg-[#080808] cursor-default'
+                  ? 'border-[#1A1813] bg-[#080808] cursor-default'
                   : cn(
                       'border-white/[0.06] bg-gradient-to-br shadow-[0_2px_6px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.04)]',
                       pad.color,
@@ -143,14 +143,14 @@ export function StudioDrumPads({ onTrigger }: Props) {
                   <div className="relative z-10 h-full w-full flex flex-col items-center justify-center gap-1.5 p-2">
                     <span
                       className="text-[10px] font-bold uppercase tracking-wider"
-                      style={{ color: isPressed ? pad.glow : '#E8DCC8' }}
+                      style={{ color: isPressed ? pad.glow : '#F7EBDD' }}
                     >
                       {pad.label}
                     </span>
                     {pad.hotkey && (
                       <span
                         className="text-[8px] font-mono"
-                        style={{ color: isPressed ? pad.glow : '#5a5142' }}
+                        style={{ color: isPressed ? pad.glow : '#9B9282' }}
                       >
                         [{pad.hotkey}]
                       </span>
@@ -160,7 +160,7 @@ export function StudioDrumPads({ onTrigger }: Props) {
               )}
               {isEmpty && (
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-[#1a160f] text-[18px] font-light">+</span>
+                  <span className="text-[#211F1A] text-[18px] font-light">+</span>
                 </div>
               )}
             </button>

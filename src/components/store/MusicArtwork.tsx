@@ -61,7 +61,7 @@ export function MusicArtwork({
         className="relative w-[92%] h-[92%] rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.55)]"
         style={{
           background:
-            'radial-gradient(circle at center, #1a160f 0%, #0a0907 24%, #14110d 27%, #0a0907 32%, #14110d 35%, #0a0907 40%, #14110d 43%, #0a0907 48%, #14110d 51%, #0a0907 56%, #14110d 59%, #0a0907 64%, #14110d 67%, #0a0907 72%, #0a0907 100%)',
+            'radial-gradient(circle at center, #211F1A 0%, #090907 24%, #171511 27%, #090907 32%, #171511 35%, #090907 40%, #171511 43%, #090907 48%, #171511 51%, #090907 56%, #171511 59%, #090907 64%, #171511 67%, #090907 72%, #090907 100%)',
           // Spin while playing; pause freezes the rotation in place.
           animation: 'vinylSpin 8s linear infinite',
           animationPlayState: isPlaying ? 'running' : 'paused',
@@ -77,17 +77,17 @@ export function MusicArtwork({
         />
 
         {/* Center label */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[36%] h-[36%] rounded-full overflow-hidden border border-[#2d2620] bg-[#14110d] flex items-center justify-center">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[36%] h-[36%] rounded-full overflow-hidden border border-[#3B372F] bg-[#171511] flex items-center justify-center">
           {albumArt ? (
             <img src={albumArt} alt="" className="w-full h-full object-cover" />
           ) : (
-            <MusicIcon size={16} className="text-[#2d2620]" />
+            <MusicIcon size={16} className="text-[#3B372F]" />
           )}
           {/* Center spindle hole */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[12%] h-[12%] rounded-full bg-[#0a0907] border border-[#1f1a13]" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[12%] h-[12%] rounded-full bg-[#090907] border border-[#2B2821]" />
           {/* Label text — tiny artist credit visible on the vinyl center */}
           {artist && (
-            <div className="absolute bottom-1 left-0 right-0 px-1 text-[7px] font-mono uppercase tracking-[0.1em] text-[#E8DCC8]/70 text-center truncate">
+            <div className="absolute bottom-1 left-0 right-0 px-1 text-[7px] font-mono uppercase tracking-[0.1em] text-[#F7EBDD]/70 text-center truncate">
               {isSong ? 'A · ' : ''}{artist}
             </div>
           )}
@@ -120,7 +120,7 @@ export function MusicArtwork({
 
       {/* Hover tooltip — title chip floating near the slid-out vinyl edge */}
       {showTip && music && (
-        <div className="pointer-events-none absolute left-2 bottom-2 px-2 py-1 rounded bg-black/75 backdrop-blur text-[9px] font-mono uppercase tracking-[0.15em] text-[#E8DCC8] z-20 max-w-[80%] truncate">
+        <div className="pointer-events-none absolute left-2 bottom-2 px-2 py-1 rounded bg-black/75 backdrop-blur text-[9px] font-mono uppercase tracking-[0.15em] text-[#F7EBDD] z-20 max-w-[80%] truncate">
           {music}
         </div>
       )}

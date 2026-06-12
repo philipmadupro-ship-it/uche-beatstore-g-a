@@ -53,15 +53,17 @@ export function UploadsTray() {
 
   return (
     <div className="fixed bottom-24 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)]">
-      <div className="bg-[#0a0907] border border-[#1a160f] rounded-lg shadow-2xl overflow-hidden">
+      <div className="bg-[#090907] border border-[#211F1A] rounded-lg shadow-2xl overflow-hidden">
         <button
           onClick={() => setExpanded((x) => !x)}
-          className="w-full flex items-center gap-2 px-3 h-10 border-b border-[#16130e] hover:bg-[#14110d] transition-colors"
+          className="tap w-full flex min-h-11 items-center gap-2 px-3 border-b border-[#1A1813] hover:bg-[#171511] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907]"
+          aria-expanded={expanded}
+          aria-label={expanded ? 'Collapse uploads tray' : 'Expand uploads tray'}
         >
-          <Upload size={12} className="text-[#E8D8B8]" />
+          <Upload size={12} className="text-[#F3E6D1]" />
           <span className="text-[11px] font-medium text-white">
             Uploads
-            <span className="text-[#5a5142] font-normal ml-1.5">
+            <span className="text-[#9B9282] font-normal ml-1.5">
               {active > 0 && `${active} running`}
               {active > 0 && (errored > 0 || done > 0) && ' · '}
               {errored > 0 && <span className="text-red-400">{errored} failed</span>}
@@ -71,9 +73,9 @@ export function UploadsTray() {
           </span>
           <div className="flex-1" />
           {expanded ? (
-            <ChevronDown size={12} className="text-[#5a5142]" />
+            <ChevronDown size={12} className="text-[#9B9282]" />
           ) : (
-            <ChevronUp size={12} className="text-[#5a5142]" />
+            <ChevronUp size={12} className="text-[#9B9282]" />
           )}
         </button>
 
@@ -106,14 +108,14 @@ function UploadRow({ u }: { u: UploadItem }) {
   };
 
   return (
-    <div className="px-3 py-2.5 border-b border-[#161310] last:border-b-0">
+    <div className="px-3 py-2.5 border-b border-[#24211B] last:border-b-0">
       {/* row 1: name + actions */}
       <div className="flex items-center gap-2 mb-1.5">
-        <FileAudio size={11} className="text-[#4a4338] shrink-0" />
-        <span className="text-[11px] text-[#E8DCC8] truncate flex-1" title={u.fileName}>
+        <FileAudio size={11} className="text-[#837B6D] shrink-0" />
+        <span className="text-[11px] text-[#F7EBDD] truncate flex-1" title={u.fileName}>
           {u.fileName}
         </span>
-        <span className="text-[9px] font-mono text-[#5a5142] shrink-0">
+        <span className="text-[9px] font-mono text-[#9B9282] shrink-0">
           {formatBytes(u.fileSize)}
         </span>
         <RowActions
@@ -127,6 +129,7 @@ function UploadRow({ u }: { u: UploadItem }) {
         />
         <input
           ref={fileRef} type="file"
+          aria-label={`Resume upload for ${u.fileName}`}
           accept=".csv,.mp3,.wav,.flac,.aiff,.aif,.m4a,.ogg"
           onChange={onResumePick}
           className="hidden"
@@ -134,7 +137,7 @@ function UploadRow({ u }: { u: UploadItem }) {
       </div>
 
       {/* row 2: progress bar */}
-      <div className="h-1 bg-[#16130e] rounded-full overflow-hidden mb-1.5">
+      <div className="h-1 bg-[#1A1813] rounded-full overflow-hidden mb-1.5">
         <div
           className={`h-full transition-all duration-200 ${
             u.status === 'success'
@@ -142,8 +145,8 @@ function UploadRow({ u }: { u: UploadItem }) {
               : u.status === 'error' || u.status === 'interrupted'
               ? 'bg-red-500'
               : u.status === 'paused'
-              ? 'bg-[#a08a6a]'
-              : 'bg-gradient-to-r from-[#D4BFA0] to-[#8A7A5C]'
+              ? 'bg-[#D0C3AF]'
+              : 'bg-gradient-to-r from-[#E7D7BE] to-[#C9BCA8]'
           }`}
           style={{ width: `${pct}%` }}
         />
@@ -155,13 +158,13 @@ function UploadRow({ u }: { u: UploadItem }) {
         <div className="flex-1" />
         {isActive && (
           <>
-            <span className="text-[#6a5d4a]">{formatSpeed(u.speedBps)}</span>
-            <span className="text-[#3a3328]">·</span>
-            <span className="text-[#6a5d4a]">ETA {formatEta(u.etaSec)}</span>
+            <span className="text-[#B4AA99]">{formatSpeed(u.speedBps)}</span>
+            <span className="text-[#6E685B]">·</span>
+            <span className="text-[#B4AA99]">ETA {formatEta(u.etaSec)}</span>
           </>
         )}
         {u.status === 'paused' && (
-          <span className="text-[#6a5d4a]">{Math.round(pct)}% · paused</span>
+          <span className="text-[#B4AA99]">{Math.round(pct)}% · paused</span>
         )}
       </div>
 
@@ -184,19 +187,19 @@ function UploadRow({ u }: { u: UploadItem }) {
 function StatusBadge({ u, pct }: { u: UploadItem; pct: number }) {
   switch (u.status) {
     case 'queued':
-      return <span className="text-[#6a5d4a]">queued</span>;
+      return <span className="text-[#B4AA99]">queued</span>;
     case 'preparing':
       return (
-        <span className="text-[#E8D8B8] flex items-center gap-1">
+        <span className="text-[#F3E6D1] flex items-center gap-1">
           <Loader2 size={9} className="animate-spin" /> preparing
         </span>
       );
     case 'uploading':
       return (
-        <span className="text-[#E8D8B8]">
+        <span className="text-[#F3E6D1]">
           {Math.round(pct)}%
           {u.totalParts > 0 && (
-            <span className="text-[#4a4338] ml-1">
+            <span className="text-[#837B6D] ml-1">
               · {u.completedPartNumbers.size}/{u.totalParts}
             </span>
           )}
@@ -204,7 +207,7 @@ function StatusBadge({ u, pct }: { u: UploadItem; pct: number }) {
       );
     case 'finalizing':
       return (
-        <span className="text-[#E8D8B8] flex items-center gap-1">
+        <span className="text-[#F3E6D1] flex items-center gap-1">
           <Loader2 size={9} className="animate-spin" /> finalizing · analyzing
         </span>
       );
@@ -223,7 +226,7 @@ function StatusBadge({ u, pct }: { u: UploadItem; pct: number }) {
     case 'interrupted':
       return <span className="text-[#E2C16D]">interrupted</span>;
     case 'paused':
-      return <span className="text-[#a08a6a]">paused</span>;
+      return <span className="text-[#D0C3AF]">paused</span>;
     default:
       return null;
   }
@@ -240,36 +243,41 @@ function RowActions({
   onRemove: () => void;
   onPickResume: () => void;
 }) {
-  const btn = 'w-5 h-5 rounded flex items-center justify-center text-[#6a5d4a] hover:text-white hover:bg-[#1a160f]';
+  const btn = 'tap grid size-8 sm:size-7 place-items-center rounded text-[#B4AA99] hover:text-white hover:bg-[#211F1A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907]';
   return (
     <div className="flex items-center gap-0.5 shrink-0">
       {isActive && (
-        <button onClick={onPause} className={btn} title="Pause">
+        <button onClick={onPause} className={btn} title="Pause" aria-label={`Pause upload for ${u.fileName}`}>
           <Pause size={10} />
         </button>
       )}
       {u.status === 'paused' && (
-        <button onClick={onRetry} className={btn} title="Resume">
+        <button onClick={onRetry} className={btn} title="Resume" aria-label={`Resume upload for ${u.fileName}`}>
           <Play size={10} />
         </button>
       )}
       {u.status === 'error' && (
-        <button onClick={onRetry} className={btn} title="Retry">
+        <button onClick={onRetry} className={btn} title="Retry" aria-label={`Retry upload for ${u.fileName}`}>
           <RefreshCw size={10} />
         </button>
       )}
       {u.status === 'interrupted' && (
-        <button onClick={onPickResume} className={`${btn} text-[#E2C16D] hover:text-[#E2C16D]`} title="Re-pick file to resume">
+        <button
+          onClick={onPickResume}
+          className={`${btn} text-[#E2C16D] hover:text-[#E2C16D]`}
+          title="Re-pick file to resume"
+          aria-label={`Choose original file to resume upload for ${u.fileName}`}
+        >
           <Upload size={10} />
         </button>
       )}
       {(isActive || u.status === 'paused' || u.status === 'queued') && (
-        <button onClick={onAbort} className={`${btn} hover:text-red-400`} title="Cancel">
+        <button onClick={onAbort} className={`${btn} hover:text-red-400`} title="Cancel" aria-label={`Cancel upload for ${u.fileName}`}>
           <X size={10} />
         </button>
       )}
       {(u.status === 'success' || u.status === 'error' || u.status === 'interrupted') && (
-        <button onClick={onRemove} className={btn} title="Dismiss">
+        <button onClick={onRemove} className={btn} title="Dismiss" aria-label={`Dismiss upload for ${u.fileName}`}>
           <X size={10} />
         </button>
       )}

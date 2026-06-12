@@ -21,12 +21,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-  Play, Pause, Loader2, Sliders, Music2, Search, RotateCcw, Volume2, VolumeX,
-  Headphones, Circle, Square, Download, Save, Repeat,
+  Play, Pause, Sliders, Music2, RotateCcw, Circle, Square,
 } from 'lucide-react';
 import { Track } from '@/lib/types';
 import { audioSrc } from '@/lib/audio/url';
-import { StudioEngine, ChannelKey, playKick, playSnare, playHat, playClap } from '@/lib/audio/engine';
+import { StudioEngine, playKick, playSnare, playHat, playClap } from '@/lib/audio/engine';
 import { toast } from '@/hooks/useToast';
 import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
 import { StudioMasterFX } from '@/components/studio/sections/StudioMasterFX';
@@ -36,6 +35,7 @@ import { StudioWaveform } from '@/components/studio/sections/StudioWaveform';
 import { StudioArrangement } from '@/components/studio/sections/StudioArrangement';
 import { StudioMixer } from '@/components/studio/sections/StudioMixer';
 import { StudioLastTake } from '@/components/studio/sections/StudioLastTake';
+import { PageContainer } from '@/components/layout/PageHeader';
 
 type StemKey = 'vocals' | 'drums' | 'bass' | 'other';
 
@@ -62,22 +62,6 @@ const DEFAULT_CH: ChannelState = {
   volume: 0.85, pan: 0, muted: false, solo: false,
   eqLow: 0, eqMid: 0, eqHigh: 0, reverb: 0, delay: 0,
 };
-
-const STEM_COLORS: Record<StemKey | 'pads' | 'master', string> = {
-  vocals: 'bg-[#D4BFA0]',
-  drums:  'bg-[#E26D5C]',
-  bass:   'bg-[#E2C16D]',
-  other:  'bg-[#6DC6A4]',
-  pads:   'bg-[#F09EE3]',
-  master: 'bg-white',
-};
-
-function fmtTime(s: number) {
-  if (!isFinite(s) || s < 0) s = 0;
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, '0')}`;
-}
 
 export function StudioWorkstation() {
   // ── Track & stem fetching ──
@@ -555,8 +539,8 @@ export function StudioWorkstation() {
       const r2 = await fetch('/api/tracks').then((x) => x.json());
       const arr: Track[] = Array.isArray(r2) ? r2 : r2.tracks || [];
       setTracks(arr.filter((t) => !!t.audio_url));
-    } catch (e: any) {
-      toast.error('Save failed', e.message);
+    } catch (e: unknown) {
+      toast.error('Save failed', e instanceof Error ? e.message : 'Try again');
     } finally {
       setSavingTake(false);
     }
@@ -565,33 +549,28 @@ export function StudioWorkstation() {
   const filtered = tracks.filter((t) => t.title.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="max-w-[1600px] mx-auto px-10 pt-10 pb-24">
+    <PageContainer className="max-w-[1600px] pb-24">
       {/* Header */}
-      <div className="flex items-end justify-between mb-8 pb-6 border-b border-[#16130e]">
+      <div className="mb-5 sm:mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          {/* "Sketchpad" instead of "FL-Lite" — frames Studio as the
-              place to put grooves together loose, before they're full
-              tracks. Studio outputs save into the Library when ready;
-              everything else (Projects = active work, Playlists = for
-              listeners) is a different surface. */}
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Sketchpad</p>
-          <h1 className="text-[28px] font-medium tracking-tight text-white leading-none">Studio</h1>
-          <p className="text-[11px] text-[#5a5142] mt-2 max-w-md">
-            Put grooves together. Jam over a track, loop a section, layer drums, record a take. Save to the library when you&apos;ve got something.
-          </p>
+          <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">Sketchpad</p>
+          <h1 className="font-heading text-[30px] leading-none text-white">Studio</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+          <span className="hidden rounded-full border border-[#211F1A] bg-[#11100D] px-3 py-2 text-[10px] font-mono uppercase tracking-[0.18em] text-[#837B6D] sm:inline-flex">
+            One track · loop · EQ · record
+          </span>
           {recording ? (
             <button
               onClick={stopRecording}
-              className="flex items-center gap-2 px-3 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 text-[11px] font-medium transition-colors animate-pulse"
+              className="flex min-h-10 shrink-0 items-center gap-2 rounded-full bg-red-600 px-3.5 py-2 text-[10px] font-mono font-bold uppercase tracking-[0.16em] text-white transition-colors hover:bg-red-700"
             >
               <Square size={11} fill="currentColor" /> Stop
             </button>
           ) : (
             <button
               onClick={startRecording}
-              className="flex items-center gap-2 px-3 py-2 rounded-md border border-red-900/50 bg-[#1f0a0a] text-red-300 hover:bg-red-950 text-[11px] font-medium transition-colors"
+              className="flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-red-900/50 bg-[#1f0a0a] px-3.5 py-2 text-[10px] font-mono font-bold uppercase tracking-[0.16em] text-red-300 transition-colors hover:bg-red-950"
             >
               <Circle size={9} fill="currentColor" /> Record
             </button>
@@ -599,7 +578,7 @@ export function StudioWorkstation() {
           {active && (
             <button
               onClick={reset}
-              className="flex items-center gap-2 px-3 py-2 rounded-md border border-[#1a160f] bg-[#14110d] text-[#a08a6a] hover:text-white text-[11px] font-medium transition-colors"
+              className="flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-[#211F1A] bg-[#171511] px-3.5 py-2 text-[10px] font-mono font-bold uppercase tracking-[0.16em] text-[#D0C3AF] transition-colors hover:text-white"
             >
               <RotateCcw size={11} /> Reset
             </button>
@@ -607,7 +586,7 @@ export function StudioWorkstation() {
         </div>
       </div>
 
-      <div className="grid grid-cols-[280px_1fr] gap-6">
+      <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-[260px_1fr]">
         {/* Track picker — extracted to sections/StudioTrackPicker. */}
         <StudioTrackPicker
           tracks={filtered}
@@ -621,35 +600,38 @@ export function StudioWorkstation() {
         {/* Workstation */}
         <main>
           {!active ? (
-            <div className="border border-dashed border-[#1a160f] rounded-lg py-32 text-center">
-              <Sliders size={28} className="text-[#3a3328] mx-auto mb-4" />
-              <p className="text-[13px] text-[#E8DCC8] mb-1">Pick a track to start</p>
-              <p className="text-[11px] text-[#5a5142]">
+            <div className="border border-dashed border-[#211F1A] rounded-lg py-20 sm:py-32 text-center px-4">
+              <Sliders size={28} className="text-[#6E685B] mx-auto mb-4" />
+              <p className="text-[13px] text-[#F7EBDD] mb-1">Pick a track to start</p>
+              <p className="text-[11px] text-[#9B9282]">
                 EQ · sends · loop · drum pads · live recording
               </p>
             </div>
           ) : (
-            <div className="space-y-5">
-              {/* Track header */}
-              <div className="flex items-end justify-between border border-[#16130e] rounded-lg p-5 bg-[#0a0907]">
-                <div className="flex items-center gap-4 min-w-0">
+            <div className="space-y-4">
+              {/* Session console — track identity + waveform first, with
+                  utility controls kept small so the waveform remains the
+                  studio's primary work surface. */}
+              <div className="rounded-2xl border border-[#1A1813] bg-[#090907] p-3 shadow-[0_18px_48px_rgba(0,0,0,0.22)] sm:p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
                   {active.cover_url ? (
                     <img loading="lazy"
                       src={audioSrc(active.cover_url) || active.cover_url}
                       alt=""
-                      className="w-16 h-16 rounded-md object-cover border border-[#1a160f]"
+                      className="h-11 w-11 shrink-0 rounded-lg border border-[#211F1A] object-cover sm:h-12 sm:w-12"
                     />
                   ) : (
-                    <div className="w-16 h-16 rounded-md bg-[#16130e] border border-[#1a160f] flex items-center justify-center">
-                      <Music2 size={20} className="text-[#4a4338]" />
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#211F1A] bg-[#1A1813] sm:h-12 sm:w-12">
+                      <Music2 size={18} className="text-[#837B6D]" />
                     </div>
                   )}
                   <div className="min-w-0">
-                    <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-1.5">
+                    <p className="mb-1 text-[9px] font-mono uppercase tracking-[0.18em] text-[#9B9282] sm:text-[10px] sm:tracking-[0.2em]">
                       Now in studio
                     </p>
-                    <h2 className="text-[18px] font-medium text-white truncate">{active.title}</h2>
-                    <p className="text-[11px] text-[#5a5142] mt-1 font-mono uppercase tracking-wider">
+                    <h2 className="truncate text-[15px] font-medium text-white sm:text-[17px]">{active.title}</h2>
+                    <p className="mt-1 truncate text-[10px] font-mono uppercase tracking-wider text-[#9B9282] sm:text-[11px]">
                       {active.bpm ? `${Math.round(active.bpm * effectiveRate)} BPM` : '— BPM'}
                       {active.key && ` · ${active.key}${active.scale ? ' ' + active.scale : ''}`}
                       {tempo !== 1 && ` · ${(tempo * 100).toFixed(0)}%`}
@@ -660,9 +642,9 @@ export function StudioWorkstation() {
                 </div>
                 <button
                   onClick={togglePlay}
-                  className="w-12 h-12 rounded-full bg-[#D4BFA0] text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg shadow-[#D4BFA0]/20"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E7D7BE] text-black shadow-lg shadow-[#E7D7BE]/15 transition-transform hover:scale-105 active:scale-95 sm:h-11 sm:w-11"
                 >
-                  {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-0.5" />}
+                    {isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" className="ml-0.5" />}
                 </button>
               </div>
 
@@ -701,28 +683,32 @@ export function StudioWorkstation() {
                   has one, else decodes the audio in the browser and
                   caches the result. */}
               {active?.audio_url && (
-                <div className="mb-4">
+                  <div>
                   <StudioWaveform
                     url={active.audio_url}
                     peaksUrl={active.peaks_url ?? null}
                     currentTime={currentTime}
                     duration={duration}
                     onSeek={seek}
-                    height={72}
+                      height={58}
+                      className="rounded-xl"
                   />
                 </div>
               )}
 
               {/* Transport + loop + tempo/pitch — extracted to sections/StudioTransport. */}
-              <StudioTransport
-                currentTime={currentTime} duration={duration} seek={seek}
-                loopOn={loopOn} setLoopOn={setLoopOn}
-                loopA={loopA} setLoopA={setLoopA}
-                loopB={loopB} setLoopB={setLoopB}
-                tempo={tempo} setTempo={setTempo}
-                pitchSemis={pitchSemis} setPitchSemis={setPitchSemis}
-                preservePitch={preservePitch} setPreservePitch={setPreservePitch}
-              />
+                <div className="mt-3">
+                  <StudioTransport
+                    currentTime={currentTime} duration={duration} seek={seek}
+                    loopOn={loopOn} setLoopOn={setLoopOn}
+                    loopA={loopA} setLoopA={setLoopA}
+                    loopB={loopB} setLoopB={setLoopB}
+                    tempo={tempo} setTempo={setTempo}
+                    pitchSemis={pitchSemis} setPitchSemis={setPitchSemis}
+                    preservePitch={preservePitch} setPreservePitch={setPreservePitch}
+                  />
+                </div>
+              </div>
 
               {/* Drum pads removed per user request — the 4×4 MPC-style
                   grid wasn't earning its real estate. Keyboard hotkeys
@@ -730,22 +716,24 @@ export function StudioWorkstation() {
                   the document keydown listener below; triggerPad
                   routes through the engine the same way. */}
 
-              {/* Mixer — extracted to sections/StudioMixer (carries ChannelStrip with it). */}
-              <StudioMixer
-                useStems={useStems}
-                stemsLoading={stemsLoading}
-                channels={channels}
-                setChannel={setChannel}
-              />
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+                {/* Mixer — extracted to sections/StudioMixer (carries ChannelStrip with it). */}
+                <StudioMixer
+                  useStems={useStems}
+                  stemsLoading={stemsLoading}
+                  channels={channels}
+                  setChannel={setChannel}
+                />
 
-              {/* Master + FX — extracted to sections/StudioMasterFX. */}
-              <StudioMasterFX
-                masterVol={masterVol} setMasterVol={setMasterVol}
-                reverbReturn={reverbReturn} setReverbReturn={setReverbReturn}
-                delayReturn={delayReturn} setDelayReturn={setDelayReturn}
-                delayTime={delayTime} setDelayTime={setDelayTime}
-                delayFeedback={delayFeedback} setDelayFeedback={setDelayFeedback}
-              />
+                {/* Master + FX — right rail on desktop, stacked on mobile. */}
+                <StudioMasterFX
+                  masterVol={masterVol} setMasterVol={setMasterVol}
+                  reverbReturn={reverbReturn} setReverbReturn={setReverbReturn}
+                  delayReturn={delayReturn} setDelayReturn={setDelayReturn}
+                  delayTime={delayTime} setDelayTime={setDelayTime}
+                  delayFeedback={delayFeedback} setDelayFeedback={setDelayFeedback}
+                />
+              </div>
 
               {/* Arrangement — in-memory clip editor. Round-6 scope:
                   visual splits + drag-to-reorder, no persistence and
@@ -769,11 +757,11 @@ export function StudioWorkstation() {
                   component is self-contained: it fetches and persists via
                   /api/tracks/[id]/lyrics, so we just need to mount it with
                   the active track id. */}
-              <div className="border border-[#16130e] rounded-lg p-5 bg-[#0a0907]">
+              <div className="border border-[#1A1813] rounded-lg p-5 bg-[#090907]">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#E8DCC8]">Lyrics</p>
-                    <p className="text-[10px] text-[#5a5142] mt-1">Auto-saves as you type</p>
+                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#F7EBDD]">Lyrics</p>
+                    <p className="text-[10px] text-[#9B9282] mt-1">Auto-saves as you type</p>
                   </div>
                 </div>
                 <LyricsStudio trackId={active.id} />
@@ -787,7 +775,7 @@ export function StudioWorkstation() {
           )}
         </main>
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

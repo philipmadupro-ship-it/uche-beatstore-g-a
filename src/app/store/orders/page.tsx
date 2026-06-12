@@ -78,14 +78,14 @@ function OrderCard({ order, onResend, resending }: {
     <div className="group flex flex-col sm:flex-row gap-4 rounded-[14px] p-[1.5px]"
       style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)' }}
     >
-      <div className="flex flex-col sm:flex-row gap-4 rounded-[13px] bg-[#14110d] p-4 w-full">
+      <div className="flex flex-col sm:flex-row gap-4 rounded-[13px] bg-[#171511] p-4 w-full">
         {/* Cover */}
-        <div className="shrink-0 w-full sm:w-16 h-40 sm:h-16 rounded-lg overflow-hidden bg-[#1f1a13]">
+        <div className="shrink-0 w-full sm:w-16 h-40 sm:h-16 rounded-lg overflow-hidden bg-[#2B2821]">
           {coverUrl ? (
             <img src={coverUrl} alt="" className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
-              {isTrack ? <Music2 size={20} className="text-[#3a3328]" /> : <Package size={20} className="text-[#3a3328]" />}
+              {isTrack ? <Music2 size={20} className="text-[#6E685B]" /> : <Package size={20} className="text-[#6E685B]" />}
             </div>
           )}
         </div>
@@ -96,30 +96,30 @@ function OrderCard({ order, onResend, resending }: {
             <span
               className="text-[9px] font-mono uppercase tracking-[0.18em] px-1.5 py-0.5 rounded"
               style={{
-                background: badge === 'Exclusive' ? 'rgba(212,191,160,0.15)' : 'rgba(255,255,255,0.06)',
-                color: badge === 'Exclusive' ? '#D4BFA0' : '#a08a6a',
-                border: badge === 'Exclusive' ? '1px solid rgba(212,191,160,0.25)' : '1px solid rgba(255,255,255,0.08)',
+                background: badge === 'Exclusive' ? 'rgba(231,215,190,0.15)' : 'rgba(255,255,255,0.06)',
+                color: badge === 'Exclusive' ? '#E7D7BE' : '#D0C3AF',
+                border: badge === 'Exclusive' ? '1px solid rgba(231,215,190,0.25)' : '1px solid rgba(255,255,255,0.08)',
               }}
             >
               {badge}
             </span>
             {order.amount_usd != null && (
-              <span className="text-[11px] font-bold text-[#E8DCC8] tabular-nums">
+              <span className="text-[11px] font-bold text-[#F7EBDD] tabular-nums">
                 {fmtAmount(order.amount_usd)}
               </span>
             )}
           </div>
 
-          <p className="text-[14px] font-semibold text-[#E8DCC8] truncate leading-tight">{title}</p>
+          <p className="text-[14px] font-semibold text-[#F7EBDD] truncate leading-tight">{title}</p>
 
           {/* Track list for multi-track purchases */}
           {isTrack && (order as TrackOrder).tracks.length > 1 && (
-            <p className="text-[11px] text-[#5a5142] truncate">
+            <p className="text-[11px] text-[#9B9282] truncate">
               {(order as TrackOrder).tracks.map(t => t.title).join(' · ')}
             </p>
           )}
 
-          <p className="text-[10px] font-mono text-[#5a5142] uppercase tracking-wider mt-0.5">
+          <p className="text-[10px] font-mono text-[#9B9282] uppercase tracking-wider mt-0.5">
             {fmtDate(order.created_at)}
           </p>
         </div>
@@ -129,7 +129,7 @@ function OrderCard({ order, onResend, resending }: {
           <Link
             href={href}
             className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-mono uppercase tracking-wider transition-colors"
-            style={{ background: 'rgba(212,191,160,0.12)', color: '#D4BFA0', border: '1px solid rgba(212,191,160,0.2)' }}
+            style={{ background: 'rgba(231,215,190,0.12)', color: '#E7D7BE', border: '1px solid rgba(231,215,190,0.2)' }}
           >
             <Download size={12} />
             <span className="hidden sm:inline">Download</span>
@@ -140,7 +140,7 @@ function OrderCard({ order, onResend, resending }: {
             onClick={onResend}
             disabled={resending}
             title="Re-send download email"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#a08a6a] border border-[#1f1a13] hover:border-[#2d2620] transition-colors disabled:opacity-40"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#D0C3AF] border border-[#2B2821] hover:border-[#3B372F] transition-colors disabled:opacity-40"
           >
             {resending ? <Loader2 size={12} className="animate-spin" /> : <RotateCcw size={12} />}
             <span className="hidden sm:inline">Re-send</span>
@@ -203,13 +203,13 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8]">
+    <div className="min-h-screen bg-[#090907] text-[#F7EBDD]">
       <div className="max-w-2xl mx-auto px-4 py-16 md:py-24">
 
         {/* Back to store */}
         <Link
           href="/store"
-          className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] hover:text-[#a08a6a] transition-colors mb-10"
+          className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282] hover:text-[#D0C3AF] transition-colors mb-10"
         >
           <ArrowLeft size={11} />
           Back to store
@@ -217,13 +217,13 @@ export default function OrdersPage() {
 
         {/* Header */}
         <div className="mb-10">
-          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#5a5142] mb-3">
+          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#9B9282] mb-3">
             Order history
           </p>
           <h1 className="text-[28px] md:text-[36px] font-bold leading-tight mb-3">
             Find your purchases
           </h1>
-          <p className="text-[14px] text-[#6a5d4a] leading-relaxed">
+          <p className="text-[14px] text-[#B4AA99] leading-relaxed">
             Enter the email you used at checkout to access your download links.
           </p>
         </div>
@@ -232,20 +232,20 @@ export default function OrdersPage() {
         <form onSubmit={lookup} className="mb-10">
           <div className="flex gap-2">
             <div className="relative flex-1">
-              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4a4338]" />
+              <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#837B6D]" />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com"
                 required
-                className="w-full bg-[#14110d] border border-[#1f1a13] focus:border-[#D4BFA0]/40 rounded-xl pl-9 pr-4 py-3 text-[14px] text-[#E8DCC8] placeholder-[#3a3328] outline-none transition-colors"
+                className="w-full bg-[#171511] border border-[#2B2821] focus:border-[#E7D7BE]/40 rounded-xl pl-9 pr-4 py-3 text-[14px] text-[#F7EBDD] placeholder-[#6E685B] outline-none transition-colors"
               />
             </div>
             <button
               type="submit"
               disabled={loading || !email.trim()}
-              className="shrink-0 flex items-center gap-2 px-5 py-3 rounded-xl font-mono text-[11px] uppercase tracking-wider text-[#0a0907] bg-[#D4BFA0] hover:bg-[#E8DCC8] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="shrink-0 flex items-center gap-2 px-5 py-3 rounded-xl font-mono text-[11px] uppercase tracking-wider text-[#090907] bg-[#E7D7BE] hover:bg-[#F7EBDD] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : 'Look up'}
             </button>
@@ -273,17 +273,17 @@ export default function OrdersPage() {
           <div>
             {orders.length === 0 ? (
               <div className="text-center py-16">
-                <p className="text-[14px] text-[#5a5142] mb-2">No purchases found for this email.</p>
-                <p className="text-[12px] text-[#3a3328]">
+                <p className="text-[14px] text-[#9B9282] mb-2">No purchases found for this email.</p>
+                <p className="text-[12px] text-[#6E685B]">
                   Try the email you used at checkout, or{' '}
-                  <Link href="/store" className="text-[#D4BFA0] hover:text-[#E8DCC8] transition-colors">
+                  <Link href="/store" className="text-[#E7D7BE] hover:text-[#F7EBDD] transition-colors">
                     browse the store
                   </Link>.
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-4">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-4">
                   {orders.length} purchase{orders.length === 1 ? '' : 's'} found
                 </p>
                 {orders.map((order) => (

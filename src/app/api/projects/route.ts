@@ -9,6 +9,21 @@ import {
 } from '@/lib/db';
 import { nextProjectName } from '@/lib/naming';
 
+type ProjectTrackPreviewRow = {
+  project_id: string;
+  track_id: string;
+  position?: number | null;
+};
+
+function addPreviewCover(map: Map<string, string[]>, ownerId: string, cover?: unknown) {
+  if (typeof cover !== 'string' || !cover) return;
+  const covers = map.get(ownerId) ?? [];
+  if (!covers.includes(cover) && covers.length < 4) {
+    covers.push(cover);
+    map.set(ownerId, covers);
+  }
+}
+
 /**
  * GET /api/projects
  *
@@ -31,17 +46,33 @@ export async function GET() {
   // filter by tag and by folder without per-row round-trips (mig 081/083).
   const tagsByProject = new Map<string, { tag: string; category: string | null }[]>();
   const foldersByProject = new Map<string, string[]>();
+  const previewCoversByProject = new Map<string, string[]>();
 
   if (isSupabaseConfigured() && ids.length) {
     const admin = createServiceClient();
     const [{ data: pts }, { data: tagRows }, { data: folderRows }] = await Promise.all([
-      admin.from('project_tracks').select('project_id').in('project_id', ids),
+      admin.from('project_tracks').select('project_id, track_id, position').in('project_id', ids),
       admin.from('project_tags').select('project_id, tag, category').in('project_id', ids),
       admin.from('project_folder_items').select('project_id, folder_id').in('project_id', ids),
     ]);
-    (pts ?? []).forEach((pt: { project_id: string }) => {
+
+    const projectTrackRows = (pts ?? []) as ProjectTrackPreviewRow[];
+    const trackIds = [...new Set(projectTrackRows.map((pt) => pt.track_id).filter(Boolean))];
+    const coverByTrack = new Map<string, string | null>();
+    if (trackIds.length) {
+      const { data: trackRows } = await admin.from('tracks').select('id, cover_url').in('id', trackIds);
+      (trackRows ?? []).forEach((track: { id: string; cover_url: string | null }) => {
+        coverByTrack.set(track.id, track.cover_url);
+      });
+    }
+
+    projectTrackRows.forEach((pt) => {
       counts.set(pt.project_id, (counts.get(pt.project_id) ?? 0) + 1);
     });
+    [...projectTrackRows]
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+      .forEach((pt) => addPreviewCover(previewCoversByProject, pt.project_id, coverByTrack.get(pt.track_id)));
+
     (tagRows ?? []).forEach((r: { project_id: string; tag: string; category: string | null }) => {
       const arr = tagsByProject.get(r.project_id) ?? [];
       arr.push({ tag: r.tag, category: r.category });
@@ -53,8 +84,14 @@ export async function GET() {
       foldersByProject.set(r.project_id, arr);
     });
   } else if (!isSupabaseConfigured()) {
-    const allPT = getAll('project_tracks') as { project_id: string }[];
+    const allPT = getAll('project_tracks') as ProjectTrackPreviewRow[];
+    const coverByTrack = new Map(
+      (getAll('tracks') as { id: string; cover_url?: string | null }[]).map((track) => [track.id, track.cover_url ?? null]),
+    );
     allPT.forEach((pt) => counts.set(pt.project_id, (counts.get(pt.project_id) ?? 0) + 1));
+    [...allPT]
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+      .forEach((pt) => addPreviewCover(previewCoversByProject, pt.project_id, coverByTrack.get(pt.track_id)));
     (getAll('project_tags') as { project_id: string; tag: string; category?: string }[]).forEach((r) => {
       const arr = tagsByProject.get(r.project_id) ?? [];
       arr.push({ tag: r.tag, category: r.category ?? null });
@@ -72,6 +109,7 @@ export async function GET() {
     track_count: counts.get(p.id) ?? 0,
     tags: tagsByProject.get(p.id) ?? [],
     folder_ids: foldersByProject.get(p.id) ?? [],
+    preview_covers: previewCoversByProject.get(p.id) ?? [],
   }));
   return NextResponse.json({ projects: withCount }, {
     headers: { 'Cache-Control': 'private, max-age=15, stale-while-revalidate=60' },

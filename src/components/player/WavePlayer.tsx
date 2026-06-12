@@ -64,7 +64,7 @@ export function WavePlayer({
   hideControls = false,
   onFinish,
   height = 40,
-  accent = '#D4BFA0',
+  accent = '#E7D7BE',
 }: WavePlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -240,7 +240,7 @@ export function WavePlayer({
             }
             setPlaying(!isPlaying);
           }}
-          className="w-8 h-8 rounded-full bg-[#16130e]/80 border border-white/[0.08] flex items-center justify-center text-[#E8DCC8] hover:border-[#D4BFA0]/50 hover:text-[#D4BFA0] hover:scale-105 active:scale-95 transition-all shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+          className="w-8 h-8 rounded-full bg-[#1A1813]/80 border border-white/[0.08] flex items-center justify-center text-[#F7EBDD] hover:border-[#E7D7BE]/50 hover:text-[#E7D7BE] hover:scale-105 active:scale-95 transition-all shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
         >
           {isPlaying ? (
             <PauseGlyph size={14} />
@@ -251,7 +251,7 @@ export function WavePlayer({
       )}
 
       {!hideControls && (
-        <span className="text-[10px] font-mono text-[#5a5142] tabular-nums w-10 text-right shrink-0">
+        <span className="text-[10px] font-mono text-[#9B9282] tabular-nums w-10 text-right shrink-0">
           {formatTime(currentTime)}
         </span>
       )}
@@ -260,14 +260,14 @@ export function WavePlayer({
         <div ref={containerRef} className="w-full" style={{ minHeight: height }} />
         {!ready && !showFailed && (
           <div className="absolute inset-0 flex items-center pointer-events-none">
-            <div className="w-full h-[2px] bg-[#1a160f] rounded animate-pulse" />
+            <div className="w-full h-[2px] bg-[#211F1A] rounded animate-pulse" />
           </div>
         )}
         {showFailed && (
           <div className="absolute inset-0 flex items-center justify-center gap-2">
             {/* Audio still plays via the fallback element below — only the
                 visual waveform is unavailable. */}
-            <span className="text-[10px] font-mono text-[#4a4338]">{fallbackActive ? 'playing (no waveform)' : 'waveform unavailable'}</span>
+            <span className="text-[10px] font-mono text-[#837B6D]">{fallbackActive ? 'playing (no waveform)' : 'waveform unavailable'}</span>
             <button
               type="button"
               onClick={(e) => {
@@ -279,7 +279,7 @@ export function WavePlayer({
                 setAutoRetryTried(false);
                 setRetryNonce((n) => n + 1);
               }}
-              className="text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border border-[#1a160f] text-[#a08a6a] hover:text-white hover:border-[#2d2620] pointer-events-auto"
+              className="text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded border border-[#211F1A] text-[#D0C3AF] hover:text-white hover:border-[#3B372F] pointer-events-auto"
             >
               Retry
             </button>
@@ -301,7 +301,7 @@ export function WavePlayer({
       </div>
 
       {!hideControls && (
-        <span className="text-[10px] font-mono text-[#5a5142] tabular-nums w-10 shrink-0">
+        <span className="text-[10px] font-mono text-[#9B9282] tabular-nums w-10 shrink-0">
           {formatTime(duration)}
         </span>
       )}

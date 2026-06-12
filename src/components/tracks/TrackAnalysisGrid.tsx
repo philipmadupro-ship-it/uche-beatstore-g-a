@@ -24,8 +24,13 @@ interface Props {
 
 export function TrackAnalysisGrid({ track, onAnalyzed }: Props) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const canAnalyze = Boolean(track.audio_url);
 
   const reAnalyze = async () => {
+    if (!track.audio_url) {
+      toast.error('No audio file', 'Upload or replace this track’s source audio before running analysis.');
+      return;
+    }
     setIsAnalyzing(true);
     try {
       const res = await fetch(`/api/tracks/${track.id}/analyze`, { method: 'POST' });
@@ -50,13 +55,14 @@ export function TrackAnalysisGrid({ track, onAnalyzed }: Props) {
   };
 
   return (
-    <div className="px-8 py-5 border-b border-[#1f1a13]">
+    <div className="px-8 py-5 border-b border-[#2B2821]">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a08a6a]">Sound DNA</h3>
+        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D0C3AF]">Sound DNA</h3>
         <button
           onClick={reAnalyze}
-          disabled={isAnalyzing}
-          className="text-[10px] font-mono uppercase tracking-widest px-2.5 py-1.5 rounded border border-[#1f1a13] bg-[#101010] text-[#a08a6a] hover:text-[#E8D8B8] hover:border-[#8A7A5C]/40 hover:bg-[#2A2418] disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+          disabled={isAnalyzing || !canAnalyze}
+          title={canAnalyze ? 'Re-analyze this track' : 'Upload source audio before analyzing'}
+          className="tap flex min-h-11 items-center gap-1.5 rounded border border-[#2B2821] bg-[#101010] px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-[#D0C3AF] transition-colors hover:border-[#C9BCA8]/40 hover:bg-[#342F27] hover:text-[#F3E6D1] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isAnalyzing ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
           {isAnalyzing ? 'Analyzing…' : 'Re-analyze'}
@@ -76,7 +82,7 @@ export function TrackAnalysisGrid({ track, onAnalyzed }: Props) {
 function Cell({ label, value }: { label: string; value: string }) {
   return (
     <div className="space-y-1">
-      <span className="text-[9px] font-bold text-[#4a4338] uppercase tracking-widest">{label}</span>
+      <span className="text-[9px] font-bold text-[#837B6D] uppercase tracking-widest">{label}</span>
       <p className="text-sm font-black text-white font-mono">{value}</p>
     </div>
   );

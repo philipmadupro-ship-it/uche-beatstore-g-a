@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadAudio, uploadPeaksSidecar } from '@/lib/storage/upload';
 import { analyzeAudio } from '@/lib/audio/analyze.server';
+import type { AudioFeatures } from '@/lib/audio/analyze.server';
 import { getAuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
 import { extractPeaks } from '@/lib/audio/peaks';
 import { isSupabaseConfigured, insert, update, getAll } from '@/lib/local-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { titleFromFilename, nextVersionLabel } from '@/lib/naming';
+import { errorMessage } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -91,31 +93,31 @@ export async function POST(req: NextRequest) {
     const safeContentType = detectContentType(ext, file.type);
 
     // 3. Parse optional client analysis
-    let clientAnalysis: any = null;
+    let clientAnalysis: Partial<AudioFeatures> | null = null;
     if (clientAnalysisRaw) {
-      try { clientAnalysis = JSON.parse(clientAnalysisRaw); } catch {}
+      try { clientAnalysis = JSON.parse(clientAnalysisRaw) as Partial<AudioFeatures>; } catch {}
     }
 
     // 4. Upload to storage
     let audioUrl = '';
     try {
       audioUrl = await uploadAudio(buffer, file.name, safeContentType);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Storage upload failed:', err);
       return NextResponse.json(
-        { error: `Storage error: ${err.message || 'could not save file'}` },
+        { error: `Storage error: ${errorMessage(err) || 'could not save file'}` },
         { status: 500 }
       );
     }
 
     // 5. Analysis (client > server fallback)
-    let analysis = clientAnalysis;
-    if (!analysis) {
+    let serverAnalysis: AudioFeatures | null = null;
+    if (!clientAnalysis) {
       try {
-        analysis = await analyzeAudio(buffer);
+        serverAnalysis = await analyzeAudio(buffer);
       } catch (err) {
         console.warn('Server analysis failed, using nulls:', err);
-        analysis = { bpm: null, key: null, scale: null, loudness: null, duration: null };
+        serverAnalysis = { bpm: null, key: null, scale: null, loudness: null, duration: null };
       }
     }
 
@@ -139,7 +141,7 @@ export async function POST(req: NextRequest) {
       console.warn('Peaks extraction/upload failed, continuing without:', err);
     }
 
-    const merged = mergeFeatures({ server: analysis, audd });
+    const merged = mergeFeatures({ client: clientAnalysis, server: serverAnalysis, audd });
     const trackData = {
       title: titleFromName,
       type,
@@ -150,7 +152,7 @@ export async function POST(req: NextRequest) {
     };
 
     // 6. Persist: replace-with-versioning OR insert new
-    let track: any;
+    let track: Record<string, unknown> | null = null;
 
     if (isSupabaseConfigured()) {
       try {
@@ -222,30 +224,19 @@ export async function POST(req: NextRequest) {
           track = data;
 
           if (projectId) {
-            // Add to project if it's a project, else fall back to playlist_tracks
-            const { data: proj } = await supabase
-              .from('projects')
-              .select('id')
-              .eq('id', projectId)
-              .maybeSingle();
-            if (proj) {
-              await supabase.from('project_tracks').insert({
-                project_id: projectId,
-                track_id: track.id,
-                role: 'main',
-                position: 0,
-              });
-            } else {
-              await supabase.from('playlist_tracks').insert({
-                playlist_id: projectId,
-                track_id: track.id,
-                position: 0,
-              });
-            }
+            const savedTrack = track;
+            const trackId = savedTrack && typeof savedTrack.id === 'string' ? savedTrack.id : null;
+            if (!trackId) throw new Error('Upload saved without a track id');
+            await attachTrackToDestination(supabase, projectId, trackId, userId);
           }
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error('Supabase op failed, falling back to local store:', err);
+        const message = errorMessage(err) || 'Database save failed';
+        if (/destination|attach/i.test(message)) {
+          const status = /forbidden/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 500;
+          return NextResponse.json({ error: message }, { status });
+        }
         track = writeLocal(trackData, replaceTrackId, projectId);
       }
     } else {
@@ -253,21 +244,76 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, track }, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Upload Error:', error);
     return NextResponse.json(
-      { error: error?.message || 'Unknown upload error' },
+      { error: errorMessage(error) || 'Unknown upload error' },
       { status: 500 }
     );
   }
 }
 
-function writeLocal(trackData: any, replaceTrackId: string | null, projectId: string | null) {
+async function attachTrackToDestination(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  destinationId: string,
+  trackId: string,
+  userId: string | null,
+) {
+  const ownsDestination = (row: { user_id?: string | null } | null) => {
+    if (!row) return false;
+    return !row.user_id || Boolean(userId && row.user_id === userId);
+  };
+
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('id,user_id')
+    .eq('id', destinationId)
+    .maybeSingle();
+  if (projectError) throw new Error(`Project lookup failed: ${projectError.message}`);
+  if (project) {
+    if (!ownsDestination(project)) throw new Error('Forbidden project destination');
+    const { error } = await supabase.from('project_tracks').insert({
+      project_id: destinationId,
+      track_id: trackId,
+      role: 'main',
+      position: 0,
+    });
+    if (error) throw new Error(`Project attach failed: ${error.message}`);
+    return;
+  }
+
+  const { data: playlist, error: playlistError } = await supabase
+    .from('playlists')
+    .select('id,user_id')
+    .eq('id', destinationId)
+    .maybeSingle();
+  if (playlistError) throw new Error(`Playlist lookup failed: ${playlistError.message}`);
+  if (playlist) {
+    if (!ownsDestination(playlist)) throw new Error('Forbidden playlist destination');
+    const { error } = await supabase.from('playlist_tracks').insert({
+      playlist_id: destinationId,
+      track_id: trackId,
+      position: 0,
+    });
+    if (error) throw new Error(`Playlist attach failed: ${error.message}`);
+    return;
+  }
+
+  throw new Error('Upload destination not found');
+}
+
+function writeLocal(
+  trackData: Record<string, unknown>,
+  replaceTrackId: string | null,
+  projectId: string | null,
+): Record<string, unknown> | null {
   if (replaceTrackId) {
-    const existingTracks = getAll('tracks');
-    const existing = existingTracks.find((t: any) => t.id === replaceTrackId);
+    const existingTracks = getAll('tracks') as Record<string, unknown>[];
+    const existing = existingTracks.find((t) => t.id === replaceTrackId);
     if (existing) {
-      const vs = getAll('track_versions').filter((v: any) => v.track_id === replaceTrackId);
+      const vs = (getAll('track_versions') as Record<string, unknown>[])
+        .filter((v) => v.track_id === replaceTrackId)
+        .map((v) => ({ version_number: Number(v.version_number) || 0 }));
       const { number, label } = nextVersionLabel(vs);
       insert('track_versions', {
         track_id: replaceTrackId,
@@ -296,11 +342,11 @@ function writeLocal(trackData: any, replaceTrackId: string | null, projectId: st
     rating: null,
     cover_url: null,
     notes: '',
-  });
+  }) as Record<string, unknown>;
   if (projectId) {
     // Try project_tracks first, fall back to playlist_tracks
-    const projects = getAll('projects');
-    const isProject = projects.some((p: any) => p.id === projectId);
+    const projects = getAll('projects') as Record<string, unknown>[];
+    const isProject = projects.some((p) => p.id === projectId);
     if (isProject) {
       insert('project_tracks', {
         project_id: projectId,

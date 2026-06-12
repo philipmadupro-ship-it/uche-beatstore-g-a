@@ -42,39 +42,39 @@ export function DrawerStemOverlay({ open, status, progress, data, onClose }: Pro
             <h2 className="text-4xl font-black text-white uppercase tracking-tighter leading-none mb-2">
               Neural stem extraction
             </h2>
-            <p className="text-[#a08a6a] text-[10px] font-bold uppercase tracking-[0.4em]">
+            <p className="text-[#D0C3AF] text-[10px] font-bold uppercase tracking-[0.4em]">
               Multi-channel isolated signal routing
             </p>
           </div>
           <button
             onClick={onClose}
-            className="bg-[#16130e] border border-[#1f1a13] hover:border-red-500/50 hover:text-red-500 p-4 rounded-2xl text-[#4a4338] transition-all transform hover:rotate-90"
+            className="bg-[#1A1813] border border-[#2B2821] hover:border-red-500/50 hover:text-red-500 p-4 rounded-2xl text-[#837B6D] transition-all transform hover:rotate-90"
           >
             <X size={28} />
           </button>
         </div>
 
         {status === 'processing' ? (
-          <div className="bg-[#16130e] border border-[#1f1a13] rounded-[3rem] p-32 flex flex-col items-center justify-center gap-8 shadow-2xl">
+          <div className="bg-[#1A1813] border border-[#2B2821] rounded-[3rem] p-32 flex flex-col items-center justify-center gap-8 shadow-2xl">
             <div className="relative">
-              <div className="w-24 h-24 border-4 border-[#D4BFA0]/20 border-t-[#D4BFA0] rounded-full animate-spin" />
-              <Scissors className="absolute inset-0 m-auto text-[#D4BFA0] animate-pulse" size={32} />
+              <div className="w-24 h-24 border-4 border-[#E7D7BE]/20 border-t-[#E7D7BE] rounded-full animate-spin" />
+              <Scissors className="absolute inset-0 m-auto text-[#E7D7BE] animate-pulse" size={32} />
             </div>
             <div className="text-center">
               {progress === 0 ? (
                 <>
                   <p className="text-xl font-black text-white uppercase tracking-widest mb-2 animate-pulse">Loading neural model</p>
-                  <p className="text-[10px] font-bold text-[#4a4338] uppercase tracking-[0.3em]">First run warms the GPU — this can take ~30 seconds</p>
+                  <p className="text-[10px] font-bold text-[#837B6D] uppercase tracking-[0.3em]">First run warms the GPU — this can take ~30 seconds</p>
                 </>
               ) : (
                 <>
                   <p className="text-xl font-black text-white uppercase tracking-widest mb-2 animate-pulse">Decompressing audio matrix</p>
-                  <p className="text-[10px] font-bold text-[#4a4338] uppercase tracking-[0.3em]">AI Stem Splitting in Progress — {progress}%</p>
+                  <p className="text-[10px] font-bold text-[#837B6D] uppercase tracking-[0.3em]">AI Stem Splitting in Progress — {progress}%</p>
                 </>
               )}
-              <div className="mt-4 w-64 mx-auto h-1 bg-[#1a160f] rounded-full overflow-hidden">
+              <div className="mt-4 w-64 mx-auto h-1 bg-[#211F1A] rounded-full overflow-hidden">
                 <div
-                  className={`h-full bg-[#D4BFA0] transition-all duration-500 ${progress === 0 ? 'animate-pulse' : ''}`}
+                  className={`h-full bg-[#E7D7BE] transition-all duration-500 ${progress === 0 ? 'animate-pulse' : ''}`}
                   style={{ width: `${progress === 0 ? 8 : progress}%` }}
                 />
               </div>

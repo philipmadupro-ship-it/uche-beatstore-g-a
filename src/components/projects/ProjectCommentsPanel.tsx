@@ -208,15 +208,15 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
   };
 
   return (
-    <div className={compact ? '' : 'border border-[#1f1a13] rounded-lg bg-[#0a0907]'}>
+    <div className={compact ? '' : 'border border-[#2B2821] rounded-lg bg-[#090907]'}>
       {!compact && (
-        <header className="flex items-center justify-between px-5 py-4 border-b border-[#1f1a13]">
+        <header className="flex items-center justify-between px-5 py-4 border-b border-[#2B2821]">
           <div className="flex items-center gap-2">
-            <MessageSquare size={12} className="text-[#6a5d4a]" />
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a08a6a]">
+            <MessageSquare size={12} className="text-[#B4AA99]" />
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D0C3AF]">
               Project comments
               {visible.length > 0 && (
-                <span className="text-[#5a5142] ml-1.5 font-mono">
+                <span className="text-[#9B9282] ml-1.5 font-mono">
                   {visible.length}{visible.length !== comments.length ? `/${comments.length}` : ''}
                 </span>
               )}
@@ -226,8 +226,8 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
             {/* Track filter — only when no external pin is forced. The pinned
                 drawer embed hides this since its filter is fixed by props. */}
             {pinnedTrackId === null && tracks.length > 0 && (
-              <div className="flex items-center gap-1.5 bg-[#0a0907] border border-[#1a160f] rounded-md px-2 py-1">
-                <Filter size={10} className="text-[#5a5142]" />
+              <div className="flex items-center gap-1.5 bg-[#090907] border border-[#211F1A] rounded-md px-2 py-1">
+                <Filter size={10} className="text-[#9B9282]" />
                 <select
                   value={filterTrackId}
                   onChange={(e) => setFilterTrackId(e.target.value)}
@@ -243,7 +243,7 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
             )}
             <button
               onClick={fetchComments}
-              className="p-1.5 text-[#5a5142] hover:text-white transition-colors"
+              className="p-1.5 text-[#9B9282] hover:text-white transition-colors"
               title="Refresh comments"
             >
               <RefreshCw size={11} />
@@ -255,10 +255,10 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
       <div className={compact ? 'space-y-3' : 'px-5 py-4 space-y-3'}>
         {loading ? (
           <div className="flex items-center justify-center py-4">
-            <Loader2 size={14} className="animate-spin text-[#4a4338]" />
+            <Loader2 size={14} className="animate-spin text-[#837B6D]" />
           </div>
         ) : visible.length === 0 ? (
-          <p className="text-[11px] text-[#5a5142] py-2">
+          <p className="text-[11px] text-[#9B9282] py-2">
             {effectiveTrackFilter
               ? 'No comments pinned to this track yet.'
               : 'No comments yet. When recipients of a share link with “Commenter” access leave feedback, it\'ll appear here.'}
@@ -272,28 +272,28 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
                 key={c.id}
                 className={`group rounded-md px-4 py-3 border ${
                   isOwner
-                    ? 'bg-[#2A2418]/40 border-[#8A7A5C]/30'
-                    : 'bg-[#0a0907] border-[#1a160f]'
+                    ? 'bg-[#342F27]/40 border-[#C9BCA8]/30'
+                    : 'bg-[#090907] border-[#211F1A]'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3 mb-1.5">
                   <div className="flex items-center gap-2 min-w-0">
                     <div
                       className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                        isOwner ? 'bg-[#8A7A5C] text-white' : 'bg-[#1a160f] text-[#a08a6a]'
+                        isOwner ? 'bg-[#C9BCA8] text-white' : 'bg-[#211F1A] text-[#D0C3AF]'
                       }`}
                     >
                       <User size={9} />
                     </div>
-                    <span className="text-[11px] font-medium text-[#E8DCC8] truncate">
+                    <span className="text-[11px] font-medium text-[#F7EBDD] truncate">
                       {c.author_name}
                     </span>
                     {isOwner && (
-                      <span className="text-[8px] font-bold text-[#E8D8B8] uppercase tracking-wider">
+                      <span className="text-[8px] font-bold text-[#F3E6D1] uppercase tracking-wider">
                         You
                       </span>
                     )}
-                    <span className="text-[9px] font-mono text-[#5a5142]">
+                    <span className="text-[9px] font-mono text-[#9B9282]">
                       {new Date(c.created_at).toLocaleString('en-US', {
                         month: 'short',
                         day: 'numeric',
@@ -303,7 +303,7 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
                     </span>
                     {onTrack && (
                       <span
-                        className="flex items-center gap-1 text-[9px] font-mono text-[#E8D8B8] bg-[#2A2418] border border-[#8A7A5C]/40 rounded px-1.5 py-0.5 truncate"
+                        className="flex items-center gap-1 text-[9px] font-mono text-[#F3E6D1] bg-[#342F27] border border-[#C9BCA8]/40 rounded px-1.5 py-0.5 truncate"
                         title={`Pinned to ${onTrack}`}
                       >
                         <Pin size={8} />
@@ -317,7 +317,7 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
                       // metadata: tells the owner *which slice* of the
                       // track the reviewer flagged.
                       <span
-                        className="text-[9px] font-mono text-[#E8D8B8] bg-[#2A2418] border border-[#8A7A5C]/40 rounded px-1.5 py-0.5"
+                        className="text-[9px] font-mono text-[#F3E6D1] bg-[#342F27] border border-[#C9BCA8]/40 rounded px-1.5 py-0.5"
                         title="Region-anchored comment"
                       >
                         {fmtTime(c.region_start)}–{fmtTime(c.region_end)}
@@ -327,7 +327,7 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
                   <button
                     onClick={() => remove(c)}
                     disabled={deleting === c.id}
-                    className="p-1 rounded text-[#4a4338] hover:text-red-400 hover:bg-[#1a160f] opacity-0 group-hover:opacity-100 transition-all"
+                    className="p-1 rounded text-[#837B6D] hover:text-red-400 hover:bg-[#211F1A] opacity-0 group-hover:opacity-100 transition-all"
                     title="Delete comment"
                   >
                     {deleting === c.id ? (
@@ -352,19 +352,19 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Reply or post a note for collaborators…"
             rows={2}
-            className="w-full bg-[#0a0907] border border-[#1a160f] rounded px-3 py-2 text-[12px] text-white placeholder:text-[#4a4338] focus:outline-none focus:border-[#8A7A5C] resize-none"
+            className="w-full bg-[#090907] border border-[#211F1A] rounded px-3 py-2 text-[12px] text-white placeholder:text-[#837B6D] focus:outline-none focus:border-[#C9BCA8] resize-none"
           />
           <div className="flex items-center justify-between mt-2">
-            <p className="text-[9px] text-[#5a5142]">
+            <p className="text-[9px] text-[#9B9282]">
               Posts as the project owner.
               {effectiveTrackFilter && (
-                <> Will be pinned to <span className="text-[#E8D8B8]">{trackTitleOf(effectiveTrackFilter)}</span>.</>
+                <> Will be pinned to <span className="text-[#F3E6D1]">{trackTitleOf(effectiveTrackFilter)}</span>.</>
               )}
             </p>
             <button
               onClick={submit}
               disabled={posting || !draft.trim()}
-              className="flex items-center gap-1.5 bg-[#D4BFA0] hover:bg-[#8A7A5C] disabled:opacity-40 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded transition-colors"
+              className="flex items-center gap-1.5 bg-[#E7D7BE] hover:bg-[#C9BCA8] disabled:opacity-40 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded transition-colors"
             >
               {posting ? <Loader2 size={11} className="animate-spin" /> : <Send size={10} />}
               Post

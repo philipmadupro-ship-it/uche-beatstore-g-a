@@ -31,17 +31,17 @@ export function BeatListRow({
     <div
       id={`beat-${track.id}`}
       className={`rounded-xl border transition-all ${isPreview
-          ? 'border-[#D4BFA0]/40 bg-[#16130e]'
+          ? 'border-[#E7D7BE]/40 bg-[#1A1813]'
           : isCurrent
-            ? 'border-[#D4BFA0]/20 bg-[#16130e]'
-            : 'border-[#1a160f] bg-[#14110d] hover:border-[#1f1a13]'
+            ? 'border-[#E7D7BE]/20 bg-[#1A1813]'
+            : 'border-[#211F1A] bg-[#171511] hover:border-[#2B2821]'
         }`}
       style={isPreview ? { borderColor: `${accentColor}66` } : isCurrent ? { borderColor: `${accentColor}33` } : {}}
     >
       <div className="flex items-center gap-3 px-3 py-2.5">
         <button
           onClick={onPlay}
-          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0 ${isCurrent ? 'text-black' : 'bg-white/[0.06] text-[#a08a6a] hover:bg-white/[0.12] hover:text-white'}`}
+          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0 ${isCurrent ? 'text-black' : 'bg-white/[0.06] text-[#D0C3AF] hover:bg-white/[0.12] hover:text-white'}`}
           style={isCurrent ? { backgroundColor: accentColor } : {}}
         >
           {isCurrent && isPlaying
@@ -51,11 +51,11 @@ export function BeatListRow({
 
         <button
           onClick={onPreview}
-          className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-[#0a0907] cursor-pointer relative group"
+          className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-[#090907] cursor-pointer relative group"
         >
           {track.cover_url
             ? <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
-            : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={14} /></div>}
+            : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={14} /></div>}
           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <ExternalLink size={10} className="text-white" />
           </div>
@@ -63,13 +63,13 @@ export function BeatListRow({
 
         <div className="flex-1 min-w-0">
           <button onClick={onPreview} className="text-left w-full" title={track.title}>
-            <p className={`text-[13px] font-medium truncate transition-colors ${isPreview || isCurrent ? '' : 'text-[#E8DCC8] hover:text-[#D4BFA0]'}`}
+            <p className={`text-[13px] font-medium truncate transition-colors ${isPreview || isCurrent ? '' : 'text-[#F7EBDD] hover:text-[#E7D7BE]'}`}
               style={isPreview || isCurrent ? { color: accentColor } : {}}
             >
               {track.title}
             </p>
           </button>
-          <p className="text-[10px] font-mono text-[#5a5142] uppercase tracking-wider truncate">
+          <p className="text-[10px] font-mono text-[#9B9282] uppercase tracking-wider truncate">
             {track.type}
             {track.duration_seconds ? ` · ${fmtDur(track.duration_seconds)}` : ''}
           </p>
@@ -80,8 +80,8 @@ export function BeatListRow({
                 .slice(0, 3)
                 .map((t) => (
                   <span key={t.tag} className={`px-1.5 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider border shrink-0 ${t.category === 'genre'
-                      ? 'bg-[#D4BFA0]/10 text-[#D4BFA0] border-[#D4BFA0]/20'
-                      : 'bg-[#1f1a13] text-[#6a5d4a] border-[#1f1a13]'}`}>
+                      ? 'bg-[#E7D7BE]/10 text-[#E7D7BE] border-[#E7D7BE]/20'
+                      : 'bg-[#2B2821] text-[#B4AA99] border-[#2B2821]'}`}>
                     {t.tag}
                   </span>
                 ))}
@@ -91,14 +91,14 @@ export function BeatListRow({
 
         {track.bpm && (
           <div className="hidden md:block text-right shrink-0">
-            <p className="text-[8px] font-mono uppercase text-[#5a5142]">BPM</p>
+            <p className="text-[8px] font-mono uppercase text-[#9B9282]">BPM</p>
             <p className="text-[11px] font-mono text-white tabular-nums">{track.bpm}</p>
           </div>
         )}
 
         {track.key && (
           <div className="hidden md:block text-right shrink-0">
-            <p className="text-[8px] font-mono uppercase text-[#5a5142]">Key</p>
+            <p className="text-[8px] font-mono uppercase text-[#9B9282]">Key</p>
             <p className="text-[11px] font-mono font-semibold tabular-nums" style={{ color: accentColor }}>
               {track.key}{track.scale === 'minor' ? 'm' : ''}
             </p>
@@ -107,7 +107,7 @@ export function BeatListRow({
 
         <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
           {track.exclusive_sold ? (
-            <span className="px-3 py-2 rounded-md bg-white/[0.03] border border-[#D4BFA0]/25 text-[#D4BFA0] text-[10px] font-bold uppercase tracking-wider">
+            <span className="px-3 py-2 rounded-md bg-white/[0.03] border border-[#E7D7BE]/25 text-[#E7D7BE] text-[10px] font-bold uppercase tracking-wider">
               Exclusive Sold
             </span>
           ) : track.free_download_enabled ? (
@@ -122,10 +122,10 @@ export function BeatListRow({
               <button
                 onClick={onAddLease}
                 disabled={priceLease == null}
-                className="px-3 py-2 rounded-md bg-white/[0.06] border border-white/[0.10] text-[#E8DCC8] text-[11px] font-bold hover:bg-white/[0.12] hover:border-white/[0.18] transition-colors disabled:opacity-30 flex flex-col items-center leading-none"
+                className="px-3 py-2 rounded-md bg-white/[0.06] border border-white/[0.10] text-[#F7EBDD] text-[11px] font-bold hover:bg-white/[0.12] hover:border-white/[0.18] transition-colors disabled:opacity-30 flex flex-col items-center leading-none"
               >
                 <span>{priceLease != null ? `$${priceLease}` : '—'}</span>
-                <span className="text-[7px] font-mono text-[#6a5d4a] mt-0.5 uppercase tracking-wider">Lease</span>
+                <span className="text-[7px] font-mono text-[#B4AA99] mt-0.5 uppercase tracking-wider">Lease</span>
               </button>
               <button
                 onClick={onAddExclusive}
@@ -140,7 +140,7 @@ export function BeatListRow({
           )}
           <button
             onClick={onPreview}
-            className="w-8 h-8 rounded-md flex items-center justify-center text-[#4a4338] hover:text-[#E8DCC8] bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.04] transition-all"
+            className="w-8 h-8 rounded-md flex items-center justify-center text-[#837B6D] hover:text-[#F7EBDD] bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.04] transition-all"
             title="Preview"
           >
             <ExternalLink size={11} />

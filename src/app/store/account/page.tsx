@@ -72,20 +72,20 @@ export default function AccountSignInPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0a0907] p-4 text-[#E8DCC8]">
+    <div className="flex min-h-screen items-center justify-center bg-[#090907] p-4 text-[#F7EBDD]">
       <div className="w-full max-w-sm">
         <Link
           href="/store"
-          className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors mb-8"
+          className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] hover:text-[#F7EBDD] transition-colors mb-8"
         >
           <ArrowLeft size={12} />
           Back to store
         </Link>
 
-        <div className="bg-[#16130e] rounded-lg border border-[#1f1a13] p-8 space-y-6">
+        <div className="bg-[#1A1813] rounded-lg border border-[#2B2821] p-8 space-y-6">
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight uppercase text-white">U2C Beatstore</h1>
-            <p className="mt-2 text-sm text-[#a08a6a]">
+            <p className="mt-2 text-sm text-[#D0C3AF]">
               {sent ? 'Check your inbox' : 'Sign in to your account'}
             </p>
           </div>
@@ -93,13 +93,13 @@ export default function AccountSignInPage() {
           {sent ? (
             <div className="rounded-xl border border-[#6DC6A4]/25 bg-[#0e1f17]/40 px-5 py-6 text-center">
               <CheckCircle2 size={26} className="text-[#6DC6A4] mx-auto mb-3" />
-              <p className="text-[13px] font-medium text-[#E8DCC8] mb-1">Email sent to {email.trim()}</p>
-              <p className="text-[11px] text-[#a08a6a] leading-relaxed">
+              <p className="text-[13px] font-medium text-[#F7EBDD] mb-1">Email sent to {email.trim()}</p>
+              <p className="text-[11px] text-[#D0C3AF] leading-relaxed">
                 Tap the button in the email to sign in. Works on any device — no password needed.
               </p>
               <button
                 onClick={() => { setSent(false); setEmail(''); }}
-                className="mt-5 text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors"
+                className="mt-5 text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F7EBDD] transition-colors"
               >
                 Use a different email
               </button>
@@ -111,7 +111,7 @@ export default function AccountSignInPage() {
                 type="button"
                 onClick={handleGoogle}
                 disabled={disabled}
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded bg-white text-black hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-50 transition-all text-sm font-medium"
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded bg-white text-black hover:bg-[#F7EBDD] active:scale-[0.98] disabled:opacity-50 transition-all text-sm font-medium"
               >
                 <GoogleGlyph />
                 {googleLoading ? 'Redirecting…' : 'Continue with Google'}
@@ -119,19 +119,19 @@ export default function AccountSignInPage() {
 
               {/* Divider */}
               <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-[#1f1a13]" />
-                <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#4a4338]">or</span>
-                <div className="flex-1 h-px bg-[#1f1a13]" />
+                <div className="flex-1 h-px bg-[#2B2821]" />
+                <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#837B6D]">or</span>
+                <div className="flex-1 h-px bg-[#2B2821]" />
               </div>
 
               {/* Email OTP */}
               <form onSubmit={handleEmail} className="space-y-4" noValidate>
                 <div>
-                  <label htmlFor="buyer-email" className="block text-xs font-medium uppercase text-[#4a4338] mb-1">
+                  <label htmlFor="buyer-email" className="block text-xs font-medium uppercase text-[#837B6D] mb-1">
                     Email Address
                   </label>
                   <div className="relative">
-                    <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4338] pointer-events-none" />
+                    <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#837B6D] pointer-events-none" />
                     <input
                       id="buyer-email"
                       type="email"
@@ -140,7 +140,7 @@ export default function AccountSignInPage() {
                       placeholder="you@example.com"
                       autoComplete="email"
                       disabled={disabled}
-                      className="w-full bg-[#0a0907] border border-[#1f1a13] rounded pl-9 pr-3 py-2.5 text-[13px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] disabled:opacity-50 transition-colors"
+                      className="w-full bg-[#090907] border border-[#2B2821] rounded pl-9 pr-3 py-2.5 text-[13px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#E7D7BE] disabled:opacity-50 transition-colors"
                     />
                   </div>
                 </div>
@@ -155,13 +155,13 @@ export default function AccountSignInPage() {
                 <button
                   type="submit"
                   disabled={disabled || !emailValid}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded border border-[#8A7A5C] text-sm font-medium uppercase tracking-widest bg-[#D4BFA0] hover:bg-[#8A7A5C] text-black disabled:opacity-40 transition-all"
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded border border-[#C9BCA8] text-sm font-medium uppercase tracking-widest bg-[#E7D7BE] hover:bg-[#C9BCA8] text-black disabled:opacity-40 transition-all"
                 >
                   {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
                   {submitting ? 'Sending…' : 'Continue with Email'}
                 </button>
 
-                <p className="text-[10px] text-[#5a5142] text-center leading-relaxed">
+                <p className="text-[10px] text-[#9B9282] text-center leading-relaxed">
                   No password. First-time emails create your account automatically.
                 </p>
               </form>

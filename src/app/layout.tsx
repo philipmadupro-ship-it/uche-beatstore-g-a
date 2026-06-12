@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0a0907',
+  themeColor: '#090907',
   colorScheme: 'dark',
   // `viewportFit: cover` lets the page paint under the iOS notch /
   // home-indicator. We pair this with safe-area-inset padding on the
@@ -60,7 +60,7 @@ export default function RootLayout({
     <html lang="en" className="dark" suppressHydrationWarning>
       <body
         suppressHydrationWarning
-        className="font-sans bg-[#0a0907] text-[#E8DCC8] min-h-screen selection:bg-[#D4BFA0] selection:text-white"
+        className="font-sans bg-[#090907] text-[#F7EBDD] min-h-screen selection:bg-[#E7D7BE] selection:text-white"
       >
         <QueryProvider>
           {children}

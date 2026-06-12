@@ -15,7 +15,7 @@ function ActiveChip({
   return (
     <button
       onClick={onClear}
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] text-black hover:opacity-90 transition-opacity"
+      className="tap inline-flex min-h-8 items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-mono uppercase tracking-[0.15em] text-black transition-opacity hover:opacity-90"
       style={{ backgroundColor: accentColor }}
       aria-label={`Remove filter: ${label}`}
     >
@@ -35,20 +35,21 @@ function FacetSection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border-t border-[#1a160f] first:border-t-0 pt-3 first:pt-0">
+    <div className="border-t border-[#211F1A] first:border-t-0 pt-3 first:pt-0">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between text-left mb-2 group"
+        className="tap group mb-2 flex min-h-11 w-full items-center justify-between rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907]"
+        aria-expanded={open}
       >
-        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#a08a6a] group-hover:text-[#E8DCC8] transition-colors">
+        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF] group-hover:text-[#F7EBDD] transition-colors">
           {title}
           {count != null && count > 0 && (
-            <span className="ml-1.5 text-[#5a5142]">({count})</span>
+            <span className="ml-1.5 text-[#9B9282]">({count})</span>
           )}
         </span>
         <ChevronDown
           size={11}
-          className={`text-[#5a5142] transition-transform duration-200 ${open ? '' : '-rotate-90'}`}
+          className={`text-[#9B9282] transition-transform duration-200 ${open ? '' : '-rotate-90'}`}
         />
       </button>
       {open && <div>{children}</div>}
@@ -65,11 +66,33 @@ function ShowMoreList({ items, max = 6 }: { items: React.ReactNode[]; max?: numb
       {visible}
       <button
         onClick={() => setExpanded((e) => !e)}
-        className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#D4BFA0] transition-colors mt-1.5 self-start"
+        className="tap mt-1.5 min-h-11 self-start rounded-md px-2 text-[9px] font-mono uppercase tracking-wider text-[#9B9282] transition-colors hover:text-[#E7D7BE] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907]"
       >
         {expanded ? '− Show less' : `+ Show all ${items.length}`}
       </button>
     </>
+  );
+}
+
+function PillButton({
+  active, onClick, children, accentColor,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  accentColor: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`tap min-h-11 whitespace-nowrap rounded-full border px-3 py-2 font-mono text-[10px] uppercase tracking-wider transition-[background-color,border-color,color,opacity] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907] ${active
+        ? 'text-black border-[#E7D7BE]'
+        : 'bg-transparent text-[#B4AA99] border-[#2B2821] hover:border-[#E7D7BE]/30 hover:text-[#D0C3AF]'
+      }`}
+      style={active ? { backgroundColor: accentColor, borderColor: accentColor } : {}}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -155,20 +178,6 @@ export function StoreSidebar(props: Props) {
   const effectivePriceMin = priceMin === 0 ? priceRange.min : priceMin;
   const effectivePriceMax = priceMax === 99999 ? priceRange.max : priceMax;
   const priceRangeActive = effectivePriceMin > priceRange.min || effectivePriceMax < priceRange.max;
-  const PillButton = ({
-    active, onClick, children,
-  }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
-    <button
-      onClick={onClick}
-      className={`px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider rounded-full border transition-all whitespace-nowrap ${active
-          ? 'text-black border-[#D4BFA0]'
-          : 'bg-transparent text-[#6a5d4a] border-[#1f1a13] hover:border-[#D4BFA0]/30 hover:text-[#a08a6a]'
-        }`}
-      style={active ? { backgroundColor: accentColor, borderColor: accentColor } : {}}
-    >
-      {children}
-    </button>
-  );
 
   const effectiveMin = bpmMin === 0 ? bpmRange.min : bpmMin;
   const effectiveMax = bpmMax === 999 ? bpmRange.max : bpmMax;
@@ -177,12 +186,16 @@ export function StoreSidebar(props: Props) {
   const content = (
     <div className="flex flex-col gap-5 p-5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a]">
+        <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99]">
           <Sliders size={11} />
           Refine
-          <span className="text-[#3a3328] tabular-nums">· {totalResults}</span>
+          <span className="text-[#6E685B] tabular-nums">· {totalResults}</span>
         </div>
-        <button onClick={onClose} className="lg:hidden text-[#4a4338] hover:text-white transition-colors">
+        <button
+          onClick={onClose}
+          className="tap grid size-11 place-items-center rounded-full text-[#837B6D] transition-colors hover:bg-[#171511] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907] lg:hidden"
+          aria-label="Close filters"
+        >
           <X size={14} />
         </button>
       </div>
@@ -192,19 +205,19 @@ export function StoreSidebar(props: Props) {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortBy)}
-            className="w-full appearance-none bg-[#0a0907] border border-[#1f1a13] rounded-lg pl-3 pr-8 py-2 text-[11px] text-[#E8DCC8] focus:outline-none focus:border-[#8A7A5C] transition-colors font-mono"
+            className="w-full appearance-none bg-[#090907] border border-[#2B2821] rounded-lg pl-3 pr-8 py-2 text-[11px] text-[#F7EBDD] focus:outline-none focus:border-[#C9BCA8] transition-colors font-mono"
           >
             {Object.entries(SORT_LABELS).map(([v, l]) => (
               <option key={v} value={v}>{l}</option>
             ))}
           </select>
-          <ChevronDown size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#5a5142] pointer-events-none" />
+          <ChevronDown size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9B9282] pointer-events-none" />
         </div>
       </FacetSection>
 
       {hasActiveFilters && (
-        <div className="rounded-lg border border-[#D4BFA0]/15 bg-[#D4BFA0]/[0.04] p-2.5">
-          <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#a08a6a] mb-1.5">
+        <div className="rounded-lg border border-[#E7D7BE]/15 bg-[#E7D7BE]/[0.04] p-2.5">
+          <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF] mb-1.5">
             Applied
           </p>
           <div className="flex flex-wrap gap-1">
@@ -242,7 +255,7 @@ export function StoreSidebar(props: Props) {
           </div>
           <button
             onClick={onReset}
-            className="mt-2 flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-[#a08a6a] hover:text-[#D4BFA0] transition-colors"
+            className="mt-2 flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-[#D0C3AF] hover:text-[#E7D7BE] transition-colors"
           >
             <RotateCcw size={9} /> Clear all
           </button>
@@ -252,7 +265,7 @@ export function StoreSidebar(props: Props) {
       <FacetSection title="Type">
         <div className="flex flex-wrap gap-1.5">
           {TYPE_FILTERS.map((f) => (
-            <PillButton key={f} active={typeFilter === f} onClick={() => setTypeFilter(f)}>
+            <PillButton accentColor={accentColor} key={f} active={typeFilter === f} onClick={() => setTypeFilter(f)}>
               {f}
             </PillButton>
           ))}
@@ -265,9 +278,9 @@ export function StoreSidebar(props: Props) {
             <ShowMoreList
               max={8}
               items={[
-                <PillButton key="__all" active={genreFilter === ''} onClick={() => setGenreFilter('')}>All</PillButton>,
+                <PillButton accentColor={accentColor} key="__all" active={genreFilter === ''} onClick={() => setGenreFilter('')}>All</PillButton>,
                 ...availableGenres.map((g) => (
-                  <PillButton key={g} active={genreFilter === g} onClick={() => setGenreFilter(genreFilter === g ? '' : g)}>
+                  <PillButton accentColor={accentColor} key={g} active={genreFilter === g} onClick={() => setGenreFilter(genreFilter === g ? '' : g)}>
                     {g}
                   </PillButton>
                 )),
@@ -283,9 +296,9 @@ export function StoreSidebar(props: Props) {
             <ShowMoreList
               max={8}
               items={[
-                <PillButton key="__all" active={moodFilter === ''} onClick={() => setMoodFilter('')}>Any</PillButton>,
+                <PillButton accentColor={accentColor} key="__all" active={moodFilter === ''} onClick={() => setMoodFilter('')}>Any</PillButton>,
                 ...availableMoods.map((m) => (
-                  <PillButton key={m} active={moodFilter === m} onClick={() => setMoodFilter(moodFilter === m ? '' : m)}>
+                  <PillButton accentColor={accentColor} key={m} active={moodFilter === m} onClick={() => setMoodFilter(moodFilter === m ? '' : m)}>
                     {m}
                   </PillButton>
                 )),
@@ -301,9 +314,9 @@ export function StoreSidebar(props: Props) {
             <ShowMoreList
               max={8}
               items={[
-                <PillButton key="__all" active={keyFilter === ''} onClick={() => setKeyFilter('')}>Any</PillButton>,
+                <PillButton accentColor={accentColor} key="__all" active={keyFilter === ''} onClick={() => setKeyFilter('')}>Any</PillButton>,
                 ...availableKeys.map((k) => (
-                  <PillButton key={k} active={keyFilter === k} onClick={() => setKeyFilter(keyFilter === k ? '' : k)}>
+                  <PillButton accentColor={accentColor} key={k} active={keyFilter === k} onClick={() => setKeyFilter(keyFilter === k ? '' : k)}>
                     {k}
                   </PillButton>
                 )),
@@ -316,7 +329,7 @@ export function StoreSidebar(props: Props) {
       <FacetSection title="Scale" count={scaleFilter ? 1 : 0} defaultOpen={false}>
         <div className="flex gap-1.5">
           {(['', 'major', 'minor'] as const).map((s) => (
-            <PillButton key={s || 'any'} active={scaleFilter === s} onClick={() => setScaleFilter(s)}>
+            <PillButton accentColor={accentColor} key={s || 'any'} active={scaleFilter === s} onClick={() => setScaleFilter(s)}>
               {s || 'Any'}
             </PillButton>
           ))}
@@ -326,17 +339,17 @@ export function StoreSidebar(props: Props) {
       {bpmRange.min < bpmRange.max && (
         <FacetSection title="BPM range" count={bpmRangeActive ? 1 : 0}>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[8px] font-mono text-[#3a3328]">range</span>
+            <span className="text-[8px] font-mono text-[#6E685B]">range</span>
             <span
               className="text-[11px] font-mono font-bold tabular-nums"
-              style={{ color: bpmRangeActive ? accentColor : '#4a4338' }}
+              style={{ color: bpmRangeActive ? accentColor : '#837B6D' }}
             >
               {effectiveMin}–{effectiveMax}
             </span>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-[8px] font-mono text-[#3a3328] w-5 text-right shrink-0">min</span>
+              <span className="text-[8px] font-mono text-[#6E685B] w-5 text-right shrink-0">min</span>
               <input
                 type="range"
                 min={bpmRange.min}
@@ -349,7 +362,7 @@ export function StoreSidebar(props: Props) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[8px] font-mono text-[#3a3328] w-5 text-right shrink-0">max</span>
+              <span className="text-[8px] font-mono text-[#6E685B] w-5 text-right shrink-0">max</span>
               <input
                 type="range"
                 min={bpmRange.min}
@@ -368,17 +381,17 @@ export function StoreSidebar(props: Props) {
       {priceRange.min < priceRange.max && (
         <FacetSection title="Price (lease)" count={priceRangeActive ? 1 : 0} defaultOpen={false}>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[8px] font-mono text-[#3a3328]">range</span>
+            <span className="text-[8px] font-mono text-[#6E685B]">range</span>
             <span
               className="text-[11px] font-mono font-bold tabular-nums"
-              style={{ color: priceRangeActive ? accentColor : '#4a4338' }}
+              style={{ color: priceRangeActive ? accentColor : '#837B6D' }}
             >
               ${effectivePriceMin}–${effectivePriceMax}
             </span>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-[8px] font-mono text-[#3a3328] w-5 text-right shrink-0">min</span>
+              <span className="text-[8px] font-mono text-[#6E685B] w-5 text-right shrink-0">min</span>
               <input
                 type="range"
                 min={priceRange.min}
@@ -391,7 +404,7 @@ export function StoreSidebar(props: Props) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[8px] font-mono text-[#3a3328] w-5 text-right shrink-0">max</span>
+              <span className="text-[8px] font-mono text-[#6E685B] w-5 text-right shrink-0">max</span>
               <input
                 type="range"
                 min={priceRange.min}
@@ -409,10 +422,10 @@ export function StoreSidebar(props: Props) {
 
       <FacetSection title="Duration" count={durationBucket ? 1 : 0} defaultOpen={false}>
         <div className="flex flex-wrap gap-1.5">
-          <PillButton active={durationBucket === ''} onClick={() => setDurationBucket('')}>Any</PillButton>
-          <PillButton active={durationBucket === 'short'} onClick={() => setDurationBucket(durationBucket === 'short' ? '' : 'short')}>&lt; 2 min</PillButton>
-          <PillButton active={durationBucket === 'medium'} onClick={() => setDurationBucket(durationBucket === 'medium' ? '' : 'medium')}>2–4 min</PillButton>
-          <PillButton active={durationBucket === 'long'} onClick={() => setDurationBucket(durationBucket === 'long' ? '' : 'long')}>4 min +</PillButton>
+          <PillButton accentColor={accentColor} active={durationBucket === ''} onClick={() => setDurationBucket('')}>Any</PillButton>
+          <PillButton accentColor={accentColor} active={durationBucket === 'short'} onClick={() => setDurationBucket(durationBucket === 'short' ? '' : 'short')}>&lt; 2 min</PillButton>
+          <PillButton accentColor={accentColor} active={durationBucket === 'medium'} onClick={() => setDurationBucket(durationBucket === 'medium' ? '' : 'medium')}>2–4 min</PillButton>
+          <PillButton accentColor={accentColor} active={durationBucket === 'long'} onClick={() => setDurationBucket(durationBucket === 'long' ? '' : 'long')}>4 min +</PillButton>
         </div>
       </FacetSection>
 
@@ -420,14 +433,14 @@ export function StoreSidebar(props: Props) {
         onClick={() => setFreeOnly(!freeOnly)}
         className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${freeOnly
             ? 'bg-[#0e1f17]/60 border-[#6DC6A4]/30 text-[#6DC6A4]'
-            : 'bg-transparent border-[#1f1a13] text-[#6a5d4a] hover:border-[#2d2620]'
+            : 'bg-transparent border-[#2B2821] text-[#B4AA99] hover:border-[#3B372F]'
           }`}
       >
         <div className="flex items-center gap-2">
           <Download size={11} />
           <span className="text-[10px] font-mono uppercase tracking-wider">Free only</span>
         </div>
-        <span className={`text-[8px] font-mono uppercase ${freeOnly ? 'text-[#6DC6A4]' : 'text-[#3a3328]'}`}>
+        <span className={`text-[8px] font-mono uppercase ${freeOnly ? 'text-[#6DC6A4]' : 'text-[#6E685B]'}`}>
           {freeOnly ? 'ON' : 'OFF'}
         </span>
       </button>
@@ -435,15 +448,15 @@ export function StoreSidebar(props: Props) {
       <button
         onClick={() => setFavoritesOnly(!favoritesOnly)}
         className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${favoritesOnly
-            ? 'border-[#c8a84b]/40 text-[#c8a84b] bg-[#c8a84b]/[0.08]'
-            : 'bg-transparent border-[#1f1a13] text-[#6a5d4a] hover:border-[#2d2620]'
+            ? 'border-[#D6BE7A]/40 text-[#D6BE7A] bg-[#D6BE7A]/[0.08]'
+            : 'bg-transparent border-[#2B2821] text-[#B4AA99] hover:border-[#3B372F]'
           }`}
       >
         <div className="flex items-center gap-2">
           <Heart size={11} fill={favoritesOnly ? 'currentColor' : 'none'} />
           <span className="text-[10px] font-mono uppercase tracking-wider">Favorites only</span>
         </div>
-        <span className={`text-[8px] font-mono uppercase tabular-nums ${favoritesOnly ? 'text-[#c8a84b]' : 'text-[#3a3328]'}`}>
+        <span className={`text-[8px] font-mono uppercase tabular-nums ${favoritesOnly ? 'text-[#D6BE7A]' : 'text-[#6E685B]'}`}>
           {favoritesCount}
         </span>
       </button>
@@ -454,14 +467,14 @@ export function StoreSidebar(props: Props) {
         style={
           newThisWeek
             ? { borderColor: `${accentColor}66`, color: accentColor, backgroundColor: `${accentColor}14` }
-            : { borderColor: '#1f1a13', color: '#6a5d4a' }
+            : { borderColor: '#2B2821', color: '#B4AA99' }
         }
       >
         <div className="flex items-center gap-2">
           <Sparkles size={11} />
           <span className="text-[10px] font-mono uppercase tracking-wider">New this week</span>
         </div>
-        <span className="text-[8px] font-mono uppercase" style={{ color: newThisWeek ? accentColor : '#3a3328' }}>
+        <span className="text-[8px] font-mono uppercase" style={{ color: newThisWeek ? accentColor : '#6E685B' }}>
           {newThisWeek ? 'ON' : 'OFF'}
         </span>
       </button>
@@ -469,7 +482,7 @@ export function StoreSidebar(props: Props) {
       <button
         onClick={onReset}
         disabled={!hasActiveFilters}
-        className="flex items-center gap-1.5 justify-center px-3 py-2 rounded-lg border border-[#1f1a13] text-[10px] font-mono uppercase tracking-wider transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#D4BFA0]/40 hover:text-[#D4BFA0] text-[#6a5d4a]"
+        className="flex items-center gap-1.5 justify-center px-3 py-2 rounded-lg border border-[#2B2821] text-[10px] font-mono uppercase tracking-wider transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#E7D7BE]/40 hover:text-[#E7D7BE] text-[#B4AA99]"
       >
         <RotateCcw size={10} />
         Reset filters
@@ -485,15 +498,15 @@ export function StoreSidebar(props: Props) {
           onClick={onClose}
         />
       )}
-      <div className={`lg:hidden fixed left-0 right-0 bottom-0 z-50 bg-[#0c0a08] border-t border-[#1f1a13] rounded-t-2xl shadow-[0_-8px_40px_rgba(0,0,0,0.6)] overflow-y-auto max-h-[75vh] transition-transform duration-300 ${open ? 'translate-y-0' : 'translate-y-full'}`}>
+      <div className={`lg:hidden fixed left-0 right-0 bottom-0 z-50 bg-[#11100D] border-t border-[#2B2821] rounded-t-2xl shadow-[0_-8px_40px_rgba(0,0,0,0.6)] overflow-y-auto max-h-[75vh] transition-transform duration-300 ${open ? 'translate-y-0' : 'translate-y-full'}`}>
         <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full bg-[#2d2620]" />
+          <div className="w-10 h-1 rounded-full bg-[#3B372F]" />
         </div>
         {content}
       </div>
 
       <div className="hidden lg:block w-56 shrink-0 sticky top-[57px] max-h-[calc(100vh-57px)] overflow-y-auto">
-        <div className="bg-[#0c0a08] border border-[#1f1a13] rounded-2xl overflow-hidden">
+        <div className="bg-[#11100D] border border-[#2B2821] rounded-2xl overflow-hidden">
           {content}
         </div>
       </div>
@@ -503,18 +516,18 @@ export function StoreSidebar(props: Props) {
 
 export function BeatCardSkeleton() {
   return (
-    <div className="rounded-2xl border border-[#1f1a13] bg-[#14110d] overflow-hidden flex flex-col">
-      <div className="w-full aspect-square bg-[#1a160f] animate-pulse" />
+    <div className="rounded-2xl border border-[#2B2821] bg-[#171511] overflow-hidden flex flex-col">
+      <div className="w-full aspect-square bg-[#211F1A] animate-pulse" />
       <div className="p-4 flex flex-col gap-3">
-        <div className="h-3.5 bg-[#1f1a13] rounded animate-pulse w-3/4" />
+        <div className="h-3.5 bg-[#2B2821] rounded animate-pulse w-3/4" />
         <div className="flex gap-1">
-          <div className="h-4 w-12 bg-[#1a160f] rounded animate-pulse" />
-          <div className="h-4 w-10 bg-[#1a160f] rounded animate-pulse" />
+          <div className="h-4 w-12 bg-[#211F1A] rounded animate-pulse" />
+          <div className="h-4 w-10 bg-[#211F1A] rounded animate-pulse" />
         </div>
-        <div className="h-9 bg-[#1a160f] rounded animate-pulse mt-1" />
+        <div className="h-9 bg-[#211F1A] rounded animate-pulse mt-1" />
         <div className="mt-auto pt-2 flex gap-2">
-          <div className="flex-1 h-10 bg-[#1a160f] rounded animate-pulse" />
-          <div className="flex-1 h-10 bg-[#1f1a13] rounded animate-pulse" />
+          <div className="flex-1 h-10 bg-[#211F1A] rounded animate-pulse" />
+          <div className="flex-1 h-10 bg-[#2B2821] rounded animate-pulse" />
         </div>
       </div>
     </div>
@@ -523,17 +536,17 @@ export function BeatCardSkeleton() {
 
 export function BeatListRowSkeleton() {
   return (
-    <div className="rounded-xl border border-[#1a160f] bg-[#14110d]">
+    <div className="rounded-xl border border-[#211F1A] bg-[#171511]">
       <div className="flex items-center gap-3 px-3 py-2.5">
-        <div className="w-7 h-7 rounded-full bg-[#1a160f] animate-pulse shrink-0" />
-        <div className="w-10 h-10 rounded-lg bg-[#1a160f] animate-pulse shrink-0" />
+        <div className="w-7 h-7 rounded-full bg-[#211F1A] animate-pulse shrink-0" />
+        <div className="w-10 h-10 rounded-lg bg-[#211F1A] animate-pulse shrink-0" />
         <div className="flex-1 min-w-0 space-y-1.5">
-          <div className="h-3 bg-[#1f1a13] rounded animate-pulse w-2/3" />
-          <div className="h-2.5 bg-[#1a160f] rounded animate-pulse w-1/3" />
+          <div className="h-3 bg-[#2B2821] rounded animate-pulse w-2/3" />
+          <div className="h-2.5 bg-[#211F1A] rounded animate-pulse w-1/3" />
         </div>
         <div className="hidden md:flex gap-2 shrink-0">
-          <div className="h-8 w-14 bg-[#1a160f] rounded animate-pulse" />
-          <div className="h-8 w-14 bg-[#1f1a13] rounded animate-pulse" />
+          <div className="h-8 w-14 bg-[#211F1A] rounded animate-pulse" />
+          <div className="h-8 w-14 bg-[#2B2821] rounded animate-pulse" />
         </div>
       </div>
     </div>

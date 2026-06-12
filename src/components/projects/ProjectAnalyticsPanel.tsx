@@ -36,7 +36,7 @@ export function ProjectAnalyticsPanel({ projectId }: { projectId: string }) {
   }, [projectId]);
 
   if (loading) return (
-    <div className="flex items-center gap-2 py-2 text-[#3a3328]">
+    <div className="flex items-center gap-2 py-2 text-[#6E685B]">
       <Loader2 size={11} className="animate-spin" />
       <span className="text-[10px] font-mono">Loading analytics…</span>
     </div>
@@ -45,8 +45,8 @@ export function ProjectAnalyticsPanel({ projectId }: { projectId: string }) {
   if (!stats) return null;
 
   return (
-    <div className="flex items-center gap-4 py-3 border-t border-[#1a160f]">
-      <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] flex items-center gap-1">
+    <div className="flex items-center gap-4 py-3 border-t border-[#211F1A]">
+      <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] flex items-center gap-1">
         <BarChart3 size={10} /> Stats
       </span>
       <Stat icon={<Eye size={11} />} label="Plays" value={stats.plays} />
@@ -62,7 +62,7 @@ export function ProjectAnalyticsPanel({ projectId }: { projectId: string }) {
 
 function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
-    <span className="flex items-center gap-1 text-[#a08a6a]" title={label}>
+    <span className="flex items-center gap-1 text-[#D0C3AF]" title={label}>
       {icon}
       <span className="text-[12px] font-mono font-semibold tabular-nums">{value}</span>
     </span>

@@ -8,6 +8,9 @@ import {
 } from 'lucide-react';
 import { AddEventModal } from '@/components/events/AddEventModal';
 import Link from 'next/link';
+import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 
 interface CalendarEvent {
   id: string;
@@ -126,59 +129,54 @@ export default function CalendarPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1400px] mx-auto px-4 md:px-10 pt-6 md:pt-10 flex flex-col" style={{ minHeight: 'calc(100vh - 80px)' }}>
-        {/* Header */}
-        <div className="relative mb-6 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#14110d]/50 via-[#0a0907]/30 to-[#0a0907] p-5 sm:p-7 md:p-8">
-          {/* Abstract Image Background */}
-          <div className="absolute inset-0 z-0 bg-[url('/images/hero-abstract-1.png')] bg-cover bg-center opacity-20 mix-blend-overlay" />
-          
-          <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-4">
-            <div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] mb-2">Schedule</p>
-              <h1 className="text-[28px] sm:text-[36px] md:text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">Calendar</h1>
-              <p className="text-[11px] text-[#a08a6a] max-w-md">Releases, sessions, sends. Tap any day to see what you did.</p>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
+      <PageContainer className="flex min-h-[calc(100vh-80px)] flex-col">
+        <PageHeader
+          eyebrow="Schedule"
+          title="Calendar"
+          description="Releases, sessions, sends. Tap any day to see what you did."
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
               {/* Month nav — glass pill with the month-year label between
                   two chevrons. Backdrop-blur so it lifts off the page. */}
-              <div className="inline-flex items-center bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-full overflow-hidden">
-                <button onClick={prevMonth} className="px-3 py-2 hover:bg-white/[0.08] text-[#a08a6a] hover:text-white transition-colors" aria-label="Previous month">
-                  <ChevronLeft size={13} />
+              <div className="inline-flex min-h-11 items-center overflow-hidden rounded-full border border-[var(--border)] bg-[var(--bg-card)]">
+                <button onClick={prevMonth} className="tap px-3 py-2 text-[var(--text-readable)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-primary)]" aria-label="Previous month">
+                  <ChevronLeft size={13} aria-hidden="true" />
                 </button>
-                <span className="px-3 text-[12px] font-medium text-[#E8DCC8] min-w-[150px] text-center tabular-nums">
+                <span className="min-w-[150px] px-3 text-center text-[12px] font-medium tabular-nums text-[var(--text-primary)]">
                   {monthName}
                 </span>
-                <button onClick={nextMonth} className="px-3 py-2 hover:bg-white/[0.08] text-[#a08a6a] hover:text-white transition-colors" aria-label="Next month">
-                  <ChevronRight size={13} />
+                <button onClick={nextMonth} className="tap px-3 py-2 text-[var(--text-readable)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-primary)]" aria-label="Next month">
+                  <ChevronRight size={13} aria-hidden="true" />
                 </button>
               </div>
-              <button
+              <Button
                 onClick={() => { setSelectedDay(new Date()); setCurrentDate(new Date()); }}
-                className="px-4 py-2 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#E8D8B8] hover:text-white hover:bg-white/[0.08] text-[11px] font-medium transition-colors"
+                variant="secondary"
+                size="sm"
                 title="Jump to today"
               >
                 Today
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white text-black hover:bg-[#E8DCC8] active:scale-[0.98] text-[12px] font-medium transition-all"
+                variant="primary"
+                leadingIcon={<Plus size={14} aria-hidden="true" />}
               >
-                <Plus size={14} />
                 Add event
-              </button>
+              </Button>
             </div>
-          </div>
-        </div>
+          }
+        />
 
         {/* Calendar grid + activity side panel. Stacks vertically below
             the lg breakpoint so the month grid stays large on tablets
             (the side panel slides under it instead of squeezing both). */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 mb-32 min-h-0">
-          <div className="rounded-2xl overflow-hidden flex flex-col relative bg-gradient-to-br from-[#14110d] to-[#0a0907] border border-[#1f1a13] shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+          <Card className="relative flex flex-col overflow-hidden bg-gradient-to-br from-[#171511] to-[#090907]">
             {/* Day headers — slightly larger and warmer than before. */}
-            <div className="grid grid-cols-7 border-b border-[#1f1a13] bg-[#0a0907]/60 backdrop-blur-sm">
+            <div className="grid grid-cols-7 border-b border-[#2B2821] bg-[#090907]/60 backdrop-blur-sm">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                <div key={d} className="py-3 text-center text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a]">{d}</div>
+                <div key={d} className="py-3 text-center text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99]">{d}</div>
               ))}
             </div>
 
@@ -195,11 +193,11 @@ export default function CalendarPage() {
                   <div
                     key={i}
                     onClick={() => setSelectedDay(day.fullDate)}
-                    className={`border-r border-b border-[#1f1a13] p-2 transition-all relative group min-h-[90px] cursor-pointer ${
+                    className={`border-r border-b border-[#2B2821] p-2 transition-all relative group min-h-[90px] cursor-pointer ${
                       !day.isCurrentMonth ? 'bg-[#08070a]' : ''
                     } ${
                       isSelected
-                        ? 'bg-gradient-to-br from-[#2A2418]/80 to-[#1a160f]/40 ring-1 ring-[#8A7A5C]/60 ring-inset z-10'
+                        ? 'bg-gradient-to-br from-[#342F27]/80 to-[#211F1A]/40 ring-1 ring-[#C9BCA8]/60 ring-inset z-10'
                         : 'hover:bg-white/[0.02]'
                     }`}
                   >
@@ -208,12 +206,12 @@ export default function CalendarPage() {
                         eye to "now" without shouting. */}
                     <div className="flex items-center gap-1.5">
                       {isToday ? (
-                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#D4BFA0] text-black text-[10px] font-bold tabular-nums">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#E7D7BE] text-black text-[10px] font-bold tabular-nums">
                           {day.date}
                         </span>
                       ) : (
                         <span className={`text-[11px] font-mono tabular-nums ${
-                          day.isCurrentMonth ? 'text-[#a08a6a]' : 'text-[#3a3328]'
+                          day.isCurrentMonth ? 'text-[#D0C3AF]' : 'text-[#6E685B]'
                         }`}>
                           {day.date}
                         </span>
@@ -225,7 +223,7 @@ export default function CalendarPage() {
                         <div
                           key={ev.id}
                           className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-white/[0.04] hover:bg-white/[0.08] transition-colors cursor-pointer border border-white/[0.04] truncate"
-                          style={{ color: ev.color || '#E8D8B8' }}
+                          style={{ color: ev.color || '#F3E6D1' }}
                           title={ev.notes || ev.title}
                         >
                           {eventIcon(ev.type)}
@@ -238,10 +236,10 @@ export default function CalendarPage() {
                         empty cells don't carry pixel noise. */}
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowAddModal(true); }}
-                      className="absolute bottom-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 rounded-full bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-[#6a5d4a] hover:text-[#E8D8B8] hover:border-[#8A7A5C]/40"
-                      aria-label="Add event"
+                      className="tap absolute bottom-1.5 right-1.5 flex size-6 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-[#B4AA99] opacity-0 transition-opacity hover:border-[#C9BCA8]/40 hover:text-[#F3E6D1] group-hover:opacity-100"
+                      aria-label={`Add event on ${day.fullDate.toLocaleDateString()}`}
                     >
-                      <Plus size={10} />
+                      <Plus size={10} aria-hidden="true" />
                     </button>
                   </div>
                 );
@@ -249,11 +247,11 @@ export default function CalendarPage() {
             </div>
 
             {loading && (
-              <div className="absolute inset-0 bg-[#0a0907]/70 backdrop-blur-sm flex items-center justify-center z-20">
-                <Loader2 size={18} className="animate-spin text-[#3a3328]" />
+              <div className="absolute inset-0 bg-[#090907]/70 backdrop-blur-sm flex items-center justify-center z-20">
+                <Loader2 size={18} className="animate-spin text-[#6E685B]" />
               </div>
             )}
-          </div>
+          </Card>
 
         {/* Activity side panel — the actions you actually took on the
             selected day, pulled from /api/activity. Closes the loop the
@@ -264,7 +262,7 @@ export default function CalendarPage() {
           loading={activityLoading}
         />
         </div>
-      </div>
+      </PageContainer>
 
       {showAddModal && <AddEventModal onClose={() => setShowAddModal(false)} onSuccess={fetchEvents} />}
     </DashboardLayout>
@@ -289,10 +287,10 @@ const KIND_ICON: Record<ActivityItem['kind'], typeof Upload> = {
 };
 
 const KIND_COLOR: Record<ActivityItem['kind'], string> = {
-  upload: 'text-[#E8D8B8]',
-  version: 'text-[#a08a6a]',
+  upload: 'text-[#F3E6D1]',
+  version: 'text-[#D0C3AF]',
   comment: 'text-[#8ecf9f]',
-  send: 'text-[#c8a84b]',
+  send: 'text-[#D6BE7A]',
   rating: 'text-[#eca9a9]',
 };
 
@@ -319,20 +317,20 @@ function ActivityPanel({
     : day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 
   return (
-    <aside className="rounded-2xl overflow-hidden flex flex-col relative bg-gradient-to-b from-[#161410]/85 via-[#0e0d0a]/85 to-[#0a0907]/95 backdrop-blur-xl border border-white/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.4),0_0_0_1px_rgba(255,255,255,0.02)_inset]">
+    <Card className="relative flex flex-col overflow-hidden bg-gradient-to-b from-[#161410]/85 via-[#0e0d0a]/85 to-[#090907]/95">
       {/* Warm radial wash — same lit-from-corner pattern the drawer
           header + share modal use. Pinned in the top-left. */}
       <div
         className="absolute -top-12 -left-12 w-32 h-32 rounded-full pointer-events-none opacity-25"
-        style={{ background: 'radial-gradient(circle, #D4BFA0 0%, transparent 70%)' }}
+        style={{ background: 'radial-gradient(circle, #E7D7BE 0%, transparent 70%)' }}
       />
       <header className="relative z-10 px-5 py-4 border-b border-white/[0.04]">
         <div className="flex items-center gap-2 mb-1.5">
-          <ActivityIcon size={11} className="text-[#E8D8B8]" />
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#a08a6a]">Activity</p>
+          <ActivityIcon size={11} className="text-[#F3E6D1]" />
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">Activity</p>
         </div>
         <h3 className="text-[15px] font-medium text-white tracking-tight">{heading}</h3>
-        <p className="text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] mt-1">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] mt-1">
           {items.length} action{items.length === 1 ? '' : 's'} on this day
         </p>
       </header>
@@ -340,10 +338,10 @@ function ActivityPanel({
       <div className="relative z-10 flex-1 overflow-y-auto custom-scrollbar">
         {loading ? (
           <div className="flex items-center justify-center py-10">
-            <Loader2 size={14} className="animate-spin text-[#3a3328]" />
+            <Loader2 size={14} className="animate-spin text-[#6E685B]" />
           </div>
         ) : items.length === 0 ? (
-          <p className="text-[11px] text-[#6a5d4a] px-5 py-10 text-center leading-relaxed">
+          <p className="px-5 py-10 text-center text-[11px] leading-relaxed text-[var(--text-readable)]">
             No tracked actions on this day. Uploads, comments, sends, and ratings will land here.
           </p>
         ) : (
@@ -359,13 +357,13 @@ function ActivityPanel({
                     <Icon size={12} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] text-[#E8DCC8] leading-snug">{it.title}</p>
-                    <p className="text-[9px] font-mono text-[#6a5d4a] uppercase tracking-wider mt-0.5">
+                    <p className="text-[11px] text-[#F7EBDD] leading-snug">{it.title}</p>
+                    <p className="text-[9px] font-mono text-[#B4AA99] uppercase tracking-wider mt-0.5">
                       {time}
                       {it.subject_kind && ` · ${it.subject_kind}`}
                     </p>
                   </div>
-                  {href && <ArrowRight size={10} className="text-[#3a3328] shrink-0" />}
+                  {href && <ArrowRight size={10} className="text-[#6E685B] shrink-0" />}
                 </>
               );
               return (
@@ -389,6 +387,6 @@ function ActivityPanel({
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 10px; }
       `}</style>
-    </aside>
+    </Card>
   );
 }

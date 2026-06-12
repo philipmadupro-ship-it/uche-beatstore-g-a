@@ -18,6 +18,7 @@ import { slugify } from '@/lib/slug';
 import { BeatComments } from '@/components/store/BeatComments';
 import { ShareMenu } from '@/components/store/ShareMenu';
 import { seededGradient } from '@/lib/ui/cover-gradient';
+import { normalizeThemeColor } from '@/lib/theme/colors';
 import type { Track } from '@/lib/types';
 
 /* ─── Types ────────────────────────────────────────────────── */
@@ -107,11 +108,11 @@ function mapToUiTier(t: ApiLicenseTier): LicenseTier {
     isExclusive: t.is_exclusive,
     checkoutType: t.is_exclusive ? 'exclusive' : 'lease',
     accentClass: t.is_exclusive
-      ? 'border-[#D4BFA0]/30 bg-gradient-to-b from-[#1f1a13] to-[#14110d]'
-      : 'border-[#2d2620] hover:border-[#a08a6a]/40',
+      ? 'border-[#E7D7BE]/30 bg-gradient-to-b from-[#2B2821] to-[#171511]'
+      : 'border-[#3B372F] hover:border-[#D0C3AF]/40',
     buttonClass: t.is_exclusive
-      ? 'bg-[#D4BFA0] hover:bg-[#E8D8B8] text-black'
-      : 'bg-white/[0.06] hover:bg-white/[0.1] text-[#E8DCC8] border border-white/[0.08]',
+      ? 'bg-[#E7D7BE] hover:bg-[#F3E6D1] text-black'
+      : 'bg-white/[0.06] hover:bg-white/[0.1] text-[#F7EBDD] border border-white/[0.08]',
   };
 }
 
@@ -156,24 +157,24 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0907] flex items-center justify-center">
-        <Loader2 size={24} className="animate-spin text-[#5a5142]" />
+      <div className="min-h-screen bg-[#090907] flex items-center justify-center">
+        <Loader2 size={24} className="animate-spin text-[#9B9282]" />
       </div>
     );
   }
   if (notFound || !track) {
     return (
-      <div className="min-h-screen bg-[#0a0907] flex flex-col items-center justify-center gap-4 text-[#5a5142]">
+      <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-[#9B9282]">
         <Music size={36} />
         <p className="text-[14px]">Beat not found or no longer for sale.</p>
-        <Link href="/store" className="text-[12px] underline hover:text-[#E8DCC8]">← Back to store</Link>
+        <Link href="/store" className="text-[12px] underline hover:text-[#F7EBDD]">← Back to store</Link>
       </div>
     );
   }
 
   const isCurrent = currentTrack?.id === track.id;
   const isCurrentPlaying = isCurrent && isPlaying;
-  const accent = creator?.accent_color || '#D4BFA0';
+  const accent = normalizeThemeColor(creator?.accent_color);
 
   const handlePlay = () => {
     if (isCurrent) { togglePlay(); return; }
@@ -207,7 +208,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
     'grid grid-cols-1 sm:grid-cols-2 gap-3';
 
   return (
-    <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8]">
+    <div className="min-h-screen bg-[#090907] text-[#F7EBDD]">
 
       {/* ── Cinematic hero ──────────────────────────────────────── */}
       <div className="relative overflow-hidden">
@@ -222,14 +223,14 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
           />
         )}
         {/* Gradient: dark top (nav area) → transparent middle → solid page bg at bottom */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0a0907]/80 via-transparent to-[#0a0907]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#090907]/80 via-transparent to-[#090907]" />
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-10">
           {/* Back */}
           <div className="pt-6 pb-0">
             <Link
               href="/store"
-              className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#a08a6a] transition-colors"
+              className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
             >
               <ArrowLeft size={11} />
               Back to store
@@ -248,7 +249,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                 <button
                   onClick={handlePlay}
                   aria-label={isCurrentPlaying ? 'Pause' : 'Play'}
-                  className="relative w-full aspect-square rounded-[16px] overflow-hidden bg-[#14110d] group block"
+                  className="relative w-full aspect-square rounded-[16px] overflow-hidden bg-[#171511] group block"
                   style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}
                 >
                   {track.cover_url ? (
@@ -261,7 +262,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                     />
                   ) : (
                     <div className="absolute inset-0" style={seededGradient(track.id)}>
-                      <div className="w-full h-full flex items-center justify-center"><Music size={40} className="text-[#3a3328]" /></div>
+                      <div className="w-full h-full flex items-center justify-center"><Music size={40} className="text-[#6E685B]" /></div>
                     </div>
                   )}
                   {/* Play overlay */}
@@ -302,11 +303,11 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                 {track.title}
               </h1>
               {creator?.display_name && (
-                <p className="mt-2 text-[13px] text-[#6a5d4a]">
+                <p className="mt-2 text-[13px] text-[#B4AA99]">
                   prod.{' '}
                   <Link
                     href={`/store/producer/${slugify(creator.display_name)}`}
-                    className="text-[#a08a6a] hover:text-[#D4BFA0] transition-colors"
+                    className="text-[#D0C3AF] hover:text-[#E7D7BE] transition-colors"
                   >
                     {creator.display_name}
                   </Link>
@@ -318,7 +319,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                 {metaChips.map(({ label, icon: Icon }) => (
                   <div
                     key={label}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-mono uppercase tracking-wider text-[#a08a6a]"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-mono uppercase tracking-wider text-[#D0C3AF]"
                     style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
                   >
                     <Icon size={10} />
@@ -333,7 +334,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                   {tags.map(({ tag, category }) => (
                     <span
                       key={`${category}:${tag}`}
-                      className="px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider border border-[#1f1a13] bg-white/[0.03] text-[#6a5d4a]"
+                      className="px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider border border-[#2B2821] bg-white/[0.03] text-[#B4AA99]"
                     >
                       {tag}
                     </span>
@@ -348,7 +349,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                   className="flex items-center gap-2 px-5 py-2.5 rounded-full text-[12px] font-bold uppercase tracking-wider transition-all active:scale-[0.97]"
                   style={{
                     backgroundColor: accent,
-                    color: '#0a0907',
+                    color: '#090907',
                     transition: 'all 300ms cubic-bezier(0.32,0.72,0,1)',
                   }}
                 >
@@ -372,7 +373,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
       <div className="max-w-7xl mx-auto px-4 md:px-10 -mt-2 mb-10">
         <div
           className="rounded-2xl px-5 py-5"
-          style={{ background: '#14110d', border: '1px solid rgba(255,255,255,0.05)' }}
+          style={{ background: '#171511', border: '1px solid rgba(255,255,255,0.05)' }}
         >
           <ProgressBar
             progress={isCurrent ? progress : 0}
@@ -380,10 +381,10 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
             accent={accent}
           />
           <div className="flex items-center justify-between mt-2.5">
-            <span className="text-[9px] font-mono text-[#3a3328] tabular-nums">
+            <span className="text-[9px] font-mono text-[#6E685B] tabular-nums">
               {isCurrent ? fmt(Math.round((track.duration_seconds ?? 0) * progress)) : '0:00'}
             </span>
-            <span className="text-[9px] font-mono text-[#3a3328] tabular-nums">
+            <span className="text-[9px] font-mono text-[#6E685B] tabular-nums">
               {fmt(track.duration_seconds)}
             </span>
           </div>
@@ -402,7 +403,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
               <div className="rounded-xl border border-[#6DC6A4]/20 bg-[#6DC6A4]/5 px-5 py-4 flex items-center justify-between gap-4">
                 <div>
                   <p className="text-[12px] font-semibold text-[#6DC6A4]">Free Download Available</p>
-                  <p className="text-[10px] text-[#5a5142] mt-0.5">Download this track free — no account needed.</p>
+                  <p className="text-[10px] text-[#9B9282] mt-0.5">Download this track free — no account needed.</p>
                 </div>
                 <a
                   href={`/api/store/free-download?track_id=${track.id}`}
@@ -417,17 +418,17 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
 
             {/* License cards */}
             {track.exclusive_sold ? (
-              <div className="rounded-xl border border-[#D4BFA0]/30 bg-[#14110d] px-5 py-6 text-center">
-                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#D4BFA0] mb-1.5">Exclusive Sold</p>
-                <p className="text-[12px] text-[#a08a6a] leading-relaxed">
+              <div className="rounded-xl border border-[#E7D7BE]/30 bg-[#171511] px-5 py-6 text-center">
+                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#E7D7BE] mb-1.5">Exclusive Sold</p>
+                <p className="text-[12px] text-[#D0C3AF] leading-relaxed">
                   The exclusive rights to this beat have been purchased.
                 </p>
               </div>
             ) : licenses.length > 0 ? (
               <div>
                 <div className="flex items-baseline justify-between mb-4">
-                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328]">Choose a license</p>
-                  <p className="text-[9px] font-mono text-[#3a3328]">Instant delivery · secure checkout</p>
+                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B]">Choose a license</p>
+                  <p className="text-[9px] font-mono text-[#6E685B]">Instant delivery · secure checkout</p>
                 </div>
                 <div className={licenseGridClass}>
                   {licenses.map((tier, i) => (
@@ -442,19 +443,19 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                   ))}
                 </div>
                 {creator?.license_notes && (
-                  <p className="mt-4 text-[10px] text-[#5a5142] leading-relaxed border-l-2 border-[#1f1a13] pl-3">{creator.license_notes}</p>
+                  <p className="mt-4 text-[10px] text-[#9B9282] leading-relaxed border-l-2 border-[#2B2821] pl-3">{creator.license_notes}</p>
                 )}
               </div>
             ) : (
-              <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-5 py-6 text-center">
-                <Download size={20} className="text-[#3a3328] mx-auto mb-2" />
-                <p className="text-[12px] text-[#6a5d4a]">No licenses available yet.</p>
+              <div className="rounded-xl border border-[#2B2821] bg-[#171511] px-5 py-6 text-center">
+                <Download size={20} className="text-[#6E685B] mx-auto mb-2" />
+                <p className="text-[12px] text-[#B4AA99]">No licenses available yet.</p>
               </div>
             )}
 
             <button
               onClick={() => setIsOpen(true)}
-              className="inline-flex items-center gap-2 text-[11px] text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors self-start"
+              className="inline-flex items-center gap-2 text-[11px] text-[#B4AA99] hover:text-[#F7EBDD] transition-colors self-start"
             >
               <ShoppingCart size={12} />
               View cart
@@ -463,9 +464,9 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
             {/* Description */}
             {track.description && (
               <div>
-                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-3">About this track</p>
-                <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-5 py-4">
-                  <p className="text-[13px] text-[#a08a6a] leading-relaxed whitespace-pre-line">{track.description}</p>
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-3">About this track</p>
+                <div className="rounded-xl border border-[#2B2821] bg-[#171511] px-5 py-4">
+                  <p className="text-[13px] text-[#D0C3AF] leading-relaxed whitespace-pre-line">{track.description}</p>
                 </div>
               </div>
             )}
@@ -489,8 +490,8 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                 className="rounded-[14px] p-[1.5px]"
                 style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))' }}
               >
-                <div className="rounded-[13px] bg-[#14110d] p-4">
-                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-3">Producer</p>
+                <div className="rounded-[13px] bg-[#171511] p-4">
+                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] mb-3">Producer</p>
                   {creator.display_name ? (
                     <Link
                       href={`/store/producer/${slugify(creator.display_name)}`}
@@ -500,31 +501,31 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                       {creator.display_name}
                     </Link>
                   ) : (
-                    <p className="text-[16px] font-bold text-[#E8DCC8]">Producer</p>
+                    <p className="text-[16px] font-bold text-[#F7EBDD]">Producer</p>
                   )}
                   {creator.bio && (
-                    <p className="text-[11px] text-[#6a5d4a] mt-2 leading-relaxed line-clamp-3">{creator.bio}</p>
+                    <p className="text-[11px] text-[#B4AA99] mt-2 leading-relaxed line-clamp-3">{creator.bio}</p>
                   )}
                   <div className="flex items-center gap-3 mt-3 flex-wrap">
                     {creator.instagram_handle && (
-                      <a href={`https://instagram.com/${creator.instagram_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-mono text-[#5a5142] hover:text-[#E8DCC8] transition-colors flex items-center gap-1" title="Instagram">
+                      <a href={`https://instagram.com/${creator.instagram_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-mono text-[#9B9282] hover:text-[#F7EBDD] transition-colors flex items-center gap-1" title="Instagram">
                         <AtSign size={11} />
                         {creator.instagram_handle.replace(/^@/, '')}
                       </a>
                     )}
                     {creator.twitter_handle && (
-                      <a href={`https://twitter.com/${creator.twitter_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-mono text-[#5a5142] hover:text-[#E8DCC8] transition-colors flex items-center gap-1" title="X / Twitter">
+                      <a href={`https://twitter.com/${creator.twitter_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-mono text-[#9B9282] hover:text-[#F7EBDD] transition-colors flex items-center gap-1" title="X / Twitter">
                         <Link2 size={11} />
                         {creator.twitter_handle.replace(/^@/, '')}
                       </a>
                     )}
                     {creator.website_url && (
-                      <a href={creator.website_url} target="_blank" rel="noopener noreferrer" className="text-[#5a5142] hover:text-[#E8DCC8] transition-colors" title="Website">
+                      <a href={creator.website_url} target="_blank" rel="noopener noreferrer" className="text-[#9B9282] hover:text-[#F7EBDD] transition-colors" title="Website">
                         <Globe size={14} />
                       </a>
                     )}
                     {creator.contact_email && (
-                      <a href={`mailto:${creator.contact_email}`} className="text-[#5a5142] hover:text-[#E8DCC8] transition-colors" title={creator.contact_email}>
+                      <a href={`mailto:${creator.contact_email}`} className="text-[#9B9282] hover:text-[#F7EBDD] transition-colors" title={creator.contact_email}>
                         <Mail size={14} />
                       </a>
                     )}
@@ -536,25 +537,25 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
             {/* Similar beats mini list */}
             {related.length > 0 && (
               <div className="rounded-[14px] p-[1.5px]" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01))' }}>
-                <div className="rounded-[13px] bg-[#14110d] p-4">
-                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] mb-3">More beats</p>
+                <div className="rounded-[13px] bg-[#171511] p-4">
+                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] mb-3">More beats</p>
                   <div className="space-y-2">
                     {related.slice(0, 4).map((r) => (
-                      <Link key={r.id} href={`/store/${r.id}`} className="flex items-center gap-3 rounded-lg hover:bg-[#16130e] p-1.5 -mx-1.5 transition-colors group">
-                        <div className="w-9 h-9 rounded-md overflow-hidden bg-[#0a0907] shrink-0">
+                      <Link key={r.id} href={`/store/${r.id}`} className="flex items-center gap-3 rounded-lg hover:bg-[#1A1813] p-1.5 -mx-1.5 transition-colors group">
+                        <div className="w-9 h-9 rounded-md overflow-hidden bg-[#090907] shrink-0">
                           {r.cover_url
                             ? <img src={r.cover_url} alt="" className="w-full h-full object-cover" />
-                            : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={12} /></div>}
+                            : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={12} /></div>}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-medium text-[#E8DCC8] truncate group-hover:text-[#D4BFA0] transition-colors">{r.title}</p>
-                          <p className="text-[8px] font-mono text-[#5a5142] uppercase">{r.bpm ? `${r.bpm} BPM` : ''}{r.key ? ` · ${r.key}` : ''}</p>
+                          <p className="text-[11px] font-medium text-[#F7EBDD] truncate group-hover:text-[#E7D7BE] transition-colors">{r.title}</p>
+                          <p className="text-[8px] font-mono text-[#9B9282] uppercase">{r.bpm ? `${r.bpm} BPM` : ''}{r.key ? ` · ${r.key}` : ''}</p>
                         </div>
-                        <ChevronRight size={11} className="text-[#3a3328] group-hover:text-[#5a5142] shrink-0 transition-colors" />
+                        <ChevronRight size={11} className="text-[#6E685B] group-hover:text-[#9B9282] shrink-0 transition-colors" />
                       </Link>
                     ))}
                     {related.length > 4 && (
-                      <Link href="/store" className="flex items-center justify-center gap-1 py-2 text-[9px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#a08a6a] transition-colors">
+                      <Link href="/store" className="flex items-center justify-center gap-1 py-2 text-[9px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#D0C3AF] transition-colors">
                         View all <ChevronRight size={9} />
                       </Link>
                     )}
@@ -581,8 +582,8 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
         {related.length > 0 && (
           <section className="mt-14">
             <div className="flex items-center justify-between mb-5">
-              <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#5a5142]">You might also like</p>
-              <Link href="/store" className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#a08a6a] transition-colors">
+              <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#9B9282]">You might also like</p>
+              <Link href="/store" className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#D0C3AF] transition-colors">
                 View all <ChevronRight size={10} />
               </Link>
             </div>
@@ -636,7 +637,7 @@ function LicenseCard({ tier, accent, recommended = false, onAddToCart, onMakeOff
           <div
             className="absolute top-0 right-0 px-2.5 py-1 rounded-bl-[10px] text-[8px] font-mono uppercase tracking-[0.18em]"
             style={exclusive
-              ? { background: accent, color: '#0a0907' }
+              ? { background: accent, color: '#090907' }
               : { background: `${accent}1f`, color: accent, borderLeft: `1px solid ${accent}33`, borderBottom: `1px solid ${accent}33` }}
           >
             {exclusive ? 'Full ownership' : 'Popular'}
@@ -646,19 +647,19 @@ function LicenseCard({ tier, accent, recommended = false, onAddToCart, onMakeOff
         <div className="p-5 flex flex-col gap-5 h-full">
           {/* Header — name + price */}
           <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-[#6a5d4a]">{tier.name}</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-[#B4AA99]">{tier.name}</p>
             <div className="flex items-baseline gap-1.5 mt-1.5">
               <span className="text-[32px] font-bold text-white leading-none tracking-tight tabular-nums">
                 {price(tier.price)}
               </span>
-              <span className="text-[10px] font-mono text-[#5a5142] uppercase tracking-wider">one-time</span>
+              <span className="text-[10px] font-mono text-[#9B9282] uppercase tracking-wider">one-time</span>
             </div>
             <p className="text-[11px] text-[#8a7a5f] mt-2 leading-snug">{tier.tagline}</p>
           </div>
 
           {/* Files included */}
           <div>
-            <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#4a4338] mb-1.5">You receive</p>
+            <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#837B6D] mb-1.5">You receive</p>
             <div className="flex items-center gap-1.5 flex-wrap">
               {tier.fileTypes.map((f) => (
                 <span
@@ -678,7 +679,7 @@ function LicenseCard({ tier, accent, recommended = false, onAddToCart, onMakeOff
           {/* Rights — refined rows, thin accent tick */}
           <ul className="space-y-2 flex-1">
             {tier.rights.map((r) => (
-              <li key={r} className="flex items-start gap-2.5 text-[11.5px] text-[#a08a6a] leading-snug">
+              <li key={r} className="flex items-start gap-2.5 text-[11.5px] text-[#D0C3AF] leading-snug">
                 <Check size={11} className="shrink-0 mt-0.5" style={{ color: accent }} strokeWidth={2.5} />
                 <span>{r}</span>
               </li>
@@ -691,8 +692,8 @@ function LicenseCard({ tier, accent, recommended = false, onAddToCart, onMakeOff
               onClick={onAddToCart}
               className="group/btn relative w-full flex items-center justify-center gap-2 rounded-full py-3.5 pl-5 pr-3 text-[12px] font-bold uppercase tracking-wider transition-all active:scale-[0.98]"
               style={exclusive || recommended
-                ? { backgroundColor: accent, color: '#0a0907' }
-                : { backgroundColor: 'rgba(255,255,255,0.06)', color: '#E8DCC8', border: '1px solid rgba(255,255,255,0.10)' }}
+                ? { backgroundColor: accent, color: '#090907' }
+                : { backgroundColor: 'rgba(255,255,255,0.06)', color: '#F7EBDD', border: '1px solid rgba(255,255,255,0.10)' }}
             >
               <ShoppingCart size={13} />
               <span>Add to cart</span>
@@ -706,7 +707,7 @@ function LicenseCard({ tier, accent, recommended = false, onAddToCart, onMakeOff
             {onMakeOffer && (
               <button
                 onClick={onMakeOffer}
-                className="w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-[10px] font-mono uppercase tracking-[0.15em] text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors"
+                className="w-full flex items-center justify-center gap-2 rounded-full py-2.5 text-[10px] font-mono uppercase tracking-[0.15em] text-[#B4AA99] hover:text-[#F7EBDD] transition-colors"
               >
                 <Tag size={11} />
                 or make an offer
@@ -723,12 +724,12 @@ function LicenseCard({ tier, accent, recommended = false, onAddToCart, onMakeOff
 
 function RelatedCard({ track }: { track: Track }) {
   return (
-    <Link href={`/store/${track.id}`} className="group flex flex-col rounded-xl border border-[#1f1a13] bg-[#14110d] overflow-hidden hover:border-[#2d2620] transition-all">
-      <div className="relative w-full aspect-square bg-[#0a0907]">
+    <Link href={`/store/${track.id}`} className="group flex flex-col rounded-xl border border-[#2B2821] bg-[#171511] overflow-hidden hover:border-[#3B372F] transition-all">
+      <div className="relative w-full aspect-square bg-[#090907]">
         {track.cover_url ? (
           <img loading="lazy" src={track.cover_url} alt={track.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-[#3a3328] bg-gradient-to-br from-[#1f1a13] to-[#0a0907]">
+          <div className="w-full h-full flex items-center justify-center text-[#6E685B] bg-gradient-to-br from-[#2B2821] to-[#090907]">
             <Music size={20} />
           </div>
         )}
@@ -737,8 +738,8 @@ function RelatedCard({ track }: { track: Track }) {
         </div>
       </div>
       <div className="p-2.5">
-        <p className="text-[11px] font-medium text-[#E8DCC8] truncate">{track.title}</p>
-        <p className="text-[9px] font-mono text-[#5a5142] uppercase tracking-wider mt-0.5">
+        <p className="text-[11px] font-medium text-[#F7EBDD] truncate">{track.title}</p>
+        <p className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider mt-0.5">
           {track.type}{track.bpm ? ` · ${track.bpm}` : ''}
         </p>
       </div>
@@ -785,40 +786,40 @@ function OfferModal({ trackId, trackTitle, accent, onClose }: {
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl border border-[#1f1a13] bg-[#0e0c08] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-sm rounded-2xl border border-[#2B2821] bg-[#11100D] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between mb-4">
           <div>
             <p className="text-[9px] font-mono uppercase tracking-[0.25em]" style={{ color: accent }}>Make an offer</p>
-            <h3 className="text-[15px] font-bold text-[#E8DCC8] mt-1 leading-tight">{trackTitle}</h3>
+            <h3 className="text-[15px] font-bold text-[#F7EBDD] mt-1 leading-tight">{trackTitle}</h3>
           </div>
-          <button onClick={onClose} className="text-[#5a5142] hover:text-[#E8DCC8] transition-colors"><X size={16} /></button>
+          <button onClick={onClose} className="text-[#9B9282] hover:text-[#F7EBDD] transition-colors"><X size={16} /></button>
         </div>
         {sent ? (
           <div className="text-center py-6">
             <Check size={26} className="mx-auto mb-3" style={{ color: accent }} />
-            <p className="text-[13px] font-medium text-[#E8DCC8] mb-1">Offer sent</p>
-            <p className="text-[11px] text-[#6a5d4a] leading-relaxed">The producer will reply to your email if interested.</p>
-            <button onClick={onClose} className="mt-5 text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors">Close</button>
+            <p className="text-[13px] font-medium text-[#F7EBDD] mb-1">Offer sent</p>
+            <p className="text-[11px] text-[#B4AA99] leading-relaxed">The producer will reply to your email if interested.</p>
+            <button onClick={onClose} className="mt-5 text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F7EBDD] transition-colors">Close</button>
           </div>
         ) : (
           <form onSubmit={submit} className="space-y-3" noValidate>
             <div>
-              <label htmlFor="offer-price" className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Your offer (USD)</label>
+              <label htmlFor="offer-price" className="block text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">Your offer (USD)</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a5d4a] text-[14px]">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B4AA99] text-[14px]">$</span>
                 <input id="offer-price" type="number" min="1" step="1" value={priceStr} onChange={(e) => setPriceStr(e.target.value)} placeholder="500"
-                  className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg pl-7 pr-3 py-2.5 text-[14px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] tabular-nums" />
+                  className="w-full bg-[#171511] border border-[#2B2821] rounded-lg pl-7 pr-3 py-2.5 text-[14px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] tabular-nums" />
               </div>
             </div>
             <div>
-              <label htmlFor="offer-email" className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Your email</label>
+              <label htmlFor="offer-email" className="block text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">Your email</label>
               <input id="offer-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" autoComplete="email"
-                className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-3 py-2.5 text-[13px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]" />
+                className="w-full bg-[#171511] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[13px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]" />
             </div>
             <div>
-              <label htmlFor="offer-message" className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Message <span className="text-[#3a3328]">(optional)</span></label>
+              <label htmlFor="offer-message" className="block text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">Message <span className="text-[#6E685B]">(optional)</span></label>
               <textarea id="offer-message" value={message} onChange={(e) => setMessage(e.target.value)} rows={2} maxLength={2000} placeholder="What you'd use it for, timeline, etc."
-                className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-3 py-2 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] resize-none" />
+                className="w-full bg-[#171511] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] resize-none" />
             </div>
             <button type="submit" disabled={!valid || submitting}
               className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-bold uppercase tracking-wider text-black transition-all disabled:opacity-40"
@@ -826,7 +827,7 @@ function OfferModal({ trackId, trackTitle, accent, onClose }: {
               {submitting ? <Loader2 size={14} className="animate-spin" /> : <Tag size={13} />}
               Send offer
             </button>
-            <p className="text-[9px] text-[#3a3328] text-center leading-relaxed">No payment is taken now.</p>
+            <p className="text-[9px] text-[#6E685B] text-center leading-relaxed">No payment is taken now.</p>
           </form>
         )}
       </div>

@@ -1,9 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { X, Calendar, Clock, Tag, Loader2, Music } from 'lucide-react';
+import { useState } from 'react';
+import { Calendar, Clock } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { Button } from '@/components/ui/Button';
+import { Field } from '@/components/ui/Field';
+import { Modal } from '@/components/ui/Modal';
 
 interface AddEventModalProps {
   onClose: () => void;
@@ -18,7 +21,7 @@ export function AddEventModal({ onClose, onSuccess, initialDate }: AddEventModal
     date: initialDate ? initialDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
     type: 'release',
     notes: '',
-    color: '#D4BFA0'
+    color: '#E7D7BE'
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,103 +51,91 @@ export function AddEventModal({ onClose, onSuccess, initialDate }: AddEventModal
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="w-full max-w-md bg-[#16130e] border border-[#1f1a13] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-        <div className="px-6 py-4 border-b border-[#1f1a13] flex justify-between items-center bg-[#0a0907]">
-          <div className="flex items-center gap-2">
-            <Calendar size={18} className="text-[#D4BFA0]" />
-            <h2 className="text-sm font-black uppercase tracking-[0.2em] text-[#E8DCC8]">Schedule Event</h2>
+    <Modal
+      onClose={onClose}
+      title="Schedule event"
+      description="Add a release, studio session, meeting, or deadline to the producer calendar."
+      icon={<Calendar size={18} aria-hidden="true" />}
+      size="md"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Field
+          required
+          type="text"
+          label="Event title"
+          placeholder="E.G. DANGER BEAT RELEASE"
+          inputClassName="uppercase tracking-widest"
+          value={formData.title}
+          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+        />
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label className="ml-1 block font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-readable)]">
+              Category
+            </label>
+            <Dropdown
+              value={formData.type}
+              onChange={(val) => setFormData({ ...formData, type: val })}
+              options={[
+                { value: 'release', label: 'Release' },
+                { value: 'studio', label: 'Studio Session' },
+                { value: 'meeting', label: 'Meeting' },
+                { value: 'other', label: 'Other' }
+              ]}
+              aria-label="Event category"
+              className="min-h-11 w-full rounded-xl border-[var(--border)] bg-[var(--bg-page)] px-4 py-3 text-xs text-[var(--text-primary)] focus:border-[var(--accent)]"
+            />
           </div>
-          <button onClick={onClose} className="text-[#4a4338] hover:text-[#E8DCC8] transition-colors">
-            <X size={20} />
-          </button>
+          <Field
+            type="date"
+            label="Date"
+            inputClassName="uppercase tracking-widest"
+            value={formData.date}
+            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+          />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Event Title</label>
-            <input
-              required
-              type="text"
-              placeholder="E.G. DANGER BEAT RELEASE"
-              className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 px-4 text-xs uppercase tracking-widest text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Category</label>
-              <Dropdown
-                value={formData.type}
-                onChange={(val) => setFormData({ ...formData, type: val })}
-                options={[
-                  { value: 'release', label: 'Release' },
-                  { value: 'studio', label: 'Studio Session' },
-                  { value: 'meeting', label: 'Meeting' },
-                  { value: 'other', label: 'Other' }
-                ]}
-                className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 px-4 text-xs text-white focus:outline-none focus:border-[#D4BFA0] transition-colors"
+        <div className="space-y-1.5">
+          <p className="ml-1 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--text-readable)]">
+            Color palette
+          </p>
+          <div className="flex gap-2">
+            {['#E7D7BE', '#4CAF50', '#FF9800', '#F44336', '#2196F3'].map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setFormData({ ...formData, color: c })}
+                aria-label={`Use ${c} event color`}
+                aria-pressed={formData.color === c}
+                className={`tap size-8 rounded-full border-2 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-spring)] hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/45 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-page)] ${formData.color === c ? 'scale-110 border-white' : 'border-transparent'}`}
+                style={{ backgroundColor: c }}
               />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Date</label>
-              <input
-                type="date"
-                className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 px-4 text-xs uppercase tracking-widest text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors"
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              />
-            </div>
+            ))}
           </div>
+        </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Color Palette</label>
-            <div className="flex gap-2">
-              {['#D4BFA0', '#4CAF50', '#FF9800', '#F44336', '#2196F3'].map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, color: c })}
-                  className={`w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${formData.color === c ? 'border-white scale-110' : 'border-transparent'}`}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-            </div>
-          </div>
+        <Field
+          multiline
+          label="Private notes"
+          placeholder="ADDITIONAL DETAILS OR LOGISTICS..."
+          inputClassName="uppercase tracking-widest"
+          value={formData.notes}
+          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+        />
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">Private Notes</label>
-            <textarea
-              placeholder="ADDITIONAL DETAILS OR LOGISTICS..."
-              className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 px-4 text-xs uppercase tracking-widest text-[#E8DCC8] focus:outline-none focus:border-[#D4BFA0] transition-colors h-24 resize-none"
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            />
-          </div>
-
-          <div className="pt-4">
-            <button
-              disabled={loading}
-              type="submit"
-              className="w-full bg-[#D4BFA0] hover:bg-[#8A7A5C] disabled:bg-[#4a4338] text-white py-4 rounded-xl text-xs font-black uppercase tracking-[0.2em] transition-all transform hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-[#D4BFA0]/20"
-            >
-              {loading ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  Processing
-                </>
-              ) : (
-                <>
-                  <Clock size={16} />
-                  Schedule Entry
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="pt-2">
+          <Button
+            loading={loading}
+            type="submit"
+            variant="accent"
+            className="w-full"
+            leadingIcon={<Clock size={16} aria-hidden="true" />}
+          >
+            {loading ? 'Processing' : 'Schedule entry'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

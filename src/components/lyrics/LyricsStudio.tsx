@@ -22,7 +22,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  BookOpen, History, Loader2, RefreshCw, Save, Type, Volume2, X, Music2, Hash, Sparkles, Search,
+  BookOpen, History, Loader2, RefreshCw, Save, Volume2, X, Music2, Hash, Sparkles, Search,
 } from 'lucide-react';
 
 interface Props {
@@ -86,6 +86,10 @@ function sectionLabel(line: string): string {
 
 const QUICK_SECTIONS = ['Intro', 'Verse', 'Pre-Chorus', 'Chorus', 'Hook', 'Bridge', 'Outro'];
 
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error ? err.message : fallback;
+}
+
 export function LyricsStudio({ trackId }: Props) {
   const [content, setContent] = useState('');
   const [savedContent, setSavedContent] = useState('');
@@ -145,9 +149,9 @@ export function LyricsStudio({ trackId }: Props) {
       setHistory(j.history || []);
       setStatus('saved');
       setTimeout(() => setStatus((s) => (s === 'saved' ? 'idle' : s)), 1400);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus('error');
-      setError(err.message || 'Save failed');
+      setError(errorMessage(err, 'Save failed'));
     }
   }, [trackId]);
 
@@ -328,31 +332,33 @@ export function LyricsStudio({ trackId }: Props) {
 
   /* ─────── UI ─────── */
   return (
-    <div className="border border-[#16130e] rounded-2xl bg-[#0c0a08] overflow-hidden">
+    <div className="border border-[#1A1813] rounded-2xl bg-[#11100D] overflow-hidden">
       {/* toolbar — quiet header: title, live count, autosave state, version/history */}
-      <div className="flex items-center gap-3 px-5 h-11 bg-transparent">
-        <Music2 size={12} className="text-[#E8D8B8]" />
-        <span className="text-[11px] font-mono uppercase tracking-wider text-[#a08a6a]">Lyrics</span>
-        <span className="text-[10px] font-mono text-[#3a3328]">·</span>
-        <span className="text-[10px] font-mono text-[#5a5142]">
+      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 min-h-10 sm:h-11 py-2 sm:py-0 bg-transparent">
+        <Music2 size={12} className="text-[#F3E6D1]" />
+        <span className="text-[11px] font-mono uppercase tracking-wider text-[#D0C3AF]">Lyrics</span>
+        <span className="text-[10px] font-mono text-[#6E685B]">·</span>
+        <span className="text-[10px] font-mono text-[#9B9282]">
           {stats.words}w · {stats.syllables} syl
         </span>
         <div className="flex-1" />
         <SaveBadge status={status} error={error} />
         <button
           onClick={saveSnapshot}
-          className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-md text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-white/[0.03] flex items-center gap-1 transition-colors"
+          className="text-[0px] sm:text-[10px] font-mono uppercase tracking-wider p-1.5 sm:px-2 sm:py-1 rounded-md text-[#B4AA99] hover:text-[#F7EBDD] hover:bg-white/[0.03] flex items-center gap-1 transition-colors"
           title="Save a version snapshot"
+          aria-label="Save a version snapshot"
         >
           <Save size={10} /> Version
         </button>
         <button
           onClick={() => setShowHistory((v) => !v)}
-          className={`text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-md flex items-center gap-1 transition-colors ${
+          className={`text-[10px] font-mono uppercase tracking-wider p-1.5 sm:px-2 sm:py-1 rounded-md flex items-center gap-1 transition-colors ${
             showHistory
-              ? 'bg-[#2A2418] text-[#E8D8B8]'
-              : 'text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-white/[0.03]'
+              ? 'bg-[#342F27] text-[#F3E6D1]'
+              : 'text-[#B4AA99] hover:text-[#F7EBDD] hover:bg-white/[0.03]'
           }`}
+          aria-label="Toggle lyrics version history"
         >
           <History size={10} /> {history.length}
         </button>
@@ -360,33 +366,33 @@ export function LyricsStudio({ trackId }: Props) {
 
       {/* Section quick-insert — keeps structure light + secondary. Click drops
           a header at the caret. */}
-      <div className="flex items-center gap-1.5 px-5 pb-2.5 overflow-x-auto no-scrollbar">
-        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3a3328] shrink-0">Section</span>
+      <div className="flex items-center gap-1 px-3 sm:px-5 pb-2 sm:pb-2.5 overflow-x-auto no-scrollbar">
+        <span className="hidden sm:inline text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] shrink-0">Section</span>
         {QUICK_SECTIONS.map((s) => (
           <button
             key={s}
             onClick={() => insertSection(s)}
-            className="shrink-0 text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded-full text-[#6a5d4a] hover:text-[#E8D8B8] hover:bg-[#2A2418] transition-colors"
+            className="shrink-0 text-[8px] sm:text-[9px] font-mono uppercase tracking-wider px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[#B4AA99] hover:text-[#F3E6D1] hover:bg-[#342F27] transition-colors"
           >
             + {s}
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] min-h-[460px]">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] min-h-[340px] sm:min-h-[460px]">
         {/* editor — the calm writing surface; gutter is borderless + faint so
             the lyrics are the only thing with weight. Section lines show a
             small accent marker instead of a syllable count. */}
-        <div className="relative bg-[#0a0907]/40">
-          <div className="absolute inset-0 grid grid-cols-[40px_1fr] overflow-hidden">
-            <div className="py-4 overflow-hidden pointer-events-none select-none">
+        <div className="relative bg-[#090907]/40">
+          <div className="absolute inset-0 grid grid-cols-[32px_1fr] sm:grid-cols-[40px_1fr] overflow-hidden">
+            <div className="py-3 sm:py-4 overflow-hidden pointer-events-none select-none">
               {stats.lineSyl.map((n, i) => (
                 <div
                   key={i}
-                  className="text-right pr-2 text-[10px] font-mono leading-[28px]"
+                  className="text-right pr-2 text-[9px] sm:text-[10px] font-mono leading-[24px] sm:leading-[28px]"
                 >
                   {stats.sections[i]
-                    ? <span className="text-[#8A7A5C]">§</span>
+                    ? <span className="text-[#C9BCA8]">§</span>
                     : <span className="text-[#332c20]">{n || ''}</span>}
                 </div>
               ))}
@@ -405,24 +411,24 @@ Drop a section like [Verse] or [Hook] from the bar above.
 Click any word to find rhymes, synonyms, definitions.
 Everything autosaves.`}
               spellCheck
-              className="w-full h-full bg-transparent text-[15px] leading-[28px] text-[#E8DCC8] placeholder:text-[#3a3328] pl-1 pr-5 py-4 resize-none focus:outline-none font-mono"
+              className="w-full h-full bg-transparent text-[13px] sm:text-[15px] leading-[24px] sm:leading-[28px] text-[#F7EBDD] placeholder:text-[#6E685B] pl-1 pr-4 sm:pr-5 py-3 sm:py-4 resize-none focus:outline-none font-mono"
             />
           </div>
         </div>
 
         {/* word tools — secondary sidebar, separated by a faint rule */}
-        <div className="flex flex-col border-t lg:border-t-0 lg:border-l border-[#16130e]">
-          <div className="px-3 py-3 border-b border-[#16130e]">
+        <div className="flex flex-col border-t lg:border-t-0 lg:border-l border-[#1A1813]">
+          <div className="px-3 py-2 sm:py-3 border-b border-[#1A1813]">
             <div className="flex items-center gap-2 mb-2">
-              <Search size={11} className="text-[#4a4338]" />
+              <Search size={11} className="text-[#837B6D]" />
               <input
                 value={lookupWord}
                 onChange={(e) => setLookupWord(e.target.value.trim().toLowerCase())}
                 placeholder="word"
-                className="flex-1 bg-transparent text-[12px] text-[#E8DCC8] placeholder:text-[#4a4338] focus:outline-none border-b border-[#1a160f] focus:border-[#2d2620] py-1"
+                className="flex-1 bg-transparent text-[12px] text-[#F7EBDD] placeholder:text-[#837B6D] focus:outline-none border-b border-[#211F1A] focus:border-[#3B372F] py-1"
               />
               {lookupWord && (
-                <button onClick={() => setLookupWord('')} className="text-[#5a5142] hover:text-white">
+                <button onClick={() => setLookupWord('')} className="text-[#9B9282] hover:text-white">
                   <X size={10} />
                 </button>
               )}
@@ -435,8 +441,8 @@ Everything autosaves.`}
                   onClick={() => setLookupKind(k)}
                   className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border transition-colors ${
                     lookupKind === k
-                      ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/40'
-                      : 'border-[#1a160f] text-[#6a5d4a] hover:text-[#a08a6a]'
+                      ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/40'
+                      : 'border-[#211F1A] text-[#B4AA99] hover:text-[#D0C3AF]'
                   }`}
                 >
                   {k.replace('-', ' ')}
@@ -445,14 +451,14 @@ Everything autosaves.`}
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 max-h-[260px] lg:max-h-none overflow-y-auto">
             {/* Tool results */}
             <div className="px-3 py-2">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[9px] font-mono uppercase tracking-wider text-[#4a4338] flex items-center gap-1.5">
+                <p className="text-[9px] font-mono uppercase tracking-wider text-[#837B6D] flex items-center gap-1.5">
                   <Sparkles size={9} /> {lookupKind.replace('-', ' ')}
                   {sortedHits.length > 0 && (
-                    <span className="text-[#6a5d4a]">· {visibleHits.length}/{sortedHits.length}</span>
+                    <span className="text-[#B4AA99]">· {visibleHits.length}/{sortedHits.length}</span>
                   )}
                 </p>
               </div>
@@ -464,8 +470,8 @@ Everything autosaves.`}
                     onClick={() => setSylFilter(null)}
                     className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
                       sylFilter == null
-                        ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/40'
-                        : 'border-[#1a160f] text-[#6a5d4a] hover:text-[#a08a6a]'
+                        ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/40'
+                        : 'border-[#211F1A] text-[#B4AA99] hover:text-[#D0C3AF]'
                     }`}
                   >
                     all
@@ -477,22 +483,22 @@ Everything autosaves.`}
                       title={`${count} ${n}-syllable result${count === 1 ? '' : 's'}`}
                       className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
                         sylFilter === n
-                          ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/40'
-                          : 'border-[#1a160f] text-[#6a5d4a] hover:text-[#a08a6a]'
+                          ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/40'
+                          : 'border-[#211F1A] text-[#B4AA99] hover:text-[#D0C3AF]'
                       }`}
                     >
-                      {n} syl <span className="text-[#4a4338]">·{count}</span>
+                      {n} syl <span className="text-[#837B6D]">·{count}</span>
                     </button>
                   ))}
                 </div>
               )}
 
               {hitsLoading ? (
-                <Loader2 size={12} className="animate-spin text-[#4a4338]" />
+                <Loader2 size={12} className="animate-spin text-[#837B6D]" />
               ) : !lookupWord ? (
-                <p className="text-[10px] text-[#4a4338] italic">Click a word in the editor or type one above.</p>
+                <p className="text-[10px] text-[#837B6D] italic">Click a word in the editor or type one above.</p>
               ) : visibleHits.length === 0 ? (
-                <p className="text-[10px] text-[#5a5142]">
+                <p className="text-[10px] text-[#9B9282]">
                   {sylFilter != null ? `No ${sylFilter}-syllable results.` : 'No results.'}
                 </p>
               ) : (
@@ -505,10 +511,10 @@ Everything autosaves.`}
                           key={h.word + (h.score ?? '')}
                           onClick={() => replaceWordAtCaret(h.word)}
                           title={`${syl} syl${h.score ? ` · score ${h.score}` : ''}`}
-                          className="text-[10px] px-2 py-0.5 rounded-md border border-[#1a160f] bg-[#14110d] text-[#E8DCC8] hover:bg-[#2A2418] hover:border-[#8A7A5C]/40 hover:text-[#E8D8B8] transition-colors"
+                          className="text-[10px] px-2 py-0.5 rounded-md border border-[#211F1A] bg-[#171511] text-[#F7EBDD] hover:bg-[#342F27] hover:border-[#C9BCA8]/40 hover:text-[#F3E6D1] transition-colors"
                         >
                           {h.word}
-                          <span className="ml-1 text-[#4a4338]">·{syl}</span>
+                          <span className="ml-1 text-[#837B6D]">·{syl}</span>
                         </button>
                       );
                     })}
@@ -516,7 +522,7 @@ Everything autosaves.`}
                   {visibleHits.length > resultLimit && (
                     <button
                       onClick={() => setResultLimit((n) => n + 40)}
-                      className="mt-2 text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#E8D8B8] border border-[#1a160f] hover:border-[#8A7A5C]/40 rounded px-2 py-1"
+                      className="mt-2 text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F3E6D1] border border-[#211F1A] hover:border-[#C9BCA8]/40 rounded px-2 py-1"
                     >
                       Show more · {visibleHits.length - resultLimit} hidden
                     </button>
@@ -526,28 +532,28 @@ Everything autosaves.`}
             </div>
 
             {/* Definition */}
-            <div className="px-3 py-2 border-t border-[#16130e]">
-              <p className="text-[9px] font-mono uppercase tracking-wider text-[#4a4338] mb-2 flex items-center gap-1.5">
+            <div className="px-3 py-2 border-t border-[#1A1813]">
+              <p className="text-[9px] font-mono uppercase tracking-wider text-[#837B6D] mb-2 flex items-center gap-1.5">
                 <BookOpen size={9} /> definition
               </p>
               {defLoading ? (
-                <Loader2 size={12} className="animate-spin text-[#4a4338]" />
+                <Loader2 size={12} className="animate-spin text-[#837B6D]" />
               ) : !lookupWord ? (
-                <p className="text-[10px] text-[#4a4338] italic">—</p>
+                <p className="text-[10px] text-[#837B6D] italic">—</p>
               ) : !defEntries || defEntries.length === 0 ? (
-                <p className="text-[10px] text-[#5a5142]">No definition found.</p>
+                <p className="text-[10px] text-[#9B9282]">No definition found.</p>
               ) : (
                 <div className="space-y-2">
                   {defEntries.slice(0, 1).map((e, i) => (
                     <div key={i}>
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[11px] text-[#E8DCC8]">{e.word}</span>
+                        <span className="text-[11px] text-[#F7EBDD]">{e.word}</span>
                         {e.phonetic && (
-                          <span className="text-[10px] font-mono text-[#6a5d4a]">{e.phonetic}</span>
+                          <span className="text-[10px] font-mono text-[#B4AA99]">{e.phonetic}</span>
                         )}
                         {e.audio && (
                           <button
-                            className="text-[#6a5d4a] hover:text-[#E8D8B8]"
+                            className="text-[#B4AA99] hover:text-[#F3E6D1]"
                             onClick={() => new Audio(e.audio!).play().catch(() => {})}
                             title="Pronounce"
                           >
@@ -557,25 +563,25 @@ Everything autosaves.`}
                       </div>
                       {e.meanings.slice(0, 2).map((m, j) => (
                         <div key={j} className="mb-1">
-                          <p className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] mb-0.5">
+                          <p className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] mb-0.5">
                             {m.partOfSpeech}
                           </p>
                           {m.definitions.slice(0, 2).map((d, k) => (
-                            <p key={k} className="text-[10px] text-[#a08a6a] mb-1 leading-snug">
+                            <p key={k} className="text-[10px] text-[#D0C3AF] mb-1 leading-snug">
                               {d.definition}
                               {d.example && (
-                                <span className="block text-[#5a5142] italic">“{d.example}”</span>
+                                <span className="block text-[#9B9282] italic">“{d.example}”</span>
                               )}
                             </p>
                           ))}
                           {m.synonyms.length > 0 && (
-                            <p className="text-[9px] text-[#4a4338]">
-                              <span className="text-[#6a5d4a] mr-1">syn:</span>
+                            <p className="text-[9px] text-[#837B6D]">
+                              <span className="text-[#B4AA99] mr-1">syn:</span>
                               {m.synonyms.slice(0, 6).map((s) => (
                                 <button
                                   key={s}
                                   onClick={() => replaceWordAtCaret(s)}
-                                  className="text-[#a08a6a] hover:text-[#E8D8B8] mr-1"
+                                  className="text-[#D0C3AF] hover:text-[#F3E6D1] mr-1"
                                 >
                                   {s}
                                 </button>
@@ -595,39 +601,39 @@ Everything autosaves.`}
 
       {/* History */}
       {showHistory && (
-        <div className="border-t border-[#16130e] bg-[#0a0907]">
-          <div className="flex items-center justify-between px-4 h-9 border-b border-[#16130e]">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-[#a08a6a]">
+        <div className="border-t border-[#1A1813] bg-[#090907]">
+          <div className="flex items-center justify-between px-4 h-9 border-b border-[#1A1813]">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-[#D0C3AF]">
               Version history · {history.length}
             </span>
-            <button onClick={() => setShowHistory(false)} className="text-[#5a5142] hover:text-white">
+            <button onClick={() => setShowHistory(false)} className="text-[#9B9282] hover:text-white">
               <X size={11} />
             </button>
           </div>
           <div className="max-h-[200px] overflow-y-auto">
             {history.length === 0 ? (
-              <p className="text-[10px] text-[#5a5142] px-4 py-3">No prior versions yet.</p>
+              <p className="text-[10px] text-[#9B9282] px-4 py-3">No prior versions yet.</p>
             ) : (
               history.map((h, i) => {
                 const isPreview = historyPreview === h;
                 return (
                   <div
                     key={i}
-                    className={`px-4 py-2 border-b border-[#161310] last:border-b-0 flex items-start gap-3 ${
-                      isPreview ? 'bg-[#0e0c08]' : ''
+                    className={`px-4 py-2 border-b border-[#24211B] last:border-b-0 flex items-start gap-3 ${
+                      isPreview ? 'bg-[#11100D]' : ''
                     }`}
                   >
-                    <Hash size={9} className="text-[#3a3328] mt-0.5" />
+                    <Hash size={9} className="text-[#6E685B] mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-mono text-[#a08a6a]">
+                      <p className="text-[10px] font-mono text-[#D0C3AF]">
                         {new Date(h.at).toLocaleString()}
                       </p>
-                      <p className="text-[10px] text-[#5a5142] truncate font-mono">
+                      <p className="text-[10px] text-[#9B9282] truncate font-mono">
                         {h.content.split('\n').slice(0, 1).join(' ')}
-                        <span className="text-[#4a4338]"> · {h.content.length} chars</span>
+                        <span className="text-[#837B6D]"> · {h.content.length} chars</span>
                       </p>
                       {isPreview && (
-                        <pre className="mt-2 text-[10px] text-[#a08a6a] whitespace-pre-wrap font-mono max-h-[120px] overflow-y-auto bg-[#0a0907] border border-[#1a160f] rounded p-2">
+                        <pre className="mt-2 text-[10px] text-[#D0C3AF] whitespace-pre-wrap font-mono max-h-[120px] overflow-y-auto bg-[#090907] border border-[#211F1A] rounded p-2">
                           {h.content}
                         </pre>
                       )}
@@ -635,13 +641,13 @@ Everything autosaves.`}
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={() => setHistoryPreview(isPreview ? null : h)}
-                        className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border border-[#1a160f] text-[#a08a6a] hover:text-white hover:border-[#2d2620]"
+                        className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border border-[#211F1A] text-[#D0C3AF] hover:text-white hover:border-[#3B372F]"
                       >
                         {isPreview ? 'Hide' : 'Preview'}
                       </button>
                       <button
                         onClick={() => restoreEntry(h)}
-                        className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border border-[#1a160f] text-[#E8D8B8] hover:bg-[#2A2418] hover:border-[#8A7A5C]/40 flex items-center gap-1"
+                        className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border border-[#211F1A] text-[#F3E6D1] hover:bg-[#342F27] hover:border-[#C9BCA8]/40 flex items-center gap-1"
                       >
                         <RefreshCw size={9} /> Restore
                       </button>
@@ -660,7 +666,7 @@ Everything autosaves.`}
 function SaveBadge({ status, error }: { status: string; error: string | null }) {
   if (status === 'saving') {
     return (
-      <span className="text-[10px] font-mono text-[#a08a6a] flex items-center gap-1">
+      <span className="text-[10px] font-mono text-[#D0C3AF] flex items-center gap-1">
         <Loader2 size={9} className="animate-spin" /> saving
       </span>
     );
@@ -675,5 +681,5 @@ function SaveBadge({ status, error }: { status: string; error: string | null }) 
       </span>
     );
   }
-  return <span className="text-[10px] font-mono text-[#3a3328]">·</span>;
+  return <span className="text-[10px] font-mono text-[#6E685B]">·</span>;
 }

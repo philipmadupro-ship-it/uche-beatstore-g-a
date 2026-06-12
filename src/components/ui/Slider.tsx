@@ -62,7 +62,7 @@ export function Slider({
   className,
   showTooltip = false,
   formatTooltip,
-  accent = '#D4BFA0',
+  accent = '#E7D7BE',
   tinted = false,
   variant = 'default',
   bipolar = false,
@@ -167,9 +167,9 @@ export function Slider({
           className="absolute bottom-full mb-2 -translate-x-1/2 pointer-events-none"
           style={{ left: `${pct}%` }}
         >
-          <div className="relative px-2 py-1 rounded-md bg-[#1a160f] border border-[#2d2620] text-[10px] font-mono text-[#E8DCC8] whitespace-nowrap shadow-lg">
+          <div className="relative px-2 py-1 rounded-md bg-[#211F1A] border border-[#3B372F] text-[10px] font-mono text-[#F7EBDD] whitespace-nowrap shadow-lg">
             {formatTooltip ? formatTooltip(value) : Math.round(value).toString()}
-            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 h-2 w-2 rotate-45 bg-[#1a160f] border-r border-b border-[#2d2620]" />
+            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 h-2 w-2 rotate-45 bg-[#211F1A] border-r border-b border-[#3B372F]" />
           </div>
         </div>
       )}

@@ -28,7 +28,7 @@ export function ProducerProfile({ creator }: { creator: ProducerProfileCreator |
     <>
       <Link
         href={`/store/producer/${slugify(creator.display_name)}`}
-        className="inline-block max-w-full text-[20px] font-semibold text-white hover:text-[#D4BFA0] transition-colors break-all"
+        className="inline-block max-w-full text-[20px] font-semibold text-white hover:text-[#E7D7BE] transition-colors break-all"
       >
         {creator.display_name}
       </Link>

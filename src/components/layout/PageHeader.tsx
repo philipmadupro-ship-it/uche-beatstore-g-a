@@ -36,13 +36,13 @@ export function PageHeader({ eyebrow, title, description, actions, meta, childre
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div className="min-w-0">
           {eyebrow && (
-            <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-[#a08a6a] mb-2">{eyebrow}</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-[#D0C3AF] mb-2">{eyebrow}</p>
           )}
           <h1 className="text-[28px] sm:text-[34px] md:text-[40px] font-bold tracking-tight text-white leading-[1.05] font-heading">
             {title}
           </h1>
           {description && (
-            <p className="text-[12px] text-[#a08a6a] max-w-xl mt-2 leading-relaxed">{description}</p>
+            <p className="text-[12px] text-[#D0C3AF] max-w-xl mt-2 leading-relaxed">{description}</p>
           )}
         </div>
 

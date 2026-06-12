@@ -6,7 +6,9 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { PageContainer } from '@/components/layout/PageHeader';
 import { TrackCard } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
@@ -20,9 +22,26 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { fmtDuration } from '@/lib/audio/format';
 import { toast } from '@/hooks/useToast';
 
+type PlaylistDetail = {
+  id: string;
+  name: string;
+  cover_url: string | null;
+  description?: string | null;
+  store_featured?: boolean | null;
+};
+
+type TrackWithTags = Track & {
+  track_tags?: { tag: string }[];
+};
+
+function trackTags(track: Track): { tag: string }[] {
+  return (track as TrackWithTags).track_tags ?? [];
+}
+
 export default function PlaylistDetailPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = React.use(paramsPromise);
-  const [playlist, setPlaylist] = useState<any>(null);
+  const searchParams = useSearchParams();
+  const [playlist, setPlaylist] = useState<PlaylistDetail | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadingArt, setUploadingArt] = useState(false);
@@ -33,15 +52,12 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
   const [tempDescription, setTempDescription] = useState('');
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAddTracks, setShowAddTracks] = useState(false);
-  const [vaultTracks, setVaultTracks] = useState<Track[]>([]);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [vaultSearch, setVaultSearch] = useState('');
-  const [adding, setAdding] = useState(false);
   const [trackSearch, setTrackSearch] = useState('');
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
 
   const { setTrack: setGlobalTrack, setQueue } = usePlayer();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const startHandledRef = useRef(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -66,6 +82,14 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
   useEffect(() => {
     fetchData();
   }, [params.id]);
+
+  useEffect(() => {
+    if (startHandledRef.current || loading || !playlist) return;
+    if (searchParams.get('start') === 'library') {
+      setShowAddTracks(true);
+      startHandledRef.current = true;
+    }
+  }, [loading, playlist, searchParams]);
 
   const handleArtChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -106,7 +130,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: tempTitle.trim() }),
     });
-    setPlaylist({ ...playlist, name: tempTitle.trim() });
+    setPlaylist((p) => p ? ({ ...p, name: tempTitle.trim() }) : p);
     setIsEditingTitle(false);
   };
 
@@ -122,7 +146,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
       body: JSON.stringify({ description: next || null }),
     });
     if (res.ok) {
-      setPlaylist({ ...playlist, description: next || null });
+      setPlaylist((p) => p ? ({ ...p, description: next || null }) : p);
       toast.success(next ? 'Description saved' : 'Description cleared');
     } else {
       const j = await res.json().catch(() => ({}));
@@ -143,7 +167,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
       toast.error('Failed to update', e.error || `HTTP ${res.status}`);
       return;
     }
-    setPlaylist((p: any) => ({ ...p, store_featured: next }));
+    setPlaylist((p) => p ? ({ ...p, store_featured: next }) : p);
     toast.success(next ? 'Featured in store' : 'Removed from featured');
   };
 
@@ -154,23 +178,12 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
 
   const openAddTracks = async () => {
     setShowAddTracks(true);
-    setSelected(new Set());
-    setVaultSearch('');
-    try {
-      const res = await fetch('/api/tracks');
-      const data = await res.json();
-      const list = Array.isArray(data) ? data : data.tracks || [];
-      const have = new Set(tracks.map((t) => t.id));
-      setVaultTracks(list.filter((t: Track) => !have.has(t.id)));
-    } catch (err) {
-      console.error('Vault fetch error:', err);
-    }
   };
 
   // Derived tag filter for the track list
   const availableTags = useMemo(() => {
     const s = new Set<string>();
-    for (const t of tracks) for (const tt of (t as any).track_tags ?? []) s.add(tt.tag);
+    for (const t of tracks) for (const tt of trackTags(t)) s.add(tt.tag);
     return [...s].sort();
   }, [tracks]);
 
@@ -178,35 +191,11 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
     let list = tracks;
     if (trackSearch.trim()) list = list.filter((t) => t.title.toLowerCase().includes(trackSearch.trim().toLowerCase()));
     if (selectedTags.size > 0) list = list.filter((t) => {
-      const tags = ((t as any).track_tags ?? []).map((tt: any) => tt.tag as string);
+      const tags = trackTags(t).map((tt) => tt.tag);
       return [...selectedTags].every((sel) => tags.includes(sel));
     });
     return list;
   }, [tracks, trackSearch, selectedTags]);
-
-  const toggleSelected = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  };
-
-  const submitAddTracks = async () => {
-    if (!selected.size) return;
-    setAdding(true);
-    try {
-      await fetch(`/api/playlists/${params.id}/tracks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ track_ids: Array.from(selected) }),
-      });
-      setShowAddTracks(false);
-      fetchData();
-    } finally {
-      setAdding(false);
-    }
-  };
 
   const removeTrack = async (trackId: string) => {
     setTracks((prev) => prev.filter((t) => t.id !== trackId));
@@ -250,7 +239,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-full">
-          <Loader2 size={18} className="animate-spin text-[#4a4338]" />
+          <Loader2 size={18} className="animate-spin text-[#837B6D]" />
         </div>
       </DashboardLayout>
     );
@@ -258,14 +247,14 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1400px] mx-auto px-10 pt-10">
+      <PageContainer>
         {/* Side-by-side layout — cover LEFT (sticky), meta + action row
             + track list RIGHT. Same shape as the library detail and
             project detail pages so all three feel like one family. */}
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_1fr] gap-10">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_1fr] gap-6 sm:gap-8 lg:gap-10">
           <div className="lg:sticky lg:top-10 lg:self-start">
             <div
-              className="aspect-square w-full bg-[#14110d] rounded-2xl border border-white/[0.05] overflow-hidden group relative cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+              className="aspect-square w-full bg-[#171511] rounded-2xl border border-white/[0.05] overflow-hidden group relative cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
               onClick={() => fileInputRef.current?.click()}
             >
               {playlist?.cover_url ? (
@@ -285,28 +274,28 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
           <div className="min-w-0">
             <div className="flex flex-col gap-4 pb-8 mb-8 border-b border-white/[0.04]">
             <div className="min-w-0">
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Playlist</p>
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Playlist</p>
               {isEditingTitle ? (
                 <div className="flex items-center gap-2 mb-3">
                   <input
                     autoFocus
-                    className="bg-transparent border-b border-[#2d2620] text-3xl font-medium tracking-tight outline-none text-white flex-1 focus:border-[#D4BFA0]"
+                    className="bg-transparent border-b border-[#3B372F] text-3xl font-medium tracking-tight outline-none text-white flex-1 focus:border-[#E7D7BE]"
                     value={tempTitle}
                     onChange={(e) => setTempTitle(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRename()}
                   />
-                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#16130e] text-[#D4BFA0]"><Check size={14} /></button>
-                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(playlist?.name || ''); }} className="p-1.5 rounded hover:bg-[#16130e] text-[#5a5142]"><X size={14} /></button>
+                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#1A1813] text-[#E7D7BE]"><Check size={14} /></button>
+                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(playlist?.name || ''); }} className="p-1.5 rounded hover:bg-[#1A1813] text-[#9B9282]"><X size={14} /></button>
                 </div>
               ) : (
                 <div className="group flex items-center gap-2 mb-3">
                   <h1 className="text-3xl font-medium text-white leading-none tracking-tight truncate font-heading">{playlist?.name}</h1>
-                  <button onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-[#5a5142] hover:text-white transition-all">
+                  <button onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-[#9B9282] hover:text-white transition-all">
                     <Edit2 size={13} />
                   </button>
                 </div>
               )}
-              <div className="flex items-center gap-3 text-[11px] font-mono text-[#5a5142] uppercase tracking-wider">
+              <div className="flex items-center gap-3 text-[11px] font-mono text-[#9B9282] uppercase tracking-wider">
                 <span>{tracks.length} track{tracks.length !== 1 ? 's' : ''}</span>
                 <span>·</span>
                 <span>{fmtDuration(totalDuration)}</span>
@@ -328,9 +317,9 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                     rows={4}
                     maxLength={2000}
                     placeholder="What's this playlist about? Late-night drives, gospel chops, etc."
-                    className="w-full bg-[#0a0907] border border-[#2d2620] rounded-lg px-3 py-2.5 text-[15px] font-light leading-[1.7] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#D4BFA0] resize-none"
+                    className="w-full bg-[#090907] border border-[#3B372F] rounded-lg px-3 py-2.5 text-[15px] font-light leading-[1.7] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#E7D7BE] resize-none"
                   />
-                  <p className="mt-1 text-[9px] font-mono text-[#3a3328]">
+                  <p className="mt-1 text-[9px] font-mono text-[#6E685B]">
                     {tempDescription.length}/2000 · ⌘/Ctrl+Enter to save
                   </p>
                 </div>
@@ -340,11 +329,11 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                   className="group mt-4 block text-left w-full"
                 >
                   {playlist?.description ? (
-                    <p className="text-[15px] text-[#a08a6a] leading-[1.7] whitespace-pre-line group-hover:text-[#E8DCC8] transition-colors font-light tracking-wide">
+                    <p className="text-[15px] text-[#D0C3AF] leading-[1.7] whitespace-pre-line group-hover:text-[#F7EBDD] transition-colors font-light tracking-wide">
                       {playlist.description}
                     </p>
                   ) : (
-                    <p className="text-[14px] text-[#3a3328] italic group-hover:text-[#5a5142] transition-colors">
+                    <p className="text-[14px] text-[#6E685B] italic group-hover:text-[#9B9282] transition-colors">
                       + Add a description
                     </p>
                   )}
@@ -353,10 +342,10 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
 
               {/* Featured in Store toggle — owner only, persists via PATCH */}
               <div className="flex items-center gap-2 mt-2">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142]">Featured in Store</span>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">Featured in Store</span>
                 <button
                   onClick={toggleStoreFeatured}
-                  className={`relative inline-flex w-9 h-5 rounded-full transition-colors ${playlist?.store_featured ? 'bg-[#D4BFA0]' : 'bg-[#1f1a13] border border-[#2d2620]'}`}
+                  className={`relative inline-flex w-9 h-5 rounded-full transition-colors ${playlist?.store_featured ? 'bg-[#E7D7BE]' : 'bg-[#2B2821] border border-[#3B372F]'}`}
                   aria-pressed={!!playlist?.store_featured}
                   title="Toggle visibility on the public /store page"
                 >
@@ -371,7 +360,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               <button
                 onClick={handlePlayAll}
                 disabled={!tracks.length}
-                className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-md text-[12px] font-medium hover:bg-[#E8DCC8] disabled:opacity-30 transition-colors"
+                className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-md text-[12px] font-medium hover:bg-[#F7EBDD] disabled:opacity-30 transition-colors"
               >
                 <Play size={12} fill="currentColor" className="ml-0.5" />
                 Play
@@ -379,14 +368,14 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               <button
                 onClick={() => setShowShareModal(true)}
                 disabled={!tracks.length}
-                className="flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#2d2620] disabled:opacity-30 transition-colors"
+                className="flex items-center gap-2 bg-[#171511] border border-[#211F1A] text-[#F7EBDD] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#3B372F] disabled:opacity-30 transition-colors"
               >
                 <Share2 size={12} />
                 Share
               </button>
               <button
                 onClick={openAddTracks}
-                className="flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#2d2620] transition-colors"
+                className="flex items-center gap-2 bg-[#171511] border border-[#211F1A] text-[#F7EBDD] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#3B372F] transition-colors"
               >
                 <Plus size={12} />
                 Add tracks
@@ -404,38 +393,43 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
             {/* end meta panel — track list follows inside the right column */}
 
         {/* Track list */}
-        <div className="border-t border-[#161310] border-b pb-1 mb-32">
+        <div className="border-t border-[#24211B] border-b pb-1 mb-32">
           {/* Search + tag chips */}
           {tracks.length > 0 && (
-            <div className="px-4 py-3 border-b border-[#161310] space-y-2">
+            <div className="px-4 py-3 border-b border-[#24211B] space-y-2">
               <div className="relative max-w-xs">
-                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3a3328] pointer-events-none" />
+                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B] pointer-events-none" />
                 <input value={trackSearch} onChange={(e) => setTrackSearch(e.target.value)} placeholder="Search tracks or tags…"
-                  className="w-full bg-[#14110d] border border-[#1a160f] rounded-md py-1.5 pl-8 pr-3 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]" />
+                  className="w-full bg-[#171511] border border-[#211F1A] rounded-md py-1.5 pl-8 pr-3 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]" />
               </div>
               {availableTags.length > 0 && (
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <Tag size={10} className="text-[#3a3328] shrink-0" />
+                  <Tag size={10} className="text-[#6E685B] shrink-0" />
                   {availableTags.map((tag) => {
                     const on = selectedTags.has(tag);
                     return (
-                      <button key={tag} onClick={() => setSelectedTags((prev) => { const n = new Set(prev); n.has(tag) ? n.delete(tag) : n.add(tag); return n; })}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'bg-transparent border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'}`}>
+                      <button key={tag} onClick={() => setSelectedTags((prev) => {
+                        const n = new Set(prev);
+                        if (n.has(tag)) n.delete(tag);
+                        else n.add(tag);
+                        return n;
+                      })}
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'bg-transparent border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]'}`}>
                         {tag}
                       </button>
                     );
                   })}
-                  {selectedTags.size > 0 && <button onClick={() => setSelectedTags(new Set())} className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#E8DCC8] ml-1 flex items-center gap-1"><X size={9} /> Clear</button>}
+                  {selectedTags.size > 0 && <button onClick={() => setSelectedTags(new Set())} className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#F7EBDD] ml-1 flex items-center gap-1"><X size={9} /> Clear</button>}
                 </div>
               )}
             </div>
           )}
-          <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_110px_32px] lg:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_100px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[10px] font-mono uppercase tracking-wider text-[#3a3328]">
+          <div className="grid grid-cols-[24px_32px_minmax(0,1fr)_32px] sm:grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_110px_32px] lg:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_100px_110px_32px] items-center gap-3 sm:gap-4 px-3 sm:px-4 h-9 border-b border-[#24211B] text-[10px] font-mono uppercase tracking-wider text-[#6E685B]">
             <span className="text-center">#</span>
             <span />
             <span>Title</span>
             <span className="hidden sm:block">Type</span>
-            <span>BPM · Key</span>
+            <span className="hidden sm:block">BPM · Key</span>
             <span className="hidden sm:block">Added</span>
             <span className="text-right hidden sm:block">Rating</span>
             <span className="hidden lg:block">Tags</span>
@@ -444,13 +438,13 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
 
           {!tracks.length ? (
             <div className="py-24 flex flex-col items-center justify-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#14110d] border border-[#1a160f] flex items-center justify-center">
-                <Music size={16} className="text-[#3a3328]" />
+              <div className="w-10 h-10 rounded-lg bg-[#171511] border border-[#211F1A] flex items-center justify-center">
+                <Music size={16} className="text-[#6E685B]" />
               </div>
-              <p className="text-[11px] font-mono uppercase tracking-wider text-[#3a3328]">Empty playlist</p>
+              <p className="text-[11px] font-mono uppercase tracking-wider text-[#6E685B]">Empty playlist</p>
               <button
                 onClick={openAddTracks}
-                className="mt-2 flex items-center gap-2 bg-[#14110d] border border-[#1a160f] text-[#E8DCC8] px-3 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider hover:border-[#D4BFA0]/50 hover:text-[#D4BFA0] transition-colors"
+                className="mt-2 flex items-center gap-2 bg-[#171511] border border-[#211F1A] text-[#F7EBDD] px-3 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider hover:border-[#E7D7BE]/50 hover:text-[#E7D7BE] transition-colors"
               >
                 <Plus size={12} /> Add tracks
               </button>
@@ -464,12 +458,12 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                   onClickDetails={(t) => setSelectedTrack(t)}
                   onPlayClick={() => handlePlayTrack(track)}
                 />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[#0a0907] border border-[#1a160f] rounded-md p-0.5">
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[#090907] border border-[#211F1A] rounded-md p-0.5">
                   <button
                     onClick={(e) => { e.stopPropagation(); moveTrack(i, -1); }}
                     disabled={i === 0}
                     title="Move up"
-                    className="p-1 text-[#5a5142] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="p-1 text-[#9B9282] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronUp size={12} />
                   </button>
@@ -477,14 +471,14 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                     onClick={(e) => { e.stopPropagation(); moveTrack(i, 1); }}
                     disabled={i === tracks.length - 1}
                     title="Move down"
-                    className="p-1 text-[#5a5142] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="p-1 text-[#9B9282] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   >
                     <ChevronDown size={12} />
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); removeTrack(track.id); }}
                     title="Remove from playlist"
-                    className="p-1 text-[#5a5142] hover:text-red-400 transition-colors"
+                    className="p-1 text-[#9B9282] hover:text-red-400 transition-colors"
                   >
                     <Trash2 size={12} />
                   </button>
@@ -504,7 +498,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
           {/* end right column */}
         </div>
         {/* end side-by-side grid */}
-      </div>
+      </PageContainer>
 
       {selectedTrack && (
         <TrackDetailsDrawer track={selectedTrack} onClose={() => setSelectedTrack(null)} onUpdate={fetchData} />

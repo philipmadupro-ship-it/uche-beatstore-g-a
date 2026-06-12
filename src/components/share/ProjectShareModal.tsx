@@ -190,7 +190,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[640px] max-h-[90vh] flex flex-col rounded-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-500 bg-gradient-to-b from-[#121214]/95 via-[#0e0e10]/95 to-[#0a0907]/98 backdrop-blur-2xl border border-white/[0.06] shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset]"
+        className="w-full max-w-[640px] max-h-[90vh] flex flex-col rounded-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-500 bg-gradient-to-b from-[#121214]/95 via-[#0e0e10]/95 to-[#090907]/98 backdrop-blur-2xl border border-white/[0.06] shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header — radial accent wash in the corner (same treatment as
@@ -199,28 +199,28 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
         <div className="relative p-6 border-b border-white/[0.04] overflow-hidden">
           <div
             className="absolute -top-16 -left-16 w-44 h-44 rounded-full pointer-events-none opacity-25"
-            style={{ background: 'radial-gradient(circle, #D4BFA0 0%, transparent 70%)' }}
+            style={{ background: 'radial-gradient(circle, #E7D7BE 0%, transparent 70%)' }}
           />
           <div className="relative z-10 flex items-start gap-4">
-            <div className="w-14 h-14 bg-[#1a160f] rounded-xl overflow-hidden shrink-0 border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
+            <div className="w-14 h-14 bg-[#211F1A] rounded-xl overflow-hidden shrink-0 border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
               {coverUrl ? (
                 <img loading="lazy" src={coverUrl} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#4a4338] font-black text-xl uppercase bg-gradient-to-br from-[#2A2418] to-[#0a0907]">
+                <div className="w-full h-full flex items-center justify-center text-[#837B6D] font-black text-xl uppercase bg-gradient-to-br from-[#342F27] to-[#090907]">
                   {projectTitle.charAt(0)}
                 </div>
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold text-[#E8D8B8] uppercase tracking-[0.2em] mb-1">Share project</p>
+              <p className="text-[10px] font-bold text-[#F3E6D1] uppercase tracking-[0.2em] mb-1">Share project</p>
               <h2 className="text-[18px] font-medium text-white truncate">{projectTitle}</h2>
-              <p className="text-[11px] text-[#6a5d4a] mt-1">
+              <p className="text-[11px] text-[#B4AA99] mt-1">
                 Create a link with a specific permission level. Each recipient can get their own.
               </p>
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[#6a5d4a] hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.12] transition-colors backdrop-blur-sm"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[#B4AA99] hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.12] transition-colors backdrop-blur-sm"
             >
               <X size={14} />
             </button>
@@ -229,8 +229,8 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
 
         <div className="flex-1 overflow-y-auto">
           {/* Create-form */}
-          <div className="p-6 border-b border-[#1f1a13] space-y-5">
-            <p className="text-[10px] font-bold text-[#a08a6a] uppercase tracking-[0.2em]">New link</p>
+          <div className="p-6 border-b border-[#2B2821] space-y-5">
+            <p className="text-[10px] font-bold text-[#D0C3AF] uppercase tracking-[0.2em]">New link</p>
 
             {/* Audience picker — drives the layout of the share page.
                 Independent of permission: a client can still be a
@@ -238,7 +238,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                 Defaults to "client" because that's the most common
                 pitch send and matches the historical layout. */}
             <div>
-              <p className="text-[10px] text-[#6a5d4a] uppercase tracking-wider mb-2">Audience</p>
+              <p className="text-[10px] text-[#B4AA99] uppercase tracking-wider mb-2">Audience</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {([
                   { key: 'client',   label: 'Client / A&R',  help: 'Bio + curated tracks + license card' },
@@ -253,12 +253,12 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                       onClick={() => setRecipientKind(k.key)}
                       className={`flex flex-col gap-1 px-3 py-3 rounded-lg border text-left transition-all ${
                         active
-                          ? 'bg-[#2A2418] border-[#8A7A5C] text-[#E8D8B8]'
-                          : 'bg-[#0a0907] border-[#1a160f] text-[#a08a6a] hover:border-[#2d2620]'
+                          ? 'bg-[#342F27] border-[#C9BCA8] text-[#F3E6D1]'
+                          : 'bg-[#090907] border-[#211F1A] text-[#D0C3AF] hover:border-[#3B372F]'
                       }`}
                     >
                       <span className="text-[11px] font-medium">{k.label}</span>
-                      <span className="text-[9px] text-[#5a5142] leading-tight">{k.help}</span>
+                      <span className="text-[9px] text-[#9B9282] leading-tight">{k.help}</span>
                     </button>
                   );
                 })}
@@ -267,7 +267,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
 
             {/* Role picker */}
             <div>
-              <p className="text-[10px] text-[#6a5d4a] uppercase tracking-wider mb-2">Permission</p>
+              <p className="text-[10px] text-[#B4AA99] uppercase tracking-wider mb-2">Permission</p>
               <div className="grid grid-cols-3 gap-2">
                 {(['viewer', 'commenter', 'editor'] as const).map((r) => {
                   const Icon = ROLE_INFO[r].icon;
@@ -278,13 +278,13 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                       onClick={() => setRole(r)}
                       className={`flex flex-col gap-1 px-3 py-3 rounded-lg border text-left transition-all ${
                         active
-                          ? 'bg-[#2A2418] border-[#8A7A5C] text-[#E8D8B8]'
-                          : 'bg-[#0a0907] border-[#1a160f] text-[#a08a6a] hover:border-[#2d2620]'
+                          ? 'bg-[#342F27] border-[#C9BCA8] text-[#F3E6D1]'
+                          : 'bg-[#090907] border-[#211F1A] text-[#D0C3AF] hover:border-[#3B372F]'
                       }`}
                     >
                       <Icon size={13} />
                       <span className="text-[11px] font-medium">{ROLE_INFO[r].label}</span>
-                      <span className="text-[9px] text-[#5a5142] leading-tight">{ROLE_INFO[r].help}</span>
+                      <span className="text-[9px] text-[#9B9282] leading-tight">{ROLE_INFO[r].help}</span>
                     </button>
                   );
                 })}
@@ -323,7 +323,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Password"
-                  className="w-full bg-[#0a0907] border border-[#1a160f] rounded-md px-3 py-2 text-[12px] text-white placeholder:text-[#4a4338] focus:outline-none focus:border-[#8A7A5C]"
+                  className="w-full bg-[#090907] border border-[#211F1A] rounded-md px-3 py-2 text-[12px] text-white placeholder:text-[#837B6D] focus:outline-none focus:border-[#C9BCA8]"
                 />
               )}
               <ToggleRow
@@ -343,7 +343,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                     { value: '14', label: '14 days' },
                     { value: '30', label: '30 days' }
                   ]}
-                  className="w-full bg-[#0a0907] border border-[#1a160f] rounded-md px-3 py-2 text-xs text-white focus:outline-none focus:border-[#8A7A5C]"
+                  className="w-full bg-[#090907] border border-[#211F1A] rounded-md px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C9BCA8]"
                 />
               )}
             </div>
@@ -351,16 +351,16 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
             {/* Optional metadata */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="text-[10px] text-[#6a5d4a] uppercase tracking-wider mb-1">Recipient (label)</p>
+                <p className="text-[10px] text-[#B4AA99] uppercase tracking-wider mb-1">Recipient (label)</p>
                 <input
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
                   placeholder="e.g. Label A&R"
-                  className="w-full bg-[#0a0907] border border-[#1a160f] rounded-md px-3 py-2 text-[11px] text-white placeholder:text-[#4a4338] focus:outline-none focus:border-[#8A7A5C]"
+                  className="w-full bg-[#090907] border border-[#211F1A] rounded-md px-3 py-2 text-[11px] text-white placeholder:text-[#837B6D] focus:outline-none focus:border-[#C9BCA8]"
                 />
               </div>
               <div>
-                <p className="text-[10px] text-[#6a5d4a] uppercase tracking-wider mb-1 flex items-center gap-1">
+                <p className="text-[10px] text-[#B4AA99] uppercase tracking-wider mb-1 flex items-center gap-1">
                   <Mail size={9} /> Email (optional)
                 </p>
                 <input
@@ -368,7 +368,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                   value={invitedEmail}
                   onChange={(e) => setInvitedEmail(e.target.value)}
                   placeholder="them@example.com"
-                  className="w-full bg-[#0a0907] border border-[#1a160f] rounded-md px-3 py-2 text-[11px] text-white placeholder:text-[#4a4338] focus:outline-none focus:border-[#8A7A5C]"
+                  className="w-full bg-[#090907] border border-[#211F1A] rounded-md px-3 py-2 text-[11px] text-white placeholder:text-[#837B6D] focus:outline-none focus:border-[#C9BCA8]"
                 />
               </div>
             </div>
@@ -378,25 +378,25 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                 brief). Pre-generate the CTA is a single full-width pill. */}
             {generatedUrl ? (
               <div className="space-y-3">
-                <div className="flex items-center gap-2 bg-white/[0.02] border border-[#8A7A5C]/30 rounded-xl px-3 py-2.5 backdrop-blur-sm">
-                  <Link2 size={12} className="text-[#E8D8B8] shrink-0" />
+                <div className="flex items-center gap-2 bg-white/[0.02] border border-[#C9BCA8]/30 rounded-xl px-3 py-2.5 backdrop-blur-sm">
+                  <Link2 size={12} className="text-[#F3E6D1] shrink-0" />
                   <input
                     readOnly
                     value={generatedUrl}
-                    className="flex-1 bg-transparent text-[11px] text-[#E8DCC8] font-mono focus:outline-none truncate"
+                    className="flex-1 bg-transparent text-[11px] text-[#F7EBDD] font-mono focus:outline-none truncate"
                   />
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => doCopy(generatedUrl)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#E8DCC8] active:scale-[0.98] transition-all"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#F7EBDD] active:scale-[0.98] transition-all"
                   >
                     {copied ? <Check size={13} /> : <Copy size={13} />}
                     {copied ? 'Copied' : 'Copy link'}
                   </button>
                   <button
                     onClick={() => setGeneratedUrl(null)}
-                    className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#E8DCC8] text-[12px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors"
+                    className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#F7EBDD] text-[12px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors"
                   >
                     Create another
                   </button>
@@ -406,7 +406,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
               <button
                 onClick={generateLink}
                 disabled={generating}
-                className="w-full bg-white hover:bg-[#E8DCC8] disabled:opacity-40 text-black text-[12px] font-medium py-3 rounded-full transition-all active:scale-[0.99] flex items-center justify-center gap-2"
+                className="w-full bg-white hover:bg-[#F7EBDD] disabled:opacity-40 text-black text-[12px] font-medium py-3 rounded-full transition-all active:scale-[0.99] flex items-center justify-center gap-2"
               >
                 {generating ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
                 Generate link
@@ -416,15 +416,15 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
 
           {/* Existing shares */}
           <div className="p-6">
-            <p className="text-[10px] font-bold text-[#a08a6a] uppercase tracking-[0.2em] mb-3">
-              Active links {shares.length > 0 && <span className="text-[#5a5142]">({shares.length})</span>}
+            <p className="text-[10px] font-bold text-[#D0C3AF] uppercase tracking-[0.2em] mb-3">
+              Active links {shares.length > 0 && <span className="text-[#9B9282]">({shares.length})</span>}
             </p>
             {loadingShares ? (
               <div className="flex items-center justify-center py-6">
-                <Loader2 size={14} className="animate-spin text-[#4a4338]" />
+                <Loader2 size={14} className="animate-spin text-[#837B6D]" />
               </div>
             ) : shares.length === 0 ? (
-              <p className="text-[11px] text-[#5a5142] py-3">No shares yet — generate one above.</p>
+              <p className="text-[11px] text-[#9B9282] py-3">No shares yet — generate one above.</p>
             ) : (
               <div className="space-y-2">
                 {shares.map((s) => {
@@ -437,24 +437,24 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                     <div
                       key={s.id}
                       className={`group flex items-center gap-3 px-3 py-2.5 rounded-md border ${
-                        revoked || expired ? 'bg-[#0a0907] border-[#161616] opacity-50' : 'bg-[#0a0907] border-[#1a160f] hover:border-[#2d2620]'
+                        revoked || expired ? 'bg-[#090907] border-[#161616] opacity-50' : 'bg-[#090907] border-[#211F1A] hover:border-[#3B372F]'
                       } transition-all`}
                     >
-                      <div className="w-7 h-7 rounded bg-[#2A2418] border border-[#8A7A5C]/30 flex items-center justify-center shrink-0">
+                      <div className="w-7 h-7 rounded bg-[#342F27] border border-[#C9BCA8]/30 flex items-center justify-center shrink-0">
                         <Icon size={11} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-medium text-[#E8DCC8] truncate">
+                          <span className="text-[11px] font-medium text-[#F7EBDD] truncate">
                             {s.label || s.invited_email || 'Untitled link'}
                           </span>
-                          <span className="text-[8px] font-bold text-[#E8D8B8] bg-[#2A2418] border border-[#8A7A5C]/40 rounded px-1.5 py-0.5 uppercase">
+                          <span className="text-[8px] font-bold text-[#F3E6D1] bg-[#342F27] border border-[#C9BCA8]/40 rounded px-1.5 py-0.5 uppercase">
                             {ROLE_INFO[s.role].label}
                           </span>
                           {revoked && <span className="text-[8px] text-red-400 uppercase">Revoked</span>}
                           {expired && !revoked && <span className="text-[8px] text-yellow-500 uppercase">Expired</span>}
                         </div>
-                        <p className="text-[9px] font-mono text-[#5a5142] mt-0.5 truncate">
+                        <p className="text-[9px] font-mono text-[#9B9282] mt-0.5 truncate">
                           {s.plays} {s.plays === 1 ? 'play' : 'plays'} · created {fmtDate(s.created_at)}
                           {s.expires_at ? ` · expires ${fmtDate(s.expires_at)}` : ''}
                         </p>
@@ -462,14 +462,14 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => doCopy(url)}
-                          className="p-1.5 rounded text-[#6a5d4a] hover:text-white hover:bg-[#1a160f]"
+                          className="p-1.5 rounded text-[#B4AA99] hover:text-white hover:bg-[#211F1A]"
                           title="Copy link"
                         >
                           <Copy size={11} />
                         </button>
                         <button
                           onClick={() => toggleDownloads(s)}
-                          className={`p-1.5 rounded hover:bg-[#1a160f] transition-colors ${s.allow_downloads ? 'text-[#D4BFA0]' : 'text-[#4a4338]'}`}
+                          className={`p-1.5 rounded hover:bg-[#211F1A] transition-colors ${s.allow_downloads ? 'text-[#E7D7BE]' : 'text-[#837B6D]'}`}
                           title={s.allow_downloads ? 'Downloads allowed — click to disable' : 'Downloads disabled — click to enable'}
                         >
                           <Download size={11} />
@@ -477,7 +477,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                         {s.invited_email && !revoked && (
                           <button
                             onClick={() => sendInvite(s)}
-                            className="p-1.5 rounded text-[#6a5d4a] hover:text-[#D4BFA0] hover:bg-[#1a160f]"
+                            className="p-1.5 rounded text-[#B4AA99] hover:text-[#E7D7BE] hover:bg-[#211F1A]"
                             title={`Email this link to ${s.invited_email}`}
                           >
                             <Send size={11} />
@@ -486,7 +486,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                         {!revoked && (
                           <button
                             onClick={() => revokeShare(s)}
-                            className="p-1.5 rounded text-[#6a5d4a] hover:text-red-400 hover:bg-[#1a160f]"
+                            className="p-1.5 rounded text-[#B4AA99] hover:text-red-400 hover:bg-[#211F1A]"
                             title="Revoke link"
                           >
                             <Trash2 size={11} />
@@ -510,14 +510,14 @@ function ToggleRow({ icon, label, active, onToggle }: { icon: React.ReactNode; l
     <button
       onClick={onToggle}
       className={`w-full flex items-center justify-between px-3 py-2 rounded-md border transition-colors ${
-        active ? 'bg-[#2A2418] border-[#8A7A5C]/40 text-[#E8D8B8]' : 'bg-[#0a0907] border-[#1a160f] text-[#a08a6a] hover:border-[#2d2620]'
+        active ? 'bg-[#342F27] border-[#C9BCA8]/40 text-[#F3E6D1]' : 'bg-[#090907] border-[#211F1A] text-[#D0C3AF] hover:border-[#3B372F]'
       }`}
     >
       <span className="flex items-center gap-2 text-[11px] font-medium">
         {icon}
         {label}
       </span>
-      <span className={`text-[9px] font-mono uppercase tracking-wider ${active ? 'text-[#E8D8B8]' : 'text-[#5a5142]'}`}>
+      <span className={`text-[9px] font-mono uppercase tracking-wider ${active ? 'text-[#F3E6D1]' : 'text-[#9B9282]'}`}>
         {active ? 'ON' : 'OFF'}
       </span>
     </button>

@@ -12,14 +12,14 @@
 
 import { escapeHtml } from './templates';
 
-const BG      = '#0a0907';
-const BG2     = '#16130e';
-const BG3     = '#1f1a13';
-const TEXT    = '#E8DCC8';
-const MUTED   = '#a08a6a';
-const FAINT   = '#5a5142';
-const ACCENT  = '#D4BFA0';
-const BORDER  = '#2d2620';
+const BG      = '#090907';
+const BG2     = '#1A1813';
+const BG3     = '#2B2821';
+const TEXT    = '#F7EBDD';
+const MUTED   = '#D0C3AF';
+const FAINT   = '#9B9282';
+const ACCENT  = '#E7D7BE';
+const BORDER  = '#3B372F';
 
 export interface BeatSendEmailOpts {
   /** First name or full name of the recipient. Will be used in greeting. */

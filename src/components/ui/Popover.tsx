@@ -69,7 +69,7 @@ export function Popover({
         <div
           ref={panelRef}
           style={{ position: 'fixed', top: pos.top, left: pos.left, width }}
-          className="z-[200] rounded-xl border border-[var(--border)] bg-[#0e0c08] shadow-2xl animate-in fade-in slide-in-from-top-1 py-1"
+          className="z-[200] rounded-xl border border-[var(--border)] bg-[#11100D] shadow-2xl animate-in fade-in slide-in-from-top-1 py-1"
         >
           {typeof children === 'function' ? children(close) : children}
         </div>,

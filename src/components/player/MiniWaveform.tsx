@@ -210,9 +210,9 @@ export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive, onPlay 
               // on dark cards; played bars glow in the warm accent. Idle cards
               // sit a touch dimmer so the active track stands out.
               className={`transition-[fill] duration-150 ${
-                isPlayed ? 'fill-[#D4BFA0]' : isActive ? 'fill-[#E8DCC8]/30' : 'fill-[#E8DCC8]/15'
+                isPlayed ? 'fill-[#E7D7BE]' : isActive ? 'fill-[#F7EBDD]/30' : 'fill-[#F7EBDD]/15'
               }`}
-              style={isPlayed ? { filter: 'drop-shadow(0 0 1.5px rgba(212,191,160,0.45))' } : undefined}
+              style={isPlayed ? { filter: 'drop-shadow(0 0 1.5px rgba(231,215,190,0.45))' } : undefined}
             />
           );
         })}

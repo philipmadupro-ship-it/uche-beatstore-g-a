@@ -19,9 +19,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, Loader2, Mail, Phone, Globe, Tag, MapPin,
-  Edit2, Check, X, Send, Trash2, Clock, FileText, BellRing, Copy,
+  Edit2, Check, X, Send, Trash2, FileText, BellRing,
 } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { PageContainer } from '@/components/layout/PageHeader';
 import { SendBeatModal } from '@/components/crm/SendBeatModal';
 import { ContactTagPicker } from '@/components/crm/ContactTagPicker';
 import { ContactStageCell, relativeDays } from '@/components/crm/contacts-shared';
@@ -34,10 +35,10 @@ import { cn } from '@/lib/utils';
 import type { Contact, BeatSend } from '@/lib/types';
 
 const PIPELINE_TONES: Record<string, { dot: string; text: string; ring: string; label: string }> = {
-  sent:        { dot: 'bg-[#6a5d4a]', text: 'text-[#a08a6a]', ring: 'ring-[#2d2620]',    label: 'Sent' },
+  sent:        { dot: 'bg-[#B4AA99]', text: 'text-[#D0C3AF]', ring: 'ring-[#3B372F]',    label: 'Sent' },
   opened:      { dot: 'bg-[#7aa8e8]', text: 'text-[#7aa8e8]', ring: 'ring-[#3a4a6a]',    label: 'Opened' },
-  interested:  { dot: 'bg-[#E8D8B8]', text: 'text-[#E8D8B8]', ring: 'ring-[#8A7A5C]/40', label: 'Interested' },
-  negotiating: { dot: 'bg-[#e8a86a]', text: 'text-[#e8a86a]', ring: 'ring-[#8A7A5C]/40', label: 'Negotiating' },
+  interested:  { dot: 'bg-[#F3E6D1]', text: 'text-[#F3E6D1]', ring: 'ring-[#C9BCA8]/40', label: 'Interested' },
+  negotiating: { dot: 'bg-[#e8a86a]', text: 'text-[#e8a86a]', ring: 'ring-[#C9BCA8]/40', label: 'Negotiating' },
   placed:      { dot: 'bg-[#6DC6A4]', text: 'text-[#6DC6A4]', ring: 'ring-[#1f5a4a]',    label: 'Placed' },
   pass:        { dot: 'bg-[#e88a8a]', text: 'text-[#e88a8a]', ring: 'ring-[#6a2a2a]',    label: 'Pass' },
 };
@@ -51,14 +52,6 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
   const [error, setError] = useState<string | null>(null);
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [nudgeModalOpen, setNudgeModalOpen] = useState(false);
-  // Track titles for activity timeline.
-  const [trackTitles, setTrackTitles] = useState<Map<string, { title: string; cover_url?: string | null }>>(new Map());
-  useEffect(() => {
-    fetch('/api/tracks').then((r) => r.ok ? r.json() : { tracks: [] }).then((d) => {
-      const arr: any[] = Array.isArray(d) ? d : d.tracks ?? [];
-      setTrackTitles(new Map(arr.map((t: any) => [t.id, { title: t.title, cover_url: t.cover_url ?? null }])));
-    }).catch(() => {});
-  }, []);
 
   // ── Fetch ───────────────────────────────────────────────────────────
   const fetchAll = async () => {
@@ -85,7 +78,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
       setLoading(false);
     }
   };
-  useEffect(() => { fetchAll(); /* eslint-disable-next-line */ }, [params.id]);
+  useEffect(() => { fetchAll(); }, [params.id]);
 
   // ── Engagement + pipeline derived state ─────────────────────────────
   const engagementTone = useMemo<'active' | 'engaged' | 'cold'>(() => {
@@ -113,7 +106,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
 
   const quickStats = useMemo(() => {
     const total = sends.length;
-    const opened = sends.filter((s) => (s as any).opened_at).length;
+    const opened = sends.filter((s) => s.opened_at).length;
     const openRate = total > 0 ? Math.round((opened / total) * 100) : null;
     const lastSentAt = latestSend?.sent_at;
     return { total, opened, openRate, lastSentAt };
@@ -166,7 +159,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-full pt-32">
-          <Loader2 size={18} className="animate-spin text-[#3a3328]" />
+          <Loader2 size={18} className="animate-spin text-[#6E685B]" />
         </div>
       </DashboardLayout>
     );
@@ -176,9 +169,9 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center pt-32 gap-3">
-          <p className="text-[#6a5d4a] text-sm">{error ? "Couldn't load contact" : 'Contact not found'}</p>
-          {error && <p className="text-[10px] text-[#3a3328] font-mono">{error}</p>}
-          <Link href="/contacts" className="text-[11px] text-[#E8D8B8] hover:text-white">Back to contacts</Link>
+          <p className="text-[#B4AA99] text-sm">{error ? "Couldn't load contact" : 'Contact not found'}</p>
+          {error && <p className="text-[10px] text-[#6E685B] font-mono">{error}</p>}
+          <Link href="/contacts" className="text-[11px] text-[#F3E6D1] hover:text-white">Back to contacts</Link>
         </div>
       </DashboardLayout>
     );
@@ -188,30 +181,30 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1400px] mx-auto px-4 md:px-10 pt-6 md:pt-10">
+      <PageContainer className="pb-32">
         {/* Backlink */}
         <Link
           href="/contacts"
-          className="inline-flex items-center gap-1.5 text-[11px] text-[#6a5d4a] hover:text-white transition-colors mb-6"
+          className="inline-flex items-center gap-1.5 text-[11px] text-[#B4AA99] hover:text-white transition-colors mb-6"
         >
           <ArrowLeft size={12} />
           All contacts
         </Link>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_1fr] gap-10">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_1fr] gap-6 sm:gap-8 lg:gap-10">
           {/* Left column — avatar disc + identity + actions. Sticky on
               tall viewports so the right column scrolls under it. */}
           <div className="lg:sticky lg:top-10 lg:self-start">
-            <div className="rounded-2xl bg-gradient-to-br from-[#14110d] to-[#0a0907] border border-[#1f1a13] p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] relative overflow-hidden">
+            <div className="rounded-2xl bg-gradient-to-br from-[#171511] to-[#090907] border border-[#2B2821] p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] relative overflow-hidden">
               {/* Warm radial wash in the corner — same lit-from-corner
                   pattern the drawer header + share modal use. */}
               <div
                 className="absolute -top-12 -left-12 w-32 h-32 rounded-full pointer-events-none opacity-30"
-                style={{ background: 'radial-gradient(circle, #D4BFA0 0%, transparent 70%)' }}
+                style={{ background: 'radial-gradient(circle, #E7D7BE 0%, transparent 70%)' }}
               />
               <div className="relative z-10">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#2A2418] to-[#1a160f] border border-[#8A7A5C]/30 flex items-center justify-center mb-4 shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
-                  <span className="text-[28px] font-medium text-[#E8D8B8]">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#342F27] to-[#211F1A] border border-[#C9BCA8]/30 flex items-center justify-center mb-4 shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
+                  <span className="text-[28px] font-medium text-[#F3E6D1]">
                     {contact.name[0]?.toUpperCase() ?? '?'}
                   </span>
                 </div>
@@ -221,11 +214,11 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                   className="text-[22px] font-medium text-white leading-tight tracking-tight"
                   placeholder="Name"
                 />
-                <div className="flex items-center gap-1.5 mt-2 text-[11px] text-[#6a5d4a]">
+                <div className="flex items-center gap-1.5 mt-2 text-[11px] text-[#B4AA99]">
                   {contact.role && <span>{contact.role}</span>}
                   {contact.role && contact.label && <span>·</span>}
                   {contact.label && <span>{contact.label}</span>}
-                  {!contact.role && !contact.label && <span className="text-[#3a3328]">Role / Label</span>}
+                  {!contact.role && !contact.label && <span className="text-[#6E685B]">Role / Label</span>}
                 </div>
 
                 {/* Buyer pipeline badge (store buyers only) */}
@@ -234,7 +227,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                     <span className={`text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                       contact.buyer_pipeline_status === 'purchased' || contact.buyer_pipeline_status === 'repeat_buyer'
                         ? 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/25'
-                        : 'text-[#D4BFA0] bg-[#D4BFA0]/10 border-[#D4BFA0]/25'
+                        : 'text-[#E7D7BE] bg-[#E7D7BE]/10 border-[#E7D7BE]/25'
                     }`}>
                       {contact.buyer_pipeline_status.replace(/_/g, ' ')}
                     </span>
@@ -264,10 +257,10 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
 
                 {/* Quick stats strip */}
                 {quickStats.total > 0 && (
-                  <div className="flex items-center gap-2 mt-3 text-[10px] font-mono text-[#5a5142] flex-wrap">
+                  <div className="flex items-center gap-2 mt-3 text-[10px] font-mono text-[#9B9282] flex-wrap">
                     <span className="tabular-nums">{quickStats.total} send{quickStats.total === 1 ? '' : 's'}</span>
-                    {quickStats.lastSentAt && <><span className="text-[#2d2620]">·</span><span>{relativeDays(quickStats.lastSentAt)}</span></>}
-                    {quickStats.openRate !== null && <><span className="text-[#2d2620]">·</span><span className={quickStats.openRate > 0 ? 'text-[#6DC6A4]' : ''}>{quickStats.openRate}% opened</span></>}
+                    {quickStats.lastSentAt && <><span className="text-[#3B372F]">·</span><span>{relativeDays(quickStats.lastSentAt)}</span></>}
+                    {quickStats.openRate !== null && <><span className="text-[#3B372F]">·</span><span className={quickStats.openRate > 0 ? 'text-[#6DC6A4]' : ''}>{quickStats.openRate}% opened</span></>}
                   </div>
                 )}
 
@@ -275,7 +268,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                 <div className="mt-4 flex items-center gap-2">
                   <button
                     onClick={() => setSendModalOpen(true)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#E8DCC8] active:scale-[0.98] transition-all"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#F7EBDD] active:scale-[0.98] transition-all"
                   >
                     <Send size={12} />
                     Send beat
@@ -288,7 +281,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                   )}
                   <button
                     onClick={deleteContact}
-                    className="px-3 py-2.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#6a5d4a] hover:text-red-400 hover:border-red-500/30 text-[12px] font-medium transition-colors"
+                    className="px-3 py-2.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#B4AA99] hover:text-red-400 hover:border-red-500/30 text-[12px] font-medium transition-colors"
                     title="Delete contact"
                   >
                     <Trash2 size={12} />
@@ -302,7 +295,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
           <div className="min-w-0 space-y-8">
             {/* Detail field grid */}
             <section>
-              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-3">Details</h2>
+              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] mb-3">Details</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <DetailField icon={<Mail size={11} />}    label="Email"     value={contact.email}     onSave={(v) => patchField('email', v)} />
                 <DetailField icon={<Phone size={11} />}   label="Phone"     value={contact.phone}     onSave={(v) => patchField('phone', v)} />
@@ -317,7 +310,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
 
             {/* Tags — free-form CRM tags (mig 091) for find / regroup. */}
             <section>
-              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-3 flex items-center gap-2">
+              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] mb-3 flex items-center gap-2">
                 <Tag size={11} /> Tags
               </h2>
               <ContactTagPicker contactId={contact.id} />
@@ -325,7 +318,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
 
             {/* Notes — full-width textarea, autosave on blur. */}
             <section>
-              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6a5d4a] mb-3 flex items-center gap-2">
+              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] mb-3 flex items-center gap-2">
                 <FileText size={11} /> Notes
               </h2>
               <textarea
@@ -335,7 +328,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                   if (v !== (contact.notes ?? '')) patchField('notes', v || null);
                 }}
                 placeholder="Session memory, preferred genres, decisions on past sends…"
-                className="w-full min-h-[120px] bg-white/[0.02] border border-[#1f1a13] rounded-xl px-4 py-3 text-[13px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] resize-y"
+                className="w-full min-h-[120px] bg-white/[0.02] border border-[#2B2821] rounded-xl px-4 py-3 text-[13px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] resize-y"
               />
             </section>
 
@@ -352,7 +345,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
             />
           </div>
         </div>
-      </div>
+      </PageContainer>
 
       {sendModalOpen && (
         <SendBeatModal
@@ -381,9 +374,9 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
  */
 function EngagementPill({ tone }: { tone: 'active' | 'engaged' | 'cold' }) {
   const cfg =
-    tone === 'active'  ? { dot: 'bg-[#E8D8B8]', text: 'text-[#E8D8B8]', ring: 'ring-[#8A7A5C]/40', label: 'Active' }
-  : tone === 'engaged' ? { dot: 'bg-[#8A7A5C]', text: 'text-[#a08a6a]', ring: 'ring-[#2d2620]',    label: 'Engaged' }
-  :                      { dot: 'bg-[#3a3328]', text: 'text-[#6a5d4a]', ring: 'ring-[#2d2620]',    label: 'Cold' };
+    tone === 'active'  ? { dot: 'bg-[#F3E6D1]', text: 'text-[#F3E6D1]', ring: 'ring-[#C9BCA8]/40', label: 'Active' }
+  : tone === 'engaged' ? { dot: 'bg-[#C9BCA8]', text: 'text-[#D0C3AF]', ring: 'ring-[#3B372F]',    label: 'Engaged' }
+  :                      { dot: 'bg-[#6E685B]', text: 'text-[#B4AA99]', ring: 'ring-[#3B372F]',    label: 'Cold' };
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-inset ${cfg.ring} ${cfg.text}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${tone === 'active' ? 'animate-pulse' : ''}`} />
@@ -407,7 +400,6 @@ function EditableLine({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
   if (editing) {
     return (
       <div className="flex items-center gap-1.5">
@@ -419,20 +411,20 @@ function EditableLine({
             if (e.key === 'Enter') { onSave(draft.trim()); setEditing(false); }
             else if (e.key === 'Escape') { setDraft(value); setEditing(false); }
           }}
-          className={cn('bg-transparent border-b border-[#8A7A5C]/50 outline-none text-white w-full', className)}
+          className={cn('bg-transparent border-b border-[#C9BCA8]/50 outline-none text-white w-full', className)}
         />
-        <button onClick={() => { onSave(draft.trim()); setEditing(false); }} className="p-1 text-[#E8D8B8]"><Check size={13} /></button>
-        <button onClick={() => { setDraft(value); setEditing(false); }} className="p-1 text-[#6a5d4a]"><X size={13} /></button>
+        <button onClick={() => { onSave(draft.trim()); setEditing(false); }} className="p-1 text-[#F3E6D1]"><Check size={13} /></button>
+        <button onClick={() => { setDraft(value); setEditing(false); }} className="p-1 text-[#B4AA99]"><X size={13} /></button>
       </div>
     );
   }
   return (
     <button
-      onClick={() => setEditing(true)}
+      onClick={() => { setDraft(value); setEditing(true); }}
       className={cn('group inline-flex items-center gap-1.5 w-full text-left', className)}
     >
       <span className="truncate">{value || placeholder}</span>
-      <Edit2 size={11} className="opacity-0 group-hover:opacity-60 text-[#6a5d4a] shrink-0" />
+      <Edit2 size={11} className="opacity-0 group-hover:opacity-60 text-[#B4AA99] shrink-0" />
     </button>
   );
 }
@@ -453,7 +445,6 @@ function DetailField({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? '');
-  useEffect(() => setDraft(value ?? ''), [value]);
 
   const commit = () => {
     const trimmed = draft.trim();
@@ -462,9 +453,9 @@ function DetailField({
   };
 
   return (
-    <div className="px-3 py-2.5 rounded-xl border border-[#1f1a13] bg-[#14110d] hover:border-[#2d2620] transition-colors">
-      <div className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-widest text-[#6a5d4a] mb-1">
-        <span className="text-[#3a3328]">{icon}</span>
+    <div className="px-3 py-2.5 rounded-xl border border-[#2B2821] bg-[#171511] hover:border-[#3B372F] transition-colors">
+      <div className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-widest text-[#B4AA99] mb-1">
+        <span className="text-[#6E685B]">{icon}</span>
         {label}
       </div>
       {editing ? (
@@ -477,15 +468,15 @@ function DetailField({
             if (e.key === 'Enter') commit();
             else if (e.key === 'Escape') { setDraft(value ?? ''); setEditing(false); }
           }}
-          className="w-full bg-transparent outline-none text-[12px] text-[#E8DCC8] border-b border-[#8A7A5C]/40"
+          className="w-full bg-transparent outline-none text-[12px] text-[#F7EBDD] border-b border-[#C9BCA8]/40"
           placeholder={`Add ${label.toLowerCase()}`}
         />
       ) : (
-        <button onClick={() => setEditing(true)} className="block text-left text-[12px] w-full">
+        <button onClick={() => { setDraft(value ?? ''); setEditing(true); }} className="block text-left text-[12px] w-full">
           {value ? (
-            <span className="text-[#E8DCC8]">{prefix}{value}</span>
+            <span className="text-[#F7EBDD]">{prefix}{value}</span>
           ) : (
-            <span className="text-[#3a3328]">Add {label.toLowerCase()}</span>
+            <span className="text-[#6E685B]">Add {label.toLowerCase()}</span>
           )}
         </button>
       )}

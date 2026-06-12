@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, SlidersHorizontal, X, Plus, Pencil, Trash2, Check, Loader2, Folder } from 'lucide-react';
-import { TAG_TAXONOMY, PROJECT_TYPE_OPTIONS } from '@/lib/types/tags';
+import { CONTENT_BUCKET_OPTIONS, TAG_TAXONOMY, PROJECT_TYPE_OPTIONS } from '@/lib/types/tags';
 import { toast, confirmToast } from '@/hooks/useToast';
+import { Drawer } from '@/components/ui/Drawer';
+import { FolderContainerCard } from '@/components/ui/ProductList';
 import {
   type ProjectFilterState,
   type ProjectSortMode,
@@ -11,7 +13,7 @@ import {
   activeProjectFilterCount,
 } from '@/lib/projects/filters';
 
-interface FolderRow { id: string; name: string; color?: string | null; cover_url?: string | null }
+interface FolderRow { id: string; name: string; color?: string | null; cover_urls?: string[] }
 
 const STATUS_PILLS: { value: ProjectStatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -46,6 +48,10 @@ export function ProjectFilterBar({
   resultCount: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [mobileFilters, setMobileFilters] = useState(false);
+  const [folderMenuOpen, setFolderMenuOpen] = useState(false);
+  const [folderDrawerOpen, setFolderDrawerOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [manage, setManage] = useState(false);
   const [newFolder, setNewFolder] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,10 +60,25 @@ export function ProjectFilterBar({
 
   const set = (patch: Partial<ProjectFilterState>) => onChange({ ...value, ...patch });
   const activeCount = activeProjectFilterCount(value);
+  const selectedFolderLabel =
+    value.folder === 'all'
+      ? 'All projects'
+      : value.folder === 'unfiled'
+        ? 'Unfiled'
+        : folders.find((f) => f.id === value.folder)?.name ?? 'Folder';
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 639px)');
+    const sync = () => setIsMobile(media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
 
   const toggleTag = (tag: string) => {
     const next = new Set(value.tags);
-    next.has(tag) ? next.delete(tag) : next.add(tag);
+    if (next.has(tag)) next.delete(tag);
+    else next.add(tag);
     set({ tags: next });
   };
 
@@ -101,78 +122,135 @@ export function ProjectFilterBar({
     } catch { toast.error('Couldn’t delete folder'); }
   };
 
-  const folderChip = (key: string, label: string, active: boolean, onClick: () => void, color?: string | null) => {
-    const accent = color || '#7F77DD';
-    return (
-      <button key={key} onClick={onClick}
-        className={`shrink-0 px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors flex items-center gap-1.5 border ${
-          active ? 'text-white' : 'bg-[#14110d] border-[#1f1a13] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
-        }`}
-        style={active ? { backgroundColor: accent, borderColor: `${accent}66` } : {}}>
-        {label}
-      </button>
-    );
-  };
+  const filterPanel = (
+    <div className="space-y-4">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {STATUS_PILLS.map((s) => (
+          <button key={s.value} onClick={() => set({ status: s.value })}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+              value.status === s.value ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]'
+            }`}>{s.label}</button>
+        ))}
+      </div>
 
-  return (
-    <div className="mb-5">
-      {/* Folder chips — horizontal scroll on mobile */}
-      <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-1 -mx-1 px-1 mb-3">
-        <Folder size={12} className="text-[#3a3328] shrink-0" />
-        {folderChip('all', 'All', value.folder === 'all', () => set({ folder: 'all' }))}
-        {folderChip('unfiled', 'Unfiled', value.folder === 'unfiled', () => set({ folder: 'unfiled' }))}
-        {folders.map((f) =>
-          editingId === f.id ? (
-            <input key={f.id} autoFocus value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              onBlur={() => renameFolder(f.id)}
-              onKeyDown={(e) => { if (e.key === 'Enter') renameFolder(f.id); if (e.key === 'Escape') setEditingId(null); }}
-              className="shrink-0 w-28 bg-[#14110d] border border-[#7F77DD]/50 rounded-full px-3 py-1.5 text-[12px] text-[#E8DCC8] focus:outline-none"
-            />
-          ) : (
-            <span key={f.id} className="shrink-0 flex items-center">
-              {folderChip(f.id, f.name, value.folder === f.id, () => set({ folder: f.id }), f.color)}
-              {manage && (
-                <span className="flex items-center -ml-1">
-                  <button onClick={() => { setEditingId(f.id); setEditName(f.name); }} className="w-6 h-6 flex items-center justify-center text-[#6a5d4a] hover:text-[#E8DCC8]" aria-label="Rename folder"><Pencil size={11} /></button>
-                  <button onClick={() => deleteFolder(f)} className="w-6 h-6 flex items-center justify-center text-[#6a5d4a] hover:text-red-400" aria-label="Delete folder"><Trash2 size={11} /></button>
-                </span>
-              )}
-            </span>
-          ),
-        )}
-        {/* New folder inline */}
-        <span className="shrink-0 flex items-center gap-1">
-          <input value={newFolder} onChange={(e) => setNewFolder(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') createFolder(); }}
-            placeholder="New folder"
-            className="w-24 bg-[#0e0c08] border border-[#1f1a13] rounded-full px-3 py-1.5 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]" />
-          <button onClick={createFolder} disabled={!newFolder.trim() || busy} className="w-7 h-7 shrink-0 rounded-full bg-[#14110d] border border-[#1f1a13] flex items-center justify-center text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] disabled:opacity-40" aria-label="Create folder">
-            {busy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-          </button>
-        </span>
+      {([['content', CONTENT_BUCKET_OPTIONS], ['project type', PROJECT_TYPE_OPTIONS], ['genre', TAG_TAXONOMY.genre], ['mood', TAG_TAXONOMY.mood]] as [string, readonly string[]][]).map(([label, opts]) => (
+        <div key={label}>
+          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">{label}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {opts.map((tag) => {
+              const active = value.tags.has(tag);
+              return (
+                <button key={tag} onClick={() => toggleTag(tag)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                    active ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]'
+                  }`}>{tag}</button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {activeCount > 0 && (
+        <button onClick={() => onChange({ ...value, search: '', status: 'all', folder: 'all', tags: new Set() })}
+          className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F7EBDD] transition-colors">
+          <X size={11} /> Clear all
+        </button>
+      )}
+    </div>
+  );
+
+  const folderPanel = (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <FolderContainerCard label="All projects" active={value.folder === 'all'} onClick={() => { set({ folder: 'all' }); setFolderMenuOpen(false); setFolderDrawerOpen(false); }} />
+        <FolderContainerCard label="Unfiled" active={value.folder === 'unfiled'} onClick={() => { set({ folder: 'unfiled' }); setFolderMenuOpen(false); setFolderDrawerOpen(false); }} />
+        {folders.map((f) => (
+          <div key={f.id} className="relative">
+            {editingId === f.id ? (
+              <input
+                autoFocus
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={() => renameFolder(f.id)}
+                onKeyDown={(e) => { if (e.key === 'Enter') renameFolder(f.id); if (e.key === 'Escape') setEditingId(null); }}
+                className="h-10 w-full rounded-xl border border-[#7F77DD]/50 bg-[#171511] px-3 text-[12px] text-[#F7EBDD] focus:outline-none"
+              />
+            ) : (
+              <FolderContainerCard
+                label={f.name}
+                active={value.folder === f.id}
+                color={f.color}
+                covers={f.cover_urls}
+                onClick={() => { set({ folder: f.id }); setFolderMenuOpen(false); setFolderDrawerOpen(false); }}
+                actions={manage ? (
+                  <>
+                    <button onClick={() => { setEditingId(f.id); setEditName(f.name); }} className="w-7 h-7 rounded-full bg-black/45 flex items-center justify-center text-[#D0C3AF] hover:text-[#F7EBDD]" aria-label="Rename folder"><Pencil size={11} /></button>
+                    <button onClick={() => deleteFolder(f)} className="w-7 h-7 rounded-full bg-black/45 flex items-center justify-center text-[#D0C3AF] hover:text-red-400" aria-label="Delete folder"><Trash2 size={11} /></button>
+                  </>
+                ) : undefined}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2 border-t border-[#211F1A] pt-3">
+        <input
+          value={newFolder}
+          onChange={(e) => setNewFolder(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') createFolder(); }}
+          placeholder="New folder"
+          className="min-h-10 flex-1 rounded-full border border-[#2B2821] bg-[#11100D] px-3 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
+        />
+        <button onClick={createFolder} disabled={!newFolder.trim() || busy} className="grid size-10 shrink-0 place-items-center rounded-full border border-[#2B2821] bg-[#171511] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F] disabled:opacity-40" aria-label="Create folder">
+          {busy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+        </button>
         {folders.length > 0 && (
-          <button onClick={() => setManage((v) => !v)} className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-colors ${manage ? 'bg-[#2A2418] text-[#E8D8B8]' : 'text-[#5a5142] hover:text-[#a08a6a]'}`} aria-label="Manage folders" title="Manage folders">
+          <button onClick={() => setManage((v) => !v)} className={`grid size-10 shrink-0 place-items-center rounded-full transition-colors ${manage ? 'bg-[#342F27] text-[#F3E6D1]' : 'text-[#9B9282] hover:text-[#D0C3AF]'}`} aria-label="Manage folders" title="Manage folders">
             {manage ? <Check size={12} /> : <Pencil size={12} />}
           </button>
         )}
       </div>
+    </div>
+  );
 
+  return (
+    <div className="mb-5">
       {/* Search + Filters toggle */}
       <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative">
+          <button
+            onClick={() => isMobile ? setFolderDrawerOpen(true) : setFolderMenuOpen((v) => !v)}
+            className={`flex min-h-10 items-center gap-2 rounded-full border px-3.5 py-2 text-[11px] font-medium transition-colors ${
+              folderMenuOpen || folderDrawerOpen || value.folder !== 'all'
+                ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/40'
+                : 'bg-[#171511] border-[#2B2821] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F]'
+            }`}
+          >
+            <Folder size={12} /> {selectedFolderLabel}
+          </button>
+          {folderMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setFolderMenuOpen(false)} />
+              <div className="absolute left-0 top-full z-40 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-[#2B2821] bg-[#0E0C09] p-3 shadow-2xl">
+                {folderPanel}
+              </div>
+            </>
+          )}
+        </div>
         <div className="relative flex-1 min-w-[160px] max-w-sm">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3a3328] pointer-events-none" />
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B] pointer-events-none" />
           <input
             value={value.search}
             onChange={(e) => set({ search: e.target.value })}
             placeholder="Search projects + tags…"
-            className="w-full bg-[#0e0c08] border border-[#1f1a13] rounded-full py-2 pl-9 pr-3 text-[12px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620]"
+            className="w-full bg-[#11100D] border border-[#2B2821] rounded-full py-2 pl-9 pr-3 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
           />
         </div>
         <button
-          onClick={() => setOpen((v) => !v)}
-          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[11px] font-medium border transition-colors ${
-            open || activeCount > 0 ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C]/40' : 'bg-[#14110d] border-[#1f1a13] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+          onClick={() => isMobile ? setMobileFilters(true) : setOpen((v) => !v)}
+          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[11px] font-medium border transition-colors min-h-10 ${
+            open || mobileFilters || activeCount > 0 ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/40' : 'bg-[#171511] border-[#2B2821] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F]'
           }`}
         >
           <SlidersHorizontal size={12} /> Filters{activeCount > 0 ? ` · ${activeCount}` : ''}
@@ -180,50 +258,39 @@ export function ProjectFilterBar({
         <select
           value={value.sort}
           onChange={(e) => set({ sort: e.target.value as ProjectSortMode })}
-          className="px-3 py-2 rounded-full bg-[#14110d] border border-[#1f1a13] text-[11px] text-[#a08a6a] focus:outline-none focus:border-[#2d2620] cursor-pointer"
+          className="px-3 py-2 rounded-full bg-[#171511] border border-[#2B2821] text-[11px] text-[#D0C3AF] focus:outline-none focus:border-[#3B372F] cursor-pointer"
         >
-          {SORTS.map((s) => <option key={s.value} value={s.value} className="bg-[#0a0907]">{s.label}</option>)}
+          {SORTS.map((s) => <option key={s.value} value={s.value} className="bg-[#090907]">{s.label}</option>)}
         </select>
-        <span className="text-[10px] font-mono text-[#3a3328] ml-auto hidden sm:inline">{resultCount} shown</span>
+        <span className="text-[10px] font-mono text-[#6E685B] ml-auto hidden sm:inline">{resultCount} shown</span>
       </div>
 
-      {/* Collapsible: status + tags */}
+      {/* Desktop collapsible: mobile gets a contained bottom sheet. */}
       {open && (
-        <div className="mt-3 rounded-xl border border-[#1f1a13] bg-[#0e0c08] p-3 space-y-3">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {STATUS_PILLS.map((s) => (
-              <button key={s.value} onClick={() => set({ status: s.value })}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                  value.status === s.value ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'
-                }`}>{s.label}</button>
-            ))}
-          </div>
-
-          {([['project type', PROJECT_TYPE_OPTIONS], ['genre', TAG_TAXONOMY.genre], ['mood', TAG_TAXONOMY.mood]] as [string, readonly string[]][]).map(([label, opts]) => (
-            <div key={label}>
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">{label}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {opts.map((tag) => {
-                  const active = value.tags.has(tag);
-                  return (
-                    <button key={tag} onClick={() => toggleTag(tag)}
-                      className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                        active ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'bg-[#14110d] border-[#1f1a13] text-[#6a5d4a] hover:text-[#a08a6a] hover:border-[#2d2620]'
-                      }`}>{tag}</button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-
-          {activeCount > 0 && (
-            <button onClick={() => onChange({ ...value, search: '', status: 'all', folder: 'all', tags: new Set() })}
-              className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors">
-              <X size={11} /> Clear all
-            </button>
-          )}
+        <div className="mt-3 hidden rounded-xl border border-[#2B2821] bg-[#11100D] p-3 sm:block">
+          {filterPanel}
         </div>
       )}
+      <Drawer
+        open={mobileFilters}
+        onClose={() => setMobileFilters(false)}
+        side="bottom"
+        title="Project filters"
+        description={`${resultCount} project${resultCount === 1 ? '' : 's'} shown`}
+        contentClassName="pb-8"
+      >
+        {filterPanel}
+      </Drawer>
+      <Drawer
+        open={folderDrawerOpen}
+        onClose={() => setFolderDrawerOpen(false)}
+        side="bottom"
+        title="Project folders"
+        description={selectedFolderLabel}
+        contentClassName="pb-8"
+      >
+        {folderPanel}
+      </Drawer>
     </div>
   );
 }

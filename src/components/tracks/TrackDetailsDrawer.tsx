@@ -319,16 +319,16 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
     {
       icon: Sliders,
       label: 'Send to studio',
-      color: 'text-[#E8D8B8]',
+      color: 'text-[#F3E6D1]',
       action: () => {
         router.push(`/studio?track=${track.id}`);
         onClose();
       },
     },
     { icon: Scissors, label: 'Split stems', color: 'text-purple-400' },
-    { icon: Download, label: 'Export', color: 'text-[#E8DCC8]' },
-    { icon: PlusSquare, label: 'Add to queue', color: 'text-[#E8DCC8]' },
-    { icon: RefreshCw, label: 'Replace audio', color: 'text-[#E8DCC8]', action: () => fileInputRef.current?.click() },
+    { icon: Download, label: 'Export', color: 'text-[#F7EBDD]' },
+    { icon: PlusSquare, label: 'Add to queue', color: 'text-[#F7EBDD]' },
+    { icon: RefreshCw, label: 'Replace audio', color: 'text-[#F7EBDD]', action: () => fileInputRef.current?.click() },
     { icon: Trash2, label: 'Delete', color: 'text-red-500', action: handleDelete },
   ];
   const DRAWER_PRIMARY_ACTIONS = 4;
@@ -347,15 +347,15 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in" 
         onClick={onClose}
       />
-      <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-[#0c0a08] border-l border-white/[0.04] z-50 flex flex-col shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-500">
+      <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-[#11100D] border-l border-white/[0.04] z-50 flex flex-col shadow-[0_0_50px_-12px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-500">
         {/* Glass header — backdrop-blur + radial gradient highlight so the
             top of the drawer reads as a lifted surface, not just another
             dark block stacked on dark. The accent dot in the corner is
-            a faint #D4BFA0 wash bleeding from top-left. */}
-        <div className="relative p-6 border-b border-white/[0.04] bg-gradient-to-b from-[#161520]/80 via-[#0e0e10]/80 to-[#0a0907]/90 backdrop-blur-xl overflow-hidden">
+            a faint #E7D7BE wash bleeding from top-left. */}
+        <div className="relative p-6 border-b border-white/[0.04] bg-gradient-to-b from-[#161520]/80 via-[#0e0e10]/80 to-[#090907]/90 backdrop-blur-xl overflow-hidden">
           <div
             className="absolute -top-12 -left-12 w-40 h-40 rounded-full pointer-events-none opacity-30"
-            style={{ background: 'radial-gradient(circle, #D4BFA0 0%, transparent 70%)' }}
+            style={{ background: 'radial-gradient(circle, #E7D7BE 0%, transparent 70%)' }}
           />
           <div className="relative z-10 flex items-start justify-between w-full gap-3">
             <div className="min-w-0 flex-1">
@@ -363,13 +363,13 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
               <div className="flex items-center gap-2 mb-3">
                 <button
                   onClick={() => setView('details')}
-                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-all ${view === 'details' ? 'bg-[#D4BFA0] text-black shadow-lg shadow-[#D4BFA0]/20' : 'bg-[#1a160f] text-[#4a4338] hover:text-[#a08a6a]'}`}
+                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-all ${view === 'details' ? 'bg-[#E7D7BE] text-black shadow-lg shadow-[#E7D7BE]/20' : 'bg-[#211F1A] text-[#837B6D] hover:text-[#D0C3AF]'}`}
                 >
                   Details
                 </button>
                 <button
                   onClick={() => setView('insights')}
-                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-all ${view === 'insights' ? 'bg-[#D4BFA0] text-black shadow-lg shadow-[#D4BFA0]/20' : 'bg-[#1a160f] text-[#4a4338] hover:text-[#a08a6a]'}`}
+                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-all ${view === 'insights' ? 'bg-[#E7D7BE] text-black shadow-lg shadow-[#E7D7BE]/20' : 'bg-[#211F1A] text-[#837B6D] hover:text-[#D0C3AF]'}`}
                 >
                   Insights
                 </button>
@@ -378,11 +378,11 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
               <h2 className="text-xl font-black text-white uppercase tracking-tighter truncate leading-none mb-2">{track.title}</h2>
               {/* Key / BPM / type meta strip */}
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[9px] font-mono uppercase tracking-widest text-[#6a5d4a] bg-[#1a160f] border border-[#2d2620] px-2 py-0.5 rounded">
+                <span className="text-[9px] font-mono uppercase tracking-widest text-[#B4AA99] bg-[#211F1A] border border-[#3B372F] px-2 py-0.5 rounded">
                   {track.type}
                 </span>
                 {track.bpm && (
-                  <span className="text-[9px] font-mono text-[#a08a6a] bg-[#1a160f] border border-[#2d2620] px-2 py-0.5 rounded tabular-nums">
+                  <span className="text-[9px] font-mono text-[#D0C3AF] bg-[#211F1A] border border-[#3B372F] px-2 py-0.5 rounded tabular-nums">
                     {track.bpm} BPM
                   </span>
                 )}
@@ -396,7 +396,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                   </span>
                 )}
                 {track.duration_seconds != null && track.duration_seconds > 0 && (
-                  <span className="text-[9px] font-mono text-[#4a4338] ml-auto tabular-nums">
+                  <span className="text-[9px] font-mono text-[#837B6D] ml-auto tabular-nums">
                     {Math.floor(track.duration_seconds / 60)}:{String(Math.floor(track.duration_seconds % 60)).padStart(2, '0')}
                   </span>
                 )}
@@ -409,14 +409,14 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                 <button
                   onClick={() => { currentTrack?.id === track.id ? setPlaying(!isPlaying) : setTrack(track); }}
                   title={currentTrack?.id === track.id && isPlaying ? 'Pause' : 'Play'}
-                  className="p-2 bg-white/[0.04] rounded-xl border border-white/[0.06] hover:border-[#D4BFA0]/40 text-[#E8DCC8] hover:text-[#D4BFA0] transition-colors backdrop-blur-sm"
+                  className="p-2 bg-white/[0.04] rounded-xl border border-white/[0.06] hover:border-[#E7D7BE]/40 text-[#F7EBDD] hover:text-[#E7D7BE] transition-colors backdrop-blur-sm"
                 >
                   {currentTrack?.id === track.id && isPlaying
                     ? <Pause size={16} fill="currentColor" />
                     : <Play size={16} fill="currentColor" className="ml-0.5" />}
                 </button>
               )}
-              <button onClick={onClose} className="text-[#4a4338] hover:text-[#E8DCC8] transition-colors p-2 bg-white/[0.04] rounded-xl border border-white/[0.06] hover:border-white/20 backdrop-blur-sm">
+              <button onClick={onClose} className="text-[#837B6D] hover:text-[#F7EBDD] transition-colors p-2 bg-white/[0.04] rounded-xl border border-white/[0.06] hover:border-white/20 backdrop-blur-sm">
                 <X size={18} />
               </button>
             </div>
@@ -428,8 +428,8 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
             <div className="p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               {/* Top stat cards — BPM + Key large */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-[#0a0907] border border-[#1f1a13] rounded-2xl p-4">
-                  <span className="text-[9px] font-black text-[#4a4338] uppercase tracking-widest block mb-1">BPM</span>
+                <div className="bg-[#090907] border border-[#2B2821] rounded-2xl p-4">
+                  <span className="text-[9px] font-black text-[#837B6D] uppercase tracking-widest block mb-1">BPM</span>
                   <p className="text-3xl font-black text-white leading-none font-mono">{track.bpm ?? '—'}</p>
                 </div>
                 <div className={`rounded-2xl p-4 ${
@@ -437,7 +437,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                     ? 'bg-[#1a1833]/40 border border-[#534AB7]/20'
                     : 'bg-[#1f1a10]/40 border border-[#3d3020]/30'
                 }`}>
-                  <span className="text-[9px] font-black text-[#4a4338] uppercase tracking-widest block mb-1">Key</span>
+                  <span className="text-[9px] font-black text-[#837B6D] uppercase tracking-widest block mb-1">Key</span>
                   <p className={`text-3xl font-black leading-none font-mono ${
                     track.scale === 'minor' ? 'text-[#9d95e8]' : 'text-[#c8a47a]'
                   }`}>
@@ -455,23 +455,23 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
               {(() => {
                 const bars = [
                   { label: 'Energy', value: track.energy, color: '#e87a5a' },
-                  { label: 'Groove', value: track.danceability, color: '#D4BFA0' },
+                  { label: 'Groove', value: track.danceability, color: '#E7D7BE' },
                   { label: 'Mood', value: track.valence, color: '#9d95e8' },
                   { label: 'Acoustic', value: track.acousticness, color: '#8ecf9f' },
                 ].filter((b) => b.value != null);
                 if (!bars.length) return null;
                 return (
-                  <div className="bg-[#0a0907] border border-[#1f1a13] rounded-2xl p-4 space-y-3">
-                    <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#4a4338] mb-3">Vibe Analysis</h3>
+                  <div className="bg-[#090907] border border-[#2B2821] rounded-2xl p-4 space-y-3">
+                    <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#837B6D] mb-3">Vibe Analysis</h3>
                     {bars.map(({ label, value, color }) => {
                       const pct = Math.round((value as number) * 100);
                       return (
                         <div key={label}>
                           <div className="flex justify-between items-baseline mb-1">
-                            <span className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a]">{label}</span>
+                            <span className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99]">{label}</span>
                             <span className="text-[10px] font-mono font-bold tabular-nums" style={{ color }}>{pct}%</span>
                           </div>
-                          <div className="h-1.5 bg-[#1a160f] rounded-full overflow-hidden">
+                          <div className="h-1.5 bg-[#211F1A] rounded-full overflow-hidden">
                             <div
                               className="h-full rounded-full transition-all duration-700"
                               style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.85 }}
@@ -486,15 +486,15 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
 
               {/* Loudness */}
               {track.loudness != null && (
-                <div className="bg-[#0a0907] border border-[#1f1a13] rounded-2xl p-4 flex items-center justify-between">
-                  <span className="text-[9px] font-black text-[#4a4338] uppercase tracking-widest">Loudness</span>
-                  <span className="text-[13px] font-mono font-bold text-[#E8DCC8] tabular-nums">{track.loudness} LUFS</span>
+                <div className="bg-[#090907] border border-[#2B2821] rounded-2xl p-4 flex items-center justify-between">
+                  <span className="text-[9px] font-black text-[#837B6D] uppercase tracking-widest">Loudness</span>
+                  <span className="text-[13px] font-mono font-bold text-[#F7EBDD] tabular-nums">{track.loudness} LUFS</span>
                 </div>
               )}
 
               {/* File info */}
-              <div className="bg-[#0a0907] border border-[#1f1a13] rounded-2xl p-4 space-y-2.5">
-                <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#4a4338] mb-3">File Info</h3>
+              <div className="bg-[#090907] border border-[#2B2821] rounded-2xl p-4 space-y-2.5">
+                <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#837B6D] mb-3">File Info</h3>
                 {[
                   { label: 'Type', value: track.type?.toUpperCase() ?? '—' },
                   { label: 'Duration', value: track.duration_seconds ? `${Math.floor(track.duration_seconds / 60)}:${String(Math.floor(track.duration_seconds % 60)).padStart(2, '0')}` : '—' },
@@ -502,8 +502,8 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                   { label: 'Added', value: new Date(track.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) },
                 ].map(({ label, value }) => (
                   <div key={label} className="flex justify-between items-center">
-                    <span className="text-[9px] font-black text-[#4a4338] uppercase tracking-widest">{label}</span>
-                    <span className="text-[11px] font-mono text-[#E8DCC8]">{value}</span>
+                    <span className="text-[9px] font-black text-[#837B6D] uppercase tracking-widest">{label}</span>
+                    <span className="text-[11px] font-mono text-[#F7EBDD]">{value}</span>
                   </div>
                 ))}
               </div>
@@ -514,22 +514,22 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                   the header Play button promotes this track to it. */}
 
               {/* Lyrics + word tools entry point */}
-              <div className="px-8 pt-6 pb-4 border-b border-[#1f1a13]">
+              <div className="px-8 pt-6 pb-4 border-b border-[#2B2821]">
                 <Link
                   href={`/library/${track.id}#lyrics`}
                   onClick={onClose}
-                  className="group flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[#2A2418] to-[#0f0f1a] border border-[#8A7A5C]/30 hover:border-[#D4BFA0]/60 transition-all"
+                  className="group flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-[#342F27] to-[#0f0f1a] border border-[#C9BCA8]/30 hover:border-[#E7D7BE]/60 transition-all"
                 >
-                  <div className="w-10 h-10 rounded-lg bg-[#0a0907] border border-[#8A7A5C]/40 flex items-center justify-center text-[#E8D8B8]">
+                  <div className="w-10 h-10 rounded-lg bg-[#090907] border border-[#C9BCA8]/40 flex items-center justify-center text-[#F3E6D1]">
                     <Mic2 size={16} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[11px] font-black uppercase tracking-[0.2em] text-white">Lyrics Studio</p>
-                    <p className="text-[10px] text-[#a08a6a] mt-1 leading-tight">
+                    <p className="text-[10px] text-[#D0C3AF] mt-1 leading-tight">
                       Write with rhymes · synonyms · dictionary · syllable counter
                     </p>
                   </div>
-                  <ExternalLink size={14} className="text-[#6a5d4a] group-hover:text-[#E8D8B8] transition-colors shrink-0" />
+                  <ExternalLink size={14} className="text-[#B4AA99] group-hover:text-[#F3E6D1] transition-colors shrink-0" />
                 </Link>
               </div>
 
@@ -564,9 +564,9 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                   track inside that project surface here, so reviewers'
                   notes appear exactly where the owner is listening. */}
               {projectId && (
-                <div className="border-b border-[#1f1a13] px-8 py-5">
+                <div className="border-b border-[#2B2821] px-8 py-5">
                   <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#a08a6a]">
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D0C3AF]">
                       Track feedback
                     </h3>
                   </div>
@@ -597,8 +597,8 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         {/* Replace-audio progress — panel-level overlay (the waveform block
             that used to host it was removed). */}
         {isReplacing && (
-          <div className="absolute inset-0 bg-[#0a0907]/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 animate-in fade-in z-10">
-            <Loader2 size={32} className="animate-spin text-[#D4BFA0] mb-4" />
+          <div className="absolute inset-0 bg-[#090907]/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 animate-in fade-in z-10">
+            <Loader2 size={32} className="animate-spin text-[#E7D7BE] mb-4" />
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Replacing Source Asset</p>
           </div>
         )}

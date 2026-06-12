@@ -43,15 +43,15 @@ export function TagPicker({ trackId, features }: TagPickerProps) {
   }, [features, tags]);
 
   return (
-    <div className="space-y-6 p-4 bg-[#16130e] border border-[#1f1a13] rounded-2xl w-full max-w-sm shadow-2xl">
+    <div className="space-y-6 p-4 bg-[#1A1813] border border-[#2B2821] rounded-2xl w-full max-w-sm shadow-2xl">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#4a4338]">Tag Workspace</h3>
+        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#837B6D]">Tag Workspace</h3>
       </div>
 
       {suggestions.length > 0 && (
         <div className="space-y-2">
-          <label className="text-[9px] font-bold uppercase tracking-widest text-[#E8D8B8] ml-1 flex items-center gap-1.5">
-            <Sparkles size={10} className="text-[#D4BFA0]" />
+          <label className="text-[9px] font-bold uppercase tracking-widest text-[#F3E6D1] ml-1 flex items-center gap-1.5">
+            <Sparkles size={10} className="text-[#E7D7BE]" />
             Suggested
           </label>
           <div className="flex flex-wrap gap-1.5">
@@ -60,14 +60,14 @@ export function TagPicker({ trackId, features }: TagPickerProps) {
                 key={`${s.category}:${s.tag}`}
                 onClick={() => handleToggle(s.tag, s.category)}
                 title={s.reason}
-                className="group px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 border bg-[#0a0907] border-dashed border-[#8A7A5C]/40 text-[#E8D8B8]/80 hover:bg-[#2A2418] hover:border-[#8A7A5C] hover:text-[#E8D8B8]"
+                className="group px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 border bg-[#090907] border-dashed border-[#C9BCA8]/40 text-[#F3E6D1]/80 hover:bg-[#342F27] hover:border-[#C9BCA8] hover:text-[#F3E6D1]"
               >
                 {s.tag}
                 <span className="ml-1.5 opacity-50 group-hover:opacity-80">+</span>
               </button>
             ))}
           </div>
-          <p className="text-[8px] font-mono uppercase tracking-widest text-[#4a4338] ml-1">
+          <p className="text-[8px] font-mono uppercase tracking-widest text-[#837B6D] ml-1">
             From audio analysis · click to apply
           </p>
         </div>
@@ -75,7 +75,7 @@ export function TagPicker({ trackId, features }: TagPickerProps) {
 
       {Object.entries(TAG_TAXONOMY).map(([category, options]) => (
         <div key={category} className="space-y-2">
-          <label className="text-[9px] font-bold uppercase tracking-widest text-[#4a4338] ml-1">{category}</label>
+          <label className="text-[9px] font-bold uppercase tracking-widest text-[#837B6D] ml-1">{category}</label>
           <div className="flex flex-wrap gap-1.5">
             {options.map((tag) => {
               const active = tags.includes(tag);
@@ -86,8 +86,8 @@ export function TagPicker({ trackId, features }: TagPickerProps) {
                   className={`
                     px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 border
                     ${active 
-                      ? 'bg-[#2A2418] text-[#E8D8B8] border-[#8A7A5C] shadow-lg shadow-[#D4BFA0]/5' 
-                      : 'bg-transparent text-[#4a4338] border-[#2d2620] hover:border-[#4a4338] hover:text-[#a08a6a]'}
+                      ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8] shadow-lg shadow-[#E7D7BE]/5' 
+                      : 'bg-transparent text-[#837B6D] border-[#3B372F] hover:border-[#837B6D] hover:text-[#D0C3AF]'}
                   `}
                 >
                   {tag}
@@ -98,16 +98,16 @@ export function TagPicker({ trackId, features }: TagPickerProps) {
         </div>
       ))}
 
-      <form onSubmit={handleAddCustom} className="pt-4 border-t border-[#1f1a13]">
+      <form onSubmit={handleAddCustom} className="pt-4 border-t border-[#2B2821]">
         <div className="relative group">
           <input
             type="text"
             value={customTag}
             onChange={(e) => setCustomTag(e.target.value)}
             placeholder="ADD CUSTOM TAG..."
-            className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-xl py-3 pl-10 pr-4 text-[10px] font-bold uppercase tracking-widest text-[#E8DCC8] placeholder-[#2d2620] focus:outline-none focus:border-[#D4BFA0] transition-all"
+            className="w-full bg-[#090907] border border-[#2B2821] rounded-xl py-3 pl-10 pr-4 text-[10px] font-bold uppercase tracking-widest text-[#F7EBDD] placeholder-[#3B372F] focus:outline-none focus:border-[#E7D7BE] transition-all"
           />
-          <Plus size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#2d2620] group-focus-within:text-[#D4BFA0] transition-colors" />
+          <Plus size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3B372F] group-focus-within:text-[#E7D7BE] transition-colors" />
         </div>
       </form>
     </div>

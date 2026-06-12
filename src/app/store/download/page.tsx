@@ -41,13 +41,13 @@ function fmt(s: number | null | undefined) {
 }
 
 const FORMAT_META: Record<string, { icon: React.ReactNode; accent: string; bg: string; border: string }> = {
-  mp3:      { icon: <Music size={12} />,  accent: 'text-[#D4BFA0]', bg: 'bg-[#2A2418]',      border: 'border-[#D4BFA0]/20' },
-  'wav-main': { icon: <Disc3 size={12} />, accent: 'text-[#E8DCC8]', bg: 'bg-[#1f1a13]',      border: 'border-[#a08a6a]/30' },
-  wav:      { icon: <Disc3 size={12} />,  accent: 'text-[#E8DCC8]', bg: 'bg-[#1f1a13]',      border: 'border-[#a08a6a]/30' },
+  mp3:      { icon: <Music size={12} />,  accent: 'text-[#E7D7BE]', bg: 'bg-[#342F27]',      border: 'border-[#E7D7BE]/20' },
+  'wav-main': { icon: <Disc3 size={12} />, accent: 'text-[#F7EBDD]', bg: 'bg-[#2B2821]',      border: 'border-[#D0C3AF]/30' },
+  wav:      { icon: <Disc3 size={12} />,  accent: 'text-[#F7EBDD]', bg: 'bg-[#2B2821]',      border: 'border-[#D0C3AF]/30' },
   vocals:   { icon: <Waves size={12} />,  accent: 'text-[#9d95e8]', bg: 'bg-[#1a1833]/60',   border: 'border-[#534AB7]/20' },
   drums:    { icon: <Waves size={12} />,  accent: 'text-[#e87a5a]', bg: 'bg-[#1f1010]/60',   border: 'border-[#8B3A2A]/20' },
   bass:     { icon: <Waves size={12} />,  accent: 'text-[#8ecf9f]', bg: 'bg-[#0d1f14]/60',   border: 'border-[#3A7A50]/20' },
-  other:    { icon: <Waves size={12} />,  accent: 'text-[#D4BFA0]', bg: 'bg-[#2A2418]/60',   border: 'border-[#8A7A5C]/20' },
+  other:    { icon: <Waves size={12} />,  accent: 'text-[#E7D7BE]', bg: 'bg-[#342F27]/60',   border: 'border-[#C9BCA8]/20' },
 };
 
 function getFormatMeta(format: string) {
@@ -66,8 +66,8 @@ export default function DownloadPortalWrapper() {
 
 function LoadingScreen() {
   return (
-    <div className="min-h-screen bg-[#0a0907] flex items-center justify-center">
-      <Loader2 size={24} className="animate-spin text-[#5a5142]" />
+    <div className="min-h-screen bg-[#090907] flex items-center justify-center">
+      <Loader2 size={24} className="animate-spin text-[#9B9282]" />
     </div>
   );
 }
@@ -146,17 +146,17 @@ function DownloadPortal() {
   /* ── Error / not found ── */
   if (error || !purchase) {
     return (
-      <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8] flex flex-col items-center justify-center gap-6 px-4 text-center">
+      <div className="min-h-screen bg-[#090907] text-[#F7EBDD] flex flex-col items-center justify-center gap-6 px-4 text-center">
         <AlertTriangle size={36} className="text-amber-500" />
         <div>
           <h1 className="text-[18px] font-bold text-white mb-2">Download not available</h1>
-          <p className="text-[13px] text-[#6a5d4a] max-w-md leading-relaxed">
+          <p className="text-[13px] text-[#B4AA99] max-w-md leading-relaxed">
             {error ?? 'This download link is invalid or has expired.'}
           </p>
         </div>
         <Link
           href="/store"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#14110d] border border-[#1f1a13] text-[12px] text-[#a08a6a] hover:text-white hover:border-[#2d2620] transition-all"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#171511] border border-[#2B2821] text-[12px] text-[#D0C3AF] hover:text-white hover:border-[#3B372F] transition-all"
         >
           <ArrowLeft size={13} />
           Back to store
@@ -170,13 +170,13 @@ function DownloadPortal() {
   });
 
   return (
-    <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8]">
+    <div className="min-h-screen bg-[#090907] text-[#F7EBDD]">
       <div className="max-w-2xl mx-auto px-4 md:px-6 pt-10 pb-24">
 
         {/* Back link */}
         <Link
           href="/store"
-          className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#a08a6a] transition-colors mb-8"
+          className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#D0C3AF] transition-colors mb-8"
         >
           <ArrowLeft size={10} />
           Back to store
@@ -187,17 +187,17 @@ function DownloadPortal() {
           <CheckCircle2 size={22} className="text-[#6DC6A4] shrink-0 mt-0.5" />
           <div>
             <h1 className="text-[17px] font-bold text-white">Your files are ready</h1>
-            <p className="text-[12px] text-[#6a5d4a] mt-1">
-              Confirmed · {purchaseDate} · <span className="text-[#E8DCC8]">${Number(purchase.amount_usd).toFixed(2)}</span>
+            <p className="text-[12px] text-[#B4AA99] mt-1">
+              Confirmed · {purchaseDate} · <span className="text-[#F7EBDD]">${Number(purchase.amount_usd).toFixed(2)}</span>
             </p>
-            <p className="text-[11px] text-[#5a5142] mt-0.5">
-              Receipt sent to <span className="text-[#a08a6a]">{purchase.buyer_email}</span>
+            <p className="text-[11px] text-[#9B9282] mt-0.5">
+              Receipt sent to <span className="text-[#D0C3AF]">{purchase.buyer_email}</span>
             </p>
           </div>
         </div>
 
         {/* Security note */}
-        <div className="flex items-center gap-2 mb-7 text-[10px] font-mono text-[#3a3328]">
+        <div className="flex items-center gap-2 mb-7 text-[10px] font-mono text-[#6E685B]">
           <ShieldCheck size={11} />
           <span>Bookmark this page — download links are private to this session.</span>
         </div>
@@ -205,7 +205,7 @@ function DownloadPortal() {
         {/* ── Track list ───────────────────────────────────────── */}
         <div className="space-y-5">
           {tracks.length === 0 && (
-            <div className="rounded-xl border border-dashed border-[#1f1a13] py-12 text-center text-[#5a5142] text-[13px]">
+            <div className="rounded-xl border border-dashed border-[#2B2821] py-12 text-center text-[#9B9282] text-[13px]">
               No tracks found in this purchase.
             </div>
           )}
@@ -225,8 +225,8 @@ function DownloadPortal() {
                 key={track.id}
                 className={`rounded-2xl border overflow-hidden transition-all ${
                   isCurrent
-                    ? 'border-[#D4BFA0]/30 bg-[#14110d]'
-                    : 'border-[#1f1a13] bg-[#14110d]/60'
+                    ? 'border-[#E7D7BE]/30 bg-[#171511]'
+                    : 'border-[#2B2821] bg-[#171511]/60'
                 }`}
               >
                 {/* Track header */}
@@ -234,12 +234,12 @@ function DownloadPortal() {
                   {/* Cover + play */}
                   <button
                     onClick={() => handlePlay(track)}
-                    className="relative w-16 h-16 rounded-xl overflow-hidden bg-[#0a0907] border border-[#1f1a13] shrink-0 group"
+                    className="relative w-16 h-16 rounded-xl overflow-hidden bg-[#090907] border border-[#2B2821] shrink-0 group"
                   >
                     {track.cover_url ? (
                       <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[#3a3328]">
+                      <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
                         <Music size={20} />
                       </div>
                     )}
@@ -259,29 +259,29 @@ function DownloadPortal() {
                     <div className="flex items-center flex-wrap gap-2 mt-1.5">
                       <span className={`text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                         track.license_type === 'exclusive'
-                          ? 'text-[#D4BFA0] bg-[#D4BFA0]/10 border-[#D4BFA0]/20'
-                          : 'text-[#6a5d4a] bg-white/[0.03] border-[#1f1a13]'
+                          ? 'text-[#E7D7BE] bg-[#E7D7BE]/10 border-[#E7D7BE]/20'
+                          : 'text-[#B4AA99] bg-white/[0.03] border-[#2B2821]'
                       }`}>
                         {track.license_type === 'exclusive' ? 'Exclusive' : 'Lease'}
                       </span>
                       {track.bpm && (
-                        <span className="text-[10px] font-mono text-[#5a5142]">{track.bpm} BPM</span>
+                        <span className="text-[10px] font-mono text-[#9B9282]">{track.bpm} BPM</span>
                       )}
                       {track.key && (
-                        <span className="text-[10px] font-mono text-[#5a5142]">
+                        <span className="text-[10px] font-mono text-[#9B9282]">
                           {track.key}{track.scale ? ` ${track.scale}` : ''}
                         </span>
                       )}
                       {track.duration_seconds != null && (
-                        <span className="text-[10px] font-mono text-[#5a5142]">{fmt(track.duration_seconds)}</span>
+                        <span className="text-[10px] font-mono text-[#9B9282]">{fmt(track.duration_seconds)}</span>
                       )}
                     </div>
                   </div>
                 </div>
 
                 {/* ── Downloads section ─────────────────────────── */}
-                <div className="border-t border-[#1a160f] px-5 py-4 space-y-3">
-                  <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#3a3328] flex items-center gap-1.5">
+                <div className="border-t border-[#211F1A] px-5 py-4 space-y-3">
+                  <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#6E685B] flex items-center gap-1.5">
                     <FileAudio size={9} />
                     Included files
                   </p>
@@ -323,7 +323,7 @@ function DownloadPortal() {
                   )}
 
                   {(!track.downloads || track.downloads.length === 0) && (
-                    <p className="text-[11px] text-[#5a5142] py-2">No files available for download.</p>
+                    <p className="text-[11px] text-[#9B9282] py-2">No files available for download.</p>
                   )}
                 </div>
               </div>
@@ -332,22 +332,22 @@ function DownloadPortal() {
         </div>
 
         {/* ── Footer ───────────────────────────────────────────── */}
-        <div className="mt-10 pt-6 border-t border-[#1a160f] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-[10px] font-mono text-[#3a3328]">
+        <div className="mt-10 pt-6 border-t border-[#211F1A] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-[10px] font-mono text-[#6E685B]">
             <Package size={11} />
             <span>All files licensed to {purchase.buyer_email}</span>
           </div>
           <div className="flex items-center gap-4">
             <Link
               href="/store/account"
-              className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#a08a6a] hover:text-[#E8DCC8] transition-colors"
+              className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#D0C3AF] hover:text-[#F7EBDD] transition-colors"
             >
               View my account
               <ExternalLink size={9} />
             </Link>
             <Link
               href="/store"
-              className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#5a5142] hover:text-[#a08a6a] transition-colors"
+              className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
             >
               Browse more beats
               <ExternalLink size={9} />
@@ -375,14 +375,14 @@ function FileDownloadRow({
   const meta = getFormatMeta(file.format);
 
   return (
-    <div className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-[#0a0907] border border-[#1a160f] hover:border-[#2d2620] transition-colors">
+    <div className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-[#090907] border border-[#211F1A] hover:border-[#3B372F] transition-colors">
       <div className="flex items-center gap-2.5">
         <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${meta.bg} border ${meta.border}`}>
           <span className={meta.accent}>{meta.icon}</span>
         </div>
         <div>
-          <p className="text-[12px] font-medium text-[#E8DCC8]">{file.label}</p>
-          <p className="text-[9px] font-mono text-[#5a5142] uppercase tracking-wider">
+          <p className="text-[12px] font-medium text-[#F7EBDD]">{file.label}</p>
+          <p className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider">
             {['vocals', 'drums', 'bass', 'other'].includes(file.format) ? 'Stem · WAV' : file.format.replace('-main', '').toUpperCase()}
           </p>
         </div>
@@ -393,8 +393,8 @@ function FileDownloadRow({
         disabled={downloading}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shrink-0 ${
           downloading
-            ? 'bg-[#D4BFA0]/10 text-[#D4BFA0] cursor-wait'
-            : 'bg-[#D4BFA0] text-black hover:bg-[#E8D8B8] active:scale-95'
+            ? 'bg-[#E7D7BE]/10 text-[#E7D7BE] cursor-wait'
+            : 'bg-[#E7D7BE] text-black hover:bg-[#F3E6D1] active:scale-95'
         }`}
       >
         {downloading ? (

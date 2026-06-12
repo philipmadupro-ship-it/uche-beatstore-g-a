@@ -12,6 +12,9 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { QuickShareModal } from '@/components/share/QuickShareModal';
+import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
+import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 interface ShareLink {
   id: string;
@@ -105,7 +108,7 @@ export default function LinksPage() {
     }
   };
 
-  const patchLink = async (token: string, patch: Record<string, any>): Promise<boolean> => {
+  const patchLink = async (token: string, patch: Record<string, unknown>): Promise<boolean> => {
     try {
       const res = await fetch(`/api/share/${token}`, {
         method: 'PATCH',
@@ -138,48 +141,43 @@ export default function LinksPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1200px] mx-auto px-4 md:px-10 pt-6 md:pt-10">
-        {/* Header */}
-        <div className="relative mb-6 sm:mb-8 rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#14110d]/50 via-[#0a0907]/30 to-[#0a0907] p-5 sm:p-7 md:p-8">
-          {/* Abstract Image Background */}
-          <div className="absolute inset-0 z-0 bg-[url('/images/hero-abstract-2.jpg')] bg-cover bg-center opacity-20 mix-blend-overlay" />
-          
-          <div className="relative z-10 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-            <div>
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] mb-2">Sharing</p>
-              <h1 className="text-[28px] sm:text-[36px] md:text-[40px] font-bold tracking-tight text-white leading-none font-heading mb-3">Links</h1>
-              <p className="text-[11px] text-[#a08a6a] max-w-md">Every share you&apos;ve sent. Tap a card to open and copy.</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[11px] font-mono text-[#E8D8B8] uppercase tracking-wider">
-                {links.length} link{links.length !== 1 ? 's' : ''}
-              </span>
-              {links.length > 0 && (
-                <span className="text-[11px] font-mono text-[#6a5d4a] uppercase tracking-wider">
-                  · {links.reduce((s, l) => s + (l.plays ?? 0), 0).toLocaleString()} total plays
-                </span>
-              )}
-              <button
+      <PageContainer className="max-w-[1200px]">
+        <PageHeader
+          eyebrow="Sharing"
+          title="Links"
+          description="Every share you've sent. Tap a card to open and copy."
+          meta={`${links.length} link${links.length !== 1 ? 's' : ''}${links.length > 0 ? ` · ${links.reduce((s, l) => s + (l.plays ?? 0), 0).toLocaleString()} plays` : ''}`}
+          actions={
+            <Button
                 onClick={() => setShowQuickShare(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-full bg-white text-black hover:bg-[#E8DCC8] text-[11px] font-medium transition-colors active:scale-[0.98]"
+                variant="primary"
+                leadingIcon={<Plus size={13} aria-hidden="true" />}
               >
-                <Plus size={13} />
                 New share
-              </button>
-            </div>
-          </div>
-        </div>
+            </Button>
+          }
+        />
 
         {loading ? (
           <div className="flex items-center justify-center py-32">
-            <Loader2 size={18} className="animate-spin text-[#3a3328]" />
+            <Loader2 size={18} className="animate-spin text-[#6E685B]" />
           </div>
         ) : links.length === 0 ? (
-          <div className="text-center py-32 border border-dashed border-[#1f1a13] rounded-lg">
-            <Link2 size={24} className="text-[#3a3328] mx-auto mb-4" />
-            <p className="text-sm text-[#E8DCC8] mb-1">No share links yet</p>
-            <p className="text-[11px] text-[#6a5d4a]">Share a project or track to create one</p>
-          </div>
+          <EmptyState
+            icon={<Link2 size={24} aria-hidden="true" />}
+            title="No share links yet"
+            description="Share a project or track to create one."
+            action={
+              <Button
+                onClick={() => setShowQuickShare(true)}
+                variant="primary"
+                leadingIcon={<Plus size={13} aria-hidden="true" />}
+              >
+                New share
+              </Button>
+            }
+            className="border-dashed py-32"
+          />
         ) : (
           // Card grid — 1 col on mobile, 2 on md, 3 on lg. Each card
           // is a button that opens the glass popup. Top-left corner
@@ -197,10 +195,10 @@ export default function LinksPage() {
                   onClick={() => setActive(link)}
                   className={cn(
                     'group relative text-left rounded-2xl p-4 transition-all cursor-pointer overflow-hidden',
-                    'bg-gradient-to-br from-[#14110d] to-[#0a0907] border',
+                    'bg-gradient-to-br from-[#171511] to-[#090907] border',
                     selected
-                      ? 'border-[#D4BFA0]/40 from-[#2A2418]/40'
-                      : 'border-[#1f1a13] hover:border-[#2d2620] hover:from-[#1a160f]',
+                      ? 'border-[#E7D7BE]/40 from-[#342F27]/40'
+                      : 'border-[#2B2821] hover:border-[#3B372F] hover:from-[#211F1A]',
                     'active:scale-[0.99]',
                     expired && 'opacity-40',
                   )}
@@ -222,8 +220,8 @@ export default function LinksPage() {
                     className={cn(
                       'absolute top-3 left-3 w-5 h-5 rounded border flex items-center justify-center transition-all z-10',
                       selected
-                        ? 'bg-[#D4BFA0] border-[#E8D8B8]'
-                        : 'border-[#2d2620] bg-[#0a0907] opacity-0 group-hover:opacity-100 hover:border-[#4a4338]',
+                        ? 'bg-[#E7D7BE] border-[#F3E6D1]'
+                        : 'border-[#3B372F] bg-[#090907] opacity-0 group-hover:opacity-100 hover:border-[#837B6D]',
                     )}
                   >
                     {selected && <Check size={11} className="text-black" strokeWidth={3} />}
@@ -233,17 +231,17 @@ export default function LinksPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-0.5">
                         {link.title ? (
-                          <h3 className="text-[13px] font-medium text-[#E8DCC8] truncate">{link.title}</h3>
+                          <h3 className="text-[13px] font-medium text-[#F7EBDD] truncate">{link.title}</h3>
                         ) : (
-                          <h3 className="text-[13px] font-medium text-[#a08a6a] truncate font-mono">{link.token}</h3>
+                          <h3 className="text-[13px] font-medium text-[#D0C3AF] truncate font-mono">{link.token}</h3>
                         )}
                         {isTop && (
-                          <span className="shrink-0 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#D4BFA0]/15 border border-[#D4BFA0]/30 text-[#D4BFA0]">
+                          <span className="shrink-0 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#E7D7BE]/15 border border-[#E7D7BE]/30 text-[#E7D7BE]">
                             Top
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] font-mono uppercase tracking-wider text-[#6a5d4a] mt-0.5">
+                      <p className="text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] mt-0.5">
                         {link.kind || 'share'} · {link.track_ids?.length ?? 0} track{(link.track_ids?.length ?? 0) === 1 ? '' : 's'}
                       </p>
                     </div>
@@ -252,7 +250,7 @@ export default function LinksPage() {
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[#6a5d4a] hover:text-white hover:bg-white/[0.04] transition-colors"
+                      className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[#B4AA99] hover:text-white hover:bg-white/[0.04] transition-colors"
                       title="Open share page"
                     >
                       <ExternalLink size={12} />
@@ -262,37 +260,37 @@ export default function LinksPage() {
                   {/* Bottom row — plays + expiry + flag icons. */}
                   <div className="flex items-center justify-between gap-2 text-[10px] font-mono mb-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="text-[#a08a6a] tabular-nums font-bold">
+                      <span className="text-[#D0C3AF] tabular-nums font-bold">
                         {link.plays ?? 0} play{(link.plays ?? 0) === 1 ? '' : 's'}
                       </span>
-                      <span className="text-[#3a3328]">·</span>
+                      <span className="text-[#6E685B]">·</span>
                       {expired ? (
                         <span className="text-red-400 inline-flex items-center gap-1"><Clock size={10} /> Expired</span>
                       ) : link.expires_at ? (
-                        <span className="text-[#6a5d4a] inline-flex items-center gap-1 min-w-0">
+                        <span className="text-[#B4AA99] inline-flex items-center gap-1 min-w-0">
                           <Clock size={10} />
                           <span className="truncate">{formatDate(link.expires_at)}</span>
                         </span>
                       ) : (
-                        <span className="text-[#6a5d4a]">Never expires</span>
+                        <span className="text-[#B4AA99]">Never expires</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 text-[#6a5d4a] shrink-0">
+                    <div className="flex items-center gap-1.5 text-[#B4AA99] shrink-0">
                       {link.password_hash && <Lock size={10} />}
                       {link.allow_downloads !== false && <span className="text-[9px] uppercase">dl</span>}
                     </div>
                   </div>
                   {/* Engagement bar — relative play share vs most-played link */}
-                  <div className="h-1 bg-[#1a160f] rounded-full overflow-hidden">
+                  <div className="h-1 bg-[#211F1A] rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-700"
                       style={{
                         width: `${playPct}%`,
                         background: playPct > 66
-                          ? '#D4BFA0'
+                          ? '#E7D7BE'
                           : playPct > 33
-                            ? '#8A7A5C'
-                            : '#3a3328',
+                            ? '#C9BCA8'
+                            : '#6E685B',
                       }}
                     />
                   </div>
@@ -301,7 +299,7 @@ export default function LinksPage() {
             })}
           </div>
         )}
-      </div>
+      </PageContainer>
 
       {/* Glass popup — opens when a card is clicked. Same surface
           material as the project share modal: backdrop-blur,
@@ -386,7 +384,7 @@ function LinkPopup({
   onCopy: (token: string) => void;
   onShare: (link: ShareLink) => void;
   onDelete: (token: string) => void;
-  onPatch: (token: string, patch: Record<string, any>) => Promise<boolean>;
+  onPatch: (token: string, patch: Record<string, unknown>) => Promise<boolean>;
   copied: boolean;
   fullUrl: string;
   expired: boolean;
@@ -432,7 +430,7 @@ function LinkPopup({
   const [editClearPassword, setEditClearPassword] = useState(false);
   const handleSave = async () => {
     setSavingEdit(true);
-    const patch: Record<string, any> = {
+    const patch: Record<string, unknown> = {
       title: editTitle.trim(),
       allow_downloads: editAllowDownloads,
       expires_days: Number(editExpiresDays || 0),
@@ -457,7 +455,7 @@ function LinkPopup({
         onClick={(e) => e.stopPropagation()}
         className={cn(
           'w-full md:max-w-[480px] rounded-t-3xl md:rounded-2xl overflow-hidden relative',
-          'bg-gradient-to-b from-[#121210]/95 via-[#0e0d0a]/95 to-[#0a0907]/98',
+          'bg-gradient-to-b from-[#121210]/95 via-[#0e0d0a]/95 to-[#090907]/98',
           'backdrop-blur-2xl border border-white/[0.06]',
           'shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset]',
           'animate-in slide-in-from-bottom-4 md:zoom-in-95 duration-300',
@@ -467,24 +465,24 @@ function LinkPopup({
             drawer header and project share modal use. */}
         <div
           className="absolute -top-16 -left-16 w-44 h-44 rounded-full pointer-events-none opacity-25"
-          style={{ background: 'radial-gradient(circle, #D4BFA0 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, #E7D7BE 0%, transparent 70%)' }}
         />
 
         <div className="relative z-10 p-5 md:p-6">
           {/* Header row */}
           <div className="flex items-start justify-between gap-3 mb-5">
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8] mb-1">Share link</p>
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#F3E6D1] mb-1">Share link</p>
               <h2 className="text-[18px] font-medium text-white truncate">
                 {link.title || `${link.kind || 'Share'} · ${link.track_ids?.length ?? 0} track${(link.track_ids?.length ?? 0) === 1 ? '' : 's'}`}
               </h2>
-              <p className="text-[11px] text-[#6a5d4a] mt-1">
+              <p className="text-[11px] text-[#B4AA99] mt-1">
                 Created {formatDate(link.created_at)} · {link.plays ?? 0} play{(link.plays ?? 0) === 1 ? '' : 's'}
               </p>
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[#6a5d4a] hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.12] transition-colors"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[#B4AA99] hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.12] transition-colors"
             >
               <X size={14} />
             </button>
@@ -492,13 +490,13 @@ function LinkPopup({
 
           {/* URL card — full URL, selectable. Big tappable Copy at
               the right for the dominant action. */}
-          <div className="flex items-center gap-2 bg-white/[0.02] border border-[#8A7A5C]/30 rounded-xl px-3 py-2.5 mb-4 backdrop-blur-sm">
-            <Link2 size={12} className="text-[#E8D8B8] shrink-0" />
+          <div className="flex items-center gap-2 bg-white/[0.02] border border-[#C9BCA8]/30 rounded-xl px-3 py-2.5 mb-4 backdrop-blur-sm">
+            <Link2 size={12} className="text-[#F3E6D1] shrink-0" />
             <input
               readOnly
               value={fullUrl}
               onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
-              className="flex-1 bg-transparent text-[11px] text-[#E8DCC8] font-mono focus:outline-none truncate"
+              className="flex-1 bg-transparent text-[11px] text-[#F7EBDD] font-mono focus:outline-none truncate"
             />
           </div>
 
@@ -519,29 +517,29 @@ function LinkPopup({
           {/* Tracks on this link — small avatar + title row. Empty
               state shown while loading or if the share is empty. */}
           <div className="mb-5">
-            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#5a5142] mb-2">Tracks on this link</p>
+            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Tracks on this link</p>
             {tracksLoading ? (
-              <div className="flex items-center gap-2 text-[10px] font-mono text-[#5a5142]">
+              <div className="flex items-center gap-2 text-[10px] font-mono text-[#9B9282]">
                 <Loader2 size={10} className="animate-spin" />
                 Loading…
               </div>
             ) : tracks.length === 0 ? (
-              <p className="text-[10px] text-[#3a3328] font-mono">No tracks resolved</p>
+              <p className="text-[10px] text-[#6E685B] font-mono">No tracks resolved</p>
             ) : (
               <ul className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
                 {tracks.map((t) => (
-                  <li key={t.id} className="flex items-center gap-2.5 text-[11px] text-[#a08a6a]">
-                    <div className="w-6 h-6 rounded bg-[#0a0907] border border-[#1f1a13] overflow-hidden shrink-0">
+                  <li key={t.id} className="flex items-center gap-2.5 text-[11px] text-[#D0C3AF]">
+                    <div className="w-6 h-6 rounded bg-[#090907] border border-[#2B2821] overflow-hidden shrink-0">
                       {t.cover_url ? (
                         <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[#3a3328]">
+                        <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
                           <Music size={10} />
                         </div>
                       )}
                     </div>
-                    <span className="truncate flex-1 text-[#E8DCC8]">{t.title}</span>
-                    <span className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] shrink-0">{t.type}</span>
+                    <span className="truncate flex-1 text-[#F7EBDD]">{t.title}</span>
+                    <span className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] shrink-0">{t.type}</span>
                   </li>
                 ))}
               </ul>
@@ -552,21 +550,21 @@ function LinkPopup({
               secondary action row. */}
           {editing && (
             <div className="mb-5 p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#E8D8B8]">Edit link</p>
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#F3E6D1]">Edit link</p>
 
               <div>
-                <label className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] mb-1 block">Title</label>
+                <label className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] mb-1 block">Title</label>
                 <input
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
                   placeholder={link.token}
-                  className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-md px-2.5 py-2 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#8A7A5C]"
+                  className="w-full bg-[#090907] border border-[#2B2821] rounded-md px-2.5 py-2 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8]"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] mb-1 block">Expires in</label>
+                  <label className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] mb-1 block">Expires in</label>
                   <Dropdown
                     value={editExpiresDays}
                     onChange={(v) => setEditExpiresDays(v)}
@@ -578,19 +576,19 @@ function LinkPopup({
                       { value: '14', label: '14 days' },
                       { value: '30', label: '30 days' },
                     ]}
-                    className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-md px-2.5 py-2 text-[11px] text-[#E8DCC8] focus:outline-none focus:border-[#8A7A5C]"
+                    className="w-full bg-[#090907] border border-[#2B2821] rounded-md px-2.5 py-2 text-[11px] text-[#F7EBDD] focus:outline-none focus:border-[#C9BCA8]"
                   />
                 </div>
                 <div>
-                  <label className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] mb-1 block">Downloads</label>
+                  <label className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] mb-1 block">Downloads</label>
                   <button
                     type="button"
                     onClick={() => setEditAllowDownloads((v) => !v)}
                     className={cn(
                       'w-full px-2.5 py-2 text-[11px] font-medium rounded-md border transition-colors flex items-center justify-center gap-1.5',
                       editAllowDownloads
-                        ? 'bg-[#2A2418] border-[#8A7A5C]/50 text-[#E8D8B8]'
-                        : 'bg-[#0a0907] border-[#1f1a13] text-[#5a5142] hover:border-[#2d2620]',
+                        ? 'bg-[#342F27] border-[#C9BCA8]/50 text-[#F3E6D1]'
+                        : 'bg-[#090907] border-[#2B2821] text-[#9B9282] hover:border-[#3B372F]',
                     )}
                   >
                     <Download size={11} />
@@ -600,15 +598,15 @@ function LinkPopup({
               </div>
 
               <div>
-                <label className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a] mb-1 flex items-center justify-between">
-                  <span>Password {link.password_hash && <span className="text-[#5a5142] normal-case">(currently set)</span>}</span>
+                <label className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] mb-1 flex items-center justify-between">
+                  <span>Password {link.password_hash && <span className="text-[#9B9282] normal-case">(currently set)</span>}</span>
                   {link.password_hash && (
                     <button
                       type="button"
                       onClick={() => setEditClearPassword((v) => !v)}
                       className={cn(
                         'text-[9px] uppercase tracking-wider transition-colors',
-                        editClearPassword ? 'text-red-400' : 'text-[#6a5d4a] hover:text-red-400',
+                        editClearPassword ? 'text-red-400' : 'text-[#B4AA99] hover:text-red-400',
                       )}
                     >
                       {editClearPassword ? 'Will clear' : 'Clear it'}
@@ -621,7 +619,7 @@ function LinkPopup({
                   onChange={(e) => setEditPassword(e.target.value)}
                   disabled={editClearPassword}
                   placeholder={link.password_hash ? '••••••' : 'No password'}
-                  className="w-full bg-[#0a0907] border border-[#1f1a13] rounded-md px-2.5 py-2 text-[11px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#8A7A5C] disabled:opacity-40"
+                  className="w-full bg-[#090907] border border-[#2B2821] rounded-md px-2.5 py-2 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] disabled:opacity-40"
                 />
               </div>
 
@@ -629,14 +627,14 @@ function LinkPopup({
                 <button
                   onClick={handleSave}
                   disabled={savingEdit}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-[#D4BFA0] hover:bg-[#E8D8B8] disabled:opacity-40 text-black text-[11px] font-bold uppercase tracking-wider transition-colors"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-[#E7D7BE] hover:bg-[#F3E6D1] disabled:opacity-40 text-black text-[11px] font-bold uppercase tracking-wider transition-colors"
                 >
                   {savingEdit ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
                   Save
                 </button>
                 <button
                   onClick={() => { setEditing(false); setEditPassword(''); setEditClearPassword(false); }}
-                  className="px-4 py-2.5 rounded-md border border-[#1f1a13] hover:border-[#2d2620] text-[#6a5d4a] hover:text-white text-[11px] uppercase tracking-wider transition-colors"
+                  className="px-4 py-2.5 rounded-md border border-[#2B2821] hover:border-[#3B372F] text-[#B4AA99] hover:text-white text-[11px] uppercase tracking-wider transition-colors"
                 >
                   Cancel
                 </button>
@@ -649,14 +647,14 @@ function LinkPopup({
           <div className="flex items-center gap-2 mb-3">
             <button
               onClick={() => onCopy(link.token)}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#E8DCC8] active:scale-[0.98] transition-all"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#F7EBDD] active:scale-[0.98] transition-all"
             >
               {copied ? <Check size={13} /> : <Copy size={13} />}
               {copied ? 'Copied' : 'Copy link'}
             </button>
             <button
               onClick={() => onShare(link)}
-              className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#E8DCC8] text-[12px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors flex items-center gap-2"
+              className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#F7EBDD] text-[12px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors flex items-center gap-2"
             >
               <Share2 size={13} />
               <span className="hidden sm:inline">Share</span>
@@ -670,21 +668,21 @@ function LinkPopup({
               href={`/share/${link.token}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-[11px] text-[#a08a6a] hover:text-white transition-colors px-2 py-1"
+              className="inline-flex items-center gap-1.5 text-[11px] text-[#D0C3AF] hover:text-white transition-colors px-2 py-1"
             >
               <ExternalLink size={11} />
               Open
             </a>
             <button
               onClick={() => setEditing((v) => !v)}
-              className="inline-flex items-center gap-1.5 text-[11px] text-[#a08a6a] hover:text-white transition-colors px-2 py-1"
+              className="inline-flex items-center gap-1.5 text-[11px] text-[#D0C3AF] hover:text-white transition-colors px-2 py-1"
             >
               <Pencil size={11} />
               {editing ? 'Close edit' : 'Edit'}
             </button>
             <button
               onClick={() => onDelete(link.token)}
-              className="inline-flex items-center gap-1.5 text-[11px] text-[#6a5d4a] hover:text-red-400 transition-colors px-2 py-1"
+              className="inline-flex items-center gap-1.5 text-[11px] text-[#B4AA99] hover:text-red-400 transition-colors px-2 py-1"
             >
               <Trash2 size={11} />
               Delete
@@ -703,8 +701,8 @@ function LinkPopup({
 function FlagChip({ icon, label, tone }: { icon?: React.ReactNode; label: string; tone?: 'warn' | 'danger' }) {
   const cls =
     tone === 'danger' ? 'text-red-400 border-red-500/30' :
-    tone === 'warn' ? 'text-[#E8D8B8] border-[#8A7A5C]/30' :
-    'text-[#a08a6a] border-[#2d2620]';
+    tone === 'warn' ? 'text-[#F3E6D1] border-[#C9BCA8]/30' :
+    'text-[#D0C3AF] border-[#3B372F]';
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border ${cls}`}>
       {icon}

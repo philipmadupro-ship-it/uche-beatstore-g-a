@@ -6,10 +6,11 @@
  */
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { PageContainer } from '@/components/layout/PageHeader';
 import {
-  Loader2, Music, Search, Sparkles, Play, Shuffle, Disc3, LayoutList, LayoutGrid,
-  SlidersHorizontal, Store, FolderOpen, ListMusic, Users, BarChart2,
-  ShoppingBag, ArrowRight, AlertCircle, TrendingUp, DollarSign,
+  Loader2, Music, Search, Sparkles, Shuffle, Disc3, LayoutList, LayoutGrid,
+  SlidersHorizontal, Store, FolderOpen, ListMusic, BarChart2,
+  ShoppingBag, ArrowRight, AlertCircle,
   Upload, Rocket, ChevronLeft, ChevronRight, ChevronDown, X, Package, Tag,
 } from 'lucide-react';
 import { PlayGlyph } from '@/components/player/TransportIcons';
@@ -17,7 +18,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_HOME_ROWS, type HomeRowConfig } from '@/lib/dashboard/home-config';
-import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { usePlayer } from '@/hooks/usePlayer';
 import { DropZone } from '@/components/upload/DropZone';
 import { TrackCard } from '@/components/tracks/TrackCard';
@@ -26,6 +26,7 @@ import { Track } from '@/lib/types';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { Drawer } from '@/components/ui/Drawer';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { listCached } from '@/lib/offline/audio-cache';
 import { TrackGridCard } from '@/components/tracks/TrackGridCard';
@@ -107,6 +108,7 @@ export default function LibraryPage() {
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [shareTarget, setShareTarget] = useState<Track | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid' | 'portfolio'>('list');
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<LibraryFilters>(() => ({
     ...DEFAULT_FILTERS,
@@ -163,7 +165,23 @@ export default function LibraryPage() {
     const saved = localStorage.getItem('library-view') as 'list' | 'grid' | 'portfolio' | null;
     if (saved === 'list' || saved === 'grid' || saved === 'portfolio') setViewMode(saved);
   }, []);
-  useEffect(() => { localStorage.setItem('library-view', viewMode); }, [viewMode]);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 639px)');
+    const sync = () => {
+      const mobile = media.matches;
+      setIsMobileViewport(mobile);
+      if (mobile) {
+        setViewMode('list');
+        setBrowseMode('all');
+      }
+    };
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
+  useEffect(() => {
+    if (!isMobileViewport) localStorage.setItem('library-view', viewMode);
+  }, [isMobileViewport, viewMode]);
   const { setTrack, setQueue, currentTrack, isPlaying, history } = usePlayer();
   const router = useRouter();
 
@@ -689,7 +707,10 @@ export default function LibraryPage() {
   // Portfolio is an immersive full-bleed mode — early-return replaces
   // the entire library page chrome with just MusicPortfolio (which
   // exposes its own onExit chip to come back to list view).
-  if (viewMode === 'portfolio') {
+  const effectiveViewMode = isMobileViewport ? 'list' : viewMode;
+  const effectiveBrowseMode = isMobileViewport ? 'all' : browseMode;
+
+  if (effectiveViewMode === 'portfolio') {
     return (
       <DashboardLayout>
         <MusicPortfolio
@@ -714,7 +735,7 @@ export default function LibraryPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-10">
+      <PageContainer className="md:pt-10">
         {/* Hero — gradient panel with the library "cover" tile, title,
             stats, and the two primary actions (Play / Shuffle). Builds on
             the same gradient + glass language as the project detail
@@ -737,12 +758,12 @@ export default function LibraryPage() {
 
           <div className="relative z-10 flex items-end gap-5 md:gap-7 p-5 sm:p-7">
             {/* Square cover tile — like Spotify playlist header */}
-            <div className={`w-[100px] h-[100px] sm:w-[132px] sm:h-[132px] rounded-2xl overflow-hidden shrink-0 shadow-[0_16px_40px_rgba(0,0,0,0.7)] border border-white/[0.08] bg-[#14110d] transition-all duration-500 ${isPlaying ? 'ring-2 ring-white/20' : ''}`}>
+            <div className={`w-[100px] h-[100px] sm:w-[132px] sm:h-[132px] rounded-2xl overflow-hidden shrink-0 shadow-[0_16px_40px_rgba(0,0,0,0.7)] border border-white/[0.08] bg-[#171511] transition-all duration-500 ${isPlaying ? 'ring-2 ring-white/20' : ''}`}>
               {heroCoverUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={heroCoverUrl} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#D4BFA0]/20 to-[#1a1a3a]/30">
+                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#E7D7BE]/20 to-[#1a1a3a]/30">
                   <Disc3 size={36} className={`text-white/30 ${isPlaying ? 'animate-[spin_6s_linear_infinite]' : ''}`} strokeWidth={0.75} />
                 </div>
               )}
@@ -760,21 +781,21 @@ export default function LibraryPage() {
                   ? [currentTrack.bpm && `${currentTrack.bpm} BPM`, currentTrack.key && `${currentTrack.key}${currentTrack.scale === 'minor' ? 'm' : ''}`].filter(Boolean).join(' · ')
                   : `${tracks.length} track${tracks.length !== 1 ? 's' : ''}${totalDurationLabel ? ` · ${totalDurationLabel}` : ''}`}
               </p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <button onClick={playAll} disabled={!filtered.length} className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white text-black text-[12px] font-bold hover:bg-[#E8DCC8] active:scale-[0.98] disabled:opacity-40 transition-all shadow-lg">
-                  <PlayGlyph size={14} className="ml-0.5" />
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <button onClick={playAll} disabled={!filtered.length} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-6 sm:py-2.5 rounded-full bg-white text-black text-[10px] sm:text-[12px] font-bold hover:bg-[#F7EBDD] active:scale-[0.98] disabled:opacity-40 transition-all shadow-lg">
+                  <PlayGlyph size={12} className="ml-0.5 sm:size-[14px]" />
                   Play all
                 </button>
-                <button onClick={shuffleAll} disabled={!filtered.length} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/[0.10] border border-white/[0.12] text-[#E8DCC8] text-[12px] font-medium hover:bg-white/[0.18] disabled:opacity-40 transition-colors backdrop-blur-sm">
-                  <Shuffle size={12} />
+                <button onClick={shuffleAll} disabled={!filtered.length} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full bg-white/[0.10] border border-white/[0.12] text-[#F7EBDD] text-[10px] sm:text-[12px] font-medium hover:bg-white/[0.18] disabled:opacity-40 transition-colors backdrop-blur-sm">
+                  <Shuffle size={11} className="sm:size-3" />
                   Shuffle
                 </button>
                 {stale.length > 0 && (
-                  <button onClick={runBulkAnalyze} disabled={!!bulkAnalyzing} className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-white/60 text-[12px] font-medium hover:bg-white/[0.12] disabled:opacity-40 transition-colors">
+                  <button onClick={runBulkAnalyze} disabled={!!bulkAnalyzing} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-white/60 text-[10px] sm:text-[12px] font-medium hover:bg-white/[0.12] disabled:opacity-40 transition-colors">
                     {bulkAnalyzing ? <><Loader2 size={11} className="animate-spin" /><span>{bulkAnalyzing.done}/{bulkAnalyzing.total}</span></> : <><Sparkles size={11} /><span>Analyze {stale.length}</span></>}
                   </button>
                 )}
-                <button onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }} className={`text-[11px] font-medium px-4 py-2.5 rounded-full transition-colors ml-auto backdrop-blur-sm ${selectMode ? 'bg-white/[0.15] border border-white/[0.20] text-white' : 'bg-white/[0.06] border border-white/[0.08] text-white/50 hover:text-white'}`}>
+                <button onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }} className={`text-[10px] sm:text-[11px] font-medium px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full transition-colors sm:ml-auto backdrop-blur-sm ${selectMode ? 'bg-white/[0.15] border border-white/[0.20] text-white' : 'bg-white/[0.06] border border-white/[0.08] text-white/50 hover:text-white'}`}>
                   {selectMode ? 'Done' : 'Select'}
                 </button>
               </div>
@@ -784,17 +805,17 @@ export default function LibraryPage() {
 
         {/* ── Quick actions ──────────────────────────────────────── */}
         <div className="flex items-center gap-2 mb-5 flex-wrap">
-          <button onClick={() => window.scrollTo({ top: 9999, behavior: 'smooth' })} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#14110d] border border-[#1f1a13] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] hover:bg-[#18140f] transition-all">
+          <button onClick={() => window.scrollTo({ top: 9999, behavior: 'smooth' })} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#171511] border border-[#2B2821] text-[11px] font-medium text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F] hover:bg-[#18140f] transition-all">
             <Upload size={13} />Upload beat
           </button>
 
           {/* New Release — split button with dropdown */}
           <div className="relative">
-            <div className="flex items-center rounded-full overflow-hidden bg-[#D4BFA0] text-black shadow-sm">
+            <div className="flex items-center rounded-full overflow-hidden bg-[#E7D7BE] text-black shadow-sm">
               <button
                 onClick={() => handleNewRelease('both')}
                 disabled={creatingRelease}
-                className="flex items-center gap-1.5 pl-3.5 pr-2.5 py-2 text-[11px] font-bold hover:bg-[#E8D8B8] transition-colors disabled:opacity-60"
+                className="flex items-center gap-1.5 pl-3.5 pr-2.5 py-2 text-[11px] font-bold hover:bg-[#F3E6D1] transition-colors disabled:opacity-60"
               >
                 {creatingRelease ? <Loader2 size={13} className="animate-spin" /> : <Rocket size={13} />}
                 New release
@@ -802,7 +823,7 @@ export default function LibraryPage() {
               <div className="w-px h-4 bg-black/20" />
               <button
                 onClick={() => setReleaseDropdownOpen((v) => !v)}
-                className="px-2 py-2 hover:bg-[#E8D8B8] transition-colors"
+                className="px-2 py-2 hover:bg-[#F3E6D1] transition-colors"
                 aria-label="Release options"
               >
                 <ChevronDown size={12} />
@@ -811,7 +832,7 @@ export default function LibraryPage() {
             {releaseDropdownOpen && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setReleaseDropdownOpen(false)} />
-                <div className="absolute left-0 top-full mt-1.5 z-40 w-48 bg-[#14110d] border border-[#1f1a13] rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="absolute left-0 top-full mt-1.5 z-40 w-48 bg-[#171511] border border-[#2B2821] rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
                   {[
                     { mode: 'both' as const, label: 'Project + Playlist', sub: 'Full release flow' },
                     { mode: 'project' as const, label: 'Project only', sub: 'Production session' },
@@ -820,26 +841,16 @@ export default function LibraryPage() {
                     <button
                       key={mode}
                       onClick={() => handleNewRelease(mode)}
-                      className="w-full flex flex-col items-start px-4 py-3 text-left hover:bg-[#1a160f] transition-colors border-b border-[#1a160f] last:border-0"
+                      className="w-full flex flex-col items-start px-4 py-3 text-left hover:bg-[#211F1A] transition-colors border-b border-[#211F1A] last:border-0"
                     >
-                      <span className="text-[12px] font-medium text-[#E8DCC8]">{label}</span>
-                      <span className="text-[9px] font-mono text-[#5a5142] mt-0.5">{sub}</span>
+                      <span className="text-[12px] font-medium text-[#F7EBDD]">{label}</span>
+                      <span className="text-[9px] font-mono text-[#9B9282] mt-0.5">{sub}</span>
                     </button>
                   ))}
                 </div>
               </>
             )}
           </div>
-
-          {[
-            { label: 'Store editor', icon: <Store size={13} />, href: '/store-editor' },
-            { label: 'View sales',   icon: <ShoppingBag size={13} />, href: '/sales' },
-            { label: 'Analytics',    icon: <BarChart2 size={13} />,   href: '/analytics' },
-          ].map(({ label, icon, href }) => (
-            <Link key={label} href={href} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#14110d] border border-[#1f1a13] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] hover:bg-[#18140f] transition-all">
-              {icon}{label}
-            </Link>
-          ))}
         </div>
 
         {/* ── Dashboard — Spotify-style home content ────────────── */}
@@ -861,7 +872,7 @@ export default function LibraryPage() {
                 label: 'Projects',
                 sub: 'Sessions',
                 icon: <FolderOpen size={15} />,
-                accent: '#D4BFA0',
+                accent: '#E7D7BE',
                 cover: tracks.filter((t: any) => t.cover_url)[1]?.cover_url ?? null,
               },
               {
@@ -877,11 +888,11 @@ export default function LibraryPage() {
                 label: 'Analytics',
                 sub: analyticsStats ? `${analyticsStats.plays} plays` : 'Engagement',
                 icon: <BarChart2 size={15} />,
-                accent: '#c8a84b',
+                accent: '#D6BE7A',
                 cover: tracks.filter((t: any) => t.cover_url)[3]?.cover_url ?? null,
               },
             ] as const).map(({ href, label, sub, icon, accent, cover }) => (
-              <Link key={href} href={href} className="group relative flex items-center gap-0 rounded-xl border border-[#1f1a13] bg-[#14110d] hover:bg-[#1e1a14] overflow-hidden transition-all hover:border-[#2d2620] hover:shadow-xl">
+              <Link key={href} href={href} className="group relative flex items-center gap-0 rounded-xl border border-[#2B2821] bg-[#171511] hover:bg-[#1e1a14] overflow-hidden transition-all hover:border-[#3B372F] hover:shadow-xl">
                 {/* Square cover — left quarter of the card */}
                 <div className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 flex items-center justify-center overflow-hidden" style={{ backgroundColor: `${accent}18` }}>
                   {cover
@@ -890,8 +901,8 @@ export default function LibraryPage() {
                     : <span style={{ color: accent }}>{icon}</span>}
                 </div>
                 <div className="flex-1 min-w-0 px-3 py-3.5">
-                  <p className="text-[12px] font-bold text-[#E8DCC8] truncate leading-tight">{label}</p>
-                  <p className="text-[9px] font-mono text-[#5a5142] mt-0.5 truncate">{sub}</p>
+                  <p className="text-[12px] font-bold text-[#F7EBDD] truncate leading-tight">{label}</p>
+                  <p className="text-[9px] font-mono text-[#9B9282] mt-0.5 truncate">{sub}</p>
                 </div>
                 {/* Hover play dot */}
                 <div className="absolute right-2.5 bottom-2.5 w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100" style={{ backgroundColor: accent }}>
@@ -901,37 +912,10 @@ export default function LibraryPage() {
             ))}
           </div>
 
-          {/* Row B: Stats strip */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            {[
-              { label: 'Plays', value: analyticsStats != null ? String(analyticsStats.plays) : '—', icon: <TrendingUp size={12} />, color: 'text-[#a08a6a]' },
-              { label: 'Sales', value: analyticsStats != null ? String(analyticsStats.sales_count) : '—', icon: <ShoppingBag size={12} />, color: 'text-[#6DC6A4]' },
-              { label: 'Gross', value: analyticsStats != null ? `$${analyticsStats.gross_usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '—', icon: <DollarSign size={12} />, color: 'text-[#c8a84b]' },
-              { label: 'In store', value: String(listedTracks.length), icon: <Store size={12} />, color: 'text-[#9d95e8]' },
-            ].map(({ label, value, icon, color }) => (
-              <div key={label} className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-4 py-2.5 flex items-center gap-3">
-                <span className={color}>{icon}</span>
-                <div>
-                  <p className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142]">{label}</p>
-                  <p className="text-[16px] font-bold text-white tabular-nums leading-tight">{value}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Row C: Nav shortcuts + attention */}
-          <div className="flex flex-wrap gap-2 items-center">
-            {([
-              { href: '/playlists', label: 'Playlists', icon: <ListMusic size={12} /> },
-              { href: '/contacts', label: 'Contacts', icon: <Users size={12} /> },
-              { href: '/calendar', label: 'Calendar', icon: <TrendingUp size={12} /> },
-            ] as const).map(({ href, label, icon }) => (
-              <Link key={href} href={href} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#1f1a13] bg-[#14110d] text-[10px] font-mono text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all">
-                {icon}{label}<ArrowRight size={9} className="opacity-50" />
-              </Link>
-            ))}
+          {/* Attention stays surfaced without repeating dashboard navigation. */}
+          <div className="flex flex-wrap gap-2 items-center justify-end">
             {attentionCount > 0 && (
-              <Link href="/store-editor" className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#3a2f1f]/50 bg-[#1f1510]/60 text-[10px] font-mono text-[#c8a84b] hover:bg-[#241a0e]/80 transition-colors ml-auto">
+              <Link href="/store-editor" className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#3a2f1f]/50 bg-[#1f1510]/60 text-[10px] font-mono text-[#D6BE7A] hover:bg-[#241a0e]/80 transition-colors">
                 <AlertCircle size={11} className="shrink-0" />
                 {attentionCount} beat{attentionCount === 1 ? '' : 's'} need attention
               </Link>
@@ -942,57 +926,57 @@ export default function LibraryPage() {
         {/* ── Library section header + browse toggle ─────────────── */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Music size={13} className="text-[#5a5142]" />
-            <h2 className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#a08a6a]">Library</h2>
-            <span className="text-[9px] font-mono text-[#3a3328] tabular-nums">· {tracks.length}</span>
+            <Music size={13} className="text-[#9B9282]" />
+            <h2 className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF]">Library</h2>
+            <span className="text-[9px] font-mono text-[#6E685B] tabular-nums">· {tracks.length}</span>
           </div>
           {/* Browse mode toggle */}
-          <div className="flex items-center bg-white/[0.04] border border-white/[0.06] rounded-full p-0.5">
+          <div className="hidden sm:flex items-center bg-white/[0.04] border border-white/[0.06] rounded-full p-0.5">
             <button
               onClick={() => setBrowseMode('sections')}
-              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${browseMode === 'sections' ? 'bg-white text-black' : 'text-[#6a5d4a] hover:text-[#a08a6a]'}`}
+              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${effectiveBrowseMode === 'sections' ? 'bg-white text-black' : 'text-[#B4AA99] hover:text-[#D0C3AF]'}`}
             >Browse</button>
             <button
               onClick={() => setBrowseMode('all')}
-              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${browseMode === 'all' ? 'bg-white text-black' : 'text-[#6a5d4a] hover:text-[#a08a6a]'}`}
+              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${effectiveBrowseMode === 'all' ? 'bg-white text-black' : 'text-[#B4AA99] hover:text-[#D0C3AF]'}`}
             >All tracks</button>
           </div>
         </div>
 
         {/* ── Sections view (Browse mode) ────────────────────────── */}
-        {browseMode === 'sections' && !loading && (
+        {effectiveBrowseMode === 'sections' && !loading && (
           <div className="mb-6 space-y-1">
             {/* ── Home filter chips ────────────────────────────────── */}
-            <div className="flex items-center gap-2 flex-wrap mb-4 pb-3 border-b border-[#1a160f]">
-              <span className="text-[9px] font-mono uppercase tracking-wider text-[#3a3328] shrink-0">Filter rows:</span>
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto scrollbar-hide mb-4 pb-2">
+              <span className="hidden sm:inline text-[9px] font-mono uppercase tracking-wider text-[#6E685B] shrink-0">Filter rows:</span>
               {/* Genre chips */}
               {['Drill','Trap','R&B','Afrobeats','Amapiano','Hip-hop','Lo-fi'].map((g) => (
                 <button key={g} onClick={() => setHomeGenre(homeGenre === g ? null : g)}
-                  className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${
-                    homeGenre === g ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+                  className={`shrink-0 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-medium border transition-all ${
+                    homeGenre === g ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#3B372F]'
                   }`}>{g}</button>
               ))}
-              <div className="w-px h-4 bg-[#1f1a13] mx-1 shrink-0" />
+              <div className="w-px h-4 bg-[#2B2821] mx-1 shrink-0" />
               {/* State chips */}
               {[
                 { v: 'maq', l: 'MAQ', cls: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
-                { v: 'needs_work', l: 'WIP', cls: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]' },
+                { v: 'needs_work', l: 'WIP', cls: 'bg-[#1f1a0a] text-[#D6BE7A] border-[#3a2f1f]' },
                 { v: 'finished', l: 'Finished', cls: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
               ].map(({ v, l, cls }) => (
                 <button key={v} onClick={() => setHomeStatus(homeStatus === v ? null : v)}
-                  className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${homeStatus === v ? cls : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'}`}
+                  className={`shrink-0 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-medium border transition-all ${homeStatus === v ? cls : 'border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#3B372F]'}`}
                 >{l}</button>
               ))}
-              <div className="w-px h-4 bg-[#1f1a13] mx-1 shrink-0" />
+              <div className="w-px h-4 bg-[#2B2821] mx-1 shrink-0" />
               {/* Type chips */}
               {[{ v: 'beat', l: 'Beats' }, { v: 'instrumental', l: 'Instr.' }].map(({ v, l }) => (
                 <button key={v} onClick={() => setHomeType(homeType === v ? null : v)}
-                  className={`shrink-0 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${
-                    homeType === v ? 'bg-white text-black border-white' : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+                  className={`shrink-0 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-medium border transition-all ${
+                    homeType === v ? 'bg-white text-black border-white' : 'border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#3B372F]'
                   }`}>{l}</button>
               ))}
               {hasHomeFilters && (
-                <button onClick={clearHomeFilters} className="flex items-center gap-1 text-[9px] font-mono text-[#5a5142] hover:text-[#E8DCC8] transition-colors ml-auto">
+                <button onClick={clearHomeFilters} className="flex items-center gap-1 text-[9px] font-mono text-[#9B9282] hover:text-[#F7EBDD] transition-colors sm:ml-auto shrink-0">
                   <X size={10} />Clear
                 </button>
               )}
@@ -1011,7 +995,7 @@ export default function LibraryPage() {
                   currentTrackId={currentTrack?.id ?? null}
                   isPlaying={isPlaying}
                   onPlayTrack={(t) => { setTrack(t); setQueue(row.tracks); }}
-                  onOpenTrack={(t) => { setSelectedTrack(t); playTrack(t); }}
+                  onOpenTrack={(t) => setSelectedTrack(t)}
                   onSeeAll={() => setBrowseMode('all')}
                 />
               ))}
@@ -1026,7 +1010,7 @@ export default function LibraryPage() {
 
         {/* Filter chips — Beat and Instrumental are mutually exclusive
             single-type filters. "All" resets. Only shown in 'all' list view. */}
-        {browseMode === 'all' && (
+        {effectiveBrowseMode === 'all' && (
           <>
         <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
           {([
@@ -1039,10 +1023,10 @@ export default function LibraryPage() {
             <button
               key={value}
               onClick={() => { setOfflineOnly(false); setTypeFilter(value); }}
-              className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-colors ${
+              className={`shrink-0 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[10px] sm:text-[12px] font-medium transition-colors ${
                 typeFilter === value && !offlineOnly
                   ? 'bg-white text-black'
-                  : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-white hover:bg-white/[0.08]'
+                  : 'bg-white/[0.04] border border-white/[0.06] text-[#D0C3AF] hover:text-white hover:bg-white/[0.08]'
               }`}
             >{label}</button>
           ))}
@@ -1052,10 +1036,10 @@ export default function LibraryPage() {
               setOfflineOnly(true);
               refreshOfflineList();
             }}
-            className={`shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium capitalize transition-colors flex items-center gap-1.5 ${
+            className={`shrink-0 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[10px] sm:text-[12px] font-medium capitalize transition-colors flex items-center gap-1.5 ${
               offlineOnly
                 ? 'bg-[#7F77DD] text-white border border-[#7F77DD]/40 shadow-[0_0_8px_rgba(127,119,221,0.4)]'
-                : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-white hover:bg-white/[0.08]'
+                : 'bg-white/[0.04] border border-white/[0.06] text-[#D0C3AF] hover:text-white hover:bg-white/[0.08]'
             }`}
           >
             <span>Offline</span>
@@ -1074,12 +1058,12 @@ export default function LibraryPage() {
             as the identity row, and the toolbar is the actual control. */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-6">
           <div className="relative flex-1 min-w-[160px] sm:max-w-sm">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a4338]" />
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#837B6D]" />
             <input
               placeholder="Search tracks"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-white/[0.03] border border-white/[0.06] rounded-full pl-8 pr-3 py-2 text-[12px] text-[#E8DCC8] placeholder-[#4a4338] focus:outline-none focus:border-white/[0.12] transition-colors"
+              className="w-full bg-white/[0.03] border border-white/[0.06] rounded-full pl-8 pr-3 py-2 text-[12px] text-[#F7EBDD] placeholder-[#837B6D] focus:outline-none focus:border-white/[0.12] transition-colors"
             />
           </div>
           <div className="flex items-center gap-2 ml-auto">
@@ -1087,14 +1071,14 @@ export default function LibraryPage() {
               onClick={() => setShowFilters((v) => !v)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-medium transition-colors ${
                 showFilters || hasActiveFilters(filters)
-                  ? 'bg-[#2A2418] border border-[#8A7A5C]/40 text-[#E8D8B8]'
-                  : 'bg-white/[0.04] border border-white/[0.06] text-[#a08a6a] hover:text-[#E8DCC8] hover:bg-white/[0.08]'
+                  ? 'bg-[#342F27] border border-[#C9BCA8]/40 text-[#F3E6D1]'
+                  : 'bg-white/[0.04] border border-white/[0.06] text-[#D0C3AF] hover:text-[#F7EBDD] hover:bg-white/[0.08]'
               }`}
             >
               <SlidersHorizontal size={11} />
               Filters
               {hasActiveFilters(filters) && (
-                <span className="w-4 h-4 rounded-full bg-[#D4BFA0] text-black text-[8px] font-bold flex items-center justify-center leading-none">
+                <span className="w-4 h-4 rounded-full bg-[#E7D7BE] text-black text-[8px] font-bold flex items-center justify-center leading-none">
                   {activeFilterCount(filters)}
                 </span>
               )}
@@ -1106,11 +1090,11 @@ export default function LibraryPage() {
               label="Sort"
               aria-label="Sort tracks"
             />
-            <div className="flex items-center bg-white/[0.04] border border-white/[0.06] rounded-full p-0.5">
+            <div className="hidden sm:flex items-center bg-white/[0.04] border border-white/[0.06] rounded-full p-0.5">
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-1.5 rounded-full transition-colors ${
-                  viewMode === 'list' ? 'bg-white text-black' : 'text-[#6a5d4a] hover:text-[#a08a6a]'
+                  effectiveViewMode === 'list' ? 'bg-white text-black' : 'text-[#B4AA99] hover:text-[#D0C3AF]'
                 }`}
                 title="List view"
               >
@@ -1119,7 +1103,7 @@ export default function LibraryPage() {
               <button
                 onClick={() => setViewMode('grid')}
                 className={`p-1.5 rounded-full transition-colors ${
-                  viewMode === 'grid' ? 'bg-white text-black' : 'text-[#6a5d4a] hover:text-[#a08a6a]'
+                  effectiveViewMode === 'grid' ? 'bg-white text-black' : 'text-[#B4AA99] hover:text-[#D0C3AF]'
                 }`}
                 title="Grid view"
               >
@@ -1127,7 +1111,7 @@ export default function LibraryPage() {
               </button>
               <button
                 onClick={() => setViewMode('portfolio')}
-                className="p-1.5 rounded-full transition-colors text-[#6a5d4a] hover:text-[#a08a6a]"
+                className="p-1.5 rounded-full transition-colors text-[#B4AA99] hover:text-[#D0C3AF]"
                 title="Portfolio view"
               >
                 <Disc3 size={13} />
@@ -1136,17 +1120,27 @@ export default function LibraryPage() {
           </div>
         </div>
 
-        {showFilters && (
+        {showFilters && !isMobileViewport && (
           <FilterBar filters={filters} onChange={setFilters} />
         )}
+        <Drawer
+          open={showFilters && isMobileViewport}
+          onClose={() => setShowFilters(false)}
+          side="bottom"
+          title="Library filters"
+          description={`${filtered.length} track${filtered.length === 1 ? '' : 's'} shown`}
+          contentClassName="pb-8"
+        >
+          <FilterBar filters={filters} onChange={setFilters} embedded />
+        </Drawer>
 
         {/* ── Smart playlists — saved auto-updating filter views ──── */}
         {(smartPlaylists.length > 0 || hasActiveFilters(filters)) && (
           <div className="flex items-center gap-2 flex-wrap mb-4">
-            <span className="text-[9px] font-mono uppercase tracking-wider text-[#3a3328] shrink-0">Smart playlists:</span>
+            <span className="text-[9px] font-mono uppercase tracking-wider text-[#6E685B] shrink-0">Smart playlists:</span>
             {smartPlaylists.map((sp) => (
               <span key={sp.id} className={`group inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-[10px] font-medium border transition-all ${
-                activeSmartId === sp.id ? 'bg-[#D4BFA0] text-black border-[#D4BFA0]' : 'border-[#1f1a13] text-[#6a5d4a] hover:text-[#E8DCC8] hover:border-[#2d2620]'
+                activeSmartId === sp.id ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#3B372F]'
               }`}>
                 <button onClick={() => applySmartPlaylist(sp)} className="flex items-center gap-1.5">
                   <Sparkles size={9} />{sp.name}
@@ -1157,7 +1151,7 @@ export default function LibraryPage() {
               </span>
             ))}
             {hasActiveFilters(filters) && (
-              <button onClick={saveSmartPlaylist} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium border border-dashed border-[#2d2620] text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#3a3328] transition-all">
+              <button onClick={saveSmartPlaylist} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-medium border border-dashed border-[#3B372F] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#6E685B] transition-all">
                 <Sparkles size={9} />Save current filter
               </button>
             )}
@@ -1171,51 +1165,53 @@ export default function LibraryPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 size={18} className="animate-spin text-[#4a4338]" />
+            <Loader2 size={18} className="animate-spin text-[#837B6D]" />
           </div>
         ) : fetchError ? (
           <div className="text-center py-16">
             <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-red-950/30 border border-red-900/40 flex items-center justify-center">
               <Music size={22} className="text-red-400" />
             </div>
-            <p className="text-sm text-[#E8DCC8] mb-1">Couldn&apos;t load your library</p>
+            <p className="text-sm text-[#F7EBDD] mb-1">Couldn&apos;t load your library</p>
             <p className="text-[11px] text-red-400 max-w-md mx-auto mb-4">{fetchError}</p>
             <button
               onClick={fetchTracks}
-              className="text-[11px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-md border border-[#1a160f] bg-[#14110d] text-[#E8DCC8] hover:border-[#2d2620]"
+              className="text-[11px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-md border border-[#211F1A] bg-[#171511] text-[#F7EBDD] hover:border-[#3B372F]"
             >
               Retry
             </button>
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-16">
-            <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-[#14110d] border border-[#1a160f] flex items-center justify-center">
-              <Music size={22} className="text-[#3a3328]" />
+            <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-[#171511] border border-[#211F1A] flex items-center justify-center">
+              <Music size={22} className="text-[#6E685B]" />
             </div>
-            <p className="text-sm text-[#E8DCC8] mb-1">
+            <p className="text-sm text-[#F7EBDD] mb-1">
               {tracks.length === 0 ? 'No tracks yet' : 'No matches'}
             </p>
-            <p className="text-[11px] text-[#5a5142]">
+            <p className="text-[11px] text-[#9B9282]">
               {tracks.length === 0
                 ? 'Upload above to start building your Vault'
                 : 'Try a different search or filter'}
             </p>
           </div>
-        ) : viewMode === 'list' ? (
-          <div className="border-t border-[#161310] border-b mb-32">
+        ) : effectiveViewMode === 'list' ? (
+          <div className="mb-32 space-y-1.5">
             {sortMode === 'store_order' && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-[#0e0c09] border-b border-[#1a160f]">
-                <Store size={10} className="text-[#D4BFA0]" />
-                <span className="text-[9px] font-mono uppercase tracking-wider text-[#6a5d4a]">
+              <div className="mb-2 flex items-center gap-2 rounded-xl bg-[#0e0c09] px-4 py-2">
+                <Store size={10} className="text-[#E7D7BE]" />
+                <span className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99]">
                   Store order — use ↑↓ to rearrange how beats appear on your public store
                 </span>
               </div>
             )}
-            {/* Column header — grid must match TrackCard's col template */}
-            <div className="grid grid-cols-[32px_32px_1fr_90px_32px] sm:grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_110px_32px] lg:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_100px_110px_32px] items-center gap-4 px-4 h-9 border-b border-[#161310] text-[9px] font-mono uppercase tracking-wider">
-              <span className="text-center flex items-center justify-center text-[#3a3328]">
+            {/* Header mirrors the Store list product row rather than the
+                old table grid: cover/play, title/meta, vibe, time,
+                rating/offline, actions. */}
+            <div className="hidden md:grid md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_70px_112px_32px] items-center gap-4 px-3 h-8 text-[9px] font-mono uppercase tracking-wider">
+              <span className="text-center flex items-center justify-center text-[#6E685B]">
                 {sortMode === 'store_order' ? (
-                  <Store size={10} className="text-[#D4BFA0]" />
+                  <Store size={10} className="text-[#E7D7BE]" />
                 ) : selectMode ? (
                   <button
                     type="button"
@@ -1233,8 +1229,8 @@ export default function LibraryPage() {
                     }}
                     className={`w-4 h-4 rounded flex items-center justify-center transition-colors cursor-pointer border ${
                       filtered.length > 0 && filtered.every((t: any) => selectedIds.has(t.id))
-                        ? 'bg-[#D4BFA0] border-[#E8D8B8]'
-                        : 'border-[#2d2620] hover:border-[#4a4338]'
+                        ? 'bg-[#E7D7BE] border-[#F3E6D1]'
+                        : 'border-[#3B372F] hover:border-[#837B6D]'
                     }`}
                   >
                     {filtered.length > 0 && filtered.every((t: any) => selectedIds.has(t.id)) && (
@@ -1242,29 +1238,26 @@ export default function LibraryPage() {
                     )}
                   </button>
                 ) : (
-                  '#'
+                  ''
                 )}
               </span>
-              <span />
               {/* Clickable sort headers */}
               {(
                 [
                   { label: 'Title', sort: 'title' as SortMode, always: true },
-                  { label: 'Type', sort: null, always: false, cls: 'hidden sm:block' },
-                  { label: 'BPM · Key', sort: sortMode === 'bpm' ? 'bpm-desc' as SortMode : 'bpm' as SortMode, always: true, activeSort: sortMode === 'bpm' || sortMode === 'bpm-desc' },
-                  { label: 'Added', sort: 'recent' as SortMode, always: false, cls: 'hidden sm:block' },
-                  { label: '★', sort: 'rating' as SortMode, always: false, cls: 'hidden sm:block text-right' },
-                  { label: 'Tags', sort: null, always: false, cls: 'hidden lg:block' },
+                  { label: 'Tags · Rating', sort: null, always: false, cls: 'hidden md:block' },
+                  { label: 'Time', sort: 'recent' as SortMode, always: false, cls: 'hidden md:flex justify-end' },
+                  { label: 'State', sort: 'rating' as SortMode, always: false, cls: 'hidden md:flex justify-end', activeSort: sortMode === 'rating' },
                 ] as Array<{ label: string; sort: SortMode | null; always: boolean; cls?: string; activeSort?: boolean }>
               ).map(({ label, sort, cls, activeSort }) => {
                 const isActive = activeSort ?? (sort != null && sortMode === sort);
-                if (!sort) return <span key={label} className={`${cls ?? ''} text-[#3a3328]`}>{label}</span>;
+                if (!sort) return <span key={label} className={`${cls ?? ''} text-[#6E685B]`}>{label}</span>;
                 return (
                   <button
                     key={label}
                     onClick={() => setSortMode(sort)}
-                    className={`flex items-center gap-1 transition-colors hover:text-[#E8DCC8] ${cls ?? ''} ${
-                      isActive ? 'text-[#D4BFA0]' : 'text-[#3a3328]'
+                    className={`flex items-center gap-1 transition-colors hover:text-[#F7EBDD] ${cls ?? ''} ${
+                      isActive ? 'text-[#E7D7BE]' : 'text-[#6E685B]'
                     }`}
                   >
                     {label}
@@ -1283,7 +1276,7 @@ export default function LibraryPage() {
                   key={t.id}
                   track={t}
                   index={absIdx + 1}
-                  onClickDetails={(track) => { setSelectedTrack(track); playTrack(track); }}
+                  onClickDetails={(track) => setSelectedTrack(track)}
                   onPlayClick={() => playTrack(t)}
                   onDelete={(track) => handleDeleteTrack(track)}
                   onShare={(track) => setShareTarget(track)}
@@ -1310,7 +1303,7 @@ export default function LibraryPage() {
               <TrackGridCard
                 key={t.id}
                 track={t}
-                onClickDetails={(track) => { setSelectedTrack(track); playTrack(track); }}
+                onClickDetails={(track) => setSelectedTrack(track)}
                 onPlayClick={() => playTrack(t)}
                 onDelete={(track) => handleDeleteTrack(track)}
                 onShare={(track) => setShareTarget(track)}
@@ -1327,12 +1320,12 @@ export default function LibraryPage() {
         )}
 
         {/* ── Pagination controls (all view) ─────────────────────── */}
-        {browseMode === 'all' && totalPages > 1 && (
-          <div className="flex items-center justify-between py-4 mb-24 border-t border-[#1a160f]">
+        {effectiveBrowseMode === 'all' && totalPages > 1 && (
+          <div className="flex items-center justify-between py-4 mb-24">
             <button
               onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
               disabled={currentPage === 0}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-[#1f1a13] bg-[#14110d] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-[#2B2821] bg-[#171511] text-[11px] font-medium text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               <ChevronLeft size={13} /> Previous
             </button>
@@ -1348,7 +1341,7 @@ export default function LibraryPage() {
                     className={`w-7 h-7 rounded-full text-[11px] font-mono tabular-nums transition-colors ${
                       page === currentPage
                         ? 'bg-white text-black font-bold'
-                        : 'text-[#6a5d4a] hover:text-[#E8DCC8] hover:bg-white/[0.06]'
+                        : 'text-[#B4AA99] hover:text-[#F7EBDD] hover:bg-white/[0.06]'
                     }`}
                   >{page + 1}</button>
                 );
@@ -1357,7 +1350,7 @@ export default function LibraryPage() {
             <button
               onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={currentPage >= totalPages - 1}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-[#1f1a13] bg-[#14110d] text-[11px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-[#2B2821] bg-[#171511] text-[11px] font-medium text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               Next <ChevronRight size={13} />
             </button>
@@ -1366,7 +1359,7 @@ export default function LibraryPage() {
 
         </>
         )}{/* end browseMode === 'all' */}
-      </div>
+      </PageContainer>
 
       {selectedTrack && (
         <TrackDetailsDrawer
@@ -1442,19 +1435,19 @@ export default function LibraryPage() {
       {/* Bulk edit popover */}
       {bulkEditOpen && selectedIds.size > 0 && (
         <div className="fixed bottom-44 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-2 fade-in duration-200">
-          <div className="bg-[#14110d] border border-[#1f1a13] rounded-2xl shadow-2xl p-4 w-72 space-y-3">
-            <p className="text-[10px] font-mono uppercase tracking-wider text-[#5a5142]">
+          <div className="bg-[#171511] border border-[#2B2821] rounded-2xl shadow-2xl p-4 w-72 space-y-3">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">
               Edit {selectedIds.size} track{selectedIds.size === 1 ? '' : 's'}
             </p>
             {/* Batch status */}
             <div>
-              <p className="text-[9px] font-mono uppercase tracking-wider text-[#3a3328] mb-1.5">Set status</p>
+              <p className="text-[9px] font-mono uppercase tracking-wider text-[#6E685B] mb-1.5">Set status</p>
               <div className="flex flex-wrap gap-1.5">
                 {[
                   { v: 'maq', l: 'MAQ', cls: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
-                  { v: 'needs_work', l: 'WIP', cls: 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]' },
+                  { v: 'needs_work', l: 'WIP', cls: 'bg-[#1f1a0a] text-[#D6BE7A] border-[#3a2f1f]' },
                   { v: 'finished', l: 'Finished', cls: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
-                  { v: 'archived', l: 'Archived', cls: 'bg-[#16130e] text-[#6a5d4a] border-[#1f1a13]' },
+                  { v: 'archived', l: 'Archived', cls: 'bg-[#1A1813] text-[#B4AA99] border-[#2B2821]' },
                 ].map(({ v, l, cls }) => (
                   <button
                     key={v}
@@ -1493,7 +1486,7 @@ export default function LibraryPage() {
                     await fetchTracks();
                     toast.success(`${val ? 'Listed' : 'Unlisted'} ${ids.length} track${ids.length === 1 ? '' : 's'}`);
                   }}
-                  className="flex-1 px-3 py-1.5 rounded-lg border border-[#1f1a13] bg-[#0a0907] text-[10px] font-medium text-[#a08a6a] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all disabled:opacity-40"
+                  className="flex-1 px-3 py-1.5 rounded-lg border border-[#2B2821] bg-[#090907] text-[10px] font-medium text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F] transition-all disabled:opacity-40"
                 >{label}</button>
               ))}
             </div>
@@ -1512,10 +1505,10 @@ export default function LibraryPage() {
 
       {smartNameOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => !savingSmart && setSmartNameOpen(false)}>
-          <div className="w-full max-w-sm rounded-2xl border border-[#1f1a13] bg-[#0e0c08] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#D4BFA0]">Smart playlist</p>
-            <h3 className="text-[15px] font-bold text-[#E8DCC8] mt-1 mb-1">Save current filters</h3>
-            <p className="text-[11px] text-[#6a5d4a] mb-4">Auto-updates as new tracks match these filters.</p>
+          <div className="w-full max-w-sm rounded-2xl border border-[#2B2821] bg-[#11100D] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#E7D7BE]">Smart playlist</p>
+            <h3 className="text-[15px] font-bold text-[#F7EBDD] mt-1 mb-1">Save current filters</h3>
+            <p className="text-[11px] text-[#B4AA99] mb-4">Auto-updates as new tracks match these filters.</p>
             <input
               autoFocus
               value={smartNameDraft}
@@ -1523,11 +1516,11 @@ export default function LibraryPage() {
               onKeyDown={(e) => { if (e.key === 'Enter' && smartNameDraft.trim()) confirmSaveSmartPlaylist(); }}
               placeholder='e.g. "Finished Drill 140+"'
               maxLength={120}
-              className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-3 py-2.5 text-[13px] text-[#E8DCC8] placeholder:text-[#3a3328] focus:outline-none focus:border-[#2d2620] mb-4"
+              className="w-full bg-[#171511] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[13px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] mb-4"
             />
             <div className="flex items-center gap-2 justify-end">
-              <button onClick={() => setSmartNameOpen(false)} disabled={savingSmart} className="px-3 py-2 rounded-lg text-[11px] font-mono uppercase tracking-wider text-[#6a5d4a] hover:text-[#E8DCC8] transition-colors disabled:opacity-40">Cancel</button>
-              <button onClick={confirmSaveSmartPlaylist} disabled={!smartNameDraft.trim() || savingSmart} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-[#D4BFA0] text-black hover:bg-[#E8D8B8] transition-colors disabled:opacity-40">
+              <button onClick={() => setSmartNameOpen(false)} disabled={savingSmart} className="px-3 py-2 rounded-lg text-[11px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F7EBDD] transition-colors disabled:opacity-40">Cancel</button>
+              <button onClick={confirmSaveSmartPlaylist} disabled={!smartNameDraft.trim() || savingSmart} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-[#E7D7BE] text-black hover:bg-[#F3E6D1] transition-colors disabled:opacity-40">
                 {savingSmart ? <Loader2 size={12} className="animate-spin" /> : null}Save
               </button>
             </div>
@@ -1567,17 +1560,17 @@ function MiniTrackCard({
       onClick={onOpen}
     >
       {/* Cover art + overlays */}
-      <div className={`relative w-full aspect-square rounded-xl overflow-hidden bg-[#14110d] border mb-2 transition-all ${isCurrent ? 'border-[#D4BFA0]/60 ring-1 ring-[#D4BFA0]/30' : 'border-[#1f1a13] group-hover:border-[#2d2620]'}`}>
+      <div className={`relative w-full aspect-square rounded-xl overflow-hidden bg-[#171511] border mb-2 transition-all ${isCurrent ? 'border-[#E7D7BE]/60 ring-1 ring-[#E7D7BE]/30' : 'border-[#2B2821] group-hover:border-[#3B372F]'}`}>
         {track.cover_url
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1a160f] to-[#0a0907]"><Music size={24} className="text-[#3a3328]" /></div>}
+          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#211F1A] to-[#090907]"><Music size={24} className="text-[#6E685B]" /></div>}
         {/* State badge */}
         {track.status && track.status !== 'archived' && (
           <span className={`absolute top-1.5 left-1.5 text-[7px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
             track.status === 'maq'        ? 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' :
             track.status === 'finished'   ? 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]'   :
-            track.status === 'needs_work' ? 'bg-[#1f1a0a] text-[#c8a84b] border-[#3a2f1f]'   : ''
+            track.status === 'needs_work' ? 'bg-[#1f1a0a] text-[#D6BE7A] border-[#3a2f1f]'   : ''
           }`}>
             {track.status === 'maq' ? 'MAQ' : track.status === 'finished' ? '✓' : 'WIP'}
           </span>
@@ -1590,14 +1583,14 @@ function MiniTrackCard({
         >
           <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
             {isPlaying
-              ? <div className="flex items-end gap-[2px] h-4">{[3,5,7,5,3].map((h,i)=><span key={i} className="w-[3px] rounded-sm bg-[#D4BFA0] animate-bounce" style={{height:h,animationDelay:`${i*80}ms`}}/>)}</div>
+              ? <div className="flex items-end gap-[2px] h-4">{[3,5,7,5,3].map((h,i)=><span key={i} className="w-[3px] rounded-sm bg-[#E7D7BE] animate-bounce" style={{height:h,animationDelay:`${i*80}ms`}}/>)}</div>
               : <PlayGlyph size={15} className="text-white ml-0.5" />}
           </div>
         </button>
       </div>
       {/* Meta */}
-      <p className={`text-[11px] font-medium truncate leading-tight ${isCurrent ? 'text-[#D4BFA0]' : 'text-[#E8DCC8]'}`}>{track.title}</p>
-      <p className="text-[9px] font-mono text-[#5a5142] mt-0.5 truncate">
+      <p className={`text-[11px] font-medium truncate leading-tight ${isCurrent ? 'text-[#E7D7BE]' : 'text-[#F7EBDD]'}`}>{track.title}</p>
+      <p className="text-[9px] font-mono text-[#9B9282] mt-0.5 truncate">
         {[track.bpm && `${track.bpm}`, track.key && `${track.key}${track.scale === 'minor' ? 'm' : ''}`].filter(Boolean).join(' · ') || track.type || '—'}
       </p>
     </div>
@@ -1608,19 +1601,19 @@ function MiniTrackCard({
 function MiniPlaylistCard({ playlist }: { playlist: any }) {
   return (
     <Link href={`/playlists/${playlist.id}`} className="group relative shrink-0 w-[130px] sm:w-[150px] cursor-pointer block">
-      <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#14110d] border border-[#1f1a13] group-hover:border-[#2d2620] mb-2 transition-all">
+      <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#171511] border border-[#2B2821] group-hover:border-[#3B372F] mb-2 transition-all">
         {playlist.cover_url
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={playlist.cover_url} alt={playlist.name} className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1f1a33] to-[#0a0907]"><ListMusic size={24} className="text-[#9d95e8]/40" /></div>}
+          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1f1a33] to-[#090907]"><ListMusic size={24} className="text-[#9d95e8]/40" /></div>}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-black/30">
           <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
             <PlayGlyph size={15} className="text-white ml-0.5" />
           </div>
         </div>
       </div>
-      <p className="text-[11px] font-medium truncate text-[#E8DCC8]">{playlist.name}</p>
-      <p className="text-[9px] font-mono text-[#5a5142] mt-0.5">{playlist.track_count ?? 0} tracks</p>
+      <p className="text-[11px] font-medium truncate text-[#F7EBDD]">{playlist.name}</p>
+      <p className="text-[9px] font-mono text-[#9B9282] mt-0.5">{playlist.track_count ?? 0} tracks</p>
     </Link>
   );
 }
@@ -1629,19 +1622,19 @@ function MiniPlaylistCard({ playlist }: { playlist: any }) {
 function MiniProjectCard({ project }: { project: any }) {
   return (
     <Link href={`/projects/${project.id}`} className="group relative shrink-0 w-[130px] sm:w-[150px] cursor-pointer block">
-      <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#14110d] border border-[#1f1a13] group-hover:border-[#2d2620] mb-2 transition-all">
+      <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#171511] border border-[#2B2821] group-hover:border-[#3B372F] mb-2 transition-all">
         {project.cover_url
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={project.cover_url} alt={project.name} className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1a1830] to-[#0a0907]"><FolderOpen size={24} className="text-[#D4BFA0]/30" /></div>}
+          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1a1830] to-[#090907]"><FolderOpen size={24} className="text-[#E7D7BE]/30" /></div>}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-black/30">
           <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
             <ArrowRight size={14} className="text-white" />
           </div>
         </div>
       </div>
-      <p className="text-[11px] font-medium truncate text-[#E8DCC8]">{project.name}</p>
-      <p className="text-[9px] font-mono text-[#5a5142] mt-0.5 capitalize">{project.status?.replace('_', ' ') ?? 'project'} · {project.track_count ?? 0} tracks</p>
+      <p className="text-[11px] font-medium truncate text-[#F7EBDD]">{project.name}</p>
+      <p className="text-[9px] font-mono text-[#9B9282] mt-0.5 capitalize">{project.status?.replace('_', ' ') ?? 'project'} · {project.track_count ?? 0} tracks</p>
     </Link>
   );
 }
@@ -1679,23 +1672,23 @@ function HomeRow({
     <div className="group/row">
       <div className="flex items-center justify-between mb-2.5">
         <div>
-          <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#a08a6a]">{cfg.title}</h3>
-          {cfg.subtitle && <p className="text-[9px] font-mono text-[#3a3328] mt-0.5">{cfg.subtitle}</p>}
+          <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">{cfg.title}</h3>
+          {cfg.subtitle && <p className="text-[9px] font-mono text-[#6E685B] mt-0.5">{cfg.subtitle}</p>}
         </div>
         <div className="flex items-center gap-1.5">
-          <button onClick={() => scroll('left')} className="hidden sm:flex w-6 h-6 rounded-full bg-[#14110d] border border-[#1f1a13] items-center justify-center text-[#5a5142] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all opacity-0 group-hover/row:opacity-100">
+          <button onClick={() => scroll('left')} className="hidden sm:flex w-6 h-6 rounded-full bg-[#171511] border border-[#2B2821] items-center justify-center text-[#9B9282] hover:text-[#F7EBDD] hover:border-[#3B372F] transition-all opacity-0 group-hover/row:opacity-100">
             <ChevronLeft size={12} />
           </button>
-          <button onClick={() => scroll('right')} className="hidden sm:flex w-6 h-6 rounded-full bg-[#14110d] border border-[#1f1a13] items-center justify-center text-[#5a5142] hover:text-[#E8DCC8] hover:border-[#2d2620] transition-all opacity-0 group-hover/row:opacity-100">
+          <button onClick={() => scroll('right')} className="hidden sm:flex w-6 h-6 rounded-full bg-[#171511] border border-[#2B2821] items-center justify-center text-[#9B9282] hover:text-[#F7EBDD] hover:border-[#3B372F] transition-all opacity-0 group-hover/row:opacity-100">
             <ChevronRight size={12} />
           </button>
           {cfg.source === 'tracks' && (
-            <button onClick={onSeeAll} className="text-[9px] font-mono text-[#5a5142] hover:text-[#a08a6a] transition-colors">
+            <button onClick={onSeeAll} className="text-[9px] font-mono text-[#9B9282] hover:text-[#D0C3AF] transition-colors">
               See all →
             </button>
           )}
-          {cfg.source === 'playlists' && <Link href="/playlists" className="text-[9px] font-mono text-[#5a5142] hover:text-[#a08a6a] transition-colors">See all →</Link>}
-          {cfg.source === 'projects' && <Link href="/projects" className="text-[9px] font-mono text-[#5a5142] hover:text-[#a08a6a] transition-colors">See all →</Link>}
+          {cfg.source === 'playlists' && <Link href="/playlists" className="text-[9px] font-mono text-[#9B9282] hover:text-[#D0C3AF] transition-colors">See all →</Link>}
+          {cfg.source === 'projects' && <Link href="/projects" className="text-[9px] font-mono text-[#9B9282] hover:text-[#D0C3AF] transition-colors">See all →</Link>}
         </div>
       </div>
       <div ref={scrollRef} className="flex gap-2.5 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-hide scroll-smooth">
@@ -1752,17 +1745,17 @@ function PackBuilderModal({
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-[#1f1a13] bg-[#0e0c08] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-2xl border border-[#2B2821] bg-[#11100D] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between mb-4">
           <div>
             <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#9d95e8]">Beat pack</p>
-            <h3 className="text-[16px] font-bold text-[#E8DCC8] mt-1">Bundle {tracks.length} beats</h3>
+            <h3 className="text-[16px] font-bold text-[#F7EBDD] mt-1">Bundle {tracks.length} beats</h3>
           </div>
-          <button onClick={onClose} disabled={busy} className="text-[#5a5142] hover:text-[#E8DCC8] transition-colors disabled:opacity-40"><X size={16} /></button>
+          <button onClick={onClose} disabled={busy} className="text-[#9B9282] hover:text-[#F7EBDD] transition-colors disabled:opacity-40"><X size={16} /></button>
         </div>
 
         {/* Selected beats — click one with art to set it as the pack cover */}
-        <p className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Pack cover <span className="text-[#3a3328]">— tap a beat</span></p>
+        <p className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">Pack cover <span className="text-[#6E685B]">— tap a beat</span></p>
         <div className="flex gap-1.5 overflow-x-auto pb-2 mb-4 scrollbar-hide">
           {tracks.map((t) => {
             const selectable = !!t.cover_url;
@@ -1773,33 +1766,33 @@ function PackBuilderModal({
                 type="button"
                 onClick={() => { if (selectable) setCoverUrl(t.cover_url!); }}
                 title={selectable ? `Use "${t.title}" as cover` : t.title}
-                className={`shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-[#14110d] border transition-all ${
-                  isCover ? 'border-[#9d95e8] ring-2 ring-[#9d95e8]/40' : 'border-[#1f1a13] hover:border-[#2d2620]'
+                className={`shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-[#171511] border transition-all ${
+                  isCover ? 'border-[#9d95e8] ring-2 ring-[#9d95e8]/40' : 'border-[#2B2821] hover:border-[#3B372F]'
                 } ${selectable ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
               >
                 {t.cover_url
                   // eslint-disable-next-line @next/next/no-img-element
                   ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-[#3a3328]"><Music size={14} /></div>}
+                  : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={14} /></div>}
               </button>
             );
           })}
         </div>
 
         {/* Name */}
-        <label className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Pack name</label>
+        <label className="block text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">Pack name</label>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
           maxLength={120}
-          className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg px-3 py-2.5 text-[13px] text-[#E8DCC8] focus:outline-none focus:border-[#2d2620] mb-4"
+          className="w-full bg-[#171511] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[13px] text-[#F7EBDD] focus:outline-none focus:border-[#3B372F] mb-4"
         />
 
         {hasAnchor ? (
           <>
             {/* Discount slider */}
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[9px] font-mono uppercase tracking-wider text-[#5a5142]">Discount</label>
+              <label className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">Discount</label>
               <span className="text-[11px] font-mono text-[#9d95e8] tabular-nums">{discount}% off</span>
             </div>
             <input
@@ -1808,13 +1801,13 @@ function PackBuilderModal({
               className="w-full accent-[#9d95e8] mb-4"
             />
             {/* Price math */}
-            <div className="rounded-xl border border-[#1f1a13] bg-[#14110d] px-4 py-3 mb-5 space-y-1.5">
-              <div className="flex items-center justify-between text-[11px] text-[#6a5d4a]">
+            <div className="rounded-xl border border-[#2B2821] bg-[#171511] px-4 py-3 mb-5 space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] text-[#B4AA99]">
                 <span>Lease value of {tracks.length} beats</span>
                 <span className="tabular-nums line-through">${leaseSum.toLocaleString()}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[12px] font-medium text-[#E8DCC8]">Pack price</span>
+                <span className="text-[12px] font-medium text-[#F7EBDD]">Pack price</span>
                 <span className="text-[22px] font-bold text-white tabular-nums">${computed.toLocaleString()}</span>
               </div>
               {savings > 0 && (
@@ -1824,15 +1817,15 @@ function PackBuilderModal({
           </>
         ) : (
           <>
-            <label className="block text-[9px] font-mono uppercase tracking-wider text-[#5a5142] mb-1.5">Pack price (USD)</label>
+            <label className="block text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">Pack price (USD)</label>
             <div className="relative mb-1">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6a5d4a]">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B4AA99]">$</span>
               <input
                 type="number" min={1} value={manualPrice} onChange={(e) => setManualPrice(e.target.value)} placeholder="50"
-                className="w-full bg-[#14110d] border border-[#1f1a13] rounded-lg pl-7 pr-3 py-2.5 text-[14px] text-[#E8DCC8] focus:outline-none focus:border-[#2d2620] tabular-nums"
+                className="w-full bg-[#171511] border border-[#2B2821] rounded-lg pl-7 pr-3 py-2.5 text-[14px] text-[#F7EBDD] focus:outline-none focus:border-[#3B372F] tabular-nums"
               />
             </div>
-            <p className="text-[10px] text-[#5a5142] mb-5">No lease prices on these beats yet — set the pack price directly.</p>
+            <p className="text-[10px] text-[#9B9282] mb-5">No lease prices on these beats yet — set the pack price directly.</p>
           </>
         )}
 

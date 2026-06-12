@@ -16,6 +16,64 @@ interface PromoTerms {
   discountAmount: number;
 }
 
+type CheckoutBody = {
+  buyer_email?: unknown;
+  items?: unknown;
+  project_id?: unknown;
+  promo_code?: unknown;
+};
+
+type RawCartItem = {
+  track_id: string;
+  license_id?: string;
+  license_type?: string;
+};
+
+type ProjectRow = {
+  id: string;
+  user_id?: string | null;
+  name?: string | null;
+  price_usd?: number | string | null;
+};
+
+type TrackRow = {
+  id: string;
+  user_id?: string | null;
+  title?: string | null;
+  store_listed?: boolean | null;
+  exclusive_sold?: boolean | null;
+  lease_price_usd?: number | string | null;
+  exclusive_price_usd?: number | string | null;
+  wav_url?: string | null;
+  stems_status?: string | null;
+};
+
+type CreatorProfileRow = {
+  license_lease_price_usd?: number | string | null;
+  license_exclusive_price_usd?: number | string | null;
+  bundle_discount_threshold?: number | string | null;
+  bundle_discount_percent?: number | string | null;
+};
+
+type LicenseRow = {
+  id: string;
+  name?: string | null;
+  price_usd?: number | string | null;
+  is_exclusive?: boolean | null;
+  is_free?: boolean | null;
+};
+
+type TrackLicenseOverrideRow = {
+  track_id: string;
+  license_id: string;
+  price_override_usd?: number | string | null;
+  enabled?: boolean | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 async function resolvePromo(
   admin: ReturnType<typeof createServiceClient>,
   code: string,
@@ -45,7 +103,10 @@ async function resolvePromo(
   };
 }
 
-type LineItems = Array<{ price_data: { unit_amount: number; product_data: { name: string } }; quantity: number }>;
+type LineItems = Array<{
+  price_data: { currency: string; unit_amount: number; product_data: { name: string } };
+  quantity: number;
+}>;
 
 /**
  * Automatic bundle/quantity discount (Task 7). When the cart's item count
@@ -72,9 +133,9 @@ function applyBundleDiscount(
 }
 
 function applyDiscount(
-  lineItems: Array<{ price_data: { unit_amount: number; product_data: { name: string } }; quantity: number }>,
+  lineItems: LineItems,
   promo: PromoTerms | null,
-): { discountedItems: typeof lineItems; discountTotalCents: number } {
+): { discountedItems: LineItems; discountTotalCents: number } {
   if (!promo || (promo.discountPercent <= 0 && promo.discountAmount <= 0)) {
     return { discountedItems: lineItems, discountTotalCents: 0 };
   }
@@ -134,25 +195,31 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as CheckoutBody;
     const buyerEmail = typeof body.buyer_email === 'string' ? body.buyer_email.trim() : '';
-    const rawItems: any[] = Array.isArray(body.items) ? body.items : [];
+    const candidateItems = Array.isArray(body.items) ? body.items : [];
     const projectId = typeof body.project_id === 'string' ? body.project_id.trim() : '';
     const promoCode = typeof body.promo_code === 'string' ? body.promo_code.trim().toUpperCase() : '';
 
     if (!buyerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail)) {
       return NextResponse.json({ error: 'Valid buyer email required' }, { status: 400 });
     }
-    if (!projectId && !rawItems.length) {
+    if (!projectId && !candidateItems.length) {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
     }
 
     // Validate item shapes only for track purchases.
+    const rawItems: RawCartItem[] = [];
     if (!projectId) {
-      for (const i of rawItems) {
-        if (typeof i.track_id !== 'string' || !i.track_id) {
+      for (const i of candidateItems) {
+        if (!isRecord(i) || typeof i.track_id !== 'string' || !i.track_id) {
           return NextResponse.json({ error: 'Item missing track_id' }, { status: 400 });
         }
+        rawItems.push({
+          track_id: i.track_id,
+          license_id: typeof i.license_id === 'string' ? i.license_id : undefined,
+          license_type: typeof i.license_type === 'string' ? i.license_type : undefined,
+        });
       }
     }
 
@@ -170,12 +237,13 @@ export async function POST(req: NextRequest) {
       if (!project) {
         return NextResponse.json({ error: 'Project not found' }, { status: 404 });
       }
-      const price = project.price_usd != null ? Number(project.price_usd) : 0;
+      const projectRow = project as ProjectRow;
+      const price = projectRow.price_usd != null ? Number(projectRow.price_usd) : 0;
       if (price <= 0) {
         return NextResponse.json({ error: 'Project is not priced for sale' }, { status: 400 });
       }
 
-      const sellerUserId = (project as any).user_id as string | undefined;
+      const sellerUserId = projectRow.user_id ?? undefined;
 
       // Validate promo code
       let promo: PromoTerms | null = null;
@@ -194,7 +262,7 @@ export async function POST(req: NextRequest) {
         price_data: {
           currency: 'usd',
           unit_amount: Math.max(1, Math.round(price * 100)),
-          product_data: { name: `Full Project — ${project.name || 'Untitled'}` },
+          product_data: { name: `Full Project — ${projectRow.name || 'Untitled'}` },
         },
         quantity: 1,
       }];
@@ -208,28 +276,28 @@ export async function POST(req: NextRequest) {
         metadata: {
           purchase_kind: 'project',
           source_surface: 'store',
-          project_id: project.id,
+          project_id: projectRow.id,
           seller_user_id: sellerUserId ?? '',
           buyer_email: buyerEmail,
-          content_id: project.id,
+          content_id: projectRow.id,
           promo_code: promo?.code ?? '',
         },
         // Project bundles land on the Spotify-style listening page
         // (post the access-gate poller that waits for the webhook).
         return_url: `${APP_URL}/store/projects/access?session_id={CHECKOUT_SESSION_ID}`,
-      } as any);
+      });
 
       // Increment promo usage
       if (promo) {
         await admin.rpc('increment_promo_uses', { code: promo.code });
       }
 
-      log.info('project checkout session created', { session_id: session.id, project_id: project.id, promo: promo?.code ?? null });
+      log.info('project checkout session created', { session_id: session.id, project_id: projectRow.id, promo: promo?.code ?? null });
       return NextResponse.json({ client_secret: session.client_secret, session_id: session.id });
     }
 
     // ── Resolve track records (track license path) ────────────────────────────
-    const trackIds = [...new Set(rawItems.map((i: any) => i.track_id as string))];
+    const trackIds = [...new Set(rawItems.map((i) => i.track_id))];
 
     const { data: tracks, error: tracksErr } = await admin
       .from('tracks')
@@ -237,11 +305,12 @@ export async function POST(req: NextRequest) {
       .in('id', trackIds);
 
     if (tracksErr) throw tracksErr;
-    if (!tracks || tracks.length === 0) {
+    const trackRows = (tracks ?? []) as TrackRow[];
+    if (trackRows.length === 0) {
       return NextResponse.json({ error: 'No matching tracks found' }, { status: 400 });
     }
 
-    const unlisted = (tracks as any[]).filter((t) => !t.store_listed).map((t: any) => t.title);
+    const unlisted = trackRows.filter((t) => !t.store_listed).map((t) => t.title ?? 'Untitled');
     if (unlisted.length) {
       return NextResponse.json({ error: `Not for sale: ${unlisted.join(', ')}` }, { status: 400 });
     }
@@ -249,7 +318,7 @@ export async function POST(req: NextRequest) {
     // Exclusive-sold guard (mig 075). Once a beat's exclusive rights have sold,
     // it can't be licensed again under ANY tier — the client hides the buttons,
     // but this server check is the authoritative gate against a forged request.
-    const soldOut = (tracks as any[]).filter((t) => t.exclusive_sold).map((t: any) => t.title);
+    const soldOut = trackRows.filter((t) => t.exclusive_sold).map((t) => t.title ?? 'Untitled');
     if (soldOut.length) {
       return NextResponse.json(
         { error: `Exclusive rights already sold: ${soldOut.join(', ')}` },
@@ -257,26 +326,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Exclusive deliverable check — used to reject the session up front,
-    // now downgraded to a tag. Buyers can still pay for an exclusive even
-    // when the producer hasn't uploaded WAV/stems yet; the webhook flags
-    // the purchase with needs_stems_upload=true and emails the producer
-    // to deliver. Build the list of (track_id, title) pairs that are
-    // missing so the webhook + the buyer's confirmation copy can use it.
+    // Exclusive deliverable check — reject the session up front when the
+    // buyer is asking for exclusive rights but the track has neither a WAV
+    // nor ready stems. This keeps checkout aligned with the delivery promise:
+    // if we charge for an exclusive, the delivery page must have something
+    // real to unlock.
     const stemsReady = (stemsStatus: string | null | undefined) =>
       stemsStatus === 'ready' || stemsStatus === 'done' || stemsStatus === 'complete';
-    const missingDeliverableTracks = rawItems
-      .map((it) => {
-        if (it.license_type !== 'exclusive' && it.license_type !== 'exclusive-rights') return null;
-        const track = (tracks as any[]).find((t) => t.id === it.track_id);
-        if (!track) return null;
-        if (track.wav_url || stemsReady(track.stems_status)) return null;
-        return { id: track.id as string, title: track.title as string };
-      })
-      .filter((x): x is { id: string; title: string } => !!x);
 
     // ── Creator profile (for legacy price fallback) ──────────────────────────
-    const sellerUserId = (tracks[0] as any).user_id as string | undefined;
+    const sellerUserId = trackRows[0]?.user_id ?? undefined;
     let profileLease: number | null = null;
     let profileExclusive: number | null = null;
     let bundleRule: { threshold: number; percent: number } | null = null;
@@ -286,10 +345,11 @@ export async function POST(req: NextRequest) {
         .select('license_lease_price_usd, license_exclusive_price_usd, bundle_discount_threshold, bundle_discount_percent')
         .eq('user_id', sellerUserId)
         .maybeSingle();
-      profileLease = profile?.license_lease_price_usd ?? null;
-      profileExclusive = profile?.license_exclusive_price_usd ?? null;
-      const threshold = Number((profile as any)?.bundle_discount_threshold ?? 0);
-      const percent = Number((profile as any)?.bundle_discount_percent ?? 0);
+      const profileRow = profile as CreatorProfileRow | null;
+      profileLease = profileRow?.license_lease_price_usd != null ? Number(profileRow.license_lease_price_usd) : null;
+      profileExclusive = profileRow?.license_exclusive_price_usd != null ? Number(profileRow.license_exclusive_price_usd) : null;
+      const threshold = Number(profileRow?.bundle_discount_threshold ?? 0);
+      const percent = Number(profileRow?.bundle_discount_percent ?? 0);
       if (threshold > 0 && percent > 0) bundleRule = { threshold, percent };
     }
 
@@ -310,18 +370,18 @@ export async function POST(req: NextRequest) {
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const customLicenseIds = [...new Set(
       rawItems
-        .map((i: any) => i.license_id)
+        .map((i) => i.license_id)
         .filter((id): id is string => typeof id === 'string' && UUID_RE.test(id))
     )];
 
     // Map license_id → license row
-    const licenseById = new Map<string, any>();
+    const licenseById = new Map<string, LicenseRow>();
     if (customLicenseIds.length > 0) {
       const { data: licenseRows } = await admin
         .from('licenses')
         .select('id, name, price_usd, is_exclusive, is_free, file_types, stems_included')
         .in('id', customLicenseIds);
-      for (const row of licenseRows ?? []) licenseById.set(row.id, row);
+      for (const row of (licenseRows ?? []) as LicenseRow[]) licenseById.set(row.id, row);
     }
 
     // Resolve per-track overrides for custom license tiers.
@@ -333,24 +393,28 @@ export async function POST(req: NextRequest) {
         .select('track_id, license_id, price_override_usd, enabled')
         .in('track_id', trackIds)
         .in('license_id', customLicenseIds);
-      for (const row of overrideRows ?? []) {
+      for (const row of (overrideRows ?? []) as TrackLicenseOverrideRow[]) {
         const key = `${row.track_id}::${row.license_id}`;
         // Mark disabled entries with null so they can be rejected below.
-        trackLicenseOverrides.set(key, row.enabled ? (row.price_override_usd ?? null) : null);
+        trackLicenseOverrides.set(
+          key,
+          row.enabled ? (row.price_override_usd != null ? Number(row.price_override_usd) : null) : null,
+        );
       }
     }
 
     // ── Build Stripe line items ──────────────────────────────────────────────
-    const trackById = new Map((tracks as any[]).map((t) => [t.id, t]));
-    const lineItems: any[] = [];
+    const trackById = new Map(trackRows.map((t) => [t.id, t]));
+    const lineItems: LineItems = [];
     const unpriced: string[] = [];
+    const missingDeliverableTracks: Array<{ id: string; title: string }> = [];
     const cartItemsMeta: Array<{ track_id: string; license_id: string; license_type: string }> = [];
 
     for (const it of rawItems) {
-      const track = trackById.get(it.track_id) as any;
+      const track = trackById.get(it.track_id);
       if (!track) continue;
 
-      const rawLicenseId: string = it.license_id ?? '';
+      const rawLicenseId = it.license_id ?? '';
       const isCustomTier = UUID_RE.test(rawLicenseId);
       const customLicense = isCustomTier ? licenseById.get(rawLicenseId) : null;
 
@@ -403,6 +467,11 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
+      if (resolvedType === 'exclusive' && !track.wav_url && !stemsReady(track.stems_status)) {
+        missingDeliverableTracks.push({ id: track.id, title: track.title ?? 'Untitled' });
+        continue;
+      }
+
       const displayName = customLicense
         ? `${customLicense.name} — ${track.title}`
         : `${resolvedType === 'exclusive' ? 'Exclusive' : 'Lease'} — ${track.title}`;
@@ -423,6 +492,12 @@ export async function POST(req: NextRequest) {
 
     if (unpriced.length) {
       return NextResponse.json({ error: `Missing price on: ${unpriced.join(', ')}` }, { status: 400 });
+    }
+    if (missingDeliverableTracks.length) {
+      return NextResponse.json(
+        { error: `Exclusive delivery not ready for: ${missingDeliverableTracks.map((t) => t.title).join(', ')}` },
+        { status: 400 },
+      );
     }
     if (!lineItems.length) {
       return NextResponse.json({ error: 'No valid items to charge' }, { status: 400 });
@@ -460,13 +535,10 @@ export async function POST(req: NextRequest) {
         cart_items: JSON.stringify(cartItemsMeta.slice(0, 25)),
         promo_code: promo?.code ?? '',
         bundle_discount_percent: bundle.applied ? String(bundle.percent) : '',
-        // Exclusive purchases of tracks with no WAV / no ready stems —
-        // webhook reads this and flags the purchase + emails the
-        // producer to upload. Comma-separated track ids; "" when none.
-        stems_pending_track_ids: missingDeliverableTracks.map((t) => t.id).join(','),
+        stems_pending_track_ids: '',
       },
       return_url: `${APP_URL}/store/download?session_id={CHECKOUT_SESSION_ID}`,
-    } as any);
+    });
 
     // Increment promo usage
     if (promo) {
@@ -476,12 +548,12 @@ export async function POST(req: NextRequest) {
     // Abandoned-cart capture (mig 071). Best-effort — the webhook flips
     // recovered=true on completion; a cron reminds the rest after ~1h.
     try {
-      const totalCents = discountedItems.reduce((s: number, li: any) => s + li.price_data.unit_amount * (li.quantity ?? 1), 0);
+      const totalCents = discountedItems.reduce((s, li) => s + li.price_data.unit_amount * (li.quantity ?? 1), 0);
       await admin.from('abandoned_carts').insert({
         stripe_session_id: session.id,
         seller_user_id: sellerUserId || null,
         buyer_email: buyerEmail,
-        items: discountedItems.map((li: any) => ({ name: li.price_data.product_data.name, price_usd: li.price_data.unit_amount / 100 })),
+        items: discountedItems.map((li) => ({ name: li.price_data.product_data.name, price_usd: li.price_data.unit_amount / 100 })),
         item_count: cartItemsMeta.length,
         total_usd: totalCents / 100,
       });

@@ -31,7 +31,7 @@ import { slugify } from '@/lib/slug';
 interface GlassPageProps {
   /** Backdrop image — blurred, low-opacity behind the whole card. */
   coverUrl?: string | null;
-  /** Accent hex (e.g. '#D4BFA0') used for gradient tint + active states. */
+  /** Accent hex (e.g. '#E7D7BE') used for gradient tint + active states. */
   accentColor: string;
   /** Card body — typically TabNav + Hero + Sections. */
   children: ReactNode;
@@ -46,7 +46,7 @@ export function GlassPage({
   maxWidth = 'max-w-5xl',
 }: GlassPageProps) {
   return (
-    <div className="min-h-screen bg-[#0a0907] text-[#E8DCC8] px-4 md:px-6 pt-8 md:pt-12 pb-24">
+    <div className="min-h-screen bg-[#090907] text-[#F7EBDD] px-4 md:px-6 pt-8 md:pt-12 pb-24">
       {coverUrl && (
         <>
           <div
@@ -57,14 +57,14 @@ export function GlassPage({
           <div
             className="fixed inset-0 -z-10"
             style={{
-              background: `linear-gradient(180deg, ${accentColor}1a 0%, rgba(10,9,7,0.85) 50%, #0a0907 100%)`,
+              background: `linear-gradient(180deg, ${accentColor}1a 0%, rgba(10,9,7,0.85) 50%, #090907 100%)`,
             }}
             aria-hidden
           />
         </>
       )}
       <div className={`${maxWidth} mx-auto`}>
-        <div className="rounded-[28px] border border-white/[0.08] bg-[#14110d]/70 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.55)] overflow-hidden">
+        <div className="rounded-[28px] border border-white/[0.08] bg-[#171511]/70 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.55)] overflow-hidden">
           {children}
         </div>
       </div>
@@ -168,11 +168,11 @@ function Hero({
       </div>
 
       {!noCover && (
-        <div className="relative w-full md:w-[280px] aspect-[16/10] md:aspect-square rounded-2xl overflow-hidden bg-[#0a0907] shrink-0">
+        <div className="relative w-full md:w-[280px] aspect-[16/10] md:aspect-square rounded-2xl overflow-hidden bg-[#090907] shrink-0">
           {coverImage ? (
             <img src={coverImage} alt={title} className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#2A2418] to-[#0a0907] text-[#5a5142]">
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#342F27] to-[#090907] text-[#9B9282]">
               {coverFallback}
             </div>
           )}
