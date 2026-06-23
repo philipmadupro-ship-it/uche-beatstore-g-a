@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { uploadAudio, uploadPeaksSidecar } from '@/lib/storage/upload';
+import { uploadPrivateAudio, uploadPeaksSidecar, uploadPublicPreview } from '@/lib/storage/upload';
 import { analyzeAudio } from '@/lib/audio/analyze.server';
 import type { AudioFeatures } from '@/lib/audio/analyze.server';
 import { getAuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
 import { extractPeaks } from '@/lib/audio/peaks';
 import { isSupabaseConfigured, insert, update, getAll } from '@/lib/local-store';
+import { requireRowOwnership } from '@/lib/db';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { titleFromFilename, nextVersionLabel } from '@/lib/naming';
 import { errorMessage } from '@/lib/errors';
@@ -79,6 +80,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    let authenticatedUserId: string | null = null;
+    if (isSupabaseConfigured()) {
+      const supabase = await createServerClient();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      }
+      authenticatedUserId = user.id;
+      if (replaceTrackId) {
+        const owner = await requireRowOwnership('tracks', replaceTrackId);
+        if (!owner.ok) return owner.res;
+      }
+      if (projectId) {
+        const destination = await resolveUploadDestination(supabase, projectId, authenticatedUserId);
+        if (!destination.ok) return destination.res;
+      }
+    }
+
     // 2. Read into buffer and sniff magic bytes
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -101,7 +120,7 @@ export async function POST(req: NextRequest) {
     // 4. Upload to storage
     let audioUrl = '';
     try {
-      audioUrl = await uploadAudio(buffer, file.name, safeContentType);
+      audioUrl = await uploadPrivateAudio(buffer, file.name, safeContentType);
     } catch (err) {
       console.error('Storage upload failed:', err);
       return NextResponse.json(
@@ -141,11 +160,19 @@ export async function POST(req: NextRequest) {
       console.warn('Peaks extraction/upload failed, continuing without:', err);
     }
 
+    let previewUrl: string | null = null;
+    try {
+      previewUrl = await uploadPublicPreview(buffer);
+    } catch (err) {
+      console.warn('Preview generation/upload failed, track remains private:', err);
+    }
+
     const merged = mergeFeatures({ client: clientAnalysis, server: serverAnalysis, audd });
     const trackData = {
       title: titleFromName,
       type,
       audio_url: audioUrl,
+      preview_url: previewUrl,
       peaks_url: peaksUrl,
       ...merged,
       stems_status: 'none' as const,
@@ -157,8 +184,7 @@ export async function POST(req: NextRequest) {
     if (isSupabaseConfigured()) {
       try {
         const supabase = await createServerClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        const userId = user?.id || null;
+        const userId = authenticatedUserId;
 
         if (replaceTrackId) {
           // Ownership gate before ANY mutation against the target track.
@@ -169,10 +195,6 @@ export async function POST(req: NextRequest) {
           // null-owner track by submitting `trackId=<their-uuid>` in
           // the upload form. requireRowOwnership rejects mismatches
           // explicitly with a 403 before we touch storage or DB.
-          const { requireRowOwnership } = await import('@/lib/db');
-          const owner = await requireRowOwnership('tracks', replaceTrackId);
-          if (!owner.ok) return owner.res;
-
           // Snapshot current state into track_versions BEFORE overwriting
           const { data: existing } = await supabase
             .from('tracks')
@@ -192,6 +214,7 @@ export async function POST(req: NextRequest) {
               version_number: number,
               version_label: label,
               audio_url: existing.audio_url,
+              preview_url: existing.preview_url,
               duration_seconds: existing.duration_seconds,
               bpm: existing.bpm,
               key: existing.key,
@@ -261,7 +284,7 @@ async function attachTrackToDestination(
 ) {
   const ownsDestination = (row: { user_id?: string | null } | null) => {
     if (!row) return false;
-    return !row.user_id || Boolean(userId && row.user_id === userId);
+    return Boolean(userId && row.user_id === userId);
   };
 
   const { data: project, error: projectError } = await supabase
@@ -300,6 +323,64 @@ async function attachTrackToDestination(
   }
 
   throw new Error('Upload destination not found');
+}
+
+async function resolveUploadDestination(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  destinationId: string,
+  userId: string | null,
+) {
+  const ownsDestination = (row: { user_id?: string | null } | null) => {
+    if (!row) return false;
+    return Boolean(userId && row.user_id === userId);
+  };
+
+  const { data: project, error: projectError } = await supabase
+    .from('projects')
+    .select('id,user_id')
+    .eq('id', destinationId)
+    .maybeSingle();
+  if (projectError) {
+    return {
+      ok: false as const,
+      res: NextResponse.json({ error: `Project lookup failed: ${projectError.message}` }, { status: 500 }),
+    };
+  }
+  if (project) {
+    if (!ownsDestination(project)) {
+      return {
+        ok: false as const,
+        res: NextResponse.json({ error: 'Forbidden project destination' }, { status: 403 }),
+      };
+    }
+    return { ok: true as const };
+  }
+
+  const { data: playlist, error: playlistError } = await supabase
+    .from('playlists')
+    .select('id,user_id')
+    .eq('id', destinationId)
+    .maybeSingle();
+  if (playlistError) {
+    return {
+      ok: false as const,
+      res: NextResponse.json({ error: `Playlist lookup failed: ${playlistError.message}` }, { status: 500 }),
+    };
+  }
+  if (playlist) {
+    if (!ownsDestination(playlist)) {
+      return {
+        ok: false as const,
+        res: NextResponse.json({ error: 'Forbidden playlist destination' }, { status: 403 }),
+      };
+    }
+    return { ok: true as const };
+  }
+
+  return {
+    ok: false as const,
+    res: NextResponse.json({ error: 'Upload destination not found' }, { status: 404 }),
+  };
 }
 
 function writeLocal(

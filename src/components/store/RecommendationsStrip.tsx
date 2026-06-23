@@ -30,20 +30,21 @@ interface RecommendationsStripProps<T extends MinTrack> {
   accentColor: string;
   currentTrackId: string | null;
   isPlaying: boolean;
+  compact?: boolean;
   priceFor: (t: T, kind: 'lease' | 'exclusive') => number | null;
   onPlay: (t: T) => void;
   onPreview: (t: T) => void;
 }
 
 export function RecommendationsStrip<T extends MinTrack>({
-  label, tracks, accentColor, currentTrackId, isPlaying, priceFor, onPlay, onPreview,
+  label, tracks, accentColor, currentTrackId, isPlaying, compact = false, priceFor, onPlay, onPreview,
 }: RecommendationsStripProps<T>) {
   const display = useMemo(() => tracks.slice(0, 12), [tracks]);
   if (display.length === 0) return null;
 
   return (
-    <section className="mt-12 max-w-[1400px] mx-auto px-4 md:px-8">
-      <div className="flex items-baseline justify-between mb-3">
+    <section className={`${compact ? 'mt-7' : 'mt-12'} max-w-[1400px] mx-auto px-4 md:px-8`}>
+      <div className={`flex items-baseline justify-between ${compact ? 'mb-2' : 'mb-3'}`}>
         <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF]">
           {label}
         </p>
@@ -52,7 +53,7 @@ export function RecommendationsStrip<T extends MinTrack>({
         </p>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+      <div className={`${compact ? 'gap-2 pb-1.5' : 'gap-3 pb-2'} flex overflow-x-auto no-scrollbar`}>
         {display.map((t) => {
           const isCurrent = currentTrackId === t.id;
           const isCurrentPlaying = isCurrent && isPlaying;
@@ -63,7 +64,7 @@ export function RecommendationsStrip<T extends MinTrack>({
               key={t.id}
               type="button"
               onClick={() => onPreview(t)}
-              className="group shrink-0 w-[140px] sm:w-[160px] text-left rounded-xl border border-[#2B2821] bg-[#171511] hover:border-[#3B372F] transition-colors overflow-hidden flex flex-col"
+              className={`${compact ? 'w-[104px] sm:w-[118px] rounded-lg' : 'w-[140px] sm:w-[160px] rounded-xl'} group shrink-0 text-left border border-[#2B2821] bg-[#171511] hover:border-[#3B372F] transition-colors overflow-hidden flex flex-col`}
             >
               {/* Cover */}
               <div className="relative aspect-square bg-[#090907] overflow-hidden">
@@ -85,29 +86,29 @@ export function RecommendationsStrip<T extends MinTrack>({
                   }`}
                   aria-label={isCurrentPlaying ? 'Pause' : 'Play'}
                 >
-                  <span className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shadow-xl">
-                    {isCurrentPlaying ? <PauseGlyph size={17} /> : <PlayGlyph size={17} className="ml-0.5" />}
+                  <span className={`${compact ? 'w-8 h-8' : 'w-10 h-10'} rounded-full bg-white text-black flex items-center justify-center shadow-xl`}>
+                    {isCurrentPlaying ? <PauseGlyph size={compact ? 14 : 17} /> : <PlayGlyph size={compact ? 14 : 17} className="ml-0.5" />}
                   </span>
                 </span>
               </div>
 
               {/* Body */}
-              <div className="p-2.5 flex flex-col gap-1 min-w-0">
-                <p className={`text-[12px] font-medium truncate ${isCurrent ? '' : 'text-[#F7EBDD]'}`}
+              <div className={`${compact ? 'p-2 gap-0.5' : 'p-2.5 gap-1'} flex flex-col min-w-0`}>
+                <p className={`${compact ? 'text-[11px]' : 'text-[12px]'} font-medium truncate ${isCurrent ? '' : 'text-[#F7EBDD]'}`}
                   style={isCurrent ? { color: accentColor } : {}}
                 >
                   {t.title}
                 </p>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] truncate">
+                  <span className={`${compact ? 'text-[8px]' : 'text-[9px]'} font-mono uppercase tracking-wider text-[#9B9282] truncate`}>
                     {t.type}{t.bpm ? ` · ${t.bpm}` : ''}
                   </span>
                   {free ? (
-                    <span className="text-[9px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 px-1.5 py-0.5 rounded">
+                    <span className={`${compact ? 'text-[8px] px-1' : 'text-[9px] px-1.5'} font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 py-0.5 rounded`}>
                       Free
                     </span>
                   ) : lease != null ? (
-                    <span className="text-[11px] font-mono font-bold text-[#F7EBDD] tabular-nums">
+                    <span className={`${compact ? 'text-[9px]' : 'text-[11px]'} font-mono font-bold text-[#F7EBDD] tabular-nums`}>
                       ${lease}
                     </span>
                   ) : (

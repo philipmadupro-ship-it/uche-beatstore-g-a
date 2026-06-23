@@ -8,6 +8,8 @@ export interface Track {
   title: string;
   type: TrackType;
   audio_url: string;
+  /** Public low-bitrate storefront derivative. The full master stays private. */
+  preview_url?: string | null;
   /** URL of the precomputed waveform peaks sidecar (JSON). Optional —
    *  older tracks may not have it; WavePlayer falls back to client decode. */
   peaks_url?: string | null;
@@ -251,4 +253,3 @@ export interface TrackVersion {
   created_at: string;
   created_by: string | null;
 }
-

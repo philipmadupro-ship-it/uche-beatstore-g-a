@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { abortMultipart } from '@/lib/storage/multipart';
 import { getSession, markStatus, deleteSession } from '@/lib/storage/upload-sessions';
+import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
 
 export const runtime = 'nodejs';
 
@@ -13,6 +14,8 @@ export async function POST(req: NextRequest) {
     }
     const s = getSession(sessionId);
     if (!s) return NextResponse.json({ ok: true, alreadyGone: true });
+    const owner = await requireUploadSessionOwner(s);
+    if (!owner.ok) return owner.res;
 
     try {
       await abortMultipart({ uploadId: s.uploadId, key: s.key });

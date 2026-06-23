@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll } from '@/lib/local-store';
 import { createServiceClient, safeSellerId } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
+import { redactPublicTrackMedia } from '@/lib/store/public-media';
 
 export const runtime = 'nodejs';
 // force-dynamic: no static pre-render; every request hits the DB so
@@ -51,7 +52,7 @@ export async function GET() {
           .filter((j) => j.playlist_id === pl.id)
           .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
           .map((j) => j.track_id);
-        const plTracks = tracks.filter((t) => plTrackIds.includes(t.id));
+        const plTracks = tracks.filter((t) => plTrackIds.includes(t.id)).map(redactPublicTrackMedia);
         return { id: pl.id, name: pl.name, cover_url: pl.cover_url ?? null, store_order: pl.store_order ?? null, tracks: plTracks };
       });
 
@@ -65,7 +66,7 @@ export async function GET() {
           .filter((j) => j.project_id === proj.id)
           .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
           .map((j) => j.track_id);
-        const projTracks = tracks.filter((t) => projTrackIds.includes(t.id));
+        const projTracks = tracks.filter((t) => projTrackIds.includes(t.id)).map(redactPublicTrackMedia);
         return {
           id: proj.id,
           name: proj.name,
@@ -77,7 +78,7 @@ export async function GET() {
         };
       });
 
-      const localResponse = NextResponse.json({ creator, tracks, featuredPlaylists, featuredProjects, licenses: [] });
+      const localResponse = NextResponse.json({ creator, tracks: tracks.map(redactPublicTrackMedia), featuredPlaylists, featuredProjects, licenses: [] });
       // Same caching policy as the Supabase path: short s-maxage so newly
       // listed tracks appear within ~30s for CDN-cached visitors.
       localResponse.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
@@ -149,11 +150,6 @@ export async function GET() {
     } else {
       tracksAny = (withSortOrder.data as any[]) ?? [];
     }
-
-    // ── wav_url (migration 039) ─────────────────────────────────────────
-    // Re-fetch with wav_url if the column exists; otherwise it stays absent.
-    // We do this as a lightweight separate check rather than in the main query
-    // so the main tracks query stays resilient.
 
     // ── Play counts — for popular sort (not exposed to buyers) ─────────
     // Batch in chunks of 100 so large catalogues don't hit the PostgREST
@@ -285,7 +281,7 @@ export async function GET() {
             .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled')
             .in('id', playlistTrackIds);
           for (const t of (ptRows ?? []) as any[]) {
-            playlistTrackMap[t.id] = { ...t, cover_url: sanitizeUrl(t.cover_url) };
+            playlistTrackMap[t.id] = redactPublicTrackMedia({ ...t, cover_url: sanitizeUrl(t.cover_url) });
           }
         }
 
@@ -344,7 +340,7 @@ export async function GET() {
             .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled')
             .in('id', projectTrackIds);
           for (const t of (ptRows ?? []) as any[]) {
-            projectTrackMap[t.id] = { ...t, cover_url: sanitizeUrl(t.cover_url) };
+            projectTrackMap[t.id] = redactPublicTrackMedia({ ...t, cover_url: sanitizeUrl(t.cover_url) });
           }
         }
 
@@ -384,32 +380,15 @@ export async function GET() {
       }
     }
 
-    // ── wav_url enrichment (migration 039) ───────────────────────────────
-    let wavByTrack: Record<string, string | null> = {};
-    if (trackIds.length > 0) {
-      try {
-        const { data: wavRows } = await admin
-          .from('tracks')
-          .select('id, wav_url')
-          .in('id', trackIds);
-        for (const r of (wavRows ?? []) as any[]) {
-          if (r.wav_url) wavByTrack[r.id] = r.wav_url;
-        }
-      } catch (e) {
-        console.error('[store] wav_url enrichment error:', e);
-      }
-    }
-
     // Strip owner uuid + sanitize cover_url + attach tags to each track
     // Voice tag (mig 072): attach the creator's tag to beats that opted in so
     // the preview player can overlay it client-side. Owner downloads stay clean.
     const tagUrl = (creator as any)?.voice_tag_url ?? null;
     const tagInterval = (creator as any)?.voice_tag_interval_seconds ?? 20;
-    const safeTracks = tracksAny.map(({ user_id: _u, cover_url, ...rest }: any) => ({
+    const safeTracks = tracksAny.map(({ user_id: _u, cover_url, ...rest }: any) => redactPublicTrackMedia({
       ...rest,
       cover_url: sanitizeUrl(cover_url),
       tags: tagsByTrack[rest.id] ?? [],
-      wav_url: wavByTrack[rest.id] ?? null,
       play_count: playCountByTrack[rest.id] ?? 0,
       ...(rest.voice_tag_enabled && tagUrl ? { voice_tag_url: tagUrl, voice_tag_interval: tagInterval } : {}),
     }));

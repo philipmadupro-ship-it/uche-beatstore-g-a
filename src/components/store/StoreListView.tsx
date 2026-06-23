@@ -34,6 +34,8 @@ interface Props {
   onPreview: (t: StoreTrack) => void;
   onAddLease: (t: StoreTrack) => void;
   onAddExclusive: (t: StoreTrack) => void;
+  licenseCount?: number;
+  lowestLicensePrice?: number | null;
   onFreeDownload: (t: StoreTrack) => void;
   isWishlisted: (id: string) => boolean;
   onToggleWishlist: (id: string) => void;
@@ -42,7 +44,7 @@ interface Props {
 export function StoreListView({
   tracks, accentColor, currentTrackId, isPlaying, isPreviewId,
   priceFor, onPlay, onPreview, onAddLease, onAddExclusive, onFreeDownload,
-  isWishlisted, onToggleWishlist,
+  licenseCount = 0, lowestLicensePrice = null, isWishlisted, onToggleWishlist,
 }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -94,6 +96,7 @@ export function StoreListView({
           const isPreview = isPreviewId === t.id;
           const lp = priceFor(t, 'lease');
           const ep = priceFor(t, 'exclusive');
+          const hasLicenseTiers = licenseCount > 0;
           const wishlisted = isWishlisted(t.id);
           return (
             <li
@@ -113,7 +116,7 @@ export function StoreListView({
               }}
               onMouseEnter={() => setHovered(t.id)}
               onMouseLeave={() => setHovered((v) => (v === t.id ? null : v))}
-              className={`relative grid grid-cols-[36px_minmax(0,1fr)_auto] md:grid-cols-[36px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_24px_24px] gap-3 md:gap-4 items-center px-4 md:px-6 py-2 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/40 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
+              className={`relative grid grid-cols-[36px_minmax(0,1fr)_auto_28px] md:grid-cols-[36px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_24px_24px] gap-3 md:gap-4 items-center px-4 md:px-6 py-2 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/40 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
               style={isPreview ? { boxShadow: `inset 2px 0 0 ${accentColor}` } : isCur ? { boxShadow: `inset 2px 0 0 ${accentColor}80` } : {}}
             >
               {/* Cover w/ hover-play */}
@@ -197,6 +200,17 @@ export function StoreListView({
                     <Download size={11} />
                     Free
                   </button>
+                ) : hasLicenseTiers ? (
+                  <button
+                    data-row-action
+                    onClick={(e) => { e.stopPropagation(); onPreview(t); }}
+                    className="flex min-h-10 items-center gap-2 rounded-md border border-white/[0.10] bg-white/[0.05] px-3 text-[10px] font-mono font-bold uppercase tracking-wider text-[#F7EBDD] transition-colors hover:bg-white/[0.10] hover:border-white/[0.18]"
+                  >
+                    Choose license
+                    {lowestLicensePrice != null && (
+                      <span className="text-[#9B9282]">from ${lowestLicensePrice}</span>
+                    )}
+                  </button>
                 ) : (
                   <>
                     <button
@@ -228,7 +242,7 @@ export function StoreListView({
                 onClick={(e) => { e.stopPropagation(); onToggleWishlist(t.id); }}
                 aria-pressed={wishlisted}
                 title={wishlisted ? 'Remove from favorites' : 'Add to favorites'}
-                className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/[0.06] transition-colors"
+                className="hidden md:flex w-7 h-7 rounded-full items-center justify-center hover:bg-white/[0.06] transition-colors"
                 style={wishlisted ? { color: '#D6BE7A' } : { color: 'rgba(255,255,255,0.45)' }}
               >
                 <Heart size={13} fill={wishlisted ? 'currentColor' : 'none'} />
@@ -257,7 +271,16 @@ export function StoreListView({
                       <ShoppingBag size={12} className="text-white/60" />
                       Open beat
                     </button>
-                    {!t.free_download_enabled && lp != null && (
+                    {!t.free_download_enabled && hasLicenseTiers && (
+                      <button
+                        onClick={() => { onPreview(t); setMenuFor(null); }}
+                        className="flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-white/[0.06] w-full text-left"
+                      >
+                        <Plus size={12} style={{ color: accentColor }} />
+                        Choose license{lowestLicensePrice != null ? ` from $${lowestLicensePrice}` : ''}
+                      </button>
+                    )}
+                    {!t.free_download_enabled && !hasLicenseTiers && lp != null && (
                       <button
                         onClick={() => { onAddLease(t); setMenuFor(null); }}
                         className="flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-white/[0.06] w-full text-left"
@@ -266,7 +289,7 @@ export function StoreListView({
                         Add lease (${lp})
                       </button>
                     )}
-                    {!t.free_download_enabled && ep != null && (
+                    {!t.free_download_enabled && !hasLicenseTiers && ep != null && (
                       <button
                         onClick={() => { onAddExclusive(t); setMenuFor(null); }}
                         className="flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-white/[0.06] w-full text-left"

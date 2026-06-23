@@ -18,15 +18,70 @@ export const r2 = new S3Client({
  * Uploads an audio/image buffer.
  * Uses Cloudflare R2 when configured, otherwise saves to public/uploads/ for local dev.
  */
-export async function uploadAudio(fileBuffer: Buffer, fileName: string, contentType: string): Promise<string> {
+export function privateAudioBucket(): string {
+  const bucket = process.env.R2_PRIVATE_BUCKET_NAME;
+  if (bucket) return bucket;
+  throw new Error('Missing R2_PRIVATE_BUCKET_NAME');
+}
+
+export function r2ObjectRef(bucket: string, key: string): string {
+  return `r2://${bucket}/${key}`;
+}
+
+export function parseR2ObjectRef(value: string): { bucket: string; key: string } | null {
+  if (!value.startsWith('r2://')) return null;
+  const withoutScheme = value.slice(5);
+  const slash = withoutScheme.indexOf('/');
+  if (slash <= 0 || slash === withoutScheme.length - 1) return null;
+  return {
+    bucket: withoutScheme.slice(0, slash),
+    key: withoutScheme.slice(slash + 1),
+  };
+}
+
+export async function getStoredObject(
+  source: string,
+  range?: string | null,
+) {
+  const ref = parseR2ObjectRef(source);
+  if (!ref) return null;
+  return r2.send(new GetObjectCommand({
+    Bucket: ref.bucket,
+    Key: ref.key,
+    Range: range || undefined,
+  }));
+}
+
+export async function readStoredObject(source: string): Promise<Buffer> {
+  const object = await getStoredObject(source);
+  if (object?.Body) {
+    return Buffer.from(await object.Body.transformToByteArray());
+  }
+
+  if (source.startsWith('/uploads/') && !source.includes('..')) {
+    return fs.readFileSync(path.join(process.cwd(), 'public', source));
+  }
+
+  const parsed = new URL(source);
+  if (parsed.protocol !== 'https:') throw new Error('Stored object source not allowed');
+  const response = await fetch(parsed, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Stored object fetch failed (${response.status})`);
+  return Buffer.from(await response.arrayBuffer());
+}
+
+/**
+ * Upload a full-resolution audio asset to private storage. Local development
+ * keeps its filesystem fallback; production fails closed without a private
+ * bucket so a master can never silently land in the public bucket.
+ */
+export async function uploadPrivateAudio(fileBuffer: Buffer, fileName: string, contentType: string): Promise<string> {
   // Local fallback when R2 is not configured
   if (!isR2Configured()) {
     return uploadLocal(fileBuffer, fileName);
   }
 
-  // Production: upload to R2
-  const bucketName = process.env.R2_BUCKET_NAME;
-  if (!bucketName) throw new Error('Missing R2_BUCKET_NAME');
+  const bucketName = privateAudioBucket();
+  if (!bucketName) throw new Error('Missing R2_PRIVATE_BUCKET_NAME');
 
   const fileExtension = fileName.split('.').pop() || 'mp3';
   const uniqueId = nanoid(10);
@@ -41,18 +96,52 @@ export async function uploadAudio(fileBuffer: Buffer, fileName: string, contentT
 
   await r2.send(command);
 
-  const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
-  if (!publicUrl) throw new Error('Missing NEXT_PUBLIC_R2_PUBLIC_URL');
+  return r2ObjectRef(bucketName, objectKey);
+}
 
-  return `${publicUrl}/${objectKey}`;
+/**
+ * Backwards-compatible name used by stems and licensed source uploads.
+ */
+export const uploadAudio = uploadPrivateAudio;
+
+export async function uploadPublicAudioAsset(
+  fileBuffer: Buffer,
+  fileName: string,
+  contentType: string,
+  prefix = 'public-audio',
+): Promise<string> {
+  if (!isR2Configured()) return uploadLocal(fileBuffer, fileName, prefix);
+
+  const bucketName = process.env.R2_BUCKET_NAME;
+  const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+  if (!bucketName || !publicUrl) throw new Error('Public R2 bucket not configured');
+
+  const ext = path.extname(fileName).replace('.', '').toLowerCase() || 'mp3';
+  const objectKey = `${prefix}/${nanoid(10)}.${ext}`;
+  await r2.send(new PutObjectCommand({
+    Bucket: bucketName,
+    Key: objectKey,
+    Body: fileBuffer,
+    ContentType: contentType,
+    CacheControl: 'public, max-age=31536000, immutable',
+  }));
+  return `${publicUrl.replace(/\/$/, '')}/${objectKey}`;
+}
+
+export async function uploadPublicPreview(source: Buffer): Promise<string | null> {
+  const { createPreviewMp3Buffer } = await import('@/lib/audio/convert');
+  const preview = await createPreviewMp3Buffer(source);
+  if (!preview) return null;
+  return uploadPublicAudioAsset(preview, 'preview.mp3', 'audio/mpeg', 'previews');
 }
 
 /**
  * Generates a signed URL valid for 1 hour for private R2 access.
  */
-export async function getPresignedUrl(key: string): Promise<string> {
-  const bucketName = process.env.R2_BUCKET_NAME;
-  if (!bucketName) throw new Error('Missing R2_BUCKET_NAME');
+export async function getPresignedUrl(keyOrRef: string): Promise<string> {
+  const ref = parseR2ObjectRef(keyOrRef);
+  const bucketName = ref?.bucket || privateAudioBucket();
+  const key = ref?.key || keyOrRef;
 
   const command = new GetObjectCommand({
     Bucket: bucketName,
@@ -96,7 +185,20 @@ export async function uploadPeaksSidecar(
     const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
     if (!bucketName || !publicUrl) return null;
 
-    // Pull the object key out of the R2 URL: NEXT_PUBLIC_R2_PUBLIC_URL/<key>.
+    const privateRef = parseR2ObjectRef(audioUrl);
+    if (privateRef) {
+      const peaksKey = `peaks/${privateRef.key.replace(/\//g, '-')}.peaks.json`;
+      await r2.send(new PutObjectCommand({
+        Bucket: bucketName,
+        Key: peaksKey,
+        Body: peaksJson,
+        ContentType: 'application/json',
+        CacheControl: 'public, max-age=31536000, immutable',
+      }));
+      return `${publicUrl.replace(/\/$/, '')}/${peaksKey}`;
+    }
+
+    // Pull the object key out of the legacy public R2 URL.
     const prefix = publicUrl.replace(/\/$/, '') + '/';
     if (!audioUrl.startsWith(prefix)) return null;
     const audioKey = audioUrl.slice(prefix.length);
@@ -197,8 +299,8 @@ export async function uploadImage(buffer: Buffer, ext: string, contentType: stri
   return `${publicUrl.replace(/\/$/, '')}/${objectKey}`;
 }
 
-function uploadLocal(fileBuffer: Buffer, fileName: string): string {
-  const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+function uploadLocal(fileBuffer: Buffer, fileName: string, prefix = ''): string {
+  const uploadsDir = path.join(process.cwd(), 'public', 'uploads', prefix);
   if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
@@ -209,6 +311,5 @@ function uploadLocal(fileBuffer: Buffer, fileName: string): string {
 
   fs.writeFileSync(filePath, fileBuffer);
 
-  return `/uploads/${safeName}`;
+  return `/uploads/${prefix ? `${prefix}/` : ''}${safeName}`;
 }
-

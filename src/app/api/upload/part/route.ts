@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadPart } from '@/lib/storage/multipart';
 import { getSession, recordPart } from '@/lib/storage/upload-sessions';
+import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -26,18 +27,30 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'invalid part number' }, { status: 400 });
     }
 
-    const session = getSession(sessionId);
+    const session = await getSession(sessionId);
     if (!session) {
       return NextResponse.json({ error: 'unknown session' }, { status: 404 });
     }
     if (session.status !== 'in_progress') {
       return NextResponse.json({ error: `session ${session.status}` }, { status: 409 });
     }
+    const owner = await requireUploadSessionOwner(session);
+    if (!owner.ok) return owner.res;
+    if (partNumber > session.totalParts) {
+      return NextResponse.json({ error: 'part number exceeds total parts' }, { status: 400 });
+    }
 
     const ab = await req.arrayBuffer();
     const body = Buffer.from(ab);
     if (body.length === 0) {
       return NextResponse.json({ error: 'empty part' }, { status: 400 });
+    }
+    const isLastPart = partNumber === session.totalParts;
+    if (!isLastPart && body.length !== session.partSize) {
+      return NextResponse.json({ error: 'invalid part size' }, { status: 400 });
+    }
+    if (isLastPart && body.length > session.partSize) {
+      return NextResponse.json({ error: 'invalid final part size' }, { status: 400 });
     }
 
     const part = await uploadPart({
@@ -47,7 +60,7 @@ export async function PUT(req: NextRequest) {
       body,
     });
 
-    const updated = recordPart(sessionId, part);
+    const updated = await recordPart(sessionId, part);
     return NextResponse.json({
       ok: true,
       partNumber: part.PartNumber,

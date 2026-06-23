@@ -5,6 +5,7 @@ import { getAppUrl } from '@/lib/env';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { Resend } from 'resend';
+import { verifyBuyerToken } from '@/lib/buyer-tokens';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,10 +15,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * POST /api/store/orders/resend
- * Body: { email: string; purchase_id: string; kind: 'track_license' | 'project_bundle' }
+ * Body: { email: string; token: string; purchase_id: string; kind: 'track_license' | 'project_bundle' }
  *
- * Re-sends the download link email to the buyer. Verifies that the
- * email matches the purchase before sending.
+ * Re-sends the download link email to the buyer. Requires a signed buyer
+ * recovery token for the same email before checking the purchase row.
  */
 export async function POST(req: NextRequest) {
   if (!isSupabaseConfigured()) {
@@ -27,16 +28,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Email service not configured' }, { status: 503 });
   }
 
-  let body: { email?: string; purchase_id?: string; kind?: string };
+  let body: { email?: string; token?: string; purchase_id?: string; kind?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { email, purchase_id, kind } = body;
-  if (!email || !EMAIL_RE.test(email) || !purchase_id || !kind) {
-    return NextResponse.json({ error: 'email, purchase_id, and kind required' }, { status: 400 });
+  const { email, token, purchase_id, kind } = body;
+  const normalizedEmail = email?.toLowerCase().trim() ?? '';
+  if (!EMAIL_RE.test(normalizedEmail) || !token || !purchase_id || !kind) {
+    return NextResponse.json({ error: 'email, token, purchase_id, and kind required' }, { status: 400 });
+  }
+
+  const claims = verifyBuyerToken(token);
+  if (!claims) {
+    return NextResponse.json({ error: 'Invalid or expired recovery token' }, { status: 410 });
+  }
+  if (claims.email !== normalizedEmail) {
+    return NextResponse.json({ error: 'Recovery token does not match email' }, { status: 403 });
   }
 
   const admin = createServiceClient();
@@ -50,7 +60,7 @@ export async function POST(req: NextRequest) {
         .from('license_purchases')
         .select('id, buyer_email, stripe_session_id, track_ids, amount_usd, status')
         .eq('id', purchase_id)
-        .eq('buyer_email', email.toLowerCase().trim())
+        .eq('buyer_email', normalizedEmail)
         .eq('status', 'paid')
         .maybeSingle();
 
@@ -65,7 +75,7 @@ export async function POST(req: NextRequest) {
 
       await resend.emails.send({
         from: fromEmail,
-        to: email,
+        to: normalizedEmail,
         subject: 'Your download link',
         html: `
           <div style="font-family:sans-serif;background:#090907;color:#F7EBDD;padding:40px;border-radius:20px;max-width:560px">
@@ -97,7 +107,7 @@ export async function POST(req: NextRequest) {
         .from('project_access_links')
         .select('id, buyer_email, token, amount_usd, project_id')
         .eq('id', purchase_id)
-        .eq('buyer_email', email.toLowerCase().trim())
+        .eq('buyer_email', normalizedEmail)
         .maybeSingle();
 
       if (error) throw error;
@@ -111,7 +121,7 @@ export async function POST(req: NextRequest) {
 
       await resend.emails.send({
         from: fromEmail,
-        to: email,
+        to: normalizedEmail,
         subject: 'Your project bundle access link',
         html: `
           <div style="font-family:sans-serif;background:#090907;color:#F7EBDD;padding:40px;border-radius:20px;max-width:560px">

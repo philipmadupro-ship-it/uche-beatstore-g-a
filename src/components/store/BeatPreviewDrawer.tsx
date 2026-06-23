@@ -207,6 +207,26 @@ export function BeatPreviewDrawer({
             </div>
           </div>
 
+          {/* ── License selector — keep the buying decision adjacent to preview ── */}
+          <div className="px-5 py-4 border-b border-white/[0.05]">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B]">License</p>
+              {selectedTier && !track.free_download_enabled && (
+                <p className="rounded-full border border-white/[0.06] bg-white/[0.03] px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider text-[#B4AA99]">
+                  {selectedTier.is_free ? 'Free' : `$${Number(selectedTier.price_usd).toLocaleString()}`}
+                </p>
+              )}
+            </div>
+            <LicenseSelector
+              tiers={activeLicenses}
+              selectedId={selectedLicense}
+              onSelect={setSelectedLicense}
+              accentColor={accentColor}
+              isFreeDownload={track.free_download_enabled ?? false}
+              onFreeDownload={onFreeDownload}
+            />
+          </div>
+
           {/* ── Studio specs ── */}
           <div className="px-5 py-4 border-b border-white/[0.05]">
             <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] mb-3">Studio specs</p>
@@ -256,18 +276,7 @@ export function BeatPreviewDrawer({
             </div>
           )}
 
-          {/* ── License selector ── */}
           <div className="px-5 py-4 pb-8">
-            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] mb-3">License</p>
-            <LicenseSelector
-              tiers={activeLicenses}
-              selectedId={selectedLicense}
-              onSelect={setSelectedLicense}
-              accentColor={accentColor}
-              isFreeDownload={track.free_download_enabled ?? false}
-              onFreeDownload={onFreeDownload}
-            />
-
             {/* Open full page — bottom of scrollable area, very visible */}
             <Link
               href={`/store/${track.id}`}

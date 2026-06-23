@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Loader2, Music, ListMusic, Plus, Check, Clock, Pin } from 'lucide-react';
+import { Loader2, ListMusic, Plus, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { usePlayer } from '@/hooks/usePlayer';
-import { cn } from '@/lib/utils';
+import { MediaCard } from '@/components/ui/MediaCard';
 import { PlaylistFilterBar } from '@/components/playlists/PlaylistFilterBar';
 import { PlaylistOptionsMenu } from '@/components/playlists/PlaylistOptionsMenu';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
@@ -184,8 +184,6 @@ export default function PlaylistsPage() {
           ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
             {filtered.map((playlist) => {
-              const sel = selectedIds.has(playlist.id);
-              const covers = playlist.preview_covers?.filter(Boolean) ?? [];
               const count = playlist.track_count ?? 0;
               const toggleSelected = () => setSelectedIds((prev) => {
                     const n = new Set(prev);
@@ -193,70 +191,54 @@ export default function PlaylistsPage() {
                     else n.add(playlist.id);
                     return n;
                   });
-              const coverBlock = (
-                <div className={cn('relative mb-2.5 aspect-square overflow-hidden rounded-xl border bg-[#11100D] transition-all duration-200 group-hover:translate-y-[-1px] sm:rounded-2xl', sel ? 'border-[#E7D7BE]/60' : 'border-[#211F1A] group-hover:border-[#3B372F]')}>
-                  {playlist.cover_url ? (
-                    <img loading="lazy" src={playlist.cover_url} alt={playlist.name} className="h-full w-full object-cover" />
-                  ) : covers.length >= 2 ? (
-                    <div className="grid h-full w-full grid-cols-2 gap-px bg-[#211F1A]">
-                      {covers.slice(0, 4).map((url, i) => (
-                        <div key={i} className="overflow-hidden bg-[#171511]">
-                          {url ? <img loading="lazy" src={url} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center"><Music size={12} className="text-[#3B372F]" /></div>}
+
+              return (
+                <MediaCard
+                  key={playlist.id}
+                  title={playlist.name}
+                  href={`/playlists/${playlist.id}`}
+                  onOpen={() => trackRecentOpen(playlist.id)}
+                  coverUrl={playlist.cover_url}
+                  previewCovers={playlist.preview_covers}
+                  fallbackIcon={<ListMusic size={26} className="sm:size-8" />}
+                  fallbackStyle={seededGradient(playlist.id)}
+                  pinned={playlist.pinned}
+                  onTogglePin={(e) => togglePin(playlist, e)}
+                  pinBusy={togglingPin === playlist.id}
+                  selectMode={selectMode}
+                  selected={selectedIds.has(playlist.id)}
+                  onToggleSelect={toggleSelected}
+                  optionsMenu={
+                    <PlaylistOptionsMenu playlist={playlist} onChanged={refreshPlaylistsAndFolders} onDeleted={fetchPlaylists} />
+                  }
+                  overlay={
+                    <>
+                      <button
+                        onClick={async (e) => { e.preventDefault(); e.stopPropagation(); try { const res = await fetch(`/api/playlists/${playlist.id}/tracks`); const data = await res.json(); const tracks = Array.isArray(data) ? data : data.tracks ?? []; if (tracks.length > 0) { setQueue(tracks); setTrack(tracks[0]); } } catch {} }}
+                        className="absolute bottom-2 left-2 grid size-7 place-items-center rounded-full bg-white text-black shadow-lg transition-transform hover:scale-105 sm:size-9"
+                        title="Play playlist"
+                      >
+                        <PlayGlyph size={11} className="ml-0.5 sm:size-[13px]" />
+                      </button>
+                      {count > 0 && (
+                        <div className="absolute bottom-2 right-2 rounded-full bg-black/60 px-1.5 py-0.5 backdrop-blur-sm">
+                          <span className="text-[8px] font-mono text-white/80 tabular-nums sm:text-[9px]">{count}</span>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center" style={seededGradient(playlist.id)}>
-                      <ListMusic size={26} className="text-white/15 sm:size-8" />
-                    </div>
-                  )}
-                  <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/72 to-transparent" />
-                  {!selectMode && (
-                    <button
-                      onClick={async (e) => { e.preventDefault(); e.stopPropagation(); try { const res = await fetch(`/api/playlists/${playlist.id}/tracks`); const data = await res.json(); const tracks = Array.isArray(data) ? data : data.tracks ?? []; if (tracks.length > 0) { setQueue(tracks); setTrack(tracks[0]); } } catch {} }}
-                      className="absolute bottom-2 left-2 grid size-7 place-items-center rounded-full bg-white text-black shadow-lg transition-transform hover:scale-105 sm:size-9"
-                      title="Play playlist"
-                    >
-                      <PlayGlyph size={11} className="ml-0.5 sm:size-[13px]" />
-                    </button>
-                  )}
-                  {playlist.pinned && !selectMode && (
-                    <button onClick={(e) => togglePin(playlist, e)} disabled={togglingPin === playlist.id}
-                      className="absolute left-2 top-2 z-20 grid size-6 place-items-center rounded-full bg-[#E7D7BE] text-black shadow-sm" title="Unpin">
-                      <Pin size={10} fill="currentColor" />
-                    </button>
-                  )}
-                  {!selectMode && <div className="absolute right-2 top-2 z-10"><PlaylistOptionsMenu playlist={playlist} onChanged={refreshPlaylistsAndFolders} onDeleted={fetchPlaylists} /></div>}
-                  {selectMode && <div className={cn('absolute right-2 top-2 grid size-6 place-items-center rounded-md border backdrop-blur-md', sel ? 'border-[#F3E6D1] bg-[#E7D7BE]' : 'border-white/20 bg-black/50')}>{sel && <Check size={12} className="text-black" strokeWidth={3} />}</div>}
-                  {count > 0 && !selectMode && <div className="absolute bottom-2 right-2 rounded-full bg-black/60 px-1.5 py-0.5 backdrop-blur-sm"><span className="text-[8px] font-mono text-white/80 tabular-nums sm:text-[9px]">{count}</span></div>}
-                </div>
-              );
-
-              const metaBlock = (
-                <>
-                  <h3 className={cn('truncate text-[13px] font-bold leading-tight transition-colors sm:text-[15px]', sel ? 'text-white' : 'text-[#F7EBDD] group-hover:text-white')}>{playlist.name}</h3>
-                  <p className="mt-1 flex min-w-0 items-center gap-1.5 text-[9px] font-mono text-[#837B6D]">
-                    <span>{count} track{count !== 1 ? 's' : ''}</span>
-                    {playlist.total_duration != null && playlist.total_duration > 0 && <><span className="text-[#3B372F]">·</span><span>{fmtDuration(playlist.total_duration)}</span></>}
-                  </p>
-                  {(playlist.tags?.length ?? 0) > 0 && (
-                    <p className="mt-1 truncate text-[8px] font-mono uppercase tracking-wider text-[#AFA694]">
-                      {playlist.tags!.slice(0, 2).map((t) => t.tag).join(' / ')}
-                    </p>
-                  )}
-                </>
-              );
-
-              return selectMode ? (
-                <button key={playlist.id} type="button" onClick={toggleSelected} className="group min-w-0 text-left">
-                  {coverBlock}
-                  {metaBlock}
-                </button>
-              ) : (
-                <Link key={playlist.id} href={`/playlists/${playlist.id}`} onClick={() => trackRecentOpen(playlist.id)} className="group min-w-0">
-                  {coverBlock}
-                  {metaBlock}
-                </Link>
+                      )}
+                    </>
+                  }
+                  meta={
+                    <>
+                      <span>{count} track{count !== 1 ? 's' : ''}</span>
+                      {playlist.total_duration != null && playlist.total_duration > 0 && (
+                        <><span className="text-[#3B372F]">·</span><span>{fmtDuration(playlist.total_duration)}</span></>
+                      )}
+                      {(playlist.tags?.length ?? 0) > 0 && (
+                        <><span className="text-[#3B372F]">·</span><span className="truncate">{playlist.tags!.slice(0, 2).map((t) => t.tag).join(' / ')}</span></>
+                      )}
+                    </>
+                  }
+                />
               );
             })}
           </div>

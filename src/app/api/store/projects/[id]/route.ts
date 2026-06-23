@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
+import { redactPublicTrackMedia } from '@/lib/store/public-media';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -66,7 +67,7 @@ export async function GET(
         .select(TRACK_FIELDS)
         .in('id', trackIds);
       for (const t of (trackRows ?? []) as any[]) {
-        trackMap[t.id] = { ...t, cover_url: sanitizeUrl(t.cover_url) };
+        trackMap[t.id] = redactPublicTrackMedia({ ...t, cover_url: sanitizeUrl(t.cover_url) });
       }
     }
 

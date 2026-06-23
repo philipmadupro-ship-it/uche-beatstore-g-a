@@ -13,9 +13,15 @@ export async function GET() {
     if (isSupabaseConfigured()) {
       const cookieClient = await createServerClient();
       const { data: { user } } = await cookieClient.auth.getUser();
+      if (!user) {
+        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      }
       const supabase = createServiceClient();
-      let q = supabase.from('calendar_events').select('*').order('date', { ascending: true });
-      if (user) q = q.or(`user_id.eq.${user.id},user_id.is.null`);
+      const q = supabase
+        .from('calendar_events')
+        .select('*')
+        .or(`user_id.eq.${user.id},user_id.is.null`)
+        .order('date', { ascending: true });
       const { data, error } = await q;
       if (error) throw new Error(error.message);
       return NextResponse.json({ events: data });

@@ -21,6 +21,9 @@
  */
 export function cdnAudioSrc(url: string | null | undefined): string {
   if (!url) return '';
+  if (url.startsWith('r2://')) {
+    return `/api/audio?src=${encodeURIComponent(url)}`;
+  }
   // Already pointed at our proxy — unwrap to the direct src so we don't double
   // through the origin. Checked BEFORE the generic '/' local-path test, since
   // proxy URLs also start with '/'.

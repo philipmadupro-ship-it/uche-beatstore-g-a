@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Search, Music, Library, Plus, GripVertical, X, Tag } from 'lucide-react';
+import { Search, Music, Library, Plus, GripVertical, X, Tag, CheckSquare } from 'lucide-react';
 import { TrackCard } from '@/components/tracks/TrackCard';
 import { Track } from '@/lib/types';
 
@@ -21,6 +21,8 @@ interface Props {
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
   onSelectAll?: () => void;
+  selectMode?: boolean;
+  onToggleSelectMode?: () => void;
   /** Called after a drag-to-reorder completes with the new ordered id list. */
   onReorder?: (orderedIds: string[]) => void;
 }
@@ -40,7 +42,8 @@ export function ProjectTrackList({
   filtered,
   onSelectTrack, onPlayTrack, onRemoveTrack, onDeleteTrack,
   onAddFromLibrary, onShowUpload,
-  selectedIds, onToggleSelect, onSelectAll, onReorder,
+  selectedIds, onToggleSelect, onSelectAll,
+  selectMode = false, onToggleSelectMode, onReorder,
 }: Props) {
   // Internal tag filter — derive available tags from all tracks, let user
   // narrow within the already type/search filtered list.
@@ -70,7 +73,8 @@ export function ProjectTrackList({
       return n;
     });
 
-  const selectable = !!(selectedIds && onToggleSelect);
+  const canSelect = !!(selectedIds && onToggleSelect && onToggleSelectMode);
+  const selectable = canSelect && selectMode;
   const allSelected = selectable && visibleTracks.length > 0 && visibleTracks.every((t) => selectedIds!.has(t.id));
 
   // Drag-to-reorder state (HTML5 DnD; no extra library).
@@ -120,15 +124,32 @@ export function ProjectTrackList({
             </button>
           ))}
         </div>
-        <div className="relative w-56 sm:w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" size={12} />
-          <input
-            type="text"
-            placeholder="Search tracks or tags"
-            className="w-full bg-[#171511] border border-[#211F1A] rounded-md py-2 pl-8 pr-3 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] transition-colors"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+        <div className="flex items-center gap-2">
+          {canSelect && (
+            <button
+              type="button"
+              onClick={onToggleSelectMode}
+              aria-pressed={selectMode}
+              className={`flex min-h-9 items-center gap-2 rounded-md border px-3 text-[10px] font-mono uppercase tracking-[0.14em] transition-colors ${
+                selectMode
+                  ? 'border-[#E7D7BE]/45 bg-[#E7D7BE]/14 text-[#E7D7BE]'
+                  : 'border-[#211F1A] bg-[#171511] text-[#B4AA99] hover:border-[#3B372F] hover:text-[#F7EBDD]'
+              }`}
+            >
+              <CheckSquare size={12} />
+              {selectMode ? 'Done' : 'Select'}
+            </button>
+          )}
+          <div className="relative w-56 sm:w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" size={12} />
+            <input
+              type="text"
+              placeholder="Search tracks or tags"
+              className="w-full bg-[#171511] border border-[#211F1A] rounded-md py-2 pl-8 pr-3 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] transition-colors"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 
@@ -232,6 +253,9 @@ export function ProjectTrackList({
                 index={i + 1}
                 onClickDetails={onSelectTrack}
                 onPlayClick={() => onPlayTrack(track)}
+                rowAction="play"
+                selectionBehavior="button"
+                draggableTrack={false}
                 onRemoveFromContext={(t) => onRemoveTrack(t.id)}
                 removeLabel="Remove from project"
                 onDelete={(t) => onDeleteTrack(t.id)}

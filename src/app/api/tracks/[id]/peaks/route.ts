@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAppUrl } from '@/lib/env';
 import { isSupabaseConfigured, getById, update, requireRowOwnership } from '@/lib/db';
 import { extractPeaks } from '@/lib/audio/peaks';
-import { uploadPeaksSidecar } from '@/lib/storage/upload';
+import { readStoredObject, uploadPeaksSidecar } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -47,28 +46,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ track, peaks_url: track.peaks_url, skipped: 'already-present' });
     }
 
-    // Resolve to an absolute URL so we can fetch from the Node runtime.
     const rawUrl: string = track.audio_url;
-    let absUrl = rawUrl;
-    if (rawUrl.startsWith('/')) {
-      const base = getAppUrl() || req.nextUrl.origin || 'http://localhost:3000';
-      absUrl = `${base}${rawUrl}`;
-    }
-
-    let upstream: Response;
+    let buf: Buffer;
     try {
-      upstream = await fetch(absUrl);
+      buf = await readStoredObject(rawUrl);
     } catch (err: any) {
       return NextResponse.json(
-        { error: `Could not fetch audio: ${err?.message || 'network error'}` },
+        { error: `Could not read audio: ${err?.message || 'storage error'}` },
         { status: 502 },
       );
     }
-    if (!upstream.ok) {
-      return NextResponse.json({ error: `Could not fetch audio (${upstream.status})` }, { status: 502 });
-    }
-    const ab = await upstream.arrayBuffer();
-    const buf = Buffer.from(ab);
 
     const peaks = await extractPeaks(buf);
     if (!peaks) {

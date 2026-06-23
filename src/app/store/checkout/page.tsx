@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import {
   ShieldCheck, Loader2, AlertTriangle, ArrowLeft, Mail,
   Check, Lock, RefreshCw, FileText, ShoppingBag, Music, Package,
@@ -25,9 +25,25 @@ const stripePublishableKey =
 const stripeKeyMissing = stripePublishableKey === PK_MISSING_SENTINEL;
 const stripePromise = loadStripe(stripePublishableKey);
 
+type CheckoutPayload = {
+  buyer_email: string;
+  promo_code?: string;
+  project_id?: string;
+  items?: Array<{
+    track_id: string;
+    license_id: string;
+    license_type: 'lease' | 'exclusive';
+  }>;
+};
+
+type StripeCheckoutInstance = {
+  mount: (selector: string) => void;
+  unmount: () => void;
+  destroy: () => void;
+};
+
 function CheckoutContent() {
-  const { items, cartTotal, clearCart } = useCart();
-  const router = useRouter();
+  const { items, cartTotal } = useCart();
   const searchParams = useSearchParams();
 
   const [email, setEmail] = useState('');
@@ -70,7 +86,7 @@ function CheckoutContent() {
   useEffect(() => {
     if (!clientSecret) return;
 
-    let checkoutInstance: any = null;
+    let checkoutInstance: StripeCheckoutInstance | null = null;
 
     async function mountStripeCheckout() {
       try {
@@ -87,17 +103,18 @@ function CheckoutContent() {
         // time instead of throwing in the browser.
         checkoutInstance = await stripe.createEmbeddedCheckoutPage({
           clientSecret,
-        });
+        }) as StripeCheckoutInstance;
 
         checkoutInstance.mount('#checkout-element');
-      } catch (err: any) {
+      } catch (err) {
         console.error('Stripe mount error:', err);
         // Detect expired / invalid client_secret so we show a friendlier
         // "Refresh checkout" message rather than the raw Stripe error.
         // Stripe surfaces these as messages like "Session has expired"
         // or "no longer valid" when the buyer leaves the tab open
         // past the ~24h session lifetime.
-        const raw = String(err?.message ?? '').toLowerCase();
+        const message = err instanceof Error ? err.message : 'Failed to render secure payment form.';
+        const raw = message.toLowerCase();
         const isExpired = raw.includes('expired') || raw.includes('no longer valid') || raw.includes('invalid');
         if (isExpired) {
           setInitError('Your checkout session expired. Refresh to start a new one.');
@@ -105,7 +122,7 @@ function CheckoutContent() {
           setClientSecret('');
           setIsEmailSubmitted(false);
         } else {
-          setInitError(err.message || 'Failed to render secure payment form.');
+          setInitError(message);
         }
       }
     }
@@ -157,7 +174,7 @@ function CheckoutContent() {
     localStorage.setItem('antigravity-buyer-email', targetEmail);
 
     try {
-      const payload: any = { buyer_email: targetEmail.trim() };
+      const payload: CheckoutPayload = { buyer_email: targetEmail.trim() };
       if (promoTerms) {
         payload.promo_code = promoCode.trim().toUpperCase();
       }
@@ -189,9 +206,9 @@ function CheckoutContent() {
       } else {
         throw new Error('Stripe initialization failed to return a payment token.');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Checkout error:', err);
-      setInitError(err.message || 'An unexpected error occurred during checkout setup.');
+      setInitError(err instanceof Error ? err.message : 'An unexpected error occurred during checkout setup.');
       setIsEmailSubmitted(false);
     } finally {
       setIsInitializing(false);
@@ -245,11 +262,23 @@ function CheckoutContent() {
 
   if (items.length === 0 && !isProjectPurchase) {
     return (
-      <div className="min-h-screen bg-[#090907] flex items-center justify-center p-6">
-        <div className="text-center">
-          <h1 className="text-[16px] font-bold text-white uppercase tracking-wider mb-2">Your Cart is Empty</h1>
-          <p className="text-[#B4AA99] text-[12px] mb-6">Add tracks from the store to purchase licenses.</p>
-          <Link href="/store" className="text-[#E7D7BE] hover:text-white text-[11px] font-mono uppercase tracking-wider">← Back to store</Link>
+      <div className="min-h-screen bg-[#090907] px-6 py-10 text-[#F7EBDD]">
+        <div className="mx-auto flex min-h-[78vh] max-w-xl flex-col items-center justify-center text-center">
+          <div className="mb-6 grid size-20 place-items-center rounded-[24px] border border-[#2B2821] bg-[#171511] shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+            <ShoppingBag size={26} className="text-[#D0C3AF]" />
+          </div>
+          <p className="mb-3 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6E685B]">Checkout</p>
+          <h1 className="text-[28px] font-bold leading-tight text-white sm:text-[36px]">Your cart is empty</h1>
+          <p className="mt-3 max-w-sm text-[13px] leading-relaxed text-[#B4AA99]">
+            Pick a beat, choose a license, then come back here for instant delivery after payment.
+          </p>
+          <Link
+            href="/store"
+            className="mt-8 inline-flex min-h-11 items-center gap-2 rounded-full bg-[#E7D7BE] px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-black transition-all hover:bg-[#F3E6D1] active:scale-[0.98]"
+          >
+            <ArrowLeft size={13} />
+            Browse beats
+          </Link>
         </div>
       </div>
     );
@@ -260,20 +289,50 @@ function CheckoutContent() {
   const orderTotalForMobile = isProjectPurchase ? null : cartTotal();
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8 md:gap-12 items-start max-w-6xl mx-auto px-4 md:px-8 py-6 pb-32 lg:pb-6">
+    <div className="mx-auto max-w-6xl px-4 pb-32 pt-6 md:px-8 lg:pb-8">
+      <header className="mb-7 rounded-[24px] border border-[#211F1A] bg-[#11100d] px-5 py-5 shadow-[0_30px_90px_rgba(0,0,0,0.38)] md:px-7">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <Link
+              href="/store"
+              className="mb-4 inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#9B9282] transition-colors hover:text-[#D0C3AF]"
+            >
+              <ArrowLeft size={11} />
+              Back to store
+            </Link>
+            <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#6E685B]">Secure checkout</p>
+            <h1 className="mt-2 text-[26px] font-bold leading-tight text-white sm:text-[34px]">
+              {isProjectPurchase ? 'Complete your bundle purchase' : 'License your selected beats'}
+            </h1>
+            <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#B4AA99]">
+              Enter your email, pay through Stripe, then receive private download links and license details.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:min-w-[320px]">
+            {[
+              { label: 'Email', active: true },
+              { label: 'Payment', active: isEmailSubmitted },
+              { label: 'Delivery', active: clientSecret },
+            ].map((step, index) => (
+              <div
+                key={step.label}
+                className={`rounded-xl border px-3 py-2 ${step.active ? 'border-[#E7D7BE]/25 bg-[#E7D7BE]/8 text-[#F7EBDD]' : 'border-white/[0.05] bg-white/[0.02] text-[#6E685B]'}`}
+              >
+                <p className="text-[8px] font-mono uppercase tracking-[0.18em]">0{index + 1}</p>
+                <p className="mt-1 text-[11px] font-semibold">{step.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 items-start gap-8 md:gap-12 lg:grid-cols-[minmax(0,1fr)_400px]">
 
       {/* ── LEFT: Checkout Flow ── */}
       <div className="space-y-6">
 
         {/* Top Header — back link + secure-checkout badge + guest-checkout tag */}
-        <div className="flex items-center justify-between pb-4 border-b border-white/[0.04]">
-          <Link
-            href="/store"
-            className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
-          >
-            <ArrowLeft size={11} />
-            Back to store
-          </Link>
+        <div className="flex items-center justify-end pb-4 border-b border-white/[0.04]">
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-widest text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 px-2 py-0.5 rounded">
               <Lock size={9} />
@@ -286,7 +345,7 @@ function CheckoutContent() {
         </div>
 
         {/* 1. Contact Form */}
-        <div className="rounded-2xl border border-[#2B2821] bg-[#171511] p-5 md:p-6 transition-all duration-300">
+        <div className="rounded-[22px] border border-[#2B2821] bg-[#171511] p-5 transition-all duration-300 md:p-6">
           <div className="flex items-center gap-3 mb-5">
             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-mono font-bold ${isEmailSubmitted ? 'bg-[#6DC6A4] text-black' : 'bg-[#E7D7BE] text-black'}`}>
               {isEmailSubmitted ? <Check size={12} /> : '1'}
@@ -311,7 +370,7 @@ function CheckoutContent() {
                     placeholder="you@example.com"
                     value={email}
                     onChange={handleEmailChange}
-                    className={`w-full bg-[#090907] border rounded-xl py-3 pl-10 pr-4 text-[13px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none transition-colors ${emailError ? 'border-red-500/50 focus:border-red-500' : 'border-[#2B2821] focus:border-[#3B372F]'
+                    className={`w-full bg-[#090907] border rounded-xl py-3 pl-10 pr-4 text-[13px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:ring-2 focus:ring-[#E7D7BE]/10 transition-colors ${emailError ? 'border-red-500/50 focus:border-red-500' : 'border-[#2B2821] focus:border-[#3B372F]'
                       }`}
                     required
                   />
@@ -325,7 +384,7 @@ function CheckoutContent() {
               </div>
               <button
                 type="submit"
-                className="w-full py-3.5 rounded-xl bg-[#E7D7BE] hover:bg-[#F3E6D1] active:scale-[0.99] text-black text-[11px] font-bold uppercase tracking-wider transition-all"
+                className="w-full py-3.5 rounded-xl bg-[#E7D7BE] hover:bg-[#F3E6D1] active:scale-[0.99] text-black text-[11px] font-bold uppercase tracking-wider transition-all focus:outline-none focus:ring-2 focus:ring-[#E7D7BE]/30"
               >
                 Continue to Payment
               </button>
@@ -357,7 +416,7 @@ function CheckoutContent() {
         </div>
 
         {/* 2. Payment Section */}
-        <div className={`rounded-2xl border transition-all duration-300 ${isEmailSubmitted ? 'border-[#2B2821] bg-[#171511]' : 'border-[#2B2821]/30 bg-[#171511]/30 opacity-50 pointer-events-none'
+        <div className={`rounded-[22px] border transition-all duration-300 ${isEmailSubmitted ? 'border-[#2B2821] bg-[#171511]' : 'border-[#2B2821]/30 bg-[#171511]/30 opacity-50 pointer-events-none'
           } p-5 md:p-6`}>
           <div className="flex items-center gap-3 mb-5">
             <div className="w-7 h-7 rounded-full bg-[#171511] border border-[#2B2821] flex items-center justify-center text-[11px] font-mono text-[#D0C3AF] font-bold">
@@ -410,7 +469,7 @@ function CheckoutContent() {
           )}
 
           {/* Secure embedded element placeholder */}
-          <div id="checkout-element" className="transition-all duration-300 min-h-[150px]" />
+          <div id="checkout-element" className="min-h-[150px] transition-all duration-300" />
 
           {clientSecret && !initError && (
             <div className="mt-6 pt-5 border-t border-white/[0.03] flex items-center justify-center gap-2 text-[10px] font-mono text-[#6E685B]">
@@ -423,15 +482,20 @@ function CheckoutContent() {
       </div>
 
       {/* ── RIGHT: Order Summary & Trust signals ── */}
-      <div className="space-y-5 lg:sticky lg:top-24">
+      <aside className="space-y-5 lg:sticky lg:top-24">
 
         {/* Order Summary Box */}
-        <div className="rounded-2xl border border-[#2B2821] bg-[#171511] overflow-hidden flex flex-col">
+        <div className="flex flex-col overflow-hidden rounded-[22px] border border-[#2B2821] bg-[#171511] shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
           <div className="px-5 py-4 border-b border-white/[0.04]">
-            <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#F7EBDD] flex items-center gap-2">
-              <ShoppingBag size={12} className="text-[#D0C3AF]" />
-              Order Summary
-            </h3>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#F7EBDD] flex items-center gap-2">
+                <ShoppingBag size={12} className="text-[#D0C3AF]" />
+                Order summary
+              </h3>
+              <span className="rounded-full border border-[#6DC6A4]/20 bg-[#6DC6A4]/10 px-2.5 py-1 text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4]">
+                Instant delivery
+              </span>
+            </div>
           </div>
 
           {/* Item List — tracks for cart purchases, or project summary */}
@@ -548,7 +612,7 @@ function CheckoutContent() {
         {/* Accepted payment methods — text badges, no third-party logos so
             we don't pull in brand assets we don't have licenses for. Stripe
             handles all the actual mark rendering inside the iframe. */}
-        <div className="rounded-2xl border border-[#2B2821] bg-[#171511] p-4">
+        <div className="rounded-[22px] border border-[#2B2821] bg-[#171511] p-4">
           <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Pay with</p>
           <div className="flex flex-wrap gap-1.5">
             {['Visa', 'Mastercard', 'Amex', 'Apple Pay', 'Google Pay', 'Link'].map((m) => (
@@ -566,8 +630,8 @@ function CheckoutContent() {
         </div>
 
         {/* Trust & Reassurance Badges */}
-        <div className="rounded-2xl border border-[#2B2821] bg-[#171511] p-5 space-y-4">
-          <h4 className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">Purchase Guarantees</h4>
+        <div className="rounded-[22px] border border-[#2B2821] bg-[#171511] p-5 space-y-4">
+          <h4 className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">Purchase guarantees</h4>
 
           <div className="space-y-3.5">
             <div className="flex gap-3 items-start">
@@ -575,7 +639,7 @@ function CheckoutContent() {
                 <Check size={11} />
               </div>
               <div>
-                <p className="text-[11px] font-bold text-[#F7EBDD]">Instant Digital Delivery</p>
+                <p className="text-[11px] font-bold text-[#F7EBDD]">Instant digital delivery</p>
                 <p className="text-[9px] text-[#B4AA99] leading-relaxed mt-0.5">Receive high-quality audio files (MP3/WAV) immediately after payment.</p>
               </div>
             </div>
@@ -585,7 +649,7 @@ function CheckoutContent() {
                 <FileText size={11} />
               </div>
               <div>
-                <p className="text-[11px] font-bold text-[#F7EBDD]">Legal License Agreement</p>
+                <p className="text-[11px] font-bold text-[#F7EBDD]">Legal license agreement</p>
                 <p className="text-[9px] text-[#B4AA99] leading-relaxed mt-0.5">Get a PDF contract detailing streaming/distribution rights for your projects.</p>
               </div>
             </div>
@@ -595,7 +659,7 @@ function CheckoutContent() {
                 <ShieldCheck size={11} />
               </div>
               <div>
-                <p className="text-[11px] font-bold text-[#F7EBDD]">Secure SSL Payment</p>
+                <p className="text-[11px] font-bold text-[#F7EBDD]">Secure SSL payment</p>
                 <p className="text-[9px] text-[#B4AA99] leading-relaxed mt-0.5">Transactions processed safely by Stripe. Card numbers are never stored.</p>
               </div>
             </div>
@@ -605,7 +669,7 @@ function CheckoutContent() {
                 <Lock size={11} />
               </div>
               <div>
-                <p className="text-[11px] font-bold text-[#F7EBDD]">One-Time Payment</p>
+                <p className="text-[11px] font-bold text-[#F7EBDD]">One-time payment</p>
                 <p className="text-[9px] text-[#B4AA99] leading-relaxed mt-0.5">No recurring fees or monthly subscriptions. Pay once and keep forever.</p>
               </div>
             </div>
@@ -619,7 +683,7 @@ function CheckoutContent() {
           </div>
         </div>
 
-      </div>
+      </aside>
 
       {/* Sticky mobile total bar — surfaces the order total below the fold
           on small screens where the order-summary column is collapsed. The
@@ -645,6 +709,7 @@ function CheckoutContent() {
         </div>
       </div>
 
+    </div>
     </div>
   );
 }

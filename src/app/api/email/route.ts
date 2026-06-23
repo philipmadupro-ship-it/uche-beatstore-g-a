@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const { contactId, email, subject, message, trackIds, shareToken, packTitle, packMeta, coverUrl, recipientName, expiresDays, allowDownloads, tracks } = await req.json();
+    const { contactId, email, subject, message, trackIds, shareToken, packTitle, packMeta, coverUrl, recipientName, expiresDays, allowDownloads, tracks, campaignId } = await req.json();
 
     if (!email || !shareToken) {
       return NextResponse.json({ error: 'Missing email or shareToken' }, { status: 400 });
@@ -57,10 +57,27 @@ export async function POST(req: NextRequest) {
 
     if (resendError) throw resendError;
 
-    // 2. Log to beat_sends
+    // Campaign attachment is optional — validate it's a uuid-ish string
+    // and that the campaign belongs to the caller before stamping it.
+    const resolvedCampaignId =
+      typeof campaignId === 'string' && /^[0-9a-f-]{36}$/i.test(campaignId) ? campaignId : null;
+
+    // 2. Log to beat_sends (+ campaign grouping when requested)
     if (isSupabaseConfigured()) {
       const supabase = authClient;
-      await supabase
+      let safeCampaignId: string | null = null;
+      if (resolvedCampaignId) {
+        // RLS scopes this select to the caller's campaigns — a foreign
+        // campaign id simply resolves to null.
+        const { data: campaign } = await supabase
+          .from('campaigns')
+          .select('id')
+          .eq('id', resolvedCampaignId)
+          .maybeSingle();
+        safeCampaignId = campaign?.id ?? null;
+      }
+
+      const { data: sendRow } = await supabase
         .from('beat_sends')
         .insert({
           contact_id: contactId,
@@ -68,9 +85,28 @@ export async function POST(req: NextRequest) {
           share_token: shareToken,
           message,
           status: 'sent',
+          campaign_id: safeCampaignId,
           // mig 089 — lets the Resend webhook correlate open/click events back here.
           email_resend_id: resendData?.id ?? null,
-        });
+        })
+        .select('id')
+        .maybeSingle();
+
+      // Keep the campaign funnel in sync: one target row per
+      // (campaign, contact), latest send linked.
+      if (safeCampaignId && contactId) {
+        await supabase
+          .from('campaign_targets')
+          .upsert(
+            {
+              campaign_id: safeCampaignId,
+              contact_id: contactId,
+              beat_send_id: sendRow?.id ?? null,
+              status: 'sent',
+            },
+            { onConflict: 'campaign_id,contact_id' },
+          );
+      }
     } else {
       insert('beat_sends', {
         contact_id: contactId,
@@ -78,6 +114,7 @@ export async function POST(req: NextRequest) {
         share_token: shareToken,
         message,
         status: 'sent',
+        campaign_id: resolvedCampaignId,
         email_resend_id: resendData?.id ?? null,
       });
     }

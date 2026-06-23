@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll, getById } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
+import { redactPublicTrackMedia } from '@/lib/store/public-media';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -161,7 +162,11 @@ export async function GET(
       );
       const profiles = (getAll('creator_profiles' as any) as any[]) || [];
       const creator = profiles[0] ?? null;
-      return NextResponse.json({ track, creator, related: all.slice(0, 6) });
+      return NextResponse.json({
+        track: redactPublicTrackMedia(track),
+        creator,
+        related: all.slice(0, 6).map(redactPublicTrackMedia),
+      });
     }
 
     const admin = createServiceClient();
@@ -280,7 +285,7 @@ export async function GET(
 
     // Strip user_id off every track before responding
     const stripUserId = ({ user_id: _u, ...rest }: any) => rest;
-    const safeTrack = stripUserId(track);
+    const safeTrack = redactPublicTrackMedia(stripUserId(track));
     // Voice tag (mig 072) — attach the creator's tag when this beat opted in,
     // so the preview player overlays it. Owner downloads remain clean.
     const cr = creatorRes.data as any;
@@ -288,8 +293,8 @@ export async function GET(
       (safeTrack as any).voice_tag_url = cr.voice_tag_url;
       (safeTrack as any).voice_tag_interval = cr.voice_tag_interval_seconds ?? 20;
     }
-    const safeRelated = related.map(stripUserId);
-    const safeFans = fansAlsoBought.map(stripUserId);
+    const safeRelated = related.map(stripUserId).map(redactPublicTrackMedia);
+    const safeFans = fansAlsoBought.map(stripUserId).map(redactPublicTrackMedia);
 
     const res = NextResponse.json({
       track: safeTrack,

@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Megaphone, Plus, Loader2, Mail, ChevronRight, TrendingUp } from 'lucide-react';
+import { Megaphone, Plus, Loader2, Mail, ChevronRight, TrendingUp, Search, Users, CheckCircle2 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import Link from 'next/link';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
@@ -45,11 +45,16 @@ interface Campaign {
   stats: CampaignStats;
 }
 
+const CAMPAIGN_FILTERS = ['All', 'Active', 'Has wins', 'Needs targets'] as const;
+type CampaignFilter = (typeof CAMPAIGN_FILTERS)[number];
+
 export default function CampaignsPage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<CampaignFilter>('All');
 
   const load = async () => {
     try {
@@ -66,6 +71,30 @@ export default function CampaignsPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const campaignSummary = useMemo(() => {
+    return campaigns.reduce(
+      (acc, c) => {
+        acc.targets += c.stats.total;
+        acc.placed += c.stats.placed;
+        if (c.stats.total === 0) acc.empty += 1;
+        if (c.stats.pending > 0) acc.active += 1;
+        return acc;
+      },
+      { targets: 0, placed: 0, empty: 0, active: 0 },
+    );
+  }, [campaigns]);
+
+  const visibleCampaigns = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return campaigns.filter((c) => {
+      if (filter === 'Active' && c.stats.pending === 0) return false;
+      if (filter === 'Has wins' && c.stats.placed === 0) return false;
+      if (filter === 'Needs targets' && c.stats.total > 0) return false;
+      if (q && !c.name.toLowerCase().includes(q) && !(c.description ?? '').toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [campaigns, filter, search]);
 
   return (
     <DashboardLayout>
@@ -85,6 +114,60 @@ export default function CampaignsPage() {
             </Button>
           }
         />
+
+        {!loading && campaigns.length > 0 && (
+          <>
+            <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <CampaignMetric label="Campaigns" value={campaigns.length} icon={<Megaphone size={13} />} />
+              <CampaignMetric label="Targets" value={campaignSummary.targets} icon={<Users size={13} />} />
+              <CampaignMetric label="Placed" value={campaignSummary.placed} icon={<CheckCircle2 size={13} />} tone="good" />
+              <CampaignMetric label="Need targets" value={campaignSummary.empty} icon={<Plus size={13} />} tone="warm" />
+            </div>
+
+            <div className="mb-5 rounded-2xl border border-[#2B2821] bg-[#11100D] p-2.5">
+              <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                <div className="relative min-w-0 flex-1">
+                  <Search size={12} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search campaigns…"
+                    className="w-full rounded-full border border-[#2B2821] bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-[#F7EBDD] transition-colors placeholder:text-[#6E685B] focus:border-[#C9BCA8] focus:outline-none"
+                  />
+                </div>
+                <div className="flex overflow-x-auto rounded-full border border-[#2B2821] bg-[#090907] p-1">
+                  {CAMPAIGN_FILTERS.map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setFilter(f)}
+                      className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
+                        filter === f ? 'bg-[#342F27] text-[#F3E6D1]' : 'text-[#B4AA99] hover:text-[#F7EBDD]'
+                      }`}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between px-1">
+                <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#6E685B]">
+                  {visibleCampaigns.length} shown
+                  {visibleCampaigns.length !== campaigns.length && ` · ${campaigns.length} total`}
+                </p>
+                {(search.trim() || filter !== 'All') && (
+                  <button
+                    type="button"
+                    onClick={() => { setSearch(''); setFilter('All'); }}
+                    className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#B4AA99] transition-colors hover:text-[#F7EBDD]"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Body */}
         {loading ? (
@@ -107,9 +190,16 @@ export default function CampaignsPage() {
             }
             className="border-dashed py-32"
           />
+        ) : visibleCampaigns.length === 0 ? (
+          <EmptyState
+            icon={<Search size={24} aria-hidden="true" />}
+            title="No matching campaigns"
+            description="Clear the search or switch filters to see the rest of your outreach batches."
+            className="border-dashed py-24"
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {campaigns.map((c) => (
+            {visibleCampaigns.map((c) => (
               <CampaignCard key={c.id} campaign={c} />
             ))}
           </div>
@@ -133,21 +223,44 @@ export default function CampaignsPage() {
   );
 }
 
+function CampaignMetric({
+  label,
+  value,
+  icon,
+  tone = 'default',
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  tone?: 'default' | 'good' | 'warm';
+}) {
+  const toneClass = tone === 'good' ? 'text-[#6DC6A4]' : tone === 'warm' ? 'text-[#E7D7BE]' : 'text-[#F7EBDD]';
+  return (
+    <div className="rounded-xl border border-[#2B2821] bg-[#171511] px-4 py-3">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[#9B9282]">
+        {icon}
+        <p className="text-[9px] font-mono uppercase tracking-[0.18em]">{label}</p>
+      </div>
+      <p className={`text-[20px] font-semibold leading-none tabular-nums ${toneClass}`}>{value}</p>
+    </div>
+  );
+}
+
 function CampaignCard({ campaign }: { campaign: Campaign }) {
   const { total, placed, pass, pending } = campaign.stats;
   const placementRate = total > 0 ? Math.round((placed / total) * 100) : 0;
   return (
     <Link
-      href={`/contacts`}
-      className="block group rounded-2xl border border-[#2B2821] bg-[#171511] p-5 hover:border-[#3B372F] transition-colors"
-      title="Open contacts (campaign drill-down coming soon)"
+      href={`/campaigns/${campaign.id}`}
+      className="group block rounded-2xl border border-[#2B2821] bg-[#171511] p-4 transition-colors hover:border-[#3B372F] sm:p-5"
+      title={`Open ${campaign.name}`}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] mb-1">
             {new Date(campaign.created_at).toLocaleDateString()}
           </p>
-          <h3 className="text-[15px] font-medium text-white truncate">{campaign.name}</h3>
+          <h3 className="truncate text-[15px] font-semibold text-white">{campaign.name}</h3>
           {campaign.description && (
             <p className="text-[12px] text-[#D0C3AF] mt-1 line-clamp-2 leading-relaxed">
               {campaign.description}
@@ -158,7 +271,7 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
       </div>
 
       {/* Funnel mini-stats */}
-      <div className="grid grid-cols-4 gap-2 pt-4 border-t border-[#2B2821]">
+      <div className="grid grid-cols-4 gap-2 rounded-xl border border-[#211F1A] bg-[#11100D] p-2">
         <Stat label="Total" value={total} tone="default" />
         <Stat label="Pending" value={pending} tone="default" />
         <Stat label="Placed" value={placed} tone="good" />

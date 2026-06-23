@@ -34,7 +34,7 @@ interface MixerProps {
   useStems: boolean;
   /** "Loading stems…" spinner gate. */
   stemsLoading: boolean;
-  /** All channel states keyed by ChannelKey — vocals/drums/bass/other/master/pads. */
+  /** All channel states keyed by ChannelKey. Pads are engine-only for keyboard hits. */
   channels: Record<ChannelKey, ChannelState>;
   /** Patch a single channel. The parent dispatches engine updates from this. */
   setChannel: (key: ChannelKey, patch: Partial<ChannelState>) => void;
@@ -68,7 +68,7 @@ export function StudioMixer({ useStems, stemsLoading, channels, setChannel }: Mi
         )}
       </div>
 
-      <div className={`grid gap-2.5 ${useStems ? 'grid-cols-1 md:grid-cols-2 2xl:grid-cols-5' : 'grid-cols-1 md:grid-cols-2'}`}>
+      <div className={`grid gap-2.5 ${useStems ? 'grid-cols-1 md:grid-cols-2 2xl:grid-cols-4' : 'grid-cols-1'}`}>
         {useStems
           ? (['vocals', 'drums', 'bass', 'other'] as StemKey[]).map((k) => (
               <ChannelStrip
@@ -87,12 +87,6 @@ export function StudioMixer({ useStems, stemsLoading, channels, setChannel }: Mi
                 onChange={(p) => setChannel('master', p)}
               />
             )}
-        <ChannelStrip
-          name="pads"
-          color={STEM_COLORS.pads}
-          state={channels.pads}
-          onChange={(p) => setChannel('pads', p)}
-        />
       </div>
     </div>
   );

@@ -54,6 +54,12 @@ interface SendBeatModalProps {
    * Used to show "Sent before" badges on the track picker cards.
    */
   priorSentTrackIds?: Set<string>;
+  /**
+   * Pre-selected campaign. When set (e.g. opened from a campaign detail
+   * page) the campaign selector defaults to it; the send stamps
+   * beat_sends.campaign_id and upserts campaign_targets server-side.
+   */
+  campaignId?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -67,7 +73,7 @@ type ShareRole = 'viewer' | 'commenter';
  * and an email preview tab. For bulk sends we create one share PER
  * recipient so revocation / per-contact tracking stays clean.
  */
-export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds, priorSentTrackIds, onClose, onSuccess }: SendBeatModalProps) {
+export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds, priorSentTrackIds, campaignId: initialCampaignId, onClose, onSuccess }: SendBeatModalProps) {
   // Normalize the input — caller can pass either `contact` or `contacts`.
   // Internal logic only sees `recipients`.
   const initialRecipients = useMemo<Contact[]>(() => {
@@ -106,6 +112,9 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
   const [role, setRole] = useState<ShareRole>('viewer');
   const [allowDownloads, setAllowDownloads] = useState(true);
   const [expiresDays, setExpiresDays] = useState(30);
+  // Campaign attachment — '' = none. Pre-seeded when opened from a campaign page.
+  const [campaignId, setCampaignId] = useState<string>(initialCampaignId ?? '');
+  const [campaigns, setCampaigns] = useState<Array<{ id: string; name: string }>>([]);
   const [password, setPassword] = useState('');
   const [usePassword, setUsePassword] = useState(false);
   // Track picker sort mode
@@ -150,15 +159,18 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
     (async () => {
       try {
         // Parallel fetch — source toggle is then instant.
-        const [tRes, pRes] = await Promise.all([
+        const [tRes, pRes, cRes] = await Promise.all([
           fetch('/api/tracks'),
           fetch('/api/projects'),
+          fetch('/api/campaigns'),
         ]);
         const tData = await tRes.json();
         const pData = await pRes.json();
+        const cData = await cRes.json().catch(() => ({}));
         if (aborted) return;
         setTracks(Array.isArray(tData) ? tData : tData.tracks || []);
         setProjects(pData.projects || []);
+        setCampaigns((cData.campaigns ?? []).map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })));
       } catch (err) {
         console.error('Fetch sources error:', err);
       } finally {
@@ -355,6 +367,28 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               const e = await inviteRes.json().catch(() => ({}));
               throw new Error(e.error || `invite ${inviteRes.status}`);
             }
+            const inviteData = await inviteRes.json().catch(() => ({}));
+
+            if (campaignId) {
+              const trackingRes = await fetch(`/api/campaigns/${campaignId}/targets`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  project_send: {
+                    contact_id: contactId,
+                    project_id: selectedProjectId,
+                    share_id: data.share.id,
+                    share_token: data.share.token,
+                    message,
+                    email_resend_id: inviteData.resendId ?? null,
+                  },
+                }),
+              });
+              if (!trackingRes.ok) {
+                const trackingData = await trackingRes.json().catch(() => ({}));
+                throw new Error(trackingData.error || `campaign tracking ${trackingRes.status}`);
+              }
+            }
           } else {
             const shareRes = await fetch('/api/share', {
               method: 'POST',
@@ -378,6 +412,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 recipientName: r.name,
                 trackIds: selectedTrackIds,
                 shareToken: shareData.token,
+                campaignId: campaignId || null,
                 message,
                 subject: resolvedSubject,
                 packTitle: summary.title,
@@ -889,6 +924,22 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                       className="ml-auto bg-transparent border-none text-[11px] text-[#F7EBDD] p-0 hover:bg-transparent hover:border-none focus:ring-0 focus:ring-offset-0 h-6 shrink-0"
                     />
                   </div>
+                  {campaigns.length > 0 && (
+                    <div className="col-span-2 flex items-center gap-2 bg-[#1A1813] border border-[#2B2821] rounded-md px-3 py-2">
+                      <Zap size={11} className="text-[#B4AA99] shrink-0" />
+                      <span className="text-[10px] text-[#D0C3AF] uppercase tracking-wider">Campaign</span>
+                      <Dropdown
+                        value={campaignId}
+                        onChange={setCampaignId}
+                        options={[
+                          { value: '', label: 'None' },
+                          ...campaigns.map((c) => ({ value: c.id, label: c.name })),
+                        ]}
+                        aria-label="Attach to campaign"
+                        className="ml-auto bg-transparent border-none text-[11px] text-[#F7EBDD] p-0 hover:bg-transparent hover:border-none focus:ring-0 focus:ring-offset-0 h-6 shrink-0"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (

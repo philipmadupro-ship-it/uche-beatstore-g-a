@@ -4,6 +4,11 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { getAppUrl } from '@/lib/env';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import {
+  canDownloadFormat,
+  parsePurchaseLineItem,
+  type PurchaseLineItem,
+} from '@/lib/store/license-entitlements';
 
 const log = createLogger('api.store.delivery');
 export const runtime = 'nodejs';
@@ -16,6 +21,7 @@ type PurchaseRow = {
   created_at: string;
   status: string;
   download_unlocked: boolean;
+  license_type?: string | null;
   track_ids?: unknown;
   line_items?: unknown;
 };
@@ -30,11 +36,6 @@ type ProjectAccessRow = {
 };
 
 type ProjectTrackRow = { track_id: string };
-
-type DeliveryLineItem = {
-  track_id: string;
-  license_type: string;
-};
 
 type DeliveryTrackRow = {
   id: string;
@@ -74,7 +75,7 @@ type StemRow = {
  *         ...track fields...,
  *         license_type: 'lease' | 'exclusive',
  *         downloads: [
- *           { format: 'mp3', label: 'MP3', proxied_url: '/api/audio?...' },
+ *           { format: 'mp3', label: 'MP3', proxied_url: '/api/store/download-file?...' },
  *           { format: 'wav', label: 'WAV', proxied_url: '...' },      // if wav_url uploaded
  *           { format: 'vocals', label: 'Vocals Stem', proxied_url: '...' }, // if stems done + exclusive
  *           ...
@@ -83,10 +84,8 @@ type StemRow = {
  *     ]
  *   }
  *
- * Download URLs are pre-computed as /api/audio proxy URLs (same-origin,
- * Content-Disposition: attachment) so the client can trigger them with a
- * plain <a href download> — no server-side redirect chain that confuses
- * browsers into "opening a page" instead of saving.
+ * Download URLs are entitlement-checked API URLs. They do not include raw
+ * storage URLs; the gated route validates the session again before streaming.
  */
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -106,7 +105,7 @@ export async function GET(req: NextRequest) {
     // ── Validate purchase ──────────────────────────────────────────────────
     const { data: purchase, error: pErr } = await admin
       .from('license_purchases')
-      .select('id, buyer_email, amount_usd, created_at, status, download_unlocked, track_ids, line_items')
+      .select('id, buyer_email, amount_usd, created_at, status, download_unlocked, license_type, track_ids, line_items')
       .eq('stripe_session_id', sessionId)
       .maybeSingle();
 
@@ -136,7 +135,7 @@ export async function GET(req: NextRequest) {
     }
 
     let trackIds: string[] = [];
-    let lineItems: Array<{ track_id: string; license_type: string }> = [];
+    let lineItems: PurchaseLineItem[] = [];
     if (isProjectPurchase && projectAccess) {
       // Load all tracks belonging to the purchased project; grant full access (stems included)
       const { data: junctions } = await admin
@@ -146,16 +145,30 @@ export async function GET(req: NextRequest) {
         .order('position', { ascending: true });
       trackIds = ((junctions ?? []) as ProjectTrackRow[]).map((j) => j.track_id);
       // treat as exclusive for stems inclusion
-      lineItems = trackIds.map((tid) => ({ track_id: tid, license_type: 'exclusive' }));
+      lineItems = trackIds.map((trackId) => ({
+        track_id: trackId,
+        license_id: 'project',
+        license_type: 'exclusive',
+        file_types: ['MP3', 'WAV', 'STEMS'],
+        stems_included: true,
+        is_exclusive: true,
+      }));
     } else if (purchase) {
       const purchaseRow = purchase as PurchaseRow;
       trackIds = Array.isArray(purchaseRow.track_ids) ? purchaseRow.track_ids.filter((id): id is string => typeof id === 'string') : [];
       lineItems = Array.isArray(purchaseRow.line_items)
-        ? purchaseRow.line_items.filter((item): item is DeliveryLineItem =>
-            typeof item === 'object' &&
-            item !== null &&
-            typeof (item as { track_id?: unknown }).track_id === 'string')
+        ? purchaseRow.line_items
+            .map(parsePurchaseLineItem)
+            .filter((item): item is PurchaseLineItem => item !== null)
         : [];
+      if (lineItems.length === 0) {
+        const legacyType = purchaseRow.license_type === 'exclusive' ? 'exclusive' : 'lease';
+        lineItems = trackIds.map((trackId) => parsePurchaseLineItem({
+          track_id: trackId,
+          license_id: legacyType,
+          license_type: legacyType,
+        })!);
+      }
     }
 
     let tracks: DeliveryTrackRow[] = [];
@@ -188,44 +201,39 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Build per-track downloads array ────────────────────────────────────
-    function proxied(rawUrl: string, filename: string): string {
-      return `${APP_URL}/api/audio?src=${encodeURIComponent(rawUrl)}&download=1&filename=${encodeURIComponent(filename)}`;
+    function proxied(format: string, trackId: string): string {
+      return `${APP_URL}/api/store/download-file?session_id=${encodeURIComponent(sessionId!)}&track_id=${encodeURIComponent(trackId)}&format=${encodeURIComponent(format)}`;
     }
 
     const tracksWithDownloads = tracks.map((t) => {
       const item = lineItems.find((li) => li.track_id === t.id);
-      const licenseType: 'lease' | 'exclusive' =
-        (item?.license_type === 'exclusive' ? 'exclusive' : 'lease');
+      const licenseType = item?.license_type ?? 'lease';
 
-      const titleSafe = (t.title || 'track').replace(/[^\w\s\-]/g, '_');
       const audioExt = (
         (t.audio_url as string | null)?.match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i)?.[1] ?? 'mp3'
       ).toLowerCase();
 
       const downloads: Array<{ format: string; label: string; proxied_url: string }> = [];
 
-      // MP3 / main audio — always included
-      if (t.audio_url) {
+      const mainFormat = audioExt === 'wav' ? 'wav' : audioExt;
+      if (t.audio_url && item && canDownloadFormat(item, mainFormat)) {
         downloads.push({
-          format: audioExt === 'wav' ? 'wav-main' : 'mp3',
-          label: audioExt === 'wav' ? 'WAV (main)' : 'MP3',
-          proxied_url: proxied(t.audio_url, `${titleSafe}.${audioExt}`),
+          format: audioExt === 'wav' ? 'wav-main' : audioExt,
+          label: audioExt === 'wav' ? 'WAV (main)' : audioExt.toUpperCase(),
+          proxied_url: proxied(audioExt, t.id),
         });
       }
 
-      // Separate WAV upload (migration 039) — available for all license types
-      // if the producer uploaded it
       const wavUrl = t.wav_url as string | null;
-      if (wavUrl && audioExt !== 'wav') {
+      if (wavUrl && audioExt !== 'wav' && item && canDownloadFormat(item, 'wav')) {
         downloads.push({
           format: 'wav',
           label: 'WAV (high quality)',
-          proxied_url: proxied(wavUrl, `${titleSafe}.wav`),
+          proxied_url: proxied('wav', t.id),
         });
       }
 
-      // Stems — only for exclusive licensees, and only when stems job is done
-      if (licenseType === 'exclusive') {
+      if (item?.stems_included) {
         const stem = stemsByTrack[t.id];
         if (stem) {
           const stemMap: Array<{ format: string; label: string; urlKey: keyof StemRow }> = [
@@ -240,7 +248,7 @@ export async function GET(req: NextRequest) {
               downloads.push({
                 format,
                 label,
-                proxied_url: proxied(url, `${titleSafe}_${format}.wav`),
+                proxied_url: proxied(format, t.id),
               });
             }
           }
@@ -253,7 +261,7 @@ export async function GET(req: NextRequest) {
         audio_url: undefined,
         wav_url: undefined,
         license_type: licenseType,
-        file_types: downloads.map((d) => d.label), // backward compat
+        file_types: item?.file_types ?? [],
         downloads,
       };
     });

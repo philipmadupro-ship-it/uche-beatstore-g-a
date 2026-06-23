@@ -143,6 +143,65 @@ export async function convertToWavBuffer(input: Buffer): Promise<Buffer | null> 
   }
 }
 
+/**
+ * Create the public listening derivative for a private master.
+ *
+ * 96 kbps MP3 is intentionally good enough for store discovery while being
+ * materially less useful than the purchased WAV/stems. The master never needs
+ * to leave private storage for storefront playback.
+ */
+export async function createPreviewMp3Buffer(input: Buffer): Promise<Buffer | null> {
+  if (!(await checkFfmpeg())) {
+    console.warn('ffmpeg not available - public preview was not generated.');
+    return null;
+  }
+
+  const { spawn } = await import('child_process');
+  const { promises: fs } = await import('fs');
+  const path = await import('path');
+  const os = await import('os');
+  const crypto = await import('crypto');
+
+  const id = crypto.randomBytes(8).toString('hex');
+  const inPath = path.join(os.tmpdir(), `ag-preview-in-${id}`);
+  const outPath = path.join(os.tmpdir(), `ag-preview-out-${id}.mp3`);
+
+  try {
+    await fs.writeFile(inPath, input);
+    const ok = await new Promise<boolean>((resolve) => {
+      const proc = spawn('ffmpeg', [
+        '-y',
+        '-i', inPath,
+        '-vn',
+        '-map_metadata', '-1',
+        '-ac', '2',
+        '-ar', '44100',
+        '-c:a', 'libmp3lame',
+        '-b:a', '96k',
+        '-f', 'mp3',
+        outPath,
+      ], { stdio: 'ignore', env: ffmpegEnv() });
+      const killer = setTimeout(() => proc.kill('SIGKILL'), 60_000);
+      proc.on('exit', (code) => {
+        clearTimeout(killer);
+        resolve(code === 0);
+      });
+      proc.on('error', () => {
+        clearTimeout(killer);
+        resolve(false);
+      });
+    });
+
+    if (!ok) return null;
+    return await fs.readFile(outPath);
+  } catch (err) {
+    console.warn('Preview conversion failed:', err);
+    return null;
+  } finally {
+    await Promise.allSettled([fs.unlink(inPath), fs.unlink(outPath)]);
+  }
+}
+
 /** Exposed for tests / diagnostics. */
 export async function isFfmpegInstalled(): Promise<boolean> {
   return checkFfmpeg();

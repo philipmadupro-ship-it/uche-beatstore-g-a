@@ -21,8 +21,8 @@ const TRACK_FIELDS = [
  * GET /api/store/projects/access/[token]
  *
  * Token-gated public endpoint for project bundle buyers. Resolves a
- * project_access_links row, then returns the project + full track list
- * (including audio_url and wav_url for downloads).
+ * project_access_links row, then returns the project + full track list.
+ * Download links are token-gated API URLs; raw storage URLs are never returned.
  *
  * 404 covers both "token unknown" and "token expired" so we don't leak
  * which case applies.
@@ -83,8 +83,12 @@ export async function GET(
         trackMap[t.id] = {
           ...t,
           cover_url: sanitizeUrl(t.cover_url),
-          audio_url: sanitizeUrl(t.audio_url),
-          wav_url: sanitizeUrl(t.wav_url),
+          audio_url: t.audio_url
+            ? `/api/store/projects/access/${encodeURIComponent(token)}/download?track_id=${encodeURIComponent(t.id)}&format=mp3`
+            : null,
+          wav_url: t.wav_url
+            ? `/api/store/projects/access/${encodeURIComponent(token)}/download?track_id=${encodeURIComponent(t.id)}&format=wav`
+            : null,
           tags: [],
         };
       }

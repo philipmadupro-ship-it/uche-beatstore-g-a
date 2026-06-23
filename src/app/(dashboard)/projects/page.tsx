@@ -9,13 +9,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader, PageContainer } from '@/components/layout/PageHeader';
-import { Loader2, Music, Layers, Plus, Clock, Pin } from 'lucide-react';
+import { Loader2, Music, Layers, Plus, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { ProjectFilterBar } from '@/components/projects/ProjectFilterBar';
 import { ProjectOptionsMenu } from '@/components/projects/ProjectOptionsMenu';
 import { CreateProjectModal } from '@/components/layout/CreateProjectModal';
+import { MediaCard } from '@/components/ui/MediaCard';
 import {
   filterAndSortProjects,
   DEFAULT_PROJECT_FILTERS,
@@ -277,49 +278,24 @@ export default function ProjectsPage() {
             {filtered.map((project) => {
               const updatedAt = project.updated_at ? new Date(project.updated_at) : null;
               const relativeTime = updatedAt ? relativeDate(updatedAt) : null;
-              const previewCovers = project.preview_covers?.filter(Boolean) ?? [];
 
               return (
-                <article
+                <MediaCard
                   key={project.id}
-                  className="group min-w-0"
-                >
-                  <Link href={`/projects/${project.id}`} onClick={() => trackRecentOpen(project.id)} className="block min-w-0">
-                    <div className="relative mb-2.5 aspect-square overflow-hidden rounded-[22px] bg-[#202020] transition-transform duration-200 group-hover:-translate-y-0.5">
-                      {project.cover_url ? (
-                        <img loading="lazy" src={project.cover_url} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                      ) : previewCovers.length > 1 ? (
-                        <div className="absolute inset-0 grid grid-cols-2 gap-px bg-[#202020]">
-                          {previewCovers.slice(0, 4).map((cover, index) => (
-                            <img key={`${cover}-${index}`} loading="lazy" src={cover} alt="" className="h-full w-full object-cover" />
-                          ))}
-                        </div>
-                      ) : previewCovers.length === 1 ? (
-                        <img loading="lazy" src={previewCovers[0]} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                      ) : (
-                        <div className="absolute inset-0 flex items-center justify-center bg-[#202020]">
-                          <Music size={28} className="text-white/16" />
-                        </div>
-                      )}
-                      {project.pinned && (
-                        <button
-                          onClick={(e) => togglePin(project, e)}
-                          disabled={togglingPin === project.id}
-                          className="absolute right-9 top-2 z-20 grid size-6 place-items-center rounded-full bg-[#E7D7BE] text-black shadow-sm"
-                          title="Unpin"
-                        >
-                          <Pin size={10} fill="currentColor" />
-                        </button>
-                      )}
-                      <div className="absolute right-2 top-2 z-10">
-                        <ProjectOptionsMenu project={project} onChanged={refreshProjectsAndFolders} onDeleted={fetchProjects} />
-                      </div>
-                    </div>
-
-                    <h3 className="truncate text-[13px] font-bold leading-tight text-[#F7EBDD] transition-colors group-hover:text-white sm:text-[15px]">
-                      {project.name}
-                    </h3>
-                    <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-[#837B6D]">
+                  title={project.name}
+                  href={`/projects/${project.id}`}
+                  onOpen={() => trackRecentOpen(project.id)}
+                  coverUrl={project.cover_url}
+                  previewCovers={project.preview_covers}
+                  fallbackIcon={<Music size={28} />}
+                  pinned={project.pinned}
+                  onTogglePin={(e) => togglePin(project, e)}
+                  pinBusy={togglingPin === project.id}
+                  optionsMenu={
+                    <ProjectOptionsMenu project={project} onChanged={refreshProjectsAndFolders} onDeleted={fetchProjects} />
+                  }
+                  meta={
+                    <>
                       <span>{project.track_count || 0} track{project.track_count === 1 ? '' : 's'}</span>
                       {relativeTime && (
                         <>
@@ -333,9 +309,9 @@ export default function ProjectsPage() {
                           <span className="truncate">{project.tags!.slice(0, 2).map((t) => t.tag).join(' / ')}</span>
                         </>
                       )}
-                    </div>
-                  </Link>
-                </article>
+                    </>
+                  }
+                />
               );
             })}
           </div>

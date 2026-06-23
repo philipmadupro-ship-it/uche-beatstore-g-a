@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUrl } from '@/lib/env';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { isSupabaseConfigured, insert, getAll, createServiceClient } from '@/lib/db';
+import { isSupabaseConfigured, insert, getAll, createServiceClient, requireUser } from '@/lib/db';
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 import { errorMessage } from '@/lib/errors';
@@ -51,6 +51,10 @@ export async function POST(req: NextRequest) {
     if (!track_ids || !Array.isArray(track_ids) || track_ids.length === 0) {
       return NextResponse.json({ error: 'Missing track_ids' }, { status: 400 });
     }
+    const uniqueTrackIds = [...new Set(track_ids)];
+    if (uniqueTrackIds.some((id) => typeof id !== 'string' || id.length === 0)) {
+      return NextResponse.json({ error: 'Invalid track_ids' }, { status: 400 });
+    }
 
     const token = nanoid(12);
     let password_hash: string | null = null;
@@ -80,17 +84,24 @@ export async function POST(req: NextRequest) {
     };
 
     if (isSupabaseConfigured()) {
-      // Resolve the current user via the cookie client, then write with the
-      // service-role admin client to bypass RLS reliably (the user-scoped
-      // INSERT policy isn't applied consistently across migrations).
-      const cookieClient = await createServerClient();
-      const { data: { user } } = await cookieClient.auth.getUser();
+      const owner = await requireUser();
+      if (!owner.ok) return owner.res;
 
-      const admin = createServiceClient();
+      const { data: ownedTracks, error: tracksError } = await owner.admin
+        .from('tracks')
+        .select('id')
+        .eq('user_id', owner.userId)
+        .in('id', uniqueTrackIds as string[]);
+      if (tracksError) throw tracksError;
 
-      const { data, error } = await admin
+      const ownedIds = new Set((ownedTracks ?? []).map((track: any) => track.id));
+      if (ownedIds.size !== uniqueTrackIds.length) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+
+      const { data, error } = await owner.admin
         .from('share_links')
-        .insert({ ...payload, user_id: user?.id || null })
+        .insert({ ...payload, user_id: owner.userId })
         .select()
         .single();
 

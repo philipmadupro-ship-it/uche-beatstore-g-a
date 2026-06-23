@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *   - row not found             → 404
  *   - row has user_id != caller → 403
  *   - row has user_id === caller → ok
- *   - row.user_id IS NULL       → ok (legacy/demo content)
+ *   - row.user_id IS NULL       → 403 (legacy rows must be migrated explicitly)
  */
 
 // --- Mocks ----------------------------------------------------------------
@@ -112,12 +112,12 @@ describe('requireRowOwnership', () => {
     }
   });
 
-  it('grants access for legacy null-owner rows', async () => {
+  it('rejects legacy null-owner rows', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'u-1' } } });
     mockMaybeSingle.mockResolvedValue({ data: { user_id: null }, error: null });
     const r = await runOwnership();
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.userId).toBe('u-1');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.res.status).toBe(403);
   });
 });
 

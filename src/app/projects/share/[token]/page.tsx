@@ -366,7 +366,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     else { setActiveIndex(i); setIsPlaying(true); }
   };
 
-  const downloadTrack = (t: ShareTrack) => {
+  const downloadTrack = async (t: ShareTrack) => {
     // Route through /api/share/[token]/download — the endpoint decides
     // whether to grant based on share.allow_downloads OR a matching
     // license_purchases row keyed by purchaseSessionId. We always pass
@@ -376,12 +376,25 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     if (purchaseSessionId) url.searchParams.set('session_id', purchaseSessionId);
     const ext = (t.audio_url.match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i)?.[1] || 'mp3').toLowerCase();
     const filename = `${t.title || 'track'}.${ext}`;
-    const a = document.createElement('a');
-    a.href = url.toString();
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      const response = await fetch(url.toString(), {
+        headers: passwordRef.current ? { 'x-share-password': passwordRef.current } : {},
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Download unavailable');
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : 'Download unavailable');
+    }
   };
 
   // ── editor actions ──────────────────────────────────────────────────

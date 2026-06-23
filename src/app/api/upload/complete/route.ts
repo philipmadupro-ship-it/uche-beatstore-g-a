@@ -6,11 +6,12 @@ import type { AudioFeatures } from '@/lib/audio/analyze.server';
 import { getAuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
 import { extractPeaks } from '@/lib/audio/peaks';
-import { uploadPeaksSidecar } from '@/lib/storage/upload';
+import { uploadPeaksSidecar, uploadPublicPreview } from '@/lib/storage/upload';
 import { isSupabaseConfigured, insert, update, getAll } from '@/lib/local-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { titleFromFilename, nextVersionLabel } from '@/lib/naming';
 import { errorMessage } from '@/lib/errors';
+import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -30,6 +31,8 @@ export async function POST(req: NextRequest) {
     if (session.status === 'completed') {
       return NextResponse.json({ error: 'already completed' }, { status: 409 });
     }
+    const owner = await requireUploadSessionOwner(session);
+    if (!owner.ok) return owner.res;
     if (session.parts.length !== session.totalParts) {
       return NextResponse.json(
         { error: `Missing parts (${session.parts.length}/${session.totalParts})` },
@@ -104,11 +107,20 @@ export async function POST(req: NextRequest) {
       console.warn('Peaks extraction/upload failed, continuing without:', err);
     }
 
+    let previewUrl: string | null = null;
+    try {
+      if (!audioBuffer) audioBuffer = await readAssembledBuffer(audioUrl).catch(() => null);
+      if (audioBuffer) previewUrl = await uploadPublicPreview(audioBuffer);
+    } catch (err) {
+      console.warn('Preview generation/upload failed, track remains private:', err);
+    }
+
     const merged = mergeFeatures({ client: clientAnalysis, server: serverAnalysis, audd });
     const trackData = {
       title: titleFromFilename(session.fileName),
       type: session.type,
       audio_url: audioUrl,
+      preview_url: previewUrl,
       peaks_url: peaksUrl,
       ...merged,
       stems_status: 'none' as const,
@@ -149,6 +161,7 @@ export async function POST(req: NextRequest) {
               version_number: number,
               version_label: label,
               audio_url: existing.audio_url,
+              preview_url: existing.preview_url,
               duration_seconds: existing.duration_seconds,
               bpm: existing.bpm,
               key: existing.key,
@@ -215,7 +228,7 @@ async function attachTrackToDestination(
 ) {
   const ownsDestination = (row: { user_id?: string | null } | null) => {
     if (!row) return false;
-    return !row.user_id || Boolean(userId && row.user_id === userId);
+    return Boolean(userId && row.user_id === userId);
   };
 
   const { data: project, error: projectError } = await supabase

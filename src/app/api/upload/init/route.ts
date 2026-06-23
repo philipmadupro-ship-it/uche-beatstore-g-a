@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { nanoid } from 'nanoid';
-import { initMultipart, DEFAULT_PART_SIZE, MAX_PARTS, MIN_PART_SIZE } from '@/lib/storage/multipart';
+import { abortMultipart, initMultipart, DEFAULT_PART_SIZE, MAX_PARTS, MIN_PART_SIZE } from '@/lib/storage/multipart';
 import { createSession } from '@/lib/storage/upload-sessions';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { errorMessage } from '@/lib/errors';
+import { requireRowOwnership } from '@/lib/db';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -62,16 +63,20 @@ export async function POST(req: NextRequest) {
     let userId: string | null = null;
     if (isSupabaseConfigured()) {
       const supabase = await createServerClient();
+      let authResult: Awaited<ReturnType<typeof supabase.auth.getUser>>;
       try {
-        const { data } = await supabase.auth.getUser();
-        userId = data.user?.id || null;
-      } catch (err) {
-        if (projectId) {
-          return NextResponse.json(
-            { error: `Could not verify upload destination owner: ${errorMessage(err)}` },
-            { status: 401 },
-          );
-        }
+        authResult = await supabase.auth.getUser();
+      } catch {
+        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      }
+      const { data, error: authError } = authResult;
+      if (authError || !data.user) {
+        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      }
+      userId = data.user.id;
+      if (replaceTrackId) {
+        const owner = await requireRowOwnership('tracks', replaceTrackId);
+        if (!owner.ok) return owner.res;
       }
       if (projectId) {
         const destination = await resolveUploadDestination(supabase, projectId, userId);
@@ -86,20 +91,26 @@ export async function POST(req: NextRequest) {
     const { uploadId, key } = await initMultipart(fileName, contentType);
     const sessionId = nanoid(16);
 
-    const session = createSession({
-      sessionId,
-      uploadId,
-      key,
-      fileName,
-      fileSize,
-      contentType,
-      partSize,
-      totalParts,
-      type: trackType,
-      projectId,
-      replaceTrackId,
-      userId,
-    });
+    let session;
+    try {
+      session = await createSession({
+        sessionId,
+        uploadId,
+        key,
+        fileName,
+        fileSize,
+        contentType,
+        partSize,
+        totalParts,
+        type: trackType,
+        projectId,
+        replaceTrackId,
+        userId,
+      });
+    } catch (err) {
+      await abortMultipart({ uploadId, key }).catch(() => undefined);
+      throw err;
+    }
 
     return NextResponse.json({
       sessionId: session.sessionId,
@@ -120,7 +131,7 @@ async function resolveUploadDestination(
 ) {
   const ownsDestination = (row: { user_id?: string | null } | null) => {
     if (!row) return false;
-    return !row.user_id || Boolean(userId && row.user_id === userId);
+    return Boolean(userId && row.user_id === userId);
   };
 
   const { data: project, error: projectError } = await supabase

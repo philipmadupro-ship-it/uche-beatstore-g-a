@@ -2,6 +2,7 @@
 
 import { Loader2, Music2, Search } from 'lucide-react';
 import type { Track } from '@/lib/types';
+import { audioSrc } from '@/lib/audio/url';
 
 interface Props {
   tracks: Track[];
@@ -27,8 +28,10 @@ interface Props {
 export function StudioTrackPicker({
   tracks, loading, activeId, onPick, search, setSearch,
 }: Props) {
+  const activeTrack = activeId ? tracks.find((t) => t.id === activeId) : null;
+
   return (
-    <aside className="border border-[#1A1813] rounded-lg overflow-hidden h-[calc(100vh-220px)] flex flex-col">
+    <aside className="flex max-h-[360px] flex-col overflow-hidden rounded-2xl border border-[#1A1813] bg-[#090907] lg:h-[calc(100vh-220px)] lg:max-h-none">
       <div className="p-3 border-b border-[#1A1813]">
         <div className="relative">
           <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6E685B]" />
@@ -52,25 +55,24 @@ export function StudioTrackPicker({
           // appear. The currently-loaded track stays visible at the top
           // so it doesn't feel like the picker "forgot" their session.
           <div className="px-3 py-8 text-center">
-            {activeId && tracks.find((t) => t.id === activeId) ? (
+            {activeTrack ? (
               <>
                 <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] mb-3">Now loaded</p>
                 <button
-                  onClick={() => onPick(activeId)}
-                  className="w-full flex items-center gap-3 px-3 py-2 text-left rounded-md bg-[#342F27] mb-4"
+                  onClick={() => onPick(activeTrack.id)}
+                  className="mb-4 flex w-full items-center gap-3 rounded-xl border border-[#C9BCA8]/20 bg-[#342F27] px-3 py-2 text-left"
                 >
-                  <div className="w-8 h-8 rounded bg-[#1A1813] border border-[#211F1A] flex items-center justify-center shrink-0">
-                    <Music2 size={12} className="text-[#F3E6D1]" />
-                  </div>
+                  <TrackThumb track={activeTrack} active />
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] text-white truncate">
-                      {tracks.find((t) => t.id === activeId)?.title}
+                      {activeTrack.title}
+                    </p>
+                    <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wider text-[#B4AA99]">
+                      {activeTrack.bpm ? `${activeTrack.bpm} BPM` : '-- BPM'} · {activeTrack.key || '--'}
                     </p>
                   </div>
                 </button>
-                <p className="text-[10px] text-[#837B6D] leading-relaxed">
-                  Type to find another track to load. The studio works on one track at a time.
-                </p>
+                <p className="text-[10px] leading-relaxed text-[#837B6D]">Type to swap tracks.</p>
               </>
             ) : (
               <>
@@ -78,9 +80,7 @@ export function StudioTrackPicker({
                   <Search size={14} className="text-[#6E685B]" />
                 </div>
                 <p className="text-[11px] text-[#B4AA99] mb-1">Search to load a track</p>
-                <p className="text-[10px] text-[#6E685B] leading-relaxed">
-                  Or open a track from the library and click <span className="text-[#D0C3AF]">Send to studio</span>.
-                </p>
+                <p className="text-[10px] leading-relaxed text-[#6E685B]">Search or send from Library.</p>
               </>
             )}
           </div>
@@ -91,13 +91,11 @@ export function StudioTrackPicker({
             <button
               key={t.id}
               onClick={() => onPick(t.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-left border-b border-[#24211B] last:border-b-0 transition-colors ${
-                activeId === t.id ? 'bg-[#342F27]' : 'hover:bg-[#101010]'
+              className={`flex w-full items-center gap-3 border-b border-[#17130F] px-3 py-2.5 text-left transition-colors last:border-b-0 ${
+                activeId === t.id ? 'bg-[#342F27]' : 'hover:bg-[#11100D]'
               }`}
             >
-              <div className="w-8 h-8 rounded bg-[#1A1813] border border-[#211F1A] flex items-center justify-center shrink-0">
-                <Music2 size={12} className={activeId === t.id ? 'text-[#F3E6D1]' : 'text-[#9B9282]'} />
-              </div>
+              <TrackThumb track={t} active={activeId === t.id} />
               <div className="min-w-0 flex-1">
                 <p className={`text-[11px] truncate ${activeId === t.id ? 'text-white' : 'text-[#F7EBDD]'}`}>
                   {t.title}
@@ -116,5 +114,28 @@ export function StudioTrackPicker({
         )}
       </div>
     </aside>
+  );
+}
+
+function TrackThumb({ track, active = false }: { track: Track; active?: boolean }) {
+  const cover = track.cover_url ? audioSrc(track.cover_url) || track.cover_url : null;
+
+  if (cover) {
+    return (
+      <img
+        loading="lazy"
+        src={cover}
+        alt=""
+        className={`h-9 w-9 shrink-0 rounded-lg border object-cover ${
+          active ? 'border-[#C9BCA8]/40' : 'border-[#211F1A]'
+        }`}
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#211F1A] bg-[#1A1813]">
+      <Music2 size={12} className={active ? 'text-[#F3E6D1]' : 'text-[#9B9282]'} />
+    </div>
   );
 }

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAppUrl } from '@/lib/env';
 import { isSupabaseConfigured, getById, update, requireRowOwnership } from '@/lib/db';
 import { analyzeAudio } from '@/lib/audio/analyze.server';
 import type { AudioFeatures } from '@/lib/audio/analyze.server';
@@ -8,6 +7,7 @@ import type { AuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { readStoredObject } from '@/lib/storage/upload';
 
 const log = createLogger('api.tracks.analyze');
 
@@ -121,57 +121,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     if (!clientUsable) {
       const rawUrl: string = track.audio_url;
-      // Three resolution paths, in order of robustness:
-      //
-      //   1. Local /uploads/... — read straight from disk. Sidesteps the
-      //      NEXT_PUBLIC_APP_URL config requirement entirely. This was
-      //      the root cause of "Asset Intelligence doesn't work" for
-      //      most users running local dev — the fetch round-trip back
-      //      to the same Next.js server timed out or 404'd when env was
-      //      slightly off.
-      //
-      //   2. Absolute URL → HTTP fetch (R2 public URLs etc.).
-      //
-      //   3. Path-relative (rare; legacy) → resolve via NEXT_PUBLIC_APP_URL
-      //      or the request origin.
-      if (rawUrl.startsWith('/uploads/')) {
-        try {
-          const fs = await import('fs');
-          const path = await import('path');
-          const filePath = path.join(process.cwd(), 'public', rawUrl);
-          buf = fs.readFileSync(filePath);
-          log.info('read local file', { trackId: id, bytes: buf.length });
-        } catch (err) {
-          return NextResponse.json(
-            { error: `Local audio file not found at ${rawUrl}. ${errorMessage(err)}` },
-            { status: 404 },
-          );
-        }
-      } else {
-        let absUrl = rawUrl;
-        if (rawUrl.startsWith('/')) {
-          const base = getAppUrl() || req.nextUrl.origin || 'http://localhost:3000';
-          absUrl = `${base}${rawUrl}`;
-        }
-        let upstream: Response;
-        try {
-          upstream = await fetch(absUrl);
-        } catch (err) {
-          log.error('audio fetch failed', { trackId: id, url: absUrl, error: errorMessage(err) });
-          return NextResponse.json(
-            { error: `Could not fetch audio from ${absUrl}: ${errorMessage(err)}` },
-            { status: 502 },
-          );
-        }
-        if (!upstream.ok) {
-          log.error('audio fetch non-2xx', { trackId: id, url: absUrl, status: upstream.status });
-          return NextResponse.json(
-            { error: `Could not fetch audio (HTTP ${upstream.status} from ${absUrl})` },
-            { status: 502 },
-          );
-        }
-        const ab = await upstream.arrayBuffer();
-        buf = Buffer.from(ab);
+      try {
+        buf = await readStoredObject(rawUrl);
+        log.info('read stored audio', { trackId: id, bytes: buf.length });
+      } catch (err) {
+        log.error('audio read failed', { trackId: id, source: rawUrl, error: errorMessage(err) });
+        return NextResponse.json(
+          { error: `Could not read track audio: ${errorMessage(err)}` },
+          { status: 502 },
+        );
       }
       try {
         serverFeatures = await analyzeAudio(buf);
@@ -198,19 +156,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!buf && clientUsable && wantsAuddEnrichment) {
       try {
         const rawUrl: string = track.audio_url;
-        if (rawUrl.startsWith('/uploads/')) {
-          const fs = await import('fs');
-          const path = await import('path');
-          buf = fs.readFileSync(path.join(process.cwd(), 'public', rawUrl));
-        } else {
-          let absUrl = rawUrl;
-          if (rawUrl.startsWith('/')) {
-            const base = getAppUrl() || req.nextUrl.origin || 'http://localhost:3000';
-            absUrl = `${base}${rawUrl}`;
-          }
-          const upstream = await fetch(absUrl);
-          if (upstream.ok) buf = Buffer.from(await upstream.arrayBuffer());
-        }
+        buf = await readStoredObject(rawUrl);
       } catch (err) {
         // Non-fatal — we already have client features. Just skip AudD.
         console.warn('AudD audio fetch failed; skipping enrichment:', err);

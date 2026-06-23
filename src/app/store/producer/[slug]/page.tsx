@@ -4,14 +4,14 @@ import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import {
   Music, Loader2, Globe, Mail, AtSign, Link2,
-  Heart, UserPlus, ArrowLeft, Tag, Gauge, Clock, Music2,
+  Heart, UserPlus, ArrowLeft, Music2,
 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast } from '@/hooks/useToast';
 import { getBuyerToken } from '@/lib/buyer-session';
-import { normalizeThemeColor } from '@/lib/theme/colors';
 import type { Track } from '@/lib/types';
+import { FONT_FAMILY_MAP } from '@/components/store/types';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -48,13 +48,6 @@ interface ProjectItem {
 }
 
 /* ─── Helpers ───────────────────────────────────────────────── */
-
-function fmt(secs: number | null): string {
-  if (!secs) return '—';
-  const m = Math.floor(secs / 60);
-  const s = Math.floor(secs % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
 
 const TYPE_LABELS: Record<string, string> = {
   beat: 'Beat',
@@ -157,7 +150,7 @@ export default function ProducerPage({
     setTrack(t);
   };
 
-  const accentColor = normalizeThemeColor(creator?.accent_color);
+  const fontFamily = FONT_FAMILY_MAP[creator?.font_style ?? 'default'] ?? FONT_FAMILY_MAP.default;
 
   if (loading) {
     return (
@@ -178,7 +171,10 @@ export default function ProducerPage({
   }
 
   return (
-    <div className="min-h-screen bg-[#090907] text-[#F7EBDD]">
+    <div
+      className="store-ui min-h-screen bg-[#090907] text-[#F7EBDD]"
+      style={{ fontFamily }}
+    >
       {/* ── Hero ── */}
       <div className="relative">
         {/* Hero background image */}
@@ -314,7 +310,6 @@ export default function ProducerPage({
                     <TrackCard
                       key={t.id}
                       track={t}
-                      accentColor={accentColor}
                       isCurrent={currentTrack?.id === t.id}
                       isPlaying={isPlaying && currentTrack?.id === t.id}
                       onPlay={() => handlePlayTrack(t)}
@@ -405,13 +400,11 @@ export default function ProducerPage({
 
 function TrackCard({
   track,
-  accentColor,
   isCurrent,
   isPlaying,
   onPlay,
 }: {
   track: Track;
-  accentColor: string;
   isCurrent: boolean;
   isPlaying: boolean;
   onPlay: () => void;

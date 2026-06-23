@@ -19,7 +19,7 @@ import {
 import { nanoid } from 'nanoid';
 import fs from 'fs';
 import path from 'path';
-import { r2 } from './upload';
+import { privateAudioBucket, r2, r2ObjectRef, readStoredObject } from './upload';
 import { isR2Configured } from '@/lib/local-store';
 
 export interface PartRef {
@@ -49,8 +49,8 @@ function buildObjectKey(fileName: string): string {
 /* ─────────── R2 backend ─────────── */
 
 async function r2Init(fileName: string, contentType: string) {
-  const Bucket = process.env.R2_BUCKET_NAME;
-  if (!Bucket) throw new Error('Missing R2_BUCKET_NAME');
+  const Bucket = privateAudioBucket();
+  if (!Bucket) throw new Error('Missing R2_PRIVATE_BUCKET_NAME');
   const Key = buildObjectKey(fileName);
   const cmd = new CreateMultipartUploadCommand({ Bucket, Key, ContentType: contentType });
   const res = await r2.send(cmd);
@@ -64,7 +64,7 @@ async function r2UploadPart(opts: {
   partNumber: number;
   body: Buffer;
 }): Promise<PartRef> {
-  const Bucket = process.env.R2_BUCKET_NAME!;
+  const Bucket = privateAudioBucket();
   const cmd = new UploadPartCommand({
     Bucket,
     Key: opts.key,
@@ -78,7 +78,7 @@ async function r2UploadPart(opts: {
 }
 
 async function r2Complete(opts: { uploadId: string; key: string; parts: PartRef[] }) {
-  const Bucket = process.env.R2_BUCKET_NAME!;
+  const Bucket = privateAudioBucket();
   const sorted = [...opts.parts].sort((a, b) => a.PartNumber - b.PartNumber);
   const cmd = new CompleteMultipartUploadCommand({
     Bucket,
@@ -89,20 +89,18 @@ async function r2Complete(opts: { uploadId: string; key: string; parts: PartRef[
     },
   });
   await r2.send(cmd);
-  const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
-  if (!publicUrl) throw new Error('Missing NEXT_PUBLIC_R2_PUBLIC_URL');
-  return `${publicUrl}/${opts.key}`;
+  return r2ObjectRef(Bucket, opts.key);
 }
 
 async function r2Abort(opts: { uploadId: string; key: string }) {
-  const Bucket = process.env.R2_BUCKET_NAME!;
+  const Bucket = privateAudioBucket();
   await r2.send(
     new AbortMultipartUploadCommand({ Bucket, Key: opts.key, UploadId: opts.uploadId })
   );
 }
 
 async function r2ListParts(opts: { uploadId: string; key: string }) {
-  const Bucket = process.env.R2_BUCKET_NAME!;
+  const Bucket = privateAudioBucket();
   const res = await r2.send(
     new ListPartsCommand({ Bucket, Key: opts.key, UploadId: opts.uploadId })
   );
@@ -246,17 +244,7 @@ export async function readAssembledBuffer(audioUrl: string, maxAttempts = 4): Pr
   let lastErr: Error = new Error('fetch failed');
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const res = await fetch(audioUrl);
-      if (res.ok) {
-        const ab = await res.arrayBuffer();
-        return Buffer.from(ab);
-      }
-      // 404 right after completeMultipart is an eventual-consistency lag — retry.
-      // Other 4xx (403, 400) are configuration errors — don't retry.
-      if (res.status !== 404 && res.status !== 503) {
-        throw new Error(`Failed to fetch assembled object (${res.status})`);
-      }
-      lastErr = new Error(`object not yet available (${res.status})`);
+      return await readStoredObject(audioUrl);
     } catch (err: any) {
       lastErr = err instanceof Error ? err : new Error(String(err));
     }

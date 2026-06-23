@@ -13,14 +13,16 @@ import { TrackCard } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { PlaylistOfflineSync } from '@/components/offline/PlaylistOfflineSync';
-import { Loader2, Camera, Check, X, Edit2, Play, Share2, Music, Plus, ChevronUp, ChevronDown, Trash2, Search, Tag, ListMusic } from 'lucide-react';
+import { Loader2, Camera, Check, X, Edit2, Play, Share2, Music, Plus, Search, Tag, ListMusic, CheckSquare, ListPlus, UploadCloud } from 'lucide-react';
 import { PlaylistSuggestions } from '@/components/playlists/PlaylistSuggestions';
 import { seededGradient } from '@/lib/ui/cover-gradient';
 import { AddFromLibraryModal } from '@/components/projects/AddFromLibraryModal';
 import { Track } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
 import { fmtDuration } from '@/lib/audio/format';
-import { toast } from '@/hooks/useToast';
+import { toast, confirmToast } from '@/hooks/useToast';
+import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
+import { DropZone } from '@/components/upload/DropZone';
 
 type PlaylistDetail = {
   id: string;
@@ -52,8 +54,12 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
   const [tempDescription, setTempDescription] = useState('');
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAddTracks, setShowAddTracks] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
   const [trackSearch, setTrackSearch] = useState('');
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const { setTrack: setGlobalTrack, setQueue } = usePlayer();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -85,8 +91,12 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
 
   useEffect(() => {
     if (startHandledRef.current || loading || !playlist) return;
-    if (searchParams.get('start') === 'library') {
+    const start = searchParams.get('start');
+    if (start === 'library') {
       setShowAddTracks(true);
+      startHandledRef.current = true;
+    } else if (start === 'upload') {
+      setShowUpload(true);
       startHandledRef.current = true;
     }
   }, [loading, playlist, searchParams]);
@@ -197,6 +207,62 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
     return list;
   }, [tracks, trackSearch, selectedTags]);
 
+  const trackIndexById = useMemo(
+    () => new Map(tracks.map((track, index) => [track.id, index])),
+    [tracks],
+  );
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkPlay = () => {
+    const selectedTracks = tracks.filter((track) => selectedIds.has(track.id));
+    if (!selectedTracks.length) return;
+    setQueue(selectedTracks);
+    setGlobalTrack(selectedTracks[0]);
+  };
+
+  const handleBulkRemove = async () => {
+    const count = selectedIds.size;
+    const ok = await confirmToast(
+      `Remove ${count} track${count === 1 ? '' : 's'} from playlist?`,
+      'Tracks stay in your library — only this playlist changes.',
+      { confirmLabel: 'Remove', cancelLabel: 'Keep' },
+    );
+    if (!ok) return;
+
+    const ids = Array.from(selectedIds);
+    setBulkBusy(true);
+    setTracks((prev) => prev.filter((track) => !selectedIds.has(track.id)));
+    const results = await Promise.allSettled(
+      ids.map((trackId) =>
+        fetch(`/api/playlists/${params.id}/tracks`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ track_id: trackId }),
+        }).then((res) => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        }),
+      ),
+    );
+    const failed = results.filter((result) => result.status === 'rejected').length;
+    setBulkBusy(false);
+    setSelectedIds(new Set());
+    setSelectMode(false);
+    await fetchData();
+    if (failed === 0) {
+      toast.success(`Removed ${ids.length} from playlist`);
+    } else {
+      toast.warning(`Removed ${ids.length - failed}, ${failed} failed`);
+    }
+  };
+
   const removeTrack = async (trackId: string) => {
     setTracks((prev) => prev.filter((t) => t.id !== trackId));
     try {
@@ -248,13 +314,42 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
   return (
     <DashboardLayout>
       <PageContainer>
+        <div className="mb-4 lg:hidden">
+          <p className="mb-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">Playlist</p>
+          {isEditingTitle ? (
+            <div className="flex items-center gap-2">
+              <input
+                autoFocus
+                className="min-w-0 flex-1 border-b border-[#3B372F] bg-transparent text-2xl font-medium text-white outline-none focus:border-[#E7D7BE]"
+                value={tempTitle}
+                onChange={(e) => setTempTitle(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleRename()}
+              />
+              <button type="button" aria-label="Save playlist title" onClick={handleRename} className="grid h-10 w-10 place-items-center rounded-md text-[#E7D7BE] hover:bg-[#1A1813]"><Check size={15} /></button>
+              <button type="button" aria-label="Cancel title edit" onClick={() => { setIsEditingTitle(false); setTempTitle(playlist?.name || ''); }} className="grid h-10 w-10 place-items-center rounded-md text-[#9B9282] hover:bg-[#1A1813]"><X size={15} /></button>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2">
+              <h1 className="min-w-0 flex-1 break-words font-heading text-2xl font-medium leading-tight text-white">{playlist?.name}</h1>
+              <button type="button" aria-label="Edit playlist title" onClick={() => setIsEditingTitle(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-[#9B9282] hover:bg-[#1A1813] hover:text-white">
+                <Edit2 size={14} />
+              </button>
+            </div>
+          )}
+          <div className="mt-2 flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">
+            <span>{tracks.length} track{tracks.length !== 1 ? 's' : ''}</span>
+            <span className="text-[#3B372F]">·</span>
+            <span>{fmtDuration(totalDuration)}</span>
+          </div>
+        </div>
+
         {/* Side-by-side layout — cover LEFT (sticky), meta + action row
             + track list RIGHT. Same shape as the library detail and
             project detail pages so all three feel like one family. */}
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_1fr] gap-6 sm:gap-8 lg:gap-10">
-          <div className="lg:sticky lg:top-10 lg:self-start">
+        <div className="grid grid-cols-1 gap-5 sm:gap-8 lg:grid-cols-[minmax(280px,360px)_1fr] lg:gap-10">
+          <div className="mx-auto w-full max-w-[240px] sm:max-w-none lg:sticky lg:top-10 lg:self-start">
             <div
-              className="aspect-square w-full bg-[#171511] rounded-2xl border border-white/[0.05] overflow-hidden group relative cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+              className="group relative aspect-square w-full cursor-pointer overflow-hidden rounded-xl border border-white/[0.05] bg-[#171511] shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:rounded-2xl"
               onClick={() => fileInputRef.current?.click()}
             >
               {playlist?.cover_url ? (
@@ -272,8 +367,9 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
           </div>
 
           <div className="min-w-0">
-            <div className="flex flex-col gap-4 pb-8 mb-8 border-b border-white/[0.04]">
+            <div className="mb-4 flex flex-col gap-3 pb-2 sm:mb-8 sm:gap-4 sm:border-b sm:border-white/[0.04] sm:pb-8">
             <div className="min-w-0">
+              <div className="hidden lg:block">
               <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Playlist</p>
               {isEditingTitle ? (
                 <div className="flex items-center gap-2 mb-3">
@@ -299,6 +395,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                 <span>{tracks.length} track{tracks.length !== 1 ? 's' : ''}</span>
                 <span>·</span>
                 <span>{fmtDuration(totalDuration)}</span>
+              </div>
               </div>
 
               {/* Curator description — shows on the public playlist page
@@ -326,7 +423,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               ) : (
                 <button
                   onClick={() => setIsEditingDescription(true)}
-                  className="group mt-4 block text-left w-full"
+                  className="group mt-2 block w-full text-left sm:mt-4"
                 >
                   {playlist?.description ? (
                     <p className="text-[15px] text-[#D0C3AF] leading-[1.7] whitespace-pre-line group-hover:text-[#F7EBDD] transition-colors font-light tracking-wide">
@@ -341,7 +438,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               )}
 
               {/* Featured in Store toggle — owner only, persists via PATCH */}
-              <div className="flex items-center gap-2 mt-2">
+              <div className="mt-3 flex items-center gap-2">
                 <span className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">Featured in Store</span>
                 <button
                   onClick={toggleStoreFeatured}
@@ -356,7 +453,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={handlePlayAll}
                 disabled={!tracks.length}
@@ -380,6 +477,15 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                 <Plus size={12} />
                 Add tracks
               </button>
+              <button
+                type="button"
+                onClick={() => setShowUpload((value) => !value)}
+                aria-expanded={showUpload}
+                className="flex items-center gap-2 rounded-md border border-[#211F1A] bg-[#171511] px-4 py-2 text-[12px] font-medium text-[#F7EBDD] transition-colors hover:border-[#3B372F]"
+              >
+                <UploadCloud size={12} />
+                Upload
+              </button>
               {/* "Sync offline" — caches every track's audio blob in
                   IndexedDB so the artist can play the curated set
                   with no network. Hidden when the playlist is empty.
@@ -392,16 +498,45 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
             </div>
             {/* end meta panel — track list follows inside the right column */}
 
+        {showUpload && (
+          <div className="mb-5 rounded-xl border border-[#211F1A] bg-[#11100D] p-3 sm:mb-8 sm:p-4">
+            <DropZone
+              playlistId={params.id}
+              onUploadSuccess={() => {
+                void fetchData();
+              }}
+            />
+          </div>
+        )}
+
         {/* Track list */}
-        <div className="border-t border-[#24211B] border-b pb-1 mb-32">
+        <div className="mb-24 pb-1 sm:mb-32 sm:border-y sm:border-[#24211B]">
           {/* Search + tag chips */}
           {tracks.length > 0 && (
-            <div className="px-4 py-3 border-b border-[#24211B] space-y-2">
+            <div className="space-y-2 py-2 sm:border-b sm:border-[#24211B] sm:px-4 sm:py-3">
               <div className="relative max-w-xs">
                 <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B] pointer-events-none" />
                 <input value={trackSearch} onChange={(e) => setTrackSearch(e.target.value)} placeholder="Search tracks or tags…"
                   className="w-full bg-[#171511] border border-[#211F1A] rounded-md py-1.5 pl-8 pr-3 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]" />
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectMode((value) => {
+                    if (value) setSelectedIds(new Set());
+                    return !value;
+                  });
+                }}
+                aria-pressed={selectMode}
+                className={`inline-flex min-h-8 items-center gap-2 rounded-md border px-3 text-[10px] font-mono uppercase tracking-[0.14em] transition-colors ${
+                  selectMode
+                    ? 'border-[#E7D7BE]/45 bg-[#E7D7BE]/14 text-[#E7D7BE]'
+                    : 'border-[#211F1A] bg-[#171511] text-[#B4AA99] hover:border-[#3B372F] hover:text-[#F7EBDD]'
+                }`}
+              >
+                <CheckSquare size={12} />
+                {selectMode ? 'Done' : 'Select'}
+              </button>
               {availableTags.length > 0 && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <Tag size={10} className="text-[#6E685B] shrink-0" />
@@ -424,7 +559,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               )}
             </div>
           )}
-          <div className="grid grid-cols-[24px_32px_minmax(0,1fr)_32px] sm:grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px] md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_110px_32px] lg:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_100px_110px_32px] items-center gap-3 sm:gap-4 px-3 sm:px-4 h-9 border-b border-[#24211B] text-[10px] font-mono uppercase tracking-wider text-[#6E685B]">
+          <div className="hidden h-9 grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px] items-center gap-4 border-b border-[#24211B] px-4 text-[10px] font-mono uppercase tracking-wider text-[#6E685B] sm:grid md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_110px_32px] lg:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_100px_110px_32px]">
             <span className="text-center">#</span>
             <span />
             <span>Title</span>
@@ -450,41 +585,31 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               </button>
             </div>
           ) : (
-            visibleTracks.map((track, i) => (
-              <div key={track.id} className="group relative">
+            visibleTracks.map((track, i) => {
+              const trackIndex = trackIndexById.get(track.id) ?? i;
+              return (
                 <TrackCard
+                  key={track.id}
                   track={track}
                   index={i + 1}
                   onClickDetails={(t) => setSelectedTrack(t)}
                   onPlayClick={() => handlePlayTrack(track)}
+                  rowAction="play"
+                  selectable={selectMode}
+                  selected={selectedIds.has(track.id)}
+                  onSelectChange={() => toggleSelectOne(track.id)}
+                  selectionBehavior="button"
+                  draggableTrack={false}
+                  onMoveUp={() => moveTrack(trackIndex, -1)}
+                  onMoveDown={() => moveTrack(trackIndex, 1)}
+                  moveControls="menu"
+                  isFirstInOrder={trackIndex <= 0}
+                  isLastInOrder={trackIndex === tracks.length - 1}
+                  onRemoveFromContext={() => removeTrack(track.id)}
+                  removeLabel="Remove from playlist"
                 />
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-[#090907] border border-[#211F1A] rounded-md p-0.5">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); moveTrack(i, -1); }}
-                    disabled={i === 0}
-                    title="Move up"
-                    className="p-1 text-[#9B9282] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronUp size={12} />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); moveTrack(i, 1); }}
-                    disabled={i === tracks.length - 1}
-                    title="Move down"
-                    className="p-1 text-[#9B9282] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                  >
-                    <ChevronDown size={12} />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); removeTrack(track.id); }}
-                    title="Remove from playlist"
-                    className="p-1 text-[#9B9282] hover:text-red-400 transition-colors"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
           {/* Similar track suggestions — collapsed by default, opens on demand.
@@ -523,6 +648,27 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
           onAdded={(count) => { fetchData(); if (count > 0) setShowAddTracks(false); }}
         />
       )}
+
+      <BatchActionBar
+        count={selectedIds.size}
+        noun={['track', 'tracks']}
+        onClear={() => { setSelectedIds(new Set()); setSelectMode(false); }}
+        busy={bulkBusy}
+        actions={[
+          {
+            label: `Play ${selectedIds.size}`,
+            icon: <ListPlus size={11} />,
+            intent: 'primary',
+            onClick: handleBulkPlay,
+          },
+          {
+            label: 'Remove',
+            icon: <DeleteIcon size={11} />,
+            intent: 'danger',
+            onClick: handleBulkRemove,
+          },
+        ]}
+      />
     </DashboardLayout>
   );
 }

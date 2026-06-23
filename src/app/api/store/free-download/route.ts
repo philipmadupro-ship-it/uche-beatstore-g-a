@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { z } from 'zod';
+import { streamAudioSource } from '@/lib/audio/stream-source';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 
 const log = createLogger('api.store.free-download');
@@ -80,14 +81,8 @@ export async function POST(req: NextRequest) {
       // non-fatal
     }
 
-    // Build the proxied download URL (same as the GET path)
-    const extMatch = (track.audio_url as string).match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i);
-    const ext = (extMatch?.[1] ?? 'mp3').toLowerCase();
-    const filename = `${track.title || 'track'}.${ext}`;
-    const downloadUrl = `/api/audio?src=${encodeURIComponent(track.audio_url)}&download=1&filename=${encodeURIComponent(filename)}`;
-
     log.info('free download', { track_id, email });
-    return NextResponse.json({ ok: true, download_url: downloadUrl });
+    return NextResponse.json({ ok: true, download_url: `/api/store/free-download?track_id=${encodeURIComponent(track_id)}` });
   } catch (err) {
     log.error('POST free-download failed', { error: errorMessage(err) });
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
@@ -103,8 +98,7 @@ export async function POST(req: NextRequest) {
  *   1. track exists and is store_listed
  *   2. free_download_enabled = true on the track
  *
- * Then 302-redirects to /api/audio?src=...&download=1 so the browser
- * triggers a file save. The raw R2 URL is never exposed.
+ * Then streams the file through this route so the raw R2 URL is never exposed.
  *
  * Future: insert a record into a download_plays table for analytics.
  */
@@ -142,9 +136,7 @@ export async function GET(req: NextRequest) {
     const extMatch = (track.audio_url as string).match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i);
     const ext = (extMatch?.[1] ?? 'mp3').toLowerCase();
     const filename = `${track.title || 'track'}.${ext}`;
-    const proxied = `/api/audio?src=${encodeURIComponent(track.audio_url)}&download=1&filename=${encodeURIComponent(filename)}`;
-
-    return NextResponse.redirect(new URL(proxied, req.url), 302);
+    return streamAudioSource(req, track.audio_url as string, filename);
   } catch (err) {
     log.error('free-download failed', { trackId, error: errorMessage(err) });
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });

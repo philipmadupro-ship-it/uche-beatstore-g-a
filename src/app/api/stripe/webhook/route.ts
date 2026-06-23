@@ -8,10 +8,22 @@ import { createLogger } from '@/lib/log';
 import { DEFAULT_TEMPLATE_MD, fillTemplate } from '@/lib/contracts/license-template';
 import { renderContractPdf } from '@/lib/contracts/pdf';
 import { uploadContractPdf } from '@/lib/storage/upload';
+import {
+  legacyLicenseFileTypes,
+  normalizeLicenseFileTypes,
+  parsePurchaseLineItem,
+  type PurchaseLineItem,
+} from '@/lib/store/license-entitlements';
 
 const log = createLogger('stripe.webhook');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+type AdminClient = ReturnType<typeof createServiceClient>;
+type LicenseLookup = {
+  is_exclusive?: boolean | null;
+  file_types?: string[] | null;
+  stems_included?: boolean | null;
+};
 
 /**
  * POST /api/stripe/webhook
@@ -38,13 +50,10 @@ export const dynamic = 'force-dynamic';
  *     delivery email pointing to /store/projects/access/<token>. Buyer gets
  *     a token-gated delivery page with per-track WAV/MP3 download links.
  *
- * ── Background processing ─────────────────────────────────────────────────
- * The critical path (signature verify + purchase upsert + event log insert)
- * completes and returns 200 before heavy work runs. Async tasks:
- *   • CRM contact upsert (for both track and project buys)
- *   • Exclusivity lock (store_listed=false on tracks)
- *   • Delivery email (track uses fulfillment_email_sent guard; project relies
- *     on event-level dedup to avoid dups)
+ * ── Fulfillment sequencing ────────────────────────────────────────────────
+ * Stripe receives 200 only after durable purchase/access state exists and
+ * fulfillment has had a chance to send delivery. Optional notifications stay
+ * best-effort so they cannot block a paid buyer.
  */
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -56,7 +65,10 @@ function parseCartItems(raw: string): Array<{ track_id: string; license_id: stri
     const parsed = JSON.parse(raw || '[]');
     if (!Array.isArray(parsed)) return [];
     return parsed.filter(
-      (i: any) => typeof i === 'object' && i !== null && typeof i.track_id === 'string',
+      (i: unknown): i is { track_id: string; license_id: string; license_type: string } =>
+        typeof i === 'object' &&
+        i !== null &&
+        typeof (i as { track_id?: unknown }).track_id === 'string',
     );
   } catch {
     return [];
@@ -68,13 +80,68 @@ function parseCartItems(raw: string): Array<{ track_id: string; license_id: stri
  *  Legacy strings ('lease', 'basic-lease', 'exclusive-rights', …) are normalised here. */
 function resolveTypeFromRaw(
   raw: string,
-  licenseById: Map<string, any>,
+  licenseById: Map<string, LicenseLookup>,
 ): 'lease' | 'exclusive' {
   if (UUID_RE.test(raw)) {
     const row = licenseById.get(raw);
     return row?.is_exclusive === true ? 'exclusive' : 'lease';
   }
   return raw === 'exclusive-rights' || raw === 'exclusive' ? 'exclusive' : 'lease';
+}
+
+function isDuplicateDbError(err: unknown) {
+  const maybeErr = err as { code?: string; message?: string } | null;
+  return (
+    maybeErr?.code === '23505' ||
+    maybeErr?.message?.includes('duplicate') ||
+    maybeErr?.message?.includes('already exists')
+  );
+}
+
+async function hasProcessedStripeEvent(admin: AdminClient, eventId: string) {
+  const { data, error } = await admin
+    .from('processed_stripe_events')
+    .select('event_id')
+    .eq('event_id', eventId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data);
+}
+
+async function markStripeEventProcessed(admin: AdminClient, eventId: string) {
+  const { error } = await admin
+    .from('processed_stripe_events')
+    .insert({ event_id: eventId })
+    .select('event_id');
+
+  if (error) {
+    if (isDuplicateDbError(error)) return false;
+    throw error;
+  }
+
+  return true;
+}
+
+async function incrementPromoUse(admin: AdminClient, promoCode: string | undefined, sessionId: string) {
+  if (!promoCode) return;
+
+  try {
+    const { data: incrementedRow, error: rpcErr } = await admin.rpc(
+      'increment_promo_use',
+      { p_code: promoCode },
+    );
+    if (rpcErr) {
+      log.warn('promo increment failed', { code: promoCode, error: errorMessage(rpcErr) });
+    } else if (!incrementedRow) {
+      log.warn('promo exhausted between session create and complete', {
+        code: promoCode,
+        session_id: sessionId,
+      });
+    }
+  } catch (err) {
+    log.warn('promo increment threw', { code: promoCode, error: errorMessage(err) });
+  }
 }
 
 // ── Background fulfillment ──────────────────────────────────────────────────
@@ -84,7 +151,7 @@ async function runFulfillment(params: {
   meta: Record<string, string>;
   purchaseId: string;
   trackIds: string[];
-  lineItems: Array<{ track_id: string; license_id: string; license_type: string }>;
+  lineItems: PurchaseLineItem[];
   hasAnyExclusive: boolean;
 }) {
   const { session, meta, purchaseId, trackIds, lineItems, hasAnyExclusive } = params;
@@ -583,66 +650,27 @@ export async function POST(req: NextRequest) {
         const meta: Record<string, string> = session.metadata ?? {};
 
         // ── Layer 1 idempotency: event-level ──────────────────────────────
-        // INSERT ... ON CONFLICT DO NOTHING returns rowCount=0 if duplicate
-        const { error: eventInsertErr, count: eventInsertCount } = await admin
-          .from('processed_stripe_events')
-          .insert({ event_id: event.id })
-          .select('event_id');
-
-        // Supabase returns null count when INSERT succeeds; conflict means we
-        // already processed this exact event delivery — return 200 immediately.
-        if (eventInsertErr) {
-          // Duplicate key → already processed
-          const isDuplicate =
-            eventInsertErr.code === '23505' || // unique_violation
-            eventInsertErr.message?.includes('duplicate') ||
-            eventInsertErr.message?.includes('already exists');
-          if (isDuplicate) {
-            log.info('duplicate event, skipping', { event_id: event.id });
-            return NextResponse.json({ received: true, skipped: true });
-          }
-          // Real DB error — bubble up so Stripe retries
-          throw eventInsertErr;
+        // Lookup first so a failed durable write never leaves the event marked
+        // processed. A final insert after fulfillment handles racey duplicates.
+        if (await hasProcessedStripeEvent(admin, event.id)) {
+          log.info('duplicate event, skipping', { event_id: event.id });
+          return NextResponse.json({ received: true, skipped: true });
         }
 
         // Mark any abandoned-cart row for this session as recovered so the
         // reminder cron never emails a buyer who actually completed (mig 071).
-        admin.from('abandoned_carts').update({ recovered: true }).eq('stripe_session_id', session.id)
+        void admin.from('abandoned_carts').update({ recovered: true }).eq('stripe_session_id', session.id)
           .then(({ error }) => { if (error) log.warn('abandoned-cart recover failed', { error: error.message }); });
 
         const purchaseKind = meta.purchase_kind ?? 'track_license';
-
-        // ── Promo redemption — atomic increment (migration 048) ─────────
-        // Closes the race where two buyers can both see uses_count <
-        // max_uses, both create sessions, and both complete. The RPC
-        // returns NULL when the cap was reached between create + complete.
-        // Stripe already collected the (discounted) money, so we honour
-        // the session either way and just log the over-redemption.
-        const promoCode = meta.promo_code;
-        if (promoCode) {
-          try {
-            const { data: incrementedRow, error: rpcErr } = await admin.rpc(
-              'increment_promo_use',
-              { p_code: promoCode },
-            );
-            if (rpcErr) {
-              log.warn('promo increment failed', { code: promoCode, error: errorMessage(rpcErr) });
-            } else if (!incrementedRow) {
-              log.warn('promo exhausted between session create and complete', {
-                code: promoCode,
-                session_id: session.id,
-              });
-            }
-          } catch (err) {
-            log.warn('promo increment threw', { code: promoCode, error: errorMessage(err) });
-          }
-        }
 
         if (purchaseKind === 'project') {
           // ── Project storefront purchase ─────────────────────────────────
           const projectId = meta.project_id;
           if (!projectId) {
             log.warn('project purchase missing project_id in metadata', { session_id: session.id });
+            await markStripeEventProcessed(admin, event.id);
+            await incrementPromoUse(admin, meta.promo_code, session.id);
             return NextResponse.json({ received: true });
           }
 
@@ -655,13 +683,15 @@ export async function POST(req: NextRequest) {
 
           if (existingAccess) {
             log.info('project access row exists, re-running fulfillment', { session_id: session.id });
-            void runProjectFulfillment({
+            await runProjectFulfillment({
               session,
               meta,
               accessId: existingAccess.id,
               accessToken: existingAccess.token,
               projectId,
             });
+            await markStripeEventProcessed(admin, event.id);
+            await incrementPromoUse(admin, meta.promo_code, session.id);
             return NextResponse.json({ received: true });
           }
 
@@ -699,14 +729,16 @@ export async function POST(req: NextRequest) {
           const accessId = createdAccess.id;
           const accessToken = createdAccess.token;
 
-          // Fire-and-forget fulfillment (CRM + email with /store/projects/access/${token})
-          void runProjectFulfillment({
+          // Fulfillment (CRM + email with /store/projects/access/${token})
+          await runProjectFulfillment({
             session,
             meta,
             accessId,
             accessToken,
             projectId,
           });
+          await markStripeEventProcessed(admin, event.id);
+          await incrementPromoUse(admin, meta.promo_code, session.id);
 
           log.info('project purchase fulfilled', {
             session_id: session.id,
@@ -718,7 +750,7 @@ export async function POST(req: NextRequest) {
           // ── Layer 2 idempotency: purchase-level ───────────────────────────
           const { data: existingPurchase } = await admin
             .from('license_purchases')
-            .select('id, fulfillment_email_sent')
+            .select('id, fulfillment_email_sent, line_items')
             .eq('stripe_session_id', session.id)
             .maybeSingle();
 
@@ -727,9 +759,26 @@ export async function POST(req: NextRequest) {
             // after DB write but before 200 response). Still run background tasks
             // in case they didn't complete.
             log.info('purchase row exists, re-running fulfillment', { session_id: session.id });
-            const cartItems = parseCartItems(meta.cart_items);
-            const hasAnyExclusive = cartItems.some((i) => i.license_type === 'exclusive');
-            void runFulfillment({
+            const existingLineItems = (existingPurchase as { line_items?: unknown }).line_items;
+            const storedLineItems: PurchaseLineItem[] = Array.isArray(existingLineItems)
+              ? existingLineItems
+                  .map(parsePurchaseLineItem)
+                  .filter((item: PurchaseLineItem | null): item is PurchaseLineItem => item !== null)
+              : [];
+            const cartItems: PurchaseLineItem[] = storedLineItems.length > 0
+              ? storedLineItems
+              : parseCartItems(meta.cart_items).map((item) => {
+                  const licenseType = item.license_type === 'exclusive' ? 'exclusive' : 'lease';
+                  return {
+                    ...item,
+                    license_type: licenseType,
+                    file_types: legacyLicenseFileTypes(licenseType),
+                    stems_included: licenseType === 'exclusive',
+                    is_exclusive: licenseType === 'exclusive',
+                  } satisfies PurchaseLineItem;
+                });
+            const hasAnyExclusive = cartItems.some((i) => i.is_exclusive);
+            await runFulfillment({
               session,
               meta,
               purchaseId: existingPurchase.id,
@@ -737,6 +786,8 @@ export async function POST(req: NextRequest) {
               lineItems: cartItems,
               hasAnyExclusive,
             });
+            await markStripeEventProcessed(admin, event.id);
+            await incrementPromoUse(admin, meta.promo_code, session.id);
             return NextResponse.json({ received: true });
           }
 
@@ -751,7 +802,7 @@ export async function POST(req: NextRequest) {
               .filter((id) => UUID_RE.test(id)),
           )];
 
-          const licenseById = new Map<string, any>();
+          const licenseById = new Map<string, LicenseLookup>();
           if (customLicenseUUIDs.length > 0) {
             const { data: licenseRows } = await admin
               .from('licenses')
@@ -761,17 +812,33 @@ export async function POST(req: NextRequest) {
           }
 
           // Build fully-resolved line items with canonical license_type
-          const resolvedLineItems = rawCartItems.map((i) => ({
-            track_id: i.track_id,
-            license_id: i.license_id,
-            license_type: resolveTypeFromRaw(i.license_id ?? i.license_type ?? '', licenseById),
-          }));
+          const resolvedLineItems: PurchaseLineItem[] = rawCartItems.map((i) => {
+            const licenseType = resolveTypeFromRaw(i.license_id ?? i.license_type ?? '', licenseById);
+            const customLicense = licenseById.get(i.license_id);
+            const fileTypes = customLicense
+              ? normalizeLicenseFileTypes(customLicense.file_types)
+              : legacyLicenseFileTypes(licenseType);
+            const stemsIncluded = customLicense
+              ? customLicense.stems_included === true
+              : licenseType === 'exclusive';
+
+            return {
+              track_id: i.track_id,
+              license_id: i.license_id || licenseType,
+              license_type: licenseType,
+              file_types: fileTypes,
+              stems_included: stemsIncluded,
+              is_exclusive: customLicense
+                ? customLicense.is_exclusive === true
+                : licenseType === 'exclusive',
+            };
+          });
 
           const trackIds = resolvedLineItems.map((i) => i.track_id);
 
           // Legacy headline fields (backward compat for readers of top-level columns)
           const headlineLicenseType = resolvedLineItems[0]?.license_type ?? 'lease';
-          const hasAnyExclusive = resolvedLineItems.some((i) => i.license_type === 'exclusive');
+          const hasAnyExclusive = resolvedLineItems.some((i) => i.is_exclusive);
 
           // ── Upsert purchase row ────────────────────────────────────────────
           // stripe_session_id is UNIQUE — this is the layer-2 idempotency guard.
@@ -804,9 +871,7 @@ export async function POST(req: NextRequest) {
             throw new Error('Failed to retrieve purchase ID after upsert');
           }
 
-          // ── Return 200 immediately — Stripe won't retry if we respond quickly ──
-          // Background tasks run asynchronously and do NOT block the response.
-          void runFulfillment({
+          await runFulfillment({
             session,
             meta,
             purchaseId,
@@ -814,6 +879,8 @@ export async function POST(req: NextRequest) {
             lineItems: resolvedLineItems,
             hasAnyExclusive,
           });
+          await markStripeEventProcessed(admin, event.id);
+          await incrementPromoUse(admin, meta.promo_code, session.id);
 
           log.info('checkout.session.completed processed', {
             session_id: session.id,
@@ -825,22 +892,26 @@ export async function POST(req: NextRequest) {
 
           // ── Notification insert ──────────────────────────────────
           if (meta.seller_user_id) {
-            const amountUsd = ((session.amount_total ?? 0) / 100).toFixed(2);
-            const beatCount = resolvedLineItems.length;
-            const beatLabel = beatCount === 1 ? '1 beat' : `${beatCount} beats`;
-            await admin.from('notifications').insert({
-              user_id: meta.seller_user_id,
-              kind: 'purchase',
-              title: `New sale — ${beatLabel} ($${amountUsd})`,
-              body: `From ${meta.buyer_email || session.customer_email || 'a buyer'}`,
-              data: {
-                session_id: session.id,
-                amount_usd: parseFloat(amountUsd),
-                buyer_email: meta.buyer_email || session.customer_email,
-              },
-            }).then(({ error: ne }) => {
-              if (ne) log.warn('notification insert failed', { error: ne.message });
-            });
+            try {
+              const amountUsd = ((session.amount_total ?? 0) / 100).toFixed(2);
+              const beatCount = resolvedLineItems.length;
+              const beatLabel = beatCount === 1 ? '1 beat' : `${beatCount} beats`;
+              await admin.from('notifications').insert({
+                user_id: meta.seller_user_id,
+                kind: 'purchase',
+                title: `New sale — ${beatLabel} ($${amountUsd})`,
+                body: `From ${meta.buyer_email || session.customer_email || 'a buyer'}`,
+                data: {
+                  session_id: session.id,
+                  amount_usd: parseFloat(amountUsd),
+                  buyer_email: meta.buyer_email || session.customer_email,
+                },
+              }).then(({ error: ne }) => {
+                if (ne) log.warn('notification insert failed', { error: ne.message });
+              });
+            } catch (ne) {
+              log.warn('notification insert threw', { error: errorMessage(ne) });
+            }
           }
         }
         break;

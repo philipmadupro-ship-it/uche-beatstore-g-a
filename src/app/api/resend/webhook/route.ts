@@ -8,6 +8,27 @@ const log = createLogger('resend.webhook');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface ResendWebhookEvent {
+  type?: string;
+  data?: {
+    email_id?: string;
+    id?: string;
+  };
+}
+
+interface OpenTrackedSend {
+  id: string;
+  campaign_id: string | null;
+  contact_id: string | null;
+  status: string | null;
+  opened_at: string | null;
+}
+
+interface ClickTrackedSend {
+  id: string;
+  link_clicked_at: string | null;
+}
+
 /**
  * POST /api/resend/webhook
  *
@@ -68,9 +89,9 @@ export async function POST(req: NextRequest) {
     log.warn('RESEND_WEBHOOK_SECRET unset — skipping signature verification');
   }
 
-  let event: any;
+  let event: ResendWebhookEvent;
   try {
-    event = JSON.parse(rawBody);
+    event = JSON.parse(rawBody) as ResendWebhookEvent;
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
@@ -91,24 +112,47 @@ export async function POST(req: NextRequest) {
     if (type === 'email.opened') {
       // First open wins — only set opened_at if still null, and lift a
       // still-'sent' row to 'opened' so the pipeline reflects reality.
-      const { data: rows } = await admin
+      const { data: rows, error: rowsError } = await admin
         .from('beat_sends')
-        .select('id, status, opened_at')
+        .select('id, campaign_id, contact_id, status, opened_at')
         .eq('email_resend_id', emailId);
-      for (const r of rows ?? []) {
+      if (rowsError) throw rowsError;
+      for (const row of (rows ?? []) as OpenTrackedSend[]) {
         const patch: Record<string, unknown> = {};
-        if (!(r as any).opened_at) patch.opened_at = nowIso;
-        if ((r as any).status === 'sent') patch.status = 'opened';
-        if (Object.keys(patch).length) await admin.from('beat_sends').update(patch).eq('id', (r as any).id);
+        if (!row.opened_at) patch.opened_at = nowIso;
+        if (row.status === 'sent') patch.status = 'opened';
+        if (Object.keys(patch).length) {
+          const { error } = await admin.from('beat_sends').update(patch).eq('id', row.id);
+          if (error) throw error;
+        }
+
+        // campaign_targets is a cache of the currently linked send's status.
+        // Scope by beat_send_id so a delayed open from an older email cannot
+        // overwrite a newer send (or a later interested/placed transition).
+        if (
+          row.campaign_id
+          && row.contact_id
+          && (row.status === 'sent' || row.status === 'opened')
+        ) {
+          const { error } = await admin
+            .from('campaign_targets')
+            .update({ status: 'opened' })
+            .eq('campaign_id', row.campaign_id)
+            .eq('contact_id', row.contact_id)
+            .eq('beat_send_id', row.id);
+          if (error) throw error;
+        }
       }
     } else if (type === 'email.clicked') {
-      const { data: rows } = await admin
+      const { data: rows, error: rowsError } = await admin
         .from('beat_sends')
         .select('id, link_clicked_at')
         .eq('email_resend_id', emailId);
-      for (const r of rows ?? []) {
-        if (!(r as any).link_clicked_at) {
-          await admin.from('beat_sends').update({ link_clicked_at: nowIso }).eq('id', (r as any).id);
+      if (rowsError) throw rowsError;
+      for (const row of (rows ?? []) as ClickTrackedSend[]) {
+        if (!row.link_clicked_at) {
+          const { error } = await admin.from('beat_sends').update({ link_clicked_at: nowIso }).eq('id', row.id);
+          if (error) throw error;
         }
       }
     }

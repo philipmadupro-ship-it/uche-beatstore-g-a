@@ -25,6 +25,7 @@ import {
   Music, ListMusic, DollarSign, Eye, EyeOff,
   GripVertical, Check, X, Plus, Layers, Search,
   ShoppingBag, Star, Tag, Trash2, Clock, Mic2, Play, Download,
+  ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { DEFAULT_TEMPLATE_MD, VARIABLE_LIST } from '@/lib/contracts/license-template';
@@ -90,6 +91,30 @@ interface ProjectRow {
   store_order?: number | null;
 }
 
+interface GlobalLicense {
+  id: string;
+  name: string;
+  price_usd: number | null;
+  is_free: boolean;
+  is_exclusive: boolean;
+  sort_order: number;
+}
+
+interface TrackLicenseLink {
+  license_id: string;
+  enabled: boolean;
+  linked: boolean;
+  price_override_usd: number | null;
+}
+
+function moveArrayItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
+  const nextIndex = index + direction;
+  if (nextIndex < 0 || nextIndex >= items.length) return items;
+  const next = [...items];
+  [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+  return next;
+}
+
 const EMPTY_PROFILE: ProfileForm = {
   display_name: '',
   bio: '',
@@ -127,7 +152,7 @@ const ACCENT_PRESETS = [
 /* ─── Accordion section ──────────────────────────────────────── */
 
 function Section({
-  id, title, icon, open, onToggle, children,
+  id, title, icon, open, onToggle, children, badge,
 }: {
   id: string;
   title: string;
@@ -135,28 +160,41 @@ function Section({
   open: boolean;
   onToggle: () => void;
   children: React.ReactNode;
+  /** Quiet content summary shown while collapsed, e.g. "12 listed". */
+  badge?: string;
 }) {
+  const panelId = `store-editor-section-${id}`;
+
   return (
-    <div className="rounded-2xl border border-[#2B2821] bg-[#171511] overflow-hidden">
+    <section className="overflow-hidden rounded-xl border border-[#2B2821] bg-[#171511] sm:rounded-2xl">
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-white/[0.02] transition-colors"
+        aria-expanded={open}
+        aria-controls={panelId}
+        className="flex w-full items-center justify-between px-4 py-3.5 text-left transition-colors hover:bg-white/[0.02] sm:px-5 sm:py-4"
       >
-        <div className="flex items-center gap-3">
-          <span className="text-[#D0C3AF]">{icon}</span>
-          <span className="text-[13px] font-semibold text-[#F7EBDD]">{title}</span>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#2B2821] bg-[#11100D] text-[#D0C3AF]">
+            {icon}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[13px] font-semibold text-[#F7EBDD]">{title}</span>
+            {badge && !open && (
+              <span className="block truncate text-[10px] font-mono text-[#6E685B]">{badge}</span>
+            )}
+          </span>
         </div>
         {open
-          ? <ChevronDown size={15} className="text-[#9B9282]" />
-          : <ChevronRight size={15} className="text-[#9B9282]" />}
+          ? <ChevronDown size={15} className="shrink-0 text-[#9B9282]" />
+          : <ChevronRight size={15} className="shrink-0 text-[#9B9282]" />}
       </button>
       {open && (
-        <div className="px-5 pb-5 pt-1 border-t border-[#211F1A] space-y-4">
+        <div id={panelId} className="space-y-4 border-t border-[#211F1A] px-4 pb-5 pt-4 sm:px-5">
           {children}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -587,7 +625,8 @@ export default function StoreEditorPage() {
   const [trackSearch, setTrackSearch] = useState('');
   const [togglingTrack, setTogglingTrack] = useState<string | null>(null);
   // Global license tiers (for per-track license panel)
-  const [globalLicenses, setGlobalLicenses] = useState<Array<{ id: string; name: string; price_usd: number | null; is_free: boolean; is_exclusive: boolean; sort_order: number }>>([]);
+  const [globalLicenses, setGlobalLicenses] = useState<GlobalLicense[]>([]);
+  const [trackLicenseLinks, setTrackLicenseLinks] = useState<Record<string, TrackLicenseLink[]>>({});
   // Which beat rows have their license panel expanded
   const [licenseExpandedFor, setLicenseExpandedFor] = useState<Set<string>>(new Set());
 
@@ -614,9 +653,9 @@ export default function StoreEditorPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [heroUploading, setHeroUploading] = useState(false);
-  const [openSections, setOpenSections] = useState<Set<string>>(
-    new Set(['hero', 'social', 'playlists', 'projects', 'tracks', 'track-controls', 'licenses']),
-  );
+  // Store Editor starts as a section index on every viewport. The user
+  // opens the exact area they mean to edit, starting with Hero.
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [previewOpen, setPreviewOpen] = useState(false);
 
   const heroFileRef = useRef<HTMLInputElement>(null);
@@ -634,12 +673,46 @@ export default function StoreEditorPage() {
       return next;
     });
 
+  const openSection = (id: string) =>
+    setOpenSections((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+
   const set = useCallback(
     (field: keyof ProfileForm) =>
       (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
         setForm((f) => ({ ...f, [field]: e.target.value })),
     [],
   );
+
+  const loadTrackLicenseLinks = useCallback(async (trackIds: string[]) => {
+    if (trackIds.length === 0) return;
+    const entries = await Promise.all(
+      trackIds.map(async (trackId) => {
+        try {
+          const res = await fetch(`/api/track-licenses?track_id=${trackId}`);
+          if (!res.ok) return [trackId, []] as const;
+          const data = await res.json();
+          const rows = (Array.isArray(data) ? data : data.licenses ?? []) as Array<TrackLicenseLink & { id?: string }>;
+          return [
+            trackId,
+            rows.map((row) => ({
+              license_id: row.license_id ?? row.id ?? '',
+              enabled: row.enabled !== false,
+              linked: !!row.linked,
+              price_override_usd: row.price_override_usd ?? null,
+            })).filter((row) => row.license_id),
+          ] as const;
+        } catch {
+          return [trackId, []] as const;
+        }
+      }),
+    );
+    setTrackLicenseLinks((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
+  }, []);
 
   /* ── Load ── */
   useEffect(() => {
@@ -657,7 +730,9 @@ export default function StoreEditorPage() {
         const [pd, pld, sd, td, prd, promod, ld] = await Promise.all([
           profileRes.json(), playlistRes.json(), storeRes.json(), tracksRes.json(), projectsRes.json(), promoRes.json(), licensesRes.json(),
         ]);
-        setGlobalLicenses((ld.licenses ?? []).sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0)));
+        const loadedGlobalLicenses = ((ld.licenses ?? []) as GlobalLicense[])
+          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+        setGlobalLicenses(loadedGlobalLicenses);
         setPromoCodes(promod.codes ?? []);
         // previewTracks are set below once rawTracks is mapped.
 
@@ -689,6 +764,7 @@ export default function StoreEditorPage() {
           return a.title.localeCompare(b.title);
         });
         setAllTracks(sortedTracks);
+        void loadTrackLicenseLinks(sortedTracks.filter((t) => t.store_listed).map((t) => t.id));
         // Preview uses up to 3 listed tracks — full TrackRow fields so BeatCard renders correctly.
         setPreviewTracks(sortedTracks.filter((t) => t.store_listed).slice(0, 3));
         const p = pd.profile ?? {};
@@ -749,7 +825,7 @@ export default function StoreEditorPage() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [loadTrackLicenseLinks]);
 
   /* ── Hero image upload ── */
   const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -800,6 +876,8 @@ export default function StoreEditorPage() {
     });
   };
   const handleDragEnd = () => { dragIdx.current = null; };
+  const moveFeaturedPlaylist = (idx: number, direction: -1 | 1) =>
+    setFeatured((prev) => moveArrayItem(prev, idx, direction));
 
   /* ── Featured project helpers ── */
   const addProjectToFeatured = (pr: ProjectRow) => {
@@ -828,12 +906,31 @@ export default function StoreEditorPage() {
     });
   };
   const handleProjectDragEnd = () => { projectDragIdx.current = null; };
+  const moveFeaturedProject = (idx: number, direction: -1 | 1) =>
+    setFeaturedProjects((prev) => moveArrayItem(prev, idx, direction));
 
   /* ── Drag-reorder for listed beats (writes tracks.store_sort_order) ──
      Only the live (store_listed=true) rows are draggable. Drafts keep
      their position. After a drag ends, we PATCH every reordered row
      with a 0-based store_sort_order so /store picks them up. */
   const trackDragIdx = useRef<number | null>(null);
+  const persistListedTrackOrder = async (listed: TrackRow[]) => {
+    try {
+      const responses = await Promise.all(
+        listed.map((t) =>
+          fetch(`/api/tracks/${t.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ store_sort_order: t.store_sort_order }),
+          }),
+        ),
+      );
+      if (responses.some((res) => !res.ok)) throw new Error('One or more beats could not be saved');
+      toast.success('Beat order saved');
+    } catch (err) {
+      toast.error('Order save failed', err instanceof Error ? err.message : 'try again');
+    }
+  };
   const handleTrackDragStart = (idx: number) => { trackDragIdx.current = idx; };
   const handleTrackDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
@@ -861,21 +958,17 @@ export default function StoreEditorPage() {
     // Persist the new order. We send a small PATCH per row — listed
     // beats only — so the store_sort_order column on /store is the
     // single source of truth.
+    await persistListedTrackOrder(allTracks.filter((t) => t.store_listed));
+  };
+
+  const moveListedTrack = (idx: number, direction: -1 | 1) => {
     const listed = allTracks.filter((t) => t.store_listed);
-    try {
-      await Promise.all(
-        listed.map((t) =>
-          fetch(`/api/tracks/${t.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ store_sort_order: t.store_sort_order }),
-          }),
-        ),
-      );
-      toast.success('Beat order saved');
-    } catch (err: any) {
-      toast.error('Order save failed', err?.message ?? 'try again');
-    }
+    const moved = moveArrayItem(listed, idx, direction);
+    if (moved === listed) return;
+    const reordered = moved.map((track, order) => ({ ...track, store_sort_order: order }));
+    setAllTracks([...reordered, ...allTracks.filter((t) => !t.store_listed)]);
+    setPreviewTracks(reordered.slice(0, 3));
+    void persistListedTrackOrder(reordered);
   };
 
   /* ── Track listing toggle ── */
@@ -903,6 +996,7 @@ export default function StoreEditorPage() {
         throw new Error(j.error || `HTTP ${res.status}`);
       }
       toast.success(nextState ? 'Added to store ✓' : 'Removed from store');
+      if (nextState) void loadTrackLicenseLinks([trackId]);
       // Followers are notified by the hourly digest cron (one email covering
       // everything newly listed) instead of one email per beat — so listing a
       // batch never spams. drop_notified_at (NULL = pending) is the queue;
@@ -921,6 +1015,11 @@ export default function StoreEditorPage() {
   /* ── Track featured toggle (migration 054) ── */
   const toggleTrackFeatured = async (trackId: string, currentlyFeatured: boolean) => {
     const nextState = !currentlyFeatured;
+    const currentPickCount = allTracks.filter((t) => t.store_listed && t.store_featured).length;
+    if (nextState && currentPickCount >= 12) {
+      toast.error("Producer's Picks is full", 'Remove one pick before adding another.');
+      return;
+    }
     // Optimistic
     setAllTracks((prev) =>
       prev.map((t) => t.id === trackId ? { ...t, store_featured: nextState } : t),
@@ -1229,6 +1328,32 @@ export default function StoreEditorPage() {
   const unfeatured = playlists.filter((pl) => !featured.find((f) => f.id === pl.id));
   /* ── unfeatured projects (available to add) ── */
   const unfeaturedProjects = projects.filter((pr) => !featuredProjects.find((f) => f.id === pr.id));
+  const producerPicks = allTracks.filter((t) => t.store_listed && t.store_featured).slice(0, 12);
+  const availableProducerPicks = allTracks.filter((t) => t.store_listed && !t.store_featured);
+
+  const hasReadyPrice = (track: TrackRow): boolean => {
+    const legacyReady = (
+      (track.lease_price_usd != null && track.lease_price_usd > 0)
+      || (track.exclusive_price_usd != null && track.exclusive_price_usd > 0)
+      || Number(form.license_lease_price_usd) > 0
+      || Number(form.license_exclusive_price_usd) > 0
+    );
+    if (globalLicenses.length === 0) return legacyReady;
+
+    const links = trackLicenseLinks[track.id] ?? [];
+    const useLinked = links.some((link) => link.linked);
+    const activeTiers = globalLicenses.filter((license) => {
+      if (!useLinked) return true;
+      const link = links.find((row) => row.license_id === license.id);
+      return !!link?.linked && link.enabled;
+    });
+    const tierReady = activeTiers.some((license) => {
+      if (license.is_free) return true;
+      const override = links.find((row) => row.license_id === license.id)?.price_override_usd;
+      return Number(override ?? license.price_usd) > 0;
+    });
+    return tierReady || (activeTiers.length === 0 && legacyReady);
+  };
 
   if (loading) {
     return (
@@ -1245,21 +1370,21 @@ export default function StoreEditorPage() {
       <PageContainer className="md:pt-10 pb-32">
 
         {/* ── Page header ── */}
-        <div className="flex items-start justify-between gap-4 mb-8">
-          <div>
+        <div className="mb-5 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF] mb-1">Dashboard</p>
             <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight text-white leading-none font-heading">
               Store Editor
             </h1>
-            <p className="text-[12px] text-[#B4AA99] mt-1.5">
+            <p className="mt-1.5 max-w-[58ch] text-[12px] leading-relaxed text-[#B4AA99]">
               Customise your public beatstore — changes go live instantly on save.
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0 mt-1">
+          <div className="flex shrink-0 items-center gap-2 overflow-x-auto pb-1 sm:mt-1 sm:justify-end sm:pb-0">
             {/* Mobile preview toggle */}
             <button
               onClick={() => setPreviewOpen((v) => !v)}
-              className="lg:hidden flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-[#D0C3AF] hover:text-white hover:bg-white/[0.08] transition-colors"
+              className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-3 py-2 text-[11px] text-[#D0C3AF] transition-colors hover:bg-white/[0.08] hover:text-white lg:hidden"
             >
               {previewOpen ? <EyeOff size={12} /> : <Eye size={12} />}
               Preview
@@ -1268,7 +1393,7 @@ export default function StoreEditorPage() {
               href="/store"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-[#D0C3AF] hover:text-white hover:bg-white/[0.08] transition-colors"
+              className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-3 py-2 text-[11px] text-[#D0C3AF] transition-colors hover:bg-white/[0.08] hover:text-white"
             >
               <ExternalLink size={12} />
               View Store
@@ -1277,7 +1402,7 @@ export default function StoreEditorPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 pl-4 pr-1.5 py-1.5 rounded-full disabled:opacity-60 text-black text-[12px] font-semibold active:scale-[0.97]"
+              className="flex shrink-0 items-center gap-2 rounded-full py-1.5 pl-4 pr-1.5 text-[12px] font-semibold text-black active:scale-[0.97] disabled:opacity-60"
               style={{
                 backgroundColor: '#E7D7BE',
                 transition: 'all 400ms cubic-bezier(0.32,0.72,0,1)',
@@ -1296,6 +1421,41 @@ export default function StoreEditorPage() {
 
           {/* ── Left: editor panels ── */}
           <div className={`flex-1 min-w-0 space-y-3 ${previewOpen ? 'hidden lg:block' : ''}`}>
+            <div className="rounded-2xl border border-[#2B2821] bg-[#11100D] p-3 sm:p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">Start with Hero</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-[#837B6D]">
+                    Sections stay closed until you open them, keeping the editor calm on mobile.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openSection('hero')}
+                  className="inline-flex shrink-0 items-center justify-center rounded-full bg-[#E7D7BE] px-4 py-2 text-[11px] font-semibold text-black transition-colors hover:bg-[#F3E6D1] active:scale-[0.98]"
+                >
+                  Open Hero
+                </button>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {[
+                  { id: 'playlists', label: 'Playlists', value: `${featured.length}/5` },
+                  { id: 'projects', label: 'Projects', value: `${featuredProjects.length}/5` },
+                  { id: 'producer-picks', label: 'Picks', value: `${producerPicks.length}/12` },
+                  { id: 'tracks', label: 'Beats live', value: String(allTracks.filter((t) => t.store_listed).length) },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => openSection(item.id)}
+                    className="rounded-xl border border-[#211F1A] bg-[#090907] px-3 py-2 text-left transition-colors hover:border-[#3B372F] hover:bg-[#171511]"
+                  >
+                    <span className="block text-[15px] font-semibold text-[#F7EBDD]">{item.value}</span>
+                    <span className="mt-0.5 block truncate text-[9px] font-mono uppercase tracking-[0.16em] text-[#6E685B]">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* ① Hero Section */}
             <Section
@@ -1304,6 +1464,7 @@ export default function StoreEditorPage() {
               icon={<ImageIcon size={15} />}
               open={openSections.has('hero')}
               onToggle={() => toggleSection('hero')}
+              badge={form.display_name || 'identity, hero image, colors'}
             >
               {/* Hero image */}
               <Field label="Hero Background Image">
@@ -1487,6 +1648,14 @@ export default function StoreEditorPage() {
               icon={<Globe size={15} />}
               open={openSections.has('social')}
               onToggle={() => toggleSection('social')}
+              badge={`${[
+                form.instagram_handle,
+                form.twitter_handle,
+                form.spotify_url,
+                form.soundcloud_url,
+                form.website_url,
+                form.contact_email,
+              ].filter(Boolean).length} connected`}
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Instagram Handle">
@@ -1559,14 +1728,15 @@ export default function StoreEditorPage() {
               icon={<ListMusic size={15} />}
               open={openSections.has('playlists')}
               onToggle={() => toggleSection('playlists')}
+              badge={`${featured.length}/5 featured`}
             >
               <p className="text-[11px] text-[#9B9282]">
-                Up to 5 playlists shown in your store hero. Drag to reorder.
+                Up to 5 playlists shown in your store hero. Drag or use the arrow controls to reorder.
               </p>
 
               {/* Featured list (drag-sortable) */}
               {featured.length > 0 ? (
-                <div className="space-y-1">
+                <div className="max-h-[300px] space-y-1 overflow-y-auto overscroll-contain pr-1">
                   {featured.map((pl, idx) => (
                     <div
                       key={pl.id}
@@ -1574,7 +1744,7 @@ export default function StoreEditorPage() {
                       onDragStart={() => handleDragStart(idx)}
                       onDragOver={(e) => handleDragOver(e, idx)}
                       onDragEnd={handleDragEnd}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#11100D] border border-[#2B2821] cursor-grab active:cursor-grabbing hover:border-[#3B372F] transition-colors group"
+                      className="group flex min-w-0 select-none items-center gap-3 rounded-xl border border-[#2B2821] bg-[#11100D] px-3 py-2.5 transition-colors hover:border-[#3B372F] sm:cursor-grab sm:active:cursor-grabbing"
                     >
                       <GripVertical size={13} className="text-[#6E685B] group-hover:text-[#9B9282] shrink-0" />
                       <div className="w-9 h-9 rounded-lg overflow-hidden bg-[#211F1A] border border-[#3B372F] shrink-0">
@@ -1586,13 +1756,34 @@ export default function StoreEditorPage() {
                         <p className="text-[12px] font-medium text-[#F7EBDD] truncate">{pl.name}</p>
                         <p className="text-[10px] font-mono text-[#9B9282]">{pl.track_count} track{pl.track_count !== 1 ? 's' : ''}</p>
                       </div>
-                      <span className="text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 px-1.5 py-0.5 rounded shrink-0">
+                      <span className="hidden shrink-0 rounded border border-[#6DC6A4]/20 bg-[#6DC6A4]/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] sm:inline-flex">
                         Featured
                       </span>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => moveFeaturedPlaylist(idx, -1)}
+                          disabled={idx === 0}
+                          aria-label={`Move ${pl.name} up`}
+                          className="grid h-9 w-9 place-items-center rounded-md border border-[#2B2821] bg-white/[0.03] text-[#B4AA99] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD] disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
+                        >
+                          <ArrowUp size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveFeaturedPlaylist(idx, 1)}
+                          disabled={idx === featured.length - 1}
+                          aria-label={`Move ${pl.name} down`}
+                          className="grid h-9 w-9 place-items-center rounded-md border border-[#2B2821] bg-white/[0.03] text-[#B4AA99] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD] disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
+                        >
+                          <ArrowDown size={12} />
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeFromFeatured(pl.id)}
-                        className="w-6 h-6 rounded-full bg-white/[0.04] border border-[#2B2821] flex items-center justify-center text-[#9B9282] hover:text-red-400 hover:border-red-900/40 transition-colors shrink-0"
+                        aria-label={`Remove ${pl.name} from featured playlists`}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#2B2821] bg-white/[0.04] text-[#9B9282] transition-colors hover:border-red-900/40 hover:text-red-400 sm:h-7 sm:w-7"
                       >
                         <X size={10} />
                       </button>
@@ -1611,7 +1802,7 @@ export default function StoreEditorPage() {
                   <p className="text-[10px] font-mono uppercase tracking-wider text-[#6E685B] mb-2">
                     Add to featured {featured.length}/5
                   </p>
-                  <div className="space-y-1">
+                  <div className="max-h-[300px] space-y-1 overflow-y-auto overscroll-contain pr-1">
                     {unfeatured.map((pl) => (
                       <div
                         key={pl.id}
@@ -1656,13 +1847,14 @@ export default function StoreEditorPage() {
               icon={<Layers size={15} />}
               open={openSections.has('projects')}
               onToggle={() => toggleSection('projects')}
+              badge={`${featuredProjects.length}/5 featured`}
             >
               <p className="text-[11px] text-[#9B9282]">
-                Up to 5 projects shown in your store. Drag to reorder.
+                Up to 5 projects shown in your store. Drag or use the arrow controls to reorder.
               </p>
 
               {featuredProjects.length > 0 ? (
-                <div className="space-y-1">
+                <div className="max-h-[300px] space-y-1 overflow-y-auto overscroll-contain pr-1">
                   {featuredProjects.map((pr, idx) => (
                     <div
                       key={pr.id}
@@ -1670,7 +1862,7 @@ export default function StoreEditorPage() {
                       onDragStart={() => handleProjectDragStart(idx)}
                       onDragOver={(e) => handleProjectDragOver(e, idx)}
                       onDragEnd={handleProjectDragEnd}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#11100D] border border-[#2B2821] cursor-grab active:cursor-grabbing hover:border-[#3B372F] transition-colors group"
+                      className="group flex min-w-0 select-none items-center gap-3 rounded-xl border border-[#2B2821] bg-[#11100D] px-3 py-2.5 transition-colors hover:border-[#3B372F] sm:cursor-grab sm:active:cursor-grabbing"
                     >
                       <GripVertical size={13} className="text-[#6E685B] group-hover:text-[#9B9282] shrink-0" />
                       <div className="w-9 h-9 rounded-lg overflow-hidden bg-[#211F1A] border border-[#3B372F] shrink-0">
@@ -1684,13 +1876,34 @@ export default function StoreEditorPage() {
                           <p className="text-[10px] font-mono text-[#9B9282]">${pr.price_usd}</p>
                         )}
                       </div>
-                      <span className="text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 px-1.5 py-0.5 rounded shrink-0">
+                      <span className="hidden shrink-0 rounded border border-[#6DC6A4]/20 bg-[#6DC6A4]/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] sm:inline-flex">
                         Featured
                       </span>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => moveFeaturedProject(idx, -1)}
+                          disabled={idx === 0}
+                          aria-label={`Move ${pr.name} up`}
+                          className="grid h-9 w-9 place-items-center rounded-md border border-[#2B2821] bg-white/[0.03] text-[#B4AA99] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD] disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
+                        >
+                          <ArrowUp size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveFeaturedProject(idx, 1)}
+                          disabled={idx === featuredProjects.length - 1}
+                          aria-label={`Move ${pr.name} down`}
+                          className="grid h-9 w-9 place-items-center rounded-md border border-[#2B2821] bg-white/[0.03] text-[#B4AA99] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD] disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
+                        >
+                          <ArrowDown size={12} />
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeProjectFromFeatured(pr.id)}
-                        className="w-6 h-6 rounded-full bg-white/[0.04] border border-[#2B2821] flex items-center justify-center text-[#9B9282] hover:text-red-400 hover:border-red-900/40 transition-colors shrink-0"
+                        aria-label={`Remove ${pr.name} from featured projects`}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#2B2821] bg-white/[0.04] text-[#9B9282] transition-colors hover:border-red-900/40 hover:text-red-400 sm:h-7 sm:w-7"
                       >
                         <X size={10} />
                       </button>
@@ -1708,7 +1921,7 @@ export default function StoreEditorPage() {
                   <p className="text-[10px] font-mono uppercase tracking-wider text-[#6E685B] mb-2">
                     Add to featured {featuredProjects.length}/5
                   </p>
-                  <div className="space-y-1">
+                  <div className="max-h-[300px] space-y-1 overflow-y-auto overscroll-contain pr-1">
                     {unfeaturedProjects.map((pr) => (
                       <div
                         key={pr.id}
@@ -1748,6 +1961,112 @@ export default function StoreEditorPage() {
               )}
             </Section>
 
+            <Section
+              id="producer-picks"
+              title="Producer's Picks"
+              icon={<Star size={15} />}
+              open={openSections.has('producer-picks')}
+              onToggle={() => toggleSection('producer-picks')}
+              badge={`${producerPicks.length}/12 selected`}
+            >
+              <div className="rounded-xl border border-[#2B2821] bg-[#090907] p-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[11px] text-[#D0C3AF]">
+                      These beats appear in the Producer&apos;s Picks strip on the public store.
+                    </p>
+                    <p className="mt-1 text-[10px] font-mono uppercase tracking-[0.16em] text-[#6E685B]">
+                      Listed beats only · max 12
+                    </p>
+                  </div>
+                  <a
+                    href="/store"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-full border border-[#2B2821] px-3 text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD]"
+                  >
+                    <ExternalLink size={11} />
+                    View store
+                  </a>
+                </div>
+              </div>
+
+              {producerPicks.length > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {producerPicks.map((t) => (
+                    <div key={t.id} className="flex items-center gap-3 rounded-xl border border-[#D6BE7A]/25 bg-[#D6BE7A]/[0.06] px-3 py-2">
+                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-[#D6BE7A]/20 bg-[#11100D]">
+                        {t.cover_url
+                          ? <img src={t.cover_url} alt="" className="h-full w-full object-cover" />
+                          : <div className="flex h-full w-full items-center justify-center text-[#6E685B]"><Music size={13} /></div>}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12px] font-medium text-[#F7EBDD]">{t.title}</p>
+                        <p className="truncate text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">
+                          {[t.type, t.bpm ? `${t.bpm} BPM` : null, t.key].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleTrackFeatured(t.id, true)}
+                        title="Remove from Producer's Picks"
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-[#D6BE7A]/25 text-[#D6BE7A] transition-colors hover:bg-[#D6BE7A]/10"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-[#2B2821] py-8 text-center">
+                  <Star size={18} className="mx-auto mb-2 text-[#3B372F]" />
+                  <p className="text-[12px] text-[#9B9282]">No producer picks selected yet.</p>
+                </div>
+              )}
+
+              {availableProducerPicks.length > 0 && (
+                <div>
+                  <p className="mb-2 text-[9px] font-mono uppercase tracking-[0.22em] text-[#6E685B]">
+                    Add from listed beats
+                  </p>
+                  <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
+                    {availableProducerPicks
+                      .filter((t) =>
+                        !trackSearch.trim() ||
+                        t.title.toLowerCase().includes(trackSearch.toLowerCase()) ||
+                        (t.key ?? '').toLowerCase().includes(trackSearch.toLowerCase()) ||
+                        String(t.bpm ?? '').includes(trackSearch),
+                      )
+                      .slice(0, 40)
+                      .map((t) => (
+                        <div key={t.id} className="flex items-center gap-3 rounded-xl border border-[#211F1A] bg-[#090907] px-3 py-2">
+                          <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md border border-[#2B2821] bg-[#11100D]">
+                            {t.cover_url
+                              ? <img src={t.cover_url} alt="" className="h-full w-full object-cover" />
+                              : <div className="flex h-full w-full items-center justify-center text-[#6E685B]"><Music size={12} /></div>}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[12px] text-[#F7EBDD]">{t.title}</p>
+                            <p className="truncate text-[9px] font-mono uppercase tracking-wider text-[#837B6D]">
+                              {[t.type, t.bpm ? `${t.bpm} BPM` : null, t.key].filter(Boolean).join(' · ')}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleTrackFeatured(t.id, false)}
+                            disabled={producerPicks.length >= 12}
+                            className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-[#2B2821] text-[#D0C3AF] transition-colors hover:border-[#D6BE7A]/40 hover:text-[#D6BE7A] disabled:cursor-not-allowed disabled:opacity-30"
+                            title="Add to Producer's Picks"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </Section>
+
             {/* ④ Track Listing — publish tracks to the store */}
             <Section
               id="tracks"
@@ -1755,6 +2074,7 @@ export default function StoreEditorPage() {
               icon={<ShoppingBag size={15} />}
               open={openSections.has('tracks')}
               onToggle={() => toggleSection('tracks')}
+              badge={`${allTracks.filter((t) => t.store_listed).length} listed`}
             >
               <p className="text-[11px] text-[#9B9282]">
                 Toggle beats on or off to control what appears in your public store. To set prices and cover art, open the beat in your{' '}
@@ -1789,10 +2109,7 @@ export default function StoreEditorPage() {
               {(() => {
                 const listed = allTracks.filter((t) => t.store_listed);
                 const noCover = listed.filter((t) => !t.cover_url);
-                const noPrice = listed.filter(
-                  (t) => (t.lease_price_usd == null || t.lease_price_usd <= 0)
-                    && (t.exclusive_price_usd == null || t.exclusive_price_usd <= 0),
-                );
+                const noPrice = listed.filter((t) => !hasReadyPrice(t));
                 const noBpmKey = listed.filter((t) => t.bpm == null && !t.key);
                 const issues = [
                   noCover.length > 0 && { label: 'no cover art', count: noCover.length, firstId: noCover[0].id },
@@ -1834,7 +2151,7 @@ export default function StoreEditorPage() {
                   </a>
                 </div>
               ) : (
-                <div className="space-y-1 max-h-[480px] overflow-y-auto pr-1">
+                <div className="max-h-[60dvh] space-y-1 overflow-y-auto overscroll-contain pr-1 sm:max-h-[480px]">
                   {(() => {
                     // Index map (within the *listed* subset) so the drag
                     // handlers know which slot a row occupies. Drafts are
@@ -1859,7 +2176,7 @@ export default function StoreEditorPage() {
                         onDragStart={() => { if (isListed) handleTrackDragStart(listedIdx); }}
                         onDragOver={(e) => { if (isListed) handleTrackDragOver(e, listedIdx); }}
                         onDragEnd={handleTrackDragEnd}
-                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${
+                        className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 transition-all sm:flex-nowrap sm:gap-3 ${
                           t.store_listed
                             ? 'bg-[#0e140e] border-[#6DC6A4]/20 hover:border-[#6DC6A4]/35 cursor-grab active:cursor-grabbing'
                             : 'bg-[#090907] border-[#211F1A] hover:border-[#2B2821]'
@@ -1867,7 +2184,7 @@ export default function StoreEditorPage() {
                       >
                         {/* Drag handle — only on listed rows */}
                         {isListed && (
-                          <GripVertical size={13} className="text-[#6E685B] hover:text-[#B4AA99] shrink-0" />
+                          <GripVertical size={13} className="hidden shrink-0 text-[#6E685B] hover:text-[#B4AA99] sm:block" />
                         )}
                         {/* Cover art */}
                         <div className="w-9 h-9 rounded-md overflow-hidden bg-[#211F1A] border border-[#3B372F] shrink-0">
@@ -1877,7 +2194,7 @@ export default function StoreEditorPage() {
                         </div>
 
                         {/* Info */}
-                        <div className="flex-1 min-w-0">
+                        <div className="min-w-[120px] flex-1">
                           <p className={`text-[12px] font-medium truncate ${t.store_listed ? 'text-[#F7EBDD]' : 'text-[#D0C3AF]'}`}>
                             {t.title}
                           </p>
@@ -2006,8 +2323,39 @@ export default function StoreEditorPage() {
 
                         {/* License tier panel toggle — listed tracks only */}
                         {t.store_listed && (
+                          <div className="flex shrink-0 items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => moveListedTrack(listedIdx, -1)}
+                              disabled={listedIdx === 0}
+                              aria-label={`Move ${t.title} up`}
+                              className="grid h-9 w-9 place-items-center rounded-md border border-[#2B2821] bg-white/[0.03] text-[#B4AA99] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD] disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
+                            >
+                              <ArrowUp size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveListedTrack(listedIdx, 1)}
+                              disabled={listedIdx === listedIds.length - 1}
+                              aria-label={`Move ${t.title} down`}
+                              className="grid h-9 w-9 place-items-center rounded-md border border-[#2B2821] bg-white/[0.03] text-[#B4AA99] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD] disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
+                            >
+                              <ArrowDown size={12} />
+                            </button>
+                          </div>
+                        )}
+
+                        {t.store_listed && (
                           <button
-                            onClick={() => setLicenseExpandedFor((prev) => { const n = new Set(prev); n.has(t.id) ? n.delete(t.id) : n.add(t.id); return n; })}
+                            onClick={() => {
+                              if (licenseExpandedFor.has(t.id)) void loadTrackLicenseLinks([t.id]);
+                              setLicenseExpandedFor((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(t.id)) next.delete(t.id);
+                                else next.add(t.id);
+                                return next;
+                              });
+                            }}
                             title="Configure license tiers for this beat"
                             className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center border transition-colors ${
                               licenseExpandedFor.has(t.id)
@@ -2089,6 +2437,7 @@ export default function StoreEditorPage() {
               icon={<DollarSign size={15} />}
               open={openSections.has('track-controls')}
               onToggle={() => toggleSection('track-controls')}
+              badge={form.bundle_discount_threshold && form.bundle_discount_percent ? 'bundle discount on' : 'defaults & notes'}
             >
               {/* License notes */}
               <Field label="License Notes">
@@ -2144,6 +2493,7 @@ export default function StoreEditorPage() {
               icon={<ImageIcon size={15} />}
               open={openSections.has('seo')}
               onToggle={() => toggleSection('seo')}
+              badge={form.seo_title || form.seo_description || form.og_image_url ? 'custom share data' : 'uses store defaults'}
             >
               <p className="text-[11px] text-[#9B9282]">
                 Controls how /store renders in iMessage, Twitter, Discord, and Google search results. All fields optional — if you leave them blank we use your display name + bio + hero image.
@@ -2193,6 +2543,7 @@ export default function StoreEditorPage() {
               icon={<Layers size={15} />}
               open={openSections.has('share-templates')}
               onToggle={() => toggleSection('share-templates')}
+              badge={`${form.share_card_style || 'default'} card · ${form.share_video_style || 'default'} video`}
             >
               <ShareStylePicker
                 kind="card"
@@ -2216,6 +2567,7 @@ export default function StoreEditorPage() {
               icon={<Mic2 size={15} />}
               open={openSections.has('voice-tag')}
               onToggle={() => toggleSection('voice-tag')}
+              badge={form.voice_tag_url ? `every ${form.voice_tag_interval_seconds || '20'}s` : 'not uploaded'}
             >
               <VoiceTagSection
                 value={form.voice_tag_url}
@@ -2233,6 +2585,7 @@ export default function StoreEditorPage() {
               icon={<Layers size={15} />}
               open={openSections.has('license-template')}
               onToggle={() => toggleSection('license-template')}
+              badge={form.license_template_md.trim() ? 'custom contract' : 'default contract'}
             >
               <LicenseTemplateEditor
                 value={form.license_template_md}
@@ -2248,6 +2601,7 @@ export default function StoreEditorPage() {
               icon={<Music size={15} />}
               open={openSections.has('waveforms')}
               onToggle={() => toggleSection('waveforms')}
+              badge="batch tool"
             >
               <p className="text-[11px] text-[#9B9282]">
                 If your beats' waveforms in /store look generic, that's because the original peaks weren't computed at upload. Regenerate them now — the player will then draw the real shape of every file.
@@ -2262,6 +2616,7 @@ export default function StoreEditorPage() {
               icon={<Tag size={15} />}
               open={openSections.has('promo')}
               onToggle={() => toggleSection('promo')}
+              badge={promoCodes.length > 0 ? `${promoCodes.length} code${promoCodes.length === 1 ? '' : 's'}` : undefined}
             >
               <p className="text-[11px] text-[#9B9282]">
                 Create codes buyers can enter at checkout. Share them in DMs or auto-fill via <code className="font-mono text-[#D0C3AF]">/store/checkout?promo=YOUR_CODE</code>.
@@ -2408,6 +2763,7 @@ export default function StoreEditorPage() {
                   return next;
                 })
               }
+              badge={`${globalLicenses.length} tier${globalLicenses.length === 1 ? '' : 's'}`}
             >
               <LicenseBuilder />
             </Section>

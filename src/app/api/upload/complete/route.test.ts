@@ -19,6 +19,7 @@ const mockGetAuddFeatures = vi.fn();
 const mockMergeFeatures = vi.fn();
 const mockExtractPeaks = vi.fn();
 const mockUploadPeaksSidecar = vi.fn();
+const mockUploadPublicPreview = vi.fn();
 const mockIsSupabaseConfigured = vi.fn();
 const mockLocalInsert = vi.fn();
 const mockLocalUpdate = vi.fn();
@@ -55,6 +56,7 @@ vi.mock('@/lib/audio/peaks', () => ({
 
 vi.mock('@/lib/storage/upload', () => ({
   uploadPeaksSidecar: (...args: unknown[]) => mockUploadPeaksSidecar(...args),
+  uploadPublicPreview: (...args: unknown[]) => mockUploadPublicPreview(...args),
 }));
 
 vi.mock('@/lib/local-store', () => ({
@@ -162,6 +164,7 @@ beforeEach(() => {
   });
   mockExtractPeaks.mockResolvedValue(null);
   mockUploadPeaksSidecar.mockResolvedValue(null);
+  mockUploadPublicPreview.mockResolvedValue(null);
   mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
   mockFrom.mockImplementation((table: string) => supabaseTable(table));
 });

@@ -52,10 +52,12 @@ export function BeatComments({
   trackId,
   trackDurationSeconds,
   accentColor,
+  onSeek,
 }: {
   trackId: string;
   trackDurationSeconds: number | null | undefined;
   accentColor: string;
+  onSeek?: (seconds: number) => void;
 }) {
   const queryClient = useQueryClient();
   const { currentTrack, progress } = usePlayer();
@@ -186,7 +188,8 @@ export function BeatComments({
             <li key={c.id} className="py-3 flex items-start gap-3">
               <button
                 type="button"
-                title="Pinned to this moment"
+                title="Play from this moment"
+                onClick={() => onSeek?.(c.timestamp_seconds)}
                 className="shrink-0 mt-0.5 px-2 py-0.5 rounded-md text-[10px] font-mono tabular-nums"
                 style={{ backgroundColor: `${accentColor}26`, color: accentColor }}
               >

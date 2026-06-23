@@ -101,8 +101,8 @@ function DownloadPortal() {
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
         setPurchase(data.purchase);
         setTracks(data.tracks ?? []);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not load your delivery link.');
       } finally {
         setLoading(false);
       }
@@ -146,21 +146,26 @@ function DownloadPortal() {
   /* ── Error / not found ── */
   if (error || !purchase) {
     return (
-      <div className="min-h-screen bg-[#090907] text-[#F7EBDD] flex flex-col items-center justify-center gap-6 px-4 text-center">
-        <AlertTriangle size={36} className="text-amber-500" />
-        <div>
-          <h1 className="text-[18px] font-bold text-white mb-2">Download not available</h1>
-          <p className="text-[13px] text-[#B4AA99] max-w-md leading-relaxed">
+      <div className="min-h-screen bg-[#090907] px-4 py-10 text-[#F7EBDD]">
+        <div className="mx-auto flex min-h-[78vh] max-w-xl flex-col items-center justify-center gap-6 text-center">
+          <div className="grid size-20 place-items-center rounded-[24px] border border-amber-400/20 bg-amber-400/8">
+            <AlertTriangle size={34} className="text-amber-400" />
+          </div>
+          <div>
+            <p className="mb-3 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6E685B]">Delivery</p>
+            <h1 className="mb-2 text-[28px] font-bold leading-tight text-white">Download not available</h1>
+            <p className="mx-auto max-w-md text-[13px] leading-relaxed text-[#B4AA99]">
             {error ?? 'This download link is invalid or has expired.'}
-          </p>
+            </p>
+          </div>
+          <Link
+            href="/store"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[#E7D7BE] px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-black transition-all hover:bg-[#F3E6D1] active:scale-[0.98]"
+          >
+            <ArrowLeft size={13} />
+            Back to store
+          </Link>
         </div>
-        <Link
-          href="/store"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#171511] border border-[#2B2821] text-[12px] text-[#D0C3AF] hover:text-white hover:border-[#3B372F] transition-all"
-        >
-          <ArrowLeft size={13} />
-          Back to store
-        </Link>
       </div>
     );
   }
@@ -168,10 +173,11 @@ function DownloadPortal() {
   const purchaseDate = new Date(purchase.created_at).toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric',
   });
+  const totalFiles = tracks.reduce((sum, track) => sum + (track.downloads?.length ?? 0), 0);
 
   return (
     <div className="min-h-screen bg-[#090907] text-[#F7EBDD]">
-      <div className="max-w-2xl mx-auto px-4 md:px-6 pt-10 pb-24">
+      <div className="mx-auto max-w-4xl px-4 pb-24 pt-10 md:px-6">
 
         {/* Back link */}
         <Link
@@ -183,23 +189,39 @@ function DownloadPortal() {
         </Link>
 
         {/* ── Success banner ───────────────────────────────────── */}
-        <div className="rounded-2xl border border-[#6DC6A4]/20 bg-[#0e1f17]/60 px-6 py-5 mb-5 flex items-start gap-4">
-          <CheckCircle2 size={22} className="text-[#6DC6A4] shrink-0 mt-0.5" />
-          <div>
-            <h1 className="text-[17px] font-bold text-white">Your files are ready</h1>
-            <p className="text-[12px] text-[#B4AA99] mt-1">
-              Confirmed · {purchaseDate} · <span className="text-[#F7EBDD]">${Number(purchase.amount_usd).toFixed(2)}</span>
-            </p>
-            <p className="text-[11px] text-[#9B9282] mt-0.5">
-              Receipt sent to <span className="text-[#D0C3AF]">{purchase.buyer_email}</span>
-            </p>
+        <div className="mb-5 rounded-[26px] border border-[#6DC6A4]/20 bg-[#0e1f17]/55 p-5 shadow-[0_30px_90px_rgba(0,0,0,0.35)] md:p-6">
+          <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+            <div className="flex items-start gap-4">
+              <div className="grid size-12 shrink-0 place-items-center rounded-[18px] border border-[#6DC6A4]/20 bg-[#6DC6A4]/10">
+                <CheckCircle2 size={24} className="text-[#6DC6A4]" />
+              </div>
+              <div>
+                <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6DC6A4]">Purchase confirmed</p>
+                <h1 className="text-[28px] font-bold leading-tight text-white md:text-[34px]">Your files are ready</h1>
+                <p className="mt-2 max-w-xl text-[12px] leading-relaxed text-[#B4AA99]">
+                  Receipt sent to <span className="text-[#D0C3AF]">{purchase.buyer_email}</span>. Keep this private link for future downloads.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 md:min-w-[280px]">
+              {[
+                { label: 'Paid', value: `$${Number(purchase.amount_usd).toFixed(2)}` },
+                { label: 'Tracks', value: String(tracks.length) },
+                { label: 'Files', value: String(totalFiles) },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 py-2">
+                  <p className="text-[8px] font-mono uppercase tracking-[0.18em] text-[#6DC6A4]/70">{item.label}</p>
+                  <p className="mt-1 text-[13px] font-bold tabular-nums text-white">{item.value}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
         {/* Security note */}
-        <div className="flex items-center gap-2 mb-7 text-[10px] font-mono text-[#6E685B]">
+        <div className="mb-7 flex flex-wrap items-center gap-2 text-[10px] font-mono text-[#6E685B]">
           <ShieldCheck size={11} />
-          <span>Bookmark this page — download links are private to this session.</span>
+          <span>Confirmed {purchaseDate}. Download links are private to this session.</span>
         </div>
 
         {/* ── Track list ───────────────────────────────────────── */}
@@ -223,7 +245,7 @@ function DownloadPortal() {
             return (
               <div
                 key={track.id}
-                className={`rounded-2xl border overflow-hidden transition-all ${
+                className={`overflow-hidden rounded-[22px] border transition-all ${
                   isCurrent
                     ? 'border-[#E7D7BE]/30 bg-[#171511]'
                     : 'border-[#2B2821] bg-[#171511]/60'
@@ -237,7 +259,7 @@ function DownloadPortal() {
                     className="relative w-16 h-16 rounded-xl overflow-hidden bg-[#090907] border border-[#2B2821] shrink-0 group"
                   >
                     {track.cover_url ? (
-                      <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
+                      <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
                         <Music size={20} />
@@ -293,7 +315,6 @@ function DownloadPortal() {
                         <FileDownloadRow
                           key={file.format}
                           file={file}
-                          trackId={track.id}
                           downloading={downloading[`${track.id}-${file.format}`] ?? false}
                           onDownload={() => triggerDownload(track.id, file)}
                         />
@@ -313,7 +334,6 @@ function DownloadPortal() {
                           <FileDownloadRow
                             key={file.format}
                             file={file}
-                            trackId={track.id}
                             downloading={downloading[`${track.id}-${file.format}`] ?? false}
                             onDownload={() => triggerDownload(track.id, file)}
                           />
@@ -363,12 +383,10 @@ function DownloadPortal() {
 
 function FileDownloadRow({
   file,
-  trackId,
   downloading,
   onDownload,
 }: {
   file: DownloadFile;
-  trackId: string;
   downloading: boolean;
   onDownload: () => void;
 }) {

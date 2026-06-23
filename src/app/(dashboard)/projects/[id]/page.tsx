@@ -69,6 +69,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
   // Multi-select state — Set for O(1) toggle. Mirrors playlists +
   // contacts patterns so the floating BatchActionBar feels the same
   // across the app.
+  const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [togglingStoreFeatured, setTogglingStoreFeatured] = useState(false);
@@ -334,6 +335,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
     const failed = results.filter((r) => r.status === 'rejected').length;
     setBulkBusy(false);
     setSelectedIds(new Set());
+    setSelectMode(false);
     await fetchData();
     if (failed === 0) {
       toast.success(`Removed ${ids.length} from project`);
@@ -458,7 +460,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           filtered={filtered}
-          onSelectTrack={(t) => { setSelectedTrack(t); handlePlayTrack(t); }}
+          onSelectTrack={(t) => setSelectedTrack(t)}
           onPlayTrack={(t) => handlePlayTrack(t)}
           onRemoveTrack={(id) => handleRemoveFromProject(id)}
           onDeleteTrack={(id) => handleDeleteTrack(id)}
@@ -467,6 +469,13 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           selectedIds={selectedIds}
           onToggleSelect={toggleSelectOne}
           onSelectAll={toggleSelectAll}
+          selectMode={selectMode}
+          onToggleSelectMode={() => {
+            setSelectMode((v) => {
+              if (v) setSelectedIds(new Set());
+              return !v;
+            });
+          }}
           onReorder={async (orderedIds) => {
             // Optimistic reorder — reflect new order immediately.
             const idxMap = new Map(orderedIds.map((id, i) => [id, i]));
@@ -630,7 +639,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
       <BatchActionBar
         count={selectedIds.size}
         noun={['track', 'tracks']}
-        onClear={() => setSelectedIds(new Set())}
+        onClear={() => { setSelectedIds(new Set()); setSelectMode(false); }}
         busy={bulkBusy}
         actions={[
           {

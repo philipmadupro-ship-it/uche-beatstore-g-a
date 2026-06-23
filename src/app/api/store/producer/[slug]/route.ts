@@ -3,6 +3,7 @@ import { isSupabaseConfigured } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { slugify } from '@/lib/slug';
+import { redactPublicTrackMedia } from '@/lib/store/public-media';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -112,7 +113,9 @@ export async function GET(
     ]);
 
     // Strip user_id from tracks before responding
-    const safeTracks = (tracksRes.data ?? []).map(({ user_id: _u, ...rest }: any) => rest);
+    const safeTracks = (tracksRes.data ?? [])
+      .map(({ user_id: _u, ...rest }: any) => rest)
+      .map(redactPublicTrackMedia);
 
     const res = NextResponse.json({
       creator,

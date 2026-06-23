@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
+import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
@@ -12,18 +13,32 @@ const log = createLogger('api.store.orders');
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * GET /api/store/orders?email=xxx
+ * GET /api/store/orders?email=xxx&token=yyy
  *
  * Returns all completed purchases (track licenses + project bundles) for a
- * buyer email. No auth — email is the identity for guest checkout (same model
- * as Shopify guest orders). Returns download URLs so the buyer can access
- * files directly from the orders page.
+ * buyer email, but only after a signed buyer recovery token proves possession
+ * of that inbox. Email alone is not enough because the response includes
+ * Stripe session IDs and project access tokens.
  */
 export async function GET(req: NextRequest) {
   const email = req.nextUrl.searchParams.get('email')?.toLowerCase().trim() ?? '';
   if (!EMAIL_RE.test(email)) {
     return NextResponse.json({ error: 'Valid email required' }, { status: 400 });
   }
+
+  const token = req.nextUrl.searchParams.get('token')?.trim() ?? '';
+  if (!token) {
+    return NextResponse.json({ error: 'Recovery token required' }, { status: 403 });
+  }
+
+  const claims = verifyBuyerToken(token);
+  if (!claims) {
+    return NextResponse.json({ error: 'Invalid or expired recovery token' }, { status: 410 });
+  }
+  if (claims.email !== email) {
+    return NextResponse.json({ error: 'Recovery token does not match email' }, { status: 403 });
+  }
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }

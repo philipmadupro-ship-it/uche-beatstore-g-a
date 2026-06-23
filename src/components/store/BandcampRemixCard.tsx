@@ -27,6 +27,8 @@ interface BandcampRemixCardProps {
   creatorName?: string | null;
   priceLease: number | null;
   priceExclusive: number | null;
+  licenseCount?: number;
+  lowestLicensePrice?: number | null;
   isCurrent: boolean;
   isPlaying: boolean;
   isPreview: boolean;
@@ -41,22 +43,16 @@ interface BandcampRemixCardProps {
   onToggleWishlist?: () => void;
 }
 
-function fmtDuration(s: number | null | undefined): string {
-  if (!s) return '—';
-  const m = Math.floor(s / 60);
-  const r = Math.floor(s % 60).toString().padStart(2, '0');
-  return `${m}:${r}`;
-}
-
 export default function BandcampRemixCard({
   track,
   creatorName,
   priceLease,
   priceExclusive,
+  licenseCount = 0,
+  lowestLicensePrice = null,
   isCurrent,
   isPlaying,
   isPreview,
-  onPlay,
   onPreview,
   onAddLease,
   onAddExclusive,
@@ -65,8 +61,8 @@ export default function BandcampRemixCard({
   isWishlisted,
   onToggleWishlist,
 }: BandcampRemixCardProps) {
-  const buyPrice = priceLease ?? priceExclusive;
-  const keyLabel = track.key ? `${track.key}${track.scale === 'minor' ? 'm' : ''}` : null;
+  const hasLicenseTiers = licenseCount > 0;
+  const buyPrice = hasLicenseTiers ? lowestLicensePrice : priceLease ?? priceExclusive;
 
   // Border treatment mirrors BeatCard's "active" affordances so a remix card
   // visually responds to play / preview state in the same vocabulary.
@@ -173,7 +169,7 @@ export default function BandcampRemixCard({
               className="shrink-0 text-[11px] font-bold tabular-nums px-2 py-0.5 rounded-lg text-black"
               style={{ backgroundColor: `${accentColor}E6` }}
             >
-              ${buyPrice}
+              {hasLicenseTiers ? 'from ' : ''}${buyPrice}
             </span>
           )}
         </div>
@@ -188,6 +184,14 @@ export default function BandcampRemixCard({
           >
             <Download size={10} />
             Free download
+          </button>
+        ) : hasLicenseTiers ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onPreview(); }}
+            className="flex h-9 w-full items-center justify-center gap-2 text-[9px] font-mono font-bold uppercase tracking-wider text-[#F7EBDD] transition-colors hover:bg-white/[0.04]"
+          >
+            Choose license
+            {buyPrice != null && <span className="text-[#B4AA99]">from ${buyPrice}</span>}
           </button>
         ) : (
           <div className="flex items-stretch divide-x divide-white/[0.06] h-9">

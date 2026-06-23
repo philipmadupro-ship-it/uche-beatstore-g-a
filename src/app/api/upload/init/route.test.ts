@@ -5,7 +5,7 @@
  * - invalid files fail before storage work begins
  * - project/playlist destinations are verified before multipart init
  * - destination lookup/auth failures do not get swallowed into a doomed upload
- * - auth lookup failure can still degrade gracefully for plain library uploads
+ * - all multipart uploads require a verified producer when Supabase is configured
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -151,13 +151,11 @@ describe('POST /api/upload/init', () => {
     }));
 
     expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({
-      error: 'Could not verify upload destination owner: auth unavailable',
-    });
+    expect(await res.json()).toEqual({ error: 'Not authenticated' });
     expect(mockInitMultipart).not.toHaveBeenCalled();
   });
 
-  it('still creates a library upload session when auth lookup fails without a destination', async () => {
+  it('rejects a library upload when auth lookup fails', async () => {
     mockGetUser.mockRejectedValueOnce(new Error('auth unavailable'));
 
     const mod = await loadRoute();
@@ -167,12 +165,28 @@ describe('POST /api/upload/init', () => {
       fileType: 'audio/wav',
     }));
 
-    expect(res.status).toBe(200);
-    expect(mockInitMultipart).toHaveBeenCalledWith('beat.wav', 'audio/wav');
-    expect(mockCreateSession).toHaveBeenCalledWith(expect.objectContaining({
-      sessionId: 'sess_test_123',
-      projectId: null,
-      userId: null,
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: 'Not authenticated' });
+    expect(mockInitMultipart).not.toHaveBeenCalled();
+    expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects a legacy null-owner destination', async () => {
+    mockMaybeSingle.mockResolvedValueOnce({
+      data: { id: 'project-1', user_id: null },
+      error: null,
+    });
+
+    const mod = await loadRoute();
+    const res = await mod.POST(req({
+      fileName: 'beat.wav',
+      fileSize: 1024 * 1024,
+      fileType: 'audio/wav',
+      projectId: 'project-1',
     }));
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'Forbidden project destination' });
+    expect(mockInitMultipart).not.toHaveBeenCalled();
   });
 });

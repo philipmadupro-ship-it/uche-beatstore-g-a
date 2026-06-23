@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { createHash } from 'crypto';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { signedSharePreviewUrl } from '@/lib/share-media-token';
 
 const log = createLogger('api.share.token');
 
@@ -29,6 +30,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
       if (shareError || !share) {
         return NextResponse.json({ error: 'Share link not found or expired' }, { status: 404 });
+      }
+
+      if (share.revoked_at) {
+        return NextResponse.json({ error: 'This link has been revoked' }, { status: 410 });
       }
 
       if (share.expires_at && new Date(share.expires_at) < new Date()) {
@@ -56,7 +61,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
           .in('track_id', share.track_ids)
       ]);
       const tracks = tracksRes.data || [];
-      const stems = stemsRes.data || [];
+      const safeTracks = tracks.map((track: any) => ({
+        ...track,
+        audio_url: signedSharePreviewUrl(token, track.id),
+      }));
+      const stems = share.allow_downloads
+        ? (stemsRes.data || []).map((stem: any) => ({
+            track_id: stem.track_id,
+            status: stem.status,
+          }))
+        : [];
 
       let creator: any = null;
       if (share.user_id) {
@@ -86,7 +100,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       }
 
       const { password_hash, ...safeShare } = share;
-      return NextResponse.json({ share: safeShare, tracks, creator, stems });
+      return NextResponse.json({ share: safeShare, tracks: safeTracks, creator, stems });
     }
 
     // Local fallback
@@ -95,6 +109,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
     if (!share) {
       return NextResponse.json({ error: 'Share link not found or expired' }, { status: 404 });
+    }
+
+    if (share.revoked_at) {
+      return NextResponse.json({ error: 'This link has been revoked' }, { status: 410 });
     }
 
     if (share.expires_at && new Date(share.expires_at) < new Date()) {
@@ -116,11 +134,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     // Preserve original ordering from share.track_ids
     const tracks = (share.track_ids || [])
       .map((id: string) => allTracks.find((t: any) => t.id === id))
-      .filter(Boolean);
+      .filter(Boolean)
+      .map((track: any) => ({ ...track, audio_url: signedSharePreviewUrl(token, track.id) }));
 
     // Fetch mock stems
     const allStems = getAll('stems' as any) || [];
-    const stems = allStems.filter((s: any) => trackIdSet.has(s.track_id));
+    const stems = share.allow_downloads
+      ? allStems
+          .filter((s: any) => trackIdSet.has(s.track_id))
+          .map((stem: any) => ({ track_id: stem.track_id, status: stem.status }))
+      : [];
 
     // Fetch mock creator profile
     const allProfiles = getAll('creator_profiles' as any) || [];

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { isSupabaseConfigured, getAll, query } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
+import { signedSharePreviewUrl } from '@/lib/share-media-token';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,11 +37,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     if (!isSupabaseConfigured()) {
       const share = (getAll('project_shares') as any[]).find((s) => s.token === token);
       if (!share) return NextResponse.json({ error: 'Link not found' }, { status: 404 });
-      const tracks = resolveLocalTracks(share.project_id);
+      const tracks = resolveLocalTracks(share.project_id).map((track) => publicShareTrack(track, token));
       return NextResponse.json({
         share: redactShare(share),
         project: resolveLocalProject(share.project_id),
         tracks,
+        stems: [],
       });
     }
 
@@ -129,9 +131,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
           admin.from('tracks').select(TRACK_FIELDS).in('id', trackIds),
           admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').in('track_id', trackIds),
         ]);
-        stems = stemsRes.data ?? [];
+        stems = redactStems(stemsRes.data, share.allow_downloads);
         const byId = new Map((tracksRes.data ?? []).map((t: any) => [t.id, t]));
-        tracks = (junction ?? []).map((j: any) => byId.get(j.track_id)).filter(Boolean);
+        tracks = (junction ?? []).map((j: any) => byId.get(j.track_id)).filter(Boolean).map((track) => publicShareTrack(track, token));
       }
       const creator = playlist?.user_id ? await fetchCreator(playlist.user_id) : null;
       const { user_id: _u, ...playlistPublic } = (playlist ?? {}) as any;
@@ -142,9 +144,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     if (contentType === 'track') {
       const trackId = (share as any).track_id;
       const { data: trackRow } = await admin.from('tracks').select(`${TRACK_FIELDS}, user_id`).eq('id', trackId).maybeSingle();
-      const tracks = trackRow ? [(() => { const { user_id: _u, ...rest } = trackRow as any; return rest; })()] : [];
+      const tracks = trackRow ? [publicShareTrack(trackRow as any, token)] : [];
       const stems = trackRow
-        ? (await admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').eq('track_id', trackId)).data ?? []
+        ? redactStems((await admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').eq('track_id', trackId)).data, share.allow_downloads)
         : [];
       const creator = (trackRow as any)?.user_id ? await fetchCreator((trackRow as any).user_id) : null;
       const trackPublic = trackRow ? { id: trackRow.id, title: trackRow.title, cover_url: (trackRow as any).cover_url } : null;
@@ -174,11 +176,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       trackIds.length ? admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').in('track_id', trackIds) : Promise.resolve({ data: [] as any[] }),
     ]);
 
-    const stems = stemsRes.data ?? [];
+    const stems = redactStems(stemsRes.data, share.allow_downloads);
     const byId = new Map(((tracksRes as any).data ?? []).map((t: any) => [t.id, t]));
     const tracks = trackIds.length
       ? (junction ?? []).map((j: any) => byId.get(j.track_id)).filter(Boolean)
       : [];
+    const safeTracks = tracks.map((track) => publicShareTrack(track, token));
 
     const projectPublic = project ? (() => { const { user_id: _u, ...rest } = project; return rest; })() : null;
 
@@ -202,7 +205,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       project: projectPublic,
       playlist: null,
       track: null,
-      tracks,
+      tracks: safeTracks,
       creator,
       stems,
       licenses,
@@ -307,6 +310,22 @@ function redactShare(s: any) {
     recipient_kind: s.recipient_kind ?? 'client',
     sales_enabled: s.sales_enabled === true,
   };
+}
+
+function publicShareTrack(track: any, token: string) {
+  const { user_id: _u, audio_url: _audio, ...rest } = track;
+  return {
+    ...rest,
+    audio_url: signedSharePreviewUrl(token, track.id),
+  };
+}
+
+function redactStems(stems: any[] | null | undefined, allowDownloads: boolean) {
+  if (!allowDownloads) return [];
+  return (stems ?? []).map((stem: any) => ({
+    track_id: stem.track_id,
+    status: stem.status,
+  }));
 }
 
 function resolveLocalProject(projectId: string) {

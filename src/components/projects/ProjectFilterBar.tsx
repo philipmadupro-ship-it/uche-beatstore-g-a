@@ -5,6 +5,7 @@ import { Search, SlidersHorizontal, X, Plus, Pencil, Trash2, Check, Loader2, Fol
 import { CONTENT_BUCKET_OPTIONS, TAG_TAXONOMY, PROJECT_TYPE_OPTIONS } from '@/lib/types/tags';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { Drawer } from '@/components/ui/Drawer';
+import { Dropdown } from '@/components/ui/Dropdown';
 import { FolderContainerCard } from '@/components/ui/ProductList';
 import {
   type ProjectFilterState,
@@ -68,7 +69,9 @@ export function ProjectFilterBar({
         : folders.find((f) => f.id === value.folder)?.name ?? 'Folder';
 
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 639px)');
+    // Below lg, filters open as a bottom sheet instead of expanding the
+    // page — tablets included, not just phones.
+    const media = window.matchMedia('(max-width: 1023px)');
     const sync = () => setIsMobile(media.matches);
     sync();
     media.addEventListener('change', sync);
@@ -255,19 +258,18 @@ export function ProjectFilterBar({
         >
           <SlidersHorizontal size={12} /> Filters{activeCount > 0 ? ` · ${activeCount}` : ''}
         </button>
-        <select
+        <Dropdown
           value={value.sort}
-          onChange={(e) => set({ sort: e.target.value as ProjectSortMode })}
-          className="px-3 py-2 rounded-full bg-[#171511] border border-[#2B2821] text-[11px] text-[#D0C3AF] focus:outline-none focus:border-[#3B372F] cursor-pointer"
-        >
-          {SORTS.map((s) => <option key={s.value} value={s.value} className="bg-[#090907]">{s.label}</option>)}
-        </select>
+          onChange={(v) => set({ sort: v as ProjectSortMode })}
+          options={SORTS.map((s) => ({ value: s.value, label: s.label }))}
+          aria-label="Sort projects"
+        />
         <span className="text-[10px] font-mono text-[#6E685B] ml-auto hidden sm:inline">{resultCount} shown</span>
       </div>
 
-      {/* Desktop collapsible: mobile gets a contained bottom sheet. */}
+      {/* Desktop (lg+) collapsible; below lg the bottom sheet takes over. */}
       {open && (
-        <div className="mt-3 hidden rounded-xl border border-[#2B2821] bg-[#11100D] p-3 sm:block">
+        <div className="mt-3 hidden rounded-xl border border-[#2B2821] bg-[#11100D] p-3 lg:block">
           {filterPanel}
         </div>
       )}

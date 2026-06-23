@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
-import { uploadAudio } from '@/lib/storage/upload';
+import { uploadPublicAudioAsset } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -33,7 +33,12 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const url = await uploadAudio(buffer, file.name || 'voice-tag.mp3', file.type || 'audio/mpeg');
+    const url = await uploadPublicAudioAsset(
+      buffer,
+      file.name || 'voice-tag.mp3',
+      file.type || 'audio/mpeg',
+      'voice-tags',
+    );
 
     if (isSupabaseConfigured()) {
       const { error } = await admin

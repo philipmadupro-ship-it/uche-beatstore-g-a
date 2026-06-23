@@ -47,6 +47,8 @@ interface Totals {
 
 const FILTERS = ['All', 'Tracks', 'Projects'] as const;
 type Filter = (typeof FILTERS)[number];
+const STATUS_FILTERS = ['Any status', 'Paid', 'Needs stems', 'Issues'] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 interface Offer {
   id: string;
@@ -90,10 +92,16 @@ export default function SalesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('All');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('Any status');
   const [search, setSearch] = useState('');
   // Top-level view: completed sales vs. incoming offers.
   const [view, setView] = useState<'sales' | 'offers'>('sales');
   const [offers, setOffers] = useState<Offer[]>([]);
+  // Mobile: only the 4 primary KPIs render until expanded.
+  const [statsExpanded, setStatsExpanded] = useState(false);
+  // Client-side pagination — keeps the list fast at any catalogue size.
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -124,6 +132,9 @@ export default function SalesPage() {
     return sales.filter((s) => {
       if (filter === 'Tracks' && s.kind !== 'track') return false;
       if (filter === 'Projects' && s.kind !== 'project') return false;
+      if (statusFilter === 'Paid' && s.status !== 'paid') return false;
+      if (statusFilter === 'Needs stems' && !s.needs_stems_upload) return false;
+      if (statusFilter === 'Issues' && !['refunded', 'disputed', 'failed', 'expired'].includes(s.status)) return false;
       if (search.trim()) {
         const q = search.toLowerCase();
         if (
@@ -136,7 +147,16 @@ export default function SalesPage() {
       }
       return true;
     });
-  }, [sales, filter, search]);
+  }, [sales, filter, statusFilter, search]);
+
+  // Snap back to page 1 whenever the visible set changes shape.
+  useEffect(() => { setPage(0); }, [filter, statusFilter, search]);
+
+  const pageCount = Math.max(1, Math.ceil(visibleSales.length / PAGE_SIZE));
+  const pagedSales = useMemo(
+    () => visibleSales.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [visibleSales, page],
+  );
 
   // ── Derived KPIs ───────────────────────────────────────────────
   const kpis = useMemo(() => {
@@ -192,7 +212,7 @@ export default function SalesPage() {
           description="Revenue, orders, and license breakdown."
           meta={totals ? `${totals.count} order${totals.count === 1 ? '' : 's'}` : undefined}
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               <Button
                 onClick={() => {
                   const rows = [
@@ -235,17 +255,26 @@ export default function SalesPage() {
           }
         />
 
-        {/* ── KPI strip — 4 cols on small, 8 on large ─────────────── */}
+        {/* ── KPI strip — 4 primary on mobile (+expander), all 8 from sm ── */}
         {totals && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2 mb-4">
-            <KpiCard label="All time" value={fmtMoney(totals.revenue_usd)} icon={<DollarSign size={13} />} accent="#6DC6A4" />
-            <KpiCard label="Last 90d" value={fmtMoney(kpis.rev90)} icon={<TrendingUp size={13} />} accent="#E7D7BE" />
-            <KpiCard label="Last 30d" value={fmtMoney(kpis.rev30)} icon={<TrendingUp size={13} />} accent="#E7D7BE" />
-            <KpiCard label="Last 7d" value={fmtMoney(kpis.rev7)} icon={<ArrowUpRight size={13} />} accent="#D6BE7A" />
-            <KpiCard label="Orders" value={String(totals.count)} icon={<ShoppingBag size={13} />} accent="#D0C3AF" />
-            <KpiCard label="Avg sale" value={totals.count > 0 ? fmtMoney(kpis.avgSale) : '—'} icon={<Tag size={13} />} accent="#9d95e8" />
-            <KpiCard label="Leases" value={String(kpis.leases)} icon={<Tag size={13} />} accent="#9d95e8" />
-            <KpiCard label="Exclusives" value={String(kpis.exclusives)} icon={<Crown size={13} />} accent="#e8a06a" />
+          <div className="mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2">
+              <KpiCard label="All time" value={fmtMoney(totals.revenue_usd)} icon={<DollarSign size={13} />} accent="#6DC6A4" />
+              <KpiCard label="Last 30d" value={fmtMoney(kpis.rev30)} icon={<TrendingUp size={13} />} accent="#E7D7BE" />
+              <KpiCard label="Orders" value={String(totals.count)} icon={<ShoppingBag size={13} />} accent="#D0C3AF" />
+              <KpiCard label="Avg sale" value={totals.count > 0 ? fmtMoney(kpis.avgSale) : '—'} icon={<Tag size={13} />} accent="#9d95e8" />
+              <KpiCard label="Last 90d" value={fmtMoney(kpis.rev90)} icon={<TrendingUp size={13} />} accent="#E7D7BE" className={statsExpanded ? '' : 'hidden sm:block'} />
+              <KpiCard label="Last 7d" value={fmtMoney(kpis.rev7)} icon={<ArrowUpRight size={13} />} accent="#D6BE7A" className={statsExpanded ? '' : 'hidden sm:block'} />
+              <KpiCard label="Leases" value={String(kpis.leases)} icon={<Tag size={13} />} accent="#9d95e8" className={statsExpanded ? '' : 'hidden sm:block'} />
+              <KpiCard label="Exclusives" value={String(kpis.exclusives)} icon={<Crown size={13} />} accent="#e8a06a" className={statsExpanded ? '' : 'hidden sm:block'} />
+            </div>
+            <button
+              type="button"
+              onClick={() => setStatsExpanded((v) => !v)}
+              className="mt-2 w-full rounded-full border border-[#2B2821] bg-[#171511] py-1.5 text-micro text-[#B4AA99] transition-colors hover:text-[#F7EBDD] sm:hidden"
+            >
+              {statsExpanded ? 'Fewer stats' : 'More stats'}
+            </button>
           </div>
         )}
 
@@ -327,30 +356,67 @@ export default function SalesPage() {
         {view === 'sales' && (
         <>
         {/* Filters */}
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider border transition-colors ${
-                filter === f
-                  ? 'bg-[#342F27] border-[#C9BCA8]/40 text-[#F3E6D1]'
-                  : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#3B372F]'
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-          <div className="relative ml-auto w-full sm:w-64">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search buyer, item, session…"
-              className="w-full bg-[#171511] border border-[#2B2821] rounded-full pl-8 pr-3 py-1.5 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] transition-colors"
-            />
+        <div className="mb-4 rounded-2xl border border-[#2B2821] bg-[#11100D] p-2.5">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search buyer, item, session…"
+                className="w-full rounded-full border border-[#2B2821] bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-[#F7EBDD] transition-colors placeholder:text-[#6E685B] focus:border-[#C9BCA8] focus:outline-none"
+              />
+            </div>
+            <div className="flex gap-2 overflow-x-auto pb-1 lg:pb-0">
+              <div className="flex shrink-0 rounded-full border border-[#2B2821] bg-[#090907] p-1">
+                {FILTERS.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setFilter(f)}
+                    className={`rounded-full px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
+                      filter === f
+                        ? 'bg-[#342F27] text-[#F3E6D1]'
+                        : 'text-[#B4AA99] hover:text-[#F7EBDD]'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+              <div className="flex shrink-0 rounded-full border border-[#2B2821] bg-[#090907] p-1">
+                {STATUS_FILTERS.map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setStatusFilter(f)}
+                    className={`rounded-full px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
+                      statusFilter === f
+                        ? 'bg-[#342F27] text-[#F3E6D1]'
+                        : 'text-[#B4AA99] hover:text-[#F7EBDD]'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 px-1">
+            <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#6E685B]">
+              {visibleSales.length} shown
+              {visibleSales.length !== sales.length && ` · ${sales.length} total`}
+            </p>
+            {(filter !== 'All' || statusFilter !== 'Any status' || search.trim()) && (
+              <button
+                type="button"
+                onClick={() => { setFilter('All'); setStatusFilter('Any status'); setSearch(''); }}
+                className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#B4AA99] transition-colors hover:text-[#F7EBDD]"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
 
@@ -384,7 +450,7 @@ export default function SalesPage() {
             className="border-dashed py-16"
           />
         ) : (
-          <div className="rounded-2xl border border-[#2B2821] bg-[#171511] overflow-hidden">
+          <div className="overflow-hidden rounded-2xl border border-[#2B2821] bg-[#171511]">
             {/* Header row (desktop only) */}
             <div className="hidden md:grid grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-5 py-3 border-b border-[#211F1A] text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
               <span>Date</span>
@@ -395,11 +461,34 @@ export default function SalesPage() {
               <span>Status</span>
               <span />
             </div>
-            <div className="divide-y divide-[#211F1A]">
-              {visibleSales.map((s) => (
+            <div className="space-y-1.5 p-2">
+              {pagedSales.map((s) => (
                 <SaleRow key={`${s.kind}:${s.id}`} sale={s} />
               ))}
             </div>
+            {pageCount > 1 && (
+              <div className="flex items-center justify-between border-t border-[#211F1A] px-5 py-3">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="rounded-full border border-[#2B2821] bg-[#11100D] px-3 py-1.5 text-micro text-[#B4AA99] transition-colors hover:text-[#F7EBDD] disabled:opacity-30"
+                >
+                  Previous
+                </button>
+                <span className="text-[10px] font-mono text-[#6E685B] tabular-nums">
+                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, visibleSales.length)} of {visibleSales.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                  disabled={page >= pageCount - 1}
+                  className="rounded-full border border-[#2B2821] bg-[#11100D] px-3 py-1.5 text-micro text-[#B4AA99] transition-colors hover:text-[#F7EBDD] disabled:opacity-30"
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         )}
         </>
@@ -514,9 +603,9 @@ function OfferRow({ offer, onStatusChange }: { offer: Offer; onStatusChange: (id
   );
 }
 
-function KpiCard({ label, value, icon, accent = '#D0C3AF' }: { label: string; value: string; icon: React.ReactNode; accent?: string }) {
+function KpiCard({ label, value, icon, accent = '#D0C3AF', className = '' }: { label: string; value: string; icon: React.ReactNode; accent?: string; className?: string }) {
   return (
-    <Card className="rounded-xl px-4 py-3">
+    <Card className={`rounded-xl px-4 py-3 ${className}`}>
       <div className="flex items-center gap-1.5 mb-1.5" style={{ color: accent }}>
         {icon}
         <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">{label}</span>
@@ -572,87 +661,122 @@ function SaleRow({ sale }: { sale: Sale }) {
     }
   };
 
-  return (
-    <div className="md:grid md:grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-5 py-3.5 flex flex-col gap-2 hover:bg-[#1A1813] transition-colors">
-      <span className="text-[11px] font-mono text-[#D0C3AF] tabular-nums">{fmtDate(sale.created_at)}</span>
-
-      <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#B4AA99]">
-        <Icon size={11} className="text-[#9B9282]" />
-        {sale.kind}
-      </span>
-
-      <div className="min-w-0">
-        <p className="text-[12px] text-[#F7EBDD] truncate flex items-center gap-2">
-          <span className="truncate">{sale.item_label}</span>
-          {sale.needs_stems_upload && !delivered && (
-            <span className="shrink-0 inline-flex items-center gap-1.5">
-              <span
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-amber-500/15 border border-amber-500/35 text-amber-300"
-                title="Buyer paid for exclusive — upload stems then deliver"
-              >
-                Awaiting stems
-              </span>
-              <button
-                onClick={handleDeliverStems}
-                disabled={delivering}
-                title="Email the buyer that their stems are ready"
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-[#6DC6A4]/15 border border-[#6DC6A4]/30 text-[#6DC6A4] hover:bg-[#6DC6A4]/25 transition-colors disabled:opacity-40"
-              >
-                {delivering ? <Loader2 size={9} className="animate-spin" /> : <Send size={9} />}
-                Deliver
-              </button>
-            </span>
-          )}
-          {delivered && (
-            <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-[#6DC6A4]/15 border border-[#6DC6A4]/30 text-[#6DC6A4]">
-              <Check size={9} /> Delivered
-            </span>
-          )}
-        </p>
-        {sale.license_type && (
-          <p className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider mt-0.5">
-            {sale.license_type}
-          </p>
-        )}
-      </div>
-
-      <span className="text-[11px] text-[#D0C3AF] truncate" title={sale.buyer_email}>
-        {sale.buyer_email}
-      </span>
-
-      <span className="text-[12px] font-mono font-bold text-white tabular-nums md:text-right">
-        {fmtMoney(sale.amount_usd)}
-      </span>
-
-      <span
-        className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider border self-start md:self-center ${STATUS_STYLES[sale.status]}`}
-      >
-        {sale.status}
-      </span>
-
-      <div className="flex items-center justify-end gap-1.5">
-        <button
-          type="button"
-          onClick={handleResend}
-          disabled={resending || sale.status !== 'paid'}
-          className="text-[#6E685B] hover:text-[#F7EBDD] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-          title={sale.status !== 'paid' ? `Cannot resend (${sale.status})` : `Resend delivery email to ${sale.buyer_email}`}
-          aria-label="Resend delivery email"
-        >
-          {resending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-        </button>
-        {stripeUrl && (
-          <a
-            href={stripeUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[#6E685B] hover:text-[#F7EBDD] transition-colors"
-            title="Open in Stripe Dashboard"
+  const stemsBadges = (
+    <>
+      {sale.needs_stems_upload && !delivered && (
+        <span className="shrink-0 inline-flex items-center gap-1.5">
+          <span
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-amber-500/15 border border-amber-500/35 text-amber-300"
+            title="Buyer paid for exclusive — upload stems then deliver"
           >
-            <ExternalLink size={12} />
-          </a>
-        )}
+            Awaiting stems
+          </span>
+          <button
+            onClick={handleDeliverStems}
+            disabled={delivering}
+            title="Email the buyer that their stems are ready"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-[#6DC6A4]/15 border border-[#6DC6A4]/30 text-[#6DC6A4] hover:bg-[#6DC6A4]/25 transition-colors disabled:opacity-40"
+          >
+            {delivering ? <Loader2 size={9} className="animate-spin" /> : <Send size={9} />}
+            Deliver
+          </button>
+        </span>
+      )}
+      {delivered && (
+        <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-[#6DC6A4]/15 border border-[#6DC6A4]/30 text-[#6DC6A4]">
+          <Check size={9} /> Delivered
+        </span>
+      )}
+    </>
+  );
+
+  const actions = (
+    <>
+      <button
+        type="button"
+        onClick={handleResend}
+        disabled={resending || sale.status !== 'paid'}
+        className="tap text-[#6E685B] hover:text-[#F7EBDD] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        title={sale.status !== 'paid' ? `Cannot resend (${sale.status})` : `Resend delivery email to ${sale.buyer_email}`}
+        aria-label="Resend delivery email"
+      >
+        {resending ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+      </button>
+      {stripeUrl && (
+        <a
+          href={stripeUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="tap text-[#6E685B] hover:text-[#F7EBDD] transition-colors"
+          title="Open in Stripe Dashboard"
+        >
+          <ExternalLink size={12} />
+        </a>
+      )}
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop: table grid row */}
+      <div className="hidden rounded-xl bg-[#11100D]/70 md:grid md:grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-3.5 py-3 transition-colors hover:bg-[#1A1813]">
+        <span className="text-[11px] font-mono text-[#D0C3AF] tabular-nums">{fmtDate(sale.created_at)}</span>
+
+        <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#B4AA99]">
+          <Icon size={11} className="text-[#9B9282]" />
+          {sale.kind}
+        </span>
+
+        <div className="min-w-0">
+          <p className="text-[12px] text-[#F7EBDD] truncate flex items-center gap-2">
+            <span className="truncate">{sale.item_label}</span>
+            {stemsBadges}
+          </p>
+          {sale.license_type && (
+            <p className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider mt-0.5">
+              {sale.license_type}
+            </p>
+          )}
+        </div>
+
+        <span className="text-[11px] text-[#D0C3AF] truncate" title={sale.buyer_email}>
+          {sale.buyer_email}
+        </span>
+
+        <span className="text-[12px] font-mono font-bold text-white tabular-nums text-right">
+          {fmtMoney(sale.amount_usd)}
+        </span>
+
+        <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider border self-center ${STATUS_STYLES[sale.status]}`}>
+          {sale.status}
+        </span>
+
+        <div className="flex items-center justify-end gap-1.5">{actions}</div>
       </div>
-    </div>
+
+      {/* Mobile: stacked card — item + amount lead, metadata quiet below */}
+      <div className="flex flex-col gap-2 rounded-xl border border-[#211F1A] bg-[#11100D] px-3.5 py-3.5 md:hidden">
+        <div className="flex items-start justify-between gap-3">
+          <p className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-[#F7EBDD] line-clamp-2">{sale.item_label}</p>
+          <span className="shrink-0 text-[14px] font-mono font-bold text-white tabular-nums">{fmtMoney(sale.amount_usd)}</span>
+        </div>
+        <p className="truncate text-meta" title={sale.buyer_email}>
+          {sale.buyer_email}
+          <span className="text-[#3B372F]"> · </span>
+          <span className="font-mono tabular-nums">{fmtDate(sale.created_at)}</span>
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider border ${STATUS_STYLES[sale.status]}`}>
+            {sale.status}
+          </span>
+          <span className="inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">
+            <Icon size={10} />
+            {sale.kind}{sale.license_type ? ` · ${sale.license_type}` : ''}
+          </span>
+          {stemsBadges}
+          <span className="ml-auto flex min-h-8 items-center gap-2.5 rounded-full border border-[#211F1A] bg-[#090907] px-2.5">{actions}</span>
+        </div>
+      </div>
+    </>
   );
 }

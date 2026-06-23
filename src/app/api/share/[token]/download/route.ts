@@ -3,10 +3,24 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { streamAudioSource } from '@/lib/audio/stream-source';
+import bcrypt from 'bcryptjs';
 
 const log = createLogger('api.share.download');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+type DownloadShareRow = {
+  allow_downloads: boolean;
+  revoked_at: string | null;
+  expires_at: string | null;
+  content_type?: string | null;
+  project_id?: string | null;
+  playlist_id?: string | null;
+  track_id?: string | null;
+  track_ids?: string[] | null;
+  password_hash?: string | null;
+};
 
 /**
  * GET /api/share/[token]/download?track_id=<uuid>&session_id=<cs_xxx>
@@ -19,10 +33,8 @@ export const dynamic = 'force-dynamic';
  *      for this share + track + still-unlocked     → grant
  *   3. otherwise                                   → 403
  *
- * On grant we 302 to /api/audio?src=...&download=1, reusing the existing
- * audio proxy's range-streaming + Content-Disposition handling. We never
- * redirect to the raw R2 URL because that would leak the underlying URL
- * (the buyer could share it and bypass the purchase gate next time).
+ * On grant we stream the file directly from this gated route. The raw storage
+ * URL never appears in JSON, DOM, or redirect Location.
  *
  * Token resolution mirrors checkout: project_shares first, share_links
  * fallback. Both project and flat share variants hit this same endpoint.
@@ -46,19 +58,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     // Resolve the share token. project_shares first, then share_links.
     const { data: projShare } = await admin
       .from('project_shares')
-      .select('allow_downloads, revoked_at, expires_at')
+      .select('allow_downloads, revoked_at, expires_at, password_hash, content_type, project_id, playlist_id, track_id')
       .eq('token', token)
       .maybeSingle();
 
-    let shareRow: { allow_downloads: boolean; revoked_at: string | null; expires_at: string | null } | null = projShare ?? null;
+    let shareRow: DownloadShareRow | null = projShare ?? null;
+    let trackBelongsToShare = false;
+
+    if (shareRow) {
+      trackBelongsToShare = await projectShareIncludesTrack(admin, shareRow, trackId);
+    }
 
     if (!shareRow) {
       const { data: linkShare } = await admin
         .from('share_links')
-        .select('allow_downloads, revoked_at, expires_at')
+        .select('allow_downloads, revoked_at, expires_at, password_hash, track_ids')
         .eq('token', token)
         .maybeSingle();
       shareRow = linkShare ?? null;
+      trackBelongsToShare = Array.isArray(linkShare?.track_ids) && linkShare.track_ids.includes(trackId);
     }
 
     // Paid storefront project access (project_access_links token) — grant if track belongs to the purchased project
@@ -66,20 +84,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     if (!shareRow) {
       const { data: paidAccess } = await admin
         .from('project_access_links')
-        .select('project_id')
+        .select('project_id, expires_at')
         .eq('token', token)
         .maybeSingle();
       if (paidAccess) {
-        const { data: belongs } = await admin
-          .from('project_tracks')
-          .select('track_id')
-          .eq('project_id', paidAccess.project_id)
-          .eq('track_id', trackId)
-          .maybeSingle();
-        if (belongs) {
-          shareRow = { allow_downloads: true, revoked_at: null, expires_at: null } as any;
-          isProjectPaidAccess = true;
-        }
+        shareRow = {
+          allow_downloads: true,
+          revoked_at: null,
+          expires_at: paidAccess.expires_at ?? null,
+        };
+        isProjectPaidAccess = true;
+        trackBelongsToShare = await projectIncludesTrack(admin, paidAccess.project_id, trackId);
       }
     }
 
@@ -91,6 +106,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     }
     if (shareRow.expires_at && new Date(shareRow.expires_at).getTime() < Date.now()) {
       return NextResponse.json({ error: 'Share expired' }, { status: 410 });
+    }
+    if (!trackBelongsToShare) {
+      return NextResponse.json({ error: 'Download not permitted for this track' }, { status: 403 });
+    }
+    if (shareRow.password_hash) {
+      const submittedPassword = req.headers.get('x-share-password') ?? '';
+      if (!submittedPassword || !(await bcrypt.compare(submittedPassword, shareRow.password_hash))) {
+        return NextResponse.json({ error: 'Share password required' }, { status: 401 });
+      }
     }
 
     // Free pass when the producer allowed downloads at the share level.
@@ -140,14 +164,47 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const extMatch = track.audio_url.match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i);
     const ext = (extMatch?.[1] ?? 'mp3').toLowerCase();
     const filename = `${track.title || 'track'}.${ext}`;
-    const proxied = `/api/audio?src=${encodeURIComponent(track.audio_url)}&download=1&filename=${encodeURIComponent(filename)}`;
-
-    // 302 to the proxy. Browser follows, gets the file with the right
-    // Content-Disposition. No client code change needed beyond hitting
-    // /api/share/[token]/download instead of /api/audio directly.
-    return NextResponse.redirect(new URL(proxied, req.url), 302);
+    return streamAudioSource(req, track.audio_url, filename);
   } catch (err) {
     log.error('download gate failed', { token, trackId, error: errorMessage(err) });
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
+}
+
+async function projectShareIncludesTrack(
+  admin: ReturnType<typeof createServiceClient>,
+  share: DownloadShareRow,
+  trackId: string,
+): Promise<boolean> {
+  const contentType = share.content_type ?? 'project';
+  if (contentType === 'track') {
+    return share.track_id === trackId;
+  }
+  if (contentType === 'playlist' && share.playlist_id) {
+    const { data } = await admin
+      .from('playlist_tracks')
+      .select('track_id')
+      .eq('playlist_id', share.playlist_id)
+      .eq('track_id', trackId)
+      .maybeSingle();
+    return !!data;
+  }
+  if (share.project_id) {
+    return projectIncludesTrack(admin, share.project_id, trackId);
+  }
+  return false;
+}
+
+async function projectIncludesTrack(
+  admin: ReturnType<typeof createServiceClient>,
+  projectId: string,
+  trackId: string,
+): Promise<boolean> {
+  const { data } = await admin
+    .from('project_tracks')
+    .select('track_id')
+    .eq('project_id', projectId)
+    .eq('track_id', trackId)
+    .maybeSingle();
+  return !!data;
 }

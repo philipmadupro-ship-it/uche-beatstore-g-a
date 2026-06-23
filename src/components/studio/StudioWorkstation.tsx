@@ -10,8 +10,7 @@
  *    master gain, level meter
  *  - Tempo (with optional pitch lock) + vinyl pitch shift in semitones
  *  - Loop region (A/B markers) with click-and-drag
- *  - 4-pad drum sampler (Kick / Snare / Hat / Clap) routed through its own
- *    channel strip with full FX available
+ *  - Keyboard drum hits (Kick / Snare / Hat / Clap) routed through the engine
  *  - Recording → captures master output to WebM, with download + Save to library
  *
  * The engine (src/lib/audio/engine.ts) wraps a single AudioContext; this
@@ -558,7 +557,7 @@ export function StudioWorkstation() {
         </div>
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
           <span className="hidden rounded-full border border-[#211F1A] bg-[#11100D] px-3 py-2 text-[10px] font-mono uppercase tracking-[0.18em] text-[#837B6D] sm:inline-flex">
-            One track · loop · EQ · record
+            Loop · EQ · record
           </span>
           {recording ? (
             <button
@@ -586,25 +585,27 @@ export function StudioWorkstation() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-[260px_1fr]">
+      <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-[240px_1fr]">
         {/* Track picker — extracted to sections/StudioTrackPicker. */}
-        <StudioTrackPicker
-          tracks={filtered}
-          loading={loadingTracks}
-          activeId={activeId}
-          onPick={setActiveId}
-          search={search}
-          setSearch={setSearch}
-        />
+        <div className={active ? 'order-2 lg:order-1' : 'order-1'}>
+          <StudioTrackPicker
+            tracks={filtered}
+            loading={loadingTracks}
+            activeId={activeId}
+            onPick={setActiveId}
+            search={search}
+            setSearch={setSearch}
+          />
+        </div>
 
         {/* Workstation */}
-        <main>
+        <main className={active ? 'order-1 lg:order-2' : 'order-2 lg:order-2'}>
           {!active ? (
             <div className="border border-dashed border-[#211F1A] rounded-lg py-20 sm:py-32 text-center px-4">
               <Sliders size={28} className="text-[#6E685B] mx-auto mb-4" />
               <p className="text-[13px] text-[#F7EBDD] mb-1">Pick a track to start</p>
               <p className="text-[11px] text-[#9B9282]">
-                EQ · sends · loop · drum pads · live recording
+                EQ · sends · loop · live recording
               </p>
             </div>
           ) : (
@@ -716,24 +717,36 @@ export function StudioWorkstation() {
                   the document keydown listener below; triggerPad
                   routes through the engine the same way. */}
 
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-                {/* Mixer — extracted to sections/StudioMixer (carries ChannelStrip with it). */}
-                <StudioMixer
-                  useStems={useStems}
-                  stemsLoading={stemsLoading}
-                  channels={channels}
-                  setChannel={setChannel}
-                />
+              <details className="group rounded-2xl border border-[#1A1813] bg-[#090907]">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:hidden">
+                  <div>
+                    <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#F7EBDD]">Mix + effects</p>
+                    <p className="mt-1 text-[10px] text-[#837B6D]">
+                      {useStems ? 'Stem EQ' : 'Master EQ'} · sends · returns
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-[#211F1A] bg-[#171511] px-3 py-1.5 text-[9px] font-mono uppercase tracking-[0.16em] text-[#B4AA99] transition-colors group-open:text-[#F3E6D1]">
+                    <span className="group-open:hidden">Open</span>
+                    <span className="hidden group-open:inline">Close</span>
+                  </span>
+                </summary>
+                <div className="grid grid-cols-1 gap-4 border-t border-[#1A1813] p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+                  <StudioMixer
+                    useStems={useStems}
+                    stemsLoading={stemsLoading}
+                    channels={channels}
+                    setChannel={setChannel}
+                  />
 
-                {/* Master + FX — right rail on desktop, stacked on mobile. */}
-                <StudioMasterFX
-                  masterVol={masterVol} setMasterVol={setMasterVol}
-                  reverbReturn={reverbReturn} setReverbReturn={setReverbReturn}
-                  delayReturn={delayReturn} setDelayReturn={setDelayReturn}
-                  delayTime={delayTime} setDelayTime={setDelayTime}
-                  delayFeedback={delayFeedback} setDelayFeedback={setDelayFeedback}
-                />
-              </div>
+                  <StudioMasterFX
+                    masterVol={masterVol} setMasterVol={setMasterVol}
+                    reverbReturn={reverbReturn} setReverbReturn={setReverbReturn}
+                    delayReturn={delayReturn} setDelayReturn={setDelayReturn}
+                    delayTime={delayTime} setDelayTime={setDelayTime}
+                    delayFeedback={delayFeedback} setDelayFeedback={setDelayFeedback}
+                  />
+                </div>
+              </details>
 
               {/* Arrangement — in-memory clip editor. Round-6 scope:
                   visual splits + drag-to-reorder, no persistence and
@@ -780,6 +793,5 @@ export function StudioWorkstation() {
 }
 
 // Sub-component map:
-//   Pad        → sections/StudioDrumPads
 //   ChannelStrip + STEM_COLORS + ChannelState → sections/StudioMixer
 //   Knob       → inlined inside sections/StudioTransport

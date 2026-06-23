@@ -5,6 +5,7 @@ import {
   X, ChevronDown, Sliders, RotateCcw, Heart, Download,
 } from 'lucide-react';
 import { Sparkles } from 'lucide-react';
+import { Dropdown } from '@/components/ui/Dropdown';
 import { TYPE_FILTERS, type TypeFilter } from './types';
 
 /* ───────── Small atoms ───────── */
@@ -145,6 +146,8 @@ interface Props {
   setPriceMax: (v: number) => void;
   priceRange: { min: number; max: number };
   totalResults: number;
+  searchQuery: string;
+  clearSearch: () => void;
   hasActiveFilters: boolean;
   onReset: () => void;
   availableGenres: string[];
@@ -169,7 +172,7 @@ export function StoreSidebar(props: Props) {
     durationBucket, setDurationBucket,
     sortBy, setSortBy,
     priceMin, setPriceMin, priceMax, setPriceMax, priceRange,
-    totalResults,
+    totalResults, searchQuery, clearSearch,
     hasActiveFilters, onReset,
     availableGenres, availableMoods, availableKeys,
     accentColor,
@@ -201,18 +204,13 @@ export function StoreSidebar(props: Props) {
       </div>
 
       <FacetSection title="Sort by" defaultOpen>
-        <div className="relative">
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortBy)}
-            className="w-full appearance-none bg-[#090907] border border-[#2B2821] rounded-lg pl-3 pr-8 py-2 text-[11px] text-[#F7EBDD] focus:outline-none focus:border-[#C9BCA8] transition-colors font-mono"
-          >
-            {Object.entries(SORT_LABELS).map(([v, l]) => (
-              <option key={v} value={v}>{l}</option>
-            ))}
-          </select>
-          <ChevronDown size={11} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9B9282] pointer-events-none" />
-        </div>
+        <Dropdown
+          value={sortBy}
+          onChange={(v) => setSortBy(v as SortBy)}
+          options={Object.entries(SORT_LABELS).map(([v, l]) => ({ value: v, label: l }))}
+          aria-label="Sort beats"
+          className="w-full"
+        />
       </FacetSection>
 
       {hasActiveFilters && (
@@ -221,6 +219,9 @@ export function StoreSidebar(props: Props) {
             Applied
           </p>
           <div className="flex flex-wrap gap-1">
+            {searchQuery.trim() && (
+              <ActiveChip label={`Search: ${searchQuery.trim()}`} onClear={clearSearch} accentColor={accentColor} />
+            )}
             {typeFilter !== 'all' && (
               <ActiveChip label={typeFilter} onClear={() => setTypeFilter('all')} accentColor={accentColor} />
             )}

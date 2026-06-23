@@ -4,7 +4,7 @@
  * Token-gated delivery endpoint reached from the Stripe webhook email.
  * Key contract:
  *   - 404 for unknown token AND for expired token (don't leak which).
- *   - Returns project + tracks (with audio_url + wav_url for downloads).
+ *   - Returns project + tracks with token-gated download URLs.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -134,8 +134,10 @@ describe('GET /api/store/projects/access/[token]', () => {
     expect(body.project.id).toBe('proj-1');
     expect(body.project).not.toHaveProperty('user_id');
     expect(body.tracks).toHaveLength(1);
-    expect(body.tracks[0].audio_url).toBe('https://r2/a.mp3');
-    expect(body.tracks[0].wav_url).toBe('https://r2/a.wav');
+    expect(body.tracks[0].audio_url).toContain('/api/store/projects/access/');
+    expect(body.tracks[0].audio_url).toContain('format=mp3');
+    expect(body.tracks[0].wav_url).toContain('/api/store/projects/access/');
+    expect(body.tracks[0].wav_url).toContain('format=wav');
     // Regression (B2-19): buyer_email no longer in response to avoid
     // leaking PII to anyone who shares the access URL.
     expect(body.access).not.toHaveProperty('buyer_email');

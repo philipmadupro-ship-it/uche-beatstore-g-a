@@ -45,7 +45,7 @@ async function requireShareOwner(shareId: string) {
     ownerUserId = data?.user_id ?? null;
   }
 
-  if (ownerUserId && ownerUserId !== user.id) {
+  if (!ownerUserId || ownerUserId !== user.id) {
     return { ok: false as const, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
   return { ok: true as const, userId: user.id, admin, share };

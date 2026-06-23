@@ -19,7 +19,7 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Layers, AlertCircle, Mail, RefreshCw } from 'lucide-react';
+import { Loader2, Layers, AlertCircle, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
 
 const POLL_INTERVAL_MS = 1500;
 const POLL_TIMEOUT_MS = 30000;
@@ -32,7 +32,7 @@ function Inner() {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    if (!sessionId) { setPhase('error'); return; }
+    if (!sessionId) return;
 
     let stop = false;
     const started = Date.now();
@@ -68,12 +68,15 @@ function Inner() {
   if (!sessionId || phase === 'error') {
     return (
       <Centered>
-        <AlertCircle size={28} className="text-red-400 mb-3" />
-        <p className="text-[14px] text-[#F7EBDD] font-medium mb-1">
+        <div className="mx-auto mb-4 grid size-14 place-items-center rounded-[20px] border border-red-400/20 bg-red-400/8">
+          <AlertCircle size={28} className="text-red-400" />
+        </div>
+        <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6E685B]">Project delivery</p>
+        <p className="mb-1 text-[22px] font-bold leading-tight text-[#F7EBDD]">
           Missing session
         </p>
-        <p className="text-[11px] text-[#D0C3AF] max-w-sm">
-          We couldn't find your purchase from this URL. Check your email for the secure link.
+        <p className="mx-auto max-w-sm text-[12px] leading-relaxed text-[#D0C3AF]">
+          We could not find your purchase from this URL. Check your email for the secure link.
         </p>
       </Centered>
     );
@@ -82,24 +85,27 @@ function Inner() {
   if (phase === 'timeout') {
     return (
       <Centered>
-        <AlertCircle size={28} className="text-amber-400 mb-3" />
-        <p className="text-[14px] text-[#F7EBDD] font-medium mb-1">
-          Still preparing your bundle…
+        <div className="mx-auto mb-4 grid size-14 place-items-center rounded-[20px] border border-amber-400/20 bg-amber-400/8">
+          <AlertCircle size={28} className="text-amber-400" />
+        </div>
+        <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6E685B]">Project delivery</p>
+        <p className="mb-2 text-[22px] font-bold leading-tight text-[#F7EBDD]">
+          Still preparing your bundle
         </p>
-        <p className="text-[11px] text-[#D0C3AF] max-w-sm mb-5">
-          Your payment went through, but we haven't received the confirmation from Stripe yet. The bundle link is also in the confirmation email — you can open it now, or refresh in a few seconds.
+        <p className="mx-auto mb-5 max-w-sm text-[12px] leading-relaxed text-[#D0C3AF]">
+          Your payment went through, but we have not received the confirmation from Stripe yet. The bundle link is also in the confirmation email, or you can refresh in a few seconds.
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           <button
             onClick={() => window.location.reload()}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-white/[0.06] border border-white/[0.12] text-[#F7EBDD] text-[10px] font-mono uppercase tracking-wider hover:bg-white/[0.10] transition-colors"
+            className="flex min-h-11 items-center gap-1.5 rounded-full bg-[#E7D7BE] px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-black transition-all hover:bg-[#F3E6D1] active:scale-[0.98]"
           >
             <RefreshCw size={11} />
             Refresh
           </button>
           <Link
             href="/store/account"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-md border border-[#3B372F] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#6E685B] text-[10px] font-mono uppercase tracking-wider transition-colors"
+            className="flex min-h-11 items-center gap-1.5 rounded-full border border-[#3B372F] px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-[#D0C3AF] transition-colors hover:border-[#6E685B] hover:text-[#F7EBDD]"
           >
             <Mail size={11} />
             My account
@@ -112,27 +118,33 @@ function Inner() {
   // polling state
   return (
     <Centered>
-      <div className="relative w-12 h-12 mb-4">
-        <Loader2 size={48} className="absolute inset-0 animate-spin text-[#E7D7BE]" />
+      <div className="relative mx-auto mb-5 size-16">
+        <Loader2 size={64} className="absolute inset-0 animate-spin text-[#E7D7BE]" />
         <Layers size={20} className="absolute inset-0 m-auto text-[#E7D7BE]" />
       </div>
-      <p className="text-[14px] text-[#F7EBDD] font-medium mb-1">
-        Preparing your bundle…
+      <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6E685B]">Project delivery</p>
+      <p className="mb-2 text-[24px] font-bold leading-tight text-[#F7EBDD]">
+        Preparing your bundle
       </p>
-      <p className="text-[11px] text-[#D0C3AF] max-w-sm">
-        Finalising your purchase — this usually takes a couple of seconds.
+      <p className="mx-auto max-w-sm text-[12px] leading-relaxed text-[#D0C3AF]">
+        Finalising your purchase. This usually takes a couple of seconds.
       </p>
-      <p className="mt-4 text-[10px] font-mono text-[#6E685B] tabular-nums">
-        {Math.floor(elapsed / 1000)}s elapsed
-      </p>
+      <div className="mx-auto mt-5 flex w-fit items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[10px] font-mono text-[#6E685B]">
+        <ShieldCheck size={11} />
+        <span className="tabular-nums">{Math.floor(elapsed / 1000)}s elapsed</span>
+      </div>
     </Centered>
   );
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center text-center px-6">
-      {children}
+    <div className="min-h-screen bg-[#090907] px-6 py-10 text-center text-[#F7EBDD]">
+      <div className="mx-auto flex min-h-[78vh] max-w-xl items-center justify-center">
+        <div className="w-full rounded-[28px] border border-[#211F1A] bg-[#11100d] px-6 py-10 shadow-[0_30px_90px_rgba(0,0,0,0.38)]">
+          {children}
+        </div>
+      </div>
     </div>
   );
 }

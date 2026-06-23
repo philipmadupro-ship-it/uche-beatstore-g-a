@@ -1,6 +1,7 @@
 'use client';
 
-import { Repeat } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, Repeat } from 'lucide-react';
 import { Slider } from '@/components/ui/Slider';
 
 interface Props {
@@ -35,11 +36,24 @@ export function StudioTransport({
   tempo, setTempo, pitchSemis, setPitchSemis,
   preservePitch, setPreservePitch,
 }: Props) {
+  const [showLoopEditor, setShowLoopEditor] = useState(false);
+
+  const toggleLoop = () => {
+    setLoopOn((v) => {
+      const next = !v;
+      if (next) {
+        setShowLoopEditor(true);
+        if (duration > 0 && loopB <= loopA) setLoopB(duration);
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="rounded-xl border border-[#1A1813] bg-[#0D0B09] p-3 sm:p-4">
       {/* Scrub bar — luxury Slider primitive. Loop region renders as a
           translucent band underneath via absolute overlay. */}
-      <div className="mb-3 flex items-center gap-3 text-[10px] font-mono text-[#D0C3AF]">
+      <div className="flex items-center gap-3 text-[10px] font-mono text-[#D0C3AF]">
         <span className="tabular-nums">{fmtTime(currentTime)}</span>
         <div className="flex-1 relative">
           {/* Loop region overlay — drawn beneath the slider but on top
@@ -69,102 +83,97 @@ export function StudioTransport({
         <span className="tabular-nums">{fmtTime(duration)}</span>
       </div>
 
-      {/* Loop A / B sliders + "Set A" / "Set B" stamp buttons. */}
-      <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_auto_auto] sm:items-center sm:gap-3">
-        <button
-          onClick={() => setLoopOn((v) => !v)}
-          className={`flex min-h-8 items-center justify-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider transition-colors ${
-            loopOn
-              ? 'bg-[#342F27] border-[#C9BCA8]/40 text-[#F3E6D1]'
-              : 'bg-[#1A1813] border-[#211F1A] text-[#B4AA99]'
-          }`}
-        >
-          <Repeat size={10} /> Loop
-        </button>
-
-        <div className="grid grid-cols-[18px_minmax(0,1fr)_48px] items-center gap-2 sm:contents">
-          <span className="text-[10px] font-mono text-[#9B9282]">A</span>
+      {/* Tempo + pitch + pitch-lock toggle. */}
+      <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+        <ControlCard label="Tempo" value={`${(tempo * 100).toFixed(0)}%`}>
           <Slider
+            value={tempo} onChange={setTempo}
+            min={0.5} max={1.5} step={0.01}
+            showTooltip variant="studio" bipolar
+            formatTooltip={(v) => `${(v * 100).toFixed(0)}%`}
+            aria-label="Tempo"
+          />
+        </ControlCard>
+        <ControlCard
+          label={preservePitch ? 'Pitch' : 'Pitch vinyl'}
+          value={preservePitch ? '0st' : `${pitchSemis > 0 ? '+' : ''}${pitchSemis}st`}
+        >
+          <Slider
+            value={pitchSemis} onChange={(v) => setPitchSemis(Math.round(v))}
+            min={-12} max={12} step={1}
+            disabled={preservePitch}
+            showTooltip variant="studio" bipolar
+            formatTooltip={(v) => `${v > 0 ? '+' : ''}${Math.round(v)}st`}
+            aria-label="Pitch"
+          />
+        </ControlCard>
+        <div className="grid grid-cols-2 gap-2 md:w-[190px]">
+          <button
+            onClick={() => setPreservePitch((v) => !v)}
+            className={`min-h-[54px] rounded-lg border px-2 py-2 text-[9px] font-mono uppercase tracking-[0.16em] transition-colors ${
+              preservePitch
+                ? 'border-[#C9BCA8]/40 bg-[#342F27] text-[#F3E6D1]'
+                : 'border-[#211F1A] bg-[#1A1813] text-[#B4AA99] hover:text-white'
+            }`}
+          >
+            Lock<br />
+            <span className="text-[11px]">{preservePitch ? 'On' : 'Off'}</span>
+          </button>
+          <button
+            onClick={toggleLoop}
+            className={`flex min-h-[54px] items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[9px] font-mono uppercase tracking-[0.16em] transition-colors ${
+              loopOn
+                ? 'border-[#C9BCA8]/40 bg-[#342F27] text-[#F3E6D1]'
+                : 'border-[#211F1A] bg-[#1A1813] text-[#B4AA99] hover:text-white'
+            }`}
+          >
+            <Repeat size={10} /> Loop
+          </button>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setShowLoopEditor((v) => !v)}
+        className="mt-3 flex w-full items-center justify-between rounded-lg border border-[#17130F] bg-[#090907] px-3 py-2 text-left text-[9px] font-mono uppercase tracking-[0.18em] text-[#837B6D] transition-colors hover:text-[#F3E6D1]"
+      >
+        <span>Loop points {loopOn ? `${fmtTime(loopA)} - ${fmtTime(loopB)}` : 'off'}</span>
+        <ChevronDown size={12} className={`transition-transform ${showLoopEditor ? 'rotate-180' : ''}`} />
+      </button>
+
+      {showLoopEditor && (
+        <div className="mt-2 rounded-lg border border-[#17130F] bg-[#090907] p-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_52px_auto] sm:items-center">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">A</span>
+            <Slider
               value={loopA}
               onChange={(v) => setLoopA(Math.min(v, loopB))}
               min={0} max={duration || 0} step={0.01}
               accent="#F3E6D1" variant="studio"
               aria-label="Loop start"
             />
-          <span className="text-right text-[10px] font-mono tabular-nums text-[#D0C3AF]">{fmtTime(loopA)}</span>
-        </div>
+            <span className="text-right text-[10px] font-mono tabular-nums text-[#D0C3AF]">{fmtTime(loopA)}</span>
+            <button
+              onClick={() => setLoopA(currentTime)}
+              className="rounded-full border border-[#211F1A] px-2 py-1 text-[9px] font-mono uppercase text-[#9B9282] transition-colors hover:text-white"
+            >Set A</button>
 
-        <div className="grid grid-cols-[18px_minmax(0,1fr)_48px] items-center gap-2 sm:contents">
-          <span className="text-[10px] font-mono text-[#9B9282]">B</span>
-          <Slider
+            <span className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">B</span>
+            <Slider
               value={loopB}
               onChange={(v) => setLoopB(Math.max(v, loopA))}
               min={0} max={duration || 0} step={0.01}
               accent="#F3E6D1" variant="studio"
               aria-label="Loop end"
             />
-          <span className="text-right text-[10px] font-mono tabular-nums text-[#D0C3AF]">{fmtTime(loopB)}</span>
-        </div>
-
-        <div className="flex items-center gap-1.5 sm:col-span-2 sm:justify-end">
-          <button
-            onClick={() => setLoopA(currentTime)}
-            className="rounded-full border border-[#211F1A] px-2 py-1 text-[9px] font-mono uppercase text-[#9B9282] transition-colors hover:text-white"
-          >Set A</button>
-          <button
-            onClick={() => setLoopB(currentTime)}
-            className="rounded-full border border-[#211F1A] px-2 py-1 text-[9px] font-mono uppercase text-[#9B9282] transition-colors hover:text-white"
-          >Set B</button>
-        </div>
-      </div>
-
-      {/* Tempo + pitch + pitch-lock toggle. */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_160px] md:gap-5">
-        <div>
-          <Knob label="Tempo" value={`${(tempo * 100).toFixed(0)}%`}>
-            <Slider
-              value={tempo} onChange={setTempo}
-              min={0.5} max={1.5} step={0.01}
-              showTooltip variant="studio" bipolar
-              formatTooltip={(v) => `${(v * 100).toFixed(0)}%`}
-              aria-label="Tempo"
-            />
-          </Knob>
-        </div>
-        <div>
-          <Knob
-            label={`Pitch ${!preservePitch ? '(vinyl)' : ''}`}
-            value={preservePitch ? '0st' : `${pitchSemis > 0 ? '+' : ''}${pitchSemis}st`}
-          >
-            <Slider
-              value={pitchSemis} onChange={(v) => setPitchSemis(Math.round(v))}
-              min={-12} max={12} step={1}
-              disabled={preservePitch}
-              showTooltip variant="studio" bipolar
-              formatTooltip={(v) => `${v > 0 ? '+' : ''}${Math.round(v)}st`}
-              aria-label="Pitch"
-            />
-          </Knob>
-        </div>
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">Pitch lock</label>
+            <span className="text-right text-[10px] font-mono tabular-nums text-[#D0C3AF]">{fmtTime(loopB)}</span>
             <button
-              onClick={() => setPreservePitch((v) => !v)}
-              className={`text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded ${
-                preservePitch
-                  ? 'bg-[#342F27] text-[#F3E6D1] border border-[#C9BCA8]/40'
-                  : 'bg-[#1A1813] text-[#B4AA99] border border-[#211F1A]'
-              }`}
-            >{preservePitch ? 'On' : 'Off'}</button>
+              onClick={() => setLoopB(currentTime)}
+              className="rounded-full border border-[#211F1A] px-2 py-1 text-[9px] font-mono uppercase text-[#9B9282] transition-colors hover:text-white"
+            >Set B</button>
           </div>
-          <p className="text-[10px] text-[#9B9282] leading-relaxed">
-            {preservePitch
-              ? 'Tempo without pitch shift.'
-              : 'Tempo + pitch coupled (vinyl).'}
-          </p>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -174,9 +183,9 @@ function fmtTime(s: number): string {
   return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
 }
 
-function Knob({ label, value, children }: { label: string; value: string; children: React.ReactNode }) {
+function ControlCard({ label, value, children }: { label: string; value: string; children: React.ReactNode }) {
   return (
-    <div>
+    <div className="rounded-lg border border-[#17130F] bg-[#090907] p-3">
       <div className="flex items-center justify-between mb-2">
         <label className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">{label}</label>
         <span className="text-[11px] text-[#F3E6D1] font-mono">{value}</span>

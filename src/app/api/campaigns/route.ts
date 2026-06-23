@@ -19,7 +19,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     if (!isSupabaseConfigured()) {
-      const campaigns = (getAll('campaigns') as any[]) || [];
+      const campaigns = getAll('campaigns') ?? [];
       return NextResponse.json({ campaigns });
     }
     const auth = await requireUser();
@@ -36,7 +36,7 @@ export async function GET() {
     // per campaign — fine for tens of campaigns. Anything larger and
     // we'd push this into a SQL view.
     const campaignIds = (campaigns ?? []).map((c) => c.id);
-    let targetsByCampaign = new Map<string, { total: number; placed: number; pass: number; pending: number }>();
+    const targetsByCampaign = new Map<string, { total: number; placed: number; pass: number; pending: number }>();
     if (campaignIds.length) {
       const { data: targets } = await auth.admin
         .from('campaign_targets')

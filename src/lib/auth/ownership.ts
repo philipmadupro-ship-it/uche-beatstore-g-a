@@ -9,9 +9,9 @@
  * row's `user_id`, and either return the admin client or a short-circuit
  * `NextResponse` for the caller to bail with.
  *
- * Rows where `user_id IS NULL` are treated as legacy/public — the loosened
- * RLS in migration 002 made several tables nullable so demo content could
- * exist without an owner. We preserve that semantics here.
+ * Legacy rows where `user_id IS NULL` are not claimable through this helper.
+ * They must be migrated to the producer explicitly rather than becoming
+ * mutable by whichever authenticated user addresses the row first.
  */
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
@@ -64,7 +64,7 @@ export async function requireRowOwnership(
   if (!row) {
     return { ok: false, res: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
   }
-  if (row.user_id && row.user_id !== user.id) {
+  if (!row.user_id || row.user_id !== user.id) {
     return { ok: false, res: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
   return { ok: true, userId: user.id, admin };

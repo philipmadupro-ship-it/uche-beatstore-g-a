@@ -30,6 +30,8 @@ export interface CreatorProfile {
   accent_color?: string | null;
   font_style?: string | null;
   text_color_primary?: string | null;
+  bundle_discount_threshold?: number | null;
+  bundle_discount_percent?: number | null;
 }
 
 export interface PlaylistTrackItem {
@@ -56,11 +58,13 @@ export interface FeaturedPlaylist {
   name: string;
   cover_url: string | null;
   store_order: number | null;
+  price_usd?: number | null;
   tracks: PlaylistTrackItem[];
 }
 
 export interface StoreTrack extends Track {
   tags?: TrackTag[];
+  store_featured?: boolean | null;
 }
 
 export const TYPE_FILTERS = ['all', 'beats', 'song', 'remix'] as const;

@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { extractPeaks } from '@/lib/audio/peaks';
-import { uploadPeaksSidecar } from '@/lib/storage/upload';
-import { getAppUrl } from '@/lib/env';
+import { readStoredObject, uploadPeaksSidecar } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -43,16 +42,12 @@ export async function POST() {
   const targets = (tracks ?? []) as Array<{ id: string; title: string; audio_url: string }>;
   const results: Array<{ id: string; title: string; ok: boolean; error?: string }> = [];
 
-  const APP_URL = getAppUrl();
   for (const t of targets) {
     try {
-      const rawUrl = t.audio_url.startsWith('/') ? `${APP_URL}${t.audio_url}` : t.audio_url;
-      const res = await fetch(rawUrl);
-      if (!res.ok) throw new Error(`audio fetch HTTP ${res.status}`);
-      const buf = Buffer.from(await res.arrayBuffer());
+      const buf = await readStoredObject(t.audio_url);
       const peaks = await extractPeaks(buf);
       if (!peaks) throw new Error('decoder returned null');
-      const peaksUrl = await uploadPeaksSidecar(rawUrl, JSON.stringify(peaks));
+      const peaksUrl = await uploadPeaksSidecar(t.audio_url, JSON.stringify(peaks));
       if (!peaksUrl) throw new Error('sidecar upload failed');
       await admin.from('tracks').update({ peaks_url: peaksUrl }).eq('id', t.id);
       results.push({ id: t.id, title: t.title, ok: true });

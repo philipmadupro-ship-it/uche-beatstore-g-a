@@ -20,6 +20,8 @@ interface Props {
   allTracks: StoreTrack[];
   priceLease: number | null;
   priceExclusive: number | null;
+  licenseCount?: number;
+  lowestLicensePrice?: number | null;
   isCurrent: boolean;
   isPlaying: boolean;
   isPreview: boolean;
@@ -34,14 +36,15 @@ interface Props {
 }
 
 export function BeatCard({
-  track, priceLease, priceExclusive, isCurrent, isPlaying, isPreview,
+  track, priceLease, priceExclusive, licenseCount = 0, lowestLicensePrice = null, isCurrent, isPlaying, isPreview,
   onPreview, onAddLease, onAddExclusive, onFreeDownload, accentColor,
   isWishlisted, onToggleWishlist,
 }: Props) {
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 
   const keyLabel = track.key ? `${track.key}${track.scale === 'minor' ? 'm' : ''}` : null;
-  const fromPrice = priceLease ?? priceExclusive;
+  const hasLicenseTiers = licenseCount > 0;
+  const fromPrice = hasLicenseTiers ? lowestLicensePrice : priceLease ?? priceExclusive;
 
   const ringStyle: React.CSSProperties = isPreview
     ? { boxShadow: `0 0 0 1.5px ${accentColor}` }
@@ -175,7 +178,7 @@ export function BeatCard({
               className="shrink-0 text-[12px] font-bold tabular-nums px-2.5 py-1 rounded-lg text-black shadow-[0_2px_8px_rgba(0,0,0,0.4)]"
               style={{ backgroundColor: accentColor }}
             >
-              ${fromPrice}
+              {hasLicenseTiers ? 'from ' : ''}${fromPrice}
             </span>
           )}
         </div>
@@ -198,6 +201,18 @@ export function BeatCard({
           >
             <Download size={10} />
             Free download
+          </button>
+        ) : hasLicenseTiers ? (
+          <button
+            onClick={stop(onPreview)}
+            className="tap flex min-h-11 w-full items-center justify-center gap-2 text-[9px] font-mono font-bold uppercase tracking-wider text-[#F7EBDD] transition-colors hover:bg-white/[0.04]"
+          >
+            Choose license
+            {fromPrice != null && (
+              <span className="text-[#B4AA99]">
+                from ${fromPrice}
+              </span>
+            )}
           </button>
         ) : (
           <div className="flex min-h-11 items-stretch divide-x divide-white/[0.06]">

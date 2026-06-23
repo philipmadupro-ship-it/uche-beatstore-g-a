@@ -5,11 +5,10 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
-  Music, Search, ShoppingCart, Loader2, Play, Pause,
-  Globe, X, CheckCircle2, XCircle, Link2, LayoutGrid,
-  List, Mail, ChevronDown, Send, ListMusic, Sliders,
-  Heart, ExternalLink, SlidersHorizontal, RotateCcw,
-  ShoppingBag, Download, ChevronRight, User, Disc3,
+  Music, Search, ShoppingCart,
+  X, CheckCircle2, XCircle, Link2, LayoutGrid,
+  List, SlidersHorizontal, Disc3, ShieldCheck,
+  CreditCard, Download, BadgeCheck, Sparkles, ArrowRight,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { buildHarmonicOrder } from '@/lib/audio/harmonic';
@@ -17,22 +16,17 @@ import { useCart } from '@/hooks/useCart';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast } from '@/hooks/useToast';
 import type { Track } from '@/lib/types';
-import { LicenseSelector } from '@/components/store/LicenseSelector';
-import type { LicenseTier as LicenseTierImport } from '@/components/store/LicenseSelector';
-import { MusicArtwork } from '@/components/store/MusicArtwork';
-import { ParticleText } from '@/components/store/ParticleText';
 import { StoreListView } from '@/components/store/StoreListView';
 import BandcampRemixCard from '@/components/store/BandcampRemixCard';
 import { RecommendationsStrip } from '@/components/store/RecommendationsStrip';
 import { useWishlist } from '@/hooks/useWishlist';
 import { filterAndSortTracks, type StoreTrack as StoreTrackFilter } from '@/lib/store/filters';
-import { Sparkles } from 'lucide-react';
 import {
   type StoreTrack, type CreatorProfile, type FeaturedPlaylist, type PlaylistTrackItem,
-  type TrackTag, type TypeFilter, type ViewMode, type LicenseTier,
+  type TypeFilter, type ViewMode, type LicenseTier,
   TYPE_FILTERS, FONT_FAMILY_MAP,
 } from '@/components/store/types';
-import { sanitizeUrl, fmtDur, getSimilarTracks } from '@/components/store/helpers';
+import { sanitizeUrl } from '@/components/store/helpers';
 import { normalizeThemeColor } from '@/lib/theme/colors';
 import { FreeDownloadModal } from '@/components/store/FreeDownloadModal';
 import { StoreContactForm } from '@/components/store/StoreContactForm';
@@ -43,9 +37,7 @@ import {
 } from '@/components/store/StoreSidebar';
 import { DropCountdown } from '@/components/store/DropCountdown';
 import { logPlay } from '@/lib/buyer-session';
-import { TagChips } from '@/components/store/TagChips';
 import { BeatCard } from '@/components/store/BeatCard';
-import { BeatListRow } from '@/components/store/BeatListRow';
 import { BeatPreviewDrawer } from '@/components/store/BeatPreviewDrawer';
 
 /* ─── Suspense wrapper ───────────────────────────────────────── */
@@ -55,6 +47,194 @@ export default function StorePageWrapper() {
     <Suspense fallback={<div className="min-h-screen bg-[#090907]" />}>
       <StorePage />
     </Suspense>
+  );
+}
+
+function stableDailyScore(id: string, salt: number) {
+  let hash = salt || 5381;
+  for (let i = 0; i < id.length; i += 1) {
+    hash = ((hash << 5) + hash + id.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+}
+
+function money(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(Number(value))) return null;
+  return `$${Number(value).toLocaleString()}`;
+}
+
+function StoreTrustRail({ accentColor }: { accentColor: string }) {
+  const items = [
+    { icon: ShieldCheck, label: 'Protected checkout', detail: 'Stripe payment' },
+    { icon: Download, label: 'Instant delivery', detail: 'Private links' },
+    { icon: BadgeCheck, label: 'License included', detail: 'Usage rights' },
+    { icon: CreditCard, label: 'No account needed', detail: 'Email receipt' },
+  ];
+
+  return (
+    <section className="mx-auto mt-8 max-w-[1400px] px-4 md:px-8">
+      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/[0.06] bg-[#14110D]/70 p-2 sm:grid-cols-4">
+        {items.map(({ icon: Icon, label, detail }) => (
+          <div key={label} className="flex min-w-0 items-center gap-2 rounded-xl px-2.5 py-2.5">
+            <span
+              className="grid size-8 shrink-0 place-items-center rounded-full border"
+              style={{ borderColor: `${accentColor}33`, color: accentColor, backgroundColor: `${accentColor}10` }}
+            >
+              <Icon size={13} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[11px] font-semibold text-[#F7EBDD]">{label}</span>
+              <span className="block truncate text-[9px] font-mono uppercase tracking-[0.16em] text-[#837B6D]">{detail}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function StoreSalesSpotlight({
+  track,
+  project,
+  accentColor,
+  currentTrackId,
+  isPlaying,
+  licenseCount,
+  lowestLicensePrice,
+  priceFor,
+  onPlay,
+  onPreview,
+  onBuyProject,
+}: {
+  track: StoreTrack | null;
+  project: FeaturedPlaylist | null;
+  accentColor: string;
+  currentTrackId: string | null;
+  isPlaying: boolean;
+  licenseCount: number;
+  lowestLicensePrice: number | null;
+  priceFor: (t: StoreTrack, kind: 'lease' | 'exclusive') => number | null;
+  onPlay: (t: StoreTrack) => void;
+  onPreview: (t: StoreTrack) => void;
+  onBuyProject: (p: FeaturedPlaylist) => void;
+}) {
+  if (!track && !project) return null;
+
+  const isCurrent = !!track && currentTrackId === track.id;
+  const trackPrice = track
+    ? licenseCount > 0
+      ? lowestLicensePrice
+      : priceFor(track, 'lease') ?? priceFor(track, 'exclusive')
+    : null;
+  const projectCover = project?.cover_url ?? project?.tracks?.find((item) => item.cover_url)?.cover_url ?? null;
+  const projectPrice = project?.price_usd != null ? Number(project.price_usd) : null;
+
+  return (
+    <section className="mx-auto mt-6 max-w-[1400px] px-4 md:px-8">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.48fr)]">
+        {track && (
+          <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-[#14110D]/80 p-3">
+            {track.cover_url && (
+              <img
+                src={track.cover_url}
+                alt=""
+                aria-hidden
+                className="absolute inset-0 h-full w-full object-cover opacity-15 blur-2xl scale-110"
+              />
+            )}
+            <div className="relative grid gap-3 sm:grid-cols-[104px_minmax(0,1fr)] sm:items-center">
+              <button
+                type="button"
+                onClick={() => onPreview(track)}
+                className="group relative aspect-square overflow-hidden rounded-xl bg-[#090907] text-left"
+              >
+                {track.cover_url ? (
+                  <img src={track.cover_url} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]" />
+                ) : (
+                  <div className="grid h-full w-full place-items-center bg-[#171511] text-[#6E685B]">
+                    <Music size={28} />
+                  </div>
+                )}
+                <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+              </button>
+              <div className="min-w-0">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[9px] font-mono uppercase tracking-[0.18em] text-[#9B9282]">
+                    <Sparkles size={10} style={{ color: accentColor }} />
+                    Daily pick
+                  </span>
+                  {trackPrice != null && (
+                    <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[9px] font-mono uppercase tracking-[0.18em] text-[#D0C3AF]">
+                      from {money(trackPrice)}
+                    </span>
+                  )}
+                </div>
+                <h2 className="truncate text-[18px] font-bold leading-tight text-[#F7EBDD] sm:text-[24px]">
+                  {track.title}
+                </h2>
+                <p className="mt-1.5 max-w-xl truncate text-[10px] font-mono uppercase tracking-[0.16em] text-[#837B6D]">
+                  {[track.type, track.bpm ? `${track.bpm} BPM` : null, track.key ? `${track.key}${track.scale === 'minor' ? 'm' : ''}` : null].filter(Boolean).join(' · ')}
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onPlay(track)}
+                    className="tap inline-flex min-h-10 items-center gap-2 rounded-full px-3.5 text-[10px] font-bold uppercase tracking-wider text-black transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: accentColor }}
+                  >
+                    <Disc3 size={13} className={isCurrent && isPlaying ? 'animate-[spin_3s_linear_infinite]' : ''} />
+                    {isCurrent && isPlaying ? 'Playing' : 'Play'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onPreview(track)}
+                    className="tap inline-flex min-h-10 items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.04] px-3.5 text-[10px] font-mono uppercase tracking-wider text-[#D0C3AF] transition-colors hover:border-white/[0.18] hover:text-[#F7EBDD]"
+                  >
+                    {licenseCount > 0 ? 'Choose license' : 'Open beat'}
+                    <ArrowRight size={12} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {project && (
+          <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-[#14110D]/80 p-3">
+            <div className="flex h-full gap-3">
+              <Link href={`/store/projects/${project.id}`} className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-[#090907] sm:size-24">
+                {projectCover ? (
+                  <img src={projectCover} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="grid h-full w-full place-items-center text-[#6E685B]">
+                    <Music size={22} />
+                  </div>
+                )}
+              </Link>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#837B6D]">Bundle</p>
+                <Link href={`/store/projects/${project.id}`} className="mt-1 line-clamp-2 text-[18px] font-bold leading-tight text-[#F7EBDD] hover:text-[#D0C3AF]">
+                  {project.name}
+                </Link>
+                <p className="mt-1 text-[10px] font-mono uppercase tracking-[0.16em] text-[#837B6D]">
+                  {project.tracks?.length ?? 0} tracks{projectPrice != null && projectPrice > 0 ? ` · ${money(projectPrice)}` : ''}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onBuyProject(project)}
+                  disabled={projectPrice == null || projectPrice <= 0}
+                  className="tap mt-auto inline-flex min-h-9 items-center justify-center gap-2 rounded-full px-3 text-[9px] font-bold uppercase tracking-wider text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{ backgroundColor: accentColor }}
+                >
+                  <ShoppingCart size={12} />
+                  Buy bundle
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -82,15 +262,28 @@ function StorePage() {
   });
   const creator = storeQuery.data?.creator ?? null;
   const tracks = useMemo(() => storeQuery.data?.tracks ?? [], [storeQuery.data]);
-  const licenses = storeQuery.data?.licenses ?? [];
-  const featuredPlaylists = storeQuery.data?.featuredPlaylists ?? [];
-  const featuredProjects = storeQuery.data?.featuredProjects ?? [];
+  const licenses = useMemo(() => storeQuery.data?.licenses ?? [], [storeQuery.data?.licenses]);
+  const featuredPlaylists = useMemo(() => storeQuery.data?.featuredPlaylists ?? [], [storeQuery.data?.featuredPlaylists]);
+  const featuredProjects = useMemo(() => storeQuery.data?.featuredProjects ?? [], [storeQuery.data?.featuredProjects]);
   const loading = storeQuery.isLoading;
+  const rotationSeed = useMemo(() => Math.floor(Date.now() / 86_400_000), []);
   useEffect(() => {
     if (storeQuery.isError) toast.error("Couldn't load store");
   }, [storeQuery.isError]);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  // List (track rows) is the marketplace default; an explicit grid choice
+  // sticks via localStorage. Hydrated in an effect so SSR HTML stays stable.
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('store-view-mode');
+      if (stored === 'grid' || stored === 'list') setViewMode(stored);
+    } catch { /* private mode */ }
+  }, []);
+  const changeViewMode = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    try { localStorage.setItem('store-view-mode', mode); } catch { /* private mode */ }
+  }, []);
   const [isSignedIn, setIsSignedIn] = useState(false);
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => setIsSignedIn(!!data.user));
@@ -137,15 +330,15 @@ function StorePage() {
   // Feed the producer's automatic bundle discount into the cart store so the
   // drawer can show the "Bundle deal applied" banner (mig 077, Task 7).
   useEffect(() => {
-    const threshold = Number((creator as any)?.bundle_discount_threshold ?? 0);
-    const percent = Number((creator as any)?.bundle_discount_percent ?? 0);
+    const threshold = Number(creator?.bundle_discount_threshold ?? 0);
+    const percent = Number(creator?.bundle_discount_percent ?? 0);
     setBundleRule(threshold > 0 && percent > 0 ? { threshold, percent } : null);
   }, [creator, setBundleRule]);
 
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const handleBuyProject = (proj: any) => {
+  const handleBuyProject = (proj: FeaturedPlaylist) => {
     if (!proj?.id) return;
     const price = proj.price_usd != null ? Number(proj.price_usd) : 0;
     if (price <= 0) {
@@ -243,6 +436,8 @@ function StorePage() {
   const priceRangeActive = effectivePriceMin > priceRange.min || effectivePriceMax < priceRange.max;
 
   const hasActiveFilters =
+    debouncedSearch.trim() !== '' ||
+    typeFilter !== 'all' ||
     genreFilter !== '' || moodFilter !== '' || keyFilter !== '' || scaleFilter !== '' ||
     freeOnly || favoritesOnly || newThisWeek || durationBucket !== '' ||
     priceRangeActive ||
@@ -304,21 +499,43 @@ function StorePage() {
   const moreFromProducer = useMemo(() => {
     const visible = new Set(filtered.map((t) => t.id));
     const pool = tracks.filter((t) => !visible.has(t.id));
-    return pool.sort(() => Math.random() - 0.5).slice(0, 12);
-  }, [tracks, filtered]);
+    return pool
+      .map((track, index) => ({ track, score: stableDailyScore(track.id, rotationSeed + index) }))
+      .sort((a, b) => a.score - b.score)
+      .map(({ track }) => track)
+      .slice(0, 12);
+  }, [tracks, filtered, rotationSeed]);
 
   // Producer-curated picks — uses tracks.store_featured (migration 054).
   // Falls back to nothing when the producer hasn't picked anything yet.
   const producerPicks = useMemo(() => {
-    return tracks.filter((t) => (t as any).store_featured === true).slice(0, 12);
+    return tracks.filter((t) => t.store_featured === true).slice(0, 12);
   }, [tracks]);
+
+  const lowestLicensePrice = useMemo(() => {
+    const activePrices = licenses
+      .map((license) => Number(license.price_usd ?? 0))
+      .filter((price) => Number.isFinite(price) && price > 0);
+    return activePrices.length ? Math.min(...activePrices) : null;
+  }, [licenses]);
+
+  const spotlightTrack = useMemo(() => {
+    const pool = producerPicks.length > 0 ? producerPicks : tracks;
+    if (pool.length === 0) return null;
+    return pool[rotationSeed % pool.length] ?? null;
+  }, [producerPicks, tracks, rotationSeed]);
+
+  const spotlightProject = useMemo(() => {
+    if (featuredProjects.length === 0) return null;
+    return featuredProjects[(rotationSeed + 1) % featuredProjects.length] ?? null;
+  }, [featuredProjects, rotationSeed]);
 
   // DJ Mode — order the visible catalogue into a continuous harmonic mix and play it.
   const [djActive, setDjActive] = useState(false);
   const handleDjMode = () => {
-    const playable = (filtered as Track[]).filter((t) => t.audio_url);
+    const playable = filtered.filter((t) => t.audio_url);
     if (playable.length === 0) return;
-    const mix = buildHarmonicOrder(playable as any) as unknown as Track[];
+    const mix = buildHarmonicOrder(playable);
     setQueue(mix);
     setTrack(mix[0]);
     setDjActive(true);
@@ -332,8 +549,8 @@ function StorePage() {
   const handlePlay = (t: StoreTrack) => {
     setDjActive(false);
     if (currentTrack?.id === t.id) { togglePlay(); return; }
-    setQueue(filtered as Track[]);
-    setTrack(t as Track);
+    setQueue(filtered);
+    setTrack(t);
     // Fire-and-forget store-play telemetry. /api/store/play is rate-limited
     // server-side (60s window per ipHash+track), 200s on failure so a bad
     // network never breaks the listening UX.
@@ -436,7 +653,7 @@ function StorePage() {
 
   return (
     <div
-      className="min-h-screen bg-[#090907] pb-28"
+      className="store-ui min-h-screen bg-[#090907] pb-28"
       style={{
         '--store-accent': accentColor,
         '--store-text': textColor,
@@ -549,6 +766,34 @@ function StorePage() {
         </div>
       )}
 
+      <StoreSalesSpotlight
+        track={spotlightTrack}
+        project={spotlightProject}
+        accentColor={accentColor}
+        currentTrackId={currentTrack?.id ?? null}
+        isPlaying={isPlaying}
+        licenseCount={licenses.length}
+        lowestLicensePrice={lowestLicensePrice}
+        priceFor={priceFor}
+        onPlay={handlePlay}
+        onPreview={(t) => setPreviewTrack(t)}
+        onBuyProject={handleBuyProject}
+      />
+
+      {producerPicks.length > 0 && (
+        <RecommendationsStrip
+          label="Producer's Picks"
+          tracks={producerPicks}
+          accentColor={accentColor}
+          currentTrackId={currentTrack?.id ?? null}
+          isPlaying={isPlaying}
+          compact
+          priceFor={(t, k) => priceFor(t, k)}
+          onPlay={(t) => handlePlay(t)}
+          onPreview={(t) => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
+        />
+      )}
+
       {/* ── Toolbar — sticky glass header ──────────────────────── */}
       <div className="sticky top-0 z-30" style={{ backdropFilter: 'blur(24px)', background: 'rgba(10,9,7,0.88)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-2.5 flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
@@ -602,7 +847,7 @@ function StorePage() {
           {/* Grid / List toggle */}
           <div className="flex items-center gap-0.5 bg-[#171511] border border-[#2B2821] rounded-md p-0.5">
             <button
-              onClick={() => setViewMode('grid')}
+              onClick={() => changeViewMode('grid')}
               aria-label="Grid view"
               aria-pressed={viewMode === 'grid'}
               className={`tap grid size-11 place-items-center rounded transition-colors ${viewMode === 'grid' ? 'bg-[#3B372F] text-[#F7EBDD]' : 'text-[#9B9282] hover:text-[#D0C3AF]'}`}
@@ -610,7 +855,7 @@ function StorePage() {
               <LayoutGrid size={13} />
             </button>
             <button
-              onClick={() => setViewMode('list')}
+              onClick={() => changeViewMode('list')}
               aria-label="List view"
               aria-pressed={viewMode === 'list'}
               className={`tap grid size-11 place-items-center rounded transition-colors ${viewMode === 'list' ? 'bg-[#3B372F] text-[#F7EBDD]' : 'text-[#9B9282] hover:text-[#D0C3AF]'}`}
@@ -646,16 +891,6 @@ function StorePage() {
             <Link2 size={15} />
           </button>
 
-          {/* My Account */}
-          <Link
-            href="/store/account/me"
-            title={isSignedIn ? 'My Account' : 'Sign in'}
-            aria-label={isSignedIn ? 'My Account' : 'Sign in'}
-            className="tap hidden h-11 w-11 items-center justify-center rounded-full text-[#B4AA99] transition-colors hover:text-[#F7EBDD] sm:flex"
-          >
-            <User size={15} fill={isSignedIn ? 'currentColor' : 'none'} />
-          </Link>
-
           {/* Cart — the one prominent action */}
           <button
             onClick={() => setIsOpen(true)}
@@ -686,6 +921,11 @@ function StorePage() {
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           totalResults={filtered.length}
+          searchQuery={debouncedSearch}
+          clearSearch={() => {
+            setSearch('');
+            setDebouncedSearch('');
+          }}
           genreFilter={genreFilter}
           setGenreFilter={setGenreFilter}
           moodFilter={moodFilter}
@@ -754,7 +994,7 @@ function StorePage() {
             </div>
           ) : viewMode === 'grid' ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
-              {filtered.map((t, _idx) =>
+              {filtered.map((t) =>
                 // Remix tracks get the Bandcamp release-card layout to
                 // stand out in the mixed grid; regular beats keep BeatCard.
                 t.type === 'remix' ? (
@@ -764,6 +1004,8 @@ function StorePage() {
                     creatorName={creator?.display_name ?? null}
                     priceLease={priceFor(t, 'lease')}
                     priceExclusive={priceFor(t, 'exclusive')}
+                    licenseCount={licenses.length}
+                    lowestLicensePrice={lowestLicensePrice}
                     isCurrent={currentTrack?.id === t.id}
                     isPlaying={isPlaying && currentTrack?.id === t.id}
                     isPreview={previewTrack?.id === t.id}
@@ -784,6 +1026,8 @@ function StorePage() {
                     allTracks={filtered}
                     priceLease={priceFor(t, 'lease')}
                     priceExclusive={priceFor(t, 'exclusive')}
+                    licenseCount={licenses.length}
+                    lowestLicensePrice={lowestLicensePrice}
                     isCurrent={currentTrack?.id === t.id}
                     isPlaying={isPlaying && currentTrack?.id === t.id}
                     isPreview={previewTrack?.id === t.id}
@@ -816,6 +1060,8 @@ function StorePage() {
               onPreview={(t) => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
               onAddLease={(t) => addToCart(t, 'lease')}
               onAddExclusive={(t) => addToCart(t, 'exclusive')}
+              licenseCount={licenses.length}
+              lowestLicensePrice={lowestLicensePrice}
               onFreeDownload={(t) => setFreeDownloadTrack(t)}
               isWishlisted={(id) => wishlist.has(id)}
               onToggleWishlist={(id) => wishlist.toggle(id)}
@@ -825,18 +1071,6 @@ function StorePage() {
       </div>
 
       {/* ── Retention strips ─────────────────────────────────────── */}
-      {producerPicks.length > 0 && (
-        <RecommendationsStrip
-          label="Producer's Picks"
-          tracks={producerPicks}
-          accentColor={accentColor}
-          currentTrackId={currentTrack?.id ?? null}
-          isPlaying={isPlaying}
-          priceFor={(t, k) => priceFor(t, k)}
-          onPlay={(t) => handlePlay(t)}
-          onPreview={(t) => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
-        />
-      )}
       <RecommendationsStrip
         label="More from this producer"
         tracks={moreFromProducer}
@@ -851,18 +1085,28 @@ function StorePage() {
       {/* ── Contact form ─────────────────────────────────────────── */}
       <StoreContactForm creator={creator} accentColor={accentColor} />
 
+      <StoreTrustRail accentColor={accentColor} />
+
       {/* ── Store footer ─────────────────────────────────────────── */}
       <div className="border-t border-[#2B2821] mt-4 py-6 px-4 md:px-12">
         <div className="max-w-[1400px] mx-auto flex flex-wrap items-center justify-between gap-4">
           <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6E685B]">
             © {new Date().getFullYear()} {creator?.display_name || 'Beat Store'}
           </p>
-          <Link
-            href="/store/orders"
-            className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#837B6D] hover:text-[#D0C3AF] transition-colors"
-          >
-            Order history / Re-download
-          </Link>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link
+              href={isSignedIn ? '/store/account/me' : '/store/account'}
+              className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#837B6D] hover:text-[#D0C3AF] transition-colors"
+            >
+              Buyer account
+            </Link>
+            <Link
+              href="/store/orders"
+              className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#837B6D] hover:text-[#D0C3AF] transition-colors"
+            >
+              Order history / Re-download
+            </Link>
+          </div>
         </div>
       </div>
 

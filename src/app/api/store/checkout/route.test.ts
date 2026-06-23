@@ -6,7 +6,7 @@
  *     'embedded_page'") and `automatic_payment_methods` for embedded
  *     sessions. Both must stay out of the create-session payload.
  *   - Project checkout must validate buyer_email, presence of the
- *     project, and a positive price_usd before touching Stripe.
+ *     project, store listing, and a positive price_usd before touching Stripe.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -97,6 +97,15 @@ describe('POST /api/store/checkout — project mode', () => {
     const mod = await loadRoute();
     const res = await mod.POST(postBody({ buyer_email: 'b@x.io', project_id: PROJECT_ID }));
     expect(res.status).toBe(400);
+    expect(mockSessionsCreate).not.toHaveBeenCalled();
+  });
+
+  it('rejects a project that is not featured on the store', async () => {
+    mockMaybeSingle.mockResolvedValueOnce({ data: { ...VALID_PROJECT, store_featured: false }, error: null });
+    const mod = await loadRoute();
+    const res = await mod.POST(postBody({ buyer_email: 'b@x.io', project_id: PROJECT_ID }));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Project is not listed for sale' });
     expect(mockSessionsCreate).not.toHaveBeenCalled();
   });
 

@@ -33,7 +33,7 @@ const COPY: Record<CollectionKind, { title: string; description: string; label: 
   },
   playlist: {
     title: 'New playlist',
-    description: 'Create a curated set, tag the pocket it belongs to, then add tracks from your Library.',
+    description: 'Create a curated set, tag the pocket it belongs to, then start from Library or Upload.',
     label: 'Playlist title',
     placeholder: 'late night sends',
     successKey: 'playlist',
@@ -48,6 +48,7 @@ const FLOW_OPTIONS: Record<CollectionKind, { value: StartFlow; label: string; de
   ],
   playlist: [
     { value: 'library', label: 'From Library', description: 'Pick existing tracks right away.', icon: Library },
+    { value: 'upload', label: 'Upload', description: 'Drop new audio into this playlist.', icon: UploadCloud },
     { value: 'empty', label: 'Empty set', description: 'Name and cover it first.', icon: FolderPlus },
   ],
 };
@@ -102,6 +103,9 @@ export function CreateProjectModal({ kind = 'project', onClose, onSuccess }: Cre
 
       await saveBuckets(collection.id);
       onSuccess(collection, flow);
+      if (kind === 'playlist' && flow === 'upload') {
+        window.location.assign(`/playlists/${collection.id}?start=upload`);
+      }
     } catch (err) {
       console.error(`Create ${kind} error:`, err);
       toast.error(`Failed to create ${copy.successKey}`, err instanceof Error ? err.message : 'Try again');

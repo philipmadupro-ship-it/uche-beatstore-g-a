@@ -159,7 +159,81 @@ describe('GET /api/store/delivery', () => {
     expect(body.tracks[0].downloads[0]).toEqual({
       format: 'mp3',
       label: 'MP3',
-      proxied_url: expect.stringContaining('/api/audio?src='),
+      proxied_url: expect.stringContaining('/api/store/download-file?'),
     });
+  });
+
+  it('only advertises files configured on the purchased custom tier', async () => {
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'license_purchases') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({
+                data: {
+                  id: 'purchase-1',
+                  buyer_email: 'buyer@example.test',
+                  amount_usd: 40,
+                  created_at: '2026-01-01T00:00:00Z',
+                  status: 'paid',
+                  download_unlocked: true,
+                  track_ids: ['track-1'],
+                  line_items: [{
+                    track_id: 'track-1',
+                    license_id: '11111111-1111-4111-8111-111111111111',
+                    license_type: 'exclusive',
+                    file_types: ['MP3'],
+                    stems_included: false,
+                    is_exclusive: true,
+                  }],
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'tracks') {
+        return {
+          select: () => ({
+            in: () => Promise.resolve({
+              data: [{
+                id: 'track-1',
+                title: 'Tiered Beat',
+                audio_url: 'https://cdn.example.test/beat.mp3',
+                wav_url: 'https://cdn.example.test/beat.wav',
+                stems_status: 'done',
+              }],
+              error: null,
+            }),
+          }),
+        };
+      }
+      if (table === 'stems') {
+        return {
+          select: () => ({
+            in: () => ({
+              eq: () => Promise.resolve({
+                data: [{
+                  track_id: 'track-1',
+                  status: 'done',
+                  drums_url: 'https://cdn.example.test/drums.wav',
+                }],
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return tableForProjectDelivery(table);
+    });
+
+    const mod = await loadRoute();
+    const res = await mod.GET(req());
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.tracks[0].downloads.map((download: { format: string }) => download.format)).toEqual(['mp3']);
+    expect(body.tracks[0].file_types).toEqual(['MP3']);
   });
 });

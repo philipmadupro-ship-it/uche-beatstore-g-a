@@ -34,6 +34,7 @@ type ProjectRow = {
   user_id?: string | null;
   name?: string | null;
   price_usd?: number | string | null;
+  store_featured?: boolean | null;
 };
 
 type TrackRow = {
@@ -57,10 +58,13 @@ type CreatorProfileRow = {
 
 type LicenseRow = {
   id: string;
+  user_id?: string | null;
   name?: string | null;
   price_usd?: number | string | null;
   is_exclusive?: boolean | null;
   is_free?: boolean | null;
+  file_types?: string[] | null;
+  stems_included?: boolean | null;
 };
 
 type TrackLicenseOverrideRow = {
@@ -238,6 +242,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Project not found' }, { status: 404 });
       }
       const projectRow = project as ProjectRow;
+      if (!projectRow.store_featured) {
+        return NextResponse.json({ error: 'Project is not listed for sale' }, { status: 400 });
+      }
+
       const price = projectRow.price_usd != null ? Number(projectRow.price_usd) : 0;
       if (price <= 0) {
         return NextResponse.json({ error: 'Project is not priced for sale' }, { status: 400 });
@@ -287,11 +295,6 @@ export async function POST(req: NextRequest) {
         return_url: `${APP_URL}/store/projects/access?session_id={CHECKOUT_SESSION_ID}`,
       });
 
-      // Increment promo usage
-      if (promo) {
-        await admin.rpc('increment_promo_uses', { code: promo.code });
-      }
-
       log.info('project checkout session created', { session_id: session.id, project_id: projectRow.id, promo: promo?.code ?? null });
       return NextResponse.json({ client_secret: session.client_secret, session_id: session.id });
     }
@@ -326,11 +329,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Exclusive deliverable check — reject the session up front when the
-    // buyer is asking for exclusive rights but the track has neither a WAV
-    // nor ready stems. This keeps checkout aligned with the delivery promise:
-    // if we charge for an exclusive, the delivery page must have something
-    // real to unlock.
+    // Exclusive deliverable check — allow checkout, but mark exclusive
+    // tracks that still need WAV/stems so the webhook can flag the sale.
     const stemsReady = (stemsStatus: string | null | undefined) =>
       stemsStatus === 'ready' || stemsStatus === 'done' || stemsStatus === 'complete';
 
@@ -379,14 +379,18 @@ export async function POST(req: NextRequest) {
     if (customLicenseIds.length > 0) {
       const { data: licenseRows } = await admin
         .from('licenses')
-        .select('id, name, price_usd, is_exclusive, is_free, file_types, stems_included')
+        .select('id, user_id, name, price_usd, is_exclusive, is_free, file_types, stems_included')
         .in('id', customLicenseIds);
-      for (const row of (licenseRows ?? []) as LicenseRow[]) licenseById.set(row.id, row);
+      for (const row of (licenseRows ?? []) as LicenseRow[]) {
+        if (sellerUserId && row.user_id === sellerUserId) {
+          licenseById.set(row.id, row);
+        }
+      }
     }
 
     // Resolve per-track overrides for custom license tiers.
     // track_licenses.price_override_usd takes highest priority.
-    const trackLicenseOverrides = new Map<string, number | null>(); // key: `${track_id}::${license_id}`
+    const trackLicenseOverrides = new Map<string, TrackLicenseOverrideRow>(); // key: `${track_id}::${license_id}`
     if (customLicenseIds.length > 0 && trackIds.length > 0) {
       const { data: overrideRows } = await admin
         .from('track_licenses')
@@ -395,11 +399,7 @@ export async function POST(req: NextRequest) {
         .in('license_id', customLicenseIds);
       for (const row of (overrideRows ?? []) as TrackLicenseOverrideRow[]) {
         const key = `${row.track_id}::${row.license_id}`;
-        // Mark disabled entries with null so they can be rejected below.
-        trackLicenseOverrides.set(
-          key,
-          row.enabled ? (row.price_override_usd != null ? Number(row.price_override_usd) : null) : null,
-        );
+        trackLicenseOverrides.set(key, row);
       }
     }
 
@@ -407,7 +407,7 @@ export async function POST(req: NextRequest) {
     const trackById = new Map(trackRows.map((t) => [t.id, t]));
     const lineItems: LineItems = [];
     const unpriced: string[] = [];
-    const missingDeliverableTracks: Array<{ id: string; title: string }> = [];
+    const stemsPendingTrackIds = new Set<string>();
     const cartItemsMeta: Array<{ track_id: string; license_id: string; license_type: string }> = [];
 
     for (const it of rawItems) {
@@ -417,6 +417,10 @@ export async function POST(req: NextRequest) {
       const rawLicenseId = it.license_id ?? '';
       const isCustomTier = UUID_RE.test(rawLicenseId);
       const customLicense = isCustomTier ? licenseById.get(rawLicenseId) : null;
+      if (isCustomTier && !customLicense) {
+        unpriced.push(`${track.title} (license not available)`);
+        continue;
+      }
 
       // Determine resolved license_type ('lease' | 'exclusive') from either
       // the custom DB row or the legacy type string passed by the client.
@@ -434,14 +438,16 @@ export async function POST(req: NextRequest) {
         const overrideKey = `${track.id}::${rawLicenseId}`;
         const trackOverride = trackLicenseOverrides.get(overrideKey);
 
-        // null in map means explicitly disabled for this track
-        if (trackOverride === null) {
+        if (trackOverride?.enabled === false) {
           unpriced.push(`${track.title} (license not available)`);
           continue;
         }
         // Use track-level override → custom license base price
-        const base = trackOverride != null && trackOverride > 0
-          ? trackOverride
+        const overridePrice = trackOverride?.price_override_usd != null
+          ? Number(trackOverride.price_override_usd)
+          : null;
+        const base = overridePrice != null && overridePrice > 0
+          ? overridePrice
           : (customLicense.price_usd != null && Number(customLicense.price_usd) > 0
               ? Number(customLicense.price_usd)
               : null);
@@ -467,9 +473,14 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      if (resolvedType === 'exclusive' && !track.wav_url && !stemsReady(track.stems_status)) {
-        missingDeliverableTracks.push({ id: track.id, title: track.title ?? 'Untitled' });
-        continue;
+      const customTierNeedsStems = customLicense?.stems_included === true && !stemsReady(track.stems_status);
+      const legacyExclusiveNeedsFiles =
+        !customLicense &&
+        resolvedType === 'exclusive' &&
+        !track.wav_url &&
+        !stemsReady(track.stems_status);
+      if (customTierNeedsStems || legacyExclusiveNeedsFiles) {
+        stemsPendingTrackIds.add(track.id);
       }
 
       const displayName = customLicense
@@ -492,12 +503,6 @@ export async function POST(req: NextRequest) {
 
     if (unpriced.length) {
       return NextResponse.json({ error: `Missing price on: ${unpriced.join(', ')}` }, { status: 400 });
-    }
-    if (missingDeliverableTracks.length) {
-      return NextResponse.json(
-        { error: `Exclusive delivery not ready for: ${missingDeliverableTracks.map((t) => t.title).join(', ')}` },
-        { status: 400 },
-      );
     }
     if (!lineItems.length) {
       return NextResponse.json({ error: 'No valid items to charge' }, { status: 400 });
@@ -535,15 +540,10 @@ export async function POST(req: NextRequest) {
         cart_items: JSON.stringify(cartItemsMeta.slice(0, 25)),
         promo_code: promo?.code ?? '',
         bundle_discount_percent: bundle.applied ? String(bundle.percent) : '',
-        stems_pending_track_ids: '',
+        stems_pending_track_ids: [...stemsPendingTrackIds].join(','),
       },
       return_url: `${APP_URL}/store/download?session_id={CHECKOUT_SESSION_ID}`,
     });
-
-    // Increment promo usage
-    if (promo) {
-      await admin.rpc('increment_promo_uses', { code: promo.code });
-    }
 
     // Abandoned-cart capture (mig 071). Best-effort — the webhook flips
     // recovered=true on completion; a cron reminds the rest after ~1h.

@@ -235,6 +235,25 @@ export const PlaylistTracksReorderBodySchema = z.object({
 });
 export type PlaylistTracksReorderBody = z.infer<typeof PlaylistTracksReorderBodySchema>;
 
+// ── Campaigns ───────────────────────────────────────────────────────────
+
+export const CampaignPatchBodySchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(5000).nullable().optional(),
+  nudge_after_days: z.number().int().min(1).max(60).nullable().optional(),
+}).strict();
+export type CampaignPatchBody = z.infer<typeof CampaignPatchBodySchema>;
+
+export const CampaignTargetsAddBodySchema = z.object({
+  contact_ids: z.array(z.string().uuid()).min(1).max(200),
+});
+export type CampaignTargetsAddBody = z.infer<typeof CampaignTargetsAddBodySchema>;
+
+export const CampaignTargetsDeleteBodySchema = z.object({
+  contact_id: z.string().uuid(),
+});
+export type CampaignTargetsDeleteBody = z.infer<typeof CampaignTargetsDeleteBodySchema>;
+
 // ── Beat sends ──────────────────────────────────────────────────────────
 
 export const BEAT_SEND_STATUSES = [

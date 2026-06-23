@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Track } from '@/lib/types';
-import { MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2, Share2, ChevronUp, ChevronDown } from 'lucide-react';
+import { MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2, Share2, ChevronUp, ChevronDown, Check } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
@@ -29,9 +29,16 @@ interface TrackCardProps {
   selectable?: boolean;
   selected?: boolean;
   onSelectChange?: (track: Track, selected: boolean) => void;
+  /** Controls what a press on the row body does. Library keeps details; project/playlist rows play. */
+  rowAction?: 'details' | 'play';
+  /** In music-first contexts, selection lives only on the explicit select button. */
+  selectionBehavior?: 'row' | 'button';
+  /** Disable track dragging where the row press should feel purely like playback. */
+  draggableTrack?: boolean;
   /** Store reorder mode — show ↑/↓ arrows in the index column */
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  moveControls?: 'cell' | 'menu';
   isFirstInOrder?: boolean;
   isLastInOrder?: boolean;
 }
@@ -57,8 +64,12 @@ export function TrackCard({
   selectable = false,
   selected = false,
   onSelectChange,
+  rowAction = 'details',
+  selectionBehavior = 'row',
+  draggableTrack = true,
   onMoveUp,
   onMoveDown,
+  moveControls = 'cell',
   isFirstInOrder = false,
   isLastInOrder = false,
 }: TrackCardProps) {
@@ -131,11 +142,24 @@ export function TrackCard({
   const isCurrent = currentTrack?.id === track.id;
   const isActive = isCurrent && isPlaying;
 
-  const handlePlay = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const playTrack = () => {
     if (isCurrent) togglePlay();
     else if (onPlayClick) onPlayClick();
     else setTrack(track);
+  };
+
+  const handlePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    playTrack();
+  };
+
+  const handleRowPress = () => {
+    if (selectable && selectionBehavior === 'row') {
+      onSelectChange?.(track, !selected);
+      return;
+    }
+    if (rowAction === 'play') playTrack();
+    else onClickDetails?.(track);
   };
 
   const uploadDate = new Date(track.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -150,16 +174,14 @@ export function TrackCard({
 
   return (
     <div
-      onClick={() => {
-        if (selectable) onSelectChange?.(track, !selected);
-        else onClickDetails?.(track);
-      }}
+      onClick={handleRowPress}
       // Native HTML5 draggable so the user can drop tracks onto contact
       // rows (or future drop targets — playlists, projects). We don't
       // mount a heavy DnD library; the dataTransfer payload is encoded
       // through lib/dnd.ts and decoded on the target.
-      draggable
+      draggable={draggableTrack}
       onDragStart={(e) => {
+        if (!draggableTrack) return;
         e.stopPropagation();
         setTrackDragData(e, {
           id: track.id,
@@ -167,7 +189,7 @@ export function TrackCard({
           cover_url: track.cover_url ?? null,
         });
       }}
-      className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 overflow-hidden rounded-[14px] border px-2.5 py-2 transition-all cursor-pointer md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_70px_112px_32px] md:gap-4 md:px-3 ${
+      className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-[14px] border px-2.5 py-2 transition-all cursor-pointer md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_70px_112px_32px] md:gap-4 md:px-3 ${
         isCurrent
           ? 'border-transparent bg-[#1F1B14]/92 shadow-[inset_2px_0_0_#E7D7BE]'
           : selected
@@ -195,7 +217,7 @@ export function TrackCard({
         className="relative z-10"
         onClick={(e) => { if (onMoveUp || onMoveDown || selectable) e.stopPropagation(); }}
       >
-        {onMoveUp !== undefined || onMoveDown !== undefined ? (
+        {(onMoveUp !== undefined || onMoveDown !== undefined) && moveControls === 'cell' ? (
           <div className="flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-lg border border-[#211F1A] bg-[#090907]/80">
             <button
               type="button"
@@ -221,12 +243,12 @@ export function TrackCard({
             type="button"
             onClick={(e) => { e.stopPropagation(); onSelectChange?.(track, !selected); }}
             className={`h-10 w-10 rounded-lg flex items-center justify-center transition-colors ${
-            selected ? 'bg-[#E7D7BE] border border-[#F3E6D1]' : 'border border-[#3B372F]/70 hover:border-[#837B6D]'
+            selected ? 'bg-[#E7D7BE] border border-[#F3E6D1] text-black' : 'border border-[#3B372F]/70 bg-[#090907]/70 text-[#6E685B] hover:border-[#837B6D] hover:text-[#D0C3AF]'
           }`}
             aria-pressed={selected}
             aria-label={selected ? 'Deselect track' : 'Select track'}
           >
-            {selected && <span className="text-black text-[10px] leading-none">✓</span>}
+            {selected ? <Check size={14} strokeWidth={2.5} /> : <span className="h-3.5 w-3.5 rounded-[4px] border border-current" />}
           </button>
         ) : (
           <button
@@ -321,14 +343,19 @@ export function TrackCard({
       <div ref={menuRef} className="relative z-20 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-[#6E685B] transition-colors hover:bg-white/[0.06] hover:text-[#F7EBDD]"
+          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
+            menuOpen
+              ? 'border-[#3B372F] bg-[#211F1A] text-[#F7EBDD]'
+              : 'border-transparent text-[#8B8273] hover:bg-white/[0.06] hover:text-[#F7EBDD]'
+          }`}
           aria-label="Track actions"
+          aria-expanded={menuOpen}
         >
           <MoreHorizontal size={14} />
         </button>
         {menuOpen && (
           <div
-            className="absolute right-0 top-7 z-30 w-52 bg-[#090907] border border-[#2B2821] rounded-lg shadow-2xl py-1 animate-in fade-in slide-in-from-top-1"
+            className="absolute right-0 top-full z-[80] mt-1 w-52 bg-[#090907] border border-[#2B2821] rounded-lg shadow-2xl py-1 animate-in fade-in slide-in-from-top-1"
           >
             {onClickDetails && (
               <button
@@ -337,6 +364,24 @@ export function TrackCard({
               >
                 <Info size={12} className="text-[#E7D7BE]" /> View details
               </button>
+            )}
+            {(onMoveUp || onMoveDown) && moveControls === 'menu' && (
+              <>
+                <button
+                  onClick={() => { setMenuOpen(false); onMoveUp?.(); }}
+                  disabled={isFirstInOrder}
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813] disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  <ChevronUp size={12} className="text-[#E7D7BE]" /> Move up
+                </button>
+                <button
+                  onClick={() => { setMenuOpen(false); onMoveDown?.(); }}
+                  disabled={isLastInOrder}
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813] disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  <ChevronDown size={12} className="text-[#E7D7BE]" /> Move down
+                </button>
+              </>
             )}
             {onShare && (
               <button

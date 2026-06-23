@@ -184,7 +184,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
 
   const handleAddToCart = (tier: LicenseTier) => {
     addItem(track, {
-      id: `${tier.checkoutType}-${track.id}`,
+      id: tier.id,
       name: tier.name,
       price_usd: tier.price,
       file_types: tier.fileTypes,
@@ -201,14 +201,10 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
     track.duration_seconds && { label: fmt(track.duration_seconds), icon: Clock },
   ].filter(Boolean) as Array<{ label: string; icon: React.ComponentType<{ size?: number }> }>;
 
-  const licenseGridClass =
-    licenses.length === 1 ? 'grid grid-cols-1' :
-    licenses.length === 2 ? 'grid grid-cols-1 sm:grid-cols-2 gap-3' :
-    licenses.length === 3 ? 'grid grid-cols-1 sm:grid-cols-3 gap-3' :
-    'grid grid-cols-1 sm:grid-cols-2 gap-3';
+  const licenseGridClass = 'grid grid-cols-1 gap-3';
 
   return (
-    <div className="min-h-screen bg-[#090907] text-[#F7EBDD]">
+    <div className="min-h-screen bg-[#090907] pb-28 text-[#F7EBDD] md:pb-0">
 
       {/* ── Cinematic hero ──────────────────────────────────────── */}
       <div className="relative overflow-hidden">
@@ -238,10 +234,10 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
           </div>
 
           {/* Cover + info row */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-end gap-5 md:gap-8 py-8 md:py-12">
+          <div className="flex flex-col items-start gap-6 py-8 sm:flex-row sm:items-end md:gap-10 md:py-12">
 
-            {/* Cover — double-bezel, smaller than before */}
-            <div className="shrink-0 w-[160px] md:w-[210px]">
+            {/* Cover — large, playable product signal */}
+            <div className="w-[min(78vw,320px)] shrink-0 sm:w-[260px] md:w-[320px]">
               <div
                 className="rounded-[18px] p-[2px]"
                 style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%)' }}
@@ -257,7 +253,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                       src={track.cover_url}
                       alt={track.title}
                       priority
-                      sizes="(max-width: 640px) 160px, 210px"
+                      sizes="(max-width: 640px) 78vw, (max-width: 768px) 260px, 320px"
                       className="w-full h-full object-cover group-hover:scale-[1.04] [transition:transform_700ms_cubic-bezier(0.32,0.72,0,1)]"
                     />
                   ) : (
@@ -393,73 +389,10 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
 
       {/* ── Main content ────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 md:px-10 pb-16">
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_300px] gap-8 md:gap-10 items-start">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-10 lg:items-start">
 
-          {/* ── Left: licenses + description + comments ── */}
-          <div className="flex flex-col gap-8 min-w-0">
-
-            {/* Free download */}
-            {(track as any).free_download_enabled && (
-              <div className="rounded-xl border border-[#6DC6A4]/20 bg-[#6DC6A4]/5 px-5 py-4 flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-[12px] font-semibold text-[#6DC6A4]">Free Download Available</p>
-                  <p className="text-[10px] text-[#9B9282] mt-0.5">Download this track free — no account needed.</p>
-                </div>
-                <a
-                  href={`/api/store/free-download?track_id=${track.id}`}
-                  download
-                  className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-full bg-[#6DC6A4] hover:bg-[#7ED4B0] text-black text-[11px] font-bold uppercase tracking-wider transition-colors"
-                >
-                  <Download size={12} />
-                  Free
-                </a>
-              </div>
-            )}
-
-            {/* License cards */}
-            {track.exclusive_sold ? (
-              <div className="rounded-xl border border-[#E7D7BE]/30 bg-[#171511] px-5 py-6 text-center">
-                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#E7D7BE] mb-1.5">Exclusive Sold</p>
-                <p className="text-[12px] text-[#D0C3AF] leading-relaxed">
-                  The exclusive rights to this beat have been purchased.
-                </p>
-              </div>
-            ) : licenses.length > 0 ? (
-              <div>
-                <div className="flex items-baseline justify-between mb-4">
-                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B]">Choose a license</p>
-                  <p className="text-[9px] font-mono text-[#6E685B]">Instant delivery · secure checkout</p>
-                </div>
-                <div className={licenseGridClass}>
-                  {licenses.map((tier, i) => (
-                    <LicenseCard
-                      key={tier.id}
-                      tier={tier}
-                      accent={accent}
-                      recommended={licenses.length > 1 && i === Math.min(1, licenses.length - 1) && !tier.isExclusive}
-                      onAddToCart={() => handleAddToCart(tier)}
-                      onMakeOffer={tier.isExclusive ? () => setOfferOpen(true) : undefined}
-                    />
-                  ))}
-                </div>
-                {creator?.license_notes && (
-                  <p className="mt-4 text-[10px] text-[#9B9282] leading-relaxed border-l-2 border-[#2B2821] pl-3">{creator.license_notes}</p>
-                )}
-              </div>
-            ) : (
-              <div className="rounded-xl border border-[#2B2821] bg-[#171511] px-5 py-6 text-center">
-                <Download size={20} className="text-[#6E685B] mx-auto mb-2" />
-                <p className="text-[12px] text-[#B4AA99]">No licenses available yet.</p>
-              </div>
-            )}
-
-            <button
-              onClick={() => setIsOpen(true)}
-              className="inline-flex items-center gap-2 text-[11px] text-[#B4AA99] hover:text-[#F7EBDD] transition-colors self-start"
-            >
-              <ShoppingCart size={12} />
-              View cart
-            </button>
+          {/* ── Left: description + comments ── */}
+          <div className="order-2 flex min-w-0 flex-col gap-8 lg:order-1">
 
             {/* Description */}
             {track.description && (
@@ -477,12 +410,95 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                 trackId={track.id}
                 trackDurationSeconds={track.duration_seconds}
                 accentColor={accent}
+                onSeek={(seconds) => {
+                  if (!isCurrent) handlePlay();
+                  seekTo(seconds / Math.max(track.duration_seconds ?? 1, 1));
+                }}
               />
             )}
           </div>
 
-          {/* ── Right sidebar: producer + similar ── */}
-          <div className="flex flex-col gap-5 md:sticky md:top-24">
+          {/* ── Right sidebar: purchase + producer + similar ── */}
+          <aside className="order-1 flex flex-col gap-5 lg:sticky lg:top-24 lg:order-2">
+
+            <div
+              id="licenses"
+              className="scroll-mt-20 rounded-[18px] p-[1.5px]"
+              style={{ background: `linear-gradient(145deg, ${accent}40, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.015))` }}
+            >
+              <div className="rounded-[17px] bg-[#100d09] p-4 sm:p-5">
+                <div className="mb-4 flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[9px] font-mono uppercase tracking-[0.22em] text-[#6E685B]">License this beat</p>
+                    <p className="mt-1 text-[12px] text-[#B4AA99]">Instant delivery after secure checkout.</p>
+                  </div>
+                  {licenses.length > 0 && !track.exclusive_sold && (
+                    <p className="shrink-0 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-[#D0C3AF]">
+                      from {price(Math.min(...licenses.map((l) => l.price)))}
+                    </p>
+                  )}
+                </div>
+
+                {track.free_download_enabled && (
+                  <div className="mb-4 rounded-xl border border-[#6DC6A4]/20 bg-[#6DC6A4]/5 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[12px] font-semibold text-[#6DC6A4]">Free download available</p>
+                        <p className="mt-0.5 text-[10px] text-[#9B9282]">No account needed.</p>
+                      </div>
+                      <a
+                        href={`/api/store/free-download?track_id=${track.id}`}
+                        download
+                        className="flex shrink-0 items-center gap-2 rounded-full bg-[#6DC6A4] px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-black transition-colors hover:bg-[#7ED4B0]"
+                      >
+                        <Download size={12} />
+                        Free
+                      </a>
+                    </div>
+                  </div>
+                )}
+
+                {track.exclusive_sold ? (
+                  <div className="rounded-xl border border-[#E7D7BE]/30 bg-[#171511] px-5 py-6 text-center">
+                    <p className="mb-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-[#E7D7BE]">Exclusive sold</p>
+                    <p className="text-[12px] leading-relaxed text-[#D0C3AF]">
+                      The exclusive rights to this beat have been purchased.
+                    </p>
+                  </div>
+                ) : licenses.length > 0 ? (
+                  <>
+                    <div className={licenseGridClass}>
+                      {licenses.map((tier, i) => (
+                        <LicenseCard
+                          key={tier.id}
+                          tier={tier}
+                          accent={accent}
+                          recommended={licenses.length > 1 && i === Math.min(1, licenses.length - 1) && !tier.isExclusive}
+                          onAddToCart={() => handleAddToCart(tier)}
+                          onMakeOffer={tier.isExclusive ? () => setOfferOpen(true) : undefined}
+                        />
+                      ))}
+                    </div>
+                    {creator?.license_notes && (
+                      <p className="mt-4 border-l-2 border-[#2B2821] pl-3 text-[10px] leading-relaxed text-[#9B9282]">{creator.license_notes}</p>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-xl border border-[#2B2821] bg-[#171511] px-5 py-6 text-center">
+                    <Download size={20} className="mx-auto mb-2 text-[#6E685B]" />
+                    <p className="text-[12px] text-[#B4AA99]">No licenses available yet.</p>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setIsOpen(true)}
+                  className="mt-4 inline-flex items-center gap-2 text-[11px] text-[#B4AA99] transition-colors hover:text-[#F7EBDD]"
+                >
+                  <ShoppingCart size={12} />
+                  View cart
+                </button>
+              </div>
+            </div>
 
             {/* Producer card */}
             {creator && (
@@ -563,7 +579,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                 </div>
               </div>
             )}
-          </div>
+          </aside>
         </div>
 
         {/* ── Fans also bought ── */}
@@ -601,6 +617,34 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
           accent={accent}
           onClose={() => setOfferOpen(false)}
         />
+      )}
+
+      {/* ── Sticky mobile buy bar — keeps the purchase path visible while
+            the license cards scroll away. Hidden on md+ where the cards
+            stay in view. Single tier adds straight to cart; multiple
+            tiers scroll back to the comparison. ── */}
+      {!track.exclusive_sold && licenses.length > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#2B2821] bg-[#0c0a08]/95 px-4 py-3 backdrop-blur-xl md:hidden">
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[12px] font-semibold text-[#F7EBDD]">{track.title}</p>
+              <p className="text-[10px] font-mono text-[#9B9282]">
+                from <span className="font-bold tabular-nums" style={{ color: accent }}>{price(Math.min(...licenses.map((l) => l.price)))}</span>
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                if (licenses.length === 1) { handleAddToCart(licenses[0]); return; }
+                document.getElementById('licenses')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+              className="flex shrink-0 items-center gap-2 rounded-full px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-black transition-transform active:scale-[0.98]"
+              style={{ backgroundColor: accent }}
+            >
+              <ShoppingCart size={13} />
+              {licenses.length === 1 ? 'Add to cart' : 'Choose license'}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -777,8 +821,8 @@ function OfferModal({ trackId, trackTitle, accent, onClose }: {
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed');
       setSent(true);
-    } catch (err: any) {
-      toast.error('Could not send offer', err.message);
+    } catch (err) {
+      toast.error('Could not send offer', err instanceof Error ? err.message : 'Please try again.');
     } finally {
       setSubmitting(false);
     }

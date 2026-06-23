@@ -252,7 +252,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
     setActiveIndex(i);
     setIsPlaying(true);
   };
-  const downloadTrack = (track: Track) => {
+  const downloadTrack = async (track: Track) => {
     // Route through /api/share/[token]/download — the endpoint grants
     // either via share.allow_downloads (free) or via a matching
     // license_purchases row keyed by purchaseSessionId (paid).
@@ -261,12 +261,25 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
     if (purchaseSessionId) url.searchParams.set('session_id', purchaseSessionId);
     const ext = (track.audio_url.match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i)?.[1] || 'mp3').toLowerCase();
     const filename = `${track.title || 'track'}.${ext}`;
-    const a = document.createElement('a');
-    a.href = url.toString();
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      const response = await fetch(url.toString(), {
+        headers: password ? { 'x-share-password': password } : {},
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Download unavailable');
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : 'Download unavailable');
+    }
   };
   const fmt = (s: number) => {
     if (!isFinite(s) || s < 0) return '0:00';

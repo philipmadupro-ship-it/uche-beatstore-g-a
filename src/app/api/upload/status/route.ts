@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/storage/upload-sessions';
 import { listParts } from '@/lib/storage/multipart';
+import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
 
 export const runtime = 'nodejs';
 
@@ -11,6 +12,8 @@ export async function GET(req: NextRequest) {
   }
   const s = getSession(sessionId);
   if (!s) return NextResponse.json({ error: 'unknown session' }, { status: 404 });
+  const owner = await requireUploadSessionOwner(s);
+  if (!owner.ok) return owner.res;
 
   // Reconcile with backend in case server restarted mid-upload
   let parts = s.parts;
