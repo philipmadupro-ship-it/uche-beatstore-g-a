@@ -16,6 +16,7 @@ import {
   AbortMultipartUploadCommand,
   ListPartsCommand,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { nanoid } from 'nanoid';
 import fs from 'fs';
 import path from 'path';
@@ -201,6 +202,21 @@ export async function uploadPart(opts: {
 }) {
   if (isR2Configured()) return r2UploadPart(opts);
   return localUploadPart({ uploadId: opts.uploadId, partNumber: opts.partNumber, body: opts.body });
+}
+
+export async function getUploadPartUrl(opts: {
+  uploadId: string;
+  key: string;
+  partNumber: number;
+}): Promise<string | null> {
+  if (!isR2Configured()) return null;
+  const command = new UploadPartCommand({
+    Bucket: privateAudioBucket(),
+    Key: opts.key,
+    UploadId: opts.uploadId,
+    PartNumber: opts.partNumber,
+  });
+  return getSignedUrl(r2, command, { expiresIn: 15 * 60 });
 }
 
 export async function completeMultipart(opts: {

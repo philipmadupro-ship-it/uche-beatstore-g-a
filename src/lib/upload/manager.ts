@@ -164,6 +164,122 @@ function xhrPart(opts: {
   onProgress: (delta: number) => void;
   signal?: AbortSignal;
 }): Promise<{ ok: boolean; status: number; error?: string }> {
+  return directOrProxiedPart(opts);
+}
+
+async function directOrProxiedPart(opts: {
+  sessionId: string;
+  partNumber: number;
+  blob: Blob;
+  onProgress: (delta: number) => void;
+  signal?: AbortSignal;
+}): Promise<{ ok: boolean; status: number; error?: string }> {
+  try {
+    const signRes = await fetch('/api/upload/part', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: opts.signal,
+      body: JSON.stringify({ sessionId: opts.sessionId, partNumber: opts.partNumber }),
+    });
+    const signed = await signRes.json() as {
+      direct?: boolean;
+      url?: string | null;
+      error?: string;
+    };
+    if (!signRes.ok) {
+      return { ok: false, status: signRes.status, error: signed.error || 'part signing failed' };
+    }
+    if (!signed.direct || !signed.url) return proxiedPart(opts);
+
+    const uploaded = await directPart({
+      url: signed.url,
+      blob: opts.blob,
+      onProgress: opts.onProgress,
+      signal: opts.signal,
+    });
+    if (!uploaded.ok || !uploaded.etag) return uploaded;
+
+    const confirmRes = await fetch('/api/upload/part', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      signal: opts.signal,
+      body: JSON.stringify({
+        sessionId: opts.sessionId,
+        partNumber: opts.partNumber,
+        etag: uploaded.etag,
+        size: opts.blob.size,
+      }),
+    });
+    const confirmed = await confirmRes.json() as { error?: string };
+    return confirmRes.ok
+      ? { ok: true, status: confirmRes.status }
+      : { ok: false, status: confirmRes.status, error: confirmed.error || 'part confirmation failed' };
+  } catch (err) {
+    if (isError(err) && err.name === 'AbortError') {
+      return { ok: false, status: 0, error: 'aborted' };
+    }
+    return { ok: false, status: 0, error: errorMessage(err) || 'network error' };
+  }
+}
+
+function directPart(opts: {
+  url: string;
+  blob: Blob;
+  onProgress: (delta: number) => void;
+  signal?: AbortSignal;
+}): Promise<{ ok: boolean; status: number; error?: string; etag?: string }> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', opts.url, true);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+
+    let lastLoaded = 0;
+    xhr.upload.onprogress = (e) => {
+      if (!e.lengthComputable) return;
+      const delta = e.loaded - lastLoaded;
+      lastLoaded = e.loaded;
+      if (delta > 0) opts.onProgress(delta);
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        const etag = xhr.getResponseHeader('ETag') || xhr.getResponseHeader('etag') || '';
+        if (!etag) {
+          resolve({ ok: false, status: xhr.status, error: 'R2 did not expose ETag' });
+          return;
+        }
+        resolve({ ok: true, status: xhr.status, etag });
+      } else {
+        let msg = `HTTP ${xhr.status}`;
+        try {
+          const j = JSON.parse(xhr.responseText);
+          if (j.error) msg = j.error;
+        } catch {}
+        resolve({ ok: false, status: xhr.status, error: msg });
+      }
+    };
+    xhr.onerror = () => resolve({ ok: false, status: 0, error: 'network error' });
+    xhr.ontimeout = () => resolve({ ok: false, status: 0, error: 'timeout' });
+
+    if (opts.signal) {
+      const onAbort = () => {
+        try { xhr.abort(); } catch {}
+        resolve({ ok: false, status: 0, error: 'aborted' });
+      };
+      if (opts.signal.aborted) return onAbort();
+      opts.signal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    xhr.send(opts.blob);
+  });
+}
+
+function proxiedPart(opts: {
+  sessionId: string;
+  partNumber: number;
+  blob: Blob;
+  onProgress: (delta: number) => void;
+  signal?: AbortSignal;
+}): Promise<{ ok: boolean; status: number; error?: string }> {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
     xhr.open('PUT', '/api/upload/part', true);

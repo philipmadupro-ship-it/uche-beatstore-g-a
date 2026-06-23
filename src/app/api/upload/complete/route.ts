@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { completeMultipart, readAssembledBuffer } from '@/lib/storage/multipart';
+import { completeMultipart, listParts, readAssembledBuffer } from '@/lib/storage/multipart';
 import { getSession, markStatus, deleteSession } from '@/lib/storage/upload-sessions';
 import { analyzeAudio } from '@/lib/audio/analyze.server';
 import type { AudioFeatures } from '@/lib/audio/analyze.server';
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     if (!sessionId) {
       return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
     }
-    const session = getSession(sessionId);
+    const session = await getSession(sessionId);
     if (!session) {
       return NextResponse.json({ error: 'unknown session' }, { status: 404 });
     }
@@ -33,9 +33,16 @@ export async function POST(req: NextRequest) {
     }
     const owner = await requireUploadSessionOwner(session);
     if (!owner.ok) return owner.res;
-    if (session.parts.length !== session.totalParts) {
+    let completedParts = session.parts;
+    try {
+      const remoteParts = await listParts({ uploadId: session.uploadId, key: session.key });
+      if (remoteParts.length >= completedParts.length) completedParts = remoteParts;
+    } catch (err) {
+      console.warn('Could not reconcile multipart state before completion:', err);
+    }
+    if (completedParts.length !== session.totalParts) {
       return NextResponse.json(
-        { error: `Missing parts (${session.parts.length}/${session.totalParts})` },
+        { error: `Missing parts (${completedParts.length}/${session.totalParts})` },
         { status: 409 }
       );
     }
@@ -47,7 +54,7 @@ export async function POST(req: NextRequest) {
         uploadId: session.uploadId,
         key: session.key,
         fileName: session.fileName,
-        parts: session.parts,
+        parts: completedParts,
       });
     } catch (err) {
       console.error('completeMultipart failed:', err);
@@ -57,7 +64,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    markStatus(sessionId, 'completed');
+    await markStatus(sessionId, 'completed');
 
     // 2. Fetch the assembled buffer ONCE with retry for R2 eventual consistency.
     // Reuse across all three analyses — analysis, AudD, and peaks — so we never
@@ -212,7 +219,7 @@ export async function POST(req: NextRequest) {
       track = writeLocal(trackData, session.replaceTrackId, session.projectId);
     }
 
-    deleteSession(sessionId);
+    await deleteSession(sessionId);
     return NextResponse.json({ success: true, track });
   } catch (err) {
     console.error('upload/complete error:', err);

@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   if (!sessionId) {
     return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
   }
-  const s = getSession(sessionId);
+  const s = await getSession(sessionId);
   if (!s) return NextResponse.json({ error: 'unknown session' }, { status: 404 });
   const owner = await requireUploadSessionOwner(s);
   if (!owner.ok) return owner.res;

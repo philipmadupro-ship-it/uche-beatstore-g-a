@@ -75,10 +75,10 @@ The UI/UX master plan and most application-layer security/commerce work are now 
    - Still required before inventory launch: apply migration 098, create the private bucket, provide ffmpeg in the production runtime or move derivative generation to a worker, and migrate/re-upload legacy public masters. Legacy public rows remain supported temporarily and are not made private by this code change alone.
 
 2. **Serverless-safe bulk upload**
-   - Multipart session state is still process-local.
-   - Parts still transit the application server.
-   - Completion can perform large in-function analysis.
-   - Move sessions to durable DB/KV, upload parts directly with presigned R2 URLs, validate content bytes, and queue analysis/peaks.
+   - Implemented in migration/code 099: multipart state persists in owner-scoped Supabase rows and survives serverless invocation changes.
+   - Browser chunks upload directly to private R2 through 15-minute signed part URLs; the app receives only ETags and byte counts.
+   - Completion reconciles against R2's authoritative part list and exact final-part size is enforced.
+   - Still required: apply migration 099, expose `ETag` in private-bucket CORS, validate assembled content bytes, and move analysis/peaks/preview generation to a durable background job.
 
 3. **600-beat request scale**
    - Store and dashboard catalogue routes remain whole-catalog-first.

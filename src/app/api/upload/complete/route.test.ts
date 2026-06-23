@@ -11,6 +11,7 @@ import { NextRequest } from 'next/server';
 
 const mockCompleteMultipart = vi.fn();
 const mockReadAssembledBuffer = vi.fn();
+const mockListParts = vi.fn();
 const mockGetSession = vi.fn();
 const mockMarkStatus = vi.fn();
 const mockDeleteSession = vi.fn();
@@ -30,6 +31,7 @@ const mockFrom = vi.fn();
 vi.mock('@/lib/storage/multipart', () => ({
   completeMultipart: (...args: unknown[]) => mockCompleteMultipart(...args),
   readAssembledBuffer: (...args: unknown[]) => mockReadAssembledBuffer(...args),
+  listParts: (...args: unknown[]) => mockListParts(...args),
 }));
 
 vi.mock('@/lib/storage/upload-sessions', () => ({
@@ -148,6 +150,7 @@ beforeEach(() => {
   mockIsSupabaseConfigured.mockReturnValue(true);
   mockGetSession.mockReturnValue(session());
   mockCompleteMultipart.mockResolvedValue('https://cdn.example.test/beat.wav');
+  mockListParts.mockImplementation(async () => mockGetSession()?.parts ?? []);
   mockReadAssembledBuffer.mockRejectedValue(new Error('skip analysis fetch'));
   mockAnalyzeAudio.mockResolvedValue({ bpm: null, key: null, scale: null, loudness: null, duration: null });
   mockGetAuddFeatures.mockResolvedValue({ danceability: 0, energy: 0, valence: 0, acousticness: 0, tempo: 0 });

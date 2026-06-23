@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     if (!sessionId) {
       return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
     }
-    const s = getSession(sessionId);
+    const s = await getSession(sessionId);
     if (!s) return NextResponse.json({ ok: true, alreadyGone: true });
     const owner = await requireUploadSessionOwner(s);
     if (!owner.ok) return owner.res;
@@ -22,8 +22,8 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.warn('abortMultipart failed (may already be gone):', err);
     }
-    markStatus(sessionId, 'aborted');
-    deleteSession(sessionId);
+    await markStatus(sessionId, 'aborted');
+    await deleteSession(sessionId);
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     console.error('upload/abort error:', err);
