@@ -10,6 +10,7 @@ import { requireRowOwnership } from '@/lib/db';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { titleFromFilename, nextVersionLabel } from '@/lib/naming';
 import { errorMessage } from '@/lib/errors';
+import { enqueueUploadProcessingJob } from '@/lib/upload/processing';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -131,7 +132,7 @@ export async function POST(req: NextRequest) {
 
     // 5. Analysis (client > server fallback)
     let serverAnalysis: AudioFeatures | null = null;
-    if (!clientAnalysis) {
+    if (!clientAnalysis && !isSupabaseConfigured()) {
       try {
         serverAnalysis = await analyzeAudio(buffer);
       } catch (err) {
@@ -141,30 +142,36 @@ export async function POST(req: NextRequest) {
     }
 
     let audd = { danceability: 0, energy: 0, valence: 0, acousticness: 0, tempo: 0 };
-    try {
-      audd = await getAuddFeatures(buffer, file.name);
-    } catch (err) {
-      console.warn('AudD features failed, using zeros:', err);
+    if (!isSupabaseConfigured()) {
+      try {
+        audd = await getAuddFeatures(buffer, file.name);
+      } catch (err) {
+        console.warn('AudD features failed, using zeros:', err);
+      }
     }
 
     const titleFromName = titleFromFilename(file.name);
 
     // Waveform peaks (best-effort sidecar). Failures don't block upload.
     let peaksUrl: string | null = null;
-    try {
-      const peaks = await extractPeaks(buffer);
-      if (peaks) {
-        peaksUrl = await uploadPeaksSidecar(audioUrl, JSON.stringify(peaks));
+    if (!isSupabaseConfigured()) {
+      try {
+        const peaks = await extractPeaks(buffer);
+        if (peaks) {
+          peaksUrl = await uploadPeaksSidecar(audioUrl, JSON.stringify(peaks));
+        }
+      } catch (err) {
+        console.warn('Peaks extraction/upload failed, continuing without:', err);
       }
-    } catch (err) {
-      console.warn('Peaks extraction/upload failed, continuing without:', err);
     }
 
     let previewUrl: string | null = null;
-    try {
-      previewUrl = await uploadPublicPreview(buffer);
-    } catch (err) {
-      console.warn('Preview generation/upload failed, track remains private:', err);
+    if (!isSupabaseConfigured()) {
+      try {
+        previewUrl = await uploadPublicPreview(buffer);
+      } catch (err) {
+        console.warn('Preview generation/upload failed, track remains private:', err);
+      }
     }
 
     const merged = mergeFeatures({ client: clientAnalysis, server: serverAnalysis, audd });
@@ -252,6 +259,17 @@ export async function POST(req: NextRequest) {
             if (!trackId) throw new Error('Upload saved without a track id');
             await attachTrackToDestination(supabase, projectId, trackId, userId);
           }
+        }
+
+        const savedTrackId = track && typeof track.id === 'string' ? track.id : replaceTrackId;
+        if (savedTrackId && userId) {
+          await enqueueUploadProcessingJob({
+            trackId: savedTrackId,
+            userId,
+            audioUrl,
+            fileName: file.name,
+            clientAnalysis,
+          });
         }
       } catch (err) {
         console.error('Supabase op failed, falling back to local store:', err);

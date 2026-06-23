@@ -27,6 +27,7 @@ const mockLocalUpdate = vi.fn();
 const mockGetAll = vi.fn();
 const mockGetUser = vi.fn();
 const mockFrom = vi.fn();
+const mockEnqueueUploadProcessingJob = vi.fn();
 
 vi.mock('@/lib/storage/multipart', () => ({
   completeMultipart: (...args: unknown[]) => mockCompleteMultipart(...args),
@@ -59,6 +60,10 @@ vi.mock('@/lib/audio/peaks', () => ({
 vi.mock('@/lib/storage/upload', () => ({
   uploadPeaksSidecar: (...args: unknown[]) => mockUploadPeaksSidecar(...args),
   uploadPublicPreview: (...args: unknown[]) => mockUploadPublicPreview(...args),
+}));
+
+vi.mock('@/lib/upload/processing', () => ({
+  enqueueUploadProcessingJob: (...args: unknown[]) => mockEnqueueUploadProcessingJob(...args),
 }));
 
 vi.mock('@/lib/local-store', () => ({
@@ -168,6 +173,7 @@ beforeEach(() => {
   mockExtractPeaks.mockResolvedValue(null);
   mockUploadPeaksSidecar.mockResolvedValue(null);
   mockUploadPublicPreview.mockResolvedValue(null);
+  mockEnqueueUploadProcessingJob.mockResolvedValue(undefined);
   mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
   mockFrom.mockImplementation((table: string) => supabaseTable(table));
 });
@@ -226,7 +232,18 @@ describe('POST /api/upload/complete', () => {
       role: 'main',
       position: 0,
     });
+    expect(mockEnqueueUploadProcessingJob).toHaveBeenCalledWith({
+      trackId: 'track-1',
+      userId: 'user-1',
+      audioUrl: 'https://cdn.example.test/beat.wav',
+      fileName: 'beat.wav',
+      clientAnalysis: null,
+    });
     expect(mockDeleteSession).toHaveBeenCalledWith('sess-1');
-    expect(await res.json()).toEqual({ success: true, track: { id: 'track-1', title: 'Beat' } });
+    expect(await res.json()).toEqual({
+      success: true,
+      track: { id: 'track-1', title: 'Beat' },
+      processing: 'queued',
+    });
   });
 });

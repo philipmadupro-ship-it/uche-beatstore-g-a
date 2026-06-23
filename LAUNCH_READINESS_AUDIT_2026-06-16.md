@@ -78,7 +78,8 @@ The UI/UX master plan and most application-layer security/commerce work are now 
    - Implemented in migration/code 099: multipart state persists in owner-scoped Supabase rows and survives serverless invocation changes.
    - Browser chunks upload directly to private R2 through 15-minute signed part URLs; the app receives only ETags and byte counts.
    - Completion reconciles against R2's authoritative part list and exact final-part size is enforced.
-   - Still required: apply migration 099, expose `ETag` in private-bucket CORS, validate assembled content bytes, and move analysis/peaks/preview generation to a durable background job.
+   - Implemented in migration/code 100: upload completion now enqueues analysis/peaks/preview generation into `upload_processing_jobs`; `/api/cron/process-uploads` processes queued work outside the upload request.
+   - Still required: apply migrations 099/100, expose `ETag` in private-bucket CORS, and migrate/reprocess legacy public masters.
 
 3. **600-beat request scale**
    - Store and dashboard catalogue routes remain whole-catalog-first.

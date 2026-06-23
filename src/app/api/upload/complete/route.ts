@@ -12,6 +12,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { titleFromFilename, nextVersionLabel } from '@/lib/naming';
 import { errorMessage } from '@/lib/errors';
 import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
+import { enqueueUploadProcessingJob } from '@/lib/upload/processing';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -65,6 +66,109 @@ export async function POST(req: NextRequest) {
     }
 
     await markStatus(sessionId, 'completed');
+
+    if (isSupabaseConfigured()) {
+      const merged = mergeFeatures({ client: clientAnalysis, server: null, audd: null });
+      const trackData = {
+        title: titleFromFilename(session.fileName),
+        type: session.type,
+        audio_url: audioUrl,
+        preview_url: null,
+        peaks_url: null,
+        ...merged,
+        stems_status: 'none' as const,
+      };
+
+      let track: Record<string, unknown> | null = null;
+      try {
+        const supabase = await createServerClient();
+        const userId = owner.userId || session.userId;
+        if (!userId) {
+          return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+        }
+
+        if (session.replaceTrackId) {
+          const { requireRowOwnership } = await import('@/lib/db');
+          const rowOwner = await requireRowOwnership('tracks', session.replaceTrackId);
+          if (!rowOwner.ok) return rowOwner.res;
+
+          const { data: existing } = await supabase
+            .from('tracks')
+            .select('*')
+            .eq('id', session.replaceTrackId)
+            .single();
+          if (existing) {
+            const { data: vs } = await supabase
+              .from('track_versions')
+              .select('version_number')
+              .eq('track_id', session.replaceTrackId);
+            const { number, label } = nextVersionLabel(vs ?? []);
+            await supabase.from('track_versions').insert({
+              track_id: session.replaceTrackId,
+              version_number: number,
+              version_label: label,
+              audio_url: existing.audio_url,
+              preview_url: existing.preview_url,
+              duration_seconds: existing.duration_seconds,
+              bpm: existing.bpm,
+              key: existing.key,
+              scale: existing.scale,
+              loudness: existing.loudness,
+              energy: existing.energy,
+              danceability: existing.danceability,
+              valence: existing.valence,
+              acousticness: existing.acousticness,
+              notes: existing.notes,
+              created_by: userId,
+            });
+          }
+
+          const { data, error } = await supabase
+            .from('tracks')
+            .update({ ...trackData, stems_status: 'none' })
+            .eq('id', session.replaceTrackId)
+            .select()
+            .single();
+          if (error) throw new Error(error.message);
+          track = data;
+        } else {
+          const { data, error } = await supabase
+            .from('tracks')
+            .insert({ user_id: userId, ...trackData })
+            .select()
+            .single();
+          if (error) throw new Error(`DB Insert Error: ${error.message}`);
+          track = data;
+
+          const trackId = track && typeof track.id === 'string' ? track.id : null;
+          if (!trackId) throw new Error('Upload saved without a track id');
+          if (session.projectId) {
+            await attachTrackToDestination(supabase, session.projectId, trackId, userId);
+          }
+        }
+
+        const trackId = track && typeof track.id === 'string' ? track.id : session.replaceTrackId;
+        if (!trackId) throw new Error('Upload saved without a track id');
+        await enqueueUploadProcessingJob({
+          trackId,
+          userId,
+          audioUrl,
+          fileName: session.fileName,
+          clientAnalysis,
+        });
+      } catch (err) {
+        console.error('Supabase upload completion failed:', err);
+        const message = errorMessage(err) || 'Database save failed';
+        if (/destination|attach/i.test(message)) {
+          const status = /forbidden/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 500;
+          return NextResponse.json({ error: message }, { status });
+        }
+        return NextResponse.json({ error: message }, { status: 500 });
+      }
+
+      await deleteSession(sessionId);
+      return NextResponse.json({ success: true, track, processing: 'queued' });
+    }
 
     // 2. Fetch the assembled buffer ONCE with retry for R2 eventual consistency.
     // Reuse across all three analyses — analysis, AudD, and peaks — so we never
