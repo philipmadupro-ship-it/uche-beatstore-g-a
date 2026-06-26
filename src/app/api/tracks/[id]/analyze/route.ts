@@ -6,6 +6,9 @@ import type { AudioFeatures } from '@/lib/audio/analyze.server';
 import { getAuddFeatures } from '@/lib/audio/audd';
 import type { AuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
+import { extractPeaks } from '@/lib/audio/peaks';
+import { makeTruncatedPreview } from '@/lib/audio/preview';
+import { uploadPeaksSidecar, uploadPreviewAsset } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -17,6 +20,10 @@ export const maxDuration = 60;
 type TrackForAnalysis = {
   id: string;
   audio_url?: string | null;
+  peaks_url?: string | null;
+  preview_url?: string | null;
+  preview_status?: string | null;
+  duration_seconds?: number | null;
   energy?: number | null;
   danceability?: number | null;
   valence?: number | null;
@@ -195,7 +202,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
        track.valence == null ||
        track.acousticness == null);
 
-    if (!buf && clientUsable && wantsAuddEnrichment) {
+    // Also fetch the buffer when peaks are missing so a re-analyze can backfill
+    // the waveform (peaks were previously only ever generated at upload, which
+    // is why analyzed tracks still rendered the synthetic fallback).
+    const wantsPeaks = !track.peaks_url;
+    // Re-analyze doubles as the preview backfill: fetch the buffer when the
+    // protected preview clip is missing for an mp3 master.
+    const wantsPreview = track.preview_status !== 'ready' && /\.(mp3|wav)(?:\?|$)/i.test(track.audio_url);
+    if (!buf && clientUsable && (wantsAuddEnrichment || wantsPeaks || wantsPreview)) {
       try {
         const rawUrl: string = track.audio_url;
         if (rawUrl.startsWith('/uploads/')) {
@@ -213,7 +227,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
       } catch (err) {
         // Non-fatal — we already have client features. Just skip AudD.
-        console.warn('AudD audio fetch failed; skipping enrichment:', err);
+        log.warn('AudD audio fetch failed; skipping enrichment:', { error: errorMessage(err) });
       }
     }
 
@@ -221,7 +235,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       try {
         auddFeatures = await getAuddFeatures(buf, `${id}.audio`);
       } catch (err) {
-        console.warn('AudD lookup failed during re-analyze:', err);
+        log.warn('AudD lookup failed during re-analyze:', { error: errorMessage(err) });
       }
     }
 
@@ -251,13 +265,60 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Persist a chord timeline alongside features when the client sent one.
     if (clientChords) patch.chords = clientChords;
 
+    // Backfill the waveform peaks when missing and we have the audio buffer.
+    // This is what makes re-analyze / "Analyze N" fix inconsistent waveforms:
+    // a track without peaks_url renders the synthetic fallback everywhere.
+    if (buf && !track.peaks_url && track.audio_url) {
+      try {
+        const peaks = await extractPeaks(buf);
+        if (peaks) {
+          const peaksUrl = await uploadPeaksSidecar(track.audio_url, JSON.stringify(peaks));
+          if (peaksUrl) patch.peaks_url = peaksUrl;
+        }
+      } catch (err) {
+        log.warn('peaks backfill during analyze failed', { trackId: id, error: errorMessage(err) });
+      }
+    }
+
+    // Backfill the protected preview clip when missing (mp3 masters only).
+    // Re-analyze / "Analyze N" is the catalogue backfill path for previews.
+    if (buf && wantsPreview && track.audio_url) {
+      try {
+        const dur = (typeof patch.duration_seconds === 'number' ? patch.duration_seconds : null)
+          ?? track.duration_seconds ?? null;
+        const { buffer: previewBuf, ext, contentType } = makeTruncatedPreview(buf, dur);
+        const previewUrl = await uploadPreviewAsset(track.audio_url, previewBuf, ext, contentType);
+        if (previewUrl) {
+          patch.preview_url = previewUrl;
+          patch.preview_status = 'ready';
+        }
+      } catch (err) {
+        log.warn('preview backfill during analyze failed', { trackId: id, error: errorMessage(err) });
+      }
+    }
+
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: 'Analysis returned no usable features' }, { status: 422 });
     }
 
     if (isSupabaseConfigured()) {
       // admin is non-null here because we passed the ownership check above.
-      const { data, error } = await admin!.from('tracks').update(patch).eq('id', id).select().single();
+      const runUpdate = (p: AnalysisPatch) =>
+        admin!.from('tracks').update(p).eq('id', id).select().single();
+      let { data, error } = await runUpdate(patch);
+      // Resilience: the preview_* columns (mig 099) may not be in PostgREST's
+      // schema cache yet right after a deploy. Rather than 500 the whole
+      // analysis, drop them and retry so BPM/peaks still persist; the preview
+      // backfills on a later re-analyze once the cache catches up.
+      if (
+        error &&
+        (('preview_url' in patch) || ('preview_status' in patch)) &&
+        /preview_(url|status)|schema cache/i.test(error.message)
+      ) {
+        log.warn('preview columns not in schema cache; retrying without them', { trackId: id });
+        const { preview_url: _pu, preview_status: _ps, ...rest } = patch;
+        ({ data, error } = await runUpdate(rest));
+      }
       if (error) throw error;
       return NextResponse.json({ track: data, source: clientUsable ? 'client' : 'server', decoded, ffmpegUsed, ffmpegAvailable, bytes, reason });
     }

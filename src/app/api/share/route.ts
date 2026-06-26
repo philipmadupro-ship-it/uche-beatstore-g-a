@@ -5,6 +5,10 @@ import { isSupabaseConfigured, insert, getAll, createServiceClient } from '@/lib
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.share');
+import { readBody } from '@/lib/validate';
+import { ShareCreateBodySchema } from '@/lib/contracts';
 
 export async function GET() {
   try {
@@ -35,7 +39,8 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const parsed = await readBody(req, ShareCreateBodySchema);
+    if (!parsed.ok) return parsed.res;
     const {
       track_ids,
       title,
@@ -46,11 +51,7 @@ export async function POST(req: NextRequest) {
       expires_days,
       password,
       recipient_kind,
-    } = body;
-
-    if (!track_ids || !Array.isArray(track_ids) || track_ids.length === 0) {
-      return NextResponse.json({ error: 'Missing track_ids' }, { status: 400 });
-    }
+    } = parsed.data;
 
     const token = nanoid(12);
     let password_hash: string | null = null;
@@ -109,7 +110,7 @@ export async function POST(req: NextRequest) {
       });
     }
   } catch (error) {
-    console.error('Share Link Error:', error);
+    log.error('Share Link Error:', { error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { startJob, pickBackend } from '@/lib/stems/dispatch';
 import { isSupabaseConfigured, update, insert, query, requireRowOwnership, createServiceClient } from '@/lib/db';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.stems');
+import { readBody } from '@/lib/validate';
+import { StemStartBodySchema } from '@/lib/contracts';
 
 /**
  * GET /api/stems?track_id=xxx
@@ -32,21 +37,16 @@ export async function GET(req: NextRequest) {
       String(b.created_at || '').localeCompare(String(a.created_at || ''))
     )[0];
     return NextResponse.json({ stem: latest || null });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { trackId, audioUrl, model } = await req.json();
-
-    if (!trackId || !audioUrl) {
-      return NextResponse.json(
-        { error: 'Missing trackId or audioUrl' },
-        { status: 400 },
-      );
-    }
+    const parsed = await readBody(req, StemStartBodySchema);
+    if (!parsed.ok) return parsed.res;
+    const { trackId, audioUrl, model } = parsed.data;
 
     // Gate stem-split kickoff on track ownership — the job hits Demucs which
     // is non-trivially expensive (CPU minutes on the GPU host). Without this
@@ -83,8 +83,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ jobId, backend });
-  } catch (error: any) {
-    console.error('Stem split start error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    log.error('Stem split start error:', { error: errorMessage(error) });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

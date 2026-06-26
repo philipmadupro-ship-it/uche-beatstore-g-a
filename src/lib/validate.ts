@@ -69,5 +69,56 @@ export async function readBody<S extends ZodTypeAny>(
   return { ok: true, data: result.data as z.infer<S> };
 }
 
+/**
+ * Shared primitive validators. These predicates were copy-pasted across
+ * routes (the email regex in 5 store/share routes, the UUID regex in the
+ * webhook, checkout, share-checkout, and ownership.ts). Centralising them
+ * keeps the shapes from drifting and gives us one place to unit-test.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** True when `s` is a canonical RFC-4122-shaped UUID string. */
+export function isUUID(s: unknown): s is string {
+  return typeof s === 'string' && UUID_RE.test(s);
+}
+
+/** True when `s` looks like an email address (loose, intentionally). */
+export function isValidEmail(s: unknown): s is string {
+  return typeof s === 'string' && EMAIL_RE.test(s);
+}
+
+/**
+ * Parse `?limit` / `?offset` from a list route's query string.
+ *
+ * - `limit` is omitted (undefined) when absent or unparseable, so the
+ *   route keeps its prior "no extra cap" behaviour; when present it's
+ *   clamped to [1, maxLimit] (default ceiling 1000, matching PostgREST's
+ *   own per-response cap).
+ * - `offset` defaults to 0 and is never negative.
+ */
+export function parsePagination(
+  params: URLSearchParams,
+  opts: { maxLimit?: number } = {},
+): { limit?: number; offset: number } {
+  const maxLimit = opts.maxLimit ?? 1000;
+  const rawLimit = params.get('limit');
+  const rawOffset = params.get('offset');
+
+  let limit: number | undefined;
+  if (rawLimit != null) {
+    const n = Number.parseInt(rawLimit, 10);
+    if (Number.isFinite(n) && n > 0) limit = Math.min(n, maxLimit);
+  }
+
+  let offset = 0;
+  if (rawOffset != null) {
+    const n = Number.parseInt(rawOffset, 10);
+    if (Number.isFinite(n) && n > 0) offset = n;
+  }
+
+  return { limit, offset };
+}
+
 // Re-export so route files have one import surface.
 export { z };

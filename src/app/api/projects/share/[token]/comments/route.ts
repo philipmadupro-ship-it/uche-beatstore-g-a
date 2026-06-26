@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { isSupabaseConfigured, getAll, insert } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.projects.share.token.comments');
 
 export const runtime = 'nodejs';
 
@@ -134,7 +137,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     if (error) throw error;
     return NextResponse.json({ comment: data });
   } catch (error: any) {
-    console.error('Project comment error:', error);
+    log.error('Project comment error:', { error: errorMessage(error) });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

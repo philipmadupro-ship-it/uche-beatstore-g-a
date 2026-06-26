@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { getAppUrl } from '@/lib/env';
+import { getPresignedUrl, r2KeyFromUrl } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -188,11 +189,23 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Build per-track downloads array ────────────────────────────────────
-    function proxied(rawUrl: string, filename: string): string {
+    // Deliverables are minted as short-TTL R2 presigned URLs so a leaked link
+    // dies within the hour, instead of the old permanent unauthenticated
+    // /api/audio proxy link. Falls back to the proxy for local/dev paths or
+    // legacy non-R2 URLs.
+    async function deliverUrl(rawUrl: string, filename: string): Promise<string> {
+      const key = r2KeyFromUrl(rawUrl);
+      if (key) {
+        try {
+          return await getPresignedUrl(key, { downloadFilename: filename, expiresIn: 3600 });
+        } catch (err) {
+          log.warn('presign failed, falling back to proxy', { error: errorMessage(err) });
+        }
+      }
       return `${APP_URL}/api/audio?src=${encodeURIComponent(rawUrl)}&download=1&filename=${encodeURIComponent(filename)}`;
     }
 
-    const tracksWithDownloads = tracks.map((t) => {
+    const tracksWithDownloads = await Promise.all(tracks.map(async (t) => {
       const item = lineItems.find((li) => li.track_id === t.id);
       const licenseType: 'lease' | 'exclusive' =
         (item?.license_type === 'exclusive' ? 'exclusive' : 'lease');
@@ -209,7 +222,7 @@ export async function GET(req: NextRequest) {
         downloads.push({
           format: audioExt === 'wav' ? 'wav-main' : 'mp3',
           label: audioExt === 'wav' ? 'WAV (main)' : 'MP3',
-          proxied_url: proxied(t.audio_url, `${titleSafe}.${audioExt}`),
+          proxied_url: await deliverUrl(t.audio_url, `${titleSafe}.${audioExt}`),
         });
       }
 
@@ -220,7 +233,7 @@ export async function GET(req: NextRequest) {
         downloads.push({
           format: 'wav',
           label: 'WAV (high quality)',
-          proxied_url: proxied(wavUrl, `${titleSafe}.wav`),
+          proxied_url: await deliverUrl(wavUrl, `${titleSafe}.wav`),
         });
       }
 
@@ -240,7 +253,7 @@ export async function GET(req: NextRequest) {
               downloads.push({
                 format,
                 label,
-                proxied_url: proxied(url, `${titleSafe}_${format}.wav`),
+                proxied_url: await deliverUrl(url, `${titleSafe}_${format}.wav`),
               });
             }
           }
@@ -256,7 +269,7 @@ export async function GET(req: NextRequest) {
         file_types: downloads.map((d) => d.label), // backward compat
         downloads,
       };
-    });
+    }));
 
     const purchaseForClient = isProjectPurchase && projectAccess
       ? {

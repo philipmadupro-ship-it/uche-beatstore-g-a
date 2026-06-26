@@ -16,6 +16,7 @@
 import { NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { isUUID } from '@/lib/validate';
 
 export type AdminClient = ReturnType<typeof createServiceClient>;
 
@@ -97,8 +98,6 @@ export async function requireUser(): Promise<
  * Use everywhere we build a PostgREST `.or('user_id.eq.${id},…')`
  * string by hand — even if today's source of `id` looks safe.
  */
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function safeSellerId(id: string | null | undefined): string | null {
-  if (!id || !UUID_RE.test(id)) return null;
-  return id;
+  return isUUID(id) ? id : null;
 }

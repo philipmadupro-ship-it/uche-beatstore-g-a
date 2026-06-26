@@ -9,6 +9,7 @@ import {
 } from '@/lib/contacts/import';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { ContactImportBodySchema } from '@/lib/contracts';
 
 const log = createLogger('api.contacts.import');
 
@@ -92,8 +93,22 @@ export async function POST(req: NextRequest) {
     let parsed: ParsedContact[] = [];
 
     if (ct.includes('application/json')) {
-      const body = await req.json();
-      parsed = Array.isArray(body?.contacts) ? body.contacts : [];
+      // Validate the pre-parsed list. Invalid JSON / a non-array / items
+      // missing a name 400 here instead of silently importing as 0 rows.
+      let raw: unknown;
+      try {
+        raw = await req.json();
+      } catch {
+        return NextResponse.json({ error: 'Body must be valid JSON' }, { status: 400 });
+      }
+      const result = ContactImportBodySchema.safeParse(raw);
+      if (!result.success) {
+        return NextResponse.json(
+          { error: result.error.issues[0]?.message ?? 'Invalid contacts payload' },
+          { status: 400 },
+        );
+      }
+      parsed = result.data.contacts as ParsedContact[];
     } else {
       const form = await req.formData();
       const file = form.get('file');

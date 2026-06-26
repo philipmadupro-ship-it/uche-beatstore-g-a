@@ -6,6 +6,8 @@ import { isSupabaseConfigured } from '@/lib/local-store';
 import { signBuyerToken } from '@/lib/buyer-tokens';
 import { getAppUrl } from '@/lib/env';
 import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.store.account.request');
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -103,11 +105,11 @@ export async function POST(req: NextRequest) {
         });
       } catch (err) {
         // Email send failures shouldn't surface to the caller; log and continue.
-        console.error('buyer-account email send failed', errorMessage(err));
+        log.error('buyer-account email send failed', { error: errorMessage(errorMessage(err)) });
       }
     } else {
       // Dev fallback — print the link to the server log so it's recoverable.
-      console.log('[buyer-account] no RESEND_API_KEY set; link =', url);
+      log.info('[buyer-account] no RESEND_API_KEY set; link =', { error: errorMessage(url) });
     }
 
     return NextResponse.json({ ok: true });

@@ -4,13 +4,13 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { getAppUrl } from '@/lib/env';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { isValidEmail } from '@/lib/validate';
 import { Resend } from 'resend';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const log = createLogger('api.store.orders.resend');
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * POST /api/store/orders/resend
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { email, purchase_id, kind } = body;
-  if (!email || !EMAIL_RE.test(email) || !purchase_id || !kind) {
+  if (!isValidEmail(email) || !purchase_id || !kind) {
     return NextResponse.json({ error: 'email, purchase_id, and kind required' }, { status: 400 });
   }
 

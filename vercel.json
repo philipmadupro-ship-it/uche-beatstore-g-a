@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/announce-drops",
       "schedule": "30 * * * *"
+    },
+    {
+      "path": "/api/cron/backfill-previews",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

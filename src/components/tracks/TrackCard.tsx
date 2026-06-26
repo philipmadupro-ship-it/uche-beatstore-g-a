@@ -139,7 +139,10 @@ export function TrackCard({
   };
 
   const uploadDate = new Date(track.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const { rate: rateTrack } = useRating(track.id, track.rating || 0);
+  // Use the hook's optimistic `rating` to render the stars — rendering off the
+  // `track.rating` prop meant the star didn't reflect the click until the
+  // parent refetched, so it looked like ratings "didn't stay".
+  const { rating: liveRating, rate: rateTrack } = useRating(track.id, track.rating || 0);
   const durationLabel = formatDuration(track.duration_seconds ?? null);
   const genreMoodTags = trackTags.filter((tt) => tt.category === 'genre' || tt.category === 'mood');
 
@@ -151,8 +154,14 @@ export function TrackCard({
   return (
     <div
       onClick={() => {
-        if (selectable) onSelectChange?.(track, !selected);
-        else onClickDetails?.(track);
+        // Modern-player behavior: a row click PLAYS the track (toggles if it's
+        // already the current one). Selection happens only in Select mode, and
+        // "View details" lives in the ⋯ menu — clicking a track no longer opens
+        // a drawer like a file browser.
+        if (selectable) { onSelectChange?.(track, !selected); return; }
+        if (isCurrent) togglePlay();
+        else if (onPlayClick) onPlayClick();
+        else setTrack(track);
       }}
       // Native HTML5 draggable so the user can drop tracks onto contact
       // rows (or future drop targets — playlists, projects). We don't
@@ -276,11 +285,8 @@ export function TrackCard({
         {genreMoodTags.length === 0 && (
           <span className="text-[10px] font-mono text-white/35">—</span>
         )}
-        {track.rating != null && Number(track.rating) > 0 && (
-          <span className="ml-auto shrink-0 text-[11px] font-mono text-[#D6BE7A]">
-            ★ {Number(track.rating).toFixed(1)}
-          </span>
-        )}
+        {/* Numeric rating badge removed — the interactive star row below is the
+            single source of truth, so the card no longer shows the rating twice. */}
       </div>
 
       {/* Time / added */}
@@ -296,9 +302,9 @@ export function TrackCard({
             <button key={star} onClick={(e) => handleRating(e, star)} className="cursor-pointer p-0.5">
               <Star
                 size={11}
-                fill={track.rating && track.rating >= star ? '#D6BE7A' : 'none'}
+                fill={liveRating >= star ? '#D6BE7A' : 'none'}
                 strokeWidth={1.5}
-                className={track.rating && track.rating >= star ? 'text-[#D6BE7A]' : 'text-[#6E685B] hover:text-[#D6BE7A] transition-colors'}
+                className={liveRating >= star ? 'text-[#D6BE7A]' : 'text-[#6E685B] hover:text-[#D6BE7A] transition-colors'}
               />
             </button>
           ))}

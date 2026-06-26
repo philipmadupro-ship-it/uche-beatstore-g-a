@@ -48,18 +48,39 @@ export async function uploadAudio(fileBuffer: Buffer, fileName: string, contentT
 }
 
 /**
- * Generates a signed URL valid for 1 hour for private R2 access.
+ * Generates a short-lived signed URL for private R2 access. Default TTL 1h.
+ * Pass `downloadFilename` to force a browser download with a clean name
+ * (sets Content-Disposition via the presigned response override).
  */
-export async function getPresignedUrl(key: string): Promise<string> {
+export async function getPresignedUrl(
+  key: string,
+  opts: { expiresIn?: number; downloadFilename?: string } = {},
+): Promise<string> {
   const bucketName = process.env.R2_BUCKET_NAME;
   if (!bucketName) throw new Error('Missing R2_BUCKET_NAME');
 
   const command = new GetObjectCommand({
     Bucket: bucketName,
     Key: key,
+    ...(opts.downloadFilename
+      ? { ResponseContentDisposition: `attachment; filename="${opts.downloadFilename.replace(/"/g, '')}"` }
+      : {}),
   });
 
-  return await getSignedUrl(r2, command, { expiresIn: 3600 });
+  return await getSignedUrl(r2, command, { expiresIn: opts.expiresIn ?? 3600 });
+}
+
+/**
+ * Derive the R2 object key from a stored public R2 URL, or null if the URL
+ * isn't an R2 public URL (e.g. a local `/uploads/...` dev path or a legacy
+ * absolute URL). Callers fall back to the proxy when this returns null.
+ */
+export function r2KeyFromUrl(rawUrl: string | null | undefined): string | null {
+  if (!rawUrl) return null;
+  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '');
+  if (!base) return null;
+  const prefix = base + '/';
+  return rawUrl.startsWith(prefix) ? rawUrl.slice(prefix.length) : null;
 }
 
 /**
@@ -115,6 +136,52 @@ export async function uploadPeaksSidecar(
     return `${publicUrl.replace(/\/$/, '')}/${peaksKey}`;
   } catch (err) {
     console.warn('uploadPeaksSidecar failed:', err);
+    return null;
+  }
+}
+
+/**
+ * Upload a generated preview clip next to the master at `<audioKey>.preview.mp3`.
+ * This is the PUBLIC, store-served asset; the master stays private. Returns the
+ * public URL or null (caller treats null as "no preview yet — fall back").
+ */
+export async function uploadPreviewAsset(
+  audioUrl: string,
+  preview: Buffer,
+  ext: string = 'mp3',
+  contentType: string = 'audio/mpeg',
+): Promise<string | null> {
+  try {
+    if (!isR2Configured()) {
+      const m = audioUrl.match(/^\/uploads\/(.+)$/);
+      if (!m) return null;
+      const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      const previewPath = path.join(uploadsDir, `${m[1]}.preview.${ext}`);
+      fs.writeFileSync(previewPath, preview);
+      return `/uploads/${m[1]}.preview.${ext}`;
+    }
+
+    const bucketName = process.env.R2_BUCKET_NAME;
+    const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
+    if (!bucketName || !publicUrl) return null;
+
+    const prefix = publicUrl.replace(/\/$/, '') + '/';
+    if (!audioUrl.startsWith(prefix)) return null;
+    const audioKey = audioUrl.slice(prefix.length);
+    const previewKey = `${audioKey}.preview.${ext}`;
+
+    await r2.send(new PutObjectCommand({
+      Bucket: bucketName,
+      Key: previewKey,
+      Body: preview,
+      ContentType: contentType,
+      CacheControl: 'public, max-age=31536000, immutable',
+    }));
+
+    return `${publicUrl.replace(/\/$/, '')}/${previewKey}`;
+  } catch (err) {
+    console.warn('uploadPreviewAsset failed:', err);
     return null;
   }
 }

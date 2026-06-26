@@ -14,7 +14,22 @@ const TRACK_FIELDS = [
   'rating', 'description',
   'lease_price_usd', 'exclusive_price_usd',
   'store_listed', 'free_download_enabled', 'voice_tag_enabled', 'exclusive_sold', 'created_at',
+  'preview_url', 'preview_status',
 ].join(', ');
+
+/**
+ * Beat protection: replace the master `audio_url` with the truncated preview
+ * when ready (and drop the preview_* internals). Apply to every track shape
+ * leaving this route — main track, related, fans-also-bought.
+ */
+function toPublicTrack<T extends Record<string, unknown>>(t: T): T {
+  if (!t) return t;
+  const { preview_url, preview_status, audio_url, ...rest } = t as Record<string, unknown>;
+  return {
+    ...rest,
+    audio_url: preview_status === 'ready' && preview_url ? preview_url : audio_url,
+  } as unknown as T;
+}
 
 /**
  * Resolve the license tiers to show on a product page.
@@ -278,9 +293,9 @@ export async function GET(
       }
     }
 
-    // Strip user_id off every track before responding
+    // Strip user_id + swap master→preview on every track before responding.
     const stripUserId = ({ user_id: _u, ...rest }: any) => rest;
-    const safeTrack = stripUserId(track);
+    const safeTrack = toPublicTrack(stripUserId(track));
     // Voice tag (mig 072) — attach the creator's tag when this beat opted in,
     // so the preview player overlays it. Owner downloads remain clean.
     const cr = creatorRes.data as any;
@@ -288,8 +303,8 @@ export async function GET(
       (safeTrack as any).voice_tag_url = cr.voice_tag_url;
       (safeTrack as any).voice_tag_interval = cr.voice_tag_interval_seconds ?? 20;
     }
-    const safeRelated = related.map(stripUserId);
-    const safeFans = fansAlsoBought.map(stripUserId);
+    const safeRelated = related.map((t: any) => toPublicTrack(stripUserId(t)));
+    const safeFans = fansAlsoBought.map((t: any) => toPublicTrack(stripUserId(t)));
 
     const res = NextResponse.json({
       track: safeTrack,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
+import { getPresignedUrl, r2KeyFromUrl } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -65,8 +66,19 @@ export async function GET(req: NextRequest) {
     const extMatch = track.audio_url.match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i);
     const ext = (extMatch?.[1] ?? 'mp3').toLowerCase();
     const filename = `${track.title || 'track'}.${ext}`;
-    const proxied = `/api/audio?src=${encodeURIComponent(track.audio_url)}&download=1&filename=${encodeURIComponent(filename)}`;
 
+    // Prefer a short-TTL R2 presigned URL so the redirect target dies within
+    // the hour; fall back to the (permanent) proxy for local/legacy paths.
+    const key = r2KeyFromUrl(track.audio_url);
+    if (key) {
+      try {
+        const signed = await getPresignedUrl(key, { downloadFilename: filename, expiresIn: 3600 });
+        return NextResponse.redirect(signed, 302);
+      } catch (err) {
+        log.warn('presign failed, falling back to proxy', { sessionId, trackId, error: errorMessage(err) });
+      }
+    }
+    const proxied = `/api/audio?src=${encodeURIComponent(track.audio_url)}&download=1&filename=${encodeURIComponent(filename)}`;
     return NextResponse.redirect(new URL(proxied, req.url), 302);
   } catch (err) {
     log.error('download-file failed', { sessionId, trackId, error: errorMessage(err) });

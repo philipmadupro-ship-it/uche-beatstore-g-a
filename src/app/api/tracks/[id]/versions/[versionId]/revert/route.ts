@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, getById, getAll, insert, update } from '@/lib/local-store';
 import { nextVersionLabel } from '@/lib/naming';
 import { requireRowOwnership } from '@/lib/auth/ownership';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.tracks.id.versions.versionId.revert');
 
 export const runtime = 'nodejs';
 
@@ -124,7 +127,7 @@ export async function POST(
 
     return NextResponse.json({ track: updated });
   } catch (error: any) {
-    console.error('Revert error:', error);
+    log.error('Revert error:', { error: errorMessage(error) });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

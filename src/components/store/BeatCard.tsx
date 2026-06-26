@@ -63,9 +63,10 @@ export function BeatCard({
       id={`beat-${track.id}`}
       role="button"
       tabIndex={0}
+      aria-label={`Preview ${track.title}`}
       onClick={onPreview}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(); } }}
-      className="group cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/40 rounded-[14px] p-[1.5px]"
+      className="group cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]/40 rounded-[14px] p-[1.5px]"
       style={{
         background: bezelBg,
         ...ringStyle,
@@ -194,6 +195,7 @@ export function BeatCard({
         ) : track.free_download_enabled ? (
           <button
             onClick={stop(onFreeDownload)}
+            aria-label={`Free download ${track.title}`}
             className="tap flex min-h-11 w-full items-center justify-center gap-1.5 text-[#6DC6A4] text-[9px] font-mono font-bold uppercase tracking-wider hover:bg-[#6DC6A4]/5 transition-colors"
           >
             <Download size={10} />
@@ -204,6 +206,7 @@ export function BeatCard({
             <button
               onClick={stop(onAddLease)}
               disabled={priceLease == null}
+              aria-label={priceLease != null ? `Add ${track.title} lease license to cart, $${priceLease}` : `Lease unavailable for ${track.title}`}
               className="tap flex flex-1 flex-col items-center justify-center gap-px transition-colors hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-25"
             >
               <span className="text-[7px] font-mono uppercase tracking-[0.18em] text-white/25 leading-none">Lease</span>
@@ -214,6 +217,7 @@ export function BeatCard({
             <button
               onClick={stop(onAddExclusive)}
               disabled={priceExclusive == null}
+              aria-label={priceExclusive != null ? `Add ${track.title} exclusive license to cart, $${priceExclusive}` : `Exclusive unavailable for ${track.title}`}
               className="tap flex flex-1 flex-col items-center justify-center gap-px transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-25"
               style={{ backgroundColor: `${accentColor}18` }}
             >

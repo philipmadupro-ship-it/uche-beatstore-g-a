@@ -217,7 +217,7 @@ export function BeatPreviewDrawer({
                 { label: 'Duration', value: fmtDur(track.duration_seconds) },
                 { label: 'Type', value: track.type?.toUpperCase() ?? '—' },
                 { label: 'Stems', value: track.stems_status === 'done' ? 'Available' : 'Not included' },
-                { label: 'WAV', value: track.wav_url ? 'Uploaded' : 'On request' },
+                { label: 'WAV', value: (track as { has_wav?: boolean }).has_wav ? 'Uploaded' : 'On request' },
               ].map(({ label, value }) => (
                 <div key={label} className="flex flex-col gap-0.5 rounded-xl px-3 py-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
                   <span className="text-[8px] font-mono uppercase tracking-[0.18em] text-white/25">{label}</span>

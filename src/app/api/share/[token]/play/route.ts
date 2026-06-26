@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, insert, createServiceClient } from '@/lib/db';
 import { createHash } from 'crypto';
 import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.share.token.play');
 
 function hashIp(req: NextRequest): string {
   const fwd = req.headers.get('x-forwarded-for') || '';
@@ -49,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Share play log error:', error);
+    log.error('Share play log error:', { error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

@@ -5,6 +5,8 @@ import { createSession } from '@/lib/storage/upload-sessions';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.upload.init');
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -66,11 +68,31 @@ export async function POST(req: NextRequest) {
         const { data } = await supabase.auth.getUser();
         userId = data.user?.id || null;
       } catch (err) {
-        if (projectId) {
-          return NextResponse.json(
-            { error: `Could not verify upload destination owner: ${errorMessage(err)}` },
-            { status: 401 },
-          );
+        return NextResponse.json(
+          { error: `Could not verify uploader: ${errorMessage(err)}` },
+          { status: 401 },
+        );
+      }
+      // Uploads are producer-only. Without an unconditional gate, an anonymous
+      // visitor could init a multipart session with no projectId and stream up
+      // to MAX_BYTES into R2 (storage + bandwidth abuse) with no account — the
+      // previous code only required auth when a projectId was supplied.
+      if (!userId) {
+        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      }
+      // Fail fast on a replace the caller doesn't own, before we waste a large
+      // upload. complete/ re-checks via requireRowOwnership as defense-in-depth.
+      if (replaceTrackId) {
+        const { data: target } = await supabase
+          .from('tracks')
+          .select('user_id')
+          .eq('id', replaceTrackId)
+          .maybeSingle();
+        if (!target) {
+          return NextResponse.json({ error: 'Track to replace not found' }, { status: 404 });
+        }
+        if (target.user_id && target.user_id !== userId) {
+          return NextResponse.json({ error: 'Forbidden — you do not own that track' }, { status: 403 });
         }
       }
       if (projectId) {
@@ -108,7 +130,7 @@ export async function POST(req: NextRequest) {
       uploadId,
     });
   } catch (err) {
-    console.error('upload/init error:', err);
+    log.error('upload/init error:', { error: errorMessage(err) });
     return NextResponse.json({ error: errorMessage(err) || 'Failed to init upload' }, { status: 500 });
   }
 }

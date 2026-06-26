@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.stems.jobId.stemName');
 
 const DEMUCS_URL = process.env.DEMUCS_SERVICE_URL ?? 'http://localhost:8001';
 
@@ -17,7 +20,7 @@ export async function GET(
   const serviceUrl = `${DEMUCS_URL}/api/v1/stems/${jobId}/${stemName}`;
 
   const upstream = await fetch(serviceUrl).catch((err) => {
-    console.error(`Stem proxy fetch failed: ${err.message}`);
+    log.error(`Stem proxy fetch failed: ${err.message}`);
     return null;
   });
 

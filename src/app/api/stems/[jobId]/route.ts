@@ -5,6 +5,8 @@ import { uploadAudio } from '@/lib/storage/upload';
 import { stemName } from '@/lib/naming';
 import { autoDeliverStems } from '@/lib/stems/auto-deliver';
 import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.stems.jobId');
 
 const CORE_STEMS = ['vocals', 'drums', 'bass', 'other'] as const;
 
@@ -90,7 +92,7 @@ export async function GET(
           const url = await uploadAudio(buffer, filename, 'audio/wav');
           stemUrls[name] = url;
         } catch (err) {
-          console.warn(`Stem upload failed for ${name}:`, err);
+          log.warn(`Stem upload failed for ${name}:`, { error: errorMessage(err) });
         }
       }
     }
@@ -160,7 +162,7 @@ export async function GET(
       },
     });
   } catch (error: unknown) {
-    console.error('Stem poll error:', error);
+    log.error('Stem poll error:', { error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }
@@ -192,7 +194,7 @@ async function resolveTrackTitle(jobId: string): Promise<string> {
       }
     }
   } catch (err) {
-    console.warn('Resolve track title failed:', err);
+    log.warn('Resolve track title failed:', { error: errorMessage(err) });
   }
   return 'Track';
 }

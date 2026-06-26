@@ -53,6 +53,10 @@ function buildCsp(nonce: string, framable = false): string {
     `base-uri 'self'`,
     `form-action 'self'`,
     `object-src 'none'`,
+    // Collect violations so report-only mode can actually "bake against real
+    // traffic" before we flip CSP_ENFORCE. Without an endpoint, report-only
+    // reported to nowhere. /api/csp-report samples + logs them.
+    `report-uri /api/csp-report`,
   ].join('; ');
 }
 

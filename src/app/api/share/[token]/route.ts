@@ -82,7 +82,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
           played_at: new Date().toISOString(),
         });
       } catch (err) {
-        console.warn('share_plays insert failed:', err);
+        log.warn('share_plays insert failed:', { error: errorMessage(err) });
       }
 
       const { password_hash, ...safeShare } = share;
@@ -136,7 +136,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         played_at: new Date().toISOString(),
       });
     } catch (err) {
-      console.warn('share_plays insert failed:', err);
+      log.warn('share_plays insert failed:', { error: errorMessage(err) });
     }
 
     const { password_hash, ...safeShare } = share;

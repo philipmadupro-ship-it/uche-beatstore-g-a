@@ -26,6 +26,7 @@ import BandcampRemixCard from '@/components/store/BandcampRemixCard';
 import { RecommendationsStrip } from '@/components/store/RecommendationsStrip';
 import { useWishlist } from '@/hooks/useWishlist';
 import { filterAndSortTracks, type StoreTrack as StoreTrackFilter } from '@/lib/store/filters';
+import { trackStoreEvent } from '@/lib/store/track-event';
 import { Sparkles } from 'lucide-react';
 import {
   type StoreTrack, type CreatorProfile, type FeaturedPlaylist, type PlaylistTrackItem,
@@ -162,7 +163,15 @@ function StorePage() {
   const [bannerOpen, setBannerOpen] = useState(false);
   useEffect(() => {
     setBannerOpen(purchaseStatus === 'success' || purchaseStatus === 'cancelled');
-    if (purchaseStatus === 'success') clearCart();
+    if (purchaseStatus === 'success') {
+      // Funnel: close the loop on the same session that checked out. Keyed on
+      // session_id de-dup server-side isn't needed — this fires once per
+      // redirect back to /store?purchase=success.
+      trackStoreEvent('purchase', {
+        metadata: { session_id_stripe: searchParams?.get('session_id') ?? undefined },
+      });
+      clearCart();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [purchaseStatus]);
   const dismissBanner = () => {

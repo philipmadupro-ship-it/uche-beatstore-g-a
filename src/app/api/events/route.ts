@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll, insert, createServiceClient } from '@/lib/db';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { safeSellerId } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 
 /**
@@ -15,7 +16,12 @@ export async function GET() {
       const { data: { user } } = await cookieClient.auth.getUser();
       const supabase = createServiceClient();
       let q = supabase.from('calendar_events').select('*').order('date', { ascending: true });
-      if (user) q = q.or(`user_id.eq.${user.id},user_id.is.null`);
+      // Validate before interpolating into the .or() filter (comma footgun).
+      // A logged-in user with a malformed id short-circuits to empty rather
+      // than running this service-role query unscoped.
+      const safeId = user ? safeSellerId(user.id) : null;
+      if (user && !safeId) return NextResponse.json({ events: [] });
+      if (safeId) q = q.or(`user_id.eq.${safeId},user_id.is.null`);
       const { data, error } = await q;
       if (error) throw new Error(error.message);
       return NextResponse.json({ events: data });

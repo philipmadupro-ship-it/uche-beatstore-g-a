@@ -3,7 +3,10 @@ import { Resend } from 'resend';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.store.contact');
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
+import { isValidEmail } from '@/lib/validate';
 
 /**
  * POST /api/store/contact
@@ -29,7 +32,7 @@ export async function POST(req: NextRequest) {
     if (!name || !email || !message) {
       return NextResponse.json({ error: 'name, email, and message are required' }, { status: 400 });
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!isValidEmail(email)) {
       return NextResponse.json({ error: 'Invalid email address' }, { status: 400 });
     }
     if (String(message).length > 2000) {
@@ -116,7 +119,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error('Store contact error:', err);
+    log.error('Store contact error:', { error: errorMessage(err) });
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
 }

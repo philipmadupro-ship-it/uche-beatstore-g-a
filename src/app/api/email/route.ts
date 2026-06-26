@@ -4,6 +4,8 @@ import { Resend } from 'resend';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured, insert } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.email');
 import { buildBeatSendEmail, defaultSubject } from '@/lib/email/beat-send-template';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -84,7 +86,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, resendId: resendData?.id });
   } catch (error) {
-    console.error('Email Send Error:', error);
+    log.error('Email Send Error:', { error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

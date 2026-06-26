@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 
 const log = createLogger('api.store.play');
 export const runtime = 'nodejs';
@@ -37,6 +38,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Per-IP cap on top of the existing 60s per-track dedup. Fire-and-forget:
+    // on limit still return 200 so playback UX is never affected.
+    if (!(await rateLimitDurable(`play:${clientIp(req)}`, 60, 60_000))) {
+      return NextResponse.json({ ok: true, skipped: 'rate-limited' });
+    }
     const body = await req.json().catch(() => ({}));
     const trackId = typeof body.track_id === 'string' ? body.track_id : '';
     const source = typeof body.source === 'string' ? body.source.slice(0, 64) : '';

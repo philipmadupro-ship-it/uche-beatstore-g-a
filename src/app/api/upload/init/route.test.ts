@@ -152,12 +152,32 @@ describe('POST /api/upload/init', () => {
 
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({
-      error: 'Could not verify upload destination owner: auth unavailable',
+      error: 'Could not verify uploader: auth unavailable',
     });
     expect(mockInitMultipart).not.toHaveBeenCalled();
   });
 
-  it('still creates a library upload session when auth lookup fails without a destination', async () => {
+  // Security: uploads are producer-only. A library upload (no destination)
+  // must NOT proceed anonymously — previously this returned 200 with a
+  // null-owner session, letting an unauthenticated visitor stream up to
+  // MAX_BYTES into R2.
+  it('rejects a library upload when the user is not authenticated', async () => {
+    mockGetUser.mockResolvedValueOnce({ data: { user: null } });
+
+    const mod = await loadRoute();
+    const res = await mod.POST(req({
+      fileName: 'beat.wav',
+      fileSize: 1024 * 1024,
+      fileType: 'audio/wav',
+    }));
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual({ error: 'Not authenticated' });
+    expect(mockInitMultipart).not.toHaveBeenCalled();
+    expect(mockCreateSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects a library upload when the auth lookup throws', async () => {
     mockGetUser.mockRejectedValueOnce(new Error('auth unavailable'));
 
     const mod = await loadRoute();
@@ -167,12 +187,7 @@ describe('POST /api/upload/init', () => {
       fileType: 'audio/wav',
     }));
 
-    expect(res.status).toBe(200);
-    expect(mockInitMultipart).toHaveBeenCalledWith('beat.wav', 'audio/wav');
-    expect(mockCreateSession).toHaveBeenCalledWith(expect.objectContaining({
-      sessionId: 'sess_test_123',
-      projectId: null,
-      userId: null,
-    }));
+    expect(res.status).toBe(401);
+    expect(mockInitMultipart).not.toHaveBeenCalled();
   });
 });

@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll } from '@/lib/local-store';
 import { createServiceClient, safeSellerId } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
 
+const log = createLogger('api.store');
 export const runtime = 'nodejs';
 // force-dynamic: no static pre-render; every request hits the DB so
 // newly listed tracks appear immediately.
@@ -118,6 +120,7 @@ export async function GET() {
         'rating', 'description',
         'lease_price_usd', 'exclusive_price_usd',
         'store_listed', 'store_featured', 'free_download_enabled', 'store_sort_order', 'voice_tag_enabled', 'exclusive_sold', 'created_at',
+        'preview_url', 'preview_status',
       ].join(', '))
       .eq('store_listed', true);
     if (sellerId) {
@@ -264,7 +267,7 @@ export async function GET() {
       const playlistsResult = await playlistsQuery;
 
       if (playlistsResult.error) {
-        console.error('[store] featured playlists query error:', playlistsResult.error.message);
+        log.warn('featured playlists query failed', { error: playlistsResult.error.message });
       } else if (playlistsResult.data?.length) {
         const playlists = playlistsResult.data as any[];
         const plIds = playlists.map((p: any) => p.id);
@@ -302,7 +305,7 @@ export async function GET() {
         });
       }
     } catch (e) {
-      console.error('[store] featured playlists error:', e);
+      log.warn('featured playlists failed', { error: errorMessage(e) });
     }
 
     // ── Store-featured projects (migration 040) ──────────────────────────
@@ -323,7 +326,7 @@ export async function GET() {
       const projectsResult = await projectsQuery;
 
       if (projectsResult.error) {
-        console.error('[store] featured projects query error:', projectsResult.error.message);
+        log.warn('featured projects query failed', { error: projectsResult.error.message });
       } else if (projectsResult.data?.length) {
         const projects = projectsResult.data as any[];
         const projIds = projects.map((p: any) => p.id);
@@ -366,7 +369,7 @@ export async function GET() {
         });
       }
     } catch (e) {
-      console.error('[store] featured projects error:', e);
+      log.warn('featured projects failed', { error: errorMessage(e) });
     }
 
     // ── Licenses (from licenses table, migration 031) ────────────────────
@@ -380,7 +383,7 @@ export async function GET() {
           .order('sort_order', { ascending: true });
         licenses = licenseRows ?? [];
       } catch (e) {
-        console.error('[store] licenses error:', e);
+        log.warn('licenses query failed', { error: errorMessage(e) });
       }
     }
 
@@ -396,7 +399,7 @@ export async function GET() {
           if (r.wav_url) wavByTrack[r.id] = r.wav_url;
         }
       } catch (e) {
-        console.error('[store] wav_url enrichment error:', e);
+        log.warn('wav_url enrichment failed', { error: errorMessage(e) });
       }
     }
 
@@ -405,11 +408,17 @@ export async function GET() {
     // the preview player can overlay it client-side. Owner downloads stay clean.
     const tagUrl = (creator as any)?.voice_tag_url ?? null;
     const tagInterval = (creator as any)?.voice_tag_interval_seconds ?? 20;
-    const safeTracks = tracksAny.map(({ user_id: _u, cover_url, ...rest }: any) => ({
+    const safeTracks = tracksAny.map(({ user_id: _u, cover_url, audio_url, preview_url, preview_status, ...rest }: any) => ({
       ...rest,
+      // Beat protection: the public stream is the TRUNCATED PREVIEW when ready;
+      // the clean master is never sent to the storefront. Falls back to the
+      // master only until a preview is generated (backfill via re-analyze).
+      audio_url: (preview_status === 'ready' && preview_url) ? preview_url : audio_url,
       cover_url: sanitizeUrl(cover_url),
       tags: tagsByTrack[rest.id] ?? [],
-      wav_url: wavByTrack[rest.id] ?? null,
+      // The WAV master is a paid deliverable — expose only that it EXISTS, never
+      // the URL (delivered post-purchase via the gated presigned download path).
+      has_wav: !!wavByTrack[rest.id],
       play_count: playCountByTrack[rest.id] ?? 0,
       ...(rest.voice_tag_enabled && tagUrl ? { voice_tag_url: tagUrl, voice_tag_interval: tagInterval } : {}),
     }));

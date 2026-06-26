@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadPart } from '@/lib/storage/multipart';
 import { getSession, recordPart } from '@/lib/storage/upload-sessions';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.upload.part');
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -56,7 +59,7 @@ export async function PUT(req: NextRequest) {
       totalParts: session.totalParts,
     });
   } catch (err: any) {
-    console.error('upload/part error:', err);
+    log.error('upload/part error:', { error: errorMessage(err) });
     return NextResponse.json({ error: err?.message || 'part upload failed' }, { status: 500 });
   }
 }

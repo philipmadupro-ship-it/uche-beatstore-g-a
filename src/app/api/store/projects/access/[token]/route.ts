@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
+import { getPresignedUrl, r2KeyFromUrl } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 
 export const runtime = 'nodejs';
@@ -9,6 +10,20 @@ export const dynamic = 'force-dynamic';
 function sanitizeUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   return url.replace(/^(https?:\/\/)+/, 'https://');
+}
+
+/**
+ * Turn a stored R2 URL into a short-lived signed URL so the bundle's master +
+ * WAV aren't permanent public links. 6h TTL keeps a listening/download session
+ * working without the URL expiring mid-play. Falls back to the cleaned URL for
+ * local/legacy non-R2 paths.
+ */
+async function signedOrSanitized(url: string | null | undefined): Promise<string | null> {
+  const key = r2KeyFromUrl(url);
+  if (key) {
+    try { return await getPresignedUrl(key, { expiresIn: 6 * 3600 }); } catch { /* fall through */ }
+  }
+  return sanitizeUrl(url);
 }
 
 const TRACK_FIELDS = [
@@ -83,8 +98,8 @@ export async function GET(
         trackMap[t.id] = {
           ...t,
           cover_url: sanitizeUrl(t.cover_url),
-          audio_url: sanitizeUrl(t.audio_url),
-          wav_url: sanitizeUrl(t.wav_url),
+          audio_url: await signedOrSanitized(t.audio_url),
+          wav_url: await signedOrSanitized(t.wav_url),
           tags: [],
         };
       }

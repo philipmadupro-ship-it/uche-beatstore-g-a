@@ -4,13 +4,15 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { UserPlus, Settings as SettingsIcon, Loader2, LogOut, CheckCircle2, Shield, User, ArrowRight, FileText } from 'lucide-react';
+import { UserPlus, Settings as SettingsIcon, Loader2, LogOut, CheckCircle2, Shield, User, ArrowRight, FileText, Trash2 } from 'lucide-react';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Field } from '@/components/ui/Field';
+import { toast, confirmToast } from '@/hooks/useToast';
+import { ErasureRequestSchema } from '@/lib/contracts';
 
 interface TeamMember {
   user_id: string;
@@ -33,6 +35,8 @@ export default function SettingsPage() {
   const [sending, setSending] = useState(false);
   const [success, setSuccess] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>({ lossless_exports: true, auto_tagging: false });
+  const [eraseEmail, setEraseEmail] = useState('');
+  const [erasing, setErasing] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -68,6 +72,38 @@ export default function SettingsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(next),
     }).catch(() => undefined);
+  };
+
+  const handleErase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = eraseEmail.trim();
+    if (!ErasureRequestSchema.safeParse({ email }).success) {
+      toast.error('Enter a valid buyer email');
+      return;
+    }
+    const ok = await confirmToast(
+      `Erase ${email}?`,
+      'Their email + Stripe details are permanently anonymised on all purchase records. Sale amounts and dates are kept. This cannot be undone.',
+      { confirmLabel: 'Erase data', cancelLabel: 'Cancel', danger: true },
+    );
+    if (!ok) return;
+    setErasing(true);
+    try {
+      const res = await fetch('/api/privacy/erase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Erasure failed');
+      const total = (data.licensePurchases ?? 0) + (data.projectAccessLinks ?? 0);
+      toast.success(total > 0 ? `Erased buyer data on ${total} record${total === 1 ? '' : 's'}` : 'No purchase records found for that email');
+      setEraseEmail('');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Erasure failed');
+    } finally {
+      setErasing(false);
+    }
   };
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -250,6 +286,35 @@ export default function SettingsPage() {
                 on={prefs.auto_tagging}
                 onToggle={(v) => savePrefs({ ...prefs, auto_tagging: v })}
               />
+            </Card>
+          </section>
+
+          {/* Buyer privacy — GDPR/CCPA erasure */}
+          <section>
+            <div className="flex items-center gap-2 mb-4">
+              <Shield size={14} className="text-[#9B9282]" />
+              <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#F7EBDD]">Buyer privacy</h2>
+            </div>
+            <Card className="p-6">
+              <p className="text-[13px] text-[#9B9282] mb-4 max-w-prose">
+                Honour a buyer&apos;s data-deletion request. Their email and Stripe details are
+                permanently anonymised across every purchase record; sale amounts and dates are
+                kept for your accounting.
+              </p>
+              <form onSubmit={handleErase} className="flex flex-col sm:flex-row gap-3 sm:items-end">
+                <Field
+                  label="Buyer email"
+                  type="email"
+                  value={eraseEmail}
+                  onChange={(e) => setEraseEmail(e.target.value)}
+                  placeholder="buyer@example.com"
+                  className="flex-1"
+                />
+                <Button type="submit" variant="secondary" disabled={erasing || !eraseEmail.trim()}>
+                  {erasing ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  Erase buyer data
+                </Button>
+              </form>
             </Card>
           </section>
         </div>

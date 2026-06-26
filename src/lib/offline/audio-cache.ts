@@ -68,44 +68,62 @@ export async function cacheTrack(
   title: string,
   onProgress?: (loaded: number, total: number) => void
 ): Promise<OfflineMeta> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch audio (${res.status})`);
-
-  const total = Number(res.headers.get('content-length') || 0);
-  const reader = res.body?.getReader();
-  const chunks: Uint8Array[] = [];
-  let loaded = 0;
-  if (reader) {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) {
-        chunks.push(value);
-        loaded += value.byteLength;
-        if (onProgress && total) onProgress(loaded, total);
-      }
-    }
-  } else {
-    const buf = await res.arrayBuffer();
-    chunks.push(new Uint8Array(buf));
-    loaded = buf.byteLength;
-  }
-
-  const blob = new Blob(chunks as BlobPart[], { type: res.headers.get('content-type') || 'audio/mpeg' });
-  const meta: OfflineMeta = {
-    id: trackId,
-    url,
-    title,
-    size: blob.size,
-    cached_at: Date.now(),
+  // Inactivity guard: if the download stalls (a hung fetch or a reader that
+  // never delivers another chunk), abort so the promise REJECTS instead of
+  // hanging forever. Without this the caller's `downloading` state never
+  // cleared, so the "Caching…" indicator stuck on screen indefinitely.
+  const STALL_MS = 30_000;
+  const controller = new AbortController();
+  let stallTimer: ReturnType<typeof setTimeout> | null = null;
+  const armStall = () => {
+    if (stallTimer) clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => controller.abort(), STALL_MS);
   };
 
-  await tx([STORE_BLOBS, STORE_META], 'readwrite', (t) => {
-    t.objectStore(STORE_BLOBS).put(blob, trackId);
-    t.objectStore(STORE_META).put(meta);
-  });
+  try {
+    armStall();
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`Failed to fetch audio (${res.status})`);
 
-  return meta;
+    const total = Number(res.headers.get('content-length') || 0);
+    const reader = res.body?.getReader();
+    const chunks: Uint8Array[] = [];
+    let loaded = 0;
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          loaded += value.byteLength;
+          armStall(); // progress made — reset the stall clock
+          if (onProgress && total) onProgress(loaded, total);
+        }
+      }
+    } else {
+      const buf = await res.arrayBuffer();
+      chunks.push(new Uint8Array(buf));
+      loaded = buf.byteLength;
+    }
+
+    const blob = new Blob(chunks as BlobPart[], { type: res.headers.get('content-type') || 'audio/mpeg' });
+    const meta: OfflineMeta = {
+      id: trackId,
+      url,
+      title,
+      size: blob.size,
+      cached_at: Date.now(),
+    };
+
+    await tx([STORE_BLOBS, STORE_META], 'readwrite', (t) => {
+      t.objectStore(STORE_BLOBS).put(blob, trackId);
+      t.objectStore(STORE_META).put(meta);
+    });
+
+    return meta;
+  } finally {
+    if (stallTimer) clearTimeout(stallTimer);
+  }
 }
 
 export async function getCachedBlob(trackId: string): Promise<Blob | null> {

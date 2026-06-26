@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
+import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Strict limit — promo validation is the enumeration surface (probe codes
+    // until one returns valid). Per-IP, 10 per minute.
+    if (!(await rateLimitDurable(`promo:${clientIp(req)}`, 10, 60_000))) {
+      return NextResponse.json({ valid: false, error: 'Too many attempts — try again shortly.' }, { status: 429 });
+    }
     const raw = await req.json().catch(() => ({}));
     const parsed = bodySchema.safeParse(raw);
     if (!parsed.success) {
@@ -41,10 +47,13 @@ export async function POST(req: NextRequest) {
     const normalized = code.trim().toUpperCase();
 
     const admin = createServiceClient();
+    // Codes are stored canonically upper-cased (the create route normalizes),
+    // and `normalized` is already upper-cased — so an exact match served by
+    // the `code` primary-key index beats an unindexed ILIKE scan.
     const { data: row } = await admin
       .from('promo_codes')
       .select('*')
-      .ilike('code', normalized)
+      .eq('code', normalized)
       .maybeSingle();
 
     if (!row) {

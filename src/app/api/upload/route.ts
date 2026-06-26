@@ -9,6 +9,8 @@ import { isSupabaseConfigured, insert, update, getAll } from '@/lib/local-store'
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { titleFromFilename, nextVersionLabel } from '@/lib/naming';
 import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.upload');
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -103,7 +105,7 @@ export async function POST(req: NextRequest) {
     try {
       audioUrl = await uploadAudio(buffer, file.name, safeContentType);
     } catch (err) {
-      console.error('Storage upload failed:', err);
+      log.error('Storage upload failed:', { error: errorMessage(err) });
       return NextResponse.json(
         { error: `Storage error: ${errorMessage(err) || 'could not save file'}` },
         { status: 500 }
@@ -116,7 +118,7 @@ export async function POST(req: NextRequest) {
       try {
         serverAnalysis = await analyzeAudio(buffer);
       } catch (err) {
-        console.warn('Server analysis failed, using nulls:', err);
+        log.warn('Server analysis failed, using nulls:', { error: errorMessage(err) });
         serverAnalysis = { bpm: null, key: null, scale: null, loudness: null, duration: null };
       }
     }
@@ -125,7 +127,7 @@ export async function POST(req: NextRequest) {
     try {
       audd = await getAuddFeatures(buffer, file.name);
     } catch (err) {
-      console.warn('AudD features failed, using zeros:', err);
+      log.warn('AudD features failed, using zeros:', { error: errorMessage(err) });
     }
 
     const titleFromName = titleFromFilename(file.name);
@@ -138,7 +140,7 @@ export async function POST(req: NextRequest) {
         peaksUrl = await uploadPeaksSidecar(audioUrl, JSON.stringify(peaks));
       }
     } catch (err) {
-      console.warn('Peaks extraction/upload failed, continuing without:', err);
+      log.warn('Peaks extraction/upload failed, continuing without:', { error: errorMessage(err) });
     }
 
     const merged = mergeFeatures({ client: clientAnalysis, server: serverAnalysis, audd });
@@ -231,7 +233,7 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (err) {
-        console.error('Supabase op failed, falling back to local store:', err);
+        log.error('Supabase op failed, falling back to local store:', { error: errorMessage(err) });
         const message = errorMessage(err) || 'Database save failed';
         if (/destination|attach/i.test(message)) {
           const status = /forbidden/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 500;
@@ -245,7 +247,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ success: true, track }, { status: 200 });
   } catch (error) {
-    console.error('Upload Error:', error);
+    log.error('Upload Error:', { error: errorMessage(error) });
     return NextResponse.json(
       { error: errorMessage(error) || 'Unknown upload error' },
       { status: 500 }

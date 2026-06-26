@@ -8,6 +8,8 @@ import { createLogger } from '@/lib/log';
 import { DEFAULT_TEMPLATE_MD, fillTemplate } from '@/lib/contracts/license-template';
 import { renderContractPdf } from '@/lib/contracts/pdf';
 import { uploadContractPdf } from '@/lib/storage/upload';
+import { parseCartItems } from '@/lib/contracts/stripe-webhook';
+import { isUUID } from '@/lib/validate';
 
 const log = createLogger('stripe.webhook');
 export const runtime = 'nodejs';
@@ -48,20 +50,8 @@ export const dynamic = 'force-dynamic';
  */
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function parseCartItems(raw: string): Array<{ track_id: string; license_id: string; license_type: string }> {
-  try {
-    const parsed = JSON.parse(raw || '[]');
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (i: any) => typeof i === 'object' && i !== null && typeof i.track_id === 'string',
-    );
-  } catch {
-    return [];
-  }
-}
+// Cart parsing + per-item validation lives in lib/contracts/stripe-webhook.ts
+// (Zod-backed, unit-tested). UUID-shape checks reuse isUUID from lib/validate.
 
 /** Map a raw license_id string to a canonical DB license_type.
  *  UUIDs are resolved via the license rows fetched from the DB.
@@ -70,7 +60,7 @@ function resolveTypeFromRaw(
   raw: string,
   licenseById: Map<string, any>,
 ): 'lease' | 'exclusive' {
-  if (UUID_RE.test(raw)) {
+  if (isUUID(raw)) {
     const row = licenseById.get(raw);
     return row?.is_exclusive === true ? 'exclusive' : 'lease';
   }
@@ -95,34 +85,36 @@ async function runFulfillment(params: {
   // purchase to the contact's activity timeline (the buyer → contact link).
   if (meta.seller_user_id && meta.buyer_email) {
     try {
-      const { data: existing } = await admin
+      // Atomic insert-if-absent — the unique index on (user_id, email)
+      // (migration 096) means two concurrent webhook deliveries can't both
+      // create the contact. ignoreDuplicates = ON CONFLICT DO NOTHING, so a
+      // returning buyer's existing name/notes are preserved.
+      await admin
         .from('contacts')
-        .select('id')
+        .upsert(
+          {
+            user_id: meta.seller_user_id,
+            name: session.customer_details?.name || 'Customer',
+            email: meta.buyer_email,
+            role: 'artist',
+            label: 'buyer',
+            notes: `Purchased via ${meta.source_surface === 'store' ? 'store' : 'share link'}`,
+            buyer_pipeline_status: 'purchased',
+          },
+          { onConflict: 'user_id,email', ignoreDuplicates: true },
+        );
+
+      // The row now exists either way. Bump the pipeline status (idempotent,
+      // covers returning buyers) and read back the id for the activity log.
+      const { data: contactRow } = await admin
+        .from('contacts')
+        .update({ buyer_pipeline_status: 'purchased' })
         .eq('user_id', meta.seller_user_id)
         .eq('email', meta.buyer_email)
+        .select('id')
         .maybeSingle();
 
-      let contactId = existing?.id as string | undefined;
-
-      if (!existing) {
-        const { data: inserted } = await admin.from('contacts').insert({
-          user_id: meta.seller_user_id,
-          name: session.customer_details?.name || 'Customer',
-          email: meta.buyer_email,
-          role: 'artist',
-          label: 'buyer',
-          notes: `Purchased via ${meta.source_surface === 'store' ? 'store' : 'share link'}`,
-          buyer_pipeline_status: 'purchased',
-        }).select('id').single();
-        contactId = inserted?.id;
-      } else {
-        // Ensure pipeline status is updated even for returning buyers
-        await admin
-          .from('contacts')
-          .update({ buyer_pipeline_status: 'purchased' })
-          .eq('user_id', meta.seller_user_id)
-          .eq('email', meta.buyer_email);
-      }
+      const contactId = contactRow?.id as string | undefined;
 
       // Activity timeline entry. dedupe_key = stripe session id so retries
       // and the timeline's derived-purchase path don't double-log. Title is
@@ -472,30 +464,30 @@ async function runProjectFulfillment(params: {
   // 1. CRM — upsert buyer (reuse pattern)
   if (meta.seller_user_id && meta.buyer_email) {
     try {
-      const { data: existing } = await admin
+      // Atomic insert-if-absent (see runFulfillment) — unique index on
+      // (user_id, email) prevents concurrent webhook deliveries from
+      // double-inserting the buyer; existing name/notes are preserved.
+      await admin
         .from('contacts')
-        .select('id')
-        .eq('user_id', meta.seller_user_id)
-        .eq('email', meta.buyer_email)
-        .maybeSingle();
+        .upsert(
+          {
+            user_id: meta.seller_user_id,
+            name: session.customer_details?.name || 'Customer',
+            email: meta.buyer_email,
+            role: 'artist',
+            label: 'buyer',
+            notes: `Purchased project via store`,
+            buyer_pipeline_status: 'purchased',
+          },
+          { onConflict: 'user_id,email', ignoreDuplicates: true },
+        );
 
-      if (!existing) {
-        await admin.from('contacts').insert({
-          user_id: meta.seller_user_id,
-          name: session.customer_details?.name || 'Customer',
-          email: meta.buyer_email,
-          role: 'artist',
-          label: 'buyer',
-          notes: `Purchased project via store`,
-          buyer_pipeline_status: 'purchased',
-        });
-      } else {
-        await admin
-          .from('contacts')
-          .update({ buyer_pipeline_status: 'purchased' })
-          .eq('user_id', meta.seller_user_id)
-          .eq('email', meta.buyer_email);
-      }
+      // Bump pipeline status for returning buyers too.
+      await admin
+        .from('contacts')
+        .update({ buyer_pipeline_status: 'purchased' })
+        .eq('user_id', meta.seller_user_id)
+        .eq('email', meta.buyer_email);
     } catch (err) {
       log.warn('project CRM upsert failed', { error: errorMessage(err) });
     }
@@ -581,6 +573,14 @@ export async function POST(req: NextRequest) {
       case 'checkout.session.completed': {
         const session = event.data.object as any;
         const meta: Record<string, string> = session.metadata ?? {};
+
+        // Drop UUID-typed metadata that isn't actually a UUID so it never
+        // reaches a DB query as a malformed filter value. Both fields have
+        // existing null-fallback paths (CRM upsert skips; project_id guard
+        // bails; sellerForAccess looks up the project owner), so clearing
+        // the bad value degrades gracefully instead of silently no-matching.
+        if (meta.seller_user_id && !isUUID(meta.seller_user_id)) delete meta.seller_user_id;
+        if (meta.project_id && !isUUID(meta.project_id)) delete meta.project_id;
 
         // ── Layer 1 idempotency: event-level ──────────────────────────────
         // INSERT ... ON CONFLICT DO NOTHING returns rowCount=0 if duplicate
@@ -748,7 +748,7 @@ export async function POST(req: NextRequest) {
           const customLicenseUUIDs = [...new Set(
             rawCartItems
               .map((i) => i.license_id)
-              .filter((id) => UUID_RE.test(id)),
+              .filter(isUUID),
           )];
 
           const licenseById = new Map<string, any>();
@@ -824,23 +824,38 @@ export async function POST(req: NextRequest) {
           });
 
           // ── Notification insert ──────────────────────────────────
+          // Event-level dedup (processed_stripe_events) already gates this
+          // path, but a sale notification is exactly the kind of thing a
+          // buyer should never see twice — so guard on session_id directly
+          // too, mirroring the contact_activity dedupe_key approach.
           if (meta.seller_user_id) {
-            const amountUsd = ((session.amount_total ?? 0) / 100).toFixed(2);
-            const beatCount = resolvedLineItems.length;
-            const beatLabel = beatCount === 1 ? '1 beat' : `${beatCount} beats`;
-            await admin.from('notifications').insert({
-              user_id: meta.seller_user_id,
-              kind: 'purchase',
-              title: `New sale — ${beatLabel} ($${amountUsd})`,
-              body: `From ${meta.buyer_email || session.customer_email || 'a buyer'}`,
-              data: {
-                session_id: session.id,
-                amount_usd: parseFloat(amountUsd),
-                buyer_email: meta.buyer_email || session.customer_email,
-              },
-            }).then(({ error: ne }) => {
-              if (ne) log.warn('notification insert failed', { error: ne.message });
-            });
+            const { data: existingNotif } = await admin
+              .from('notifications')
+              .select('id')
+              .eq('user_id', meta.seller_user_id)
+              .eq('kind', 'purchase')
+              .eq('data->>session_id', session.id)
+              .maybeSingle();
+
+            if (!existingNotif) {
+              const amountUsd = ((session.amount_total ?? 0) / 100).toFixed(2);
+              const beatCount = resolvedLineItems.length;
+              const beatLabel = beatCount === 1 ? '1 beat' : `${beatCount} beats`;
+              await admin.from('notifications').insert({
+                user_id: meta.seller_user_id,
+                kind: 'purchase',
+                title: `New sale — ${beatLabel} ($${amountUsd})`,
+                body: `From ${meta.buyer_email || session.customer_email || 'a buyer'}`,
+                data: {
+                  session_id: session.id,
+                  dedupe_key: session.id,
+                  amount_usd: parseFloat(amountUsd),
+                  buyer_email: meta.buyer_email || session.customer_email,
+                },
+              }).then(({ error: ne }) => {
+                if (ne) log.warn('notification insert failed', { error: ne.message });
+              });
+            }
           }
         }
         break;

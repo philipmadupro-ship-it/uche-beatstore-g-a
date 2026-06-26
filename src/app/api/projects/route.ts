@@ -8,6 +8,7 @@ import {
   getAll,
 } from '@/lib/db';
 import { nextProjectName } from '@/lib/naming';
+import { parsePagination } from '@/lib/validate';
 
 type ProjectTrackPreviewRow = {
   project_id: string;
@@ -31,12 +32,15 @@ function addPreviewCover(map: Map<string, string[]>, ownerId: string, cover?: un
  * project_tracks junction. The main row fetch goes through `scopedList`;
  * the count rollup is a one-off join we run alongside.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   type ProjectRow = { id: string; user_id: string | null; [k: string]: unknown };
 
+  const { limit, offset } = parsePagination(new URL(req.url).searchParams);
   const projects = await scopedList<ProjectRow>('projects', {
     orderBy: 'created_at',
     ascending: false,
+    limit,
+    offset,
   });
   if (isErrorResponse(projects)) return projects;
 

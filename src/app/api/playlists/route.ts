@@ -8,6 +8,7 @@ import {
   getAll,
 } from '@/lib/db';
 import { nextPlaylistName } from '@/lib/naming';
+import { parsePagination } from '@/lib/validate';
 
 type PlaylistTrackPreviewRow = {
   playlist_id: string;
@@ -30,12 +31,15 @@ function addPreviewCover(map: Map<string, string[]>, ownerId: string, cover?: un
  * GET /api/playlists — caller's playlists + null-owner legacy rows, with
  * track_count attached via the playlist_tracks junction.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   type PlaylistRow = { id: string; user_id: string | null; [k: string]: unknown };
 
+  const { limit, offset } = parsePagination(new URL(req.url).searchParams);
   const playlists = await scopedList<PlaylistRow>('playlists', {
     orderBy: 'created_at',
     ascending: false,
+    limit,
+    offset,
   });
   if (isErrorResponse(playlists)) return playlists;
 

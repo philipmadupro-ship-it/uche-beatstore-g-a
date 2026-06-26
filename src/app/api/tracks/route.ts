@@ -8,6 +8,7 @@ import {
 } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { parsePagination } from '@/lib/validate';
 
 const log = createLogger('api.tracks.list');
 
@@ -55,6 +56,10 @@ export async function GET(req: NextRequest) {
     const extraLte: Record<string, number> = {};
     if (maxBpm) extraLte.bpm = parseInt(maxBpm);
 
+    // Optional pagination — omitted limit keeps prior behaviour (capped only
+    // by PostgREST's own per-response ceiling).
+    const { limit, offset } = parsePagination(searchParams);
+
     // Try the rich query with joins first. If Supabase complains (missing
     // table, RLS surprise), retry without joins so an active library
     // doesn't blink to "no tracks" on a transient schema hiccup.
@@ -68,6 +73,8 @@ export async function GET(req: NextRequest) {
       extraGte: Object.keys(extraGte).length ? extraGte : undefined,
       extraLte: Object.keys(extraLte).length ? extraLte : undefined,
       extraIn: junctionIds ? { column: 'id', values: junctionIds } : undefined,
+      limit,
+      offset,
     });
 
     if (isErrorResponse(rows)) {
@@ -79,6 +86,8 @@ export async function GET(req: NextRequest) {
         extraGte: Object.keys(extraGte).length ? extraGte : undefined,
         extraLte: Object.keys(extraLte).length ? extraLte : undefined,
         extraIn: junctionIds ? { column: 'id', values: junctionIds } : undefined,
+        limit,
+        offset,
       });
       if (isErrorResponse(rows)) return rows;
     }

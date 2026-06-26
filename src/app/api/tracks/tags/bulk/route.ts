@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, requireUser, query, getAll, insert, deleteRow } from '@/lib/db';
+import { safeSellerId } from '@/lib/auth/ownership';
 import { readBody } from '@/lib/validate';
 import { errorMessage } from '@/lib/errors';
 import { ContactsBulkTagsBodySchema } from '@/lib/contracts';
@@ -20,12 +21,15 @@ export async function POST(req: NextRequest) {
     if (!auth.ok) return auth.res;
 
     if (isSupabaseConfigured()) {
+      // Validate before interpolating into .or() (comma footgun).
+      const safeId = safeSellerId(auth.userId);
+      if (!safeId) return NextResponse.json({ updated: 0 });
       // Restrict to owned tracks.
       const { data: owned } = await auth.admin
         .from('tracks')
         .select('id')
         .in('id', ids)
-        .or(`user_id.eq.${auth.userId},user_id.is.null`);
+        .or(`user_id.eq.${safeId},user_id.is.null`);
       const ownedIds = (owned ?? []).map((t: any) => t.id);
       if (ownedIds.length === 0) return NextResponse.json({ updated: 0 });
 

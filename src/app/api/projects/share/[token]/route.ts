@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { isSupabaseConfigured, getAll, query } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
 
+const log = createLogger('api.projects.share.token');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
@@ -208,7 +211,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       licenses,
     });
   } catch (error: any) {
-    console.error('Project share read error:', error);
+    log.error('Project share read error:', { error: errorMessage(error) });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -288,7 +291,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     if (error) throw error;
     return NextResponse.json({ project: data });
   } catch (error: any) {
-    console.error('Editor PATCH error:', error);
+    log.error('Editor PATCH error:', { error: errorMessage(error) });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

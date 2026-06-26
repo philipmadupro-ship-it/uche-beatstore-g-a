@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { scopedList, insertOwned, isErrorResponse, isSupabaseConfigured, createServiceClient, getAll, requireUser, query, update } from '@/lib/db';
-import { readBody } from '@/lib/validate';
+import { safeSellerId } from '@/lib/auth/ownership';
+import { readBody, parsePagination } from '@/lib/validate';
 import { errorMessage } from '@/lib/errors';
 import { ContactsBatchPatchBodySchema } from '@/lib/contracts';
 
@@ -12,8 +13,14 @@ import { ContactsBatchPatchBodySchema } from '@/lib/contracts';
  *                       (mig 091). Null-owner legacy rows included by default.
  * POST /api/contacts → create with user_id auto-stamped from session.
  */
-export async function GET(_req: NextRequest) {
-  const rows = await scopedList<{ id: string; [k: string]: unknown }>('contacts', { orderBy: 'name', ascending: true });
+export async function GET(req: NextRequest) {
+  const { limit, offset } = parsePagination(new URL(req.url).searchParams);
+  const rows = await scopedList<{ id: string; [k: string]: unknown }>('contacts', {
+    orderBy: 'name',
+    ascending: true,
+    limit,
+    offset,
+  });
   if (isErrorResponse(rows)) return rows;
 
   // Batch-attach tags so the CRM can filter/group by them client-side.
@@ -78,12 +85,15 @@ export async function PATCH(req: NextRequest) {
     if (!auth.ok) return auth.res;
 
     if (isSupabaseConfigured()) {
+      // Validate before interpolating into .or() (comma footgun).
+      const safeId = safeSellerId(auth.userId);
+      if (!safeId) return NextResponse.json({ updated: 0 });
       // Single UPDATE … IN (ids) scoped to owner-or-legacy-null. No N round-trips.
       const { data, error } = await auth.admin
         .from('contacts')
         .update(patch)
         .in('id', ids)
-        .or(`user_id.eq.${auth.userId},user_id.is.null`)
+        .or(`user_id.eq.${safeId},user_id.is.null`)
         .select('id');
       if (error) throw new Error(error.message);
       return NextResponse.json({ updated: data?.length ?? 0 });

@@ -4,14 +4,17 @@ import { Resend } from 'resend';
 import { nanoid } from 'nanoid';
 import { isSupabaseConfigured, insert, createServiceClient } from '@/lib/db';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.invite');
+import { readBody } from '@/lib/validate';
+import { InviteCreateBodySchema } from '@/lib/contracts';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, role } = await req.json();
-
-    if (!email || !role) {
-      return NextResponse.json({ error: 'Email and role required' }, { status: 400 });
-    }
+    const parsed = await readBody(req, InviteCreateBodySchema);
+    if (!parsed.ok) return parsed.res;
+    const { email, role } = parsed.data;
 
     // Without an auth gate this endpoint is an open relay — anyone could fire
     // invitation emails through our Resend account, spending the budget and
@@ -67,8 +70,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, invite, inviteUrl });
-  } catch (error: any) {
-    console.error('Invite Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    log.error('Invite Error:', { error: errorMessage(error) });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

@@ -5,16 +5,13 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { isValidEmail, isUUID } from '@/lib/validate';
+import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
+import { applyDiscount, applyBundleDiscount, type PromoTerms, type LineItems } from '@/lib/store/discount';
 
 const log = createLogger('api.store.checkout');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-interface PromoTerms {
-  code: string;
-  discountPercent: number;
-  discountAmount: number;
-}
 
 type CheckoutBody = {
   buyer_email?: unknown;
@@ -81,10 +78,13 @@ async function resolvePromo(
 ): Promise<{ valid: false; error: string } | { valid: true; terms: PromoTerms | null }> {
   if (!code) return { valid: true, terms: null };
 
+  // `code` is already trimmed + upper-cased by the caller, and stored codes
+  // are canonical upper-case — exact match hits the `code` PK index instead
+  // of an unindexed ILIKE scan.
   const { data: row } = await admin
     .from('promo_codes')
     .select('*')
-    .ilike('code', code)
+    .eq('code', code)
     .maybeSingle();
 
   if (!row) return { valid: false, error: 'Invalid promo code' };
@@ -101,77 +101,6 @@ async function resolvePromo(
       discountAmount: Number(row.discount_amount ?? 0),
     },
   };
-}
-
-type LineItems = Array<{
-  price_data: { currency: string; unit_amount: number; product_data: { name: string } };
-  quantity: number;
-}>;
-
-/**
- * Automatic bundle/quantity discount (Task 7). When the cart's item count
- * meets the producer's threshold, knock `percent` off every line uniformly.
- * Runs BEFORE any promo code, so a promo stacks on the already-bundled price.
- * Off when threshold<=0, percent<=0, or the cart is below the threshold.
- */
-function applyBundleDiscount(
-  lineItems: LineItems,
-  rule: { threshold: number; percent: number } | null,
-): { items: LineItems; applied: boolean; percent: number } {
-  if (!rule || rule.threshold <= 0 || rule.percent <= 0 || lineItems.length < rule.threshold) {
-    return { items: lineItems, applied: false, percent: 0 };
-  }
-  const factor = 1 - Math.min(90, rule.percent) / 100;
-  const items = lineItems.map((li) => ({
-    ...li,
-    price_data: {
-      ...li.price_data,
-      unit_amount: Math.max(1, Math.round(li.price_data.unit_amount * factor)),
-    },
-  }));
-  return { items, applied: true, percent: rule.percent };
-}
-
-function applyDiscount(
-  lineItems: LineItems,
-  promo: PromoTerms | null,
-): { discountedItems: LineItems; discountTotalCents: number } {
-  if (!promo || (promo.discountPercent <= 0 && promo.discountAmount <= 0)) {
-    return { discountedItems: lineItems, discountTotalCents: 0 };
-  }
-
-  const originalTotalCents = lineItems.reduce((sum, li) => sum + li.price_data.unit_amount, 0);
-
-  if (promo.discountPercent > 0) {
-    const discountedItems = lineItems.map((li) => ({
-      ...li,
-      price_data: {
-        ...li.price_data,
-        unit_amount: Math.max(1, Math.round(li.price_data.unit_amount * (1 - promo.discountPercent / 100))),
-      },
-    }));
-    const newTotal = discountedItems.reduce((sum, li) => sum + li.price_data.unit_amount, 0);
-    return { discountedItems, discountTotalCents: originalTotalCents - newTotal };
-  }
-
-  // Flat amount discount — distribute proportionally across line items
-  const discountCents = Math.min(Math.round(promo.discountAmount * 100), originalTotalCents - 1);
-  let remaining = discountCents;
-  const discountedItems = lineItems.map((li, idx) => {
-    if (remaining <= 0) return li;
-    const share = Math.round((li.price_data.unit_amount / originalTotalCents) * discountCents);
-    const actualDiscount = idx === lineItems.length - 1 ? remaining : Math.min(share, remaining);
-    remaining -= actualDiscount;
-    return {
-      ...li,
-      price_data: {
-        ...li.price_data,
-        unit_amount: Math.max(1, li.price_data.unit_amount - actualDiscount),
-      },
-    };
-  });
-
-  return { discountedItems, discountTotalCents: discountCents };
 }
 
 /**
@@ -195,13 +124,18 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Per-IP limit — each call creates a Stripe session (+ abandoned_carts
+    // row). Caps session/cart spam without throttling a real buyer.
+    if (!(await rateLimitDurable(`checkout:${clientIp(req)}`, 8, 60_000))) {
+      return NextResponse.json({ error: 'Too many checkout attempts — try again shortly.' }, { status: 429 });
+    }
     const body = await req.json().catch(() => ({})) as CheckoutBody;
     const buyerEmail = typeof body.buyer_email === 'string' ? body.buyer_email.trim() : '';
     const candidateItems = Array.isArray(body.items) ? body.items : [];
     const projectId = typeof body.project_id === 'string' ? body.project_id.trim() : '';
     const promoCode = typeof body.promo_code === 'string' ? body.promo_code.trim().toUpperCase() : '';
 
-    if (!buyerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail)) {
+    if (!isValidEmail(buyerEmail)) {
       return NextResponse.json({ error: 'Valid buyer email required' }, { status: 400 });
     }
     if (!projectId && !candidateItems.length) {
@@ -367,11 +301,10 @@ export async function POST(req: NextRequest) {
     // Collect the UUIDs that look like proper UUIDs (v4 format) to query the
     // licenses table. Legacy values like 'lease' / 'basic-lease' / 'exclusive-rights'
     // are not UUIDs and fall through to the legacy price logic.
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const customLicenseIds = [...new Set(
       rawItems
         .map((i) => i.license_id)
-        .filter((id): id is string => typeof id === 'string' && UUID_RE.test(id))
+        .filter(isUUID)
     )];
 
     // Map license_id → license row
@@ -415,7 +348,7 @@ export async function POST(req: NextRequest) {
       if (!track) continue;
 
       const rawLicenseId = it.license_id ?? '';
-      const isCustomTier = UUID_RE.test(rawLicenseId);
+      const isCustomTier = isUUID(rawLicenseId);
       const customLicense = isCustomTier ? licenseById.get(rawLicenseId) : null;
 
       // Determine resolved license_type ('lease' | 'exclusive') from either

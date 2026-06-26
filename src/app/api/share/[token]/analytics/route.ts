@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll, query, createServiceClient } from '@/lib/db';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.share.token.analytics');
 
 /**
  * GET /api/share/[token]/analytics
@@ -118,7 +121,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       by_track,
     });
   } catch (error: any) {
-    console.error('Share analytics error:', error);
+    log.error('Share analytics error:', { error: errorMessage(error) });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

@@ -15,6 +15,7 @@
  * type). e.g. `RateBodySchema` and `RateBody = z.infer<typeof RateBodySchema>`.
  */
 import { z } from 'zod';
+import { STORE_EVENT_TYPES } from '@/lib/store/funnel';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -320,3 +321,127 @@ export function parsePurchaseLineItems(raw: unknown): PurchaseLineItem[] {
   // Older rows can be `null` or use a different shape; treat as empty.
   return [];
 }
+
+// ── Stems ────────────────────────────────────────────────────────────────
+// POST /api/stems — kick off a Demucs/Moises split. Gated on track
+// ownership; validated so a bad body 400s instead of throwing on a
+// missing field deep in the dispatcher.
+export const StemStartBodySchema = z.object({
+  trackId: z.string().min(1),
+  audioUrl: z.string().min(1).max(2000),
+  model: z.string().max(40).optional(),
+});
+export type StemStartBody = z.infer<typeof StemStartBodySchema>;
+
+// ── Invites ──────────────────────────────────────────────────────────────
+// POST /api/invite — team invite. Role mirrors the settings UI's options.
+export const INVITE_ROLES = ['admin', 'collaborator'] as const;
+export type InviteRole = (typeof INVITE_ROLES)[number];
+
+export const InviteCreateBodySchema = z.object({
+  email: z.string().email().max(200),
+  role: z.enum(INVITE_ROLES),
+}).strict();
+export type InviteCreateBody = z.infer<typeof InviteCreateBodySchema>;
+
+// ── Share links ──────────────────────────────────────────────────────────
+// POST /api/share — legacy track/project share-link creation.
+export const ShareCreateBodySchema = z.object({
+  track_ids: z.array(z.string().min(1)).min(1),
+  title: z.string().max(200).nullish(),
+  cover_url: z.string().max(2000).nullish(),
+  project_id: z.string().nullish(),
+  kind: z.enum(['track', 'project']).optional(),
+  allow_downloads: z.boolean().optional(),
+  expires_days: z.number().int().min(0).max(3650).optional(),
+  password: z.string().min(1).max(200).nullish(),
+  recipient_kind: z.enum(['client', 'producer', 'rapper', 'friend']).optional(),
+});
+export type ShareCreateBody = z.infer<typeof ShareCreateBodySchema>;
+
+// ── Creator profile ────────────────────────────────────────────────────────
+// POST/PATCH /api/profile. The form historically sent price + numeric fields
+// as strings (the route parseFloat/Number-coerces), so those accept string OR
+// number here. All fields optional; unknown keys are dropped (not .strict) so
+// the route's existing whitelist-by-destructure stays the source of truth.
+const numericLike = z.union([z.number(), z.string()]).nullish();
+export const CreatorProfilePatchSchema = z.object({
+  display_name: z.string().max(200).nullish(),
+  bio: z.string().max(10000).nullish(),
+  hero_image_url: z.string().max(2000).nullish(),
+  credits: z.string().max(10000).nullish(),
+  license_lease_price_usd: numericLike,
+  license_exclusive_price_usd: numericLike,
+  license_notes: z.string().max(10000).nullish(),
+  license_agreement: z.string().max(50000).nullish(),
+  default_discount_percent: numericLike,
+  instagram_handle: z.string().max(200).nullish(),
+  twitter_handle: z.string().max(200).nullish(),
+  spotify_url: z.string().max(2000).nullish(),
+  soundcloud_url: z.string().max(2000).nullish(),
+  website_url: z.string().max(2000).nullish(),
+  contact_email: z.string().max(200).nullish(),
+  accent_color: z.string().max(40).nullish(),
+  font_style: z.string().max(40).nullish(),
+  seo_title: z.string().max(200).nullish(),
+  seo_description: z.string().max(500).nullish(),
+  og_image_url: z.string().max(2000).nullish(),
+  license_template_md: z.string().max(50000).nullish(),
+  share_card_style: z.string().max(40).nullish(),
+  share_video_style: z.string().max(40).nullish(),
+  lossless_exports: z.boolean().optional(),
+  auto_tagging: z.boolean().optional(),
+  voice_tag_url: z.string().max(2000).nullish(),
+  voice_tag_interval_seconds: numericLike,
+  bundle_discount_threshold: numericLike,
+  bundle_discount_percent: numericLike,
+});
+export type CreatorProfilePatch = z.infer<typeof CreatorProfilePatchSchema>;
+
+// ── Contact import (JSON branch) ──────────────────────────────────────────
+// POST /api/contacts/import with { contacts: [...] }. The multipart branch
+// re-parses a file server-side and is validated there; this schema guards
+// the pre-parsed JSON list. Only `name` is required (mirrors ParsedContact).
+export const ContactImportItemSchema = z.object({
+  name: z.string().min(1).max(200),
+  email: z.string().max(200).optional(),
+  phone: z.string().max(60).optional(),
+  role: z.string().max(80).optional(),
+  label: z.string().max(80).optional(),
+  category: z.string().max(80).optional(),
+  genre: z.string().max(80).optional(),
+  country: z.string().max(80).optional(),
+  city: z.string().max(80).optional(),
+  instagram: z.string().max(200).optional(),
+  twitter: z.string().max(200).optional(),
+  website: z.string().max(2000).optional(),
+  notes: z.string().max(10000).optional(),
+}).passthrough();
+export type ContactImportItem = z.infer<typeof ContactImportItemSchema>;
+
+export const ContactImportBodySchema = z.object({
+  contacts: z.array(ContactImportItemSchema).min(1).max(5000),
+});
+export type ContactImportBody = z.infer<typeof ContactImportBodySchema>;
+
+// ── Buyer data erasure (GDPR) ───────────────────────────────────────────────
+// POST /api/privacy/erase — producer-initiated anonymisation of a buyer's PII
+// across their purchase records. Email is the only buyer identifier we hold.
+export const ErasureRequestSchema = z.object({
+  email: z.string().email().max(200),
+}).strict();
+export type ErasureRequest = z.infer<typeof ErasureRequestSchema>;
+
+// ── Storefront funnel events ───────────────────────────────────────────────
+// POST /api/store/event — public, fire-and-forget telemetry. event_type is
+// constrained to the known funnel vocabulary; metadata is a bounded free-form
+// payload (cart contents, amount, source surface). Everything else optional so
+// a lost field never drops a whole event.
+export const StoreEventBodySchema = z.object({
+  event_type: z.enum(STORE_EVENT_TYPES),
+  session_id: z.string().min(1).max(100),
+  track_id: z.string().max(100).optional(),
+  license_id: z.string().max(100).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+});
+export type StoreEventBody = z.infer<typeof StoreEventBodySchema>;
