@@ -10,6 +10,7 @@ import { renderContractPdf } from '@/lib/contracts/pdf';
 import { uploadContractPdf } from '@/lib/storage/upload';
 import { parseCartItems } from '@/lib/contracts/stripe-webhook';
 import { isUUID } from '@/lib/validate';
+import { resolveLicenseType } from '@/lib/store/license-type';
 
 const log = createLogger('stripe.webhook');
 export const runtime = 'nodejs';
@@ -52,20 +53,6 @@ export const dynamic = 'force-dynamic';
 // ── Helpers ─────────────────────────────────────────────────────────────────
 // Cart parsing + per-item validation lives in lib/contracts/stripe-webhook.ts
 // (Zod-backed, unit-tested). UUID-shape checks reuse isUUID from lib/validate.
-
-/** Map a raw license_id string to a canonical DB license_type.
- *  UUIDs are resolved via the license rows fetched from the DB.
- *  Legacy strings ('lease', 'basic-lease', 'exclusive-rights', …) are normalised here. */
-function resolveTypeFromRaw(
-  raw: string,
-  licenseById: Map<string, any>,
-): 'lease' | 'exclusive' {
-  if (isUUID(raw)) {
-    const row = licenseById.get(raw);
-    return row?.is_exclusive === true ? 'exclusive' : 'lease';
-  }
-  return raw === 'exclusive-rights' || raw === 'exclusive' ? 'exclusive' : 'lease';
-}
 
 // ── Background fulfillment ──────────────────────────────────────────────────
 
@@ -764,7 +751,7 @@ export async function POST(req: NextRequest) {
           const resolvedLineItems = rawCartItems.map((i) => ({
             track_id: i.track_id,
             license_id: i.license_id,
-            license_type: resolveTypeFromRaw(i.license_id ?? i.license_type ?? '', licenseById),
+            license_type: resolveLicenseType(i.license_id ?? i.license_type ?? '', licenseById),
           }));
 
           const trackIds = resolvedLineItems.map((i) => i.track_id);
