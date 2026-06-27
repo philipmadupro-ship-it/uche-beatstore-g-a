@@ -8,6 +8,7 @@ import { createLogger } from '@/lib/log';
 import { emailShell, emailButton } from '@/lib/email/templates';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/server';
 import { getAppUrl } from '@/lib/env';
+import { needsStemsUpload } from '@/lib/stems/readiness';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -102,9 +103,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (action === 'accept' && trackId && isStripeConfigured()) {
       try {
         const APP_URL = getAppUrl();
-        const stemsReady = (s: string | null | undefined) =>
-          s === 'ready' || s === 'done' || s === 'complete';
-        const stemsPending = !trackRow?.wav_url && !stemsReady(trackRow?.stems_status);
+        const stemsPending = needsStemsUpload(trackRow ?? {});
 
         const session = await getStripe().checkout.sessions.create({
           mode: 'payment',

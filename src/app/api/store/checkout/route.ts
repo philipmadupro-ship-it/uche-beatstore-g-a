@@ -8,6 +8,7 @@ import { createLogger } from '@/lib/log';
 import { isValidEmail, isUUID } from '@/lib/validate';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 import { applyDiscount, applyBundleDiscount, type PromoTerms, type LineItems } from '@/lib/store/discount';
+import { needsStemsUpload } from '@/lib/stems/readiness';
 
 const log = createLogger('api.store.checkout');
 export const runtime = 'nodejs';
@@ -260,14 +261,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Exclusive deliverable check — reject the session up front when the
-    // buyer is asking for exclusive rights but the track has neither a WAV
-    // nor ready stems. This keeps checkout aligned with the delivery promise:
-    // if we charge for an exclusive, the delivery page must have something
-    // real to unlock.
-    const stemsReady = (stemsStatus: string | null | undefined) =>
-      stemsStatus === 'ready' || stemsStatus === 'done' || stemsStatus === 'complete';
-
     // ── Creator profile (for legacy price fallback) ──────────────────────────
     const sellerUserId = trackRows[0]?.user_id ?? undefined;
     let profileLease: number | null = null;
@@ -400,7 +393,7 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      if (resolvedType === 'exclusive' && !track.wav_url && !stemsReady(track.stems_status)) {
+      if (resolvedType === 'exclusive' && needsStemsUpload(track)) {
         missingDeliverableTracks.push({ id: track.id, title: track.title ?? 'Untitled' });
         continue;
       }
