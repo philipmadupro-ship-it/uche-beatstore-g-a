@@ -18,7 +18,7 @@
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageContainer } from '@/components/layout/PageHeader';
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Loader2, Save, ExternalLink, ChevronDown, ChevronRight,
   Image as ImageIcon, Upload, Globe,
@@ -36,6 +36,8 @@ import { ArtistBioBlock } from '@/components/store/ArtistBioBlock';
 import { BeatCard } from '@/components/store/BeatCard';
 import { TrackLicensePanel } from '@/components/store/TrackLicensePanel';
 import type { StoreTrack, CreatorProfile } from '@/components/store/types';
+
+const TRACK_LIST_BATCH_SIZE = 80;
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -463,6 +465,38 @@ interface TrackRow {
   scheduled_publish_at: string | null;
 }
 
+interface TrackStoreSummary {
+  total: number;
+  listed: number;
+  producerPicks: TrackRow[];
+  issues: {
+    noCover: { count: number; firstId: string | null };
+    noPrice: { count: number; firstId: string | null };
+    noBpmKey: { count: number; firstId: string | null };
+  };
+}
+
+function mapTrackRow(t: any): TrackRow {
+  return {
+    id: t.id,
+    title: t.title,
+    type: t.type,
+    cover_url: t.cover_url ?? null,
+    bpm: t.bpm ?? null,
+    key: t.key ?? null,
+    scale: t.scale ?? null,
+    store_listed: !!t.store_listed,
+    store_featured: !!t.store_featured,
+    store_sort_order: t.store_sort_order ?? null,
+    scheduled_publish_at: t.scheduled_publish_at ?? null,
+    lease_price_usd: t.lease_price_usd ?? null,
+    exclusive_price_usd: t.exclusive_price_usd ?? null,
+    free_download_enabled: !!t.free_download_enabled,
+    exclusive_sold: !!t.exclusive_sold,
+    voice_tag_enabled: !!t.voice_tag_enabled,
+  };
+}
+
 function StorePreview({
   profile,
   featuredPlaylists,
@@ -622,7 +656,17 @@ export default function StoreEditorPage() {
   const [featuredProjects, setFeaturedProjects] = useState<ProjectRow[]>([]);
   const [previewTracks, setPreviewTracks] = useState<PreviewTrack[]>([]);
   const [allTracks, setAllTracks] = useState<TrackRow[]>([]);
+  const [trackSummary, setTrackSummary] = useState<TrackStoreSummary | null>(null);
   const [trackSearch, setTrackSearch] = useState('');
+  const [visibleTrackRows, setVisibleTrackRows] = useState(TRACK_LIST_BATCH_SIZE);
+  const [trackNextCursor, setTrackNextCursor] = useState<string | null>(null);
+  const [trackHasMore, setTrackHasMore] = useState(false);
+  const [trackLoadingMore, setTrackLoadingMore] = useState(false);
+  const [producerPickSearch, setProducerPickSearch] = useState('');
+  const [producerPickCandidates, setProducerPickCandidates] = useState<TrackRow[]>([]);
+  const [producerPickNextCursor, setProducerPickNextCursor] = useState<string | null>(null);
+  const [producerPickHasMore, setProducerPickHasMore] = useState(false);
+  const [producerPickLoading, setProducerPickLoading] = useState(false);
   const [togglingTrack, setTogglingTrack] = useState<string | null>(null);
   // Global license tiers (for per-track license panel)
   const [globalLicenses, setGlobalLicenses] = useState<GlobalLicense[]>([]);
@@ -664,6 +708,9 @@ export default function StoreEditorPage() {
   const dragIdx = useRef<number | null>(null);
   // Drag state for project reorder
   const projectDragIdx = useRef<number | null>(null);
+  const trackSearchRequestRef = useRef(0);
+  const loadedTrackSearchRef = useRef<string | null>(null);
+  const producerPickRequestRef = useRef(0);
 
   const toggleSection = (id: string) =>
     setOpenSections((prev) => {
@@ -680,6 +727,151 @@ export default function StoreEditorPage() {
       next.add(id);
       return next;
     });
+
+  const producerPicksOpen = openSections.has('producer-picks');
+
+  useEffect(() => {
+    setVisibleTrackRows(TRACK_LIST_BATCH_SIZE);
+  }, [trackSearch, allTracks.length]);
+
+  const filteredTrackRows = useMemo(() => {
+    const search = trackSearch.trim().toLowerCase();
+    if (!search) return allTracks;
+    return allTracks.filter((t) =>
+      t.title.toLowerCase().includes(search) ||
+      (t.key ?? '').toLowerCase().includes(search) ||
+      String(t.bpm ?? '').includes(search)
+    );
+  }, [allTracks, trackSearch]);
+
+  const renderedTrackRows = useMemo(
+    () => filteredTrackRows.slice(0, visibleTrackRows),
+    [filteredTrackRows, visibleTrackRows],
+  );
+
+  const loadTrackPage = useCallback(async ({ cursor = null, append = false, search = '' }: {
+    cursor?: string | null;
+    append?: boolean;
+    search?: string;
+  } = {}) => {
+    const normalizedSearch = search.trim();
+    const requestId = append ? trackSearchRequestRef.current : ++trackSearchRequestRef.current;
+    if (append) setTrackLoadingMore(true);
+    try {
+      const params = new URLSearchParams({
+        paged: '1',
+        lean: '1',
+        limit: '100',
+      });
+      if (cursor) params.set('cursor', cursor);
+      if (normalizedSearch) params.set('q', normalizedSearch);
+      const res = await fetch(`/api/tracks?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+      if (requestId !== trackSearchRequestRef.current) return [];
+      const rows = ((data.tracks ?? []) as any[]).map(mapTrackRow).sort((a, b) => {
+        if (a.store_listed && !b.store_listed) return -1;
+        if (!a.store_listed && b.store_listed) return 1;
+        if (a.store_sort_order != null && b.store_sort_order != null) return a.store_sort_order - b.store_sort_order;
+        return a.title.localeCompare(b.title);
+      });
+      setAllTracks((prev) => {
+        if (!append) return rows;
+        const seen = new Set(prev.map((track) => track.id));
+        return [...prev, ...rows.filter((track) => !seen.has(track.id))];
+      });
+      setTrackHasMore(Boolean(data.pageInfo?.hasMore));
+      setTrackNextCursor(data.pageInfo?.nextCursor ?? null);
+      loadedTrackSearchRef.current = normalizedSearch;
+      return rows;
+    } finally {
+      if (append) setTrackLoadingMore(false);
+    }
+  }, []);
+
+  const loadProducerPickPage = useCallback(async ({ cursor = null, append = false, search = '' }: {
+    cursor?: string | null;
+    append?: boolean;
+    search?: string;
+  } = {}) => {
+    const requestId = append ? producerPickRequestRef.current : ++producerPickRequestRef.current;
+    setProducerPickLoading(true);
+    try {
+      const params = new URLSearchParams({
+        paged: '1',
+        lean: '1',
+        limit: '40',
+        store_listed: '1',
+      });
+      if (cursor) params.set('cursor', cursor);
+      if (search.trim()) params.set('q', search.trim());
+      const res = await fetch(`/api/tracks?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+      if (requestId !== producerPickRequestRef.current) return;
+      const rows = ((data.tracks ?? []) as any[]).map(mapTrackRow);
+      setProducerPickCandidates((prev) => {
+        if (!append) return rows;
+        const seen = new Set(prev.map((track) => track.id));
+        return [...prev, ...rows.filter((track) => !seen.has(track.id))];
+      });
+      setProducerPickHasMore(Boolean(data.pageInfo?.hasMore));
+      setProducerPickNextCursor(data.pageInfo?.nextCursor ?? null);
+    } finally {
+      if (requestId === producerPickRequestRef.current) setProducerPickLoading(false);
+    }
+  }, []);
+
+  const refreshTrackSummary = useCallback(async () => {
+    const res = await fetch('/api/tracks/store-summary');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+    const nextSummary: TrackStoreSummary = {
+      ...data,
+      producerPicks: ((data.producerPicks ?? []) as any[]).map(mapTrackRow),
+    };
+    setTrackSummary(nextSummary);
+    return nextSummary;
+  }, []);
+
+  const patchTrackSummaryVisibility = useCallback((before: TrackRow, after: TrackRow) => {
+    setTrackSummary((prev) => {
+      if (!prev) return prev;
+      const listedDelta = (after.store_listed ? 1 : 0) - (before.store_listed ? 1 : 0);
+      const producerPicks = prev.producerPicks
+        .filter((track) => track.id !== after.id)
+        .concat(after.store_listed && after.store_featured ? [after] : [])
+        .sort((a, b) => (a.store_sort_order ?? 9999) - (b.store_sort_order ?? 9999) || a.title.localeCompare(b.title))
+        .slice(0, 12);
+      return {
+        ...prev,
+        listed: Math.max(0, prev.listed + listedDelta),
+        producerPicks,
+      };
+    });
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    const normalizedSearch = trackSearch.trim();
+    if (loadedTrackSearchRef.current === normalizedSearch) return;
+    const timer = setTimeout(() => {
+      loadTrackPage({ search: trackSearch }).catch((err) => {
+        toast.error('Could not search beats', err instanceof Error ? err.message : 'try again');
+      });
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [loadTrackPage, loading, trackSearch]);
+
+  useEffect(() => {
+    if (!producerPicksOpen) return;
+    const timer = setTimeout(() => {
+      loadProducerPickPage({ search: producerPickSearch }).catch((err) => {
+        toast.error('Could not load listed beats', err instanceof Error ? err.message : 'try again');
+      });
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [loadProducerPickPage, producerPickSearch, producerPicksOpen]);
 
   const set = useCallback(
     (field: keyof ProfileForm) =>
@@ -718,55 +910,29 @@ export default function StoreEditorPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [profileRes, playlistRes, storeRes, tracksRes, projectsRes, promoRes, licensesRes] = await Promise.all([
+        const [profileRes, playlistRes, storeRes, trackSummaryRes, projectsRes, promoRes, licensesRes] = await Promise.all([
           fetch('/api/profile'),
           fetch('/api/playlists'),
           fetch('/api/store'),
-          fetch('/api/tracks'),
+          fetch('/api/tracks/store-summary'),
           fetch('/api/projects'),
           fetch('/api/promo-codes'),
           fetch('/api/licenses'),
         ]);
-        const [pd, pld, sd, td, prd, promod, ld] = await Promise.all([
-          profileRes.json(), playlistRes.json(), storeRes.json(), tracksRes.json(), projectsRes.json(), promoRes.json(), licensesRes.json(),
+        const [pd, pld, sd, summaryData, prd, promod, ld] = await Promise.all([
+          profileRes.json(), playlistRes.json(), storeRes.json(), trackSummaryRes.json(), projectsRes.json(), promoRes.json(), licensesRes.json(),
         ]);
         const loadedGlobalLicenses = ((ld.licenses ?? []) as GlobalLicense[])
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
         setGlobalLicenses(loadedGlobalLicenses);
         setPromoCodes(promod.codes ?? []);
-        // previewTracks are set below once rawTracks is mapped.
-
-        // All tracks for the listing manager (array response from /api/tracks)
-        const rawTracks: TrackRow[] = Array.isArray(td)
-          ? td.map((t: any) => ({
-              id: t.id,
-              title: t.title,
-              type: t.type,
-              cover_url: t.cover_url ?? null,
-              bpm: t.bpm ?? null,
-              key: t.key ?? null,
-              scale: t.scale ?? null,
-              store_listed: !!t.store_listed,
-              store_featured: !!t.store_featured,
-              store_sort_order: t.store_sort_order ?? null,
-              scheduled_publish_at: t.scheduled_publish_at ?? null,
-              lease_price_usd: t.lease_price_usd ?? null,
-              exclusive_price_usd: t.exclusive_price_usd ?? null,
-              free_download_enabled: !!t.free_download_enabled,
-              exclusive_sold: !!t.exclusive_sold,
-              voice_tag_enabled: !!t.voice_tag_enabled,
-            }))
-          : [];
-        const sortedTracks = rawTracks.sort((a, b) => {
-          if (a.store_listed && !b.store_listed) return -1;
-          if (!a.store_listed && b.store_listed) return 1;
-          if (a.store_sort_order != null && b.store_sort_order != null) return a.store_sort_order - b.store_sort_order;
-          return a.title.localeCompare(b.title);
+        setTrackSummary({
+          ...summaryData,
+          producerPicks: ((summaryData.producerPicks ?? []) as any[]).map(mapTrackRow),
         });
-        setAllTracks(sortedTracks);
-        void loadTrackLicenseLinks(sortedTracks.filter((t) => t.store_listed).map((t) => t.id));
-        // Preview uses up to 3 listed tracks — full TrackRow fields so BeatCard renders correctly.
-        setPreviewTracks(sortedTracks.filter((t) => t.store_listed).slice(0, 3));
+        const firstTrackPage = await loadTrackPage({ search: '' });
+        void loadTrackLicenseLinks(firstTrackPage.filter((t) => t.store_listed).map((t) => t.id));
+        setPreviewTracks((summaryData.producerPicks ?? []).slice(0, 3).map(mapTrackRow));
         const p = pd.profile ?? {};
         setForm({
           display_name: p.display_name ?? '',
@@ -825,7 +991,7 @@ export default function StoreEditorPage() {
         setLoading(false);
       }
     })();
-  }, [loadTrackLicenseLinks]);
+  }, [loadTrackLicenseLinks, loadTrackPage]);
 
   /* ── Hero image upload ── */
   const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -911,21 +1077,22 @@ export default function StoreEditorPage() {
 
   /* ── Drag-reorder for listed beats (writes tracks.store_sort_order) ──
      Only the live (store_listed=true) rows are draggable. Drafts keep
-     their position. After a drag ends, we PATCH every reordered row
-     with a 0-based store_sort_order so /store picks them up. */
+     their position. After a drag ends, one bulk PATCH writes the 0-based
+     store_sort_order so /store picks it up without a request storm. */
   const trackDragIdx = useRef<number | null>(null);
   const persistListedTrackOrder = async (listed: TrackRow[]) => {
     try {
-      const responses = await Promise.all(
-        listed.map((t) =>
-          fetch(`/api/tracks/${t.id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ store_sort_order: t.store_sort_order }),
-          }),
-        ),
-      );
-      if (responses.some((res) => !res.ok)) throw new Error('One or more beats could not be saved');
+      const res = await fetch('/api/tracks/reorder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: listed.map((t, index) => ({
+            id: t.id,
+            store_sort_order: t.store_sort_order ?? index,
+          })),
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Order could not be saved');
       toast.success('Beat order saved');
     } catch (err) {
       toast.error('Order save failed', err instanceof Error ? err.message : 'try again');
@@ -975,11 +1142,9 @@ export default function StoreEditorPage() {
   const toggleTrackListed = async (trackId: string, currentlyListed: boolean) => {
     setTogglingTrack(trackId);
     const nextState = !currentlyListed;
-    // Optimistic update
-    setAllTracks((prev) =>
-      prev.map((t) => t.id === trackId ? { ...t, store_listed: nextState } : t),
-    );
-    // Update preview tracks to reflect listing state.
+    const before = allTracks.find((track) => track.id === trackId);
+    const after = before ? { ...before, store_listed: nextState } : null;
+    if (before && after) patchTrackSummaryVisibility(before, after);
     setAllTracks((prev) => {
       const updated = prev.map((t) => t.id === trackId ? { ...t, store_listed: nextState } : t);
       setPreviewTracks(updated.filter((t) => t.store_listed).slice(0, 3));
@@ -997,15 +1162,19 @@ export default function StoreEditorPage() {
       }
       toast.success(nextState ? 'Added to store ✓' : 'Removed from store');
       if (nextState) void loadTrackLicenseLinks([trackId]);
+      void refreshTrackSummary().catch(() => {});
       // Followers are notified by the hourly digest cron (one email covering
       // everything newly listed) instead of one email per beat — so listing a
       // batch never spams. drop_notified_at (NULL = pending) is the queue;
       // the cron stamps it after the digest sends.
     } catch (err: any) {
       // Rollback
+      if (before && after) patchTrackSummaryVisibility(after, before);
       setAllTracks((prev) =>
         prev.map((t) => t.id === trackId ? { ...t, store_listed: currentlyListed } : t),
       );
+      const restored = allTracks.map((t) => t.id === trackId ? { ...t, store_listed: currentlyListed } : t);
+      setPreviewTracks(restored.filter((t) => t.store_listed).slice(0, 3));
       toast.error('Failed to update', err.message);
     } finally {
       setTogglingTrack(null);
@@ -1015,10 +1184,20 @@ export default function StoreEditorPage() {
   /* ── Track featured toggle (migration 054) ── */
   const toggleTrackFeatured = async (trackId: string, currentlyFeatured: boolean) => {
     const nextState = !currentlyFeatured;
-    const currentPickCount = allTracks.filter((t) => t.store_listed && t.store_featured).length;
+    const currentPickCount = trackSummary?.producerPicks.length ?? allTracks.filter((t) => t.store_listed && t.store_featured).length;
     if (nextState && currentPickCount >= 12) {
       toast.error("Producer's Picks is full", 'Remove one pick before adding another.');
       return;
+    }
+    const before = allTracks.find((track) => track.id === trackId)
+      ?? producerPickCandidates.find((track) => track.id === trackId)
+      ?? trackSummary?.producerPicks.find((track) => track.id === trackId);
+    const after = before ? { ...before, store_featured: nextState } : null;
+    if (before && after) patchTrackSummaryVisibility(before, after);
+    if (before) {
+      setProducerPickCandidates((prev) => nextState
+        ? prev.filter((track) => track.id !== trackId)
+        : [...prev.filter((track) => track.id !== trackId), { ...before, store_featured: false }]);
     }
     // Optimistic
     setAllTracks((prev) =>
@@ -1035,11 +1214,18 @@ export default function StoreEditorPage() {
         throw new Error(j.error || `HTTP ${res.status}`);
       }
       toast.success(nextState ? "Pinned to Producer's Picks" : "Removed from picks");
+      void refreshTrackSummary().catch(() => {});
     } catch (err: any) {
       // Rollback
+      if (before && after) patchTrackSummaryVisibility(after, before);
       setAllTracks((prev) =>
         prev.map((t) => t.id === trackId ? { ...t, store_featured: currentlyFeatured } : t),
       );
+      if (before) {
+        setProducerPickCandidates((prev) => currentlyFeatured
+          ? prev.filter((track) => track.id !== trackId)
+          : [...prev.filter((track) => track.id !== trackId), before]);
+      }
       toast.error('Failed to update', err.message);
     }
   };
@@ -1328,8 +1514,9 @@ export default function StoreEditorPage() {
   const unfeatured = playlists.filter((pl) => !featured.find((f) => f.id === pl.id));
   /* ── unfeatured projects (available to add) ── */
   const unfeaturedProjects = projects.filter((pr) => !featuredProjects.find((f) => f.id === pr.id));
-  const producerPicks = allTracks.filter((t) => t.store_listed && t.store_featured).slice(0, 12);
-  const availableProducerPicks = allTracks.filter((t) => t.store_listed && !t.store_featured);
+  const producerPicks = trackSummary?.producerPicks ?? allTracks.filter((t) => t.store_listed && t.store_featured).slice(0, 12);
+  const producerPickIds = new Set(producerPicks.map((track) => track.id));
+  const availableProducerPicks = producerPickCandidates.filter((track) => !producerPickIds.has(track.id));
 
   const hasReadyPrice = (track: TrackRow): boolean => {
     const legacyReady = (
@@ -1442,7 +1629,7 @@ export default function StoreEditorPage() {
                   { id: 'playlists', label: 'Playlists', value: `${featured.length}/5` },
                   { id: 'projects', label: 'Projects', value: `${featuredProjects.length}/5` },
                   { id: 'producer-picks', label: 'Picks', value: `${producerPicks.length}/12` },
-                  { id: 'tracks', label: 'Beats live', value: String(allTracks.filter((t) => t.store_listed).length) },
+                  { id: 'tracks', label: 'Beats live', value: String(trackSummary?.listed ?? allTracks.filter((t) => t.store_listed).length) },
                 ].map((item) => (
                   <button
                     key={item.id}
@@ -1965,7 +2152,7 @@ export default function StoreEditorPage() {
               id="producer-picks"
               title="Producer's Picks"
               icon={<Star size={15} />}
-              open={openSections.has('producer-picks')}
+              open={producerPicksOpen}
               onToggle={() => toggleSection('producer-picks')}
               badge={`${producerPicks.length}/12 selected`}
             >
@@ -2024,20 +2211,30 @@ export default function StoreEditorPage() {
                 </div>
               )}
 
-              {availableProducerPicks.length > 0 && (
-                <div>
-                  <p className="mb-2 text-[9px] font-mono uppercase tracking-[0.22em] text-[#6E685B]">
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-[9px] font-mono uppercase tracking-[0.22em] text-[#6E685B]">
                     Add from listed beats
                   </p>
+                  <span className="text-[9px] font-mono text-[#6E685B]">Searches all listed beats</span>
+                </div>
+                <div className="relative mb-2">
+                  <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" />
+                  <input
+                    type="search"
+                    value={producerPickSearch}
+                    onChange={(event) => setProducerPickSearch(event.target.value)}
+                    placeholder="Search by title, key, or BPM"
+                    className={`${inputCls} pl-8`}
+                  />
+                </div>
+                {producerPickLoading && availableProducerPicks.length === 0 ? (
+                  <div className="flex min-h-20 items-center justify-center rounded-xl border border-[#211F1A] bg-[#090907]">
+                    <Loader2 size={15} className="animate-spin text-[#837B6D]" />
+                  </div>
+                ) : availableProducerPicks.length > 0 ? (
                   <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
                     {availableProducerPicks
-                      .filter((t) =>
-                        !trackSearch.trim() ||
-                        t.title.toLowerCase().includes(trackSearch.toLowerCase()) ||
-                        (t.key ?? '').toLowerCase().includes(trackSearch.toLowerCase()) ||
-                        String(t.bpm ?? '').includes(trackSearch),
-                      )
-                      .slice(0, 40)
                       .map((t) => (
                         <div key={t.id} className="flex items-center gap-3 rounded-xl border border-[#211F1A] bg-[#090907] px-3 py-2">
                           <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md border border-[#2B2821] bg-[#11100D]">
@@ -2062,9 +2259,34 @@ export default function StoreEditorPage() {
                           </button>
                         </div>
                       ))}
+                    {producerPickHasMore && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!producerPickNextCursor || producerPickLoading) return;
+                          loadProducerPickPage({
+                            cursor: producerPickNextCursor,
+                            append: true,
+                            search: producerPickSearch,
+                          }).catch((err) => {
+                            toast.error('Could not load more listed beats', err instanceof Error ? err.message : 'try again');
+                          });
+                        }}
+                        disabled={producerPickLoading}
+                        className="mt-2 w-full rounded-xl border border-[#2B2821] bg-[#11100D] px-4 py-2.5 text-[10px] font-mono uppercase tracking-[0.18em] text-[#D0C3AF] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD] disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {producerPickLoading ? 'Loading beats...' : 'Load more listed beats'}
+                      </button>
+                    )}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <div className="rounded-xl border border-dashed border-[#2B2821] py-6 text-center">
+                    <p className="text-[11px] text-[#837B6D]">
+                      {producerPickSearch.trim() ? 'No listed beats match this search.' : 'Every listed beat is already selected.'}
+                    </p>
+                  </div>
+                )}
+              </div>
             </Section>
 
             {/* ④ Track Listing — publish tracks to the store */}
@@ -2074,7 +2296,7 @@ export default function StoreEditorPage() {
               icon={<ShoppingBag size={15} />}
               open={openSections.has('tracks')}
               onToggle={() => toggleSection('tracks')}
-              badge={`${allTracks.filter((t) => t.store_listed).length} listed`}
+              badge={`${trackSummary?.listed ?? allTracks.filter((t) => t.store_listed).length} listed`}
             >
               <p className="text-[11px] text-[#9B9282]">
                 Toggle beats on or off to control what appears in your public store. To set prices and cover art, open the beat in your{' '}
@@ -2082,7 +2304,7 @@ export default function StoreEditorPage() {
               </p>
 
               {/* Search */}
-              {allTracks.length > 4 && (
+              {(trackSummary?.total ?? allTracks.length) > 4 && (
                 <div className="relative">
                   <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" />
                   <input
@@ -2098,9 +2320,10 @@ export default function StoreEditorPage() {
               {/* Stats */}
               <div className="flex items-center gap-3 text-[10px] font-mono text-[#9B9282]">
                 <span className="px-2 py-0.5 rounded bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 text-[#6DC6A4] font-bold">
-                  {allTracks.filter((t) => t.store_listed).length} listed
+                  {trackSummary?.listed ?? allTracks.filter((t) => t.store_listed).length} listed
                 </span>
-                <span>{allTracks.length} total beats</span>
+                <span>{trackSummary?.total ?? allTracks.length} total beats</span>
+                {trackSearch.trim() && <span>{filteredTrackRows.length} matching</span>}
               </div>
 
               {/* Needs attention — surfaces listed beats with quality
@@ -2108,13 +2331,13 @@ export default function StoreEditorPage() {
                   BPM/key metadata). Producer can fix in /library. */}
               {(() => {
                 const listed = allTracks.filter((t) => t.store_listed);
-                const noCover = listed.filter((t) => !t.cover_url);
-                const noPrice = listed.filter((t) => !hasReadyPrice(t));
-                const noBpmKey = listed.filter((t) => t.bpm == null && !t.key);
+                const noCover = trackSummary?.issues.noCover ?? { count: listed.filter((t) => !t.cover_url).length, firstId: listed.find((t) => !t.cover_url)?.id ?? null };
+                const noPrice = trackSummary?.issues.noPrice ?? { count: listed.filter((t) => !hasReadyPrice(t)).length, firstId: listed.find((t) => !hasReadyPrice(t))?.id ?? null };
+                const noBpmKey = trackSummary?.issues.noBpmKey ?? { count: listed.filter((t) => t.bpm == null && !t.key).length, firstId: listed.find((t) => t.bpm == null && !t.key)?.id ?? null };
                 const issues = [
-                  noCover.length > 0 && { label: 'no cover art', count: noCover.length, firstId: noCover[0].id },
-                  noPrice.length > 0 && { label: 'no price set', count: noPrice.length, firstId: noPrice[0].id },
-                  noBpmKey.length > 0 && { label: 'no BPM or key', count: noBpmKey.length, firstId: noBpmKey[0].id },
+                  noCover.count > 0 && noCover.firstId && { label: 'no cover art', count: noCover.count, firstId: noCover.firstId },
+                  noPrice.count > 0 && noPrice.firstId && { label: 'no price set', count: noPrice.count, firstId: noPrice.firstId },
+                  noBpmKey.count > 0 && noBpmKey.firstId && { label: 'no BPM or key', count: noBpmKey.count, firstId: noBpmKey.firstId },
                 ].filter(Boolean) as Array<{ label: string; count: number; firstId: string }>;
                 if (issues.length === 0) return null;
                 return (
@@ -2142,7 +2365,7 @@ export default function StoreEditorPage() {
               })()}
 
               {/* Track rows */}
-              {allTracks.length === 0 ? (
+              {(trackSummary?.total ?? allTracks.length) === 0 ? (
                 <div className="rounded-xl border border-dashed border-[#2B2821] py-10 text-center">
                   <Music size={20} className="text-[#3B372F] mx-auto mb-2" />
                   <p className="text-[12px] text-[#9B9282]">No beats in your library yet.</p>
@@ -2159,13 +2382,7 @@ export default function StoreEditorPage() {
                     const listedIds: string[] = allTracks
                       .filter((x) => x.store_listed)
                       .map((x) => x.id);
-                    return allTracks
-                      .filter((t) =>
-                        !trackSearch.trim() ||
-                        t.title.toLowerCase().includes(trackSearch.toLowerCase()) ||
-                        (t.key ?? '').toLowerCase().includes(trackSearch.toLowerCase()) ||
-                        String(t.bpm ?? '').includes(trackSearch),
-                      )
+                    return renderedTrackRows
                       .map((t) => {
                         const listedIdx = listedIds.indexOf(t.id);
                         const isListed = listedIdx >= 0;
@@ -2426,6 +2643,30 @@ export default function StoreEditorPage() {
                         );
                       });
                   })()}
+                  {visibleTrackRows < filteredTrackRows.length && (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleTrackRows((count) => count + TRACK_LIST_BATCH_SIZE)}
+                      className="mt-2 w-full rounded-xl border border-[#2B2821] bg-[#11100D] px-4 py-3 text-[10px] font-mono uppercase tracking-[0.18em] text-[#D0C3AF] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD]"
+                    >
+                      Load more beats · {Math.min(TRACK_LIST_BATCH_SIZE, filteredTrackRows.length - visibleTrackRows)} more
+                    </button>
+                  )}
+                  {trackHasMore && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!trackNextCursor || trackLoadingMore) return;
+                        loadTrackPage({ cursor: trackNextCursor, append: true }).catch((err) => {
+                          toast.error('Could not load more beats', err instanceof Error ? err.message : 'try again');
+                        });
+                      }}
+                      disabled={trackLoadingMore}
+                      className="mt-2 w-full rounded-xl border border-[#2B2821] bg-[#11100D] px-4 py-3 text-[10px] font-mono uppercase tracking-[0.18em] text-[#D0C3AF] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD] disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {trackLoadingMore ? 'Loading beats...' : 'Load next 100 beats'}
+                    </button>
+                  )}
                 </div>
               )}
             </Section>

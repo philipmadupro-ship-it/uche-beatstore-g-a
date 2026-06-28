@@ -29,14 +29,21 @@ export function useRealtimeTable(opts: {
   filter?: string;
   /** Disable subscription (e.g. when the parent has no id yet). */
   enabled?: boolean;
+  /** Coalesce bursts of CDC events into one refresh. Defaults to 350ms. */
+  debounceMs?: number;
   /** Caller-supplied callback. We keep a ref so consumers don't have to
    *  useCallback for hot identity — the subscription stays stable. */
   onChange: () => void;
 }) {
-  const { table, filter, enabled = true, onChange } = opts;
+  const { table, filter, enabled = true, debounceMs = 350, onChange } = opts;
 
   const cbRef = useRef(onChange);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => { cbRef.current = onChange; }, [onChange]);
+
+  useEffect(() => () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!enabled) return;
@@ -57,13 +64,21 @@ export function useRealtimeTable(opts: {
         table,
         filter,
       }, () => {
-        cbRef.current();
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => {
+          timerRef.current = null;
+          cbRef.current();
+        }, Math.max(0, debounceMs));
       })
       .subscribe();
 
     return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
       // removeChannel is async but we don't need to await it on unmount.
       supabase.removeChannel(channel);
     };
-  }, [table, filter, enabled]);
+  }, [table, filter, enabled, debounceMs]);
 }

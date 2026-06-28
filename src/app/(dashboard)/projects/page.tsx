@@ -13,6 +13,7 @@ import { Loader2, Music, Layers, Plus, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
+import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { ProjectFilterBar } from '@/components/projects/ProjectFilterBar';
 import { ProjectOptionsMenu } from '@/components/projects/ProjectOptionsMenu';
 import { CreateProjectModal } from '@/components/layout/CreateProjectModal';
@@ -122,16 +123,18 @@ export default function ProjectsPage() {
     fetchProjects();
     fetchFolders();
   }, []);
+  const refreshProjects = useDebouncedCallback(fetchProjects, 500);
+  const refreshFolders = useDebouncedCallback(fetchFolders, 500);
 
   // Auto-refresh on any project mutation — sharing flows, comments, and
   // bulk-from-library actions all land here without manual reload. Tag +
   // folder-membership changes re-attach via the list fetch so chips stay live.
-  useRealtimeTable({ table: 'projects', onChange: fetchProjects });
-  useRealtimeTable({ table: 'project_tags', onChange: fetchProjects });
-  useRealtimeTable({ table: 'project_folder_items', onChange: fetchProjects });
-  useRealtimeTable({ table: 'project_tracks', onChange: fetchProjects });
-  useRealtimeTable({ table: 'tracks', onChange: fetchProjects });
-  useRealtimeTable({ table: 'project_folders', onChange: fetchFolders });
+  useRealtimeTable({ table: 'projects', onChange: refreshProjects });
+  useRealtimeTable({ table: 'project_tags', onChange: refreshProjects });
+  useRealtimeTable({ table: 'project_folder_items', onChange: refreshProjects });
+  useRealtimeTable({ table: 'project_tracks', onChange: refreshProjects });
+  useRealtimeTable({ table: 'tracks', onChange: refreshProjects });
+  useRealtimeTable({ table: 'project_folders', onChange: refreshFolders });
 
   // Filter + sort delegated to the pure, tested helper (lib/projects/filters).
   // Pinned projects float to the very top within the sorted results.

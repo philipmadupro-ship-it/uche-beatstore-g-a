@@ -63,6 +63,29 @@ function money(value: number | null | undefined) {
   return `$${Number(value).toLocaleString()}`;
 }
 
+const STORE_PAGE_SIZE = 80;
+
+type StorePageInfo = {
+  hasMore: boolean;
+  nextCursor: string | null;
+};
+
+type StoreFacets = {
+  total: number;
+  genres: string[];
+  moods: string[];
+  keys: string[];
+  bpmRange: { min: number; max: number };
+  priceRange: { min: number; max: number };
+};
+
+function normalizeStoreTracks(rawTracks: StoreTrack[]) {
+  return rawTracks.map((t) => ({
+    ...t,
+    cover_url: sanitizeUrl(t.cover_url) ?? undefined,
+  }));
+}
+
 function StoreTrustRail({ accentColor }: { accentColor: string }) {
   const items = [
     { icon: ShieldCheck, label: 'Protected checkout', detail: 'Stripe payment' },
@@ -241,53 +264,13 @@ function StoreSalesSpotlight({
 /* ─── Main page ──────────────────────────────────────────────── */
 
 function StorePage() {
-  const storeQuery = useQuery({
-    queryKey: ['store'],
-    queryFn: async () => {
-      const res = await fetch('/api/store');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const rawTracks = (data.tracks as StoreTrack[]) ?? [];
-      return {
-        creator: (data.creator ?? null) as CreatorProfile | null,
-        tracks: rawTracks.map((t) => ({
-          ...t,
-          cover_url: sanitizeUrl(t.cover_url) ?? undefined,
-        })),
-        licenses: (data.licenses as LicenseTier[]) ?? [],
-        featuredPlaylists: (data.featuredPlaylists as FeaturedPlaylist[]) ?? [],
-        featuredProjects: (data.featuredProjects as FeaturedPlaylist[]) ?? [],
-      };
-    },
-  });
-  const creator = storeQuery.data?.creator ?? null;
-  const tracks = useMemo(() => storeQuery.data?.tracks ?? [], [storeQuery.data]);
-  const licenses = useMemo(() => storeQuery.data?.licenses ?? [], [storeQuery.data?.licenses]);
-  const featuredPlaylists = useMemo(() => storeQuery.data?.featuredPlaylists ?? [], [storeQuery.data?.featuredPlaylists]);
-  const featuredProjects = useMemo(() => storeQuery.data?.featuredProjects ?? [], [storeQuery.data?.featuredProjects]);
-  const loading = storeQuery.isLoading;
-  const rotationSeed = useMemo(() => Math.floor(Date.now() / 86_400_000), []);
-  useEffect(() => {
-    if (storeQuery.isError) toast.error("Couldn't load store");
-  }, [storeQuery.isError]);
+  const [loadedMoreTracks, setLoadedMoreTracks] = useState<StoreTrack[]>([]);
+  const [pageInfo, setPageInfo] = useState<StorePageInfo>({ hasMore: false, nextCursor: null });
+  const [loadingMore, setLoadingMore] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   // List (track rows) is the marketplace default; an explicit grid choice
   // sticks via localStorage. Hydrated in an effect so SSR HTML stays stable.
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem('store-view-mode');
-      if (stored === 'grid' || stored === 'list') setViewMode(stored);
-    } catch { /* private mode */ }
-  }, []);
-  const changeViewMode = useCallback((mode: ViewMode) => {
-    setViewMode(mode);
-    try { localStorage.setItem('store-view-mode', mode); } catch { /* private mode */ }
-  }, []);
-  const [isSignedIn, setIsSignedIn] = useState(false);
-  useEffect(() => {
-    createClient().auth.getUser().then(({ data }) => setIsSignedIn(!!data.user));
-  }, []);
 
   // Sidebar filters
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile toggle
@@ -316,6 +299,121 @@ function StorePage() {
     setSearch(v);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => setDebouncedSearch(v), 200);
+  }, []);
+
+  const serverStoreQuery = useMemo(() => {
+    const params = new URLSearchParams({ limit: String(STORE_PAGE_SIZE) });
+    const q = debouncedSearch.trim();
+    if (q) params.set('q', q);
+    if (typeFilter !== 'all') params.set('type', typeFilter);
+    if (genreFilter) params.set('genre', genreFilter);
+    if (moodFilter) params.set('mood', moodFilter);
+    if (keyFilter) params.set('key', keyFilter);
+    if (scaleFilter) params.set('scale', scaleFilter);
+    if (durationBucket) params.set('duration', durationBucket);
+    if (freeOnly) params.set('free', '1');
+    if (newThisWeek) params.set('new', '1');
+    if (sortBy !== 'newest') params.set('sort', sortBy);
+    return params.toString();
+  }, [
+    debouncedSearch,
+    durationBucket,
+    freeOnly,
+    genreFilter,
+    keyFilter,
+    moodFilter,
+    newThisWeek,
+    scaleFilter,
+    sortBy,
+    typeFilter,
+  ]);
+
+  const storeQuery = useQuery({
+    queryKey: ['store', 'paged', serverStoreQuery],
+    queryFn: async () => {
+      const res = await fetch(`/api/store?${serverStoreQuery}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const rawTracks = (data.tracks as StoreTrack[]) ?? [];
+      return {
+        creator: (data.creator ?? null) as CreatorProfile | null,
+        tracks: normalizeStoreTracks(rawTracks),
+        licenses: (data.licenses as LicenseTier[]) ?? [],
+        featuredPlaylists: (data.featuredPlaylists as FeaturedPlaylist[]) ?? [],
+        featuredProjects: (data.featuredProjects as FeaturedPlaylist[]) ?? [],
+        pageInfo: (data.pageInfo ?? { hasMore: false, nextCursor: null }) as StorePageInfo,
+      };
+    },
+  });
+  const facetsQuery = useQuery({
+    queryKey: ['store-facets'],
+    queryFn: async () => {
+      const res = await fetch('/api/store/facets');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return (await res.json()) as StoreFacets;
+    },
+  });
+  const creator = storeQuery.data?.creator ?? null;
+  useEffect(() => {
+    setLoadedMoreTracks([]);
+    setPageInfo(storeQuery.data?.pageInfo ?? { hasMore: false, nextCursor: null });
+  }, [storeQuery.data?.pageInfo]);
+  const initialTracks = useMemo(() => storeQuery.data?.tracks ?? [], [storeQuery.data?.tracks]);
+  const tracks = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: StoreTrack[] = [];
+    for (const track of [...initialTracks, ...loadedMoreTracks]) {
+      if (!track?.id || seen.has(track.id)) continue;
+      seen.add(track.id);
+      merged.push(track);
+    }
+    return merged;
+  }, [initialTracks, loadedMoreTracks]);
+  const licenses = useMemo(() => storeQuery.data?.licenses ?? [], [storeQuery.data?.licenses]);
+  const featuredPlaylists = useMemo(() => storeQuery.data?.featuredPlaylists ?? [], [storeQuery.data?.featuredPlaylists]);
+  const featuredProjects = useMemo(() => storeQuery.data?.featuredProjects ?? [], [storeQuery.data?.featuredProjects]);
+  const loading = storeQuery.isLoading;
+  const rotationSeed = useMemo(() => Math.floor(Date.now() / 86_400_000), []);
+  useEffect(() => {
+    if (storeQuery.isError) toast.error("Couldn't load store");
+  }, [storeQuery.isError]);
+  useEffect(() => {
+    if (facetsQuery.isError) toast.error("Couldn't load store filters");
+  }, [facetsQuery.isError]);
+
+  const loadMoreTracks = useCallback(async () => {
+    if (!pageInfo.hasMore || !pageInfo.nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const params = new URLSearchParams(serverStoreQuery);
+      params.set('cursor', pageInfo.nextCursor);
+      const res = await fetch(`/api/store?${params.toString()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setLoadedMoreTracks((current) => [
+        ...current,
+        ...normalizeStoreTracks((data.tracks as StoreTrack[]) ?? []),
+      ]);
+      setPageInfo((data.pageInfo ?? { hasMore: false, nextCursor: null }) as StorePageInfo);
+    } catch {
+      toast.error("Couldn't load more beats");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, pageInfo.hasMore, pageInfo.nextCursor, serverStoreQuery]);
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('store-view-mode');
+      if (stored === 'grid' || stored === 'list') setViewMode(stored);
+    } catch { /* private mode */ }
+  }, []);
+  const changeViewMode = useCallback((mode: ViewMode) => {
+    setViewMode(mode);
+    try { localStorage.setItem('store-view-mode', mode); } catch { /* private mode */ }
+  }, []);
+  const [isSignedIn, setIsSignedIn] = useState(false);
+  useEffect(() => {
+    createClient().auth.getUser().then(({ data }) => setIsSignedIn(!!data.user));
   }, []);
 
   // Preview drawer
@@ -369,31 +467,35 @@ function StorePage() {
 
   // Distinct genres from track tags
   const availableGenres = useMemo(() => {
+    if (facetsQuery.data?.genres?.length) return facetsQuery.data.genres;
     const genres = new Set<string>();
     tracks.forEach((t) => {
       (t.tags ?? []).filter((tag) => tag.category === 'genre').forEach((tag) => genres.add(tag.tag));
     });
     return Array.from(genres).sort();
-  }, [tracks]);
+  }, [facetsQuery.data?.genres, tracks]);
 
   const availableMoods = useMemo(() => {
+    if (facetsQuery.data?.moods?.length) return facetsQuery.data.moods;
     const moods = new Set<string>();
     tracks.forEach((t) => {
       (t.tags ?? []).filter((tag) => tag.category === 'mood').forEach((tag) => moods.add(tag.tag));
     });
     return Array.from(moods).sort();
-  }, [tracks]);
+  }, [facetsQuery.data?.moods, tracks]);
 
   const availableKeys = useMemo(() => {
+    if (facetsQuery.data?.keys?.length) return facetsQuery.data.keys;
     const keys = new Set(tracks.map((t) => t.key).filter(Boolean) as string[]);
     return Array.from(keys).sort();
-  }, [tracks]);
+  }, [facetsQuery.data?.keys, tracks]);
 
   const bpmRange = useMemo(() => {
+    if (facetsQuery.data?.bpmRange) return facetsQuery.data.bpmRange;
     const bpms = tracks.map((t) => t.bpm).filter(Boolean) as number[];
     if (!bpms.length) return { min: 60, max: 200 };
     return { min: Math.min(...bpms), max: Math.max(...bpms) };
-  }, [tracks]);
+  }, [facetsQuery.data?.bpmRange, tracks]);
 
   // Initialize BPM sliders when tracks first load
   useEffect(() => {
@@ -409,6 +511,7 @@ function StorePage() {
 
   // Price range — derived from resolved lease prices (track override → profile default).
   const priceRange = useMemo(() => {
+    if (facetsQuery.data?.priceRange) return facetsQuery.data.priceRange;
     const prices = tracks
       .map((t) => {
         const override = t.lease_price_usd;
@@ -421,7 +524,7 @@ function StorePage() {
       .filter((p): p is number => p != null);
     if (!prices.length) return { min: 0, max: 200 };
     return { min: Math.floor(Math.min(...prices)), max: Math.ceil(Math.max(...prices)) };
-  }, [tracks, creator?.license_lease_price_usd]);
+  }, [facetsQuery.data?.priceRange, tracks, creator?.license_lease_price_usd]);
 
   useEffect(() => {
     if (tracks.length > 0 && priceMin === 0 && priceMax === 99999) {
@@ -992,80 +1095,97 @@ function StorePage() {
                 </button>
               )}
             </div>
-          ) : viewMode === 'grid' ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
-              {filtered.map((t) =>
-                // Remix tracks get the Bandcamp release-card layout to
-                // stand out in the mixed grid; regular beats keep BeatCard.
-                t.type === 'remix' ? (
-                  <div key={t.id} className="store-card-enter">
-                  <BandcampRemixCard
-                    track={t as unknown as Track}
-                    creatorName={creator?.display_name ?? null}
-                    priceLease={priceFor(t, 'lease')}
-                    priceExclusive={priceFor(t, 'exclusive')}
-                    licenseCount={licenses.length}
-                    lowestLicensePrice={lowestLicensePrice}
-                    isCurrent={currentTrack?.id === t.id}
-                    isPlaying={isPlaying && currentTrack?.id === t.id}
-                    isPreview={previewTrack?.id === t.id}
-                    onPlay={() => handlePlay(t)}
-                    onPreview={() => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
-                    onAddLease={() => addToCart(t, 'lease')}
-                    onAddExclusive={() => addToCart(t, 'exclusive')}
-                    onFreeDownload={() => setFreeDownloadTrack(t)}
-                    accentColor={accentColor}
-                    isWishlisted={wishlist.has(t.id)}
-                    onToggleWishlist={() => wishlist.toggle(t.id)}
-                  />
-                  </div>
-                ) : (
-                  <div key={t.id} className="store-card-enter">
-                  <BeatCard
-                    track={t}
-                    allTracks={filtered}
-                    priceLease={priceFor(t, 'lease')}
-                    priceExclusive={priceFor(t, 'exclusive')}
-                    licenseCount={licenses.length}
-                    lowestLicensePrice={lowestLicensePrice}
-                    isCurrent={currentTrack?.id === t.id}
-                    isPlaying={isPlaying && currentTrack?.id === t.id}
-                    isPreview={previewTrack?.id === t.id}
-                    onPlay={() => handlePlay(t)}
-                    onPreview={() => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
-                    onAddLease={() => addToCart(t, 'lease')}
-                    onAddExclusive={() => addToCart(t, 'exclusive')}
-                    onFreeDownload={() => setFreeDownloadTrack(t)}
-                    accentColor={accentColor}
-                    isWishlisted={wishlist.has(t.id)}
-                    onToggleWishlist={() => wishlist.toggle(t.id)}
-                  />
-                  </div>
-                ),
-              )}
-            </div>
           ) : (
-            // List view — Apple-UI rows on a glass shell with the
-            // hovered row's cover fading in as a blurred backdrop
-            // (carryover from the deprecated MusicPortfolio embedded
-            // mode the user asked us to replace).
-            <StoreListView
-              tracks={filtered}
-              accentColor={accentColor}
-              currentTrackId={currentTrack?.id ?? null}
-              isPlaying={isPlaying}
-              isPreviewId={previewTrack?.id ?? null}
-              priceFor={priceFor}
-              onPlay={(t) => handlePlay(t)}
-              onPreview={(t) => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
-              onAddLease={(t) => addToCart(t, 'lease')}
-              onAddExclusive={(t) => addToCart(t, 'exclusive')}
-              licenseCount={licenses.length}
-              lowestLicensePrice={lowestLicensePrice}
-              onFreeDownload={(t) => setFreeDownloadTrack(t)}
-              isWishlisted={(id) => wishlist.has(id)}
-              onToggleWishlist={(id) => wishlist.toggle(id)}
-            />
+            <>
+              {viewMode === 'grid' ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
+                  {filtered.map((t) =>
+                    // Remix tracks get the Bandcamp release-card layout to
+                    // stand out in the mixed grid; regular beats keep BeatCard.
+                    t.type === 'remix' ? (
+                      <div key={t.id} className="store-card-enter">
+                      <BandcampRemixCard
+                        track={t as unknown as Track}
+                        creatorName={creator?.display_name ?? null}
+                        priceLease={priceFor(t, 'lease')}
+                        priceExclusive={priceFor(t, 'exclusive')}
+                        licenseCount={licenses.length}
+                        lowestLicensePrice={lowestLicensePrice}
+                        isCurrent={currentTrack?.id === t.id}
+                        isPlaying={isPlaying && currentTrack?.id === t.id}
+                        isPreview={previewTrack?.id === t.id}
+                        onPlay={() => handlePlay(t)}
+                        onPreview={() => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
+                        onAddLease={() => addToCart(t, 'lease')}
+                        onAddExclusive={() => addToCart(t, 'exclusive')}
+                        onFreeDownload={() => setFreeDownloadTrack(t)}
+                        accentColor={accentColor}
+                        isWishlisted={wishlist.has(t.id)}
+                        onToggleWishlist={() => wishlist.toggle(t.id)}
+                      />
+                      </div>
+                    ) : (
+                      <div key={t.id} className="store-card-enter">
+                      <BeatCard
+                        track={t}
+                        allTracks={filtered}
+                        priceLease={priceFor(t, 'lease')}
+                        priceExclusive={priceFor(t, 'exclusive')}
+                        licenseCount={licenses.length}
+                        lowestLicensePrice={lowestLicensePrice}
+                        isCurrent={currentTrack?.id === t.id}
+                        isPlaying={isPlaying && currentTrack?.id === t.id}
+                        isPreview={previewTrack?.id === t.id}
+                        onPlay={() => handlePlay(t)}
+                        onPreview={() => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
+                        onAddLease={() => addToCart(t, 'lease')}
+                        onAddExclusive={() => addToCart(t, 'exclusive')}
+                        onFreeDownload={() => setFreeDownloadTrack(t)}
+                        accentColor={accentColor}
+                        isWishlisted={wishlist.has(t.id)}
+                        onToggleWishlist={() => wishlist.toggle(t.id)}
+                      />
+                      </div>
+                    ),
+                  )}
+                </div>
+              ) : (
+                // List view — Apple-UI rows on a glass shell with the
+                // hovered row's cover fading in as a blurred backdrop
+                // (carryover from the deprecated MusicPortfolio embedded
+                // mode the user asked us to replace).
+                <StoreListView
+                  tracks={filtered}
+                  accentColor={accentColor}
+                  currentTrackId={currentTrack?.id ?? null}
+                  isPlaying={isPlaying}
+                  isPreviewId={previewTrack?.id ?? null}
+                  priceFor={priceFor}
+                  onPlay={(t) => handlePlay(t)}
+                  onPreview={(t) => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
+                  onAddLease={(t) => addToCart(t, 'lease')}
+                  onAddExclusive={(t) => addToCart(t, 'exclusive')}
+                  licenseCount={licenses.length}
+                  lowestLicensePrice={lowestLicensePrice}
+                  onFreeDownload={(t) => setFreeDownloadTrack(t)}
+                  isWishlisted={(id) => wishlist.has(id)}
+                  onToggleWishlist={(id) => wishlist.toggle(id)}
+                />
+              )}
+
+              {pageInfo.hasMore && (
+                <div className="mt-8 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={loadMoreTracks}
+                    disabled={loadingMore}
+                    className="tap inline-flex min-h-11 items-center justify-center rounded-full border border-[#2B2821] bg-[#14110D] px-6 text-[10px] font-mono uppercase tracking-[0.2em] text-[#E7D7BE] transition-colors hover:border-[#D4BFA0]/40 hover:text-white disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {loadingMore ? 'Loading beats...' : 'Load more beats'}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

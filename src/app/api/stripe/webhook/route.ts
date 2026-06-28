@@ -8,6 +8,7 @@ import { createLogger } from '@/lib/log';
 import { DEFAULT_TEMPLATE_MD, fillTemplate } from '@/lib/contracts/license-template';
 import { renderContractPdf } from '@/lib/contracts/pdf';
 import { uploadContractPdf } from '@/lib/storage/upload';
+import { deliverFulfillmentEmail } from '@/lib/fulfillment/email-outbox';
 import {
   legacyLicenseFileTypes,
   normalizeLicenseFileTypes,
@@ -428,7 +429,6 @@ async function runFulfillment(params: {
         return;
       }
 
-      const resend = new Resend(process.env.RESEND_API_KEY);
       const sourceSurface = meta.source_surface ?? 'store';
       const isStore = sourceSurface === 'store';
       const isProjShare = meta.is_project_share !== 'false';
@@ -466,8 +466,12 @@ async function runFulfillment(params: {
            </p>`
         : '';
 
-      await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+      await deliverFulfillmentEmail({
+        admin,
+        kind: 'track',
+        referenceId: purchaseId,
+        sellerUserId: meta.seller_user_id || null,
+        stripeSessionId: session.id,
         to: meta.buyer_email,
         subject: `Your license${lineItems.length > 1 ? 's are' : ' is'} ready`,
         attachments: contractPdfBuffer
@@ -571,8 +575,6 @@ async function runProjectFulfillment(params: {
   // 2. Delivery email (no per-row email flag on project_access_links; rely on event dedup)
   if (process.env.RESEND_API_KEY && meta.buyer_email) {
     try {
-      const resend = new Resend(process.env.RESEND_API_KEY);
-
       // Fetch project name for nicer email
       let projName = 'Project';
       try {
@@ -586,8 +588,12 @@ async function runProjectFulfillment(params: {
 
       const accessUrl = `${APP_URL}/store/projects/access/${accessToken}`;
 
-      await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+      await deliverFulfillmentEmail({
+        admin,
+        kind: 'project',
+        referenceId: accessId,
+        sellerUserId: meta.seller_user_id || null,
+        stripeSessionId: session.id,
         to: meta.buyer_email,
         subject: `Your project "${projName}" is ready`,
         html: `

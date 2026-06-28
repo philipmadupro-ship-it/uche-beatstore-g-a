@@ -12,6 +12,7 @@ import { MediaCard } from '@/components/ui/MediaCard';
 import { PlaylistFilterBar } from '@/components/playlists/PlaylistFilterBar';
 import { PlaylistOptionsMenu } from '@/components/playlists/PlaylistOptionsMenu';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
+import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { filterAndSortPlaylists, DEFAULT_PLAYLIST_FILTERS, type PlaylistFilterState, type PlaylistListItem } from '@/lib/playlists/filters';
 import { PlayGlyph } from '@/components/player/TransportIcons';
 import { seededGradient } from '@/lib/ui/cover-gradient';
@@ -70,12 +71,14 @@ export default function PlaylistsPage() {
     fetchFolders();
   };
   useEffect(() => { fetchPlaylists(); fetchFolders(); }, []);
-  useRealtimeTable({ table: 'playlists', onChange: fetchPlaylists });
-  useRealtimeTable({ table: 'playlist_tags', onChange: fetchPlaylists });
-  useRealtimeTable({ table: 'playlist_folder_items', onChange: fetchPlaylists });
-  useRealtimeTable({ table: 'playlist_tracks', onChange: fetchPlaylists });
-  useRealtimeTable({ table: 'tracks', onChange: fetchPlaylists });
-  useRealtimeTable({ table: 'playlist_folders', onChange: fetchFolders });
+  const refreshPlaylists = useDebouncedCallback(fetchPlaylists, 500);
+  const refreshFolders = useDebouncedCallback(fetchFolders, 500);
+  useRealtimeTable({ table: 'playlists', onChange: refreshPlaylists });
+  useRealtimeTable({ table: 'playlist_tags', onChange: refreshPlaylists });
+  useRealtimeTable({ table: 'playlist_folder_items', onChange: refreshPlaylists });
+  useRealtimeTable({ table: 'playlist_tracks', onChange: refreshPlaylists });
+  useRealtimeTable({ table: 'tracks', onChange: refreshPlaylists });
+  useRealtimeTable({ table: 'playlist_folders', onChange: refreshFolders });
 
   const togglePin = async (playlist: Playlist, e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();

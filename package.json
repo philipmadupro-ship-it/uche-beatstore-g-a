@@ -10,6 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:scale": "vitest run src/app/api/store/catalog-scale.test.ts src/app/api/tracks/route.test.ts",
+    "readiness:prod": "node scripts/ops/production-readiness.mjs",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
     "e2e:ui": "playwright test --ui",

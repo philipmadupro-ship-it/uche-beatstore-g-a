@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll } from '@/lib/local-store';
 import { createServiceClient, safeSellerId } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
@@ -19,6 +19,102 @@ function sanitizeUrl(url: string | null | undefined): string | null {
   return url.replace(/^(https?:\/\/)+/, 'https://');
 }
 
+function parsePagination(req: NextRequest) {
+  const rawLimit = req.nextUrl.searchParams.get('limit');
+  if (!rawLimit) return null;
+
+  const parsedLimit = Number.parseInt(rawLimit, 10);
+  const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 60;
+  const rawCursor = req.nextUrl.searchParams.get('cursor');
+  const parsedOffset = rawCursor ? Number.parseInt(rawCursor, 10) : 0;
+  const offset = Number.isFinite(parsedOffset) && parsedOffset > 0 ? parsedOffset : 0;
+
+  return { limit, offset };
+}
+
+function cleanParam(value: string | null): string {
+  return (value ?? '').trim().slice(0, 80);
+}
+
+function parseStoreFilters(req: NextRequest) {
+  const params = req.nextUrl.searchParams;
+  const sort = cleanParam(params.get('sort'));
+  return {
+    q: cleanParam(params.get('q')),
+    type: cleanParam(params.get('type')),
+    genre: cleanParam(params.get('genre')),
+    mood: cleanParam(params.get('mood')),
+    key: cleanParam(params.get('key')),
+    scale: cleanParam(params.get('scale')),
+    duration: cleanParam(params.get('duration')),
+    freeOnly: params.get('free') === '1' || params.get('free') === 'true',
+    newThisWeek: params.get('new') === '1' || params.get('new') === 'true',
+    sort: sort || 'newest',
+  };
+}
+
+function localFilterAndSortTracks(
+  tracks: any[],
+  tagsByTrack: Record<string, Array<{ tag: string; category: string | null }>>,
+  filters: ReturnType<typeof parseStoreFilters>,
+) {
+  const q = filters.q.toLowerCase();
+  const filtered = tracks.filter((track) => {
+    const tags = tagsByTrack[track.id] ?? [];
+    if (filters.type === 'beats' && track.type !== 'beat' && track.type !== 'instrumental') return false;
+    if (filters.type && filters.type !== 'all' && filters.type !== 'beats' && track.type !== filters.type) return false;
+    if (filters.freeOnly && !track.free_download_enabled) return false;
+    if (filters.newThisWeek) {
+      const created = track.created_at ? new Date(track.created_at).getTime() : 0;
+      if (Date.now() - created > 7 * 24 * 60 * 60 * 1000) return false;
+    }
+    if (filters.key && String(track.key ?? '').toLowerCase() !== filters.key.toLowerCase()) return false;
+    if (filters.scale && String(track.scale ?? '').toLowerCase() !== filters.scale.toLowerCase()) return false;
+    if (filters.duration) {
+      const duration = Number(track.duration_seconds ?? 0);
+      if (filters.duration === 'short' && duration >= 120) return false;
+      if (filters.duration === 'medium' && (duration < 120 || duration > 240)) return false;
+      if (filters.duration === 'long' && duration <= 240) return false;
+    }
+    if (filters.genre && !tags.some((tag) => tag.category === 'genre' && tag.tag.toLowerCase() === filters.genre.toLowerCase())) return false;
+    if (filters.mood && !tags.some((tag) => tag.category === 'mood' && tag.tag.toLowerCase() === filters.mood.toLowerCase())) return false;
+    if (!q) return true;
+    return (
+      String(track.title ?? '').toLowerCase().includes(q) ||
+      String(track.description ?? '').toLowerCase().includes(q) ||
+      String(track.key ?? '').toLowerCase().includes(q) ||
+      String(track.bpm ?? '').includes(q) ||
+      tags.some((tag) => tag.tag.toLowerCase().includes(q))
+    );
+  });
+
+  const sorted = [...filtered];
+  switch (filters.sort) {
+    case 'bpm-asc':
+      sorted.sort((a, b) => Number(a.bpm ?? Infinity) - Number(b.bpm ?? Infinity));
+      break;
+    case 'bpm-desc':
+      sorted.sort((a, b) => Number(b.bpm ?? -Infinity) - Number(a.bpm ?? -Infinity));
+      break;
+    case 'price-asc':
+      sorted.sort((a, b) => Number(a.lease_price_usd ?? Infinity) - Number(b.lease_price_usd ?? Infinity));
+      break;
+    case 'price-desc':
+      sorted.sort((a, b) => Number(b.lease_price_usd ?? -Infinity) - Number(a.lease_price_usd ?? -Infinity));
+      break;
+    case 'title':
+      sorted.sort((a, b) => String(a.title ?? '').localeCompare(String(b.title ?? '')));
+      break;
+    case 'popular':
+      sorted.sort((a, b) => Number(b.rating ?? 0) - Number(a.rating ?? 0));
+      break;
+    case 'newest':
+    default:
+      sorted.sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime());
+  }
+  return sorted;
+}
+
 // `safeSellerId` now lives in @/lib/auth/ownership so every PostgREST
 // `.or()` interpolation site can import it. See lib for full rationale.
 
@@ -33,10 +129,30 @@ function sanitizeUrl(url: string | null | undefined): string | null {
  * Resilient to partially-applied migrations (033-036): each newer column
  * set is fetched with a try-catch fallback.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const pagination = parsePagination(req);
+    const filters = parseStoreFilters(req);
+
     if (!isSupabaseConfigured()) {
-      const tracks = (getAll('tracks') as any[]).filter((t) => t.store_listed === true);
+      const allStoreTracks = (getAll('tracks') as any[]).filter((t) => t.store_listed === true);
+      const localTagsByTrack: Record<string, Array<{ tag: string; category: string | null }>> = {};
+      for (const row of ((getAll('track_tags' as any) as any[]) || [])) {
+        if (!localTagsByTrack[row.track_id]) localTagsByTrack[row.track_id] = [];
+        localTagsByTrack[row.track_id].push({ tag: row.tag, category: row.category ?? null });
+      }
+      const filteredStoreTracks = localFilterAndSortTracks(allStoreTracks, localTagsByTrack, filters);
+      const tracks = pagination
+        ? filteredStoreTracks.slice(pagination.offset, pagination.offset + pagination.limit)
+        : filteredStoreTracks;
+      const pageInfo = pagination
+        ? {
+          hasMore: pagination.offset + pagination.limit < filteredStoreTracks.length,
+          nextCursor: pagination.offset + pagination.limit < filteredStoreTracks.length
+            ? String(pagination.offset + pagination.limit)
+            : null,
+        }
+        : null;
       const profiles = (getAll('creator_profiles' as any) as any[]) || [];
       const creator = profiles[0] ?? null;
 
@@ -52,7 +168,7 @@ export async function GET() {
           .filter((j) => j.playlist_id === pl.id)
           .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
           .map((j) => j.track_id);
-        const plTracks = tracks.filter((t) => plTrackIds.includes(t.id)).map(redactPublicTrackMedia);
+        const plTracks = allStoreTracks.filter((t) => plTrackIds.includes(t.id)).map(redactPublicTrackMedia);
         return { id: pl.id, name: pl.name, cover_url: pl.cover_url ?? null, store_order: pl.store_order ?? null, tracks: plTracks };
       });
 
@@ -66,7 +182,7 @@ export async function GET() {
           .filter((j) => j.project_id === proj.id)
           .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
           .map((j) => j.track_id);
-        const projTracks = tracks.filter((t) => projTrackIds.includes(t.id)).map(redactPublicTrackMedia);
+        const projTracks = allStoreTracks.filter((t) => projTrackIds.includes(t.id)).map(redactPublicTrackMedia);
         return {
           id: proj.id,
           name: proj.name,
@@ -78,7 +194,14 @@ export async function GET() {
         };
       });
 
-      const localResponse = NextResponse.json({ creator, tracks: tracks.map(redactPublicTrackMedia), featuredPlaylists, featuredProjects, licenses: [] });
+      const localResponse = NextResponse.json({
+        creator,
+        tracks: tracks.map(redactPublicTrackMedia),
+        featuredPlaylists,
+        featuredProjects,
+        licenses: [],
+        ...(pageInfo ? { pageInfo } : {}),
+      });
       // Same caching policy as the Supabase path: short s-maxage so newly
       // listed tracks appear within ~30s for CDN-cached visitors.
       localResponse.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
@@ -109,8 +232,80 @@ export async function GET() {
     // ── Tracks ─────────────────────────────────────────────────────────────
     // Try with store_sort_order first (migration 033). Fall back without it.
     let tracksAny: any[] = [];
+    let requiredTrackIds: string[] | null = null;
 
-    let withSortOrderQuery = admin
+    const intersectTrackIds = (ids: string[]) => {
+      const unique = [...new Set(ids.filter(Boolean))];
+      requiredTrackIds = requiredTrackIds == null
+        ? unique
+        : requiredTrackIds.filter((id) => unique.includes(id));
+    };
+
+    const applyTagFilter = async (category: 'genre' | 'mood', tag: string) => {
+      if (!tag) return;
+      const tagQuery = admin
+        .from('track_tags')
+        .select('track_id')
+        .eq('category', category)
+        .ilike('tag', tag);
+      const { data: tagRows, error: tagError } = await tagQuery;
+      if (tagError) throw tagError;
+      intersectTrackIds(((tagRows ?? []) as any[]).map((row) => row.track_id));
+    };
+
+    await applyTagFilter('genre', filters.genre);
+    await applyTagFilter('mood', filters.mood);
+
+    const safeSearch = filters.q.replace(/[%,()]/g, ' ').trim();
+    const applyTrackFilters = (query: any) => {
+      let next = query;
+      if (filters.type === 'beats') {
+        next = next.in('type', ['beat', 'instrumental']);
+      } else if (filters.type && filters.type !== 'all') {
+        next = next.eq('type', filters.type);
+      }
+      if (filters.freeOnly) next = next.eq('free_download_enabled', true);
+      if (filters.newThisWeek) {
+        next = next.gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
+      }
+      if (filters.key) next = next.ilike('key', filters.key);
+      if (filters.scale) next = next.ilike('scale', filters.scale);
+      if (filters.duration === 'short') next = next.lt('duration_seconds', 120);
+      if (filters.duration === 'medium') next = next.gte('duration_seconds', 120).lte('duration_seconds', 240);
+      if (filters.duration === 'long') next = next.gt('duration_seconds', 240);
+      if (safeSearch) {
+        const like = `%${safeSearch}%`;
+        next = next.or(`title.ilike.${like},description.ilike.${like},key.ilike.${like}`);
+      }
+      if (requiredTrackIds) {
+        next = next.in('id', requiredTrackIds.length > 0 ? requiredTrackIds : ['00000000-0000-0000-0000-000000000000']);
+      }
+      return next;
+    };
+
+    const applyTrackOrdering = (query: any, includeStoreOrder: boolean) => {
+      switch (filters.sort) {
+        case 'bpm-asc':
+          return query.order('bpm', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
+        case 'bpm-desc':
+          return query.order('bpm', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+        case 'price-asc':
+          return query.order('lease_price_usd', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
+        case 'price-desc':
+          return query.order('lease_price_usd', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+        case 'title':
+          return query.order('title', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
+        case 'popular':
+          return query.order('rating', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+        case 'newest':
+        default:
+          return includeStoreOrder
+            ? query.order('store_sort_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false })
+            : query.order('created_at', { ascending: false });
+      }
+    };
+
+    let withSortOrderQuery = applyTrackFilters(admin
       .from('tracks')
       .select([
         'id', 'user_id', 'title', 'type',
@@ -120,16 +315,21 @@ export async function GET() {
         'lease_price_usd', 'exclusive_price_usd',
         'store_listed', 'store_featured', 'free_download_enabled', 'store_sort_order', 'voice_tag_enabled', 'exclusive_sold', 'created_at',
       ].join(', '))
-      .eq('store_listed', true);
+      .eq('store_listed', true));
     if (sellerId) {
       withSortOrderQuery = withSortOrderQuery.or(`user_id.eq.${safeSeller},user_id.is.null`);
     }
-    const withSortOrder = await withSortOrderQuery
-      .order('store_sort_order', { ascending: true, nullsFirst: false })
-      .order('created_at', { ascending: false });
+    let withSortOrderOrdered = applyTrackOrdering(withSortOrderQuery, true);
+    if (pagination) {
+      withSortOrderOrdered = withSortOrderOrdered.range(
+        pagination.offset,
+        pagination.offset + pagination.limit,
+      );
+    }
+    const withSortOrder = await withSortOrderOrdered;
 
     if (withSortOrder.error) {
-      let fallbackQuery = admin
+      let fallbackQuery = applyTrackFilters(admin
         .from('tracks')
         .select([
           'id', 'user_id', 'title', 'type',
@@ -139,16 +339,27 @@ export async function GET() {
           'lease_price_usd', 'exclusive_price_usd',
           'store_listed', 'free_download_enabled', 'created_at',
         ].join(', '))
-        .eq('store_listed', true);
+        .eq('store_listed', true));
       if (sellerId) {
         fallbackQuery = fallbackQuery.or(`user_id.eq.${safeSeller},user_id.is.null`);
       }
-      const fallback = await fallbackQuery
-        .order('created_at', { ascending: false });
+      let fallbackOrdered = applyTrackOrdering(fallbackQuery, false);
+      if (pagination) {
+        fallbackOrdered = fallbackOrdered.range(
+          pagination.offset,
+          pagination.offset + pagination.limit,
+        );
+      }
+      const fallback = await fallbackOrdered;
       if (fallback.error) throw fallback.error;
       tracksAny = (fallback.data as any[]) ?? [];
     } else {
       tracksAny = (withSortOrder.data as any[]) ?? [];
+    }
+
+    const hasMoreTracks = pagination ? tracksAny.length > pagination.limit : false;
+    if (pagination && hasMoreTracks) {
+      tracksAny = tracksAny.slice(0, pagination.limit);
     }
 
     // ── Play counts — for popular sort (not exposed to buyers) ─────────
@@ -166,16 +377,31 @@ export async function GET() {
     if (trackIds.length > 0) {
       try {
         for (const chunk of chunkIds(trackIds)) {
-          const { data: playRows } = await admin
-            .from('store_plays')
-            .select('track_id')
+          const { data: playRows, error: playCountError } = await admin
+            .from('store_play_counts')
+            .select('track_id, play_count')
             .in('track_id', chunk);
+          if (playCountError) throw playCountError;
           for (const row of (playRows ?? []) as any[]) {
-            playCountByTrack[row.track_id] = (playCountByTrack[row.track_id] ?? 0) + 1;
+            playCountByTrack[row.track_id] = Number(row.play_count ?? 0);
           }
         }
       } catch {
-        // non-fatal — popular sort falls back to rating proxy
+        // Migration 102 may not be applied yet. Fall back to the older raw-row
+        // count path so popular sorting degrades gracefully.
+        try {
+          for (const chunk of chunkIds(trackIds)) {
+            const { data: playRows } = await admin
+              .from('store_plays')
+              .select('track_id')
+              .in('track_id', chunk);
+            for (const row of (playRows ?? []) as any[]) {
+              playCountByTrack[row.track_id] = (playCountByTrack[row.track_id] ?? 0) + 1;
+            }
+          }
+        } catch {
+          // non-fatal — popular sort falls back to rating proxy
+        }
       }
     }
 
@@ -396,7 +622,21 @@ export async function GET() {
     // Public catalogue → CDN-cacheable. Short s-maxage so newly listed
     // tracks appear within ~30s; stale-while-revalidate keeps perceived
     // latency low while the cache refills.
-    const response = NextResponse.json({ creator, tracks: safeTracks, featuredPlaylists, featuredProjects, licenses });
+    const response = NextResponse.json({
+      creator,
+      tracks: safeTracks,
+      featuredPlaylists,
+      featuredProjects,
+      licenses,
+      ...(pagination
+        ? {
+          pageInfo: {
+            hasMore: hasMoreTracks,
+            nextCursor: hasMoreTracks ? String(pagination.offset + pagination.limit) : null,
+          },
+        }
+        : {}),
+    });
     response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     return response;
   } catch (err) {

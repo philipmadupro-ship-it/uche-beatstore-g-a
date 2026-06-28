@@ -25,6 +25,7 @@ import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { Track } from '@/lib/types';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
+import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { Drawer } from '@/components/ui/Drawer';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
@@ -278,23 +279,49 @@ export default function LibraryPage() {
     }
   };
 
-  const fetchTracks = async () => {
-    setLoading(true);
+  const TRACK_PAGE_SIZE = 100;
+  const [hasMoreTracks, setHasMoreTracks] = useState(false);
+  const [nextTrackCursor, setNextTrackCursor] = useState<string | null>(null);
+  const [loadingMoreTracks, setLoadingMoreTracks] = useState(false);
+
+  const fetchTracks = async ({ cursor = null, append = false }: { cursor?: string | null; append?: boolean } = {}) => {
+    if (append) setLoadingMoreTracks(true);
+    else setLoading(true);
     setFetchError(null);
     try {
-      const res = await fetch('/api/tracks');
+      const params = new URLSearchParams({
+        paged: '1',
+        lean: '1',
+        limit: String(TRACK_PAGE_SIZE),
+      });
+      if (cursor) params.set('cursor', cursor);
+      const res = await fetch(`/api/tracks?${params.toString()}`);
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data?.error || `Failed to load tracks (${res.status})`);
       }
-      setTracks(Array.isArray(data) ? data : []);
+      const page = Array.isArray(data) ? data : data.tracks ?? [];
+      setTracks((prev) => {
+        if (!append) return page;
+        const seen = new Set(prev.map((track) => track.id));
+        const incoming = page.filter((track: Track) => !seen.has(track.id));
+        return [...prev, ...incoming];
+      });
+      setHasMoreTracks(Boolean(data.pageInfo?.hasMore));
+      setNextTrackCursor(data.pageInfo?.nextCursor ?? null);
     } catch (err: any) {
       console.error('Error fetching tracks:', err);
       setFetchError(err?.message || 'Failed to load tracks');
-      setTracks([]);
+      if (!append) setTracks([]);
     } finally {
-      setLoading(false);
+      if (append) setLoadingMoreTracks(false);
+      else setLoading(false);
     }
+  };
+
+  const loadMoreTracks = () => {
+    if (!hasMoreTracks || !nextTrackCursor || loadingMoreTracks) return;
+    void fetchTracks({ cursor: nextTrackCursor, append: true });
   };
 
   useEffect(() => { fetchTracks(); }, []);
@@ -337,7 +364,8 @@ export default function LibraryPage() {
   // Auto-refresh on track inserts/updates/deletes. Replaces the previous
   // "refresh only on user action" behavior — uploads from elsewhere or
   // analyze jobs landing now surface immediately in the library.
-  useRealtimeTable({ table: 'tracks', onChange: fetchTracks });
+  const refreshTracks = useDebouncedCallback(fetchTracks, 500);
+  useRealtimeTable({ table: 'tracks', onChange: refreshTracks });
 
   // Whenever the tracks list refreshes, re-sync the open drawer's track so
   // edits (re-analyze, rating, status, replace audio) reflect immediately
@@ -1175,7 +1203,7 @@ export default function LibraryPage() {
             <p className="text-sm text-[#F7EBDD] mb-1">Couldn&apos;t load your library</p>
             <p className="text-[11px] text-red-400 max-w-md mx-auto mb-4">{fetchError}</p>
             <button
-              onClick={fetchTracks}
+              onClick={() => fetchTracks()}
               className="text-[11px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-md border border-[#211F1A] bg-[#171511] text-[#F7EBDD] hover:border-[#3B372F]"
             >
               Retry
@@ -1353,6 +1381,19 @@ export default function LibraryPage() {
               className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-[#2B2821] bg-[#171511] text-[11px] font-medium text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
             >
               Next <ChevronRight size={13} />
+            </button>
+          </div>
+        )}
+
+        {effectiveBrowseMode === 'all' && hasMoreTracks && (
+          <div className="flex justify-center pb-28">
+            <button
+              type="button"
+              onClick={loadMoreTracks}
+              disabled={loadingMoreTracks}
+              className="rounded-full border border-[#2B2821] bg-[#171511] px-5 py-2.5 text-[10px] font-mono uppercase tracking-[0.18em] text-[#D0C3AF] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD] disabled:cursor-wait disabled:opacity-60"
+            >
+              {loadingMoreTracks ? 'Loading tracks...' : 'Load more tracks'}
             </button>
           </div>
         )}

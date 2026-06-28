@@ -21,6 +21,7 @@ interface Props {
 
 const TYPE_OPTIONS = ['all', 'beat', 'instrumental', 'song', 'remix'] as const;
 const KEY_OPTIONS = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const TRACK_PAGE_SIZE = 80;
 
 export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdded, title = 'Add from library' }: Props) {
   const [tracks, setTracks] = useState<any[]>([]);
@@ -35,29 +36,73 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
-    (async () => {
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const res = await fetch('/api/tracks');
+        const params = buildTrackQuery();
+        const res = await fetch(`/api/tracks?${params.toString()}`);
         const data = await res.json();
-        setTracks(Array.isArray(data) ? data : data.tracks || []);
+        if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+        setTracks(data.tracks || []);
+        setHasMore(Boolean(data.pageInfo?.hasMore));
+        setNextCursor(data.pageInfo?.nextCursor ?? null);
       } catch (err: any) { setError(err?.message || 'Failed to load library'); }
       finally { setLoading(false); }
-    })();
-  }, []);
+    }, 220);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, typeFilter, bpmMin, bpmMax, keyFilter, selectedTags]);
+
+  const buildTrackQuery = (cursor?: string | null) => {
+    const params = new URLSearchParams({
+      paged: '1',
+      lean: '1',
+      limit: String(TRACK_PAGE_SIZE),
+    });
+    if (cursor) params.set('cursor', cursor);
+    if (search.trim()) params.set('q', search.trim());
+    if (typeFilter !== 'all') params.set('type', typeFilter);
+    if (bpmMin.trim()) params.set('min_bpm', bpmMin.trim());
+    if (bpmMax.trim()) params.set('max_bpm', bpmMax.trim());
+    if (keyFilter) params.set('key', keyFilter);
+    if (selectedTags.size === 1) params.set('tag', [...selectedTags][0]);
+    return params;
+  };
+
+  const loadMore = async () => {
+    if (!hasMore || !nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const params = buildTrackQuery(nextCursor);
+      const res = await fetch(`/api/tracks?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+      setTracks((current) => {
+        const seen = new Set(current.map((track) => track.id));
+        const incoming = (data.tracks || []).filter((track: any) => !seen.has(track.id));
+        return [...current, ...incoming];
+      });
+      setHasMore(Boolean(data.pageInfo?.hasMore));
+      setNextCursor(data.pageInfo?.nextCursor ?? null);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load more tracks');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const excluded = useMemo(() => new Set(excludeIds), [excludeIds]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const bMin = bpmMin !== '' ? Number(bpmMin) : null;
-    const bMax = bpmMax !== '' ? Number(bpmMax) : null;
     return tracks.filter((t) => {
-      if (typeFilter !== 'all' && t.type !== typeFilter) return false;
-      if (bMin !== null && (t.bpm == null || t.bpm < bMin)) return false;
-      if (bMax !== null && (t.bpm == null || t.bpm > bMax)) return false;
-      if (keyFilter && (t.key ?? '').toLowerCase() !== keyFilter.toLowerCase()) return false;
       if (selectedTags.size > 0) {
         const owned = (t.track_tags ?? []).map((tt: any) => tt.tag);
         if (![...selectedTags].every((sel) => owned.includes(sel))) return false;
@@ -65,7 +110,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
       if (q) return (t.title || '').toLowerCase().includes(q);
       return true;
     });
-  }, [tracks, search, typeFilter, bpmMin, bpmMax, keyFilter, selectedTags]);
+  }, [tracks, search, selectedTags]);
 
   const toggle = (id: string) => setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleTag = (tag: string) => setSelectedTags((prev) => { const n = new Set(prev); n.has(tag) ? n.delete(tag) : n.add(tag); return n; });
@@ -209,6 +254,18 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
                   </li>
                 );
               })}
+              {hasMore && (
+                <li className="px-5 py-4">
+                  <button
+                    type="button"
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                    className="w-full rounded-lg border border-[#2B2821] bg-[#171511] px-4 py-2.5 text-[10px] font-mono uppercase tracking-[0.18em] text-[#D0C3AF] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {loadingMore ? 'Loading tracks...' : 'Load more tracks'}
+                  </button>
+                </li>
+              )}
             </ul>
           )}
         </div>

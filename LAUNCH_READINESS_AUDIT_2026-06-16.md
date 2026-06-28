@@ -3,7 +3,7 @@
 Date: 2026-06-16
 Scope: launch/security readiness for uploading 500-600 real beats, with store, library, projects, playlists, checkout, storage, RLS, and competitor workflow review.
 
-## Implementation Update — 2026-06-23
+## Implementation Update — 2026-06-28
 
 The UI/UX master plan and most application-layer security/commerce work are now implemented. The app builds successfully and all automated tests pass. This does **not** yet remove the inventory freeze for 500-600 valuable masters because the remaining blockers are storage and scale infrastructure, not page UI.
 
@@ -11,7 +11,7 @@ The UI/UX master plan and most application-layer security/commerce work are now 
 
 - Production build: passed (`next build`, 53 static pages plus dynamic routes).
 - TypeScript: passed.
-- Tests: 286/286 passed across 45 files.
+- Tests: 309/309 passed across 53 files.
 - Live checks:
   - `/store`: 200
   - `/store/orders`: 200
@@ -36,6 +36,8 @@ The UI/UX master plan and most application-layer security/commerce work are now 
 - Paid delivery and project access stream through entitlement-checked endpoints.
 - Dashboard routes and sensitive event/link APIs are auth-gated.
 - Migrations 096 and 097 lock share enumeration and legacy null-owner mutation down once applied.
+- Migration/code 098 moves new upload masters to private R2 references and exposes only generated preview derivatives publicly.
+- Migration/code 101 adds legacy-public-master migration metadata and `/api/cron/migrate-legacy-audio` starts moving existing public audio into private storage in small batches.
 
 **Phase 2 commerce correctness**
 
@@ -67,26 +69,73 @@ The UI/UX master plan and most application-layer security/commerce work are now 
 - Links combines track and project shares with correct public paths and owner scoping.
 - Studio, Sales, project/playlist filters, folders, and creation/upload flows received the planned mobile/productization pass.
 
+**Phase 3 scale foundation**
+
+- `/api/store` now supports opt-in cursor pagination with bounded payloads while preserving the legacy full-catalogue response for existing internal callers.
+- `/store` loads the first 80 beats and appends more on demand, preventing the public catalogue from pulling 500-600 tracks into the initial render.
+- `/api/store` applies public store search/type/tag/key/scale/free/new/duration/sort filters before pagination.
+- `/api/store/facets` provides full-catalogue sidebar facets/ranges without forcing the page to download every beat.
+- `/api/tracks` now has a backward-compatible bounded mode for dashboard search/pagination, including `q`, `limit`, `cursor`, and `paged=1`.
+- Project/playlist Add From Library modals use bounded track search with load-more instead of fetching the whole library.
+- Store Editor's Beat Listing renders tracks in 80-row batches with load-more, while keeping full-catalogue counts/readiness checks intact.
+- Realtime table subscriptions now debounce CDC bursts; library, projects, and playlists share debounced refresh callbacks so multi-table updates collapse into one fetch per screen.
+- Migration/code 102 adds `store_play_counts`; `/api/store` reads aggregate play counts with a raw-row fallback.
+- `/api/tracks/reorder` bulk-writes store listing order so Store Editor no longer sends one PATCH per listed beat.
+- Library now loads tracks through `/api/tracks?paged=1` in 100-track pages with load-more, instead of pulling the whole catalogue into memory on first render.
+- `/api/tracks/store-summary` provides Store Editor whole-catalogue counts/readiness/Producer's Picks while the listing manager loads rows through paged `/api/tracks`.
+- Producer's Picks has independent server-backed listed-beat search/pagination, and the editor suppresses duplicate or stale initial requests.
+- Bounded dashboard pagination is covered with a generated 600-track catalogue test.
+- `npm run test:scale` now enforces a 600-beat fixture budget: 80-row initial payload, private-master redaction, compact facets/summary, filter-before-pagination, and a 20-request bounded burst.
+- Store facet tag chunks execute in parallel, and Store Editor price readiness indexes track-license links by track instead of repeatedly scanning the full link set.
+- Migration/code 104 adds the composite/partial/GIN indexes used by catalogue ordering, facets, play analytics, share analytics, and sales lookups.
+- Store pagination, store facets, bounded track search, and bulk reorder are covered by focused route tests.
+
+**Phase 2 delivery resilience**
+
+- Migration/code 103 adds a durable `fulfillment_email_jobs` outbox for paid track-license and project-bundle emails.
+- Stripe still attempts delivery immediately, but failed sends remain queued after the webhook completes.
+- `/api/cron/process-fulfillment-emails` claims work with `FOR UPDATE SKIP LOCKED`, retries with exponential backoff, recovers stale locks, and dead-letters after ten failed attempts.
+- The rollout is migration-safe: before migration 103 exists, checkout falls back to direct delivery rather than failing a paid purchase.
+
 ### Remaining launch blockers
+
+0. **Production deployment disabled (current P0)**
+   - Read-only verification on 2026-06-28 returned HTTP `402` with Vercel `DEPLOYMENT_DISABLED` for both the production alias and latest READY deployment.
+   - Vercel reports project `uche-beatstore-g` as `live: false`; no buyer can access the store until the account/project deployment is re-enabled.
+   - The latest production deployment also predates the current local security, scale, and outbox work, so a fresh deployment is required after hosting access is restored.
 
 1. **Private storage and derivative previews**
    - Implemented for new uploads in migration/code 098: masters/WAV/stems use opaque private `r2://` references; upload generates a 96 kbps public MP3 derivative; storefront playback prefers only `preview_url`.
    - Production upload fails closed unless `R2_PRIVATE_BUCKET_NAME` is configured.
-   - Still required before inventory launch: apply migration 098, create the private bucket, provide ffmpeg in the production runtime or move derivative generation to a worker, and migrate/re-upload legacy public masters. Legacy public rows remain supported temporarily and are not made private by this code change alone.
+   - Implemented in migration/code 101: legacy public audio rows can be reprocessed by cron into private masters plus fresh previews/peaks.
+   - Read-only production verification on 2026-06-28 confirms migration 101 is **not** applied: `tracks.private_audio_migrated_at` is missing (`42703`).
+   - Still required before inventory launch: apply migration 101, verify the `privatebuckets` configuration and production ffmpeg (or move derivatives to a worker), then confirm the migration cron finishes all legacy public masters.
 
 2. **Serverless-safe bulk upload**
    - Implemented in migration/code 099: multipart state persists in owner-scoped Supabase rows and survives serverless invocation changes.
    - Browser chunks upload directly to private R2 through 15-minute signed part URLs; the app receives only ETags and byte counts.
    - Completion reconciles against R2's authoritative part list and exact final-part size is enforced.
    - Implemented in migration/code 100: upload completion now enqueues analysis/peaks/preview generation into `upload_processing_jobs`; `/api/cron/process-uploads` processes queued work outside the upload request.
-   - Still required: apply migrations 099/100, expose `ETag` in private-bucket CORS, and migrate/reprocess legacy public masters.
+   - Operator reports migrations 099/100 are applied and private-bucket CORS was configured.
+   - Still required: verify `ETag` is visible to the browser and confirm queued processing/legacy migration in production logs.
 
 3. **600-beat request scale**
-   - Store and dashboard catalogue routes remain whole-catalog-first.
-   - Add cursor pagination, server-side filters/facets, lean search endpoints, aggregate play counts, virtualized rows, debounced realtime invalidation, and bulk reorder APIs.
+   - Public `/store` no longer fetches the whole catalogue on first load.
+   - Store search/filter now runs before pagination and sidebar facets come from a lean aggregate endpoint.
+   - Add-from-library dashboard flows now use bounded track search.
+   - Store Editor listing rows are batched to avoid a 600-row DOM render.
+   - Realtime refreshes are debounced so upload/analyze/reorder bursts do not trigger repeated full reload storms.
+   - Store play counts use an aggregate view when migration 102 is applied.
+   - Store listing reorder now uses one bulk API call.
+   - Library and Store Editor listing manager use server-backed track pages.
+   - Store Editor counts/readiness/Producer's Picks come from a summary endpoint, not a full track payload.
+   - The deterministic 600-beat application fixture passes all payload and CPU budgets.
+   - Remaining work before full inventory: apply migration 104, verify production query plans, and run a staged network/database load test against generated placeholder rows.
 
 4. **Durable fulfillment outbox**
-   - Purchase state is durable, but email delivery still needs a persisted `pending/sent/failed` outbox with retries for both track and project purchases.
+   - Implemented in migration/code 103 for track and project delivery emails.
+   - Read-only production verification confirms migration 103 is applied and currently has zero pending, failed, or dead jobs.
+   - Still required: deploy the five-minute cron and verify a forced Resend failure moves `pending -> processing -> failed -> sent` in production logs.
 
 5. **Deployment operations**
    - Review and apply migrations 096/097 after assigning any legitimate legacy null-owner rows to the producer.
@@ -94,7 +143,7 @@ The UI/UX master plan and most application-layer security/commerce work are now 
 
 ### Current release decision
 
-The refactor is ready for continued testing with placeholder or non-sensitive inventory. Do not upload the full valuable 500-600 beat catalogue until the five infrastructure items above are complete, especially private derivative previews and durable direct-to-R2 upload.
+The refactor is ready for continued local testing with placeholder or non-sensitive inventory. Production is currently offline at the Vercel layer. Do not upload the full valuable 500-600 beat catalogue until hosting is restored, the current code is deployed, and the remaining production drills pass.
 
 ## Method
 
@@ -517,4 +566,4 @@ These are not launch blockers for a single-producer store:
 
 ## Recommended Next Step
 
-Start with Phase 1. It is the foundation. Store UI and licensing polish should continue after the media boundary is safe, because otherwise a nicer store just makes unprotected files easier to find.
+Re-enable the Vercel project/account, apply migrations 101 and 104, and deploy the current code. Then run `npm run readiness:prod`; after it passes, run the three production drills (upload processing, legacy-audio migration, forced fulfillment-email retry) before loading the valuable catalogue.

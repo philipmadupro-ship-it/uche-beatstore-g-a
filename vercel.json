@@ -19,6 +19,14 @@
     {
       "path": "/api/cron/process-uploads",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/migrate-legacy-audio",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/process-fulfillment-emails",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
