@@ -87,6 +87,46 @@ export async function GET() {
     out.hints.push('RESEND_API_KEY missing — purchase receipt emails will be skipped (purchase still records).');
   }
 
+  // 2b: Confirm a Stripe webhook endpoint is actually registered for the three
+  // events we handle. This turns "is the dashboard set up?" from a manual
+  // checklist into a programmatic check — a paid sale with no registered
+  // webhook never fulfils.
+  const REQUIRED_EVENTS = ['checkout.session.completed', 'charge.refunded', 'charge.dispute.created'];
+  out.webhook = {
+    endpoint_registered: false,
+    url: null as string | null,
+    status: null as string | null,
+    missing_events: REQUIRED_EVENTS.slice(),
+    error: null as string | null,
+  };
+  if (out.stripe.account_id === 'verified') {
+    try {
+      const stripe = getStripe();
+      const eps = await stripe.webhookEndpoints.list({ limit: 100 });
+      const ours = eps.data.find((e) => e.url?.includes('/api/stripe/webhook'));
+      if (ours) {
+        out.webhook.endpoint_registered = true;
+        out.webhook.url = ours.url;
+        out.webhook.status = ours.status;
+        // '*' means the endpoint is subscribed to all events.
+        const enabled = new Set(ours.enabled_events);
+        const missing = enabled.has('*') ? [] : REQUIRED_EVENTS.filter((e) => !enabled.has(e));
+        out.webhook.missing_events = missing;
+        if (ours.status !== 'enabled') {
+          out.hints.push(`Stripe webhook endpoint is "${ours.status}", not "enabled".`);
+        }
+        if (missing.length) {
+          out.hints.push(`Stripe webhook is missing events: ${missing.join(', ')}.`);
+        }
+      } else {
+        out.hints.push(`No Stripe webhook endpoint points at /api/stripe/webhook. Add one in the Stripe dashboard subscribed to: ${REQUIRED_EVENTS.join(', ')}.`);
+      }
+    } catch (err) {
+      // Restricted keys can't list webhook endpoints — not fatal.
+      out.webhook.error = errorMessage(err);
+    }
+  }
+
   // 3+4+5: Supabase-side checks. Require a signed-in user so this
   // endpoint can show seller-scoped diagnostics.
   if (out.supabase.configured) {

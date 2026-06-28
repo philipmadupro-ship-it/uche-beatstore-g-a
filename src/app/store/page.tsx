@@ -866,12 +866,20 @@ function StorePage() {
           <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6E685B]">
             © {new Date().getFullYear()} {creator?.display_name || 'Beat Store'}
           </p>
-          <Link
-            href="/store/orders"
-            className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#837B6D] hover:text-[#D0C3AF] transition-colors"
-          >
-            Order history / Re-download
-          </Link>
+          <div className="flex items-center gap-5">
+            <Link
+              href="/store/privacy"
+              className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#837B6D] hover:text-[#D0C3AF] transition-colors"
+            >
+              Privacy
+            </Link>
+            <Link
+              href="/store/orders"
+              className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#837B6D] hover:text-[#D0C3AF] transition-colors"
+            >
+              Order history / Re-download
+            </Link>
+          </div>
         </div>
       </div>
 
