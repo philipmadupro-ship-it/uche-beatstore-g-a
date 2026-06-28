@@ -9,6 +9,7 @@ import { isValidEmail, isUUID } from '@/lib/validate';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 import { applyDiscount, applyBundleDiscount, type PromoTerms, type LineItems } from '@/lib/store/discount';
 import { needsStemsUpload } from '@/lib/stems/readiness';
+import { resolveLicenseType } from '@/lib/store/license-type';
 
 const log = createLogger('api.store.checkout');
 export const runtime = 'nodejs';
@@ -346,12 +347,7 @@ export async function POST(req: NextRequest) {
 
       // Determine resolved license_type ('lease' | 'exclusive') from either
       // the custom DB row or the legacy type string passed by the client.
-      const resolvedType: 'lease' | 'exclusive' =
-        customLicense?.is_exclusive === true
-          ? 'exclusive'
-          : rawLicenseId === 'exclusive-rights' || rawLicenseId === 'exclusive' || it.license_type === 'exclusive'
-            ? 'exclusive'
-            : 'lease';
+      const resolvedType = resolveLicenseType(rawLicenseId, licenseById, it.license_type);
 
       // Price resolution:
       let effectivePrice: number | null = null;

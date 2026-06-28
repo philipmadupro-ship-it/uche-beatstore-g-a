@@ -42,3 +42,25 @@ describe('resolveLicenseType — legacy string ids', () => {
     expect(resolveLicenseType('Exclusive', byId)).toBe('lease'); // case-sensitive by design
   });
 });
+
+describe('resolveLicenseType — legacy type hint (checkout)', () => {
+  it('honours an exclusive hint for an unrecognised/legacy id', () => {
+    expect(resolveLicenseType('basic-lease', byId, 'exclusive')).toBe('exclusive');
+    expect(resolveLicenseType('', byId, 'exclusive')).toBe('exclusive');
+  });
+
+  it('lets the DB row win over the hint for a known UUID', () => {
+    expect(resolveLicenseType(UUID_LEASE, byId, 'exclusive')).toBe('lease');
+    expect(resolveLicenseType(UUID_EXCL, byId, 'lease')).toBe('exclusive');
+  });
+
+  it('falls back to the hint for a UUID not in the map', () => {
+    expect(resolveLicenseType(UUID_UNKNOWN, byId, 'exclusive')).toBe('exclusive');
+    expect(resolveLicenseType(UUID_UNKNOWN, byId)).toBe('lease'); // no hint → safe default
+  });
+
+  it('a non-exclusive hint never escalates to exclusive', () => {
+    expect(resolveLicenseType('lease', byId, 'lease')).toBe('lease');
+    expect(resolveLicenseType('lease', byId, undefined)).toBe('lease');
+  });
+});
