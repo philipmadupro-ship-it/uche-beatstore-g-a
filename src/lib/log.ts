@@ -104,6 +104,19 @@ export interface Logger {
 }
 
 /**
+ * Mask an email for logging — keeps the first 3 local-part chars + domain so a
+ * log line stays correlatable without storing buyer PII in plaintext.
+ * `buyer@example.com` → `buy***@example.com`. Use anywhere a buyer email would
+ * otherwise be logged.
+ */
+export function maskEmail(email: string | null | undefined): string {
+  if (!email) return '<none>';
+  const at = email.indexOf('@');
+  if (at < 1) return '***';
+  return `${email.slice(0, Math.min(3, at))}***${email.slice(at)}`;
+}
+
+/**
  * Create a logger scoped to a route or module. Use dot-paths like
  * `api.tracks.rate` so prod grep is trivial.
  */

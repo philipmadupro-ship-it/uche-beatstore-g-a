@@ -89,6 +89,22 @@ export async function PUT(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
+    // Authenticate BEFORE touching the uploaded file. parseFile() runs the
+    // xlsx parser (a dependency with known ReDoS/prototype-pollution advisories
+    // and no upstream fix), so we must never let an unauthenticated request
+    // reach it in production — otherwise it's an anonymous DoS surface. Only
+    // the signed-in producer can trigger a parse. (Local-store dev mode has no
+    // Supabase auth and is localhost-only, so it's exempt.)
+    let userId: string | null = null;
+    if (isSupabaseConfigured()) {
+      const cookieClient = await createServerClient();
+      const { data: { user } } = await cookieClient.auth.getUser();
+      if (!user) {
+        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      }
+      userId = user.id;
+    }
+
     const ct = req.headers.get('content-type') || '';
     let parsed: ParsedContact[] = [];
 
@@ -131,13 +147,6 @@ export async function POST(req: NextRequest) {
     const categoryBreakdown: Record<string, number> = {};
 
     if (isSupabaseConfigured()) {
-      const cookieClient = await createServerClient();
-      const { data: { user } } = await cookieClient.auth.getUser();
-      if (!user) {
-        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-      }
-      const userId = user.id;
-
       // Service-role insert to bypass RLS — same pattern as share/playlists.
       // Now goes through the centralized createServiceClient helper instead
       // of a one-off import.

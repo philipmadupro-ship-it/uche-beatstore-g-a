@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
-import { createLogger } from '@/lib/log';
+import { createLogger, maskEmail } from '@/lib/log';
 import { z } from 'zod';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
     const filename = `${track.title || 'track'}.${ext}`;
     const downloadUrl = `/api/audio?src=${encodeURIComponent(track.audio_url)}&download=1&filename=${encodeURIComponent(filename)}`;
 
-    log.info('free download', { track_id, email });
+    log.info('free download', { track_id, email: maskEmail(email) });
     return NextResponse.json({ ok: true, download_url: downloadUrl });
   } catch (err) {
     log.error('POST free-download failed', { error: errorMessage(err) });

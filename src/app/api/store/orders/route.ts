@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
-import { createLogger } from '@/lib/log';
+import { createLogger, maskEmail } from '@/lib/log';
 import { isValidEmail } from '@/lib/validate';
 
 export const runtime = 'nodejs';
@@ -123,7 +123,7 @@ export async function GET(req: NextRequest) {
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     );
 
-    log.info('orders lookup', { email: email.replace(/.{3}@/, '***@'), count: orders.length });
+    log.info('orders lookup', { email: maskEmail(email), count: orders.length });
     return NextResponse.json({ orders });
   } catch (err) {
     log.error('orders lookup failed', { error: errorMessage(err) });
