@@ -9,6 +9,7 @@ import {
 } from '@/lib/contacts/import';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { ContactImportBodySchema } from '@/lib/contracts';
 
 const log = createLogger('api.contacts.import');
 
@@ -88,12 +89,42 @@ export async function PUT(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
+    // Authenticate BEFORE touching the uploaded file. parseFile() runs the
+    // xlsx parser (a dependency with known ReDoS/prototype-pollution advisories
+    // and no upstream fix), so we must never let an unauthenticated request
+    // reach it in production — otherwise it's an anonymous DoS surface. Only
+    // the signed-in producer can trigger a parse. (Local-store dev mode has no
+    // Supabase auth and is localhost-only, so it's exempt.)
+    let userId: string | null = null;
+    if (isSupabaseConfigured()) {
+      const cookieClient = await createServerClient();
+      const { data: { user } } = await cookieClient.auth.getUser();
+      if (!user) {
+        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      }
+      userId = user.id;
+    }
+
     const ct = req.headers.get('content-type') || '';
     let parsed: ParsedContact[] = [];
 
     if (ct.includes('application/json')) {
-      const body = await req.json();
-      parsed = Array.isArray(body?.contacts) ? body.contacts : [];
+      // Validate the pre-parsed list. Invalid JSON / a non-array / items
+      // missing a name 400 here instead of silently importing as 0 rows.
+      let raw: unknown;
+      try {
+        raw = await req.json();
+      } catch {
+        return NextResponse.json({ error: 'Body must be valid JSON' }, { status: 400 });
+      }
+      const result = ContactImportBodySchema.safeParse(raw);
+      if (!result.success) {
+        return NextResponse.json(
+          { error: result.error.issues[0]?.message ?? 'Invalid contacts payload' },
+          { status: 400 },
+        );
+      }
+      parsed = result.data.contacts as ParsedContact[];
     } else {
       const form = await req.formData();
       const file = form.get('file');
@@ -116,13 +147,6 @@ export async function POST(req: NextRequest) {
     const categoryBreakdown: Record<string, number> = {};
 
     if (isSupabaseConfigured()) {
-      const cookieClient = await createServerClient();
-      const { data: { user } } = await cookieClient.auth.getUser();
-      if (!user) {
-        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-      }
-      const userId = user.id;
-
       // Service-role insert to bypass RLS — same pattern as share/playlists.
       // Now goes through the centralized createServiceClient helper instead
       // of a one-off import.

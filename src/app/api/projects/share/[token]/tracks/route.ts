@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.projects.share.token.tracks');
 
 export const runtime = 'nodejs';
 
@@ -109,7 +112,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
 
     return NextResponse.json({ success: true, count: finalOrder.length });
   } catch (error: any) {
-    console.error('Editor reorder error:', error);
+    log.error('Editor reorder error:', { error: errorMessage(error) });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

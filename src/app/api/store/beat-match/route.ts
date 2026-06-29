@@ -4,6 +4,7 @@ import { estimateBpm } from '@/lib/audio/bpm';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('api.store.beat-match');
@@ -156,6 +157,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ bpm, duration, matches: scored });
   } catch (err) {
     log.warn('beat-match failed', { error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

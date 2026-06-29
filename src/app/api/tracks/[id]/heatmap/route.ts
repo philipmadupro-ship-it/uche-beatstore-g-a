@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, createServiceClient } from '@/lib/db';
 import { requireRowOwnership } from '@/lib/auth/ownership';
 import { getAll, insert } from '@/lib/local-store';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.tracks.id.heatmap');
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +32,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const pings = all.filter((p: any) => p.track_id === trackId);
     return NextResponse.json({ pings });
   } catch (error: any) {
-    console.error('Heatmap GET error:', error);
+    log.error('Heatmap GET error:', { error: errorMessage(error) });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -73,7 +76,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     return NextResponse.json({ ping });
   } catch (error: any) {
-    console.error('Heatmap POST error:', error);
+    log.error('Heatmap POST error:', { error: errorMessage(error) });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

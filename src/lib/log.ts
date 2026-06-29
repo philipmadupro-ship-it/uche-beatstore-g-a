@@ -21,6 +21,8 @@
  * upgrading later is a one-import swap when needed.
  */
 
+import { captureException } from '@/lib/observability';
+
 type Level = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogContext {
@@ -48,6 +50,13 @@ const MIN_LEVEL: Level = (() => {
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 function emit(level: Level, scope: string, message: string, context?: LogContext) {
+  // Error-level logs feed the observability reporter (Sentry, when configured)
+  // so production exceptions surface somewhere actionable — not just stdout.
+  // Done before the level gate so errors always report even if logs are quiet.
+  if (level === 'error') {
+    captureException(new Error(`[${scope}] ${message}`), { scope, ...(context ?? {}) });
+  }
+
   if (LEVEL_RANK[level] < LEVEL_RANK[MIN_LEVEL]) return;
 
   if (IS_PROD) {
@@ -92,6 +101,19 @@ export interface Logger {
   info: (msg: string, ctx?: LogContext) => void;
   warn: (msg: string, ctx?: LogContext) => void;
   error: (msg: string, ctx?: LogContext) => void;
+}
+
+/**
+ * Mask an email for logging — keeps the first 3 local-part chars + domain so a
+ * log line stays correlatable without storing buyer PII in plaintext.
+ * `buyer@example.com` → `buy***@example.com`. Use anywhere a buyer email would
+ * otherwise be logged.
+ */
+export function maskEmail(email: string | null | undefined): string {
+  if (!email) return '<none>';
+  const at = email.indexOf('@');
+  if (at < 1) return '***';
+  return `${email.slice(0, Math.min(3, at))}***${email.slice(at)}`;
 }
 
 /**

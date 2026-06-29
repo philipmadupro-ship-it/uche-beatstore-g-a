@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { isSupabaseConfigured, getAll, insert } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
+const log = createLogger('api.projects.share.token.comments');
 
 export const runtime = 'nodejs';
 
@@ -70,6 +74,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
   const password = req.headers.get('x-share-password');
+  // Public (token-gated) comment endpoint — throttle per IP to blunt spam.
+  if (!await rateLimitDurable(`sharecomment:${clientIp(req)}`, 10, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
   try {
     const body = await req.json().catch(() => ({}));
     const authorName = typeof body.author_name === 'string' ? body.author_name.trim() : '';
@@ -134,7 +142,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     if (error) throw error;
     return NextResponse.json({ comment: data });
   } catch (error: any) {
-    console.error('Project comment error:', error);
+    log.error('Project comment error:', { error: errorMessage(error) });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

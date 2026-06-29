@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { NextRequest } from 'next/server';
-import { readBody, z } from './validate';
+import { readBody, isUUID, isValidEmail, parsePagination, z } from './validate';
 
 /**
  * Tests for readBody — the Zod-validation entry point used by every
@@ -84,5 +84,66 @@ describe('readBody', () => {
 
     const badRes = await readBody(fakeReq({ role: 'admin' }), Schema);
     expect(badRes.ok).toBe(false);
+  });
+});
+
+describe('isUUID', () => {
+  it('accepts canonical UUIDs (any case)', () => {
+    expect(isUUID('123e4567-e89b-12d3-a456-426614174000')).toBe(true);
+    expect(isUUID('123E4567-E89B-12D3-A456-426614174000')).toBe(true);
+  });
+
+  it('rejects malformed or non-string values', () => {
+    expect(isUUID('not-a-uuid')).toBe(false);
+    expect(isUUID('123e4567e89b12d3a456426614174000')).toBe(false); // no dashes
+    expect(isUUID('123e4567-e89b-12d3-a456-42661417400')).toBe(false); // too short
+    expect(isUUID('123e4567-e89b-12d3-a456-426614174000,extra')).toBe(false); // .or() footgun
+    expect(isUUID(null)).toBe(false);
+    expect(isUUID(undefined)).toBe(false);
+    expect(isUUID(123)).toBe(false);
+    expect(isUUID('')).toBe(false);
+  });
+});
+
+describe('isValidEmail', () => {
+  it('accepts well-formed addresses', () => {
+    expect(isValidEmail('a@b.co')).toBe(true);
+    expect(isValidEmail('first.last+tag@example.com')).toBe(true);
+  });
+
+  it('rejects malformed or non-string values', () => {
+    expect(isValidEmail('no-at-sign')).toBe(false);
+    expect(isValidEmail('two @at.com')).toBe(false);
+    expect(isValidEmail('no@tld')).toBe(false);
+    expect(isValidEmail('')).toBe(false);
+    expect(isValidEmail(null)).toBe(false);
+    expect(isValidEmail(42)).toBe(false);
+  });
+});
+
+describe('parsePagination', () => {
+  const parse = (qs: string, opts?: { maxLimit?: number }) =>
+    parsePagination(new URLSearchParams(qs), opts);
+
+  it('returns undefined limit + offset 0 when params are absent', () => {
+    expect(parse('')).toEqual({ limit: undefined, offset: 0 });
+  });
+
+  it('parses and clamps a valid limit to the ceiling', () => {
+    expect(parse('limit=10')).toEqual({ limit: 10, offset: 0 });
+    expect(parse('limit=99999')).toEqual({ limit: 1000, offset: 0 });
+    expect(parse('limit=50', { maxLimit: 25 })).toEqual({ limit: 25, offset: 0 });
+  });
+
+  it('ignores non-positive / unparseable limits (keeps default behaviour)', () => {
+    expect(parse('limit=0').limit).toBeUndefined();
+    expect(parse('limit=-5').limit).toBeUndefined();
+    expect(parse('limit=abc').limit).toBeUndefined();
+  });
+
+  it('parses offset and floors negatives to 0', () => {
+    expect(parse('offset=40').offset).toBe(40);
+    expect(parse('offset=-3').offset).toBe(0);
+    expect(parse('offset=nope').offset).toBe(0);
   });
 });

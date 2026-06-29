@@ -30,13 +30,19 @@ export function BeatListRow({
   return (
     <div
       id={`beat-${track.id}`}
-      className={`rounded-xl border transition-all ${isPreview
+      className={`overflow-hidden rounded-xl border transition-all duration-200 ${isPreview
           ? 'border-[#E7D7BE]/40 bg-[#1A1813]'
           : isCurrent
             ? 'border-[#E7D7BE]/20 bg-[#1A1813]'
-            : 'border-[#211F1A] bg-[#171511] hover:border-[#2B2821]'
+            : 'border-[#211F1A] bg-[#171511] hover:border-[#2B2821] hover:bg-[#1A1813]'
         }`}
-      style={isPreview ? { borderColor: `${accentColor}66` } : isCurrent ? { borderColor: `${accentColor}33` } : {}}
+      style={
+        isPreview
+          ? { borderColor: `${accentColor}66`, boxShadow: `inset 3px 0 0 ${accentColor}` }
+          : isCurrent
+            ? { borderColor: `${accentColor}33`, boxShadow: `inset 3px 0 0 ${accentColor}` }
+            : {}
+      }
     >
       <div className="flex items-center gap-3 px-3 py-2.5">
         <button
@@ -102,6 +108,14 @@ export function BeatListRow({
             <p className="text-[11px] font-mono font-semibold tabular-nums" style={{ color: accentColor }}>
               {track.key}{track.scale === 'minor' ? 'm' : ''}
             </p>
+          </div>
+        )}
+
+        {track.has_wav && (
+          <div className="hidden md:flex shrink-0 items-center">
+            <span className="rounded-sm bg-white/[0.06] border border-white/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-[0.15em] text-[#B4AA99]">
+              WAV
+            </span>
           </div>
         )}
 

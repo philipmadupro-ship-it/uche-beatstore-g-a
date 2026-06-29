@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadImage } from '@/lib/storage/upload';
 import { requireUser } from '@/lib/auth/ownership';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.upload.image');
 
 export const runtime = 'nodejs';
 
@@ -76,7 +79,7 @@ export async function POST(req: NextRequest) {
     const url = await uploadImage(buffer, ext, file.type);
     return NextResponse.json({ success: true, url });
   } catch (error: any) {
-    console.error('Image Upload Error:', error);
+    log.error('Image Upload Error:', { error: errorMessage(error) });
     return NextResponse.json({ error: error.message || 'Upload failed' }, { status: 500 });
   }
 }

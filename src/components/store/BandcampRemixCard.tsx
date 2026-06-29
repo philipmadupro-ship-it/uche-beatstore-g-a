@@ -93,9 +93,10 @@ export default function BandcampRemixCard({
       id={`beat-${track.id}`}
       role="button"
       tabIndex={0}
+      aria-label={creatorName ? `Preview ${track.title} by ${creatorName}` : `Preview ${track.title}`}
       onClick={onPreview}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(); } }}
-      className="group cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/40 rounded-[14px] p-[1.5px]"
+      className="group cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent)]/40 rounded-[14px] p-[1.5px]"
       style={{ background: bezelBg }}
     >
     <div className={`relative rounded-[13px] overflow-hidden flex flex-col bg-[#171511] ${borderClass}`} style={borderStyle}>
@@ -130,6 +131,7 @@ export default function BandcampRemixCard({
               type="button"
               onClick={(e) => { e.stopPropagation(); onToggleWishlist(); }}
               aria-pressed={!!isWishlisted}
+              aria-label={isWishlisted ? `Remove ${track.title} from favorites` : `Add ${track.title} to favorites`}
               className={`w-7 h-7 rounded-full flex items-center justify-center backdrop-blur-sm transition-colors ${
                 isWishlisted ? 'bg-[#D6BE7A]/30 text-[#D6BE7A]' : 'bg-black/30 text-white/50 hover:text-white'
               }`}
@@ -139,15 +141,19 @@ export default function BandcampRemixCard({
           )}
         </div>
 
-        {/* Centre: play glyph (hover) — decorative; click passes through to
-            the card's onPreview, play happens inside the drawer */}
+        {/* Centre: play button (hover). Interactive — starts playback in the
+            bottom player (click-to-play); clicking elsewhere opens the drawer.
+            Wrapper stays pointer-events-none so only the button intercepts. */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-          <div
-            className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onPlay(); }}
+            aria-label={`${isPlaying ? 'Pause' : 'Play'} ${track.title}`}
+            className="pointer-events-auto w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)] transition-transform hover:scale-105 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             style={{ backgroundColor: accentColor }}
           >
             {isPlaying ? <PauseGlyph size={16} /> : <PlayGlyph size={16} className="ml-0.5 text-black" />}
-          </div>
+          </button>
         </div>
 
         {/* Bottom: title + producer + price */}
@@ -180,6 +186,7 @@ export default function BandcampRemixCard({
         {track.free_download_enabled ? (
           <button
             onClick={(e) => { e.stopPropagation(); onFreeDownload(); }}
+            aria-label={`Free download ${track.title}`}
             className="flex items-center justify-center gap-1.5 w-full h-9 text-[#6DC6A4] text-[9px] font-mono font-bold uppercase tracking-wider hover:bg-[#6DC6A4]/5 transition-colors"
           >
             <Download size={10} />
@@ -198,6 +205,7 @@ export default function BandcampRemixCard({
             <button
               onClick={(e) => { e.stopPropagation(); onAddLease(); }}
               disabled={priceLease == null}
+              aria-label={priceLease != null ? `Add ${track.title} lease license to cart, $${priceLease}` : `Lease unavailable for ${track.title}`}
               className="flex-1 flex flex-col items-center justify-center hover:bg-white/[0.04] transition-colors disabled:opacity-25 disabled:cursor-not-allowed gap-px"
             >
               <span className="text-[7px] font-mono uppercase tracking-[0.18em] text-white/25 leading-none">Lease</span>
@@ -208,6 +216,7 @@ export default function BandcampRemixCard({
             <button
               onClick={(e) => { e.stopPropagation(); onAddExclusive(); }}
               disabled={priceExclusive == null}
+              aria-label={priceExclusive != null ? `Add ${track.title} exclusive license to cart, $${priceExclusive}` : `Exclusive unavailable for ${track.title}`}
               className="flex-1 flex flex-col items-center justify-center transition-colors disabled:opacity-25 disabled:cursor-not-allowed gap-px hover:opacity-90"
               style={{ backgroundColor: `${accentColor}18` }}
             >

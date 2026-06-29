@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { createServiceClient, isSupabaseConfigured, getAll, query } from '@/lib/db';
+import { safeSellerId } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -66,7 +67,15 @@ export async function GET(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ activity: [], from, to });
     }
-    const userId = user.id;
+    // Validate the id once here so every `.or('user_id.eq.${userId}…')`
+    // below — including the resolveOwned* helpers — is provably safe from
+    // the PostgREST comma-injection footgun. These are service-role queries
+    // where the filter is the only scoping, so a bad id must short-circuit
+    // to empty, never drop the clause.
+    const userId = safeSellerId(user.id);
+    if (!userId) {
+      return NextResponse.json({ activity: [], from, to });
+    }
     const admin = createServiceClient();
     const ownerFilter = `user_id.eq.${userId},user_id.is.null`;
 

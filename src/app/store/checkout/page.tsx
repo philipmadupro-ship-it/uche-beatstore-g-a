@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { useCart } from '@/hooks/useCart';
+import { trackStoreEvent } from '@/lib/store/track-event';
 
 // Load Stripe. The previous fallback hardcoded a real `pk_test_…` from
 // another Stripe account, which would silently route payments to that
@@ -203,6 +204,15 @@ function CheckoutContent() {
 
       if (data.client_secret) {
         setClientSecret(data.client_secret);
+        // Funnel: a Stripe session was created — the buyer reached checkout.
+        trackStoreEvent('checkout_start', {
+          metadata: {
+            mode: isProjectPurchase ? 'project' : 'cart',
+            item_count: isProjectPurchase ? 1 : items.length,
+            track_ids: isProjectPurchase ? [] : items.map((i) => i.track.id),
+            promo: promoTerms ? promoCode.trim().toUpperCase() : undefined,
+          },
+        });
       } else {
         throw new Error('Stripe initialization failed to return a payment token.');
       }

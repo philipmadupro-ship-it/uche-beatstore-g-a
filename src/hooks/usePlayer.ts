@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Track } from '@/lib/types';
+import { buildShuffleOrder, nextInShuffle, newShuffleSeed } from '@/lib/audio/shuffle';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
@@ -12,6 +13,10 @@ interface PlayerState {
   progress: number;
   volume: number;
   shuffle: boolean;
+  /** Seeded play order (track ids) for the current shuffle cycle — a bag that
+   *  plays every track once before any repeat. Empty when shuffle is off. */
+  shuffleOrder: string[];
+  shuffleSeed: number;
   repeat: RepeatMode;
   /**
    * When non-null, WavePlayer reads this on every render cycle and seeks
@@ -55,18 +60,6 @@ interface PlayerState {
   cycleRepeat: () => void;
 }
 
-function pickRandom<T>(arr: T[], exclude: T | null): T | undefined {
-  if (arr.length === 0) return undefined;
-  if (arr.length === 1) return arr[0];
-  let pick = arr[Math.floor(Math.random() * arr.length)];
-  let attempts = 0;
-  while (pick === exclude && attempts < 5) {
-    pick = arr[Math.floor(Math.random() * arr.length)];
-    attempts += 1;
-  }
-  return pick;
-}
-
 export const usePlayer = create<PlayerState>()(
   persist(
     (set, get) => ({
@@ -77,34 +70,67 @@ export const usePlayer = create<PlayerState>()(
       progress: 0,
       volume: 0.8,
       shuffle: false,
+      shuffleOrder: [],
+      shuffleSeed: newShuffleSeed(),
       repeat: 'off',
       seekTarget: null,
       duckGain: 1,
 
       setTrack: (track) => {
         const prev = get().currentTrack;
-        set((state) => ({
-          currentTrack: track,
-          isPlaying: true,
-          progress: 0,
-          // Ensure the new track lives in the queue so the queue drawer reflects
-          // what's actually playing. If it's already there we leave order intact.
-          queue: state.queue.some((t) => t.id === track.id)
-            ? state.queue
-            : [...state.queue, track],
-          history: prev && prev.id !== track.id ? [...state.history, prev].slice(-50) : state.history,
-        }));
+        set((state) => {
+          const inQueue = state.queue.some((t) => t.id === track.id);
+          // Keep the shuffle bag covering the new track so it's accounted for.
+          const shuffleOrder =
+            state.shuffle && !state.shuffleOrder.includes(track.id)
+              ? [...state.shuffleOrder, track.id]
+              : state.shuffleOrder;
+          return {
+            currentTrack: track,
+            isPlaying: true,
+            progress: 0,
+            // Ensure the new track lives in the queue so the queue drawer
+            // reflects what's actually playing. If it's already there we
+            // leave order intact.
+            queue: inQueue ? state.queue : [...state.queue, track],
+            shuffleOrder,
+            history: prev && prev.id !== track.id ? [...state.history, prev].slice(-50) : state.history,
+          };
+        });
       },
 
-      setQueue: (tracks) => set({ queue: tracks }),
+      setQueue: (tracks) =>
+        set((state) => {
+          if (!state.shuffle) return { queue: tracks };
+          // Rebuild the shuffle bag for the new queue, keeping whatever's
+          // playing at the front so it isn't interrupted.
+          const seed = newShuffleSeed();
+          return {
+            queue: tracks,
+            shuffleSeed: seed,
+            shuffleOrder: buildShuffleOrder(
+              tracks.map((t) => t.id),
+              seed,
+              state.currentTrack?.id ?? null,
+            ),
+          };
+        }),
 
       addToQueue: (track) =>
-        set((state) =>
-          state.queue.some((t) => t.id === track.id) ? state : { queue: [...state.queue, track] }
-        ),
+        set((state) => {
+          if (state.queue.some((t) => t.id === track.id)) return state;
+          // Keep the new track in the bag so shuffle still reaches it.
+          const shuffleOrder = state.shuffle
+            ? [...state.shuffleOrder, track.id]
+            : state.shuffleOrder;
+          return { queue: [...state.queue, track], shuffleOrder };
+        }),
 
       removeFromQueue: (id) =>
-        set((state) => ({ queue: state.queue.filter((t) => t.id !== id) })),
+        set((state) => ({
+          queue: state.queue.filter((t) => t.id !== id),
+          shuffleOrder: state.shuffleOrder.filter((sid) => sid !== id),
+        })),
 
       reorderQueue: (from, to) =>
         set((state) => {
@@ -137,11 +163,27 @@ export const usePlayer = create<PlayerState>()(
         const index = queue.findIndex((t) => t.id === currentTrack.id);
 
         if (shuffle) {
-          const pool = queue.filter((t) => t.id !== currentTrack.id);
-          const pick = pickRandom(pool, null);
-          if (!pick) return;
+          const { shuffleOrder, shuffleSeed } = get();
+          // Ensure we have a bag (e.g. shuffle persisted on across reload).
+          let order = shuffleOrder.length ? shuffleOrder : buildShuffleOrder(
+            queue.map((t) => t.id), shuffleSeed, currentTrack.id,
+          );
+          let nextId = nextInShuffle(order, currentTrack.id);
+          if (nextId === null) {
+            // Bag exhausted — every track played once.
+            if (repeat !== 'all') { set({ isPlaying: false, progress: 0 }); return; }
+            // Reshuffle a fresh cycle for repeat-all (new seed), current first.
+            const seed = newShuffleSeed();
+            order = buildShuffleOrder(queue.map((t) => t.id), seed, currentTrack.id);
+            nextId = nextInShuffle(order, currentTrack.id);
+            if (nextId === null) { set({ isPlaying: false, progress: 0 }); return; }
+            set({ shuffleSeed: seed });
+          }
+          const pick = queue.find((t) => t.id === nextId);
+          if (!pick) { set({ isPlaying: false, progress: 0 }); return; }
           set({
             currentTrack: pick,
+            shuffleOrder: order,
             progress: 0,
             isPlaying: true,
             history: [...history, currentTrack].slice(-50),
@@ -193,7 +235,23 @@ export const usePlayer = create<PlayerState>()(
         if (prevTrack) set({ currentTrack: prevTrack, progress: 0, isPlaying: true });
       },
 
-      toggleShuffle: () => set((state) => ({ shuffle: !state.shuffle })),
+      toggleShuffle: () =>
+        set((state) => {
+          const shuffle = !state.shuffle;
+          if (!shuffle) return { shuffle, shuffleOrder: [] };
+          // Turning shuffle ON — build a fresh bag from the current queue,
+          // keeping the playing track at the front.
+          const seed = newShuffleSeed();
+          return {
+            shuffle,
+            shuffleSeed: seed,
+            shuffleOrder: buildShuffleOrder(
+              state.queue.map((t) => t.id),
+              seed,
+              state.currentTrack?.id ?? null,
+            ),
+          };
+        }),
       setRepeat: (mode) => set({ repeat: mode }),
       cycleRepeat: () =>
         set((state) => ({
@@ -207,6 +265,8 @@ export const usePlayer = create<PlayerState>()(
       partialize: (state) => ({
         volume: state.volume,
         shuffle: state.shuffle,
+        shuffleOrder: state.shuffleOrder,
+        shuffleSeed: state.shuffleSeed,
         repeat: state.repeat,
         queue: state.queue,
         currentTrack: state.currentTrack,

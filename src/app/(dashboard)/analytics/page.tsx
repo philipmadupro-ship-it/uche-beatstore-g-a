@@ -23,6 +23,13 @@ import { Field } from '@/components/ui/Field';
 
 // ── Types ────────────────────────────────────────────────────────
 interface Totals { plays: number; sales_count: number; gross_usd: number }
+interface FunnelRow { stage: string; sessions: number; pctOfTop: number; pctOfPrev: number }
+const FUNNEL_LABELS: Record<string, string> = {
+  pdp_view: 'Viewed a beat',
+  add_to_cart: 'Added to cart',
+  checkout_start: 'Started checkout',
+  purchase: 'Purchased',
+};
 interface ByTrack { track_id: string; title: string; plays: number; sales: number; gross: number }
 interface ByDay { date: string; sales: number; gross: number }
 interface ShareLinkRow {
@@ -83,6 +90,7 @@ export default function AnalyticsPage() {
   const [byTrack, setByTrack] = useState<ByTrack[]>([]);
   const [byDay, setByDay] = useState<ByDay[]>([]);
   const [byShareLink, setByShareLink] = useState<ShareLinkRow[]>([]);
+  const [funnel, setFunnel] = useState<FunnelRow[]>([]);
   const [trackMeta, setTrackMeta] = useState<Map<string, TrackMeta>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -129,6 +137,7 @@ export default function AnalyticsPage() {
         setByTrack(analyticsData.by_track ?? []);
         setByDay(analyticsData.by_day ?? []);
         setByShareLink(analyticsData.by_share_link ?? []);
+        setFunnel(analyticsData.funnel ?? []);
 
         if (tracksRes.ok) {
           const tracksData = await tracksRes.json();
@@ -415,6 +424,48 @@ export default function AnalyticsPage() {
                   <polyline points={`0,${activityLine.h} ${activityLine.pts} ${activityLine.w},${activityLine.h}`} fill="url(#engageGrad)" stroke="none" />
                   <polyline points={activityLine.pts} fill="none" stroke="#9d95e8" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
                 </svg>
+              </div>
+            )}
+
+            {/* Storefront funnel — view → cart → checkout → paid (last 30 days,
+                independent of the play filters above). */}
+            {funnel.some((s) => s.sessions > 0) && (
+              <div className="rounded-2xl border border-[#2B2821] bg-[#171511] px-5 py-4 mb-5">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp size={12} className="text-[#D0C3AF]" />
+                    <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">Storefront funnel</p>
+                  </div>
+                  <p className="text-[9px] font-mono text-[#6E685B]">Last 30 days · by session</p>
+                </div>
+                <div className="space-y-2.5">
+                  {funnel.map((s) => (
+                    <div key={s.stage}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] text-[#D0C3AF]">{FUNNEL_LABELS[s.stage] ?? s.stage}</span>
+                        <span className="text-[10px] font-mono tabular-nums text-[#9B9282]">
+                          {s.sessions.toLocaleString()}
+                          {s.stage !== 'pdp_view' && (
+                            <span className="text-[#6E685B]"> · {s.pctOfPrev}% from prev</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-[#0E0D0B] overflow-hidden" role="presentation">
+                        <div
+                          className="h-full rounded-full bg-[var(--accent)]"
+                          style={{ width: `${Math.max(s.pctOfTop, s.sessions > 0 ? 2 : 0)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-[9px] font-mono text-[#6E685B]">
+                  View→paid conversion: {(() => {
+                    const top = funnel.find((s) => s.stage === 'pdp_view')?.sessions ?? 0;
+                    const paid = funnel.find((s) => s.stage === 'purchase')?.sessions ?? 0;
+                    return top > 0 ? `${((paid / top) * 100).toFixed(1)}%` : '—';
+                  })()}
+                </p>
               </div>
             )}
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
-import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 import { slugify } from '@/lib/slug';
 import { redactPublicTrackMedia } from '@/lib/store/public-media';
 
@@ -128,6 +128,6 @@ export async function GET(
     res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     return res;
   } catch (err) {
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

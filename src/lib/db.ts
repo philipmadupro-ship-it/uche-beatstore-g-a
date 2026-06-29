@@ -100,6 +100,15 @@ interface ListOptions {
   extraLte?: Record<string, number>;
   /** `.in(column, values)` filter. */
   extraIn?: { column: string; values: (string | number)[] };
+  /**
+   * Max rows to return. PostgREST already caps a response at ~1000 rows,
+   * so an unbounded list was implicitly capped there; making it explicit
+   * lets routes page (with `offset`) and keeps pathological libraries from
+   * trying to stream everything. Omitted → no extra cap beyond PostgREST's.
+   */
+  limit?: number;
+  /** Row offset for pagination. Applied with `limit` via `.range()`. */
+  offset?: number;
 }
 
 // =====================================================================
@@ -156,6 +165,8 @@ export async function scopedList<T = unknown>(
     extraGte,
     extraLte,
     extraIn,
+    limit,
+    offset = 0,
   } = opts;
 
   if (!isSupabaseConfigured()) {
@@ -179,12 +190,14 @@ export async function scopedList<T = unknown>(
       const set = new Set(extraIn.values.map(String));
       rows = rows.filter((r) => set.has(String(r[extraIn.column])));
     }
-    return rows.sort((a, b) => {
+    const sorted = rows.sort((a, b) => {
       const av = a[orderBy] ?? '';
       const bv = b[orderBy] ?? '';
       const cmp = String(av).localeCompare(String(bv));
       return ascending ? cmp : -cmp;
-    }) as T[];
+    });
+    const paged = limit != null ? sorted.slice(offset, offset + limit) : sorted.slice(offset);
+    return paged as T[];
   }
 
   const cookieClient = await createServerClient();
@@ -216,6 +229,13 @@ export async function scopedList<T = unknown>(
   }
   if (extraIn) {
     q = q.in(extraIn.column, extraIn.values);
+  }
+  if (limit != null) {
+    q = q.range(offset, offset + limit - 1);
+  } else if (offset > 0) {
+    // Offset without an explicit limit — page from `offset` to PostgREST's
+    // own per-response ceiling.
+    q = q.range(offset, offset + 999);
   }
   const { data, error } = await q;
   if (error) {

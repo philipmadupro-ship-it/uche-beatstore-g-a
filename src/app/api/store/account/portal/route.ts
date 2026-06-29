@@ -5,7 +5,8 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { getAppUrl } from '@/lib/env';
-import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
+import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,6 +29,10 @@ const bodySchema = z.object({
  */
 export async function POST(req: NextRequest) {
   try {
+    // Mints a Stripe portal session — throttle per IP for defense in depth.
+    if (!await rateLimitDurable(`portal:${clientIp(req)}`, 10, 60_000)) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
     const raw = await req.json().catch(() => ({}));
     const parsed = bodySchema.safeParse(raw);
     if (!parsed.success) {
@@ -68,6 +73,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

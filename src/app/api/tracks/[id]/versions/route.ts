@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, query } from '@/lib/local-store';
 import { requireRowOwnership } from '@/lib/auth/ownership';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.tracks.id.versions');
 
 /**
  * GET /api/tracks/[id]/versions — gated on track ownership. Pre-fix any
@@ -28,7 +31,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .sort((a: any, b: any) => (b.version_number ?? 0) - (a.version_number ?? 0));
     return NextResponse.json({ versions });
   } catch (error: any) {
-    console.error('GET Versions Error:', error);
+    log.error('GET Versions Error:', { error: errorMessage(error) });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

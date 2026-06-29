@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll, createServiceClient } from '@/lib/db';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.search');
 
 export const runtime = 'nodejs';
 
@@ -80,7 +83,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ tracks, projects, contacts });
   } catch (err: any) {
-    console.error('Search error:', err);
+    log.error('Search error:', { error: errorMessage(err) });
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

@@ -52,12 +52,12 @@ export const Field = forwardRef<HTMLInputElement | HTMLTextAreaElement, FieldPro
   const describedBy = [helperId, errorId].filter(Boolean).join(' ') || undefined;
   const inputClasses = cn(
     'w-full rounded-xl border border-[var(--border)] bg-[var(--bg-page)] text-xs text-[var(--text-primary)]',
-    'placeholder:text-[#9B9282] transition-colors duration-[var(--dur-fast)] ease-[var(--ease-spring)]',
+    'placeholder:text-[var(--text-muted)] transition-colors duration-[var(--dur-fast)] ease-[var(--ease-spring)]',
     'focus:outline-none focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]/25',
     'disabled:cursor-not-allowed disabled:opacity-50',
     icon ? 'pl-10 pr-4' : 'px-4',
     multiline ? 'min-h-28 py-3 resize-y' : 'min-h-11 py-3',
-    error && 'border-[#8d3a2f] focus:border-[#ff8b73] focus:ring-[#ff8b73]/20',
+    error && 'border-[var(--error)] focus:border-[var(--error-strong)] focus:ring-[var(--error-strong)]/20',
     inputClassName,
   );
 
@@ -73,7 +73,7 @@ export const Field = forwardRef<HTMLInputElement | HTMLTextAreaElement, FieldPro
         {icon && (
           <span
             className={cn(
-              'pointer-events-none absolute left-3 text-[#9B9282]',
+              'pointer-events-none absolute left-3 text-[var(--text-muted)]',
               multiline ? 'top-3.5' : 'top-1/2 -translate-y-1/2',
             )}
             aria-hidden="true"
@@ -102,7 +102,7 @@ export const Field = forwardRef<HTMLInputElement | HTMLTextAreaElement, FieldPro
         )}
       </div>
       {helperText && <p id={helperId} className="ml-1 text-[11px] leading-5 text-[var(--text-readable)]">{helperText}</p>}
-      {error && <p id={errorId} className="ml-1 text-[11px] leading-5 text-[#ffb7a8]">{error}</p>}
+      {error && <p id={errorId} className="ml-1 text-[11px] leading-5 text-[var(--error-text)]">{error}</p>}
     </div>
   );
 });

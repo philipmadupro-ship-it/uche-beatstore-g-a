@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { useTags } from '@/hooks/useTags';
-import { Plus, Sparkles } from 'lucide-react';
+import { Plus, Sparkles, X } from 'lucide-react';
 import { suggestTags, type TrackFeatures } from '@/lib/audio/feature-tags';
 
 interface TagPickerProps {
@@ -47,6 +47,32 @@ export function TagPicker({ trackId, features }: TagPickerProps) {
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#837B6D]">Tag Workspace</h3>
       </div>
+
+      {/* Applied tags — the track's current tags, including custom ones that
+          aren't in the taxonomy below. Without this a freshly-created custom
+          tag had nowhere to render, so it looked like it never got created.
+          Click a chip to remove it. */}
+      {tags.length > 0 && (
+        <div className="space-y-2">
+          <label className="ml-1 text-[9px] font-bold uppercase tracking-widest text-[#F3E6D1]">
+            Applied · {tags.length}
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => toggleTag.mutate({ tag: t, category: 'custom', active: true })}
+                title="Remove tag"
+                className="group inline-flex items-center gap-1 rounded-lg border border-[#E7D7BE]/30 bg-[#E7D7BE]/12 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#F3E6D1] transition-colors hover:bg-[#E7D7BE]/20"
+              >
+                {t}
+                <X size={9} className="opacity-60 transition-opacity group-hover:opacity-100" />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {suggestions.length > 0 && (
         <div className="space-y-2">
@@ -99,15 +125,26 @@ export function TagPicker({ trackId, features }: TagPickerProps) {
       ))}
 
       <form onSubmit={handleAddCustom} className="pt-4 border-t border-[#2B2821]">
-        <div className="relative group">
-          <input
-            type="text"
-            value={customTag}
-            onChange={(e) => setCustomTag(e.target.value)}
-            placeholder="ADD CUSTOM TAG..."
-            className="w-full bg-[#090907] border border-[#2B2821] rounded-xl py-3 pl-10 pr-4 text-[10px] font-bold uppercase tracking-widest text-[#F7EBDD] placeholder-[#3B372F] focus:outline-none focus:border-[#E7D7BE] transition-all"
-          />
-          <Plus size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3B372F] group-focus-within:text-[#E7D7BE] transition-colors" />
+        <div className="flex items-center gap-2">
+          <div className="relative group flex-1">
+            <input
+              type="text"
+              value={customTag}
+              onChange={(e) => setCustomTag(e.target.value)}
+              placeholder="ADD CUSTOM TAG..."
+              className="w-full bg-[#090907] border border-[#2B2821] rounded-xl py-3 pl-10 pr-4 text-[10px] font-bold uppercase tracking-widest text-[#F7EBDD] placeholder-[#3B372F] focus:outline-none focus:border-[#E7D7BE] transition-all"
+            />
+            <Plus size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3B372F] group-focus-within:text-[#E7D7BE] transition-colors" />
+          </div>
+          {/* Explicit submit so the tag adds on click, not just Enter — the
+              missing button is why custom tags appeared not to create. */}
+          <button
+            type="submit"
+            disabled={!customTag.trim() || toggleTag.isPending}
+            className="shrink-0 rounded-xl bg-[#E7D7BE] px-4 py-3 text-[10px] font-black uppercase tracking-widest text-black transition-colors hover:bg-[#F3E6D1] disabled:cursor-not-allowed disabled:opacity-30"
+          >
+            Add
+          </button>
         </div>
       </form>
     </div>

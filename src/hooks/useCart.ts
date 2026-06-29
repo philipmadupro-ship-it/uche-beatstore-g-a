@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Track } from '@/lib/types';
 import { toast } from '@/hooks/useToast';
+import { trackStoreEvent } from '@/lib/store/track-event';
 
 export interface CartLicense {
   id: string;
@@ -76,10 +77,18 @@ export const useCart = create<CartState>()(
         });
         if (isDuplicate) {
           toast.info('Already in cart', `${track.title} (${license.name}) is already added`);
+        } else {
+          // Funnel: a genuine add (not a dup) advances the buyer.
+          trackStoreEvent('add_to_cart', {
+            track_id: track.id,
+            license_id: license.id,
+            metadata: { seller_user_id: (track as any).user_id, price_usd: license.price_usd },
+          });
         }
       },
 
       addItems: (pairs) => {
+        const added: CartItem[] = [];
         set((state) => {
           const currentItems = state.items || [];
           const seen = new Set(currentItems.map((i) => `${i.track?.id}-${i.license?.id}`));
@@ -90,14 +99,32 @@ export const useCart = create<CartState>()(
             seen.add(key);
             newItems.push({ id: `${track.id}-${license.id}-${Date.now()}-${newItems.length}`, track, license });
           }
+          added.push(...newItems);
           return newItems.length > 0
             ? { items: [...currentItems, ...newItems], isOpen: true }
             : { items: currentItems };
         });
+        // Funnel: one add event per newly-added item (dups already skipped).
+        for (const item of added) {
+          trackStoreEvent('add_to_cart', {
+            track_id: item.track.id,
+            license_id: item.license.id,
+            metadata: { seller_user_id: (item.track as any).user_id, price_usd: item.license.price_usd, bulk: true },
+          });
+        }
       },
 
       removeItem: (itemId) =>
-        set((state) => ({ items: state.items.filter((i) => i.id !== itemId) })),
+        set((state) => {
+          const removed = state.items.find((i) => i.id === itemId);
+          if (removed) {
+            trackStoreEvent('remove_from_cart', {
+              track_id: removed.track?.id,
+              license_id: removed.license?.id,
+            });
+          }
+          return { items: state.items.filter((i) => i.id !== itemId) };
+        }),
 
       clearCart: () => set({ items: [] }),
 

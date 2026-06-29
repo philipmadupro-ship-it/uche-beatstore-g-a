@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { parsePurchaseLineItems } from '@/lib/contracts';
+import { computeFunnel } from '@/lib/store/funnel';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -275,6 +276,22 @@ export async function GET() {
       0,
     );
 
+    // 7. Storefront funnel (mig 097). Last 30 days of store_events collapsed
+    //    into view → cart → checkout → paid. Guarded: the table may not exist
+    //    yet on a stale DB, in which case the funnel is simply omitted.
+    let funnel: ReturnType<typeof computeFunnel> = [];
+    try {
+      const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: events } = await admin
+        .from('store_events')
+        .select('session_id, event_type')
+        .eq('seller_user_id', userId)
+        .gte('created_at', since30);
+      funnel = computeFunnel((events ?? []) as { session_id: string | null; event_type: string | null }[]);
+    } catch {
+      // store_events table may not exist yet (mig 097 unapplied); non-fatal.
+    }
+
     // Share-link table (Task 6) — only links that actually got opened, busiest
     // first, with the dominant traffic source surfaced.
     const byShareLink = Array.from(shareLinkAgg.values())
@@ -306,6 +323,7 @@ export async function GET() {
       by_day: byDay,
       recent_sales: recentSales,
       by_share_link: byShareLink,
+      funnel,
     });
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });

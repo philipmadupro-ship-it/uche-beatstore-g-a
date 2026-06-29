@@ -4,7 +4,10 @@ import { getStripe, isStripeConfigured } from '@/lib/stripe/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
+import { isValidEmail, isUUID } from '@/lib/validate';
+import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 
 const log = createLogger('api.share.checkout');
 export const runtime = 'nodejs';
@@ -51,6 +54,10 @@ export async function POST(
 ) {
   const { token } = await params;
 
+  // Creates a Stripe Checkout session — throttle per IP so it can't be spammed.
+  if (!await rateLimitDurable(`sharecheckout:${clientIp(req)}`, 10, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
   if (!isStripeConfigured()) {
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
   }
@@ -66,7 +73,7 @@ export async function POST(
     if (!rawItems.length) {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });
     }
-    if (!buyerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail)) {
+    if (!isValidEmail(buyerEmail)) {
       return NextResponse.json({ error: 'Valid buyer email required' }, { status: 400 });
     }
 
@@ -132,11 +139,10 @@ export async function POST(
     }
 
     // ── Resolve custom license rows ──────────────────────────────────────────
-    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const customLicenseIds = [...new Set(
       rawItems
         .map((i: any) => i.license_id)
-        .filter((id): id is string => typeof id === 'string' && UUID_RE.test(id)),
+        .filter(isUUID),
     )];
 
     const licenseById = new Map<string, any>();
@@ -176,7 +182,7 @@ export async function POST(
       if (!track) continue;
 
       const rawLicenseId: string = item.license_id ?? '';
-      const isCustomTier = UUID_RE.test(rawLicenseId);
+      const isCustomTier = isUUID(rawLicenseId);
       const customLicense = isCustomTier ? licenseById.get(rawLicenseId) : null;
 
       // Resolve license_type
@@ -298,6 +304,6 @@ export async function POST(
     return NextResponse.json({ url: session.url, session_id: session.id });
   } catch (err) {
     log.error('checkout failed', { token, error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

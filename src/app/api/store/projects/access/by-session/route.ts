@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
-import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -51,6 +51,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ token: (data as any).token });
   } catch (err) {
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

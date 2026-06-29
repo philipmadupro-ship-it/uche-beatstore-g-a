@@ -3,6 +3,9 @@ import { isSupabaseConfigured, getById, getAll } from '@/lib/local-store';
 import { requireRowOwnership } from '@/lib/auth/ownership';
 import { findSimilar } from '@/lib/audio/similarity';
 import type { Track } from '@/lib/types';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.tracks.id.similar');
 
 export const runtime = 'nodejs';
 
@@ -104,7 +107,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       })),
     });
   } catch (error: any) {
-    console.error('Similar tracks error:', error);
+    log.error('Similar tracks error:', { error: errorMessage(error) });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

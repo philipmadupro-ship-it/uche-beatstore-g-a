@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/client';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 const baseSchema = z.object({
@@ -31,7 +30,6 @@ type FormData = {
 };
 
 export default function LoginPage() {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
@@ -39,6 +37,16 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   
   const supabase = createClient();
+
+  // Where to land after auth. Read from ?next (set by the proxy when it bounces
+  // a protected page), but only accept a safe same-origin path — never another
+  // /login (that's the redirect loop) or a protocol-relative //evil.com.
+  const resolveNext = (): string => {
+    if (typeof window === 'undefined') return '/library';
+    const raw = new URLSearchParams(window.location.search).get('next') || '/library';
+    const safe = /^\/(?!\/)/.test(raw) && !raw.startsWith('/login');
+    return safe ? raw : '/library';
+  };
 
   const { register, handleSubmit, formState: { errors }, reset, clearErrors } = useForm<FormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -84,8 +92,11 @@ export default function LoginPage() {
       if (error) {
         setMessage({ type: 'error', text: error.message });
       } else {
-        router.push('/library');
-        router.refresh();
+        // Hard navigation (not router.push) so the server/proxy re-reads the
+        // freshly-set session cookie in a new request. A client-side push can
+        // race the cookie write — the proxy then sees no user and bounces back
+        // to /login, which is the reported redirect loop.
+        window.location.assign(resolveNext());
       }
     }
   };
@@ -96,7 +107,9 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        // Carry `next` through the OAuth round-trip so the callback lands the
+        // user where they were headed (it defaulted to /library and dropped it).
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(resolveNext())}`,
       },
     });
     if (error) {

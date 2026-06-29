@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockMaybeSingle = vi.fn();
-const ilikeArgs: { col?: string; value?: string } = {};
+const eqArgs: { col?: string; value?: string } = {};
 
 vi.mock('@/lib/local-store', () => ({
   isSupabaseConfigured: () => true,
@@ -20,9 +20,9 @@ vi.mock('@/lib/auth/ownership', () => ({
   createServiceClient: () => ({
     from: () => ({
       select: () => ({
-        ilike: (col: string, value: string) => {
-          ilikeArgs.col = col;
-          ilikeArgs.value = value;
+        eq: (col: string, value: string) => {
+          eqArgs.col = col;
+          eqArgs.value = value;
           return { maybeSingle: () => mockMaybeSingle() };
         },
       }),
@@ -42,8 +42,8 @@ function req(body: unknown) {
 
 beforeEach(() => {
   mockMaybeSingle.mockReset();
-  ilikeArgs.col = undefined;
-  ilikeArgs.value = undefined;
+  eqArgs.col = undefined;
+  eqArgs.value = undefined;
 });
 
 describe('POST /api/store/promo', () => {
@@ -62,7 +62,7 @@ describe('POST /api/store/promo', () => {
   it('normalizes code to uppercase before lookup', async () => {
     mockMaybeSingle.mockResolvedValue({ data: null });
     await POST(req({ code: 'summer10' }));
-    expect(ilikeArgs.value).toBe('SUMMER10');
+    expect(eqArgs.value).toBe('SUMMER10');
   });
 
   it('rejects inactive codes', async () => {

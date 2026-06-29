@@ -135,8 +135,17 @@
   --accent-dim: hsl(var(--accent-dim-hsl));
   --accent-tint: hsl(var(--accent-tint-hsl));
   --star: #D6BE7A;
+  /* Muted hint/placeholder/icon text — the canonical value for the dozens of
+   * ad-hoc `#9B9282` usages. Slightly above the decorative tertiary fades. */
+  --text-muted: #9B9282;
   --border: #2B2821;
   --border-hover: #3B372F;
+  /* Error states — previously bespoke per component (Field used #8d3a2f /
+   * #ff8b73 / #ffb7a8). Canonicalised so error styling is consistent and
+   * editable in one place. `--error-text` clears AA on the dark bg. */
+  --error: #8d3a2f;
+  --error-strong: #ff8b73;
+  --error-text: #ffb7a8;
   --z-popover: 200;
   --z-drawer: 220;
   --z-modal: 240;
@@ -202,6 +211,9 @@ body {
   height: 100%;
   margin: 0;
   padding: 0;
+  /* Tell the UA the page is dark so native scrollbars, form controls, and
+     the spelling/autofill chrome render in their dark variants. */
+  color-scheme: dark;
   /* Off-canvas panels (cart drawer, queue, now-playing) are position:fixed and
      slide in from translate-x-full. On a phone the full-width closed drawer
      would otherwise add a viewport of horizontal scroll. `clip` removes that
@@ -382,6 +394,21 @@ html {
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
+
+  /* Global safety net. The codebase gates its big set-pieces (vinyl, cosmos
+     masonry, ParticleText, MusicPortfolio) individually, but the storefront
+     also has many ad-hoc hover transitions (card scale, play-glyph fade,
+     inline `style={{ transition }}`) that aren't. This neutralises animation
+     + transition duration everywhere for reduced-motion users — the standard
+     reset — so a new component can never reintroduce un-gated motion.
+     Durations are near-zero rather than 0 so transitionend still fires. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @keyframes cosmosFadeInUp {

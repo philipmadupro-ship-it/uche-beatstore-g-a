@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCreatorProfile, updateCreatorProfile } from '@/lib/actions/profile';
+import { errorMessage } from '@/lib/errors';
+import { createLogger } from '@/lib/log';
+const log = createLogger('api.profile');
+import { readBody } from '@/lib/validate';
+import { CreatorProfilePatchSchema } from '@/lib/contracts';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +19,10 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    
+    const parsed = await readBody(req, CreatorProfilePatchSchema);
+    if (!parsed.ok) return parsed.res;
+    const body = parsed.data;
+
     // Whitelist profile fields
     const {
       display_name,
@@ -54,11 +61,11 @@ export async function POST(req: NextRequest) {
       bio: bio || null,
       hero_image_url: hero_image_url || null,
       credits: credits || null,
-      license_lease_price_usd: license_lease_price_usd ? parseFloat(license_lease_price_usd) : null,
-      license_exclusive_price_usd: license_exclusive_price_usd ? parseFloat(license_exclusive_price_usd) : null,
+      license_lease_price_usd: license_lease_price_usd ? parseFloat(String(license_lease_price_usd)) : null,
+      license_exclusive_price_usd: license_exclusive_price_usd ? parseFloat(String(license_exclusive_price_usd)) : null,
       license_notes: license_notes || null,
       license_agreement: license_agreement || null,
-      default_discount_percent: default_discount_percent ? parseFloat(default_discount_percent) : null,
+      default_discount_percent: default_discount_percent ? parseFloat(String(default_discount_percent)) : null,
       instagram_handle: instagram_handle || null,
       twitter_handle: twitter_handle || null,
       spotify_url: spotify_url || null,
@@ -94,9 +101,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: result.error }, { status });
     }
     return NextResponse.json({ profile: result.profile });
-  } catch (error: any) {
-    console.error('Profile POST API error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    log.error('Profile POST API error:', { error: errorMessage(error) });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }
 

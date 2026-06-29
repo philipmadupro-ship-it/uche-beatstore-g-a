@@ -42,6 +42,14 @@ vi.mock('@/lib/audio/audd', () => ({
 vi.mock('@/lib/audio/merge', () => ({
   mergeFeatures: (...args: unknown[]) => mockMergeFeatures(...args),
 }));
+// Peaks + sidecar are server-only modules (import 'server-only'); mock them so
+// the route's new waveform backfill doesn't pull the real modules into vitest.
+vi.mock('@/lib/audio/peaks', () => ({
+  extractPeaks: () => null,
+}));
+vi.mock('@/lib/storage/upload', () => ({
+  uploadPeaksSidecar: () => null,
+}));
 
 function req(body?: unknown): NextRequest {
   return new NextRequest('http://localhost/api/tracks/track-1/analyze', {

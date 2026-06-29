@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, use } from 'react';
+import { useState, use, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { trackStoreEvent } from '@/lib/store/track-event';
 import Link from 'next/link';
 import {
   ArrowLeft, ShoppingCart, Music, Clock, Gauge,
@@ -154,6 +155,17 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
   const related = data?.related ?? [];
   const fansAlsoBought = data?.fansAlsoBought ?? [];
   const notFound = isError || (!loading && !track);
+
+  // Funnel: one pdp_view per track loaded (top of the funnel).
+  const viewedTrackId = track?.id ?? null;
+  useEffect(() => {
+    if (!viewedTrackId) return;
+    trackStoreEvent('pdp_view', {
+      track_id: viewedTrackId,
+      metadata: { seller_user_id: (track as any)?.user_id },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewedTrackId]);
 
   if (loading) {
     return (
