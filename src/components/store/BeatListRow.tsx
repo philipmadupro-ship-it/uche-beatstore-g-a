@@ -105,6 +105,14 @@ export function BeatListRow({
           </div>
         )}
 
+        {track.has_wav && (
+          <div className="hidden md:flex shrink-0 items-center">
+            <span className="rounded-sm bg-white/[0.06] border border-white/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-[0.15em] text-[#B4AA99]">
+              WAV
+            </span>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
           {track.exclusive_sold ? (
             <span className="px-3 py-2 rounded-md bg-white/[0.03] border border-[#E7D7BE]/25 text-[#E7D7BE] text-[10px] font-bold uppercase tracking-wider">

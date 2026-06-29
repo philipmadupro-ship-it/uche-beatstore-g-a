@@ -169,8 +169,13 @@ export function BeatCard({
             >
               {track.title}
             </p>
-            <p className="text-[9px] font-mono text-white/45 uppercase tracking-[0.1em] truncate mt-0.5">
-              {[track.type, keyLabel].filter(Boolean).join(' · ')}
+            <p className="text-[9px] font-mono text-white/45 uppercase tracking-[0.1em] truncate mt-0.5 flex items-center gap-1.5">
+              <span className="truncate">{[track.type, keyLabel].filter(Boolean).join(' · ')}</span>
+              {track.has_wav && (
+                <span className="shrink-0 rounded-sm bg-white/10 px-1 py-px text-[8px] tracking-[0.15em] text-white/70">
+                  WAV
+                </span>
+              )}
             </p>
           </div>
 

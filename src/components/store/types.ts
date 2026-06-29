@@ -61,6 +61,8 @@ export interface FeaturedPlaylist {
 
 export interface StoreTrack extends Track {
   tags?: TrackTag[];
+  /** True when a lossless WAV master is on file (catalogue enrichment, mig 039). */
+  has_wav?: boolean;
 }
 
 export const TYPE_FILTERS = ['all', 'beats', 'song', 'remix'] as const;
