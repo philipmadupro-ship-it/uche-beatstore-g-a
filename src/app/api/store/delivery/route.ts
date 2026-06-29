@@ -62,6 +62,12 @@ type StemRow = {
   other_url?: string | null;
 };
 
+// The bare `?session_id=` link is a post-purchase convenience for the buyer
+// who just paid — not permanent access. After this window it stops working and
+// the durable path is the account (magic link at /store/orders → /store/account).
+// This bounds how long a leaked session link keeps working. Tunable.
+const DELIVERY_LINK_TTL_DAYS = 14;
+
 /**
  * GET /api/store/delivery?session_id=cs_xxx
  *
@@ -135,6 +141,22 @@ export async function GET(req: NextRequest) {
         { error: 'Download access revoked (refunded or disputed)' },
         { status: 403 },
       );
+    }
+
+    // Time-box the bare session link — after the window, downloads live only in
+    // the buyer's account.
+    const createdAt = (isProjectPurchase ? projectAccess?.created_at : purchase?.created_at) ?? null;
+    if (createdAt) {
+      const ageDays = (Date.now() - new Date(createdAt).getTime()) / 86_400_000;
+      if (ageDays > DELIVERY_LINK_TTL_DAYS) {
+        return NextResponse.json(
+          {
+            error: 'link_expired',
+            message: 'This download link has expired. Sign in to your account to re-download.',
+          },
+          { status: 410 },
+        );
+      }
     }
 
     let trackIds: string[] = [];

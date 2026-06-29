@@ -98,7 +98,9 @@ function DownloadPortal() {
       try {
         const res = await fetch(`/api/store/delivery?session_id=${encodeURIComponent(sessionId)}`);
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        // Prefer the human-readable `message` (e.g. the link-expired notice that
+        // points the buyer to their account) over the machine `error` code.
+        if (!res.ok) throw new Error(data.message || data.error || `HTTP ${res.status}`);
         setPurchase(data.purchase);
         setTracks(data.tracks ?? []);
       } catch (err: any) {

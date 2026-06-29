@@ -9,6 +9,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
+// Purchases must be recent for the delivery-link TTL (14d) to allow access.
+const FRESH_ISO = new Date().toISOString();
+
 const mockIsSupabaseConfigured = vi.fn();
 const mockFrom = vi.fn();
 
@@ -50,7 +53,7 @@ function tableForProjectDelivery(table: string) {
               project_id: 'project-1',
               buyer_email: 'buyer@example.test',
               amount_usd: 49,
-              created_at: '2026-01-01T00:00:00Z',
+              created_at: FRESH_ISO,
               stripe_session_id: 'cs_test_123',
             },
             error: null,
@@ -119,7 +122,7 @@ describe('GET /api/store/delivery', () => {
                   id: 'purchase-1',
                   buyer_email: 'buyer@example.test',
                   amount_usd: 30,
-                  created_at: '2026-01-01T00:00:00Z',
+                  created_at: FRESH_ISO,
                   status: 'refunded',
                   download_unlocked: false,
                   track_ids: ['track-1'],
@@ -151,7 +154,7 @@ describe('GET /api/store/delivery', () => {
       id: 'access-1',
       buyer_email: 'buyer@example.test',
       amount_usd: 49,
-      created_at: '2026-01-01T00:00:00Z',
+      created_at: FRESH_ISO,
       status: 'paid',
     });
     expect(body.tracks).toHaveLength(1);
@@ -161,5 +164,32 @@ describe('GET /api/store/delivery', () => {
       label: 'MP3',
       proxied_url: expect.stringContaining('/api/audio?src='),
     });
+  });
+
+  it('410s a session link older than the TTL (downloads then live in the account)', async () => {
+    const oldIso = new Date(Date.now() - 60 * 86_400_000).toISOString(); // 60 days ago
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'project_access_links') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({
+                data: {
+                  id: 'access-1', project_id: 'project-1', buyer_email: 'buyer@example.test',
+                  amount_usd: 49, created_at: oldIso, stripe_session_id: 'cs_test_123',
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      return tableForProjectDelivery(table);
+    });
+
+    const mod = await loadRoute();
+    const res = await mod.GET(req());
+    expect(res.status).toBe(410);
+    expect((await res.json()).error).toBe('link_expired');
   });
 });
