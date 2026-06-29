@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll } from '@/lib/local-store';
 import { createServiceClient, safeSellerId } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('api.store');
@@ -430,6 +431,6 @@ export async function GET() {
     response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
     return response;
   } catch (err) {
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

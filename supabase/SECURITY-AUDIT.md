@@ -52,16 +52,13 @@ fail-closed**:
 - **PII in logs** — `free-download` logged the raw buyer email; added shared
   `maskEmail()` and applied it there + in `orders`.
 
-## Open note (low severity)
+## Resolved (follow-up pass)
 
-- **`GET /api/stems/[jobId]`** resolves a stem job by its opaque `jobId`
-  without a job→track→owner check, so a caller who knows a job id can read its
-  status + resulting stem URLs. Low severity today: job ids are opaque
-  (dispatcher-generated, not enumerable), stems land on the public R2 bucket
-  regardless, and the app is single-producer. **Recommendation:** add an owner
-  check (resolve `stems.track_id → tracks.user_id == auth.uid()`) before a
-  multi-tenant launch. Not fixed now to avoid changing the live stems polling
-  flow without deeper analysis.
+- **`GET /api/stems/[jobId]`** — FIXED. Added `authorizeStemJob()`: requires an
+  authenticated user, then resolves `stems.track_id → tracks.user_id` and 403s
+  on owner mismatch (null-owner legacy rows stay readable; jobs with no
+  persisted row yet just require auth). Verified the authenticated producer
+  still polls (404 for an unknown job, not 401).
 
 ## Dependency posture
 `npm audit`: 14 advisories, all transitive to **`xlsx`** (prototype pollution +
@@ -87,12 +84,12 @@ comment** routes (the real abuse + cost vectors):
 
 Verified live: `account/request` returns 200 ×5 then 429.
 
-## Open note — error-message leakage (low severity)
+## Resolved — error-message leakage
 
-~52 public routes return `errorMessage(err)` directly to the client, and
-`errorMessage` surfaces `err.message` — for a Supabase/Postgres error that can
-include column/constraint names (schema info disclosure). Not exploitable for
-data access (RLS/ownership still hold), but noisy. **Recommendation:** a
-`publicError(err, log)` helper that logs the detail server-side and returns a
-generic message on public routes. Deferred — a 52-route mechanical sweep with
-real regression risk, lower priority than the abuse vectors above.
+FIXED. Public routes used to return `errorMessage(err)` (raw `err.message`,
+which for a Supabase/Postgres error can include column/constraint names) on
+their 500s. Added `lib/api-error.ts → publicError(err, status=500)`, which logs
+the real detail server-side and returns a generic client message, then applied
+it to the 500 catch-blocks across **30 store/share/projects-share routes**.
+400/422 responses keep their intentional validation messages; dashboard
+(owner-authenticated) routes are unaffected.

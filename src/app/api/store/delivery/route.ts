@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { getAppUrl } from '@/lib/env';
 import { getPresignedUrl, r2KeyFromUrl } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('api.store.delivery');
@@ -293,6 +294,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     log.error('delivery lookup failed', { sessionId, error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 import { createLogger, maskEmail } from '@/lib/log';
 import { z } from 'zod';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
@@ -90,7 +91,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, download_url: downloadUrl });
   } catch (err) {
     log.error('POST free-download failed', { error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }
 
@@ -147,6 +148,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL(proxied, req.url), 302);
   } catch (err) {
     log.error('free-download failed', { trackId, error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

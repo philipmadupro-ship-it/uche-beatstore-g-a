@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('api.share.download');
@@ -148,6 +149,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     return NextResponse.redirect(new URL(proxied, req.url), 302);
   } catch (err) {
     log.error('download gate failed', { token, trackId, error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

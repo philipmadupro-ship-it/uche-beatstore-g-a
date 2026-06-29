@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { getPresignedUrl, r2KeyFromUrl } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('api.store.download-file');
@@ -82,6 +83,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL(proxied, req.url), 302);
   } catch (err) {
     log.error('download-file failed', { sessionId, trackId, error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

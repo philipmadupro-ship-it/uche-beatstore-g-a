@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { getAppUrl } from '@/lib/env';
 import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 import { isValidEmail } from '@/lib/validate';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
@@ -146,6 +147,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid kind' }, { status: 400 });
   } catch (err) {
     log.error('resend failed', { error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

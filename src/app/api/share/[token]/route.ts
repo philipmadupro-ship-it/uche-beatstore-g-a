@@ -4,6 +4,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import bcrypt from 'bcryptjs';
 import { createHash } from 'crypto';
 import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('api.share.token');
@@ -143,7 +144,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     return NextResponse.json({ share: safeShare, tracks, creator, stems });
   } catch (error) {
     log.error('share GET failed', { token, error: errorMessage(error) });
-    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+    return publicError(error);
   }
 }
 
@@ -183,7 +184,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
     if (link) deleteRow('share_links', link.id);
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+    return publicError(error);
   }
 }
 
@@ -261,6 +262,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     return NextResponse.json({ share: safe });
   } catch (error) {
     log.error('share PATCH failed', { token, error: errorMessage(error) });
-    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+    return publicError(error);
   }
 }

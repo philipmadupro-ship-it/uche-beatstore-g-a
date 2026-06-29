@@ -4,6 +4,7 @@ import { getStripe, isStripeConfigured } from '@/lib/stripe/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 import { isValidEmail, isUUID } from '@/lib/validate';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
@@ -487,6 +488,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ client_secret: session.client_secret, session_id: session.id });
   } catch (err) {
     log.error('store checkout failed', { error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

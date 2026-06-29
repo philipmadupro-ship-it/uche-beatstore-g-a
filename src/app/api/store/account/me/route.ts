@@ -3,7 +3,7 @@ import { requireUser } from '@/lib/auth/ownership';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { parsePurchaseLineItems } from '@/lib/contracts';
-import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -87,6 +87,6 @@ export async function GET() {
 
     return NextResponse.json({ email, track_licenses: trackLicenses, project_bundles: projectBundles });
   } catch (err) {
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

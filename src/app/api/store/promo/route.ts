@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
-import { errorMessage } from '@/lib/errors';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 
 export const runtime = 'nodejs';
@@ -84,6 +83,6 @@ export async function POST(req: NextRequest) {
       discount_amount: row.discount_amount ?? 0,
     });
   } catch (err) {
-    return NextResponse.json({ valid: false, error: errorMessage(err) }, { status: 500 });
+    return NextResponse.json({ valid: false, error: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 }

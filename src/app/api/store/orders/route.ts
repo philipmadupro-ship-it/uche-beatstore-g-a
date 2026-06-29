@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 import { createLogger, maskEmail } from '@/lib/log';
 import { isValidEmail } from '@/lib/validate';
 
@@ -127,6 +128,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ orders });
   } catch (err) {
     log.error('orders lookup failed', { error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    return publicError(err);
   }
 }

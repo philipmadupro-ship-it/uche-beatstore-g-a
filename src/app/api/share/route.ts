@@ -5,6 +5,7 @@ import { isSupabaseConfigured, insert, getAll, createServiceClient } from '@/lib
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 import { errorMessage } from '@/lib/errors';
+import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 const log = createLogger('api.share');
 import { readBody } from '@/lib/validate';
@@ -33,7 +34,7 @@ export async function GET() {
     const links = getAll('share_links').slice().reverse();
     return NextResponse.json({ links });
   } catch (error) {
-    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+    return publicError(error);
   }
 }
 
@@ -111,6 +112,6 @@ export async function POST(req: NextRequest) {
     }
   } catch (error) {
     log.error('Share Link Error:', { error: errorMessage(error) });
-    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+    return publicError(error);
   }
 }
