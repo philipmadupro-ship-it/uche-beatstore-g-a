@@ -91,7 +91,18 @@ function StorePage() {
     if (storeQuery.isError) toast.error("Couldn't load store");
   }, [storeQuery.isError]);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  // Default to the list view (denser, scannable). Remembers the visitor's
+  // last choice across visits via localStorage; read in an effect to avoid an
+  // SSR hydration mismatch.
+  const [viewMode, setViewModeState] = useState<ViewMode>('list');
+  useEffect(() => {
+    const saved = localStorage.getItem('antigravity-store-view');
+    if (saved === 'grid' || saved === 'list') setViewModeState(saved);
+  }, []);
+  const setViewMode = (m: ViewMode) => {
+    setViewModeState(m);
+    try { localStorage.setItem('antigravity-store-view', m); } catch { /* private mode */ }
+  };
   const [isSignedIn, setIsSignedIn] = useState(false);
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => setIsSignedIn(!!data.user));

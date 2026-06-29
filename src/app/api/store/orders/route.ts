@@ -4,7 +4,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { publicError } from '@/lib/api-error';
 import { createLogger, maskEmail } from '@/lib/log';
-import { isValidEmail } from '@/lib/validate';
+import { verifyBuyerToken } from '@/lib/buyer-tokens';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -12,18 +12,24 @@ export const dynamic = 'force-dynamic';
 const log = createLogger('api.store.orders');
 
 /**
- * GET /api/store/orders?email=xxx
+ * GET /api/store/orders  —  requires a verified buyer token.
  *
- * Returns all completed purchases (track licenses + project bundles) for a
- * buyer email. No auth — email is the identity for guest checkout (same model
- * as Shopify guest orders). Returns download URLs so the buyer can access
- * files directly from the orders page.
+ * Returns the buyer's completed purchases (track licenses + project bundles)
+ * WITH download URLs, so it must prove email ownership: pass the HMAC-signed
+ * token issued by the magic-link flow (`/api/store/account/request` →
+ * `/store/account/[token]`) as `?token=` or the `x-buyer-token` header. The
+ * email is taken from the token's claims — NOT from a query param — so nobody
+ * can pull another buyer's downloads just by typing their address.
  */
 export async function GET(req: NextRequest) {
-  const email = req.nextUrl.searchParams.get('email')?.toLowerCase().trim() ?? '';
-  if (!isValidEmail(email)) {
-    return NextResponse.json({ error: 'Valid email required' }, { status: 400 });
+  const token = req.nextUrl.searchParams.get('token')
+    ?? req.headers.get('x-buyer-token')
+    ?? '';
+  const claims = token ? verifyBuyerToken(token) : null;
+  if (!claims?.email) {
+    return NextResponse.json({ error: 'A verified account link is required' }, { status: 401 });
   }
+  const email = claims.email.toLowerCase().trim();
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
