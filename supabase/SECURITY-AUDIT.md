@@ -69,3 +69,30 @@ ReDoS, no upstream fix on npm). Used only in producer contact import, now
 strictly behind auth. CI gate is `--audit-level=critical` (passes). Revisit:
 pin to the SheetJS CDN build or migrate to `exceljs` if untrusted xlsx upload
 is ever introduced.
+
+## Abuse / rate-limit coverage
+
+`Sec-A` rate-limited the core money + telemetry endpoints. This pass added
+`rateLimitDurable` to the remaining public **email-sender / Stripe-session /
+comment** routes (the real abuse + cost vectors):
+
+| Route | Limit | Why |
+|---|---|---|
+| `store/account/request` | 5/min/IP | magic-link email → inbox spam / Resend burn |
+| `store/orders/resend` | 5/min/IP | re-sends delivery email → inbox spam |
+| `store/comments/[trackId]` | 10/min/IP | public comment spam |
+| `projects/share/[token]/comments` | 10/min/IP | public comment spam |
+| `share/[token]/checkout` | 10/min/IP | mints Stripe Checkout sessions |
+| `store/account/portal` | 10/min/IP | mints Stripe portal sessions (token-gated already) |
+
+Verified live: `account/request` returns 200 ×5 then 429.
+
+## Open note — error-message leakage (low severity)
+
+~52 public routes return `errorMessage(err)` directly to the client, and
+`errorMessage` surfaces `err.message` — for a Supabase/Postgres error that can
+include column/constraint names (schema info disclosure). Not exploitable for
+data access (RLS/ownership still hold), but noisy. **Recommendation:** a
+`publicError(err, log)` helper that logs the detail server-side and returns a
+generic message on public routes. Deferred — a 52-route mechanical sweep with
+real regression risk, lower priority than the abuse vectors above.

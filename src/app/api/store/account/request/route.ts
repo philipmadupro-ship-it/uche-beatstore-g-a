@@ -7,6 +7,7 @@ import { signBuyerToken } from '@/lib/buyer-tokens';
 import { getAppUrl } from '@/lib/env';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 const log = createLogger('api.store.account.request');
 
 export const runtime = 'nodejs';
@@ -32,6 +33,11 @@ const bodySchema = z.object({
  */
 export async function POST(req: NextRequest) {
   try {
+    // Magic-link email sender — rate-limit per IP so it can't be used to
+    // spam a victim's inbox (or burn Resend quota).
+    if (!await rateLimitDurable(`acctreq:${clientIp(req)}`, 5, 60_000)) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
     const raw = await req.json().catch(() => ({}));
     const parsed = bodySchema.safeParse(raw);
     if (!parsed.success) {

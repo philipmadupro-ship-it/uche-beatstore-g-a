@@ -6,6 +6,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { isValidEmail, isUUID } from '@/lib/validate';
+import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 
 const log = createLogger('api.share.checkout');
 export const runtime = 'nodejs';
@@ -52,6 +53,10 @@ export async function POST(
 ) {
   const { token } = await params;
 
+  // Creates a Stripe Checkout session — throttle per IP so it can't be spammed.
+  if (!await rateLimitDurable(`sharecheckout:${clientIp(req)}`, 10, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
   if (!isStripeConfigured()) {
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
   }

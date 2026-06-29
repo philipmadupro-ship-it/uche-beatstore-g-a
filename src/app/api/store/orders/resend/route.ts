@@ -5,6 +5,7 @@ import { getAppUrl } from '@/lib/env';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { isValidEmail } from '@/lib/validate';
+import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 import { Resend } from 'resend';
 
 export const runtime = 'nodejs';
@@ -20,6 +21,10 @@ const log = createLogger('api.store.orders.resend');
  * email matches the purchase before sending.
  */
 export async function POST(req: NextRequest) {
+  // Email re-sender — throttle per IP so it can't flood a buyer's inbox.
+  if (!await rateLimitDurable(`resend:${clientIp(req)}`, 5, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }

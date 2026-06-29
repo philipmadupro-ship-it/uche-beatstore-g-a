@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
+import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -62,6 +63,10 @@ export async function POST(
   { params }: { params: Promise<{ trackId: string }> },
 ) {
   const { trackId } = await params;
+  // Public comment endpoint — throttle per IP to blunt spam.
+  if (!await rateLimitDurable(`storecomment:${clientIp(req)}`, 10, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Comments unavailable in offline mode' }, { status: 503 });
   }
