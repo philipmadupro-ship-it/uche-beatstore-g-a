@@ -65,10 +65,22 @@ export async function GET(
         .order('created_at', { ascending: false }),
     ]);
 
+    // Batch-load track titles so the account shows WHAT was bought, not "2 tracks".
+    const allItems = (lpRes.data ?? []).flatMap((r: any) => parsePurchaseLineItems(r.line_items));
+    const trackIds = [...new Set(allItems.map((i) => i.track_id).filter(Boolean))];
+    const titleMap = new Map<string, string>();
+    if (trackIds.length > 0) {
+      const { data: tracks } = await admin.from('tracks').select('id, title').in('id', trackIds);
+      for (const t of (tracks ?? []) as any[]) titleMap.set(t.id, t.title);
+    }
+
     const trackLicenses = (lpRes.data ?? []).map((row: any) => ({
       id: row.id,
       kind: 'track' as const,
-      items: parsePurchaseLineItems(row.line_items),
+      items: parsePurchaseLineItems(row.line_items).map((i) => ({
+        ...i,
+        title: titleMap.get(i.track_id) ?? null,
+      })),
       amount_usd: Number(row.amount_usd ?? 0),
       created_at: row.created_at,
       status: row.status,

@@ -198,10 +198,17 @@ function DownloadPortal() {
           </div>
         </div>
 
-        {/* Security note */}
-        <div className="flex items-center gap-2 mb-7 text-[10px] font-mono text-[#6E685B]">
-          <ShieldCheck size={11} />
-          <span>Bookmark this page — download links are private to this session.</span>
+        {/* Account prompt — this convenience link is private + temporary; the
+            account is the permanent home for re-downloads. */}
+        <div className="flex items-start gap-2.5 mb-7 rounded-xl border border-[#211F1A] bg-[#120F0B] px-4 py-3">
+          <ShieldCheck size={14} className="text-[#837B6D] shrink-0 mt-0.5" />
+          <p className="text-[11px] text-[#9B9282] leading-relaxed">
+            This link is private to you and works for 14 days. For permanent access,{' '}
+            <Link href="/store/account" className="text-[#D0C3AF] underline underline-offset-2 hover:text-[#F7EBDD] transition-colors">
+              open these files in your account
+            </Link>{' '}
+            — same email, no password needed.
+          </p>
         </div>
 
         {/* ── Track list ───────────────────────────────────────── */}

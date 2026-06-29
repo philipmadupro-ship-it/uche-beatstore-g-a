@@ -13,7 +13,7 @@ import { toast } from '@/hooks/useToast';
 interface TrackLicense {
   id: string;
   kind: 'track';
-  items: Array<{ track_id: string; license_id: string; license_type: string }>;
+  items: Array<{ track_id: string; license_id: string; license_type: string; title?: string | null }>;
   amount_usd: number;
   created_at: string;
   status: string | null;
@@ -225,11 +225,14 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-medium text-[#F7EBDD]">
-                            {r.items.length} track{r.items.length === 1 ? '' : 's'} · {fmtMoney(r.amount_usd)}
+                          <p className="text-[12px] font-medium text-[#F7EBDD] truncate">
+                            {r.items.map((i) => i.title).filter(Boolean).join(' · ')
+                              || `${r.items.length} track${r.items.length === 1 ? '' : 's'}`}
                           </p>
                           <p className="text-[10px] font-mono text-[#9B9282] mt-0.5">
-                            {fmtDate(r.created_at)}{r.status ? ` · ${r.status}` : ''}
+                            {fmtDate(r.created_at)} · {fmtMoney(r.amount_usd)}
+                            {r.items[0]?.license_type ? ` · ${r.items[0].license_type}` : ''}
+                            {r.status ? ` · ${r.status}` : ''}
                           </p>
                         </div>
                         {r.download_url && (
