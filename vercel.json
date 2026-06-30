@@ -6,27 +6,27 @@
     },
     {
       "path": "/api/cron/publish-scheduled",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/abandoned-carts",
-      "schedule": "0 * * * *"
+      "schedule": "0 16 * * *"
     },
     {
       "path": "/api/cron/announce-drops",
-      "schedule": "30 * * * *"
+      "schedule": "30 6 * * *"
     },
     {
       "path": "/api/cron/process-uploads",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 7 * * *"
     },
     {
       "path": "/api/cron/migrate-legacy-audio",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 3 * * *"
     },
     {
       "path": "/api/cron/process-fulfillment-emails",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 5 * * *"
     }
   ]
 }
