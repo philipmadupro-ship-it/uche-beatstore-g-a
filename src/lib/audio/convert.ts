@@ -43,6 +43,29 @@ function ffmpegEnv(): NodeJS.ProcessEnv {
 }
 
 /**
+ * Resolve the ffmpeg binary. Prefer the bundled `ffmpeg-static` binary so the
+ * transcode works on Vercel's serverless runtime (which ships no system
+ * ffmpeg); fall back to `ffmpeg` on PATH for local/dev hosts where the static
+ * package may be absent or the user prefers their own build.
+ */
+let ffmpegBinCache: string | null = null;
+async function ffmpegBin(): Promise<string> {
+  if (ffmpegBinCache) return ffmpegBinCache;
+  try {
+    const mod = await import('ffmpeg-static');
+    const p = (mod as unknown as { default?: string }).default ?? (mod as unknown as string);
+    if (p && typeof p === 'string') {
+      ffmpegBinCache = p;
+      return p;
+    }
+  } catch {
+    // ffmpeg-static not installed — fall through to PATH lookup.
+  }
+  ffmpegBinCache = 'ffmpeg';
+  return ffmpegBinCache;
+}
+
+/**
  * Detect ffmpeg availability. Positive results cache forever (the binary
  * isn't going to vanish mid-process); NEGATIVE results expire after
  * 60s so a transient flake (zombie pid, slow brew install completing
@@ -59,8 +82,9 @@ async function checkFfmpeg(): Promise<boolean> {
     return false;
   }
   const { spawn } = await import('child_process');
+  const bin = await ffmpegBin();
   ffmpegAvailable = await new Promise<boolean>((resolve) => {
-    const proc = spawn('ffmpeg', ['-version'], { stdio: 'ignore', env: ffmpegEnv() });
+    const proc = spawn(bin, ['-version'], { stdio: 'ignore', env: ffmpegEnv() });
     proc.on('error', () => resolve(false));
     proc.on('exit', (code) => resolve(code === 0));
   });
@@ -104,7 +128,7 @@ export async function convertToWavBuffer(input: Buffer): Promise<Buffer | null> 
     await fs.writeFile(inPath, input);
 
     const ok = await new Promise<boolean>((resolve) => {
-      const proc = spawn('ffmpeg', [
+      const proc = spawn(ffmpegBinCache || 'ffmpeg', [
         '-y',           // overwrite output silently
         '-i', inPath,
         '-ac', '1',     // mono
@@ -169,7 +193,7 @@ export async function createPreviewMp3Buffer(input: Buffer): Promise<Buffer | nu
   try {
     await fs.writeFile(inPath, input);
     const ok = await new Promise<boolean>((resolve) => {
-      const proc = spawn('ffmpeg', [
+      const proc = spawn(ffmpegBinCache || 'ffmpeg', [
         '-y',
         '-i', inPath,
         '-vn',
@@ -196,6 +220,74 @@ export async function createPreviewMp3Buffer(input: Buffer): Promise<Buffer | nu
     return await fs.readFile(outPath);
   } catch (err) {
     console.warn('Preview conversion failed:', err);
+    return null;
+  } finally {
+    await Promise.allSettled([fs.unlink(inPath), fs.unlink(outPath)]);
+  }
+}
+
+/**
+ * Create the PROTECTED public preview clip: the first `previewSeconds` of the
+ * master, transcoded to a small 96 kbps stereo MP3 in a single ffmpeg pass.
+ *
+ * This replaces the byte-truncation approach (`makeTruncatedPreview`) for the
+ * common case: a WAV master byte-truncates to a still-huge ~13 MB WAV, whereas
+ * a 75 s 96 kbps MP3 is ~0.9 MB — fast to load in the share/store player and
+ * useless as a full-beat rip. Works for any input ffmpeg can read (wav, mp3,
+ * flac, aiff, m4a…). Returns null when ffmpeg is unavailable or the input is
+ * unreadable, so callers can fall back to `makeTruncatedPreview`.
+ */
+export async function makePreviewMp3Buffer(
+  input: Buffer,
+  previewSeconds = 75,
+): Promise<Buffer | null> {
+  if (!(await checkFfmpeg())) {
+    console.warn('ffmpeg not available - mp3 preview was not generated.');
+    return null;
+  }
+
+  const { spawn } = await import('child_process');
+  const { promises: fs } = await import('fs');
+  const path = await import('path');
+  const os = await import('os');
+  const crypto = await import('crypto');
+
+  const id = crypto.randomBytes(8).toString('hex');
+  const inPath = path.join(os.tmpdir(), `ag-mp3prev-in-${id}`);
+  const outPath = path.join(os.tmpdir(), `ag-mp3prev-out-${id}.mp3`);
+  const seconds = Math.max(1, Math.floor(previewSeconds));
+
+  try {
+    await fs.writeFile(inPath, input);
+    const ok = await new Promise<boolean>((resolve) => {
+      const proc = spawn(ffmpegBinCache || 'ffmpeg', [
+        '-y',
+        '-t', String(seconds), // keep only the first N seconds (the truncation)
+        '-i', inPath,
+        '-vn',
+        '-map_metadata', '-1',
+        '-ac', '2',
+        '-ar', '44100',
+        '-c:a', 'libmp3lame',
+        '-b:a', '96k',
+        '-f', 'mp3',
+        outPath,
+      ], { stdio: 'ignore', env: ffmpegEnv() });
+      const killer = setTimeout(() => proc.kill('SIGKILL'), 60_000);
+      proc.on('exit', (code) => {
+        clearTimeout(killer);
+        resolve(code === 0);
+      });
+      proc.on('error', () => {
+        clearTimeout(killer);
+        resolve(false);
+      });
+    });
+
+    if (!ok) return null;
+    return await fs.readFile(outPath);
+  } catch (err) {
+    console.warn('mp3 preview conversion failed:', err);
     return null;
   } finally {
     await Promise.allSettled([fs.unlink(inPath), fs.unlink(outPath)]);

@@ -60,7 +60,17 @@ const nextConfig: NextConfig = {
     '@audio/decode-wma',
     'music-tempo',
     'music-metadata',
+    // Keep the native ffmpeg binary external (required at runtime, not bundled).
+    'ffmpeg-static',
   ],
+  // Next's tracer can't see the ffmpeg-static binary (it's spawned via a path
+  // string, not imported), so include it explicitly for the routes that
+  // generate audio previews. Without this the binary is missing on Vercel and
+  // MP3 preview generation silently falls back to byte-truncation.
+  outputFileTracingIncludes: {
+    '/api/tracks/[id]/analyze': ['./node_modules/ffmpeg-static/ffmpeg'],
+    '/api/cron/backfill-previews': ['./node_modules/ffmpeg-static/ffmpeg'],
+  },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {

@@ -6,7 +6,7 @@ import { getAuddFeatures } from '@/lib/audio/audd';
 import type { AuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
 import { extractPeaks } from '@/lib/audio/peaks';
-import { makeTruncatedPreview } from '@/lib/audio/preview';
+import { makeTruncatedPreview, DEFAULT_PREVIEW_SECONDS } from '@/lib/audio/preview';
 import { uploadPeaksSidecar, uploadPreviewAsset } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
@@ -232,7 +232,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       try {
         const dur = (typeof patch.duration_seconds === 'number' ? patch.duration_seconds : null)
           ?? track.duration_seconds ?? null;
-        const { buffer: previewBuf, ext, contentType } = makeTruncatedPreview(buf, dur);
+        // Prefer a small 96 kbps MP3 clip (ffmpeg); fall back to byte-truncation
+        // when ffmpeg is unavailable so a preview is still produced. Dynamic
+        // import keeps the server-only convert module out of the test/module
+        // graph until this code path actually runs.
+        const { makePreviewMp3Buffer } = await import('@/lib/audio/convert');
+        const mp3 = await makePreviewMp3Buffer(buf, DEFAULT_PREVIEW_SECONDS);
+        const { buffer: previewBuf, ext, contentType } = mp3
+          ? { buffer: mp3, ext: 'mp3' as const, contentType: 'audio/mpeg' }
+          : makeTruncatedPreview(buf, dur);
         const previewUrl = await uploadPreviewAsset(track.audio_url, previewBuf, ext, contentType);
         if (previewUrl) {
           patch.preview_url = previewUrl;

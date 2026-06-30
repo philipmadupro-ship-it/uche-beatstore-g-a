@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
-import { makeTruncatedPreview } from '@/lib/audio/preview';
+import { makeTruncatedPreview, DEFAULT_PREVIEW_SECONDS } from '@/lib/audio/preview';
 import { uploadPreviewAsset } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
@@ -96,10 +96,13 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      const { buffer: previewBuf, ext, contentType } = makeTruncatedPreview(
-        buf,
-        track.duration_seconds ?? null,
-      );
+      // Prefer a small 96 kbps MP3 clip (ffmpeg); fall back to byte-truncation
+      // when ffmpeg is unavailable so a preview is still produced.
+      const { makePreviewMp3Buffer } = await import('@/lib/audio/convert');
+      const mp3 = await makePreviewMp3Buffer(buf, DEFAULT_PREVIEW_SECONDS);
+      const { buffer: previewBuf, ext, contentType } = mp3
+        ? { buffer: mp3, ext: 'mp3' as const, contentType: 'audio/mpeg' }
+        : makeTruncatedPreview(buf, track.duration_seconds ?? null);
       const previewUrl = await uploadPreviewAsset(track.audio_url as string, previewBuf, ext, contentType);
       if (!previewUrl) {
         failed++;
