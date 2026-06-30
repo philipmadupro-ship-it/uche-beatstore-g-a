@@ -312,7 +312,7 @@ export async function GET(req: NextRequest) {
         'audio_url', 'peaks_url', 'cover_url',
         'duration_seconds', 'bpm', 'key', 'scale',
         'rating', 'description',
-        'lease_price_usd', 'exclusive_price_usd',
+        'lease_price_usd', 'exclusive_price_usd', 'wav_url',
         'store_listed', 'store_featured', 'free_download_enabled', 'store_sort_order', 'voice_tag_enabled', 'exclusive_sold', 'created_at',
       ].join(', '))
       .eq('store_listed', true));
@@ -336,7 +336,7 @@ export async function GET(req: NextRequest) {
           'audio_url', 'peaks_url', 'cover_url',
           'duration_seconds', 'bpm', 'key', 'scale',
           'rating', 'description',
-          'lease_price_usd', 'exclusive_price_usd',
+          'lease_price_usd', 'exclusive_price_usd', 'wav_url',
           'store_listed', 'free_download_enabled', 'created_at',
         ].join(', '))
         .eq('store_listed', true));
@@ -614,6 +614,9 @@ export async function GET(req: NextRequest) {
     const safeTracks = tracksAny.map(({ user_id: _u, cover_url, ...rest }: any) => redactPublicTrackMedia({
       ...rest,
       cover_url: sanitizeUrl(cover_url),
+      // Derive WAV availability before redaction nulls wav_url, so the store
+      // can show a "WAV" badge without exposing the private master URL.
+      has_wav: Boolean(rest.wav_url),
       tags: tagsByTrack[rest.id] ?? [],
       play_count: playCountByTrack[rest.id] ?? 0,
       ...(rest.voice_tag_enabled && tagUrl ? { voice_tag_url: tagUrl, voice_tag_interval: tagInterval } : {}),

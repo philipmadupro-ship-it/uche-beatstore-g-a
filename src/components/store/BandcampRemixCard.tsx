@@ -52,6 +52,7 @@ export default function BandcampRemixCard({
   lowestLicensePrice = null,
   isCurrent,
   isPlaying,
+  onPlay,
   isPreview,
   onPreview,
   onAddLease,

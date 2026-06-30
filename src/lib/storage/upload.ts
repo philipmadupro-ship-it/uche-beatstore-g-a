@@ -136,6 +136,24 @@ export async function uploadPublicPreview(source: Buffer): Promise<string | null
 }
 
 /**
+ * Upload an already-truncated preview clip (produced by makeTruncatedPreview)
+ * to the PUBLIC bucket and return its public URL. `sourceRef` is the master
+ * the preview derives from — kept in the signature for traceability; the
+ * stored object always gets a fresh public key so the private master is never
+ * exposed via the preview URL.
+ */
+export async function uploadPreviewAsset(
+  sourceRef: string,
+  previewBuffer: Buffer,
+  ext: string,
+  contentType: string,
+): Promise<string> {
+  void sourceRef;
+  const safeExt = (ext || 'mp3').replace(/[^a-z0-9]/gi, '').toLowerCase() || 'mp3';
+  return uploadPublicAudioAsset(previewBuffer, `preview.${safeExt}`, contentType, 'previews');
+}
+
+/**
  * Generates a signed URL valid for 1 hour for private R2 access.
  */
 export async function getPresignedUrl(keyOrRef: string): Promise<string> {

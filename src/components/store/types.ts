@@ -65,6 +65,9 @@ export interface FeaturedPlaylist {
 export interface StoreTrack extends Track {
   tags?: TrackTag[];
   store_featured?: boolean | null;
+  /** Derived server-side from wav_url presence (the URL itself is redacted).
+   *  Drives the "WAV" format badge on cards + list rows. */
+  has_wav?: boolean | null;
 }
 
 export const TYPE_FILTERS = ['all', 'beats', 'song', 'remix'] as const;
