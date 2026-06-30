@@ -9,4 +9,3 @@ ALTER TABLE public.license_purchases
   ADD COLUMN IF NOT EXISTS stems_delivery_email_sent boolean NOT NULL DEFAULT false;
 
 NOTIFY pgrst, 'reload schema';
-w
