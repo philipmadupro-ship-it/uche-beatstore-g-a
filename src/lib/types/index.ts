@@ -10,6 +10,9 @@ export interface Track {
   audio_url: string;
   /** Public low-bitrate storefront derivative. The full master stays private. */
   preview_url?: string | null;
+  /** Preview generation state: 'none' | 'pending' | 'ready'. Drives the
+   *  library's "Analyze N" preview-backfill affordance. */
+  preview_status?: string | null;
   /** URL of the precomputed waveform peaks sidecar (JSON). Optional —
    *  older tracks may not have it; WavePlayer falls back to client decode. */
   peaks_url?: string | null;

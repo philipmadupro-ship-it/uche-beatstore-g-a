@@ -225,6 +225,9 @@ async function listBoundedTracks(
       'store_featured', 'store_sort_order', 'scheduled_publish_at',
       'lease_price_usd', 'exclusive_price_usd', 'free_download_enabled',
       'exclusive_sold', 'voice_tag_enabled', 'created_at',
+      // audio_url + preview_status drive the library's "Analyze N" / preview
+      // backfill affordance (owner-only response, so the private ref is fine).
+      'audio_url', 'preview_status',
       'track_tags(tag, category)', 'stems(status)',
     ].join(', '))
     .or(`user_id.eq.${safeUserId},user_id.is.null`);

@@ -635,15 +635,20 @@ export default function LibraryPage() {
   // We treat "missing intelligence" as null/undefined on the four AudD-ish
   // fields. Tracks where AudD genuinely returned 0 are skipped — re-analyzing
   // them won't help.
+  // Tracks that still need a protected MP3 preview generated. Re-analyzing a
+  // track is the preview-backfill path (it reads the master from R2, makes a
+  // small mp3 clip, and sets preview_status='ready'). Without this, mp3/wav
+  // masters with no preview keep serving the full ~80MB WAV on share/store,
+  // which is unplayably slow on mobile. We target preview-missing masters
+  // directly rather than audio-feature gaps so the button surfaces the work
+  // that actually matters for playback.
   const stale = useMemo(
     () =>
       tracks.filter(
         (t: any) =>
           !!t.audio_url &&
-          (t.energy == null ||
-            t.danceability == null ||
-            t.valence == null ||
-            t.acousticness == null),
+          /\.(mp3|wav)(?:\?|$)/i.test(t.audio_url) &&
+          t.preview_status !== 'ready',
       ),
     [tracks],
   );

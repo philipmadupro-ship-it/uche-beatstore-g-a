@@ -64,7 +64,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
           wants the beat AT the top so they can listen while their
           eyes drop down to the lyric sheet underneath. */}
       {currentTrack && (
-        <div className="w-full px-6 md:px-12 pt-12 pb-6 flex justify-center z-10">
+        <div className="w-full px-4 sm:px-6 md:px-12 pt-10 sm:pt-12 pb-6 flex justify-center z-10">
           <ShareWaveformVinyl
             track={currentTrack as any}
             projectCover={project.cover_url}
@@ -78,24 +78,24 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
       )}
 
       {/* Main layout */}
-      <div className="flex-1 max-w-6xl mx-auto w-full px-6 md:px-12 pb-32 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-12 z-10">
+      <div className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 md:px-12 pb-32 grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8 lg:gap-12 z-10">
 
         {/* Left Side: Full Lyrics Studio — same component used in /studio
             so the rapper gets rhymes / syllable count / version history
             without re-implementing any of it. Reads/writes the track's
             lyrics column server-side. */}
         <div className="flex flex-col min-w-0">
-          <div className="mb-6 flex items-center justify-between">
-            <div>
+          <div className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
               <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">
                 Vocalist Workspace
               </p>
-              <h2 className="text-2xl font-bold uppercase tracking-wider text-white mt-1">
+              <h2 className="text-xl sm:text-2xl font-bold uppercase tracking-wider text-white mt-1">
                 Lyrics &amp; Topline Sheet
               </h2>
             </div>
             {(currentTrack?.bpm || currentTrack?.key) && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 {currentTrack.key && (
                   <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg ${
                     currentTrack.scale === 'minor'

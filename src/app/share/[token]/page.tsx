@@ -516,17 +516,17 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
     {purchaseBannerNode}
     <div className="min-h-screen bg-[#090907] text-[#F7EBDD] flex flex-col font-sans">
       {/* Header */}
-      <header className="px-8 py-5 border-b border-[#1A1813] flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-[5px] bg-white flex items-center justify-center">
+      <header className="px-4 sm:px-8 py-5 border-b border-[#1A1813] flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-6 h-6 rounded-[5px] bg-white flex items-center justify-center shrink-0">
             <span className="text-[9px] font-black text-black">AG</span>
           </div>
-          <span className="text-[11px] font-medium tracking-[0.2em] uppercase text-[#D0C3AF]">U2C Beatstore</span>
+          <span className="text-[11px] font-medium tracking-[0.2em] uppercase text-[#D0C3AF] truncate">U2C Beatstore</span>
         </div>
-        <span className="text-[10px] font-mono text-[#837B6D] uppercase tracking-wider truncate max-w-xs">{shareTitle}</span>
+        <span className="text-[10px] font-mono text-[#837B6D] uppercase tracking-wider truncate max-w-[40%] sm:max-w-xs">{shareTitle}</span>
       </header>
 
-      <main className="flex-1 max-w-2xl mx-auto w-full px-6 py-12 pb-20">
+      <main className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-8 sm:py-12 pb-24">
         {activeTrack && (
           <div className="mb-12">
             {/* Track hero — vinyl-style spinning cover. The disc itself
@@ -538,8 +538,8 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
                 The whole stack rotates via the `animate-vinyl` keyframe
                 with animationPlayState toggled by `isPlaying`, so the
                 disc only turns while audio is actually playing. */}
-            <div className="flex gap-6 items-center mb-8">
-              <div className="relative w-32 h-32 shrink-0">
+            <div className="flex gap-4 sm:gap-6 items-center mb-8">
+              <div className="relative w-24 h-24 sm:w-32 sm:h-32 shrink-0">
                 <div
                   className="absolute inset-0 rounded-full overflow-hidden bg-black animate-vinyl shadow-[0_8px_28px_rgba(0,0,0,0.6)]"
                   style={{ animationPlayState: isPlaying ? 'running' : 'paused' }}
@@ -622,41 +622,42 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             {/* Controls */}
             <div className="flex items-center gap-3">
               <button onClick={prevTrack} disabled={activeIndex === 0}
-                className="w-8 h-8 flex items-center justify-center text-[#9B9282] hover:text-white disabled:opacity-20 transition-colors">
+                className="w-8 h-8 flex items-center justify-center text-[#9B9282] hover:text-white disabled:opacity-20 transition-colors shrink-0">
                 <SkipBack size={16} fill="currentColor" />
               </button>
               <button onClick={togglePlay}
-                className="w-10 h-10 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform">
+                className="w-10 h-10 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shrink-0">
                 {isPlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="ml-0.5" />}
               </button>
               <button onClick={nextTrack} disabled={activeIndex === tracks.length - 1}
-                className="w-8 h-8 flex items-center justify-center text-[#9B9282] hover:text-white disabled:opacity-20 transition-colors">
+                className="w-8 h-8 flex items-center justify-center text-[#9B9282] hover:text-white disabled:opacity-20 transition-colors shrink-0">
                 <SkipForward size={16} fill="currentColor" />
               </button>
 
-              <div className="flex items-center gap-2 ml-3">
-                <button onClick={() => setMuted(!muted)} className="text-[#9B9282] hover:text-white transition-colors">
+              <div className="flex items-center gap-2 ml-1 sm:ml-3 shrink-0">
+                <button onClick={() => setMuted(!muted)} className="text-[#9B9282] hover:text-white transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
                   {muted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
                 </button>
                 <input type="range" min="0" max="1" step="0.01" value={muted ? 0 : volume}
                   onChange={(e) => { setMuted(false); setVolume(parseFloat(e.target.value)); }}
-                  className="w-20 cursor-pointer" />
+                  aria-label="Volume"
+                  className="hidden sm:block w-20 cursor-pointer" />
               </div>
 
               <div className="flex-1" />
 
               {allowDownloads ? (
                 <button onClick={() => downloadTrack(activeTrack)}
-                  className="flex items-center gap-1.5 text-[11px] font-medium text-[#D0C3AF] hover:text-white border border-[#211F1A] hover:border-[#3B372F] px-3 py-2 rounded-md transition-colors">
+                  className="flex items-center gap-1.5 text-[11px] font-medium text-[#D0C3AF] hover:text-white border border-[#211F1A] hover:border-[#3B372F] px-3 py-2 rounded-md transition-colors shrink-0">
                   <Download size={12} />
-                  Download
+                  <span className="hidden sm:inline">Download</span>
                 </button>
               ) : (
                 <div
                   title="The sender disabled downloads on this link."
-                  className="flex items-center gap-1.5 text-[11px] font-medium text-[#837B6D] border border-[#161616] px-3 py-2 rounded-md cursor-not-allowed">
+                  className="flex items-center gap-1.5 text-[11px] font-medium text-[#837B6D] border border-[#161616] px-3 py-2 rounded-md cursor-not-allowed shrink-0">
                   <Lock size={11} />
-                  Downloads disabled
+                  <span className="hidden sm:inline">Downloads disabled</span>
                 </div>
               )}
             </div>

@@ -119,24 +119,36 @@ export function BeatListRow({
           </div>
         )}
 
-        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
           {track.exclusive_sold ? (
-            <span className="px-3 py-2 rounded-md bg-white/[0.03] border border-[#E7D7BE]/25 text-[#E7D7BE] text-[10px] font-bold uppercase tracking-wider">
-              Exclusive Sold
+            <span className="px-2 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white/[0.03] border border-[#E7D7BE]/25 text-[#E7D7BE] text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
+              <span className="sm:hidden">Sold</span>
+              <span className="hidden sm:inline">Exclusive Sold</span>
             </span>
           ) : track.free_download_enabled ? (
             <button
               onClick={onFreeDownload}
-              className="px-3 py-2 rounded-md bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 text-[#6DC6A4] text-[10px] font-bold uppercase tracking-wider hover:bg-[#6DC6A4]/20 transition-colors"
+              className="px-2 py-1.5 sm:px-3 sm:py-2 rounded-md bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 text-[#6DC6A4] text-[9px] sm:text-[10px] font-bold uppercase tracking-wider hover:bg-[#6DC6A4]/20 transition-colors"
             >
-              Free Download
+              <span className="sm:hidden">Free</span>
+              <span className="hidden sm:inline">Free Download</span>
             </button>
           ) : (
             <>
+              {/* Mobile: one compact price chip → opens the preview drawer, where
+                  the full lease/exclusive license picker lives. Keeps the title
+                  readable on narrow screens. */}
+              <button
+                onClick={onPreview}
+                className="sm:hidden px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/[0.10] text-[#F7EBDD] text-[11px] font-bold leading-none whitespace-nowrap"
+              >
+                {priceLease != null ? `$${priceLease}` : priceExclusive != null ? `$${priceExclusive}` : 'Buy'}
+              </button>
+              {/* Desktop: full dual-price buttons. */}
               <button
                 onClick={onAddLease}
                 disabled={priceLease == null}
-                className="px-3 py-2 rounded-md bg-white/[0.06] border border-white/[0.10] text-[#F7EBDD] text-[11px] font-bold hover:bg-white/[0.12] hover:border-white/[0.18] transition-colors disabled:opacity-30 flex flex-col items-center leading-none"
+                className="hidden sm:flex px-3 py-2 rounded-md bg-white/[0.06] border border-white/[0.10] text-[#F7EBDD] text-[11px] font-bold hover:bg-white/[0.12] hover:border-white/[0.18] transition-colors disabled:opacity-30 flex-col items-center leading-none"
               >
                 <span>{priceLease != null ? `$${priceLease}` : '—'}</span>
                 <span className="text-[7px] font-mono text-[#B4AA99] mt-0.5 uppercase tracking-wider">Lease</span>
@@ -144,7 +156,7 @@ export function BeatListRow({
               <button
                 onClick={onAddExclusive}
                 disabled={priceExclusive == null}
-                className="px-3 py-2 rounded-md text-black text-[11px] font-bold hover:opacity-90 transition-opacity disabled:opacity-30 flex flex-col items-center leading-none"
+                className="hidden sm:flex px-3 py-2 rounded-md text-black text-[11px] font-bold hover:opacity-90 transition-opacity disabled:opacity-30 flex-col items-center leading-none"
                 style={{ backgroundColor: accentColor }}
               >
                 <span>{priceExclusive != null ? `$${priceExclusive}` : '—'}</span>
@@ -154,7 +166,7 @@ export function BeatListRow({
           )}
           <button
             onClick={onPreview}
-            className="w-8 h-8 rounded-md flex items-center justify-center text-[#837B6D] hover:text-[#F7EBDD] bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.04] transition-all"
+            className="hidden sm:flex w-8 h-8 rounded-md items-center justify-center text-[#837B6D] hover:text-[#F7EBDD] bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.04] transition-all"
             title="Preview"
           >
             <ExternalLink size={11} />

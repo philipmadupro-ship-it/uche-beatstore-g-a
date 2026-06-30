@@ -744,23 +744,23 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     {purchaseBannerNode}
     <div className="min-h-screen bg-[#090907] text-[#F7EBDD] flex flex-col">
       {/* Header */}
-      <header className="px-8 py-5 border-b border-[#1A1813] flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-[5px] bg-white flex items-center justify-center">
+      <header className="px-4 sm:px-8 py-5 border-b border-[#1A1813] flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-6 h-6 rounded-[5px] bg-white flex items-center justify-center shrink-0">
             <span className="text-[9px] font-black text-black">AG</span>
           </div>
-          <span className="text-[11px] font-medium tracking-[0.2em] uppercase text-[#D0C3AF]">U2C Beatstore</span>
+          <span className="text-[11px] font-medium tracking-[0.2em] uppercase text-[#D0C3AF] truncate">U2C Beatstore</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {share && <RoleBadge role={share.role} />}
         </div>
       </header>
 
-      <main className="flex-1 max-w-5xl mx-auto px-8 py-10 w-full space-y-8">
+      <main className="flex-1 max-w-5xl mx-auto px-4 sm:px-8 py-8 sm:py-10 w-full space-y-8">
         {/* Project header */}
         {project && (
-          <div className="flex items-end gap-5">
-            <div className="w-24 h-24 bg-[#1A1813] rounded-xl overflow-hidden border border-[#211F1A] shrink-0">
+          <div className="flex items-end gap-4 sm:gap-5">
+            <div className="w-16 h-16 sm:w-24 sm:h-24 bg-[#1A1813] rounded-xl overflow-hidden border border-[#211F1A] shrink-0">
               {project.cover_url
                 ? <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
                 : <div className="w-full h-full flex items-center justify-center text-[#6E685B] text-3xl font-black">{project.name.charAt(0)}</div>
@@ -783,7 +783,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                   </button>
                 )}
               </div>
-              <h1 className="text-[28px] font-medium text-white tracking-tight truncate">{project.name}</h1>
+              <h1 className="text-[20px] sm:text-[28px] font-medium text-white tracking-tight truncate">{project.name}</h1>
 
               {editing && share?.role === 'editor' ? (
                 <div className="mt-3 space-y-2 max-w-prose">
@@ -824,7 +824,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
 
         {/* Player */}
         {activeTrack && (
-          <div className="bg-[#11100D] border border-[#211F1A] rounded-xl p-6">
+          <div className="bg-[#11100D] border border-[#211F1A] rounded-xl p-4 sm:p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-[#1A1813] rounded border border-[#211F1A] overflow-hidden shrink-0">
                 {activeTrack.cover_url
@@ -891,7 +891,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
               <div ref={waveRef} className="w-full" style={{ minHeight: 56 }} />
             )}
 
-            <div className="flex items-center gap-3 mt-4">
+            <div className="flex items-center gap-3 mt-4 flex-wrap sm:flex-nowrap">
               {/* Track-level transport stays visible in DAW mode too —
                   PlayerCanvas only owns intra-track play/pause; switching
                   tracks is still the share-page's responsibility. */}
@@ -918,13 +918,14 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                   <span className="text-[10px] font-mono text-[#9B9282] tabular-nums">{fmt(duration)}</span>
 
                   <div className="flex items-center gap-2 pl-3 border-l border-[#211F1A]">
-                    <button onClick={() => setMuted((m) => !m)} className="text-[#9B9282] hover:text-white">
+                    <button onClick={() => setMuted((m) => !m)} className="text-[#9B9282] hover:text-white" aria-label={muted ? 'Unmute' : 'Mute'}>
                       {muted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
                     </button>
                     <input
                       type="range" min="0" max="1" step="0.01" value={muted ? 0 : volume}
                       onChange={(e) => { setMuted(false); setVolume(parseFloat(e.target.value)); }}
-                      className="w-20 cursor-pointer"
+                      aria-label="Volume"
+                      className="hidden sm:block w-20 cursor-pointer"
                     />
                   </div>
                 </>
@@ -1119,15 +1120,15 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                   <span className="text-[#B4AA99] ml-auto">click to clear</span>
                 </button>
               )}
-              <div className="flex items-center justify-between">
-                <p className="text-[9px] text-[#9B9282]">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[9px] text-[#9B9282] min-w-0 truncate">
                   {activeTrack ? `Will be pinned to ${activeTrack.title}` : 'Project-level comment'}
                   {pinnedRegion && ` · region ${fmt(pinnedRegion.start)}–${fmt(pinnedRegion.end)}`}
                 </p>
                 <button
                   onClick={submitComment}
                   disabled={posting || !authorName.trim() || !draft.trim()}
-                  className="flex items-center gap-1.5 bg-[#E7D7BE] hover:bg-[#C9BCA8] disabled:opacity-40 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded transition-colors"
+                  className="flex items-center gap-1.5 bg-[#E7D7BE] hover:bg-[#C9BCA8] disabled:opacity-40 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded transition-colors shrink-0"
                 >
                   {posting ? <Loader2 size={11} className="animate-spin" /> : <Send size={10} />}
                   Post
