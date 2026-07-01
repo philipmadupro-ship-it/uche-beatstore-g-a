@@ -640,7 +640,13 @@ export async function GET(req: NextRequest) {
         }
         : {}),
     });
-    response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60');
+    // CDN cache: keep fresh for 5 min, then serve stale instantly for up to a
+    // day while revalidating in the background. On a low-traffic store the old
+    // 30s window expired between visits, so nearly every visitor paid the full
+    // cold query cost (~5s). A long stale-while-revalidate means a visitor
+    // almost never waits — they get the cached copy immediately and the refresh
+    // happens out of band. Newly listed tracks appear within ~5 min.
+    response.headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=86400');
     return response;
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
