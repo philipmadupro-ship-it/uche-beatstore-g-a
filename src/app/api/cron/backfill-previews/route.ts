@@ -85,6 +85,7 @@ export async function GET(req: NextRequest) {
   let processed = 0;
   let failed = 0;
   let skippedTooLarge = 0;
+  const reasons: Array<{ id: string; stage: string; error: string }> = [];
 
   // Sequential on purpose: one master buffered at a time keeps memory bounded.
   for (const track of candidates) {
@@ -92,10 +93,17 @@ export async function GET(req: NextRequest) {
       // Read via the storage layer so private `r2://` refs resolve — a plain
       // fetch() only handles public http(s) URLs and silently failed on every
       // r2:// master, which is why the automated backfill never populated them.
-      const buf = await readStoredObject(track.audio_url as string);
+      let buf: Buffer;
+      try {
+        buf = await readStoredObject(track.audio_url as string);
+      } catch (e) {
+        failed++;
+        reasons.push({ id: track.id, stage: 'read', error: errorMessage(e) });
+        continue;
+      }
       if (!buf || buf.length === 0) {
         failed++;
-        log.warn('master read returned empty', { trackId: track.id });
+        reasons.push({ id: track.id, stage: 'read', error: 'empty buffer' });
         continue;
       }
       if (buf.length > MAX_MASTER_BYTES) {
@@ -107,14 +115,28 @@ export async function GET(req: NextRequest) {
       // Prefer a small 96 kbps MP3 clip (ffmpeg); fall back to byte-truncation
       // when ffmpeg is unavailable so a preview is still produced.
       const { makePreviewMp3Buffer } = await import('@/lib/audio/convert');
-      const mp3 = await makePreviewMp3Buffer(buf, DEFAULT_PREVIEW_SECONDS);
-      const { buffer: previewBuf, ext, contentType } = mp3
-        ? { buffer: mp3, ext: 'mp3' as const, contentType: 'audio/mpeg' }
-        : makeTruncatedPreview(buf, track.duration_seconds ?? null);
-      const previewUrl = await uploadPreviewAsset(track.audio_url as string, previewBuf, ext, contentType);
+      let previewBuf: Buffer, ext: 'mp3' | 'wav', contentType: string;
+      try {
+        const mp3 = await makePreviewMp3Buffer(buf, DEFAULT_PREVIEW_SECONDS);
+        ({ buffer: previewBuf, ext, contentType } = mp3
+          ? { buffer: mp3, ext: 'mp3' as const, contentType: 'audio/mpeg' }
+          : makeTruncatedPreview(buf, track.duration_seconds ?? null));
+      } catch (e) {
+        failed++;
+        reasons.push({ id: track.id, stage: 'transcode', error: errorMessage(e) });
+        continue;
+      }
+      let previewUrl: string | null;
+      try {
+        previewUrl = await uploadPreviewAsset(track.audio_url as string, previewBuf, ext, contentType);
+      } catch (e) {
+        failed++;
+        reasons.push({ id: track.id, stage: 'upload', error: errorMessage(e) });
+        continue;
+      }
       if (!previewUrl) {
         failed++;
-        log.warn('preview upload returned no url', { trackId: track.id });
+        reasons.push({ id: track.id, stage: 'upload', error: 'no url returned' });
         continue;
       }
 
@@ -124,16 +146,17 @@ export async function GET(req: NextRequest) {
         .eq('id', track.id);
       if (updErr) {
         failed++;
-        log.warn('preview status update failed', { trackId: track.id, error: updErr.message });
+        reasons.push({ id: track.id, stage: 'db', error: updErr.message });
         continue;
       }
       processed++;
     } catch (err) {
       failed++;
+      reasons.push({ id: track.id, stage: 'unknown', error: errorMessage(err) });
       log.warn('preview backfill failed', { trackId: track.id, error: errorMessage(err) });
     }
   }
 
   log.info('backfill run complete', { processed, failed, skippedTooLarge, candidates: candidates.length });
-  return NextResponse.json({ processed, failed, skippedTooLarge, candidates: candidates.length });
+  return NextResponse.json({ processed, failed, skippedTooLarge, candidates: candidates.length, reasons: reasons.slice(0, 10) });
 }
