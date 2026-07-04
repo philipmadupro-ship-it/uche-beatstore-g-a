@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { makeTruncatedPreview, DEFAULT_PREVIEW_SECONDS } from '@/lib/audio/preview';
-import { uploadPreviewAsset } from '@/lib/storage/upload';
+import { uploadPreviewAsset, readStoredObject } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('cron.backfill-previews');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Reading an ~80MB master + ffmpeg transcode is seconds per track; give the
+// run headroom so a batch isn't cut off mid-transcode.
+export const maxDuration = 60;
 
 // How many tracks to process per invocation. Each one fetches the master and
 // uploads a truncated copy, so we keep the batch small and process them
@@ -51,15 +54,23 @@ export async function GET(req: NextRequest) {
 
   const admin = createServiceClient();
 
-  // Candidates: on the storefront, mp3/wav master, preview not yet ready.
-  // `.or` covers both the legacy NULL and the explicit 'none'/'pending' states.
-  const { data: tracks, error } = await admin
+  // `?scope=all` also backfills non-store-listed tracks (e.g. share/project-only
+  // beats) so every preview_url gets populated, not just the storefront.
+  // `?limit=N` (bounded) lets a manual drain process more than the daily batch.
+  const scope = req.nextUrl.searchParams.get('scope');
+  const limitParam = Number(req.nextUrl.searchParams.get('limit'));
+  const batch = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 40) : BATCH;
+
+  // Candidates: mp3/wav master, preview not yet ready. `.or` covers both the
+  // legacy NULL and the explicit 'none'/'pending' states.
+  let candidateQuery = admin
     .from('tracks')
     .select('id, audio_url, duration_seconds')
-    .eq('store_listed', true)
-    .or('preview_status.is.null,preview_status.neq.ready')
+    .or('preview_status.is.null,preview_status.neq.ready');
+  if (scope !== 'all') candidateQuery = candidateQuery.eq('store_listed', true);
+  const { data: tracks, error } = await candidateQuery
     .order('created_at', { ascending: true })
-    .limit(BATCH);
+    .limit(batch);
 
   if (error) {
     // Most likely the preview_status column isn't in PostgREST's schema cache
@@ -78,21 +89,18 @@ export async function GET(req: NextRequest) {
   // Sequential on purpose: one master buffered at a time keeps memory bounded.
   for (const track of candidates) {
     try {
-      const upstream = await fetch(track.audio_url as string);
-      if (!upstream.ok) {
+      // Read via the storage layer so private `r2://` refs resolve — a plain
+      // fetch() only handles public http(s) URLs and silently failed on every
+      // r2:// master, which is why the automated backfill never populated them.
+      const buf = await readStoredObject(track.audio_url as string);
+      if (!buf || buf.length === 0) {
         failed++;
-        log.warn('master fetch failed', { trackId: track.id, status: upstream.status });
+        log.warn('master read returned empty', { trackId: track.id });
         continue;
       }
-      const len = Number(upstream.headers.get('content-length') ?? 0);
-      if (len > MAX_MASTER_BYTES) {
-        skippedTooLarge++;
-        log.warn('master too large for serverless backfill', { trackId: track.id, bytes: len });
-        continue;
-      }
-      const buf = Buffer.from(await upstream.arrayBuffer());
       if (buf.length > MAX_MASTER_BYTES) {
         skippedTooLarge++;
+        log.warn('master too large for serverless backfill', { trackId: track.id, bytes: buf.length });
         continue;
       }
 
