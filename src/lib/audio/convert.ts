@@ -112,7 +112,9 @@ export async function convertToWavBuffer(input: Buffer): Promise<Buffer | null> 
 
   // Dynamic imports keep Node built-ins out of any bundler's reach.
   const { spawn } = await import('child_process');
-  const { promises: fs } = await import('fs');
+  // `node:fs` (not `fs`) so we bypass the Turbopack `fs -> empty stub` alias in
+  // next.config.ts — that alias is for the browser bundle; here we need real fs.
+  const { promises: fs } = await import('node:fs');
   const path = await import('path');
   const os = await import('os');
   const crypto = await import('crypto');
@@ -181,7 +183,9 @@ export async function createPreviewMp3Buffer(input: Buffer): Promise<Buffer | nu
   }
 
   const { spawn } = await import('child_process');
-  const { promises: fs } = await import('fs');
+  // `node:fs` (not `fs`) so we bypass the Turbopack `fs -> empty stub` alias in
+  // next.config.ts — that alias is for the browser bundle; here we need real fs.
+  const { promises: fs } = await import('node:fs');
   const path = await import('path');
   const os = await import('os');
   const crypto = await import('crypto');
@@ -247,7 +251,9 @@ export async function makePreviewMp3Buffer(
   }
 
   const { spawn } = await import('child_process');
-  const { promises: fs } = await import('fs');
+  // `node:fs` (not `fs`) so we bypass the Turbopack `fs -> empty stub` alias in
+  // next.config.ts — that alias is for the browser bundle; here we need real fs.
+  const { promises: fs } = await import('node:fs');
   const path = await import('path');
   const os = await import('os');
   const crypto = await import('crypto');
