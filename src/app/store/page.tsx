@@ -20,6 +20,7 @@ import { StoreListView } from '@/components/store/StoreListView';
 import BandcampRemixCard from '@/components/store/BandcampRemixCard';
 import { RecommendationsStrip } from '@/components/store/RecommendationsStrip';
 import { useWishlist } from '@/hooks/useWishlist';
+import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
 import { filterAndSortTracks, type StoreTrack as StoreTrackFilter } from '@/lib/store/filters';
 import {
   type StoreTrack, type CreatorProfile, type FeaturedPlaylist, type PlaylistTrackItem,
@@ -593,6 +594,11 @@ function StorePage() {
     effectiveBpmMin, effectiveBpmMax, keyFilter, scaleFilter, durationBucket,
     genreFilter, moodFilter, sortBy, creator?.license_lease_price_usd, wishlist.ids,
   ]);
+
+  // Background-prefetch the visible tracks' previews so tapping any beat plays
+  // instantly from the on-device cache (Spotify-style). Bandwidth-aware + capped
+  // in the cache layer; only tracks with a real preview URL are fetched.
+  usePreviewPrefetch(filtered);
 
   // Retention strips at the bottom of the page. "More from this producer"
   // excludes anything visible in the current filtered set so the picks

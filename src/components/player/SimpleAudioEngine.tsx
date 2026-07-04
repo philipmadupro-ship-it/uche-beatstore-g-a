@@ -30,6 +30,7 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { cdnAudioSrc } from '@/lib/audio/cdn';
 import { normalizationGain } from '@/lib/audio/loudness';
 import { getOfflineSrc } from '@/lib/offline/audio-cache';
+import { getPreviewSrc } from '@/lib/audio/preview-cache';
 
 export function SimpleAudioEngine() {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -55,8 +56,15 @@ export function SimpleAudioEngine() {
       let src = cdnAudioSrc(url);
       if (trackId) {
         try {
+          // Prefer an explicit offline download; then the auto-prefetched
+          // preview cache (instant, no network); else stream from the network.
           const offline = await getOfflineSrc(trackId);
-          if (offline && !cancelled) src = offline;
+          if (offline && !cancelled) {
+            src = offline;
+          } else {
+            const preview = await getPreviewSrc(trackId);
+            if (preview && !cancelled) src = preview;
+          }
         } catch {
           // best-effort; fall back to network
         }
