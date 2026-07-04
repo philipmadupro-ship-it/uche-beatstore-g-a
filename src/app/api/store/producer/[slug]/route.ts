@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 
 const TRACK_FIELDS = [
   'id', 'title', 'type',
-  'audio_url', 'peaks_url', 'cover_url',
+  'audio_url', 'preview_url', 'peaks_url', 'cover_url',
   'duration_seconds', 'bpm', 'key', 'scale',
   'rating', 'description',
   'lease_price_usd', 'exclusive_price_usd',
