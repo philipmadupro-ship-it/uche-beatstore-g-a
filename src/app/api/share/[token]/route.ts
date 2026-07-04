@@ -7,8 +7,17 @@ import { errorMessage } from '@/lib/errors';
 import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 import { signedSharePreviewUrl } from '@/lib/share-media-token';
+import { cdnAudioSrc } from '@/lib/audio/cdn';
 
 const log = createLogger('api.share.token');
+
+/** Prefer the direct public preview clip (fast + edge-cached + prefetchable);
+ *  fall back to the signed proxy for tracks without a generated preview. */
+function shareAudioUrl(track: any, token: string): string {
+  const p = track?.preview_url;
+  if (typeof p === 'string' && /^https?:\/\//i.test(p)) return cdnAudioSrc(p);
+  return signedSharePreviewUrl(token, track.id);
+}
 
 function hashIp(req: NextRequest): string {
   const fwd = req.headers.get('x-forwarded-for') || '';
@@ -54,7 +63,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       const [tracksRes, stemsRes] = await Promise.all([
         supabaseAdmin
           .from('tracks')
-          .select('id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics')
+          .select('id, title, type, audio_url, preview_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics')
           .in('id', share.track_ids),
         supabaseAdmin
           .from('stems')
@@ -62,10 +71,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
           .in('track_id', share.track_ids)
       ]);
       const tracks = tracksRes.data || [];
-      const safeTracks = tracks.map((track: any) => ({
-        ...track,
-        audio_url: signedSharePreviewUrl(token, track.id),
-      }));
+      const safeTracks = tracks.map((track: any) => {
+        const { preview_url: _p, ...rest } = track;
+        return { ...rest, audio_url: shareAudioUrl(track, token) };
+      });
       const stems = share.allow_downloads
         ? (stemsRes.data || []).map((stem: any) => ({
             track_id: stem.track_id,
@@ -136,7 +145,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const tracks = (share.track_ids || [])
       .map((id: string) => allTracks.find((t: any) => t.id === id))
       .filter(Boolean)
-      .map((track: any) => ({ ...track, audio_url: signedSharePreviewUrl(token, track.id) }));
+      .map((track: any) => { const { preview_url: _p, ...rest } = track; return { ...rest, audio_url: shareAudioUrl(track, token) }; });
 
     // Fetch mock stems
     const allStems = getAll('stems' as any) || [];

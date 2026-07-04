@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { isSupabaseConfigured, getAll, query } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { signedSharePreviewUrl } from '@/lib/share-media-token';
+import { cdnAudioSrc } from '@/lib/audio/cdn';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -102,7 +103,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     }
 
     const CREATOR_FIELDS = 'display_name, bio, hero_image_url, credits, license_lease_price_usd, license_exclusive_price_usd, license_notes, instagram_handle, twitter_handle, spotify_url, soundcloud_url, website_url, contact_email';
-    const TRACK_FIELDS = 'id, title, type, audio_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics, description, lease_price_usd, exclusive_price_usd';
+    const TRACK_FIELDS = 'id, title, type, audio_url, preview_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics, description, lease_price_usd, exclusive_price_usd';
 
     async function fetchCreator(userId: string) {
       const { data } = await admin.from('creator_profiles').select(CREATOR_FIELDS).eq('user_id', userId).maybeSingle();
@@ -313,10 +314,18 @@ function redactShare(s: any) {
 }
 
 function publicShareTrack(track: any, token: string) {
-  const { user_id: _u, audio_url: _audio, ...rest } = track;
+  const { user_id: _u, audio_url: _audio, preview_url, ...rest } = track;
+  // Stream the public preview clip straight from R2 (fast + edge-cached +
+  // prefetchable) when it exists; fall back to the signed proxy for tracks
+  // whose preview hasn't been generated yet. The preview is the truncated,
+  // public-by-design clip — the full master is never exposed either way.
+  const direct = typeof preview_url === 'string' && /^https?:\/\//i.test(preview_url)
+    ? cdnAudioSrc(preview_url)
+    : null;
   return {
     ...rest,
-    audio_url: signedSharePreviewUrl(token, track.id),
+    preview_url: null,
+    audio_url: direct ?? signedSharePreviewUrl(token, track.id),
   };
 }
 

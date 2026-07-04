@@ -15,6 +15,7 @@ import { ClientShareVariant } from '@/components/share/variants/ClientShareVaria
 import { ProducerShareVariant } from '@/components/share/variants/ProducerShareVariant';
 import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
+import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
 
 export default function PublicSharePage({ params: paramsPromise }: { params: Promise<{ token: string }> }) {
   const params = React.use(paramsPromise);
@@ -51,6 +52,8 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   }, [token]);
 
   const [tracks, setTracks] = useState<Track[]>([]);
+  // Background-prefetch preview clips so tapping a beat plays instantly.
+  usePreviewPrefetch(tracks);
   const [shareTitle, setShareTitle] = useState('');
   const [allowDownloads, setAllowDownloads] = useState(true);
   const [isLoading, setIsLoading] = useState(true);

@@ -18,6 +18,7 @@ import { ArrangementOverlay } from '@/components/tracks/ArrangementOverlay';
 import { ProducerShareVariant } from '@/components/share/variants/ProducerShareVariant';
 import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
+import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
 
 interface ShareInfo {
   token: string;
@@ -154,6 +155,8 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   const [shareTrackMeta, setShareTrackMeta] = useState<ShareTrackMeta | null>(null);
   const [share, setShare] = useState<ShareInfo | null>(null);
   const [tracks, setTracks] = useState<ShareTrack[]>([]);
+  // Background-prefetch preview clips so tapping a beat plays instantly.
+  usePreviewPrefetch(tracks);
   // Owner's creator profile (bio / hero / license / social). Powers
   // the client variant; null in two cases: profile not filled out yet
   // OR recipient_kind isn't 'client' so we don't need it.
