@@ -8,6 +8,7 @@ import {
 import { LicenseSelector } from '@/components/store/LicenseSelector';
 import { ProgressBar } from '@/components/player/ProgressBar';
 import { Drawer } from '@/components/ui/Drawer';
+import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
 import { fmtDur, getSimilarTracks } from './helpers';
 import { TagChips } from './TagChips';
@@ -123,7 +124,7 @@ export function BeatPreviewDrawer({
         {/* Full-bleed cover hero */}
         <div className="relative h-[260px] shrink-0 overflow-hidden bg-[#090907]">
           {track.cover_url ? (
-            <img src={track.cover_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            <CoverImage src={track.cover_url} sizes="(max-width: 640px) 100vw, 480px" priority className="object-cover" />
           ) : (
             <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 40% 50%, ${accentColor}22 0%, transparent 70%), #090907` }} />
           )}
@@ -258,9 +259,9 @@ export function BeatPreviewDrawer({
                     onClick={() => onSelectTrack(s)}
                     className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#1A1813] border border-transparent hover:border-white/[0.05] transition-all text-left group"
                   >
-                    <div className="w-8 h-8 rounded-md overflow-hidden bg-[#090907] shrink-0">
+                    <div className="relative w-8 h-8 rounded-md overflow-hidden bg-[#090907] shrink-0">
                       {s.cover_url
-                        ? <img src={s.cover_url} alt="" className="w-full h-full object-cover" />
+                        ? <CoverImage src={s.cover_url} sizes="32px" className="object-cover" />
                         : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={12} /></div>}
                     </div>
                     <div className="flex-1 min-w-0">

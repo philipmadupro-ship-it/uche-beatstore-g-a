@@ -20,6 +20,7 @@ import {
   Plus, Download, Clock,
 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
+import { CoverImage } from '@/components/ui/CoverImage';
 import { fmtDur } from './helpers';
 import type { StoreTrack } from './types';
 
@@ -126,7 +127,7 @@ export function StoreListView({
                 className="relative w-9 h-9 rounded-md overflow-hidden bg-[#090907] border border-white/[0.06] shrink-0 cursor-pointer"
               >
                 {t.cover_url
-                  ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                  ? <CoverImage src={t.cover_url} sizes="36px" className="object-cover" />
                   : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={13} /></div>}
                 {(isHov || isCur) && (
                   <span

@@ -16,6 +16,7 @@ import { useHydrated } from '@/hooks/useHydrated';
 import type { Track } from '@/lib/types';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
+import { CoverImage } from '@/components/ui/CoverImage';
 
 interface CartItem {
   id: string;
@@ -144,9 +145,9 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
               key={i.id}
               className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.05]"
             >
-              <div className="w-10 h-10 rounded bg-[#090907] border border-[#2B2821] overflow-hidden shrink-0">
+              <div className="relative w-10 h-10 rounded bg-[#090907] border border-[#2B2821] overflow-hidden shrink-0">
                 {i.track.cover_url
-                  ? <img loading="lazy" src={i.track.cover_url} alt="" className="w-full h-full object-cover" />
+                  ? <CoverImage src={i.track.cover_url} sizes="40px" className="object-cover" />
                   : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={14} /></div>}
               </div>
               <div className="min-w-0 flex-1">

@@ -6,6 +6,7 @@ import {
   ListMusic, ChevronRight, X, Music, ShoppingBag, Layers,
 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
+import { CoverImage } from '@/components/ui/CoverImage';
 import type { Track } from '@/lib/types';
 import type { FeaturedPlaylist, PlaylistTrackItem } from './types';
 
@@ -53,11 +54,10 @@ export function FeaturedPlaylistsStrip({
                 >
                   <div className="relative w-full h-full rounded-[13px] overflow-hidden bg-[#171511]">
                     {pl.cover_url ? (
-                      <img
+                      <CoverImage
                         src={pl.cover_url}
-                        alt=""
-                        loading="lazy"
-                        className="w-full h-full object-cover group-hover:scale-[1.04] transition-transform duration-500 ease-out"
+                        sizes="(max-width: 640px) 45vw, 180px"
+                        className="object-cover group-hover:scale-[1.04] transition-transform duration-500 ease-out"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#2B2821] to-[#090907]">
@@ -101,9 +101,9 @@ export function FeaturedPlaylistsStrip({
             onClick={() => setExpandedId((id) => (id === pl.id ? null : pl.id))}
             className={`shrink-0 w-[120px] sm:w-[140px] text-left group transition-all ${expandedId === pl.id ? 'opacity-100' : ''}`}
           >
-            <div className={`w-full aspect-square rounded-xl bg-[#171511] border overflow-hidden mb-2 flex items-center justify-center transition-all ${expandedId === pl.id ? 'border-[#E7D7BE]/40 shadow-lg shadow-[#E7D7BE]/5' : 'border-[#2B2821] group-hover:border-[#3B372F]'}`}>
+            <div className={`relative w-full aspect-square rounded-xl bg-[#171511] border overflow-hidden mb-2 flex items-center justify-center transition-all ${expandedId === pl.id ? 'border-[#E7D7BE]/40 shadow-lg shadow-[#E7D7BE]/5' : 'border-[#2B2821] group-hover:border-[#3B372F]'}`}>
               {pl.cover_url
-                ? <img src={pl.cover_url} alt="" className="w-full h-full object-cover" />
+                ? <CoverImage src={pl.cover_url} sizes="140px" className="object-cover" />
                 : <ListMusic size={24} className="text-[#3B372F]" />}
             </div>
             <p className="text-[11px] font-medium text-[#F7EBDD] truncate">{pl.name}</p>
@@ -182,9 +182,9 @@ export function FeaturedPlaylistsStrip({
                         ? <PauseGlyph size={11} />
                         : <PlayGlyph size={11} className="ml-0.5" />}
                     </button>
-                    <div className="w-8 h-8 rounded shrink-0 bg-[#090907] overflow-hidden">
+                    <div className="relative w-8 h-8 rounded shrink-0 bg-[#090907] overflow-hidden">
                       {t.cover_url
-                        ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                        ? <CoverImage src={t.cover_url} sizes="32px" className="object-cover" />
                         : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={12} /></div>}
                     </div>
                     <div className="flex-1 min-w-0">

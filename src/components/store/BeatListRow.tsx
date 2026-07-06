@@ -2,6 +2,7 @@
 
 import { Music, ExternalLink } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
+import { CoverImage } from '@/components/ui/CoverImage';
 import { fmtDur } from './helpers';
 import type { StoreTrack } from './types';
 
@@ -60,7 +61,7 @@ export function BeatListRow({
           className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-[#090907] cursor-pointer relative group"
         >
           {track.cover_url
-            ? <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
+            ? <CoverImage src={track.cover_url} sizes="40px" className="object-cover" />
             : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={14} /></div>}
           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <ExternalLink size={10} className="text-white" />

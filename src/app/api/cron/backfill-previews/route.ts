@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { makeTruncatedPreview, DEFAULT_PREVIEW_SECONDS } from '@/lib/audio/preview';
-import { uploadPreviewAsset, readStoredObject } from '@/lib/storage/upload';
+import { uploadPreviewAsset, uploadPeaksSidecar, readStoredObject } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -61,12 +61,14 @@ export async function GET(req: NextRequest) {
   const limitParam = Number(req.nextUrl.searchParams.get('limit'));
   const batch = Number.isFinite(limitParam) ? Math.min(Math.max(limitParam, 1), 40) : BATCH;
 
-  // Candidates: mp3/wav master, preview not yet ready. `.or` covers both the
-  // legacy NULL and the explicit 'none'/'pending' states.
+  // Candidates: mp3/wav master missing EITHER the preview clip or the waveform
+  // peaks sidecar. `.or` covers the legacy NULL and explicit 'none'/'pending'
+  // preview states; peaks_url NULL means waveform surfaces must download and
+  // decode audio client-side just to draw bars.
   let candidateQuery = admin
     .from('tracks')
-    .select('id, audio_url, duration_seconds')
-    .or('preview_status.is.null,preview_status.neq.ready');
+    .select('id, audio_url, duration_seconds, preview_status, peaks_url')
+    .or('preview_status.is.null,preview_status.neq.ready,peaks_url.is.null');
   if (scope !== 'all') candidateQuery = candidateQuery.eq('store_listed', true);
   const { data: tracks, error } = await candidateQuery
     .order('created_at', { ascending: true })
@@ -112,37 +114,67 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      // Prefer a small 96 kbps MP3 clip (ffmpeg); fall back to byte-truncation
-      // when ffmpeg is unavailable so a preview is still produced.
-      const { makePreviewMp3Buffer } = await import('@/lib/audio/convert');
-      let previewBuf: Buffer, ext: 'mp3' | 'wav', contentType: string;
-      try {
-        const mp3 = await makePreviewMp3Buffer(buf, DEFAULT_PREVIEW_SECONDS);
-        ({ buffer: previewBuf, ext, contentType } = mp3
-          ? { buffer: mp3, ext: 'mp3' as const, contentType: 'audio/mpeg' }
-          : makeTruncatedPreview(buf, track.duration_seconds ?? null));
-      } catch (e) {
-        failed++;
-        reasons.push({ id: track.id, stage: 'transcode', error: errorMessage(e) });
-        continue;
-      }
-      let previewUrl: string | null;
-      try {
-        previewUrl = await uploadPreviewAsset(track.audio_url as string, previewBuf, ext, contentType);
-      } catch (e) {
-        failed++;
-        reasons.push({ id: track.id, stage: 'upload', error: errorMessage(e) });
-        continue;
-      }
-      if (!previewUrl) {
-        failed++;
-        reasons.push({ id: track.id, stage: 'upload', error: 'no url returned' });
-        continue;
+      const patch: Record<string, string> = {};
+
+      // ── Preview clip (only when not already ready) ──────────────────────
+      if (track.preview_status !== 'ready') {
+        // Prefer a small 96 kbps MP3 clip (ffmpeg); fall back to byte-truncation
+        // when ffmpeg is unavailable so a preview is still produced.
+        const { makePreviewMp3Buffer } = await import('@/lib/audio/convert');
+        let previewBuf: Buffer, ext: 'mp3' | 'wav', contentType: string;
+        try {
+          const mp3 = await makePreviewMp3Buffer(buf, DEFAULT_PREVIEW_SECONDS);
+          ({ buffer: previewBuf, ext, contentType } = mp3
+            ? { buffer: mp3, ext: 'mp3' as const, contentType: 'audio/mpeg' }
+            : makeTruncatedPreview(buf, track.duration_seconds ?? null));
+        } catch (e) {
+          failed++;
+          reasons.push({ id: track.id, stage: 'transcode', error: errorMessage(e) });
+          continue;
+        }
+        let previewUrl: string | null;
+        try {
+          previewUrl = await uploadPreviewAsset(track.audio_url as string, previewBuf, ext, contentType);
+        } catch (e) {
+          failed++;
+          reasons.push({ id: track.id, stage: 'upload', error: errorMessage(e) });
+          continue;
+        }
+        if (!previewUrl) {
+          failed++;
+          reasons.push({ id: track.id, stage: 'upload', error: 'no url returned' });
+          continue;
+        }
+        patch.preview_url = previewUrl;
+        patch.preview_status = 'ready';
       }
 
+      // ── Waveform peaks sidecar (when missing) ───────────────────────────
+      // Without peaks_url every waveform surface downloads + decodes audio
+      // client-side just to draw bars. Best-effort: a peaks failure never
+      // blocks the preview from being persisted.
+      if (!track.peaks_url) {
+        try {
+          const { extractPeaks } = await import('@/lib/audio/peaks');
+          const peaks = await extractPeaks(buf);
+          if (peaks) {
+            const peaksUrl = await uploadPeaksSidecar(track.audio_url as string, JSON.stringify(peaks));
+            if (peaksUrl) patch.peaks_url = peaksUrl;
+          }
+        } catch (e) {
+          reasons.push({ id: track.id, stage: 'peaks', error: errorMessage(e) });
+          log.warn('peaks backfill failed', { trackId: track.id, error: errorMessage(e) });
+        }
+      }
+
+      if (Object.keys(patch).length === 0) {
+        // Nothing produced (e.g. only peaks were needed and they failed).
+        failed++;
+        continue;
+      }
       const { error: updErr } = await admin
         .from('tracks')
-        .update({ preview_url: previewUrl, preview_status: 'ready' })
+        .update(patch)
         .eq('id', track.id);
       if (updErr) {
         failed++;

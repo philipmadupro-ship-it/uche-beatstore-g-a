@@ -4,6 +4,7 @@ import { Track } from '@/lib/types';
 import { Music, Star, MoreHorizontal, Trash2, MinusCircle, Info, Share2 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { Popover } from '@/components/ui/Popover';
+import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { setTrackDragData } from '@/lib/dnd';
@@ -83,11 +84,10 @@ export function TrackGridCard({
             : 'border-[#211F1A] group-hover:border-[#3B372F]'
       }`}>
         {track.cover_url ? (
-          <img
-            loading="lazy"
+          <CoverImage
             src={track.cover_url}
-            alt=""
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            sizes="(max-width: 640px) 50vw, 220px"
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907] flex items-center justify-center">

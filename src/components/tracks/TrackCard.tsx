@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Track } from '@/lib/types';
 import { MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2, Share2, ChevronUp, ChevronDown, Check } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
+import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { setTrackDragData } from '@/lib/dnd';
@@ -258,7 +259,7 @@ export function TrackCard({
             aria-label={isActive ? 'Pause track' : 'Play track'}
           >
             {track.cover_url ? (
-              <img loading="lazy" src={track.cover_url} alt="" className="h-full w-full object-cover" />
+              <CoverImage src={track.cover_url} sizes="40px" className="object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-[#6E685B]">
                 <Music size={13} />
