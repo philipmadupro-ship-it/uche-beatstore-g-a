@@ -27,7 +27,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
-import { cdnAudioSrc } from '@/lib/audio/cdn';
+import { playbackAudioSrc } from '@/lib/audio/cdn';
 import { normalizationGain } from '@/lib/audio/loudness';
 import { getOfflineSrc } from '@/lib/offline/audio-cache';
 import { getPreviewSrc, peekPreviewSrc } from '@/lib/audio/preview-cache';
@@ -56,7 +56,7 @@ export function SimpleAudioEngine() {
     if (!a || !url) return;
     let cancelled = false;
 
-    const instant = peekPreviewSrc(trackId) ?? cdnAudioSrc(url);
+    const instant = peekPreviewSrc(trackId) ?? playbackAudioSrc(url);
     // Only reset src when it actually changes — avoids re-buffering on
     // unrelated re-renders.
     if (a.src !== instant) {

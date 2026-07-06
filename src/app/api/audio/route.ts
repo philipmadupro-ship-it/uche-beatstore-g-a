@@ -34,6 +34,30 @@ export async function GET(req: NextRequest) {
     return new Response('Missing src', { status: 400 });
   }
 
+  // Playback fast path: instead of piping every byte through this function
+  // (slow first byte, one held connection per listener), answer with a 302 to
+  // a short-lived presigned R2 URL. Presigning is local HMAC — no network —
+  // so this response is ~instant, and the <audio> element then streams (and
+  // Range-seeks) directly from R2. Opt-in because WaveSurfer decode surfaces
+  // need same-origin bytes (CORS) and must keep the streaming proxy.
+  if (searchParams.get('redirect') === '1' && src.startsWith('r2://')) {
+    try {
+      const { getPresignedUrl } = await import('@/lib/storage/upload');
+      const signed = await getPresignedUrl(src);
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: signed,
+          // Reusable briefly (well under the 1h signature validity) so seeks
+          // don't re-hit the function.
+          'cache-control': 'private, max-age=300',
+        },
+      });
+    } catch {
+      // fall through to the streaming proxy below
+    }
+  }
+
   const download = searchParams.get('download') === '1';
   const filename = searchParams.get('filename') || src.split('/').pop() || 'audio';
   const upstream = download

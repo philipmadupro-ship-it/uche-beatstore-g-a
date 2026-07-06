@@ -51,7 +51,13 @@ export function PlayerBar() {
     const ctrl = new AbortController();
     // Low-priority so it never competes with the current track's stream.
     // Warm the SAME direct R2/CDN URL the engine will request (not the proxy).
-    fetch(cdnAudioSrc(upcoming.audio_url), { signal: ctrl.signal, priority: 'low' as RequestPriority }).catch(() => {});
+    // Only for direct http(s) previews — a proxy-bound r2:// master would pull
+    // the full ~80MB file through the origin, burning mobile data and choking
+    // the active stream's bandwidth.
+    const warmSrc = cdnAudioSrc(upcoming.audio_url);
+    if (/^https?:\/\//i.test(warmSrc)) {
+      fetch(warmSrc, { signal: ctrl.signal, priority: 'low' as RequestPriority }).catch(() => {});
+    }
     if (upcoming.peaks_url) {
       fetch(upcoming.peaks_url, { signal: ctrl.signal, cache: 'force-cache' }).catch(() => {});
     }

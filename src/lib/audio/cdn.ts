@@ -49,3 +49,19 @@ export function cdnAudioSrc(url: string | null | undefined): string {
   // Otherwise stream straight from wherever it lives (R2 public URL, etc.).
   return url;
 }
+
+/**
+ * Like cdnAudioSrc, but for plain <audio> PLAYBACK of private r2:// refs it
+ * opts into the proxy's redirect mode: /api/audio answers with a 302 to a
+ * presigned R2 URL (local HMAC — near-instant) and the element streams +
+ * Range-seeks directly from R2 instead of piping bytes through the function.
+ * Use ONLY for media-element playback (PlayerBar engine) — WaveSurfer/decode
+ * surfaces need same-origin bytes and must stay on cdnAudioSrc.
+ */
+export function playbackAudioSrc(url: string | null | undefined): string {
+  const resolved = cdnAudioSrc(url);
+  if (resolved.startsWith('/api/audio?') && !resolved.includes('redirect=')) {
+    return `${resolved}&redirect=1`;
+  }
+  return resolved;
+}
