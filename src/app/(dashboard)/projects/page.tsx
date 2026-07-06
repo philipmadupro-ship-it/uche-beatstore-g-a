@@ -24,6 +24,7 @@ import {
   type ProjectFilterState,
   type ProjectListItem,
 } from '@/lib/projects/filters';
+import { getCached, setCached } from '@/lib/client-cache';
 
 interface Project extends ProjectListItem {
   status?: 'in_progress' | 'final' | 'archived';
@@ -62,9 +63,11 @@ function relativeDate(date: Date): string {
 }
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [folders, setFolders] = useState<FolderRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Seeded from the session cache so returning to this page paints instantly;
+  // the mount fetch refreshes in the background (stale-while-revalidate).
+  const [projects, setProjects] = useState<Project[]>(() => getCached<Project[]>('projects:list') ?? []);
+  const [folders, setFolders] = useState<FolderRow[]>(() => getCached<FolderRow[]>('projects:folders') ?? []);
+  const [loading, setLoading] = useState(() => !getCached('projects:list'));
   const [createOpen, setCreateOpen] = useState(false);
   const [filters, setFilters] = useState<ProjectFilterState>(() => ({ ...DEFAULT_PROJECT_FILTERS, tags: new Set() }));
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -95,7 +98,9 @@ export default function ProjectsPage() {
       const res = await fetch('/api/projects');
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-      setProjects(Array.isArray(data) ? data : data.projects || []);
+      const list = Array.isArray(data) ? data : data.projects || [];
+      setCached('projects:list', list);
+      setProjects(list);
     } catch (err) {
       console.error('Error fetching projects:', err);
       setFetchError(err instanceof Error ? err.message : 'Failed to load projects');
@@ -109,7 +114,9 @@ export default function ProjectsPage() {
       const res = await fetch('/api/projects/folders');
       if (!res.ok) return;
       const data = await res.json();
-      setFolders(data.folders ?? []);
+      const list = data.folders ?? [];
+      setCached('projects:folders', list);
+      setFolders(list);
     } catch {
       // best-effort
     }

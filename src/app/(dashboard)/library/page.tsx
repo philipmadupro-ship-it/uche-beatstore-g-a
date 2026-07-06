@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_HOME_ROWS, type HomeRowConfig } from '@/lib/dashboard/home-config';
+import { getCached, setCached } from '@/lib/client-cache';
 import { usePlayer } from '@/hooks/usePlayer';
 import { DropZone } from '@/components/upload/DropZone';
 import { TrackCard } from '@/components/tracks/TrackCard';
@@ -75,8 +76,10 @@ export default function LibraryPage() {
   // Proper Track typing rather than the previous `any[]` — catches column
   // renames at compile time and gives the drawer call sites real
   // intellisense on `track.bpm`, `track.energy`, etc.
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Seeded from the session cache so returning to the library paints the last
+  // known list instantly (no skeleton); the mount fetch then refreshes it.
+  const [tracks, setTracks] = useState<Track[]>(() => getCached<Track[]>('library:tracks') ?? []);
+  const [loading, setLoading] = useState(() => !getCached('library:tracks'));
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'beat' | 'instrumental' | 'song' | 'remix'>('all');
@@ -286,7 +289,9 @@ export default function LibraryPage() {
 
   const fetchTracks = async ({ cursor = null, append = false }: { cursor?: string | null; append?: boolean } = {}) => {
     if (append) setLoadingMoreTracks(true);
-    else setLoading(true);
+    // Only gate the UI behind the skeleton when there's nothing painted yet —
+    // with a cached list on screen this is a silent background refresh.
+    else if (!getCached('library:tracks')) setLoading(true);
     setFetchError(null);
     try {
       const params = new URLSearchParams({
@@ -302,17 +307,25 @@ export default function LibraryPage() {
       }
       const page = Array.isArray(data) ? data : data.tracks ?? [];
       setTracks((prev) => {
-        if (!append) return page;
-        const seen = new Set(prev.map((track) => track.id));
-        const incoming = page.filter((track: Track) => !seen.has(track.id));
-        return [...prev, ...incoming];
+        let next: Track[];
+        if (!append) {
+          next = page;
+        } else {
+          const seen = new Set(prev.map((track) => track.id));
+          const incoming = page.filter((track: Track) => !seen.has(track.id));
+          next = [...prev, ...incoming];
+        }
+        setCached('library:tracks', next);
+        return next;
       });
       setHasMoreTracks(Boolean(data.pageInfo?.hasMore));
       setNextTrackCursor(data.pageInfo?.nextCursor ?? null);
     } catch (err: any) {
       console.error('Error fetching tracks:', err);
       setFetchError(err?.message || 'Failed to load tracks');
-      if (!append) setTracks([]);
+      // Keep any cached list on screen (stale-while-revalidate) — only blank
+      // the view when we never had data to show.
+      if (!append && !getCached('library:tracks')) setTracks([]);
     } finally {
       if (append) setLoadingMoreTracks(false);
       else setLoading(false);
