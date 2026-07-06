@@ -42,13 +42,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       .join(' · ');
     const description = t.description?.trim() || meta || 'Listen and license on U2C Beatstore.';
     const url = `${getAppUrl()}/store/${id}`;
-    const images = t.cover_url ? [{ url: t.cover_url }] : undefined;
+    const brandedImage = `${getAppUrl()}/api/store/share-card?track_id=${encodeURIComponent(id)}&kind=playing&format=og`;
+    const images = [{ url: brandedImage, width: 1200, height: 630, alt: `${t.title} by ${displayName || 'U2C'}` }];
 
     return {
       title,
       description,
+      alternates: { canonical: url },
+      robots: { index: true, follow: true },
       openGraph: { title, description, url, images, type: 'music.song' },
-      twitter: { card: 'summary_large_image', title, description, images: t.cover_url ? [t.cover_url] : undefined },
+      twitter: { card: 'summary_large_image', title, description, images: [brandedImage] },
     };
   } catch {
     return fallback;

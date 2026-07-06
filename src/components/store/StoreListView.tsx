@@ -117,18 +117,18 @@ export function StoreListView({
               }}
               onMouseEnter={() => setHovered(t.id)}
               onMouseLeave={() => setHovered((v) => (v === t.id ? null : v))}
-              className={`relative grid grid-cols-[36px_minmax(0,1fr)_auto_28px] md:grid-cols-[36px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_24px_24px] gap-3 md:gap-4 items-center px-4 md:px-6 py-2 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/40 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
+              className={`relative grid grid-cols-[44px_minmax(0,1fr)_auto_28px] md:grid-cols-[44px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_24px_24px] gap-3 md:gap-4 items-center px-4 md:px-6 py-3 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/40 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
               style={isPreview ? { boxShadow: `inset 2px 0 0 ${accentColor}` } : isCur ? { boxShadow: `inset 2px 0 0 ${accentColor}80` } : {}}
             >
               {/* Cover w/ hover-play */}
               <div
                 data-row-action
                 onClick={(e) => { e.stopPropagation(); onPlay(t); }}
-                className="relative w-9 h-9 rounded-md overflow-hidden bg-[#090907] border border-white/[0.06] shrink-0 cursor-pointer"
+                className="relative size-11 rounded-md overflow-hidden bg-[#090907] border border-white/[0.06] shrink-0 cursor-pointer"
               >
                 {t.cover_url
                   ? <CoverImage src={t.cover_url} sizes="36px" className="object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={13} /></div>}
+                  : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={13} /></div>}
                 {(isHov || isCur) && (
                   <span
                     aria-hidden
@@ -145,7 +145,7 @@ export function StoreListView({
                   visible info is title + tags + rating + price. */}
               <div className="min-w-0">
                 <p
-                  className="text-[14px] truncate font-medium"
+                  className="text-[16px] truncate font-bold leading-tight"
                   style={isCur || isPreview ? { color: accentColor } : { color: '#F7EBDD' }}
                 >
                   {t.title}
@@ -196,7 +196,7 @@ export function StoreListView({
                   <button
                     data-row-action
                     onClick={(e) => { e.stopPropagation(); onFreeDownload(t); }}
-                    className="flex items-center gap-1 px-3 py-2 rounded-md text-[11px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/30 hover:bg-[#6DC6A4]/20 transition-colors"
+                    className="flex min-h-9 items-center gap-1 rounded-md border border-[#6DC6A4]/25 bg-[#6DC6A4]/8 px-2.5 text-[9px] font-mono uppercase tracking-wider text-[#6DC6A4] transition-colors hover:bg-[#6DC6A4]/15"
                   >
                     <Download size={11} />
                     Free
@@ -205,11 +205,15 @@ export function StoreListView({
                   <button
                     data-row-action
                     onClick={(e) => { e.stopPropagation(); onPreview(t); }}
-                    className="flex min-h-10 items-center gap-2 rounded-md border border-white/[0.10] bg-white/[0.05] px-3 text-[10px] font-mono font-bold uppercase tracking-wider text-[#F7EBDD] transition-colors hover:bg-white/[0.10] hover:border-white/[0.18]"
+                    aria-label={`Choose a license for ${t.title}${lowestLicensePrice != null ? `, from $${lowestLicensePrice}` : ''}`}
+                    className="flex min-h-9 items-center gap-1 rounded-md border border-white/[0.08] bg-white/[0.035] px-2 text-[9px] font-mono font-semibold uppercase text-[#D0C3AF] transition-colors hover:bg-white/[0.08] hover:text-[#F7EBDD] sm:gap-1.5 sm:px-2.5 sm:tracking-[0.08em]"
                   >
-                    Choose license
+                    <ShoppingBag size={11} className="sm:hidden" aria-hidden="true" />
+                    <span className="hidden sm:inline">Choose license</span>
                     {lowestLicensePrice != null && (
-                      <span className="text-[#9B9282]">from ${lowestLicensePrice}</span>
+                      <span className="text-[#9B9282]">
+                        <span className="hidden sm:inline">from </span>${lowestLicensePrice}<span className="sm:hidden">+</span>
+                      </span>
                     )}
                   </button>
                 ) : (
@@ -242,6 +246,7 @@ export function StoreListView({
                 data-row-action
                 onClick={(e) => { e.stopPropagation(); onToggleWishlist(t.id); }}
                 aria-pressed={wishlisted}
+                aria-label={wishlisted ? `Remove ${t.title} from favorites` : `Add ${t.title} to favorites`}
                 title={wishlisted ? 'Remove from favorites' : 'Add to favorites'}
                 className="hidden md:flex w-7 h-7 rounded-full items-center justify-center hover:bg-white/[0.06] transition-colors"
                 style={wishlisted ? { color: '#D6BE7A' } : { color: 'rgba(255,255,255,0.45)' }}
@@ -254,6 +259,8 @@ export function StoreListView({
                 <button
                   data-row-action
                   onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === t.id ? null : t.id); }}
+                  aria-label={`More options for ${t.title}`}
+                  aria-expanded={menuFor === t.id}
                   className="w-7 h-7 rounded-full flex items-center justify-center text-white/45 hover:text-white hover:bg-white/[0.06] transition-colors"
                   title="More"
                 >

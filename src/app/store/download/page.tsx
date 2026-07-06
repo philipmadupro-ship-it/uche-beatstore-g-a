@@ -152,7 +152,7 @@ function DownloadPortal() {
             <AlertTriangle size={34} className="text-amber-400" />
           </div>
           <div>
-            <p className="mb-3 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6E685B]">Delivery</p>
+            <p className="mb-3 text-[10px] font-mono uppercase tracking-[0.24em] text-[#9B9282]">Delivery</p>
             <h1 className="mb-2 text-[28px] font-bold leading-tight text-white">Download not available</h1>
             <p className="mx-auto max-w-md text-[13px] leading-relaxed text-[#B4AA99]">
             {error ?? 'This download link is invalid or has expired.'}
@@ -219,7 +219,7 @@ function DownloadPortal() {
         </div>
 
         {/* Security note */}
-        <div className="mb-7 flex flex-wrap items-center gap-2 text-[10px] font-mono text-[#6E685B]">
+        <div className="mb-7 flex flex-wrap items-center gap-2 text-[10px] font-mono text-[#9B9282]">
           <ShieldCheck size={11} />
           <span>Confirmed {purchaseDate}. Download links are private to this session.</span>
         </div>
@@ -261,7 +261,7 @@ function DownloadPortal() {
                     {track.cover_url ? (
                       <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
+                      <div className="w-full h-full flex items-center justify-center text-[#9B9282]">
                         <Music size={20} />
                       </div>
                     )}
@@ -303,7 +303,7 @@ function DownloadPortal() {
 
                 {/* ── Downloads section ─────────────────────────── */}
                 <div className="border-t border-[#211F1A] px-5 py-4 space-y-3">
-                  <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#6E685B] flex items-center gap-1.5">
+                  <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#9B9282] flex items-center gap-1.5">
                     <FileAudio size={9} />
                     Included files
                   </p>
@@ -353,7 +353,7 @@ function DownloadPortal() {
 
         {/* ── Footer ───────────────────────────────────────────── */}
         <div className="mt-10 pt-6 border-t border-[#211F1A] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-[10px] font-mono text-[#6E685B]">
+          <div className="flex items-center gap-2 text-[10px] font-mono text-[#9B9282]">
             <Package size={11} />
             <span>All files licensed to {purchase.buyer_email}</span>
           </div>

@@ -231,14 +231,14 @@ export function LicenseBuilder() {
                 <button
                   onClick={() => moveUp(idx)}
                   disabled={idx === 0}
-                  className="w-5 h-4 flex items-center justify-center text-[#6E685B] hover:text-[#D0C3AF] disabled:opacity-20 transition-colors"
+                  className="w-5 h-4 flex items-center justify-center text-[#9B9282] hover:text-[#D0C3AF] disabled:opacity-20 transition-colors"
                 >
                   <ChevronUp size={11} />
                 </button>
                 <button
                   onClick={() => moveDown(idx)}
                   disabled={idx === licenses.length - 1}
-                  className="w-5 h-4 flex items-center justify-center text-[#6E685B] hover:text-[#D0C3AF] disabled:opacity-20 transition-colors"
+                  className="w-5 h-4 flex items-center justify-center text-[#9B9282] hover:text-[#D0C3AF] disabled:opacity-20 transition-colors"
                 >
                   <ChevronDown size={11} />
                 </button>
@@ -294,10 +294,10 @@ export function LicenseBuilder() {
                   <div>
                     <label className="license-label">
                       Price (USD)
-                      <span className="ml-2 text-[#6E685B]">— 0 = free</span>
+                      <span className="ml-2 text-[#9B9282]">— 0 = free</span>
                     </label>
                     <div className="relative">
-                      <DollarSign size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B] pointer-events-none" />
+                      <DollarSign size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9B9282] pointer-events-none" />
                       <input
                         type="number"
                         min={0}
@@ -455,10 +455,10 @@ export function LicenseBuilder() {
         >
           {creating ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
           Add License Tier
-          <span className="text-[#6E685B]">({4 - licenses.length} remaining)</span>
+          <span className="text-[#9B9282]">({4 - licenses.length} remaining)</span>
         </button>
       ) : (
-        <p className="text-center text-[10px] font-mono text-[#6E685B] py-2">
+        <p className="text-center text-[10px] font-mono text-[#9B9282] py-2">
           Maximum 4 license tiers reached.
         </p>
       )}
@@ -486,7 +486,7 @@ export function LicenseBuilder() {
           transition: border-color 0.15s;
           appearance: none;
         }
-        .license-input::placeholder { color: #6E685B; }
+        .license-input::placeholder { color: #9B9282; }
         .license-input:focus { border-color: #C9BCA8; }
       `}</style>
     </div>

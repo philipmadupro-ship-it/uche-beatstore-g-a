@@ -394,7 +394,7 @@ function TrackList({
   if (tracks.length === 0) {
     return (
       <div className="px-6 md:px-10 py-10 text-center">
-        <Music size={20} className="text-[#6E685B] mx-auto mb-2" />
+        <Music size={20} className="text-[#9B9282] mx-auto mb-2" />
         <p className="text-[12px] text-[#B4AA99]">No tracks in this project yet.</p>
       </div>
     );
@@ -425,7 +425,7 @@ function TrackList({
               <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-[#090907] border border-white/[0.06] shrink-0">
                 {t.cover_url
                   ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={14} /></div>}
+                  : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={14} /></div>}
                 {(isHov || isCur) && (
                   <button
                     onClick={(e) => {

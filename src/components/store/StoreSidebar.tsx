@@ -192,11 +192,11 @@ export function StoreSidebar(props: Props) {
         <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99]">
           <Sliders size={11} />
           Refine
-          <span className="text-[#6E685B] tabular-nums">· {totalResults}</span>
+          <span className="text-[#9B9282] tabular-nums">· {totalResults}</span>
         </div>
         <button
           onClick={onClose}
-          className="tap grid size-11 place-items-center rounded-full text-[#837B6D] transition-colors hover:bg-[#171511] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907] lg:hidden"
+          className="tap grid size-11 place-items-center rounded-full text-[#9B9282] transition-colors hover:bg-[#171511] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907] lg:hidden"
           aria-label="Close filters"
         >
           <X size={14} />
@@ -340,19 +340,20 @@ export function StoreSidebar(props: Props) {
       {bpmRange.min < bpmRange.max && (
         <FacetSection title="BPM range" count={bpmRangeActive ? 1 : 0}>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[8px] font-mono text-[#6E685B]">range</span>
+            <span className="text-[8px] font-mono text-[#9B9282]">range</span>
             <span
               className="text-[11px] font-mono font-bold tabular-nums"
-              style={{ color: bpmRangeActive ? accentColor : '#837B6D' }}
+              style={{ color: bpmRangeActive ? accentColor : '#9B9282' }}
             >
               {effectiveMin}–{effectiveMax}
             </span>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-[8px] font-mono text-[#6E685B] w-5 text-right shrink-0">min</span>
+              <span className="text-[8px] font-mono text-[#9B9282] w-5 text-right shrink-0">min</span>
               <input
                 type="range"
+                aria-label="Minimum BPM"
                 min={bpmRange.min}
                 max={bpmRange.max}
                 step={1}
@@ -363,9 +364,10 @@ export function StoreSidebar(props: Props) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[8px] font-mono text-[#6E685B] w-5 text-right shrink-0">max</span>
+              <span className="text-[8px] font-mono text-[#9B9282] w-5 text-right shrink-0">max</span>
               <input
                 type="range"
+                aria-label="Maximum BPM"
                 min={bpmRange.min}
                 max={bpmRange.max}
                 step={1}
@@ -382,19 +384,20 @@ export function StoreSidebar(props: Props) {
       {priceRange.min < priceRange.max && (
         <FacetSection title="Price (lease)" count={priceRangeActive ? 1 : 0} defaultOpen={false}>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[8px] font-mono text-[#6E685B]">range</span>
+            <span className="text-[8px] font-mono text-[#9B9282]">range</span>
             <span
               className="text-[11px] font-mono font-bold tabular-nums"
-              style={{ color: priceRangeActive ? accentColor : '#837B6D' }}
+              style={{ color: priceRangeActive ? accentColor : '#9B9282' }}
             >
               ${effectivePriceMin}–${effectivePriceMax}
             </span>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-[8px] font-mono text-[#6E685B] w-5 text-right shrink-0">min</span>
+              <span className="text-[8px] font-mono text-[#9B9282] w-5 text-right shrink-0">min</span>
               <input
                 type="range"
+                aria-label="Minimum lease price"
                 min={priceRange.min}
                 max={priceRange.max}
                 step={1}
@@ -405,9 +408,10 @@ export function StoreSidebar(props: Props) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[8px] font-mono text-[#6E685B] w-5 text-right shrink-0">max</span>
+              <span className="text-[8px] font-mono text-[#9B9282] w-5 text-right shrink-0">max</span>
               <input
                 type="range"
+                aria-label="Maximum lease price"
                 min={priceRange.min}
                 max={priceRange.max}
                 step={1}
@@ -441,7 +445,7 @@ export function StoreSidebar(props: Props) {
           <Download size={11} />
           <span className="text-[10px] font-mono uppercase tracking-wider">Free only</span>
         </div>
-        <span className={`text-[8px] font-mono uppercase ${freeOnly ? 'text-[#6DC6A4]' : 'text-[#6E685B]'}`}>
+        <span className={`text-[8px] font-mono uppercase ${freeOnly ? 'text-[#6DC6A4]' : 'text-[#9B9282]'}`}>
           {freeOnly ? 'ON' : 'OFF'}
         </span>
       </button>
@@ -457,7 +461,7 @@ export function StoreSidebar(props: Props) {
           <Heart size={11} fill={favoritesOnly ? 'currentColor' : 'none'} />
           <span className="text-[10px] font-mono uppercase tracking-wider">Favorites only</span>
         </div>
-        <span className={`text-[8px] font-mono uppercase tabular-nums ${favoritesOnly ? 'text-[#D6BE7A]' : 'text-[#6E685B]'}`}>
+        <span className={`text-[8px] font-mono uppercase tabular-nums ${favoritesOnly ? 'text-[#D6BE7A]' : 'text-[#9B9282]'}`}>
           {favoritesCount}
         </span>
       </button>
@@ -475,7 +479,7 @@ export function StoreSidebar(props: Props) {
           <Sparkles size={11} />
           <span className="text-[10px] font-mono uppercase tracking-wider">New this week</span>
         </div>
-        <span className="text-[8px] font-mono uppercase" style={{ color: newThisWeek ? accentColor : '#6E685B' }}>
+        <span className="text-[8px] font-mono uppercase" style={{ color: newThisWeek ? accentColor : '#9B9282' }}>
           {newThisWeek ? 'ON' : 'OFF'}
         </span>
       </button>

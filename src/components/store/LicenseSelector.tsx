@@ -55,7 +55,7 @@ export function LicenseSelector({
 
   if (tiers.length === 0) {
     return (
-      <p className="text-[11px] text-[#837B6D] text-center py-4 font-mono">
+      <p className="text-[11px] text-[#9B9282] text-center py-4 font-mono">
         No licenses configured
       </p>
     );

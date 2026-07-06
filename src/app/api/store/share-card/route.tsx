@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
   const trackId = searchParams.get('track_id');
   const kind = (searchParams.get('kind') ?? 'licensed') as 'licensed' | 'playing';
   const styleOverride = searchParams.get('style');
+  const format = searchParams.get('format') === 'og' ? 'og' : 'story';
 
   let title = 'Untitled Track';
   let producer = 'U2C Beatstore';
@@ -62,13 +63,39 @@ export async function GET(req: NextRequest) {
   const style = asCardStyle(styleOverride ?? preferredStyle);
   const eyebrow = kind === 'playing' ? 'Now playing' : 'Just licensed';
 
-  return new ImageResponse(renderCard({ style, title, producer, cover, accent, eyebrow }), {
-    width: 1080,
-    height: 1920,
+  const props = { style, title, producer, cover, accent, eyebrow };
+  return new ImageResponse(format === 'og' ? OgCard(props) : renderCard(props), {
+    width: format === 'og' ? 1200 : 1080,
+    height: format === 'og' ? 630 : 1920,
     headers: {
       'Cache-Control': 'public, max-age=86400, s-maxage=86400',
     },
   });
+}
+
+function OgCard({ title, producer, cover, accent }: RenderProps) {
+  return (
+    <div style={{ width: 1200, height: 630, display: 'flex', position: 'relative', overflow: 'hidden', background: '#090907', color: '#F7EBDD', fontFamily: 'sans-serif' }}>
+      {cover && (
+        <div style={{ position: 'absolute', inset: -80, backgroundImage: `url(${cover})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(70px)', opacity: 0.4 }} />
+      )}
+      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(9,9,7,0.98) 0%, rgba(9,9,7,0.9) 52%, rgba(9,9,7,0.35) 100%)' }} />
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', width: '100%', padding: 60, gap: 56 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 18, letterSpacing: 7, textTransform: 'uppercase', color: accent, marginBottom: 28 }}>Listen · License · Create</div>
+          <div style={{ fontSize: 70, fontWeight: 900, lineHeight: 0.98, color: '#fff', maxWidth: 700, wordBreak: 'break-word' }}>{title}</div>
+          <div style={{ display: 'flex', marginTop: 30, fontSize: 26, color: 'rgba(255,255,255,0.72)' }}>prod. <span style={{ color: accent, fontWeight: 700, marginLeft: 8 }}>{producer}</span></div>
+          <div style={{ display: 'flex', marginTop: 50, fontSize: 16, letterSpacing: 5, textTransform: 'uppercase', color: 'rgba(255,255,255,0.42)' }}>U2C Beatstore</div>
+        </div>
+        <div style={{ display: 'flex', width: 430, height: 430, borderRadius: 28, overflow: 'hidden', background: '#171511', border: '2px solid rgba(255,255,255,0.08)', boxShadow: '0 30px 90px rgba(0,0,0,0.55)' }}>
+          {cover
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={cover} alt="" width={430} height={430} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <PlaceholderCover />}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 interface RenderProps {

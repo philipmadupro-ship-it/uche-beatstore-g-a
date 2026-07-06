@@ -131,7 +131,7 @@ export function BeatComments({
             onChange={(e) => setAuthorName(e.target.value)}
             placeholder="Your name"
             maxLength={60}
-            className="bg-[#090907] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
+            className="bg-[#090907] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F]"
           />
           <div className="flex items-center gap-2">
             <button
@@ -154,7 +154,7 @@ export function BeatComments({
               placeholder={`Say something at ${fmtTs(effectiveTs)}…`}
               maxLength={500}
               onKeyDown={(e) => { if (e.key === 'Enter' && canPost) post.mutate(); }}
-              className="flex-1 bg-[#090907] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
+              className="flex-1 bg-[#090907] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F]"
             />
             <button
               type="button"

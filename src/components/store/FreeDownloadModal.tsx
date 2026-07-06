@@ -54,7 +54,7 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
         className="relative bg-[#171511] border border-[#2B2821] rounded-2xl w-full max-w-sm p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <button onClick={onClose} className="absolute top-4 right-4 text-[#6E685B] hover:text-[#D0C3AF] transition-colors">
+        <button onClick={onClose} className="absolute top-4 right-4 text-[#9B9282] hover:text-[#D0C3AF] transition-colors">
           <X size={16} />
         </button>
 
@@ -86,7 +86,7 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Your name (optional)"
-                className="w-full bg-[#11100D] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] transition-colors"
+                className="w-full bg-[#11100D] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] transition-colors"
               />
               <input
                 type="email"
@@ -94,7 +94,7 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com *"
                 required
-                className="w-full bg-[#11100D] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] transition-colors"
+                className="w-full bg-[#11100D] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] transition-colors"
               />
               {error && (
                 <p className="text-[11px] text-red-400 bg-red-400/5 border border-red-400/20 rounded px-3 py-2">{error}</p>

@@ -48,7 +48,7 @@ export function RecommendationsStrip<T extends MinTrack>({
         <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF]">
           {label}
         </p>
-        <p className="text-[9px] font-mono uppercase tracking-wider text-[#6E685B] tabular-nums">
+        <p className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] tabular-nums">
           {display.length} {display.length === 1 ? 'pick' : 'picks'}
         </p>
       </div>
@@ -71,7 +71,7 @@ export function RecommendationsStrip<T extends MinTrack>({
                 {t.cover_url ? (
                   <CoverImage src={t.cover_url} alt="" sizes="160px" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[#6E685B] bg-gradient-to-br from-[#2B2821] to-[#090907]">
+                  <div className="w-full h-full flex items-center justify-center text-[#9B9282] bg-gradient-to-br from-[#2B2821] to-[#090907]">
                     <Music size={18} />
                   </div>
                 )}
@@ -112,7 +112,7 @@ export function RecommendationsStrip<T extends MinTrack>({
                       ${lease}
                     </span>
                   ) : (
-                    <span className="text-[10px] font-mono text-[#6E685B]">—</span>
+                    <span className="text-[10px] font-mono text-[#9B9282]">—</span>
                   )}
                 </div>
               </div>

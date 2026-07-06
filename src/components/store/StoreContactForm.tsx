@@ -58,7 +58,7 @@ export function StoreContactForm({ creator, accentColor }: Props) {
     <div className="border-t border-[#211F1A]">
       <div className="max-w-xl mx-auto px-4 md:px-10 py-16">
         <div className="text-center mb-8">
-          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#6E685B] mb-2">Get in touch</p>
+          <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#9B9282] mb-2">Get in touch</p>
           <h2 className="text-xl font-medium text-[#F7EBDD]">
             Work with {creator?.display_name || 'the producer'}
           </h2>
@@ -80,65 +80,75 @@ export function StoreContactForm({ creator, accentColor }: Props) {
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">
-                  Your name <span className="text-[#6E685B]">*</span>
+                <label htmlFor="store-contact-name" className="block text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">
+                  Your name <span className="text-[#9B9282]">*</span>
                 </label>
                 <input
+                  id="store-contact-name"
                   type="text"
                   autoComplete="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onBlur={() => touch('name')}
+                  aria-invalid={nameErr ? 'true' : 'false'}
+                  aria-describedby={nameErr ? 'store-contact-name-error' : undefined}
                   placeholder="Artist or real name"
-                  className={`w-full bg-[#171511] border rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none transition-colors ${nameErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-[#2B2821] focus:border-[#3B372F]'}`}
+                  className={`w-full bg-[#171511] border rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none transition-colors ${nameErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-[#2B2821] focus:border-[#3B372F]'}`}
                 />
-                {nameErr && <p className="mt-1 text-[10px] text-red-400">{nameErr}</p>}
+                {nameErr && <p id="store-contact-name-error" role="alert" className="mt-1 text-[10px] text-red-400">{nameErr}</p>}
               </div>
               <div>
-                <label className="block text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">
-                  Email <span className="text-[#6E685B]">*</span>
+                <label htmlFor="store-contact-email" className="block text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">
+                  Email <span className="text-[#9B9282]">*</span>
                 </label>
                 <input
+                  id="store-contact-email"
                   type="email"
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   onBlur={() => touch('email')}
+                  aria-invalid={emailErr ? 'true' : 'false'}
+                  aria-describedby={emailErr ? 'store-contact-email-error' : undefined}
                   placeholder="your@email.com"
-                  className={`w-full bg-[#171511] border rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none transition-colors ${emailErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-[#2B2821] focus:border-[#3B372F]'}`}
+                  className={`w-full bg-[#171511] border rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none transition-colors ${emailErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-[#2B2821] focus:border-[#3B372F]'}`}
                 />
-                {emailErr && <p className="mt-1 text-[10px] text-red-400">{emailErr}</p>}
+                {emailErr && <p id="store-contact-email-error" role="alert" className="mt-1 text-[10px] text-red-400">{emailErr}</p>}
               </div>
             </div>
             <div>
-              <label className="block text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">Subject</label>
+              <label htmlFor="store-contact-subject" className="block text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">Subject</label>
               <input
+                id="store-contact-subject"
                 type="text"
                 autoComplete="off"
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Beat licensing, custom request, feature…"
-                className="w-full bg-[#171511] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] transition-colors"
+                className="w-full bg-[#171511] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] transition-colors"
               />
             </div>
             <div>
-              <label className="block text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">
-                Message <span className="text-[#6E685B]">*</span>
+              <label htmlFor="store-contact-message" className="block text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">
+                Message <span className="text-[#9B9282]">*</span>
               </label>
               <textarea
+                id="store-contact-message"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onBlur={() => touch('message')}
+                aria-invalid={msgErr ? 'true' : 'false'}
+                aria-describedby={msgErr ? 'store-contact-message-error' : undefined}
                 rows={5}
                 maxLength={2000}
                 placeholder="Tell me about your project or what you're looking for…"
-                className={`w-full bg-[#171511] border rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none transition-colors resize-none leading-relaxed ${msgErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-[#2B2821] focus:border-[#3B372F]'}`}
+                className={`w-full bg-[#171511] border rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none transition-colors resize-none leading-relaxed ${msgErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-[#2B2821] focus:border-[#3B372F]'}`}
               />
               <div className="flex items-center justify-between mt-1">
                 {msgErr
-                  ? <p className="text-[10px] text-red-400">{msgErr}</p>
+                  ? <p id="store-contact-message-error" role="alert" className="text-[10px] text-red-400">{msgErr}</p>
                   : <span />}
-                <p className="text-right text-[9px] font-mono text-[#6E685B]">{message.length}/2000</p>
+                <p className="text-right text-[9px] font-mono text-[#9B9282]">{message.length}/2000</p>
               </div>
             </div>
             {error && (

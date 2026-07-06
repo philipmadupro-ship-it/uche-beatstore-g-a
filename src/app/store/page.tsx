@@ -40,6 +40,7 @@ import { DropCountdown } from '@/components/store/DropCountdown';
 import { logPlay } from '@/lib/buyer-session';
 import { BeatCard } from '@/components/store/BeatCard';
 import { BeatPreviewDrawer } from '@/components/store/BeatPreviewDrawer';
+import { trackStoreEvent } from '@/lib/store/track-event';
 
 /* ─── Suspense wrapper ───────────────────────────────────────── */
 
@@ -108,7 +109,7 @@ function StoreTrustRail({ accentColor }: { accentColor: string }) {
             </span>
             <span className="min-w-0">
               <span className="block truncate text-[11px] font-semibold text-[#F7EBDD]">{label}</span>
-              <span className="block truncate text-[9px] font-mono uppercase tracking-[0.16em] text-[#837B6D]">{detail}</span>
+              <span className="block truncate text-[9px] font-mono uppercase tracking-[0.16em] text-[#9B9282]">{detail}</span>
             </span>
           </div>
         ))}
@@ -170,12 +171,13 @@ function StoreSalesSpotlight({
               <button
                 type="button"
                 onClick={() => onPreview(track)}
+                aria-label={`Preview ${track.title}`}
                 className="group relative aspect-square overflow-hidden rounded-xl bg-[#090907] text-left"
               >
                 {track.cover_url ? (
                   <img src={track.cover_url} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]" />
                 ) : (
-                  <div className="grid h-full w-full place-items-center bg-[#171511] text-[#6E685B]">
+                  <div className="grid h-full w-full place-items-center bg-[#171511] text-[#9B9282]">
                     <Music size={28} />
                   </div>
                 )}
@@ -196,7 +198,7 @@ function StoreSalesSpotlight({
                 <h2 className="truncate text-[18px] font-bold leading-tight text-[#F7EBDD] sm:text-[24px]">
                   {track.title}
                 </h2>
-                <p className="mt-1.5 max-w-xl truncate text-[10px] font-mono uppercase tracking-[0.16em] text-[#837B6D]">
+                <p className="mt-1.5 max-w-xl truncate text-[10px] font-mono uppercase tracking-[0.16em] text-[#9B9282]">
                   {[track.type, track.bpm ? `${track.bpm} BPM` : null, track.key ? `${track.key}${track.scale === 'minor' ? 'm' : ''}` : null].filter(Boolean).join(' · ')}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -230,17 +232,17 @@ function StoreSalesSpotlight({
                 {projectCover ? (
                   <img src={projectCover} alt="" className="h-full w-full object-cover" />
                 ) : (
-                  <div className="grid h-full w-full place-items-center text-[#6E685B]">
+                  <div className="grid h-full w-full place-items-center text-[#9B9282]">
                     <Music size={22} />
                   </div>
                 )}
               </Link>
               <div className="flex min-w-0 flex-1 flex-col">
-                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#837B6D]">Bundle</p>
+                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#9B9282]">Bundle</p>
                 <Link href={`/store/projects/${project.id}`} className="mt-1 line-clamp-2 text-[18px] font-bold leading-tight text-[#F7EBDD] hover:text-[#D0C3AF]">
                   {project.name}
                 </Link>
-                <p className="mt-1 text-[10px] font-mono uppercase tracking-[0.16em] text-[#837B6D]">
+                <p className="mt-1 text-[10px] font-mono uppercase tracking-[0.16em] text-[#9B9282]">
                   {project.tracks?.length ?? 0} tracks{projectPrice != null && projectPrice > 0 ? ` · ${money(projectPrice)}` : ''}
                 </p>
                 <button
@@ -355,6 +357,17 @@ function StorePage() {
     },
   });
   const creator = storeQuery.data?.creator ?? null;
+  const storeViewTracked = useRef(false);
+  useEffect(() => {
+    if (storeViewTracked.current || !storeQuery.data) return;
+    storeViewTracked.current = true;
+    trackStoreEvent('store_view', {
+      metadata: {
+        seller_user_id: (storeQuery.data.tracks[0] as { user_id?: string } | undefined)?.user_id,
+        result_count: storeQuery.data.tracks.length,
+      },
+    });
+  }, [storeQuery.data]);
   useEffect(() => {
     setLoadedMoreTracks([]);
     setPageInfo(storeQuery.data?.pageInfo ?? { hasMore: false, nextCursor: null });
@@ -647,6 +660,10 @@ function StorePage() {
     const mix = buildHarmonicOrder(playable);
     setQueue(mix);
     setTrack(mix[0]);
+    trackStoreEvent('preview_play', {
+      track_id: mix[0].id,
+      metadata: { source: 'dj_mode', seller_user_id: (mix[0] as { user_id?: string }).user_id },
+    });
     setDjActive(true);
     toast.success('DJ Mode', `Continuous key-matched mix · ${mix.length} beats`);
     void fetch('/api/store/play', {
@@ -657,9 +674,22 @@ function StorePage() {
 
   const handlePlay = (t: StoreTrack) => {
     setDjActive(false);
-    if (currentTrack?.id === t.id) { togglePlay(); return; }
+    if (currentTrack?.id === t.id) {
+      if (!isPlaying) {
+        trackStoreEvent('preview_play', {
+          track_id: t.id,
+          metadata: { source: viewMode === 'grid' ? 'store_grid' : 'store_list', seller_user_id: (t as { user_id?: string }).user_id },
+        });
+      }
+      togglePlay();
+      return;
+    }
     setQueue(filtered);
     setTrack(t);
+    trackStoreEvent('preview_play', {
+      track_id: t.id,
+      metadata: { source: viewMode === 'grid' ? 'store_grid' : 'store_list', seller_user_id: (t as { user_id?: string }).user_id },
+    });
     // Fire-and-forget store-play telemetry. /api/store/play is rate-limited
     // server-side (60s window per ipHash+track), 200s on failure so a bad
     // network never breaks the listening UX.
@@ -943,7 +973,7 @@ function StorePage() {
                 <button
                   key={f}
                   onClick={() => setTypeFilter(f)}
-                  className={`px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider rounded-full transition-colors whitespace-nowrap ${typeFilter === f ? 'text-[#F7EBDD] border border-[#E7D7BE]/40 bg-[#E7D7BE]/10' : 'bg-transparent text-[#837B6D] hover:text-[#D0C3AF]'
+                  className={`px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider rounded-full transition-colors whitespace-nowrap ${typeFilter === f ? 'text-[#F7EBDD] border border-[#E7D7BE]/40 bg-[#E7D7BE]/10' : 'bg-transparent text-[#9B9282] hover:text-[#D0C3AF]'
                     }`}
                 >
                   {f}
@@ -1088,7 +1118,7 @@ function StorePage() {
             )
           ) : filtered.length === 0 ? (
             <div className="text-center py-32 border border-dashed border-[#2B2821] rounded-lg">
-              <Music size={28} className="text-[#6E685B] mx-auto mb-3" />
+              <Music size={28} className="text-[#9B9282] mx-auto mb-3" />
               <p className="text-sm text-[#F7EBDD] mb-1">
                 {tracks.length === 0 ? 'No beats in the store yet' : 'No beats match your filters'}
               </p>
@@ -1216,19 +1246,19 @@ function StorePage() {
       {/* ── Store footer ─────────────────────────────────────────── */}
       <div className="border-t border-[#2B2821] mt-4 py-6 px-4 md:px-12">
         <div className="max-w-[1400px] mx-auto flex flex-wrap items-center justify-between gap-4">
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#6E685B]">
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
             © {new Date().getFullYear()} {creator?.display_name || 'Beat Store'}
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <Link
               href={isSignedIn ? '/store/account/me' : '/store/account'}
-              className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#837B6D] hover:text-[#D0C3AF] transition-colors"
+              className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
             >
               Buyer account
             </Link>
             <Link
               href="/store/orders"
-              className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#837B6D] hover:text-[#D0C3AF] transition-colors"
+              className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
             >
               Order history / Re-download
             </Link>

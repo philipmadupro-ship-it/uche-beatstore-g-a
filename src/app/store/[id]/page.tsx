@@ -66,6 +66,13 @@ interface LicenseTier {
   accentClass: string;
   buttonClass: string;
   checkoutType: 'lease' | 'exclusive';
+  streamingLimit: number | null;
+  distributionLimit: number | null;
+  commercialRights: boolean;
+  syncRights: boolean;
+  broadcastRights: boolean;
+  stemsIncluded: boolean;
+  creditRequired: boolean;
 }
 
 /* ─── Helpers ───────────────────────────────────────────────── */
@@ -108,6 +115,13 @@ function mapToUiTier(t: ApiLicenseTier): LicenseTier {
     rights: rights.slice(0, 5),
     isExclusive: t.is_exclusive,
     checkoutType: t.is_exclusive ? 'exclusive' : 'lease',
+    streamingLimit: t.streaming_limit,
+    distributionLimit: t.distribution_limit,
+    commercialRights: t.commercial_rights,
+    syncRights: t.sync_rights,
+    broadcastRights: t.broadcast_rights,
+    stemsIncluded: t.stems_included,
+    creditRequired: t.credit_required,
     accentClass: t.is_exclusive
       ? 'border-[#E7D7BE]/30 bg-gradient-to-b from-[#2B2821] to-[#171511]'
       : 'border-[#3B372F] hover:border-[#D0C3AF]/40',
@@ -189,9 +203,22 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
   const accent = normalizeThemeColor(creator?.accent_color);
 
   const handlePlay = () => {
-    if (isCurrent) { togglePlay(); return; }
+    if (isCurrent) {
+      if (!isPlaying) {
+        trackStoreEvent('preview_play', {
+          track_id: track.id,
+          metadata: { source: 'product_page', seller_user_id: (track as Track & { user_id?: string }).user_id },
+        });
+      }
+      togglePlay();
+      return;
+    }
     setQueue([track, ...related]);
     playTrack(track);
+    trackStoreEvent('preview_play', {
+      track_id: track.id,
+      metadata: { source: 'product_page', seller_user_id: (track as Track & { user_id?: string }).user_id },
+    });
   };
 
   const handleAddToCart = (tier: LicenseTier) => {
@@ -214,9 +241,29 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
   ].filter(Boolean) as Array<{ label: string; icon: React.ComponentType<{ size?: number }> }>;
 
   const licenseGridClass = 'grid grid-cols-1 gap-3';
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'MusicRecording',
+    name: track.title,
+    description: track.description || undefined,
+    duration: track.duration_seconds ? `PT${Math.round(track.duration_seconds)}S` : undefined,
+    image: track.cover_url || undefined,
+    byArtist: creator?.display_name ? { '@type': 'MusicGroup', name: creator.display_name } : undefined,
+    offers: licenses.map((tier) => ({
+      '@type': 'Offer',
+      name: tier.name,
+      price: tier.price,
+      priceCurrency: 'USD',
+      availability: 'https://schema.org/InStock',
+    })),
+  };
 
   return (
     <div className="min-h-screen bg-[#090907] pb-28 text-[#F7EBDD] md:pb-0">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, '\\u003c') }}
+      />
 
       {/* ── Cinematic hero ──────────────────────────────────────── */}
       <div className="relative overflow-hidden">
@@ -270,7 +317,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                     />
                   ) : (
                     <div className="absolute inset-0" style={seededGradient(track.id)}>
-                      <div className="w-full h-full flex items-center justify-center"><Music size={40} className="text-[#6E685B]" /></div>
+                      <div className="w-full h-full flex items-center justify-center"><Music size={40} className="text-[#9B9282]" /></div>
                     </div>
                   )}
                   {/* Play overlay */}
@@ -389,10 +436,10 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
             accent={accent}
           />
           <div className="flex items-center justify-between mt-2.5">
-            <span className="text-[9px] font-mono text-[#6E685B] tabular-nums">
+            <span className="text-[9px] font-mono text-[#9B9282] tabular-nums">
               {isCurrent ? fmt(Math.round((track.duration_seconds ?? 0) * progress)) : '0:00'}
             </span>
-            <span className="text-[9px] font-mono text-[#6E685B] tabular-nums">
+            <span className="text-[9px] font-mono text-[#9B9282] tabular-nums">
               {fmt(track.duration_seconds)}
             </span>
           </div>
@@ -441,7 +488,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
               <div className="rounded-[17px] bg-[#100d09] p-4 sm:p-5">
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-[9px] font-mono uppercase tracking-[0.22em] text-[#6E685B]">License this beat</p>
+                    <p className="text-[9px] font-mono uppercase tracking-[0.22em] text-[#9B9282]">License this beat</p>
                     <p className="mt-1 text-[12px] text-[#B4AA99]">Instant delivery after secure checkout.</p>
                   </div>
                   {licenses.length > 0 && !track.exclusive_sold && (
@@ -491,13 +538,14 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                         />
                       ))}
                     </div>
+                    {licenses.length > 1 && <LicenseComparison tiers={licenses} accent={accent} />}
                     {creator?.license_notes && (
                       <p className="mt-4 border-l-2 border-[#2B2821] pl-3 text-[10px] leading-relaxed text-[#9B9282]">{creator.license_notes}</p>
                     )}
                   </>
                 ) : (
                   <div className="rounded-xl border border-[#2B2821] bg-[#171511] px-5 py-6 text-center">
-                    <Download size={20} className="mx-auto mb-2 text-[#6E685B]" />
+                    <Download size={20} className="mx-auto mb-2 text-[#9B9282]" />
                     <p className="text-[12px] text-[#B4AA99]">No licenses available yet.</p>
                   </div>
                 )}
@@ -519,7 +567,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                 style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.07), rgba(255,255,255,0.02))' }}
               >
                 <div className="rounded-[13px] bg-[#171511] p-4">
-                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] mb-3">Producer</p>
+                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-3">Producer</p>
                   {creator.display_name ? (
                     <Link
                       href={`/store/producer/${slugify(creator.display_name)}`}
@@ -566,20 +614,20 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
             {related.length > 0 && (
               <div className="rounded-[14px] p-[1.5px]" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01))' }}>
                 <div className="rounded-[13px] bg-[#171511] p-4">
-                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] mb-3">More beats</p>
+                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-3">More beats</p>
                   <div className="space-y-2">
                     {related.slice(0, 4).map((r) => (
                       <Link key={r.id} href={`/store/${r.id}`} className="flex items-center gap-3 rounded-lg hover:bg-[#1A1813] p-1.5 -mx-1.5 transition-colors group">
                         <div className="w-9 h-9 rounded-md overflow-hidden bg-[#090907] shrink-0">
                           {r.cover_url
                             ? <img src={r.cover_url} alt="" className="w-full h-full object-cover" />
-                            : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={12} /></div>}
+                            : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={12} /></div>}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-[11px] font-medium text-[#F7EBDD] truncate group-hover:text-[#E7D7BE] transition-colors">{r.title}</p>
                           <p className="text-[8px] font-mono text-[#9B9282] uppercase">{r.bpm ? `${r.bpm} BPM` : ''}{r.key ? ` · ${r.key}` : ''}</p>
                         </div>
-                        <ChevronRight size={11} className="text-[#6E685B] group-hover:text-[#9B9282] shrink-0 transition-colors" />
+                        <ChevronRight size={11} className="text-[#9B9282] group-hover:text-[#9B9282] shrink-0 transition-colors" />
                       </Link>
                     ))}
                     {related.length > 4 && (
@@ -715,7 +763,7 @@ function LicenseCard({ tier, accent, recommended = false, onAddToCart, onMakeOff
 
           {/* Files included */}
           <div>
-            <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#837B6D] mb-1.5">You receive</p>
+            <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-1.5">You receive</p>
             <div className="flex items-center gap-1.5 flex-wrap">
               {tier.fileTypes.map((f) => (
                 <span
@@ -776,6 +824,61 @@ function LicenseCard({ tier, accent, recommended = false, onAddToCart, onMakeOff
   );
 }
 
+function LicenseComparison({ tiers, accent }: { tiers: LicenseTier[]; accent: string }) {
+  const yesNo = (value: boolean) => {
+    const positive = value;
+    return (
+      <span className={positive ? 'text-[#6DC6A4]' : 'text-[#9B9282]'}>
+        {positive ? 'Included' : 'Not included'}
+      </span>
+    );
+  };
+  const rows: Array<{ label: string; value: (tier: LicenseTier) => React.ReactNode }> = [
+    { label: 'Files', value: (tier) => tier.fileTypes.join(' + ') || '—' },
+    { label: 'Streams', value: (tier) => fmtLimit(tier.streamingLimit) },
+    { label: 'Distribution', value: (tier) => fmtLimit(tier.distributionLimit) },
+    { label: 'Commercial use', value: (tier) => yesNo(tier.commercialRights) },
+    { label: 'Sync / film', value: (tier) => yesNo(tier.syncRights) },
+    { label: 'Broadcast / TV', value: (tier) => yesNo(tier.broadcastRights) },
+    { label: 'Stems', value: (tier) => yesNo(tier.stemsIncluded) },
+    { label: 'Producer credit', value: (tier) => tier.creditRequired ? 'Required' : <span className="text-[#6DC6A4]">Not required</span> },
+  ];
+
+  return (
+    <details className="group mt-4 rounded-xl border border-white/[0.07] bg-white/[0.02]">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-[10px] font-mono uppercase tracking-[0.16em] text-[#D0C3AF] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E7D7BE]/50">
+        Compare every right
+        <ChevronRight size={12} aria-hidden="true" className="transition-transform group-open:rotate-90" style={{ color: accent }} />
+      </summary>
+      <div className="overflow-x-auto border-t border-white/[0.06]">
+        <table className="min-w-[560px] w-full border-collapse text-left">
+          <caption className="sr-only">License rights and deliverables comparison</caption>
+          <thead>
+            <tr>
+              <th scope="col" className="px-3 py-3 text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">Right</th>
+              {tiers.map((tier) => (
+                <th key={tier.id} scope="col" className="px-3 py-3 text-[10px] font-semibold text-[#F7EBDD]">
+                  {tier.name}<span className="block mt-0.5 font-mono text-[9px]" style={{ color: accent }}>{price(tier.price)}</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.label} className="border-t border-white/[0.05]">
+                <th scope="row" className="whitespace-nowrap px-3 py-2.5 text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">{row.label}</th>
+                {tiers.map((tier) => (
+                  <td key={tier.id} className="px-3 py-2.5 text-[10px] text-[#D0C3AF]">{row.value(tier)}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  );
+}
+
 /* ─── Related Card ─────────────────────────────────────────── */
 
 function RelatedCard({ track }: { track: Track }) {
@@ -785,7 +888,7 @@ function RelatedCard({ track }: { track: Track }) {
         {track.cover_url ? (
           <img loading="lazy" src={track.cover_url} alt={track.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-[#6E685B] bg-gradient-to-br from-[#2B2821] to-[#090907]">
+          <div className="w-full h-full flex items-center justify-center text-[#9B9282] bg-gradient-to-br from-[#2B2821] to-[#090907]">
             <Music size={20} />
           </div>
         )}
@@ -864,18 +967,18 @@ function OfferModal({ trackId, trackTitle, accent, onClose }: {
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B4AA99] text-[14px]">$</span>
                 <input id="offer-price" type="number" min="1" step="1" value={priceStr} onChange={(e) => setPriceStr(e.target.value)} placeholder="500"
-                  className="w-full bg-[#171511] border border-[#2B2821] rounded-lg pl-7 pr-3 py-2.5 text-[14px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] tabular-nums" />
+                  className="w-full bg-[#171511] border border-[#2B2821] rounded-lg pl-7 pr-3 py-2.5 text-[14px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] tabular-nums" />
               </div>
             </div>
             <div>
               <label htmlFor="offer-email" className="block text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">Your email</label>
               <input id="offer-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@email.com" autoComplete="email"
-                className="w-full bg-[#171511] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[13px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]" />
+                className="w-full bg-[#171511] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[13px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F]" />
             </div>
             <div>
-              <label htmlFor="offer-message" className="block text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">Message <span className="text-[#6E685B]">(optional)</span></label>
+              <label htmlFor="offer-message" className="block text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mb-1.5">Message <span className="text-[#9B9282]">(optional)</span></label>
               <textarea id="offer-message" value={message} onChange={(e) => setMessage(e.target.value)} rows={2} maxLength={2000} placeholder="What you'd use it for, timeline, etc."
-                className="w-full bg-[#171511] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] resize-none" />
+                className="w-full bg-[#171511] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] resize-none" />
             </div>
             <button type="submit" disabled={!valid || submitting}
               className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-bold uppercase tracking-wider text-black transition-all disabled:opacity-40"
@@ -883,7 +986,7 @@ function OfferModal({ trackId, trackTitle, accent, onClose }: {
               {submitting ? <Loader2 size={14} className="animate-spin" /> : <Tag size={13} />}
               Send offer
             </button>
-            <p className="text-[9px] text-[#6E685B] text-center leading-relaxed">No payment is taken now.</p>
+            <p className="text-[9px] text-[#9B9282] text-center leading-relaxed">No payment is taken now.</p>
           </form>
         )}
       </div>

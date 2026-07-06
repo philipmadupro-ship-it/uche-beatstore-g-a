@@ -82,7 +82,7 @@ export function TrackLicensePanel({ trackId, globalLicenses }: {
 
   if (loading) return (
     <div className="flex items-center justify-center py-4">
-      <Loader2 size={13} className="animate-spin text-[#837B6D]" />
+      <Loader2 size={13} className="animate-spin text-[#9B9282]" />
     </div>
   );
 
@@ -98,7 +98,7 @@ export function TrackLicensePanel({ trackId, globalLicenses }: {
   return (
     <div className="space-y-2">
       {!anyLinked && (
-        <p className="text-[9px] text-[#837B6D] font-mono">
+        <p className="text-[9px] text-[#9B9282] font-mono">
           Using all global tiers. Toggle a tier to set per-beat overrides.
         </p>
       )}
@@ -141,7 +141,7 @@ export function TrackLicensePanel({ trackId, globalLicenses }: {
                 />
               </div>
             )}
-            {isBusy && <Loader2 size={11} className="animate-spin text-[#837B6D] shrink-0" />}
+            {isBusy && <Loader2 size={11} className="animate-spin text-[#9B9282] shrink-0" />}
             {!isBusy && row.linked && <Check size={11} className="text-[#6DC6A4] shrink-0" />}
           </div>
         );

@@ -137,7 +137,7 @@ export function DropCountdown({ accentColor }: { accentColor: string }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
-                  className="bg-[#090907] border border-[#2B2821] rounded-full px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] min-w-0 w-44 md:w-56"
+                  className="bg-[#090907] border border-[#2B2821] rounded-full px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] min-w-0 w-44 md:w-56"
                 />
                 <button
                   type="button"

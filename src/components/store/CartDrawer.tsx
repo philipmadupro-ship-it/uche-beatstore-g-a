@@ -112,14 +112,14 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
             value={buyerEmail}
             onChange={(e) => setBuyerEmail(e.target.value)}
             placeholder="Your email for the license"
-            className="w-full bg-[#090907] border border-[#2B2821] rounded-md py-2.5 px-3 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
+            className="w-full bg-[#090907] border border-[#2B2821] rounded-md py-2.5 px-3 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F]"
           />
           <input
             type="text"
             value={promoCode}
             onChange={(e) => setPromoCode(e.target.value)}
             placeholder="Promo code"
-            className="w-full bg-[#090907] border border-[#2B2821] rounded-md py-2.5 px-3 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] uppercase"
+            className="w-full bg-[#090907] border border-[#2B2821] rounded-md py-2.5 px-3 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] uppercase"
           />
           <Button
             onClick={handleCheckout}
@@ -148,7 +148,7 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
               <div className="relative w-10 h-10 rounded bg-[#090907] border border-[#2B2821] overflow-hidden shrink-0">
                 {i.track.cover_url
                   ? <CoverImage src={i.track.cover_url} sizes="40px" className="object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={14} /></div>}
+                  : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={14} /></div>}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-[12px] font-medium text-[#F7EBDD] truncate">{i.track.title}</p>

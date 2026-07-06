@@ -55,7 +55,7 @@ export default function OrdersPage() {
   if (checkingSession) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#090907]">
-        <Loader2 size={20} className="animate-spin text-[#837B6D]" />
+        <Loader2 size={20} className="animate-spin text-[#9B9282]" />
       </div>
     );
   }
@@ -105,11 +105,11 @@ export default function OrdersPage() {
           ) : (
             <form onSubmit={requestLink} className="space-y-4" noValidate>
               <div>
-                <label htmlFor="order-email" className="mb-1.5 block text-[10px] font-mono uppercase tracking-[0.18em] text-[#837B6D]">
+                <label htmlFor="order-email" className="mb-1.5 block text-[10px] font-mono uppercase tracking-[0.18em] text-[#9B9282]">
                   Checkout email
                 </label>
                 <div className="relative">
-                  <Mail size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#837B6D]" />
+                  <Mail size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9B9282]" />
                   <input
                     id="order-email"
                     type="email"
@@ -117,7 +117,7 @@ export default function OrdersPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
                     autoComplete="email"
-                    className="w-full rounded-xl border border-[#2B2821] bg-[#090907] py-3 pl-9 pr-3 text-[13px] text-[#F7EBDD] outline-none transition-colors placeholder:text-[#6E685B] focus:border-[#E7D7BE]/50"
+                    className="w-full rounded-xl border border-[#2B2821] bg-[#090907] py-3 pl-9 pr-3 text-[13px] text-[#F7EBDD] outline-none transition-colors placeholder:text-[#9B9282] focus:border-[#E7D7BE]/50"
                   />
                 </div>
               </div>

@@ -436,6 +436,7 @@ describe('POST /api/stripe/webhook — fulfillment branches', () => {
         metadata: {
           purchase_kind: 'track_license',
           seller_user_id: SELLER,
+          store_session_id: 'store-session-1',
           buyer_email: 'buyer@example.com',
           cart_items: JSON.stringify([{ track_id: 't1', license_id: 'lease', license_type: 'lease' }]),
         },
@@ -459,6 +460,13 @@ describe('POST /api/stripe/webhook — fulfillment branches', () => {
       amount_usd: 25,
       track_ids: ['t1'],
       download_unlocked: true,
+    });
+    const funnelInsert = writes.find((w) => w.table === 'store_events' && w.op === 'insert');
+    expect(funnelInsert?.payload).toMatchObject({
+      event_type: 'purchase',
+      session_id: 'store-session-1',
+      seller_user_id: SELLER,
+      metadata: { stripe_session_id: 'cs_lp', amount_usd: 25 },
     });
   });
 

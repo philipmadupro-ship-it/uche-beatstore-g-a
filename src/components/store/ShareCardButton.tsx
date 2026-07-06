@@ -20,7 +20,7 @@
  *                         triggers in a row.
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2, Share2, X, Download } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 
@@ -38,7 +38,18 @@ export function ShareCardModal({
   trackId, trackTitle, kind = 'playing', accentColor = '#E7D7BE', open, onClose,
 }: ModalProps) {
   const [sharing, setSharing] = useState(false);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const cardUrl = `/api/store/share-card?track_id=${encodeURIComponent(trackId)}&kind=${kind}`;
+
+  useEffect(() => {
+    if (!open) return;
+    closeButtonRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose, open]);
 
   const nativeShare = async () => {
     if (typeof navigator === 'undefined' || !navigator.share) {
@@ -70,12 +81,17 @@ export function ShareCardModal({
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
       onClick={onClose}
+      role="presentation"
     >
       <div
         className="relative bg-[#171511] border border-white/[0.10] rounded-2xl p-5 max-w-md w-full"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-card-title"
       >
         <button
+          ref={closeButtonRef}
           type="button"
           onClick={onClose}
           className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"
@@ -87,7 +103,7 @@ export function ShareCardModal({
         <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-3">
           Share to Stories
         </p>
-        <h3 className="text-[14px] font-semibold text-[#F7EBDD] mb-4 pr-8 break-words">
+        <h3 id="share-card-title" className="text-[14px] font-semibold text-[#F7EBDD] mb-4 pr-8 break-words">
           {trackTitle}
         </h3>
 

@@ -25,6 +25,8 @@ import { Field } from '@/components/ui/Field';
 interface Totals { plays: number; sales_count: number; gross_usd: number }
 interface FunnelRow { stage: string; sessions: number; pctOfTop: number; pctOfPrev: number }
 const FUNNEL_LABELS: Record<string, string> = {
+  store_view: 'Visited the store',
+  preview_play: 'Played a preview',
   pdp_view: 'Viewed a beat',
   add_to_cart: 'Added to cart',
   checkout_start: 'Started checkout',
@@ -427,7 +429,7 @@ export default function AnalyticsPage() {
               </div>
             )}
 
-            {/* Storefront funnel — view → cart → checkout → paid (last 30 days,
+            {/* Storefront funnel — visit → preview → cart → checkout → paid (last 30 days,
                 independent of the play filters above). */}
             {funnel.some((s) => s.sessions > 0) && (
               <div className="rounded-2xl border border-[#2B2821] bg-[#171511] px-5 py-4 mb-5">
@@ -445,7 +447,7 @@ export default function AnalyticsPage() {
                         <span className="text-[11px] text-[#D0C3AF]">{FUNNEL_LABELS[s.stage] ?? s.stage}</span>
                         <span className="text-[10px] font-mono tabular-nums text-[#9B9282]">
                           {s.sessions.toLocaleString()}
-                          {s.stage !== 'pdp_view' && (
+                          {s.stage !== 'store_view' && (
                             <span className="text-[#6E685B]"> · {s.pctOfPrev}% from prev</span>
                           )}
                         </span>
@@ -460,8 +462,8 @@ export default function AnalyticsPage() {
                   ))}
                 </div>
                 <p className="mt-3 text-[9px] font-mono text-[#6E685B]">
-                  View→paid conversion: {(() => {
-                    const top = funnel.find((s) => s.stage === 'pdp_view')?.sessions ?? 0;
+                  Visit→paid conversion: {(() => {
+                    const top = funnel.find((s) => s.stage === 'store_view')?.sessions ?? 0;
                     const paid = funnel.find((s) => s.stage === 'purchase')?.sessions ?? 0;
                     return top > 0 ? `${((paid / top) * 100).toFixed(1)}%` : '—';
                   })()}

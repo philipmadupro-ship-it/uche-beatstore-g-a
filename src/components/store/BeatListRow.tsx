@@ -62,7 +62,7 @@ export function BeatListRow({
         >
           {track.cover_url
             ? <CoverImage src={track.cover_url} sizes="40px" className="object-cover" />
-            : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={14} /></div>}
+            : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={14} /></div>}
           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <ExternalLink size={10} className="text-white" />
           </div>
@@ -70,7 +70,7 @@ export function BeatListRow({
 
         <div className="flex-1 min-w-0">
           <button onClick={onPreview} className="text-left w-full" title={track.title}>
-            <p className={`text-[13px] font-medium truncate transition-colors ${isPreview || isCurrent ? '' : 'text-[#F7EBDD] hover:text-[#E7D7BE]'}`}
+            <p className={`text-[15px] font-bold leading-tight truncate transition-colors ${isPreview || isCurrent ? '' : 'text-[#FFF8EE] hover:text-[#E7D7BE]'}`}
               style={isPreview || isCurrent ? { color: accentColor } : {}}
             >
               {track.title}
@@ -167,7 +167,7 @@ export function BeatListRow({
           )}
           <button
             onClick={onPreview}
-            className="hidden sm:flex w-8 h-8 rounded-md items-center justify-center text-[#837B6D] hover:text-[#F7EBDD] bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.04] transition-all"
+            className="hidden sm:flex w-8 h-8 rounded-md items-center justify-center text-[#9B9282] hover:text-[#F7EBDD] bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.04] transition-all"
             title="Preview"
           >
             <ExternalLink size={11} />

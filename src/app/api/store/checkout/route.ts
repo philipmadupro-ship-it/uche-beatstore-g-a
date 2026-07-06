@@ -21,6 +21,7 @@ type CheckoutBody = {
   items?: unknown;
   project_id?: unknown;
   promo_code?: unknown;
+  store_session_id?: unknown;
 };
 
 type RawCartItem = {
@@ -204,6 +205,9 @@ export async function POST(req: NextRequest) {
     const candidateItems = Array.isArray(body.items) ? body.items : [];
     const projectId = typeof body.project_id === 'string' ? body.project_id.trim() : '';
     const promoCode = typeof body.promo_code === 'string' ? body.promo_code.trim().toUpperCase() : '';
+    const storeSessionId = typeof body.store_session_id === 'string'
+      ? body.store_session_id.trim().slice(0, 100)
+      : '';
 
     if (!buyerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail)) {
       return NextResponse.json({ error: 'Valid buyer email required' }, { status: 400 });
@@ -289,6 +293,7 @@ export async function POST(req: NextRequest) {
           buyer_email: buyerEmail,
           content_id: projectRow.id,
           promo_code: promo?.code ?? '',
+          store_session_id: storeSessionId,
         },
         // Project bundles land on the Spotify-style listening page
         // (post the access-gate poller that waits for the webhook).
@@ -541,6 +546,7 @@ export async function POST(req: NextRequest) {
         promo_code: promo?.code ?? '',
         bundle_discount_percent: bundle.applied ? String(bundle.percent) : '',
         stems_pending_track_ids: [...stemsPendingTrackIds].join(','),
+        store_session_id: storeSessionId,
       },
       return_url: `${APP_URL}/store/download?session_id={CHECKOUT_SESSION_ID}`,
     });

@@ -76,6 +76,18 @@ export async function POST(req: NextRequest) {
       sellerUserId = metadata.seller_user_id as string;
     }
 
+    // Single-producer fallback for store-level events such as store_view and
+    // project checkout, where there is intentionally no public owner UUID or
+    // track id to send from the browser.
+    if (!sellerUserId) {
+      const { data: profile } = await admin
+        .from('creator_profiles')
+        .select('user_id')
+        .limit(1)
+        .maybeSingle();
+      sellerUserId = (profile as { user_id?: string } | null)?.user_id ?? null;
+    }
+
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
       || req.headers.get('x-real-ip')
       || 'unknown';

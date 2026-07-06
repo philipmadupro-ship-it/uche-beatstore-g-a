@@ -45,6 +45,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {
       title,
       description,
+      alternates: { canonical: url },
+      robots: { index: true, follow: true },
       openGraph: { title, description, url, images, type: 'music.album' },
       twitter: { card: 'summary_large_image', title, description, images: p.cover_url ? [p.cover_url] : undefined },
     };

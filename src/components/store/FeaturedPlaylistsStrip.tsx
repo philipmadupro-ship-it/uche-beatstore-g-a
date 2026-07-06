@@ -36,7 +36,7 @@ export function FeaturedPlaylistsStrip({
   if (projectMode) {
     return (
       <div className="max-w-[1400px] mx-auto px-4 md:px-8 pt-8 pb-2">
-        <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#6E685B] mb-4">{label}</p>
+        <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#9B9282] mb-4">{label}</p>
         <div className="flex gap-4 overflow-x-auto pb-3 no-scrollbar snap-x snap-mandatory">
           {playlists.map((pl) => {
             const href = detailHrefBase ? `${detailHrefBase}/${pl.id}` : '#';
@@ -93,7 +93,7 @@ export function FeaturedPlaylistsStrip({
   /* ── Playlist mode: compact thumbnail strip, expand on click ── */
   return (
     <div className="max-w-[1400px] mx-auto px-4 md:px-8 pt-8 pb-2">
-      <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#6E685B] mb-4">{label}</p>
+      <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#9B9282] mb-4">{label}</p>
       <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
         {playlists.map((pl) => (
           <button
@@ -162,7 +162,7 @@ export function FeaturedPlaylistsStrip({
                     Add All — Exclusive
                   </button>
                 )}
-                <button onClick={() => setExpandedId(null)} className="text-[#6E685B] hover:text-[#D0C3AF] transition-colors">
+                <button onClick={() => setExpandedId(null)} className="text-[#9B9282] hover:text-[#D0C3AF] transition-colors">
                   <X size={13} />
                 </button>
               </div>
@@ -185,7 +185,7 @@ export function FeaturedPlaylistsStrip({
                     <div className="relative w-8 h-8 rounded shrink-0 bg-[#090907] overflow-hidden">
                       {t.cover_url
                         ? <CoverImage src={t.cover_url} sizes="32px" className="object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={12} /></div>}
+                        : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={12} /></div>}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className={`text-[12px] font-medium truncate ${isCur ? 'text-[#E7D7BE]' : 'text-[#F7EBDD]'}`}>{t.title}</p>

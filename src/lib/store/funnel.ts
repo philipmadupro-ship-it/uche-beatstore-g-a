@@ -16,7 +16,8 @@
 
 /** Ordered funnel stages, top → bottom. */
 export const FUNNEL_STAGES = [
-  'pdp_view',
+  'store_view',
+  'preview_play',
   'add_to_cart',
   'checkout_start',
   'purchase',
@@ -25,7 +26,9 @@ export type FunnelStage = (typeof FUNNEL_STAGES)[number];
 
 /** Every event type we accept (superset of funnel stages). */
 export const STORE_EVENT_TYPES = [
+  'store_view',
   'pdp_view',
+  'preview_play',
   'add_to_cart',
   'remove_from_cart',
   'checkout_start',
@@ -39,6 +42,9 @@ export function isStoreEventType(s: unknown): s is StoreEventType {
 
 /** Zero-based index of a stage in the funnel, or -1 if not a funnel stage. */
 function stageRank(type: string): number {
+  // Keep historical PDP events useful after the funnel gained a catalogue
+  // stage. A PDP view proves the visitor reached the storefront.
+  if (type === 'pdp_view') return 0;
   return (FUNNEL_STAGES as readonly string[]).indexOf(type);
 }
 

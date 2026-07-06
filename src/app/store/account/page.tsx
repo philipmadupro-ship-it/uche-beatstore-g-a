@@ -120,18 +120,18 @@ export default function AccountSignInPage() {
               {/* Divider */}
               <div className="flex items-center gap-3">
                 <div className="flex-1 h-px bg-[#2B2821]" />
-                <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#837B6D]">or</span>
+                <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">or</span>
                 <div className="flex-1 h-px bg-[#2B2821]" />
               </div>
 
               {/* Email OTP */}
               <form onSubmit={handleEmail} className="space-y-4" noValidate>
                 <div>
-                  <label htmlFor="buyer-email" className="block text-xs font-medium uppercase text-[#837B6D] mb-1">
+                  <label htmlFor="buyer-email" className="block text-xs font-medium uppercase text-[#9B9282] mb-1">
                     Email Address
                   </label>
                   <div className="relative">
-                    <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#837B6D] pointer-events-none" />
+                    <Mail size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9B9282] pointer-events-none" />
                     <input
                       id="buyer-email"
                       type="email"
@@ -140,7 +140,7 @@ export default function AccountSignInPage() {
                       placeholder="you@example.com"
                       autoComplete="email"
                       disabled={disabled}
-                      className="w-full bg-[#090907] border border-[#2B2821] rounded pl-9 pr-3 py-2.5 text-[13px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#E7D7BE] disabled:opacity-50 transition-colors"
+                      className="w-full bg-[#090907] border border-[#2B2821] rounded pl-9 pr-3 py-2.5 text-[13px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#E7D7BE] disabled:opacity-50 transition-colors"
                     />
                   </div>
                 </div>

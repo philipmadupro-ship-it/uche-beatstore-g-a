@@ -145,6 +145,46 @@ async function incrementPromoUse(admin: AdminClient, promoCode: string | undefin
   }
 }
 
+async function recordStorePurchaseEvent(
+  admin: AdminClient,
+  session: { id: string; amount_total?: number | null },
+  meta: Record<string, string>,
+  trackId: string | null,
+) {
+  const storeSessionId = meta.store_session_id?.trim();
+  if (!storeSessionId || !meta.seller_user_id) return;
+
+  try {
+    const { data: existing } = await admin
+      .from('store_events')
+      .select('id, metadata')
+      .eq('session_id', storeSessionId)
+      .eq('event_type', 'purchase')
+      .limit(20);
+    const alreadyRecorded = (existing ?? []).some(
+      (row: { metadata?: Record<string, unknown> | null }) => row.metadata?.stripe_session_id === session.id,
+    );
+    if (alreadyRecorded) return;
+
+    const { error } = await admin.from('store_events').insert({
+      event_type: 'purchase',
+      session_id: storeSessionId,
+      track_id: trackId && UUID_RE.test(trackId) ? trackId : null,
+      license_id: meta.license_id || null,
+      seller_user_id: meta.seller_user_id,
+      metadata: {
+        stripe_session_id: session.id,
+        purchase_kind: meta.purchase_kind || 'track_license',
+        amount_usd: Number(session.amount_total ?? 0) / 100,
+      },
+    });
+    if (error) log.warn('store purchase event insert failed', { session_id: session.id, error: error.message });
+  } catch (err) {
+    // Analytics must never make paid fulfillment fail.
+    log.warn('store purchase event tracking threw', { session_id: session.id, error: errorMessage(err) });
+  }
+}
+
 // ── Background fulfillment ──────────────────────────────────────────────────
 
 async function runFulfillment(params: {
@@ -696,6 +736,7 @@ export async function POST(req: NextRequest) {
               accessToken: existingAccess.token,
               projectId,
             });
+            await recordStorePurchaseEvent(admin, session, meta, null);
             await markStripeEventProcessed(admin, event.id);
             await incrementPromoUse(admin, meta.promo_code, session.id);
             return NextResponse.json({ received: true });
@@ -743,6 +784,12 @@ export async function POST(req: NextRequest) {
             accessToken,
             projectId,
           });
+          await recordStorePurchaseEvent(
+            admin,
+            session,
+            { ...meta, seller_user_id: meta.seller_user_id || sellerForAccess || '' },
+            null,
+          );
           await markStripeEventProcessed(admin, event.id);
           await incrementPromoUse(admin, meta.promo_code, session.id);
 
@@ -792,6 +839,7 @@ export async function POST(req: NextRequest) {
               lineItems: cartItems,
               hasAnyExclusive,
             });
+            await recordStorePurchaseEvent(admin, session, meta, cartItems[0]?.track_id ?? null);
             await markStripeEventProcessed(admin, event.id);
             await incrementPromoUse(admin, meta.promo_code, session.id);
             return NextResponse.json({ received: true });
@@ -885,6 +933,7 @@ export async function POST(req: NextRequest) {
             lineItems: resolvedLineItems,
             hasAnyExclusive,
           });
+          await recordStorePurchaseEvent(admin, session, meta, trackIds[0] ?? null);
           await markStripeEventProcessed(admin, event.id);
           await incrementPromoUse(admin, meta.promo_code, session.id);
 

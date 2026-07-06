@@ -38,6 +38,32 @@ export interface StoreEventInput {
   metadata?: Record<string, unknown>;
 }
 
+const ATTRIBUTION_KEY = 'antigravity-store-attribution';
+
+function getAttribution(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const existing = window.sessionStorage.getItem(ATTRIBUTION_KEY);
+    if (existing) return JSON.parse(existing) as Record<string, string>;
+
+    const params = new URLSearchParams(window.location.search);
+    const attribution: Record<string, string> = {
+      entry_path: window.location.pathname.slice(0, 200),
+    };
+    for (const key of ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content']) {
+      const value = params.get(key)?.trim();
+      if (value) attribution[key] = value.slice(0, 120);
+    }
+    if (document.referrer) {
+      try { attribution.referrer_host = new URL(document.referrer).hostname.slice(0, 120); } catch { /* ignore */ }
+    }
+    window.sessionStorage.setItem(ATTRIBUTION_KEY, JSON.stringify(attribution));
+    return attribution;
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Emit a funnel event. Never awaited, never throws. Uses `keepalive` so the
  * request survives a navigation (e.g. checkout_start right before redirect).
@@ -52,7 +78,11 @@ export function trackStoreEvent(eventType: StoreEventType, input: StoreEventInpu
     session_id,
     track_id: input.track_id,
     license_id: input.license_id,
-    metadata: input.metadata,
+    metadata: {
+      ...getAttribution(),
+      page_path: window.location.pathname.slice(0, 200),
+      ...input.metadata,
+    },
   });
 
   try {

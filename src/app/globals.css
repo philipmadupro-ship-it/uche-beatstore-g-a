@@ -310,6 +310,13 @@ body {
   color: var(--text-primary);
 }
 
+/* Keyboard users need a consistent indicator across the hand-rolled store
+   controls. Component-specific rings can still override this baseline. */
+:where(a, button, input, textarea, select, summary):focus-visible {
+  outline: 2px solid var(--focus-ring, #D4BFA0);
+  outline-offset: 3px;
+}
+
 /* Utility for horizontally-scrolling chip strips and tag rows — hides
    the scrollbar without disabling scroll. */
 .scrollbar-hide {

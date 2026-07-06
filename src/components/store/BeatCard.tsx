@@ -102,7 +102,7 @@ export function BeatCard({
         )}
 
         {/* Gradient scrim — heavy at bottom for text legibility */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/5" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-black/5" />
 
         {/* ── Top row: BPM · wishlist ── */}
         <div className="absolute top-0 inset-x-0 flex items-start justify-between p-2.5 gap-2">
@@ -155,14 +155,14 @@ export function BeatCard({
         </div>
 
         {/* ── Bottom overlay: title + key + price ── */}
-        <div className="absolute bottom-0 inset-x-0 p-2.5 flex items-end justify-between gap-2">
-          <div className="min-w-0 flex-1">
+        <div className="absolute bottom-0 inset-x-0 p-2.5 flex flex-col items-start gap-1.5 sm:flex-row sm:items-end sm:justify-between sm:gap-2">
+          <div className="min-w-0 w-full flex-1">
             {/* Playing indicator */}
             {isCurrent && (
               <span className="block w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] animate-pulse mb-1.5" />
             )}
             <p
-              className="text-[13px] sm:text-[14px] font-bold text-white leading-tight truncate"
+              className="text-[15px] sm:text-base font-bold text-[#FFF8EE] leading-tight truncate [text-shadow:0_2px_8px_rgba(0,0,0,0.95)]"
               style={isCurrent ? { color: accentColor } : {}}
             >
               {track.title}
@@ -175,7 +175,7 @@ export function BeatCard({
           {/* Price pill — accent tinted, shown when not free/sold */}
           {!track.exclusive_sold && !track.free_download_enabled && fromPrice != null && (
             <span
-              className="shrink-0 text-[12px] font-bold tabular-nums px-2.5 py-1 rounded-lg text-black shadow-[0_2px_8px_rgba(0,0,0,0.4)]"
+              className="shrink-0 self-start text-[12px] font-bold tabular-nums px-2.5 py-1 rounded-lg text-black shadow-[0_2px_8px_rgba(0,0,0,0.4)] sm:self-auto"
               style={{ backgroundColor: accentColor }}
             >
               {hasLicenseTiers ? 'from ' : ''}${fromPrice}

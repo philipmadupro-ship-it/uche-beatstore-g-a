@@ -17,6 +17,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const fallback: Metadata = {
     title: 'U2C Beatstore',
     description: 'License beats, instrumentals, and project bundles from independent producers.',
+    alternates: { canonical: `${getAppUrl()}/store` },
+    robots: { index: true, follow: true },
   };
   if (!isSupabaseConfigured()) return fallback;
 
@@ -43,6 +45,8 @@ export async function generateMetadata(): Promise<Metadata> {
     return {
       title: title as string,
       description: description as string,
+      alternates: { canonical: url },
+      robots: { index: true, follow: true },
       openGraph: {
         title: title as string,
         description: description as string,

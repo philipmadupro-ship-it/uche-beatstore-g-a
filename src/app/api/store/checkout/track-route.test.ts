@@ -162,6 +162,7 @@ describe('POST /api/store/checkout — track mode exclusive delivery metadata', 
     const mod = await loadRoute();
     const res = await mod.POST(postBody({
       buyer_email: 'buyer@example.test',
+      store_session_id: 'store-session-1',
       items: [{ track_id: 'track-1', license_id: licenseId, license_type: 'lease' }],
     }));
 
@@ -173,6 +174,7 @@ describe('POST /api/store/checkout — track mode exclusive delivery metadata', 
       license_id: licenseId,
       license_type: 'lease',
     }]);
+    expect(args.metadata.store_session_id).toBe('store-session-1');
   });
 
   it('rejects a custom license that belongs to another seller', async () => {

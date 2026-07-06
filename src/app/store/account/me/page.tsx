@@ -113,7 +113,7 @@ export default function BuyerMePage() {
   if (!authChecked) {
     return (
       <div className="min-h-screen bg-[#090907] flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-[#837B6D]" />
+        <Loader2 size={20} className="animate-spin text-[#9B9282]" />
       </div>
     );
   }
@@ -140,7 +140,7 @@ export default function BuyerMePage() {
   if (isLoading || !data) {
     return (
       <div className="min-h-screen bg-[#090907] flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-[#837B6D]" />
+        <Loader2 size={20} className="animate-spin text-[#9B9282]" />
       </div>
     );
   }
@@ -195,7 +195,7 @@ export default function BuyerMePage() {
 
         {isEmpty ? (
           <div className="mt-10 rounded-2xl border border-[#2B2821] bg-[#171511] px-6 py-16 text-center">
-            <Music size={28} className="text-[#6E685B] mx-auto mb-3" />
+            <Music size={28} className="text-[#9B9282] mx-auto mb-3" />
             <p className="text-[14px] text-[#F7EBDD] font-medium mb-1">No purchases yet</p>
             <p className="text-[12px] text-[#B4AA99] max-w-md mx-auto mb-5">
               Once you license a beat or buy a project bundle, it'll show up here.
@@ -222,7 +222,7 @@ export default function BuyerMePage() {
                         {b.project.cover_url
                           // eslint-disable-next-line @next/next/no-img-element
                           ? <img src={b.project.cover_url} alt="" className="w-full h-full object-cover" />
-                          : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Layers size={14} /></div>}
+                          : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Layers size={14} /></div>}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-medium text-[#F7EBDD] truncate">{b.project.name}</p>
@@ -295,7 +295,7 @@ export default function BuyerMePage() {
                   href={`https://billing.stripe.com/p/login/start?email=${encodeURIComponent(userEmail ?? data.email)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider border border-[#3B372F] text-[#F7EBDD] hover:border-[#6E685B] hover:bg-white/[0.04] transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider border border-[#3B372F] text-[#F7EBDD] hover:border-[#9B9282] hover:bg-white/[0.04] transition-colors"
                 >
                   <ExternalLink size={11} />
                   Open portal
@@ -308,7 +308,7 @@ export default function BuyerMePage() {
         <SessionLibrary />
 
         <footer className="mt-10 pt-6 border-t border-[#211F1A]">
-          <p className="text-[10px] font-mono text-[#6E685B] leading-relaxed">
+          <p className="text-[10px] font-mono text-[#9B9282] leading-relaxed">
             You're signed in with a persistent session — no link expiry.{' '}
             <button onClick={handleSignOut} className="text-[#B4AA99] hover:text-[#F7EBDD] underline underline-offset-2">
               Sign out
@@ -448,7 +448,7 @@ function SessionLibrary() {
             placeholder="New playlist name"
             maxLength={80}
             onKeyDown={(e) => { if (e.key === 'Enter' && newPlaylistName.trim()) createMut.mutate(newPlaylistName.trim()); }}
-            className="flex-1 bg-[#090907] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
+            className="flex-1 bg-[#090907] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F]"
           />
           <button
             type="button"

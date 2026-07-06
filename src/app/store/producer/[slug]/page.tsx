@@ -336,7 +336,7 @@ export default function ProducerPage({
                         {pl.cover_url ? (
                           <img src={pl.cover_url} alt={pl.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
+                          <div className="w-full h-full flex items-center justify-center text-[#9B9282]">
                             <Music size={20} />
                           </div>
                         )}
@@ -367,7 +367,7 @@ export default function ProducerPage({
                         {proj.cover_url ? (
                           <img src={proj.cover_url} alt={proj.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
+                          <div className="w-full h-full flex items-center justify-center text-[#9B9282]">
                             <Music size={20} />
                           </div>
                         )}
@@ -422,7 +422,7 @@ function TrackCard({
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
+          <div className="w-full h-full flex items-center justify-center text-[#9B9282]">
             <Music size={20} />
           </div>
         )}

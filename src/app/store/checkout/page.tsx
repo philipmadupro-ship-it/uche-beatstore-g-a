@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { loadStripe } from '@stripe/stripe-js';
 import { useCart } from '@/hooks/useCart';
-import { trackStoreEvent } from '@/lib/store/track-event';
+import { getStoreSessionId, trackStoreEvent } from '@/lib/store/track-event';
 
 // Load Stripe. The previous fallback hardcoded a real `pk_test_…` from
 // another Stripe account, which would silently route payments to that
@@ -28,6 +28,7 @@ const stripePromise = loadStripe(stripePublishableKey);
 
 type CheckoutPayload = {
   buyer_email: string;
+  store_session_id?: string;
   promo_code?: string;
   project_id?: string;
   items?: Array<{
@@ -44,7 +45,7 @@ type StripeCheckoutInstance = {
 };
 
 function CheckoutContent() {
-  const { items, cartTotal } = useCart();
+  const { items, cartTotal, bundleRule } = useCart();
   const searchParams = useSearchParams();
 
   const [email, setEmail] = useState('');
@@ -175,7 +176,10 @@ function CheckoutContent() {
     localStorage.setItem('antigravity-buyer-email', targetEmail);
 
     try {
-      const payload: CheckoutPayload = { buyer_email: targetEmail.trim() };
+      const payload: CheckoutPayload = {
+        buyer_email: targetEmail.trim(),
+        store_session_id: getStoreSessionId(),
+      };
       if (promoTerms) {
         payload.promo_code = promoCode.trim().toUpperCase();
       }
@@ -206,6 +210,7 @@ function CheckoutContent() {
         setClientSecret(data.client_secret);
         // Funnel: a Stripe session was created — the buyer reached checkout.
         trackStoreEvent('checkout_start', {
+          track_id: isProjectPurchase ? undefined : items[0]?.track.id,
           metadata: {
             mode: isProjectPurchase ? 'project' : 'cart',
             item_count: isProjectPurchase ? 1 : items.length,
@@ -270,6 +275,19 @@ function CheckoutContent() {
     return null;
   })();
 
+  const subtotal = cartTotal();
+  const bundleDiscount = bundleRule && items.length >= bundleRule.threshold
+    ? subtotal * (Math.min(90, bundleRule.percent) / 100)
+    : 0;
+  const afterBundle = Math.max(0, subtotal - bundleDiscount);
+  const promoDiscount = promoTerms
+    ? promoTerms.discount_percent > 0
+      ? afterBundle * (promoTerms.discount_percent / 100)
+      : Math.min(afterBundle, promoTerms.discount_amount)
+    : 0;
+  const estimatedTotal = Math.max(items.length * 0.01, afterBundle - promoDiscount);
+  const usd = (value: number) => `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   if (items.length === 0 && !isProjectPurchase) {
     return (
       <div className="min-h-screen bg-[#090907] px-6 py-10 text-[#F7EBDD]">
@@ -277,7 +295,7 @@ function CheckoutContent() {
           <div className="mb-6 grid size-20 place-items-center rounded-[24px] border border-[#2B2821] bg-[#171511] shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
             <ShoppingBag size={26} className="text-[#D0C3AF]" />
           </div>
-          <p className="mb-3 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6E685B]">Checkout</p>
+          <p className="mb-3 text-[10px] font-mono uppercase tracking-[0.24em] text-[#9B9282]">Checkout</p>
           <h1 className="text-[28px] font-bold leading-tight text-white sm:text-[36px]">Your cart is empty</h1>
           <p className="mt-3 max-w-sm text-[13px] leading-relaxed text-[#B4AA99]">
             Pick a beat, choose a license, then come back here for instant delivery after payment.
@@ -296,7 +314,7 @@ function CheckoutContent() {
 
 
   // Computed for the sticky mobile total bar.
-  const orderTotalForMobile = isProjectPurchase ? null : cartTotal();
+  const orderTotalForMobile = isProjectPurchase ? null : estimatedTotal;
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-32 pt-6 md:px-8 lg:pb-8">
@@ -310,7 +328,7 @@ function CheckoutContent() {
               <ArrowLeft size={11} />
               Back to store
             </Link>
-            <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#6E685B]">Secure checkout</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#9B9282]">Secure checkout</p>
             <h1 className="mt-2 text-[26px] font-bold leading-tight text-white sm:text-[34px]">
               {isProjectPurchase ? 'Complete your bundle purchase' : 'License your selected beats'}
             </h1>
@@ -326,7 +344,7 @@ function CheckoutContent() {
             ].map((step, index) => (
               <div
                 key={step.label}
-                className={`rounded-xl border px-3 py-2 ${step.active ? 'border-[#E7D7BE]/25 bg-[#E7D7BE]/8 text-[#F7EBDD]' : 'border-white/[0.05] bg-white/[0.02] text-[#6E685B]'}`}
+                className={`rounded-xl border px-3 py-2 ${step.active ? 'border-[#E7D7BE]/25 bg-[#E7D7BE]/8 text-[#F7EBDD]' : 'border-white/[0.05] bg-white/[0.02] text-[#9B9282]'}`}
               >
                 <p className="text-[8px] font-mono uppercase tracking-[0.18em]">0{index + 1}</p>
                 <p className="mt-1 text-[11px] font-semibold">{step.label}</p>
@@ -348,7 +366,7 @@ function CheckoutContent() {
               <Lock size={9} />
               Secure
             </span>
-            <span className="hidden sm:inline-flex text-[9px] font-mono uppercase tracking-widest text-[#6E685B] bg-white/[0.02] border border-white/[0.05] px-2 py-0.5 rounded">
+            <span className="hidden sm:inline-flex text-[9px] font-mono uppercase tracking-widest text-[#9B9282] bg-white/[0.02] border border-white/[0.05] px-2 py-0.5 rounded">
               Guest Checkout
             </span>
           </div>
@@ -373,24 +391,29 @@ function CheckoutContent() {
                   Email Address <span className="text-red-400">*</span>
                 </label>
                 <div className="relative">
-                  <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#6E685B]" />
+                  <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#9B9282]" />
                   <input
                     id="checkout-email"
                     type="email"
                     placeholder="you@example.com"
                     value={email}
                     onChange={handleEmailChange}
-                    className={`w-full bg-[#090907] border rounded-xl py-3 pl-10 pr-4 text-[13px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:ring-2 focus:ring-[#E7D7BE]/10 transition-colors ${emailError ? 'border-red-500/50 focus:border-red-500' : 'border-[#2B2821] focus:border-[#3B372F]'
+                    autoComplete="email"
+                    inputMode="email"
+                    aria-invalid={emailError ? 'true' : 'false'}
+                    aria-describedby={emailError ? 'checkout-email-error' : 'checkout-email-help'}
+                    className={`w-full bg-[#090907] border rounded-xl py-3 pl-10 pr-4 text-[13px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:ring-2 focus:ring-[#E7D7BE]/10 transition-colors ${emailError ? 'border-red-500/50 focus:border-red-500' : 'border-[#2B2821] focus:border-[#3B372F]'
                       }`}
                     required
                   />
                 </div>
                 {emailError && (
-                  <p className="text-[10px] text-red-400 mt-2 font-mono flex items-center gap-1">
-                    <AlertTriangle size={10} />
+                  <p id="checkout-email-error" role="alert" className="text-[10px] text-red-400 mt-2 font-mono flex items-center gap-1">
+                    <AlertTriangle size={10} aria-hidden="true" />
                     {emailError}
                   </p>
                 )}
+                {!emailError && <p id="checkout-email-help" className="sr-only">Your receipt, license, and download link will be sent here.</p>}
               </div>
               <button
                 type="submit"
@@ -482,7 +505,7 @@ function CheckoutContent() {
           <div id="checkout-element" className="min-h-[150px] transition-all duration-300" />
 
           {clientSecret && !initError && (
-            <div className="mt-6 pt-5 border-t border-white/[0.03] flex items-center justify-center gap-2 text-[10px] font-mono text-[#6E685B]">
+            <div className="mt-6 pt-5 border-t border-white/[0.03] flex items-center justify-center gap-2 text-[10px] font-mono text-[#9B9282]">
               <Lock size={10} />
               <span>SSL Gated Session · Powered by Stripe Elements</span>
             </div>
@@ -517,7 +540,7 @@ function CheckoutContent() {
                     {i.track.cover_url ? (
                       <img loading="lazy" src={i.track.cover_url} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
+                      <div className="w-full h-full flex items-center justify-center text-[#9B9282]">
                         <Music size={16} />
                       </div>
                     )}
@@ -562,19 +585,21 @@ function CheckoutContent() {
                       {promoCode.trim().toUpperCase()} — {discountDisplay}
                     </span>
                   </div>
-                  <button onClick={clearPromo} className="text-[#9B9282] hover:text-white transition-colors">
-                    <X size={12} />
+                  <button type="button" onClick={clearPromo} aria-label="Remove promo code" className="grid size-11 place-items-center text-[#9B9282] hover:text-white transition-colors">
+                    <X size={12} aria-hidden="true" />
                   </button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
+                  <label htmlFor="checkout-promo" className="sr-only">Promo code</label>
                   <input
+                    id="checkout-promo"
                     type="text"
                     value={promoCode}
                     onChange={(e) => setPromoCode(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); checkPromo(); } }}
                     placeholder="Promo code"
-                    className="flex-1 bg-[#090907] border border-[#2B2821] rounded-lg py-2 px-3 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] uppercase"
+                    className="flex-1 bg-[#090907] border border-[#2B2821] rounded-lg py-2 px-3 text-[11px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] uppercase"
                   />
                   <button
                     onClick={checkPromo}
@@ -586,7 +611,7 @@ function CheckoutContent() {
                 </div>
               )}
               {promoError && (
-                <p className="text-[10px] text-red-400 mt-1.5">{promoError}</p>
+                <p role="alert" className="text-[10px] text-red-400 mt-1.5">{promoError}</p>
               )}
             </div>
           )}
@@ -596,12 +621,12 @@ function CheckoutContent() {
             <div className="px-5 py-4 bg-[#090907]/40 border-t border-white/[0.04] space-y-1">
               <div className="flex justify-between items-center text-[10px] font-mono text-[#9B9282] uppercase tracking-wider">
                 <span>Subtotal</span>
-                <span>${cartTotal()}</span>
+                <span>{usd(subtotal)}</span>
               </div>
               {promoTerms && discountDisplay && (
                 <div className="flex justify-between items-center text-[10px] font-mono text-[#6DC6A4] uppercase tracking-wider">
                   <span>Discount ({discountDisplay})</span>
-                  <span>-{discountDisplay}</span>
+                  <span>-{usd(promoDiscount)}</span>
                 </div>
               )}
               <div className="flex justify-between items-center text-[10px] font-mono text-[#9B9282] uppercase tracking-wider">
@@ -611,7 +636,7 @@ function CheckoutContent() {
               <div className="flex justify-between items-center pt-2 mt-1 border-t border-white/[0.02]">
                 <span className="text-[10px] font-mono text-[#D0C3AF] uppercase tracking-wider">Total amount</span>
                 <span className="text-[18px] font-bold text-white tabular-nums">
-                  ${cartTotal()}
+                  {usd(estimatedTotal)}
                 </span>
               </div>
             </div>
@@ -634,7 +659,7 @@ function CheckoutContent() {
               </span>
             ))}
           </div>
-          <p className="text-[9px] font-mono text-[#6E685B] mt-2">
+          <p className="text-[9px] font-mono text-[#9B9282] mt-2">
             Got a promo code? Apply it in the secure payment form above.
           </p>
         </div>
@@ -699,13 +724,13 @@ function CheckoutContent() {
           on small screens where the order-summary column is collapsed. The
           extra pb-32 on the grid above reserves the space so the bar
           doesn't cover the last form fields. */}
-      <div className="lg:hidden fixed left-0 right-0 bottom-0 z-30 bg-[#090907]/95 backdrop-blur border-t border-[#2B2821] px-4 py-3 flex items-center justify-between gap-3">
+      <div className="lg:hidden fixed left-0 right-0 bottom-0 z-30 bg-[#090907]/95 backdrop-blur border-t border-[#2B2821] px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center justify-between gap-3" role="status" aria-live="polite">
         <div className="min-w-0">
           <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
             {isProjectPurchase ? 'Project bundle' : `${items.length} item${items.length === 1 ? '' : 's'}`}
           </p>
           <p className="text-[18px] font-bold text-white tabular-nums leading-tight">
-            {orderTotalForMobile != null ? `$${orderTotalForMobile}` : 'See Stripe'}
+            {orderTotalForMobile != null ? usd(orderTotalForMobile) : 'See Stripe'}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

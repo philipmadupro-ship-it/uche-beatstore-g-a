@@ -25,13 +25,13 @@ export default function StorePrivacyPage() {
       <div className="max-w-[760px] mx-auto px-5 md:px-8 py-12">
         <Link
           href="/store"
-          className="inline-flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.2em] text-[#837B6D] hover:text-[#D0C3AF] transition-colors"
+          className="inline-flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.2em] text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
         >
           <ArrowLeft size={13} /> Back to store
         </Link>
 
         <h1 className="font-heading text-[34px] md:text-[40px] mt-6 leading-tight">Privacy Policy</h1>
-        <p className="mt-2 text-[12px] font-mono uppercase tracking-[0.2em] text-[#6E685B]">Last updated · {UPDATED}</p>
+        <p className="mt-2 text-[12px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">Last updated · {UPDATED}</p>
 
         <p className="mt-6 text-[14px] leading-relaxed text-[#B4AA99]">
           This is a single-producer beat store. You can browse and preview without an account; we only
@@ -92,7 +92,7 @@ export default function StorePrivacyPage() {
         <div className="mt-12 border-t border-[#2B2821] pt-6">
           <Link
             href="/store"
-            className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#837B6D] hover:text-[#D0C3AF] transition-colors"
+            className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
           >
             ← Back to store
           </Link>

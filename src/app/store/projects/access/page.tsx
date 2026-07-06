@@ -71,7 +71,7 @@ function Inner() {
         <div className="mx-auto mb-4 grid size-14 place-items-center rounded-[20px] border border-red-400/20 bg-red-400/8">
           <AlertCircle size={28} className="text-red-400" />
         </div>
-        <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6E685B]">Project delivery</p>
+        <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#9B9282]">Project delivery</p>
         <p className="mb-1 text-[22px] font-bold leading-tight text-[#F7EBDD]">
           Missing session
         </p>
@@ -88,7 +88,7 @@ function Inner() {
         <div className="mx-auto mb-4 grid size-14 place-items-center rounded-[20px] border border-amber-400/20 bg-amber-400/8">
           <AlertCircle size={28} className="text-amber-400" />
         </div>
-        <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6E685B]">Project delivery</p>
+        <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#9B9282]">Project delivery</p>
         <p className="mb-2 text-[22px] font-bold leading-tight text-[#F7EBDD]">
           Still preparing your bundle
         </p>
@@ -105,7 +105,7 @@ function Inner() {
           </button>
           <Link
             href="/store/account"
-            className="flex min-h-11 items-center gap-1.5 rounded-full border border-[#3B372F] px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-[#D0C3AF] transition-colors hover:border-[#6E685B] hover:text-[#F7EBDD]"
+            className="flex min-h-11 items-center gap-1.5 rounded-full border border-[#3B372F] px-4 py-2 text-[10px] font-mono uppercase tracking-wider text-[#D0C3AF] transition-colors hover:border-[#9B9282] hover:text-[#F7EBDD]"
           >
             <Mail size={11} />
             My account
@@ -122,14 +122,14 @@ function Inner() {
         <Loader2 size={64} className="absolute inset-0 animate-spin text-[#E7D7BE]" />
         <Layers size={20} className="absolute inset-0 m-auto text-[#E7D7BE]" />
       </div>
-      <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6E685B]">Project delivery</p>
+      <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#9B9282]">Project delivery</p>
       <p className="mb-2 text-[24px] font-bold leading-tight text-[#F7EBDD]">
         Preparing your bundle
       </p>
       <p className="mx-auto max-w-sm text-[12px] leading-relaxed text-[#D0C3AF]">
         Finalising your purchase. This usually takes a couple of seconds.
       </p>
-      <div className="mx-auto mt-5 flex w-fit items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[10px] font-mono text-[#6E685B]">
+      <div className="mx-auto mt-5 flex w-fit items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[10px] font-mono text-[#9B9282]">
         <ShieldCheck size={11} />
         <span className="tabular-nums">{Math.floor(elapsed / 1000)}s elapsed</span>
       </div>
