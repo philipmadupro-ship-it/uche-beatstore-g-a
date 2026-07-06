@@ -30,7 +30,7 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { cdnAudioSrc } from '@/lib/audio/cdn';
 import { normalizationGain } from '@/lib/audio/loudness';
 import { getOfflineSrc } from '@/lib/offline/audio-cache';
-import { getPreviewSrc } from '@/lib/audio/preview-cache';
+import { getPreviewSrc, peekPreviewSrc } from '@/lib/audio/preview-cache';
 
 export function SimpleAudioEngine() {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -44,42 +44,47 @@ export function SimpleAudioEngine() {
   const url = currentTrack?.audio_url ?? null;
   const normGain = normalizationGain(currentTrack?.loudness);
 
-  // ── Load source when the track changes (prefer offline blob) ──────────
+  // ── Load source when the track changes ────────────────────────────────
+  // Latency-critical: nothing async may sit between the tap and play().
+  // Awaiting IndexedDB before setting src added tens/hundreds of ms per tap
+  // (and risked iOS revoking the user-gesture autoplay grant). Fast path is
+  // fully synchronous: in-memory prefetched blob if warmed, else the direct
+  // CDN/R2 URL. The persistent caches are consulted in the background and
+  // only swapped in if buffering hasn't produced audio yet.
   useEffect(() => {
     const a = audioRef.current;
     if (!a || !url) return;
     let cancelled = false;
 
-    (async () => {
-      // Stream straight from R2 / CDN — a plain <audio> element needs no CORS,
-      // so we skip the /api/audio proxy and keep the origin out of the stream.
-      let src = cdnAudioSrc(url);
-      if (trackId) {
+    const instant = peekPreviewSrc(trackId) ?? cdnAudioSrc(url);
+    // Only reset src when it actually changes — avoids re-buffering on
+    // unrelated re-renders.
+    if (a.src !== instant) {
+      a.src = instant;
+      a.load();
+    }
+    if (isPlaying) {
+      a.play().catch(() => { /* autoplay block — user will press play */ });
+    }
+
+    // Background: prefer an explicit offline download, then a persisted (but
+    // not yet memory-warmed) preview blob. Swap only while nothing has played
+    // yet, so we never restart audible playback.
+    if (trackId && !instant.startsWith('blob:')) {
+      (async () => {
         try {
-          // Prefer an explicit offline download; then the auto-prefetched
-          // preview cache (instant, no network); else stream from the network.
           const offline = await getOfflineSrc(trackId);
-          if (offline && !cancelled) {
-            src = offline;
-          } else {
-            const preview = await getPreviewSrc(trackId);
-            if (preview && !cancelled) src = preview;
-          }
+          const blob = offline ?? (await getPreviewSrc(trackId));
+          if (cancelled || !blob || a.src === blob) return;
+          if (a.currentTime > 0 && !a.paused) return; // already audible — leave it
+          a.src = blob;
+          a.load();
+          if (isPlaying) a.play().catch(() => {});
         } catch {
-          // best-effort; fall back to network
+          // best-effort; the network stream is already loading
         }
-      }
-      if (cancelled) return;
-      // Only reset src when it actually changes — avoids re-buffering on
-      // unrelated re-renders.
-      if (a.src !== src) {
-        a.src = src;
-        a.load();
-      }
-      if (isPlaying) {
-        a.play().catch(() => { /* autoplay block — user will press play */ });
-      }
-    })();
+      })();
+    }
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

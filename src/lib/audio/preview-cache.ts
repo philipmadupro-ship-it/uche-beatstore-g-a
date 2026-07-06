@@ -157,6 +157,19 @@ export async function getPreviewSrc(id: string | null | undefined): Promise<stri
   return url;
 }
 
+/**
+ * Synchronous in-memory lookup — the tap-to-play fast path. Returns a blob:
+ * URL only when the preview has already been warmed into memory (by prefetch
+ * or a previous play), letting the player set `audio.src` with zero async work
+ * between the tap and playback.
+ */
+export function peekPreviewSrc(id: string | null | undefined): string | null {
+  if (!id) return null;
+  const url = blobUrlMap.get(id) ?? null;
+  if (url) touch(id);
+  return url;
+}
+
 function revokePreviewSrc(id: string): void {
   const url = blobUrlMap.get(id);
   if (url) {
@@ -171,7 +184,12 @@ export async function prefetchPreview(id: string, url: string): Promise<void> {
   // Only cache direct http(s) previews — never the proxy fallback (which may
   // stream a full master for un-previewed tracks).
   if (!/^https?:\/\//i.test(url)) return;
-  if (await getMeta(id)) return; // already cached
+  if (await getMeta(id)) {
+    // Cached in a previous session — hydrate the in-memory blob URL so the
+    // synchronous peekPreviewSrc fast path hits on the first tap.
+    await getPreviewSrc(id);
+    return;
+  }
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
@@ -187,6 +205,9 @@ export async function prefetchPreview(id: string, url: string): Promise<void> {
       t.objectStore(STORE_BLOBS).put(blob, id);
       t.objectStore(STORE_META).put(meta);
     });
+    // Warm the in-memory blob URL right away so the first tap after prefetch
+    // is fully synchronous (no IndexedDB read between tap and playback).
+    if (!blobUrlMap.has(id)) blobUrlMap.set(id, URL.createObjectURL(blob));
     await enforceCap();
   } catch {
     // best-effort — playback still works by streaming directly.

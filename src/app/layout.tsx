@@ -44,6 +44,23 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
+// Warm the connection to the audio host at page load so the FIRST preview
+// fetch skips DNS + TCP + TLS (~100-300ms on mobile radio). crossOrigin
+// because the prefetch cache fetches with CORS; the plain <audio> stream
+// reuses the same socket either way.
+function AudioHostPreconnect() {
+  const hosts = [process.env.NEXT_PUBLIC_R2_CDN_URL, process.env.NEXT_PUBLIC_R2_PUBLIC_URL]
+    .map((u) => { try { return u ? new URL(u).origin : null; } catch { return null; } })
+    .filter((o): o is string => !!o);
+  return (
+    <>
+      {[...new Set(hosts)].map((origin) => (
+        <link key={origin} rel="preconnect" href={origin} crossOrigin="anonymous" />
+      ))}
+    </>
+  );
+}
+
 export default function RootLayout({
   children,
 }: {
@@ -58,6 +75,9 @@ export default function RootLayout({
     // suppression is scoped to the *top-level* attributes; mismatches in
     // children still throw normally.
     <html lang="en" className="dark" suppressHydrationWarning>
+      <head>
+        <AudioHostPreconnect />
+      </head>
       <body
         suppressHydrationWarning
         className="font-sans bg-[#090907] text-[#F7EBDD] min-h-screen selection:bg-[#E7D7BE] selection:text-white"
