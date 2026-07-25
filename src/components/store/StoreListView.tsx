@@ -171,7 +171,7 @@ export function StoreListView({
                   <button
                     data-row-action
                     onClick={(e) => { e.stopPropagation(); onFreeDownload(t); }}
-                    className="flex min-h-10 items-center gap-1.5 rounded-lg px-2.5 text-[11px] font-medium text-[#6DC6A4] transition-colors hover:bg-white/[0.04]"
+                    className="flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-[11px] font-medium text-[#6DC6A4] transition-colors hover:bg-white/[0.04]"
                   >
                     <Download size={11} />
                     Free
@@ -181,14 +181,17 @@ export function StoreListView({
                     data-row-action
                     onClick={(e) => { e.stopPropagation(); onPreview(t); }}
                     aria-label={`Choose a license for ${t.title}${lowestLicensePrice != null ? `, from $${lowestLicensePrice}` : ''}`}
-                    className="flex min-h-10 items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 text-[11px] font-medium text-[#F7EBDD] transition-colors hover:bg-white/[0.04]"
+                    className="flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.08] px-2.5 text-[11px] font-medium text-[#F7EBDD] transition-colors hover:bg-white/[0.04]"
                   >
                     <ShoppingBag size={11} className="sm:hidden" aria-hidden="true" />
+                    {/* Label is hidden below sm and on the widest label ("Choose
+                        license") the trailing "from" is dropped — Akira Expanded
+                        is wide enough that the full phrase wraps inside the
+                        fixed buy column. The aria-label carries the full
+                        "from $X" phrasing for assistive tech. */}
                     <span className="hidden sm:inline">Choose license</span>
                     {lowestLicensePrice != null && (
-                      <span className="tabular-nums text-white/45">
-                        <span className="hidden sm:inline">from </span>${lowestLicensePrice}<span className="sm:hidden">+</span>
-                      </span>
+                      <span className="tabular-nums text-white/45">${lowestLicensePrice}+</span>
                     )}
                   </button>
                 ) : (
@@ -197,7 +200,7 @@ export function StoreListView({
                       data-row-action
                       onClick={(e) => { e.stopPropagation(); onAddLease(t); }}
                       disabled={lp == null}
-                      className="flex min-h-10 items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 text-[11px] transition-colors hover:bg-white/[0.04] disabled:opacity-30"
+                      className="flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.08] px-2.5 text-[11px] transition-colors hover:bg-white/[0.04] disabled:opacity-30"
                     >
                       <span className="text-white/45">Lease</span>
                       <span className="font-semibold tabular-nums text-[#F7EBDD]">{lp != null ? `$${lp}` : '—'}</span>
@@ -206,7 +209,7 @@ export function StoreListView({
                       data-row-action
                       onClick={(e) => { e.stopPropagation(); onAddExclusive(t); }}
                       disabled={ep == null}
-                      className="flex min-h-10 items-center gap-1.5 rounded-lg border border-white/[0.08] px-2.5 text-[11px] transition-colors hover:bg-white/[0.04] disabled:opacity-30"
+                      className="flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.08] px-2.5 text-[11px] transition-colors hover:bg-white/[0.04] disabled:opacity-30"
                     >
                       <span className="text-white/45">Exclusive</span>
                       <span className="font-semibold tabular-nums" style={{ color: accentColor }}>{ep != null ? `$${ep}` : '—'}</span>

@@ -5033,3 +5033,48 @@
 - The page still carries 18 distinct hardcoded hex colours. Consolidating those needs per-usage judgement about which are semantic and which are drift, so it was deliberately left out of this structural pass rather than blanket-mapped.
 - Browser verification remains outstanding for every quiet-luxury pass so far. The type-scale collapse in particular changes rendered sizes across a long page and should be viewed at 375px and desktop before this surface is signed off.
 - Next pass: 2c checkout (`src/app/store/checkout/page.tsx`, 803 lines, 11 text sizes, 15 hex colours).
+
+## 2026-07-25 - Browser Verification Of Quiet Luxury Passes 1-2b
+
+### Skills Used
+
+- `.codex/skills/qa-and-regression-testing`: first real browser verification of the visual lane; previous passes were structural class counts only.
+- `.codex/skills/quiet-luxury-ui`: applied the "verify the surface, do not trust the diff" step.
+- `.codex/skills/beatstor-design-system`: font decision recorded against the token set.
+
+### Area Inspected
+
+- Running dev server at `/store` (grid and list modes), rendered at 800px viewport.
+- `src/app/globals.css`
+- `src/components/store/StoreListView.tsx`
+
+### Changes Made
+
+- `StoreListView`: added `whitespace-nowrap` to all four buy actions and shortened the visible license label from "Choose license from $X" to "Choose license $X+". The `aria-label` still carries the full "from $X" phrasing for assistive tech.
+- `globals.css`: added a comment to `.store-ui` recording that the storefront body font must stay Akira Expanded and that swapping it to `--font-store` was tried and reverted on the owner's instruction.
+
+### Problems Discovered
+
+- The buy actions wrapped onto two lines in list mode ("CHOOSE LICENSE" above "FROM $100"). Raising those actions from 9px mono to the 11px body size in pass 1 pushed the phrase past the fixed 220px buy column, because Akira Expanded is a very wide face. This was invisible to the class-count method and only appeared in a real viewport - it is the concrete argument for browser-verifying every surface before signing it off.
+- The storefront body font is Akira Expanded, a caps-only expanded display face, so all running text renders uppercase regardless of source string: a beat stored as "yeat synth" renders "YEAT SYNTH" and sentence-case button labels render as shouts. A migration of the storefront to the already-defined `--font-store` (Inter plus the platform UI stack, already loaded locally and already applied to the small label classes) was implemented and verified working in the browser, then reverted: the owner confirmed Akira and Synkopy are the brand identity and are to be kept.
+- Two further issues were observed but not yet addressed: the Daily Pick panel renders on a purple gradient that does not belong to the warm amber palette, and the project Buy Bundle control is a full-width filled slab that dominates its section.
+
+### Problems Fixed
+
+- Buy actions render on a single line in list mode at desktop width.
+- The font decision is now documented in the stylesheet so it is not retried by a future pass.
+
+### Tests Performed
+
+- Browser: `/store` loaded against the local dev server; grid cards, list rows, header row, and buy actions inspected; computed styles read from the live DOM to confirm the font revert took effect (`.store-ui` resolves to Akira Expanded).
+- `npx tsc --noEmit` - passed.
+- `npx eslint src/components/store/StoreListView.tsx` - 0 errors, 0 warnings.
+- `npm test` - passed, 100 files and 538 tests.
+- `npm run build` - passed, 55 static pages generated.
+
+### Remaining Concerns
+
+- Mobile width (375px) has not been checked for any quiet-luxury pass; the wrapping class of bug found here is exactly what a narrow viewport surfaces, so this should happen before more surfaces are restyled.
+- Because Akira Expanded stays, every future pass must budget for its width: phrases that fit in a mono face at 9px will not fit at 11px in the same column. Prefer shorter labels over smaller type.
+- Off-palette purple on the Daily Pick panel and the heavy Buy Bundle slab remain open.
+- Passes 1, 2a, and 2b are now browser-verified at desktop width only. Next: 2c checkout, then a mobile sweep.

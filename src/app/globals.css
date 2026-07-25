@@ -330,6 +330,12 @@ body {
   font-family: 'Panchang';
 }
 
+/* Storefront typography.
+ *
+ * Akira Expanded (body) and Synkopy (.font-heading) are the brand identity and
+ * stay. Do NOT swap the storefront's running text to --font-store: it was
+ * tried and reverted on the owner's instruction. --font-store remains scoped to
+ * the small label classes below only. */
 .store-ui {
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
 }
