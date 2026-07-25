@@ -5314,3 +5314,44 @@
 - The file's 10/11/12/13px scale was deliberately left uncollapsed this pass for the reason above; a future pass should read the whole file (not just the hero/quick-actions/modal regions touched here) before attempting that reduction.
 - List view, grid view, and portfolio view (the three main content-density modes below the hero) were not part of this pass's scope; per `docs/design-direction.md` surface order, the remaining dashboard work is projects/playlists/store-editor, then a final modals/empty-states sweep.
 - The file's 39 hardcoded hex colours were not consolidated, matching the same deliberate deferral noted on every prior surface.
+
+## 2026-07-26 - Quiet Luxury Pass 4b: Dashboard Home Reads As A Homepage
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: targeted the specific gap the product owner named directly - "more quiet, more like Spotify, more like a homepage" - rather than re-running the same shadow/colour checklist from pass 4.
+- `.codex/skills/beatstor-design-system`: confirmed the fix uses the existing body font (Akira Expanded, the app-wide default) rather than introducing a new typographic voice.
+- `.codex/skills/antigravity-testing-release`: typecheck, focused lint, full suite, production build; live computed-style verification.
+
+### Area Inspected
+
+- `src/app/(dashboard)/library/page.tsx`, specifically the "Library" section header and the `HomeRow` shelf-title component (both untouched by pass 4, which focused on the hero and quick-actions grid).
+
+### Changes Made
+
+- `HomeRow` shelf titles ("Recently played", "Your playlists", "Top rated", etc.) were styled identically to a BPM badge: 11px, `font-mono`, uppercase, `tracking-[0.2em]`, muted `#D0C3AF`. Changed to 18px bold at the page's full-brightness text colour (`#F7EBDD`), using the app's own default body font rather than mono - the same font every other piece of real content on the page already uses.
+- The page-level "Library" header got the identical fix, sized one step down (16px) so it still reads as one level above the shelf titles it introduces.
+- Left the row subtitle and the "See all" links on the existing small mono scale - that is metadata/utility text, and correctly stays quiet by the same logic that made the titles too quiet.
+
+### Problems Discovered
+
+- The product owner's specific complaint - "more like a homepage" - had a precise, identifiable cause: every piece of real content (shelf names, the page's own section label) was styled as if it were metadata. Metadata-style typography (tiny, uppercase, mono, wide tracking, muted colour) is exactly right for a BPM badge or a timestamp; used on the actual content headings of a homepage, it flattens everything to the same whisper and the page reads as a settings panel instead of a place with content in it.
+- This is the opposite failure mode from the earlier passes, which were about removing excess weight (shadows, gradients, off-palette colour). Here the page was already visually quiet in the sense of "nothing was loud" - but quiet in the wrong place. `docs/design-direction.md` principle 2 ("Typography carries the luxury") already covers this distinction ("Mono-uppercase micro-labels ONLY for true metadata... never for headings") but pass 4 did not apply it to the shelf titles because that pass's scope was the hero and colour system, not the content-row headers below it.
+- Card sizing on the shelves (130-150px covers) was checked against Spotify's own shelf-card scale and found to already match it - no change needed there.
+
+### Problems Fixed
+
+- Confirmed live via computed styles: "Library" now renders at 16px and "Your playlists" at 18px, both in the page's brightest text colour, replacing the previous 11px muted mono treatment on both.
+
+### Tests Performed
+
+- Browser: reloaded `/library` in the authenticated session used for pass 4; live `getComputedStyle` check on the rendered `h2`/`h3` elements confirming the new sizes and colour took effect (not just present in source).
+- `npx tsc --noEmit` - passed.
+- `npx eslint "src/app/(dashboard)/library/page.tsx"` - 0 errors, same 2 pre-existing warnings as pass 4.
+- `npm test` - passed, 100 files and 538 tests.
+- `npm run build` - passed, 55 static pages generated.
+
+### Remaining Concerns
+
+- The home filter-chip row (genre/status/type toggles, three dividers) sits directly below the "Library" header and is real functional chrome competing for the same visual band as the newly-emphasised heading. It was left alone this pass because reducing its visibility (e.g. collapsing it behind a toggle) would be an interaction change, not a restyle, and this workstream's standing rule is zero behaviour change. Flagging it as the next candidate if the product owner wants the homepage feel pushed further - but that decision needs the owner, not a unilateral behaviour change.
+- Per the explicit request to continue, next is projects and playlists.

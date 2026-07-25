@@ -988,7 +988,7 @@ export default function LibraryPage() {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Music size={13} className="text-[#9B9282]" />
-            <h2 className="text-[11px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF]">Library</h2>
+            <h2 className="text-[16px] font-bold text-[#F7EBDD]">Library</h2>
             <span className="text-[9px] font-mono text-[#6E685B] tabular-nums">· {tracks.length}</span>
           </div>
           {/* Browse mode toggle */}
@@ -1746,7 +1746,7 @@ function HomeRow({
     <div className="group/row">
       <div className="flex items-center justify-between mb-2.5">
         <div>
-          <h3 className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">{cfg.title}</h3>
+          <h3 className="text-[18px] font-bold text-[#F7EBDD]">{cfg.title}</h3>
           {cfg.subtitle && <p className="text-[9px] font-mono text-[#6E685B] mt-0.5">{cfg.subtitle}</p>}
         </div>
         <div className="flex items-center gap-1.5">
