@@ -7,6 +7,11 @@ const log = createLogger('api.stems');
 import { readBody } from '@/lib/validate';
 import { StemStartBodySchema } from '@/lib/contracts';
 
+interface StemRow {
+  track_id: string;
+  created_at?: string | null;
+}
+
 /**
  * GET /api/stems?track_id=xxx
  * Returns the latest stem record for a track (vocals/drums/bass/other URLs).
@@ -32,8 +37,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ stem: data || null });
     }
 
-    const rows = query('stems', (s: any) => s.track_id === trackId);
-    const latest = rows.sort((a: any, b: any) =>
+    const rows = query<StemRow>('stems', (s) => s.track_id === trackId);
+    const latest = rows.sort((a, b) =>
       String(b.created_at || '').localeCompare(String(a.created_at || ''))
     )[0];
     return NextResponse.json({ stem: latest || null });

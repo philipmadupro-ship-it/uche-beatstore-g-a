@@ -1,0 +1,7 @@
+interface:
+  display_name: "Cover Art Generator"
+  short_description: "Modular producer artwork system"
+  brand_color: "#C8BBA7"
+  default_prompt: "Use $cover-art-generator to build this Beatstor cover-art workflow."
+policy:
+  allow_implicit_invocation: true

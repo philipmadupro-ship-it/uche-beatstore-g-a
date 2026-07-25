@@ -5,7 +5,7 @@ import {
   Eye, MessageSquare, Edit3, Mail, Trash2, Send, ShoppingBag,
 } from 'lucide-react';
 import { Dropdown } from '@/components/ui/Dropdown';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast, confirmToast } from '@/hooks/useToast';
 
@@ -48,6 +48,15 @@ const CONTENT_LABELS: Record<Props['contentType'], string> = {
   track: 'Share track',
 };
 
+function errorDetail(error: unknown) {
+  return error instanceof Error ? error.message : undefined;
+}
+
+async function responseError(res: Response) {
+  const body = await res.json().catch(() => ({})) as { error?: string };
+  return body.error || `HTTP ${res.status}`;
+}
+
 export function ContentShareModal({ contentType, contentId, contentTitle, coverUrl, onClose }: Props) {
   const [role, setRole] = useState<ContentShare['role']>('viewer');
   const [recipientKind, setRecipientKind] = useState<'client' | 'producer' | 'rapper' | 'friend'>('client');
@@ -66,7 +75,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
   const [shares, setShares] = useState<ContentShare[]>([]);
   const [loadingShares, setLoadingShares] = useState(true);
 
-  const fetchShares = async () => {
+  const fetchShares = useCallback(async () => {
     setLoadingShares(true);
     try {
       const res = await fetch(apiBase(contentType, contentId));
@@ -77,9 +86,9 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
     } finally {
       setLoadingShares(false);
     }
-  };
+  }, [contentId, contentType]);
 
-  useEffect(() => { fetchShares(); }, [contentId, contentType]);
+  useEffect(() => { fetchShares(); }, [fetchShares]);
 
   const generateLink = async () => {
     setGenerating(true);
@@ -104,8 +113,8 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
       setGeneratedUrl(data.url);
       setPassword('');
       fetchShares();
-    } catch (err: any) {
-      toast.error('Couldn’t create share link', err?.message);
+    } catch (err: unknown) {
+      toast.error('Couldn’t create share link', errorDetail(err));
     } finally {
       setGenerating(false);
     }
@@ -129,13 +138,12 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
     try {
       const res = await fetch(`/api/shares/${s.id}`, { method: 'DELETE' });
       if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error(e.error || `HTTP ${res.status}`);
+        throw new Error(await responseError(res));
       }
       toast.success('Share revoked');
       fetchShares();
-    } catch (err: any) {
-      toast.error('Revoke failed', err?.message);
+    } catch (err: unknown) {
+      toast.error('Revoke failed', errorDetail(err));
     }
   };
 
@@ -157,8 +165,8 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
         return;
       }
       toast.success('Invite sent', `Email queued for ${recipient}`);
-    } catch (err: any) {
-      toast.error('Invite failed', err?.message);
+    } catch (err: unknown) {
+      toast.error('Invite failed', errorDetail(err));
     }
   };
 
@@ -170,12 +178,11 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
         body: JSON.stringify({ allow_downloads: !s.allow_downloads }),
       });
       if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error(e.error || `HTTP ${res.status}`);
+        throw new Error(await responseError(res));
       }
       fetchShares();
-    } catch (err: any) {
-      toast.error('Update failed', err?.message);
+    } catch (err: unknown) {
+      toast.error('Update failed', errorDetail(err));
     }
   };
 

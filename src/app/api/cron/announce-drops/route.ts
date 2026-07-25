@@ -11,6 +11,26 @@ const log = createLogger('cron.announce-drops');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface PendingDropRow {
+  id: string;
+  title: string;
+  cover_url: string | null;
+  user_id: string | null;
+  created_at: string;
+}
+
+interface FollowerEmailRow {
+  email: string | null;
+}
+
+interface CreatorProfileRow {
+  display_name: string | null;
+}
+
+function isNonEmptyString(value: string | null | undefined): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
 /**
  * New-drop digest cron (mig 070).
  *
@@ -43,15 +63,16 @@ export async function GET(req: NextRequest) {
       .order('created_at', { ascending: false })
       .limit(200);
 
-    const rows = (pending ?? []).filter((t: any) => t.user_id);
+    const rows = ((pending ?? []) as PendingDropRow[]).filter((t) => t.user_id);
     if (rows.length === 0) return NextResponse.json({ ok: true, sellers: 0, beats: 0 });
 
     // Group by seller.
-    const bySeller = new Map<string, any[]>();
+    const bySeller = new Map<string, PendingDropRow[]>();
     for (const t of rows) {
-      const arr = bySeller.get((t as any).user_id) ?? [];
+      if (!t.user_id) continue;
+      const arr = bySeller.get(t.user_id) ?? [];
       arr.push(t);
-      bySeller.set((t as any).user_id, arr);
+      bySeller.set(t.user_id, arr);
     }
 
     const resendKey = process.env.RESEND_API_KEY;
@@ -71,7 +92,7 @@ export async function GET(req: NextRequest) {
         .from('producer_follows')
         .select('email')
         .eq('producer_user_id', sellerId);
-      const emails = [...new Set((followers ?? []).map((f: any) => f.email).filter(Boolean))];
+      const emails = [...new Set(((followers ?? []) as FollowerEmailRow[]).map((f) => f.email).filter(isNonEmptyString))];
       if (emails.length === 0) continue;
 
       const { data: prof } = await admin
@@ -79,7 +100,7 @@ export async function GET(req: NextRequest) {
         .select('display_name')
         .eq('user_id', sellerId)
         .maybeSingle();
-      const producerName = (prof as any)?.display_name || 'A producer you follow';
+      const producerName = (prof as CreatorProfileRow | null)?.display_name || 'A producer you follow';
       const appUrl = getAppUrl();
 
       const beatRows = beats.slice(0, 12).map((b) =>

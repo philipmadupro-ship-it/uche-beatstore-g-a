@@ -9,6 +9,10 @@ const log = createLogger('api.tracks.stem-files');
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
+interface LastStemFileRow {
+  position: number | null;
+}
+
 /**
  * Flexible, repeatable stem files (migration 080 — track_stem_files).
  *
@@ -101,7 +105,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .order('position', { ascending: false })
       .limit(1)
       .maybeSingle();
-    const position = ((last as any)?.position ?? -1) + 1;
+    const position = ((last as LastStemFileRow | null)?.position ?? -1) + 1;
 
     const { data, error } = await admin
       .from('track_stem_files')

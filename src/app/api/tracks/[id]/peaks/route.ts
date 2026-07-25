@@ -10,6 +10,11 @@ const log = createLogger('api.tracks.peaks');
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
+interface TrackPeaksRow {
+  audio_url: string | null;
+  peaks_url?: string | null;
+}
+
 /**
  * Backfill the precomputed peaks sidecar for a single track.
  *
@@ -27,17 +32,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const force = req.nextUrl.searchParams.get('force') === '1';
 
   try {
-    let track: any;
-    let admin: any = null;
+    let track: TrackPeaksRow | null = null;
+    let updateSupabasePeaks: ((peaksUrl: string) => Promise<NextResponse>) | null = null;
     if (isSupabaseConfigured()) {
       const owner = await requireRowOwnership('tracks', id);
       if (!owner.ok) return owner.res;
-      admin = owner.admin;
-      const { data, error } = await admin.from('tracks').select('*').eq('id', id).single();
+      const admin = owner.admin;
+      const { data, error } = await admin.from('tracks').select('audio_url, peaks_url').eq('id', id).single();
       if (error) throw error;
-      track = data;
+      track = data as TrackPeaksRow;
+      updateSupabasePeaks = async (peaksUrl) => {
+        const { data: updatedTrack, error: updateError } = await admin
+          .from('tracks')
+          .update({ peaks_url: peaksUrl })
+          .eq('id', id)
+          .select()
+          .single();
+        if (updateError) throw updateError;
+        return NextResponse.json({ track: updatedTrack, peaks_url: peaksUrl });
+      };
     } else {
-      track = getById('tracks', id);
+      track = getById<TrackPeaksRow>('tracks', id);
     }
 
     if (!track) return NextResponse.json({ error: 'Track not found' }, { status: 404 });
@@ -50,9 +65,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     let buf: Buffer;
     try {
       buf = await readStoredObject(rawUrl);
-    } catch (err: any) {
+    } catch (err: unknown) {
       return NextResponse.json(
-        { error: `Could not read audio: ${err?.message || 'storage error'}` },
+        { error: `Could not read audio: ${errorMessage(err) || 'storage error'}` },
         { status: 502 },
       );
     }
@@ -66,15 +81,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Peaks sidecar upload failed' }, { status: 500 });
     }
 
-    if (isSupabaseConfigured()) {
-      const { data, error } = await admin!
-        .from('tracks')
-        .update({ peaks_url: peaksUrl })
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return NextResponse.json({ track: data, peaks_url: peaksUrl });
+    if (updateSupabasePeaks) {
+      return updateSupabasePeaks(peaksUrl);
     }
 
     const updated = update('tracks', id, { peaks_url: peaksUrl });

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Antigravity Workspace"
+  short_description: "Route work across the beatstore workspace"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $antigravity-workspace to orient a broad Antigravity request before changing code."
+policy:
+  allow_implicit_invocation: true

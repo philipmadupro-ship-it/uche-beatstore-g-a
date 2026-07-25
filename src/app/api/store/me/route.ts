@@ -4,6 +4,14 @@ import { requireUser, createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { publicError } from '@/lib/api-error';
+import {
+  buildBuyerLibraryShape,
+  collectBuyerLibraryTrackIds,
+  type BuyerLibraryFavoriteRow,
+  type BuyerLibraryHistoryRow,
+  type BuyerLibraryTrackJoinRow,
+  type BuyerLibraryTrackSummary,
+} from '@/lib/store/buyer-library';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -89,29 +97,38 @@ export async function GET(req: NextRequest) {
         .order('updated_at', { ascending: false }),
     ]);
 
+    const history = (historyRes.data ?? []) as Array<Omit<BuyerLibraryHistoryRow, 'track'>>;
+    const favorites = (favRes.data ?? []) as Array<Omit<BuyerLibraryFavoriteRow, 'track'>>;
     const playlists = (plRes.data ?? []) as Array<{ id: string; name: string; created_at: string; updated_at: string }>;
     const playlistIds = playlists.map((p) => p.id);
-    let trackMap: Record<string, string[]> = {};
+    let playlistTracks: BuyerLibraryTrackJoinRow[] = [];
     if (playlistIds.length > 0) {
       const { data: junction } = await admin
         .from('buyer_playlist_tracks')
         .select('playlist_id, track_id, position')
         .in('playlist_id', playlistIds)
         .order('position', { ascending: true });
-      for (const r of (junction ?? []) as any[]) {
-        (trackMap[r.playlist_id] ??= []).push(r.track_id);
-      }
+      playlistTracks = (junction ?? []) as BuyerLibraryTrackJoinRow[];
     }
 
-    return NextResponse.json({
+    const trackIds = collectBuyerLibraryTrackIds({ history, favorites, playlistTracks });
+    let tracks: BuyerLibraryTrackSummary[] = [];
+    if (trackIds.length > 0) {
+      const { data: trackRows } = await admin
+        .from('tracks')
+        .select('id,title,cover_url,type,bpm,key,scale,duration_seconds')
+        .in('id', trackIds);
+      tracks = (trackRows ?? []) as BuyerLibraryTrackSummary[];
+    }
+
+    return NextResponse.json(buildBuyerLibraryShape({
       email,
-      history: historyRes.data ?? [],
-      favorites: favRes.data ?? [],
-      playlists: playlists.map((p) => ({
-        ...p,
-        track_ids: trackMap[p.id] ?? [],
-      })),
-    });
+      history,
+      favorites,
+      playlists,
+      playlistTracks,
+      tracks,
+    }));
   } catch (err) {
     return publicError(err);
   }

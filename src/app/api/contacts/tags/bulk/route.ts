@@ -4,6 +4,17 @@ import { readBody } from '@/lib/validate';
 import { errorMessage } from '@/lib/errors';
 import { ContactsBulkTagsBodySchema } from '@/lib/contracts';
 
+interface ContactIdRow {
+  id: string;
+}
+
+interface ContactTagRow {
+  id?: string;
+  contact_id: string;
+  tag: string;
+  category?: string | null;
+}
+
 /**
  * POST /api/contacts/tags/bulk — add and/or remove tags across many contacts in
  * one request. Body { ids, add?, remove? }. Merges (never overwrites): adds are
@@ -30,7 +41,7 @@ export async function POST(req: NextRequest) {
         .select('id')
         .in('id', ids)
         .or(`user_id.eq.${auth.userId},user_id.is.null`);
-      const ownedIds = (owned ?? []).map((c: any) => c.id);
+      const ownedIds = ((owned ?? []) as ContactIdRow[]).map((c) => c.id);
       if (ownedIds.length === 0) return NextResponse.json({ updated: 0 });
 
       if (remove.length) {
@@ -47,14 +58,17 @@ export async function POST(req: NextRequest) {
     const idset = new Set(ids);
     if (remove.length) {
       const removeSet = new Set(remove);
-      (getAll('contact_tags') as any[])
+      getAll<ContactTagRow>('contact_tags')
         .filter((r) => idset.has(r.contact_id) && removeSet.has(r.tag))
-        .forEach((r) => deleteRow('contact_tags', r.id));
+        .forEach((r) => { if (r.id) deleteRow('contact_tags', r.id); });
     }
     if (add.length) {
       for (const cid of ids) {
         for (const tag of add) {
-          const exists = query('contact_tags', (t) => (t as any).contact_id === cid && (t as any).tag === tag).length > 0;
+          const exists = query<ContactTagRow>(
+            'contact_tags',
+            (t) => t.contact_id === cid && t.tag === tag,
+          ).length > 0;
           if (!exists) insert('contact_tags', { contact_id: cid, tag, category: 'custom' });
         }
       }

@@ -37,6 +37,26 @@ const STATUS_FOR: Record<string, string> = {
   counter: 'countered',
 };
 
+interface BuyerOfferRow {
+  id: string;
+  seller_user_id: string;
+  track_id: string | null;
+  track_title: string;
+  buyer_email: string;
+  offered_price_usd: number;
+  status?: string | null;
+}
+
+interface TrackReadinessRow {
+  wav_url?: string | null;
+  stems_status?: string | null;
+  exclusive_sold?: boolean | null;
+}
+
+interface CreatorContactRow {
+  contact_email?: string | null;
+}
+
 function money(n: number): string {
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
@@ -63,26 +83,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .select('id, seller_user_id, track_id, track_title, buyer_email, offered_price_usd, status')
       .eq('id', id)
       .maybeSingle();
-    if (!offer || (offer as any).seller_user_id !== userId) {
+    const offerRow = offer as BuyerOfferRow | null;
+    if (!offerRow || offerRow.seller_user_id !== userId) {
       return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
     }
 
     const action = parsed.data.action;
-    const trackId = (offer as any).track_id as string | null;
-    const offered = Number((offer as any).offered_price_usd);
-    const buyerEmail = (offer as any).buyer_email as string;
-    const title = (offer as any).track_title as string;
+    const trackId = offerRow.track_id;
+    const offered = Number(offerRow.offered_price_usd);
+    const buyerEmail = offerRow.buyer_email;
+    const title = offerRow.track_title;
 
     // Accepting an offer that's now sold-out under exclusive rights makes no
     // sense — block it (mig 075). The track row is the source of truth.
-    let trackRow: { wav_url: string | null; stems_status: string | null; exclusive_sold: boolean | null } | null = null;
+    let trackRow: TrackReadinessRow | null = null;
     if (trackId) {
       const { data: t } = await admin
         .from('tracks')
         .select('wav_url, stems_status, exclusive_sold')
         .eq('id', trackId)
         .maybeSingle();
-      trackRow = (t as any) ?? null;
+      trackRow = (t as TrackReadinessRow | null) ?? null;
       if (action === 'accept' && trackRow?.exclusive_sold) {
         return NextResponse.json(
           { error: 'Exclusive rights for this track have already sold.' },
@@ -153,7 +174,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           .select('contact_email')
           .eq('user_id', userId)
           .maybeSingle();
-        let producerEmail = (prof as any)?.contact_email as string | null;
+        let producerEmail = (prof as CreatorContactRow | null)?.contact_email ?? null;
         if (!producerEmail) {
           const { data: authUser } = await admin.auth.admin.getUserById(userId);
           producerEmail = authUser?.user?.email ?? null;

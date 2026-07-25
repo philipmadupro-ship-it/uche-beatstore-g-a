@@ -19,89 +19,14 @@
  *     siblings mounted in different parts of the tree.
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
+import { buildDawWaveformBars, loadVisualPeaks, resampleVisualPeaks, syntheticVisualPeaks } from '@/lib/audio/visual-peaks';
+import { keyboardSeekFraction } from '@/lib/audio/seek-accessibility';
 
 /* ─── Constants ────────────────────────────────────────────── */
 
 const BAR_COUNT = 72;          // number of bars rendered in the SVG
-const BAR_MIN_H = 0.08;        // minimum bar height as fraction of container
-const BAR_MAX_H = 1.0;         // maximum bar height
-
-/* ─── Seeded PRNG ───────────────────────────────────────────── */
-// Mulberry32 — fast, deterministic, seedable. We seed with the track ID
-// so the same track always renders the same synthetic waveform.
-function mulberry32(seed: number) {
-  return function () {
-    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-}
-
-function seedFromString(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  }
-  return h;
-}
-
-function syntheticBars(trackId: string, count: number): number[] {
-  const rand = mulberry32(seedFromString(trackId));
-  // Envelope: rise over first 20%, sustain in the middle, fall last 15%
-  return Array.from({ length: count }, (_, i) => {
-    const pos = i / count;
-    const envelope =
-      pos < 0.2
-        ? 0.3 + 0.7 * (pos / 0.2)
-        : pos > 0.85
-          ? 0.3 + 0.7 * ((1 - pos) / 0.15)
-          : 1;
-    const base = rand() * 0.7 + 0.3;
-    return Math.max(BAR_MIN_H, Math.min(BAR_MAX_H, base * envelope));
-  });
-}
-
-/* ─── Peaks fetch ───────────────────────────────────────────── */
-
-interface PeaksFile {
-  version: number;
-  peaks: number[];
-  duration: number;
-  length: number;
-}
-
-async function loadPeaks(url: string, signal: AbortSignal): Promise<number[] | null> {
-  try {
-    const res = await fetch(url, { signal, cache: 'force-cache' });
-    if (!res.ok) return null;
-    const json = (await res.json()) as PeaksFile;
-    if (!json?.peaks?.length) return null;
-    return json.peaks;
-  } catch {
-    return null;
-  }
-}
-
-/** Downsample or upsample `peaks` to exactly `targetCount` bars. */
-function resample(peaks: number[], targetCount: number): number[] {
-  if (peaks.length === 0) return Array(targetCount).fill(0.5);
-  const out: number[] = [];
-  for (let i = 0; i < targetCount; i++) {
-    const srcIdx = (i / (targetCount - 1)) * (peaks.length - 1);
-    const lo = Math.floor(srcIdx);
-    const hi = Math.min(lo + 1, peaks.length - 1);
-    const t = srcIdx - lo;
-    const raw = Math.abs(peaks[lo]!) * (1 - t) + Math.abs(peaks[hi]!) * t;
-    out.push(raw);
-  }
-  // Normalize to [BAR_MIN_H, BAR_MAX_H]
-  const max = Math.max(...out, 1e-6);
-  return out.map((v) => BAR_MIN_H + (v / max) * (BAR_MAX_H - BAR_MIN_H));
-}
-
 /* ─── Component ─────────────────────────────────────────────── */
 
 interface Props {
@@ -121,10 +46,14 @@ interface Props {
 
 export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive, onPlay }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [bars, setBars] = useState<number[]>(() => syntheticBars(trackId, BAR_COUNT));
-  const [peaksLoaded, setPeaksLoaded] = useState(false);
+  const fallbackBars = useMemo(() => syntheticVisualPeaks(trackId, BAR_COUNT), [trackId]);
+  const loadKey = `${trackId}:${peaksUrl ?? ''}`;
+  const [loadedBars, setLoadedBars] = useState<{ key: string; bars: number[] } | null>(null);
+  const bars = loadedBars?.key === loadKey ? loadedBars.bars : fallbackBars;
+  const dawBars = useMemo(() => buildDawWaveformBars(bars), [bars]);
+  const peaksLoaded = loadedBars?.key === loadKey;
 
-  const { progress, seekTo } = usePlayer();
+  const { currentTrack, progress, seekTo } = usePlayer();
 
   // Lazy-load peaks via IntersectionObserver — fires only when the card
   // enters the viewport so we don't hammer the CDN on initial mount.
@@ -138,10 +67,9 @@ export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive, onPlay 
       ([entry]) => {
         if (!entry?.isIntersecting) return;
         observer.disconnect();
-        loadPeaks(peaksUrl, controller.signal).then((rawPeaks) => {
+        loadVisualPeaks(peaksUrl, controller.signal).then((rawPeaks) => {
           if (!rawPeaks) return;
-          setBars(resample(rawPeaks, BAR_COUNT));
-          setPeaksLoaded(true);
+          setLoadedBars({ key: loadKey, bars: resampleVisualPeaks(rawPeaks, BAR_COUNT) });
         });
       },
       { rootMargin: '100px' },
@@ -151,14 +79,7 @@ export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive, onPlay 
       observer.disconnect();
       controller.abort();
     };
-  }, [peaksUrl, peaksLoaded]);
-
-  // Reset to synthetic shape when the trackId changes (card reuse).
-  useEffect(() => {
-    setBars(syntheticBars(trackId, BAR_COUNT));
-    setPeaksLoaded(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackId]);
+  }, [loadKey, peaksLoaded, peaksUrl]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -175,35 +96,67 @@ export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive, onPlay 
     [isActive, onPlay, seekTo],
   );
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!isActive) return;
+      const nextFraction = keyboardSeekFraction(e.key, progress, currentTrack?.duration_seconds);
+      if (nextFraction == null) return;
+      e.preventDefault();
+      seekTo(nextFraction);
+    },
+    [currentTrack?.duration_seconds, isActive, progress, seekTo],
+  );
+
   const fillPct = isActive ? progress * 100 : 0;
+  const currentSeconds = currentTrack?.duration_seconds ? Math.round(currentTrack.duration_seconds * progress) : 0;
 
   return (
     <div
       ref={containerRef}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      tabIndex={isActive ? 0 : undefined}
       style={{ height }}
-      className={`relative w-full overflow-hidden ${isActive ? 'cursor-col-resize' : onPlay ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`relative w-full overflow-hidden rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/70 ${isActive ? 'cursor-col-resize' : onPlay ? 'cursor-pointer' : 'cursor-default'}`}
       role={isActive ? 'slider' : undefined}
-      aria-label={isActive ? 'Seek' : undefined}
+      aria-label={isActive ? `Seek ${currentTrack?.title ?? 'current track'}` : undefined}
       aria-valuenow={isActive ? Math.round(progress * 100) : undefined}
+      aria-valuemin={isActive ? 0 : undefined}
+      aria-valuemax={isActive ? 100 : undefined}
+      aria-valuetext={isActive ? `${currentSeconds} seconds elapsed` : undefined}
     >
       <svg
         viewBox={`0 0 ${BAR_COUNT * 3 - 1} 100`}
         preserveAspectRatio="none"
         className="absolute inset-0 w-full h-full"
       >
-        {bars.map((h, i) => {
-          const x = i * 3;
-          const barH = h * 100;
+        {dawBars.map((bar) => {
+          if (!bar.isBeat) return null;
+          const x = bar.index * 3 + 1;
+          return (
+            <line
+              key={`grid-${bar.index}`}
+              x1={x}
+              x2={x}
+              y1={bar.isDownbeat ? 4 : 18}
+              y2={bar.isDownbeat ? 96 : 82}
+              stroke={bar.isDownbeat ? 'rgba(231,215,190,0.20)' : 'rgba(231,215,190,0.10)'}
+              strokeWidth={bar.isDownbeat ? 0.45 : 0.3}
+            />
+          );
+        })}
+        {dawBars.map((bar) => {
+          const x = bar.index * 3;
+          const barH = bar.height * 100;
           const y = (100 - barH) / 2;
-          const playedFrac = i / BAR_COUNT;
+          const playedFrac = bar.index / BAR_COUNT;
           const isPlayed = isActive && playedFrac < progress;
           return (
             <rect
-              key={i}
+              key={bar.index}
               x={x}
               y={y}
-              width={2}
+              width={bar.isDownbeat ? 2.35 : 2}
               height={barH}
               rx={1.2}
               // Frosted unplayed bars (warm off-white, low alpha) read clearly
@@ -212,7 +165,7 @@ export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive, onPlay 
               className={`transition-[fill] duration-150 ${
                 isPlayed ? 'fill-[#E7D7BE]' : isActive ? 'fill-[#F7EBDD]/30' : 'fill-[#F7EBDD]/15'
               }`}
-              style={isPlayed ? { filter: 'drop-shadow(0 0 1.5px rgba(231,215,190,0.45))' } : undefined}
+              style={isPlayed || bar.isTransient ? { filter: `drop-shadow(0 0 ${bar.isTransient ? 2.4 : 1.5}px rgba(231,215,190,0.45))` } : undefined}
             />
           );
         })}

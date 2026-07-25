@@ -65,6 +65,10 @@ interface MatchTrack {
   tags?: Array<{ tag: string; category: string | null }>;
 }
 
+interface GenreTagRow {
+  track_id: string;
+}
+
 export async function POST(req: NextRequest) {
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Beat-match unavailable in offline mode' }, { status: 503 });
@@ -125,7 +129,7 @@ export async function POST(req: NextRequest) {
         .select('track_id, tag, category')
         .ilike('tag', genreBias)
         .eq('category', 'genre');
-      genreTrackIds = new Set(((tagRows ?? []) as any[]).map((r) => r.track_id as string));
+      genreTrackIds = new Set(((tagRows ?? []) as GenreTagRow[]).map((r) => r.track_id));
     }
 
     const scored = trackRows

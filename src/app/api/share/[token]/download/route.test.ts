@@ -9,7 +9,14 @@ import { NextRequest } from 'next/server';
 
 const mockIsSupabaseConfigured = vi.fn();
 const mockCompare = vi.fn();
-const mockFromQueue: Array<(table: string) => any> = [];
+type MockEqChain = {
+  eq: () => MockEqChain;
+  maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+};
+type MockSelectChain = {
+  select: () => MockEqChain;
+};
+const mockFromQueue: Array<(table: string) => MockSelectChain> = [];
 
 vi.mock('@/lib/db', () => ({
   isSupabaseConfigured: () => mockIsSupabaseConfigured(),
@@ -35,7 +42,7 @@ function maybeSingleResult(data: unknown, error: unknown = null) {
   });
 }
 
-function eqChain(result: Promise<{ data: unknown; error: unknown }>): any {
+function eqChain(result: Promise<{ data: unknown; error: unknown }>): MockEqChain {
   return {
     eq: () => eqChain(result),
     maybeSingle: () => result,

@@ -1,13 +1,15 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import NextImage from 'next/image';
 import {
-  Loader2, Check, DollarSign, FileText, Image, AlertTriangle, Activity, Globe,
+  Loader2, Check, DollarSign, FileText, Image as ImageIcon, AlertTriangle, Activity, Globe,
   Upload, ChevronDown, Calendar, RotateCcw, X,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import type { Track } from '@/lib/types';
+import { uploadImageFile } from '@/lib/upload/image-upload-client';
 
 /* ── Per-track license row shape from /api/track-licenses ─── */
 interface TrackLicenseRow {
@@ -20,6 +22,20 @@ interface TrackLicenseRow {
   price_override_usd: number | null;
 }
 
+type PriceOverrideDraft = {
+  rowId: string;
+  initial: string;
+  value: string;
+};
+
+interface ListingTrack extends Track {
+  store_featured?: boolean | null;
+  scheduled_publish_at?: string | null;
+}
+
+type PersistValue = string | boolean | null;
+type TrackPatchPayload = Record<string, string | number | boolean | null>;
+
 interface CreatorDefaults {
   lease: number | null;
   exclusive: number | null;
@@ -28,7 +44,7 @@ interface CreatorDefaults {
 }
 
 interface Props {
-  track: Track;
+  track: ListingTrack;
   /** Called after a successful save so the parent can re-fetch if it cares. */
   onSaved?: () => void;
 }
@@ -55,12 +71,12 @@ export function TrackListingEditor({ track, onSaved }: Props) {
 
   // Free download + merchandising
   const [freeDownload, setFreeDownload] = useState(!!track.free_download_enabled);
-  const [featured, setFeatured] = useState(!!(track as any).store_featured);
+  const [featured, setFeatured] = useState(!!track.store_featured);
   const [voiceTag, setVoiceTag] = useState(!!track.voice_tag_enabled);
   const [sortOrder, setSortOrder] = useState(track.store_sort_order != null ? String(track.store_sort_order) : '');
 
   // Scheduled drop
-  const scheduledAt = (track as any).scheduled_publish_at as string | null | undefined;
+  const scheduledAt = track.scheduled_publish_at;
   const [scheduleInput, setScheduleInput] = useState('');
 
   // Creator defaults (for resolved-price preview) + tag count (for readiness)
@@ -69,8 +85,14 @@ export function TrackListingEditor({ track, onSaved }: Props) {
 
   // Collapsible sections — pricing + description open; the set-once panels start closed.
   const [openSections, setOpenSections] = useState<Set<string>>(() => new Set(['pricing', 'description']));
-  const toggleSection = (id: string) =>
-    setOpenSections((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleSection = (id: string) => {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   // Per-track license rows
   const [licenseRows, setLicenseRows] = useState<TrackLicenseRow[]>([]);
@@ -143,7 +165,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
     setStoreListed(!!track.store_listed);
     setExclusiveSold(!!track.exclusive_sold);
     setFreeDownload(!!track.free_download_enabled);
-    setFeatured(!!(track as any).store_featured);
+    setFeatured(!!track.store_featured);
     setVoiceTag(!!track.voice_tag_enabled);
     setSortOrder(track.store_sort_order != null ? String(track.store_sort_order) : '');
     setCoverUrlInput(track.cover_url ?? '');
@@ -152,20 +174,22 @@ export function TrackListingEditor({ track, onSaved }: Props) {
     setScaleInput(track.scale ?? 'minor');
     setLeasePrice(track.lease_price_usd != null ? String(track.lease_price_usd) : '');
     setExclusivePrice(track.exclusive_price_usd != null ? String(track.exclusive_price_usd) : '');
-  }, [track.id, track.description, track.store_listed, track.exclusive_sold, track.cover_url, track.bpm, track.key, track.scale, track.lease_price_usd, track.exclusive_price_usd]);
+  }, [track.id, track.description, track.store_listed, track.exclusive_sold, track.store_featured, track.free_download_enabled, track.voice_tag_enabled, track.store_sort_order, track.cover_url, track.bpm, track.key, track.scale, track.lease_price_usd, track.exclusive_price_usd]);
 
-  const persist = async (field: string, value: any) => {
+  const persist = async (field: string, value: PersistValue) => {
     setSaving(field);
     try {
-      const payload: Record<string, any> = {};
+      const payload: TrackPatchPayload = {};
       if (field === 'description') {
-        payload.description = value.trim() || null;
+        payload.description = String(value).trim() || null;
       } else if (field === 'lease') {
-        const n = value.trim() === '' ? null : Number(value);
+        const valueText = String(value).trim();
+        const n = valueText === '' ? null : Number(valueText);
         if (n !== null && (!Number.isFinite(n) || n < 0)) { toast.error('Price must be a non-negative number'); setSaving(null); return; }
         payload.lease_price_usd = n;
       } else if (field === 'exclusive') {
-        const n = value.trim() === '' ? null : Number(value);
+        const valueText = String(value).trim();
+        const n = valueText === '' ? null : Number(valueText);
         if (n !== null && (!Number.isFinite(n) || n < 0)) { toast.error('Price must be a non-negative number'); setSaving(null); return; }
         payload.exclusive_price_usd = n;
       } else if (field === 'store_listed') {
@@ -215,16 +239,12 @@ export function TrackListingEditor({ track, onSaved }: Props) {
     if (!file) return;
     setImageUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/upload/image', { method: 'POST', body: formData });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Upload failed');
-      setCoverUrlInput(data.url);
-      await persist('cover_url', data.url);
+      const coverUrl = await uploadImageFile(file);
+      setCoverUrlInput(coverUrl);
+      await persist('cover_url', coverUrl);
       toast.success('Cover art uploaded');
-    } catch (err: any) {
-      toast.error('Upload failed: ' + err.message);
+    } catch (err) {
+      toast.error('Upload failed: ' + (err instanceof Error ? err.message : 'Try again'));
     } finally {
       setImageUploading(false);
     }
@@ -497,16 +517,16 @@ export function TrackListingEditor({ track, onSaved }: Props) {
           </Section>
 
           {/* ── Cover Art ── */}
-          <Section id="cover" title="Cover Art" icon={<Image size={11} className="text-[#D0C3AF]" />}
+          <Section id="cover" title="Cover Art" icon={<ImageIcon size={11} className="text-[#D0C3AF]" />}
             summary={coverUrlInput ? 'Set' : 'Recommended'} open={openSections.has('cover')} onToggle={() => toggleSection('cover')}>
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
               <div onClick={() => fileInputRef.current?.click()}
                 className="w-16 h-16 rounded-lg bg-[#1A1813] border border-[#2B2821] overflow-hidden shrink-0 cursor-pointer hover:border-[#E7D7BE]/40 transition-colors relative group">
                 {coverUrlInput ? (
-                  <img src={coverUrlInput} alt="" className="w-full h-full object-cover" />
+                  <NextImage src={coverUrlInput} alt="" fill sizes="64px" className="object-cover" />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-[#6E685B] gap-0.5">
-                    <Image size={16} /><span className="text-[8px] font-mono uppercase">Upload</span>
+                    <ImageIcon size={16} /><span className="text-[8px] font-mono uppercase">Upload</span>
                   </div>
                 )}
                 {imageUploading ? (
@@ -515,7 +535,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><Upload size={12} className="text-white" /></div>
                 )}
               </div>
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImageUpload} />
               <div className="flex-1 min-w-0 space-y-1.5">
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-mono uppercase tracking-wider text-[#B4AA99]">Cover Art</span>
@@ -624,12 +644,14 @@ function LicenseTierRow({
   saving: boolean;
   onChange: (enabled: boolean, priceOverride: string) => void;
 }) {
-  const [priceOverride, setPriceOverride] = useState(
-    row.price_override_usd != null ? String(row.price_override_usd) : '',
-  );
-  useEffect(() => {
-    setPriceOverride(row.price_override_usd != null ? String(row.price_override_usd) : '');
-  }, [row.price_override_usd]);
+  const [priceOverrideDraft, setPriceOverrideDraft] = useState<PriceOverrideDraft | null>(null);
+  const canonicalPriceOverride = row.price_override_usd != null ? String(row.price_override_usd) : '';
+  const priceOverride = priceOverrideDraft?.rowId === row.id && priceOverrideDraft.initial === canonicalPriceOverride
+    ? priceOverrideDraft.value
+    : canonicalPriceOverride;
+  const setPriceOverride = (value: string) => {
+    setPriceOverrideDraft({ rowId: row.id, initial: canonicalPriceOverride, value });
+  };
 
   return (
     <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${

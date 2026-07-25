@@ -12,7 +12,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextResponse } from 'next/server';
 
 const mockRequireUser = vi.fn();
-const mockFromQueue: Array<(table: string) => any> = [];
+type SupabaseMockChain = {
+  select: () => unknown;
+};
+const mockFromQueue: Array<(table: string) => SupabaseMockChain> = [];
 
 vi.mock('@/lib/auth/ownership', () => ({
   requireUser: () => mockRequireUser(),
@@ -33,25 +36,6 @@ function eqOrderResult(data: unknown, error: unknown = null) {
   return () => ({
     select: () => ({
       eq: () => ({ order: () => Promise.resolve({ data, error }) }),
-    }),
-  });
-}
-
-/** projects (owned list): .select().eq() */
-function eqResult(data: unknown, error: unknown = null) {
-  return () => ({
-    select: () => ({
-      eq: () => Promise.resolve({ data, error }),
-      in: () => Promise.resolve({ data, error }),
-    }),
-  });
-}
-
-/** access_links scoped to projectIds: .select().in().order */
-function inOrderResult(data: unknown, error: unknown = null) {
-  return () => ({
-    select: () => ({
-      in: () => ({ order: () => Promise.resolve({ data, error }) }),
     }),
   });
 }

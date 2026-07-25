@@ -7,6 +7,32 @@ const log = createLogger('api.projects.export');
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
+interface ProjectExportRow {
+  name: string;
+}
+
+interface ProjectTrackExportRow {
+  track_id: string;
+  position: number | null;
+}
+
+interface ExportTrackRow {
+  id: string;
+  title: string | null;
+  audio_url: string | null;
+  wav_url: string | null;
+}
+
+interface StemExportRow {
+  track_id: string;
+  vocals_url: string | null;
+  drums_url: string | null;
+  bass_url: string | null;
+  other_url: string | null;
+}
+
+type StemUrlField = Exclude<keyof StemExportRow, 'track_id'>;
+
 /**
  * GET /api/projects/[id]/export
  *
@@ -34,6 +60,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .eq('id', id)
       .maybeSingle();
     if (projErr || !project) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    const projectRow = project as ProjectExportRow;
 
     // Get the ordered track list.
     const { data: ptRows, error: ptErr } = await admin
@@ -42,8 +69,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .eq('project_id', id)
       .order('position', { ascending: true });
     if (ptErr) throw ptErr;
-    const trackIds = (ptRows ?? []).map((r: any) => r.track_id);
-    if (!trackIds.length) return NextResponse.json({ project_name: project.name, files: [] });
+    const projectTrackRows = (ptRows ?? []) as ProjectTrackExportRow[];
+    const trackIds = projectTrackRows.map((r) => r.track_id);
+    if (!trackIds.length) return NextResponse.json({ project_name: projectRow.name, files: [] });
 
     // Fetch track audio + stems.
     const { data: tracks, error: tErr } = await admin
@@ -58,17 +86,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .in('track_id', trackIds);
     if (sErr) throw sErr;
 
-    const stemsByTrack = new Map((stems ?? []).map((s: any) => [s.track_id, s]));
-    const order = new Map(trackIds.map((tid: string, i: number) => [tid, i]));
+    const stemRows = (stems ?? []) as StemExportRow[];
+    const stemsByTrack = new Map(stemRows.map((s) => [s.track_id, s]));
+    const order = new Map(trackIds.map((tid, i) => [tid, i]));
 
-    const sorted = [...(tracks ?? [])].sort((a: any, b: any) =>
+    const sorted = [...((tracks ?? []) as ExportTrackRow[])].sort((a, b) =>
       (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0),
     );
 
     const files: { name: string; url: string; type: string }[] = [];
     const ext = (url: string) => url.match(/\.(wav|mp3|flac|aiff|ogg|m4a|webm)[^.]*$/i)?.[1]?.toLowerCase() ?? 'mp3';
 
-    for (const t of sorted as any[]) {
+    for (const t of sorted) {
       const title = (t.title || 'track').replace(/[^\w\s-]/g, '').trim();
       const primary = t.wav_url || t.audio_url;
       if (primary) {
@@ -79,8 +108,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       }
       const st = stemsByTrack.get(t.id);
       if (st) {
-        for (const [key, label] of [['vocals_url', 'vocals'], ['drums_url', 'drums'], ['bass_url', 'bass'], ['other_url', 'other']] as [string, string][]) {
-          const u = (st as any)[key];
+        for (const [key, label] of [['vocals_url', 'vocals'], ['drums_url', 'drums'], ['bass_url', 'bass'], ['other_url', 'other']] as [StemUrlField, string][]) {
+          const u = st[key];
           if (u) {
             const proxyUrl = `/api/audio?src=${encodeURIComponent(u)}&download=1&filename=${encodeURIComponent(`${title}_${label}.${ext(u)}`)}`;
             files.push({ name: `${title}_${label}.${ext(u)}`, url: proxyUrl, type: 'stem' });
@@ -89,7 +118,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
 
-    return NextResponse.json({ project_name: project.name, files });
+    return NextResponse.json({ project_name: projectRow.name, files });
   } catch (err) {
     log.error('project export failed', { projectId: id, error: errorMessage(err) });
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });

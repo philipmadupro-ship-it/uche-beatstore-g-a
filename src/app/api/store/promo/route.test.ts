@@ -8,6 +8,7 @@
  *   - normalizes the code to uppercase before lookup
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
 
 const mockMaybeSingle = vi.fn();
 const eqArgs: { col?: string; value?: string } = {};
@@ -33,11 +34,11 @@ vi.mock('@/lib/auth/ownership', () => ({
 import { POST } from './route';
 
 function req(body: unknown) {
-  return new Request('http://localhost/api/store/promo', {
+  return new NextRequest('http://localhost/api/store/promo', {
     method: 'POST',
     body: JSON.stringify(body),
     headers: { 'content-type': 'application/json' },
-  }) as any;
+  });
 }
 
 beforeEach(() => {

@@ -9,6 +9,9 @@ import {
 } from 'lucide-react';
 import { setBuyerToken } from '@/lib/buyer-session';
 import { toast } from '@/hooks/useToast';
+import { BuyerLibraryTile, buyerTrackTitles } from '@/components/store/BuyerLibraryTile';
+import { CoverImage } from '@/components/ui/CoverImage';
+import type { BuyerLibraryShape, BuyerLibraryPlaylist } from '@/lib/store/buyer-library';
 
 interface TrackLicense {
   id: string;
@@ -63,11 +66,11 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
     (async () => {
       try {
         const res = await fetch(`/api/store/account/${token}`);
-        const json = await res.json();
+        const json = await res.json() as AccountData & { error?: string };
         if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
         setData(json);
-      } catch (err: any) {
-        setError(err.message || 'Could not load your account.');
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Could not load your account.');
       } finally {
         setLoading(false);
       }
@@ -83,11 +86,12 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
-      const json = await res.json();
+      const json = await res.json() as { url?: string; error?: string };
       if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      if (!json.url) throw new Error('Portal URL missing.');
       window.location.href = json.url;
-    } catch (err: any) {
-      setPortalError(err.message || 'Could not open Stripe portal.');
+    } catch (err: unknown) {
+      setPortalError(err instanceof Error ? err.message : 'Could not open Stripe portal.');
     } finally {
       setPortalLoading(false);
     }
@@ -106,7 +110,7 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
       <div className="min-h-screen bg-[#090907] text-[#F7EBDD] flex items-center justify-center px-4">
         <div className="max-w-sm text-center">
           <AlertCircle size={28} className="text-red-400 mx-auto mb-3" />
-          <p className="text-[14px] font-medium text-[#F7EBDD] mb-1">Couldn't open your account</p>
+          <p className="text-[14px] font-medium text-[#F7EBDD] mb-1">Couldn&apos;t open your account</p>
           <p className="text-[11px] text-[#D0C3AF] mb-5">{error || 'Unknown error.'}</p>
           <Link
             href="/store/account"
@@ -162,7 +166,7 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
             <Music size={28} className="text-[#9B9282] mx-auto mb-3" />
             <p className="text-[14px] text-[#F7EBDD] font-medium mb-1">No purchases yet</p>
             <p className="text-[12px] text-[#B4AA99] max-w-md mx-auto mb-5">
-              Once you license a beat or buy a project bundle, it'll show up here. The link in this URL stays valid for 24h.
+              Once you license a beat or buy a project bundle, it&apos;ll show up here. The link in this URL stays valid for 24h.
             </p>
             <Link
               href="/store"
@@ -185,9 +189,9 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
                       key={b.id}
                       className="flex items-center gap-3 rounded-xl border border-[#2B2821] bg-[#171511] px-3 py-3"
                     >
-                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-[#090907] border border-[#2B2821] shrink-0">
+                      <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-[#090907] border border-[#2B2821] shrink-0">
                         {b.project.cover_url
-                          ? <img src={b.project.cover_url} alt="" className="w-full h-full object-cover" />
+                          ? <CoverImage src={b.project.cover_url} alt="" className="object-cover" sizes="48px" />
                           : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Layers size={14} /></div>}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -300,22 +304,6 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
 
 /* ─── Buyer Library — history + favorites + playlists ─────────── */
 
-interface LibraryHistoryRow { track_id: string; played_at: string }
-interface LibraryFavRow { track_id: string; created_at: string }
-interface LibraryPlaylist {
-  id: string;
-  name: string;
-  created_at: string;
-  updated_at: string;
-  track_ids: string[];
-}
-interface LibraryShape {
-  email: string;
-  history: LibraryHistoryRow[];
-  favorites: LibraryFavRow[];
-  playlists: LibraryPlaylist[];
-}
-
 function BuyerLibrary({ token }: { token: string }) {
   const queryClient = useQueryClient();
 
@@ -327,7 +315,7 @@ function BuyerLibrary({ token }: { token: string }) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error ?? `HTTP ${res.status}`);
       }
-      return (await res.json()) as LibraryShape;
+      return (await res.json()) as BuyerLibraryShape;
     },
     retry: false,
   });
@@ -344,7 +332,7 @@ function BuyerLibrary({ token }: { token: string }) {
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
-      return j.playlist as LibraryPlaylist;
+      return j.playlist as BuyerLibraryPlaylist;
     },
     onSuccess: () => { setNewPlaylistName(''); toast.success('Playlist created'); refresh(); },
     onError: (e: Error) => toast.error('Could not create', e.message),
@@ -388,20 +376,15 @@ function BuyerLibrary({ token }: { token: string }) {
           Recently played
         </p>
         {recentHistory.length === 0 ? (
-          <p className="text-[12px] text-white/40">Listen to a beat on the store and it'll show up here.</p>
+          <p className="text-[12px] text-white/40">Listen to a beat on the store and it&apos;ll show up here.</p>
         ) : (
           <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
             {recentHistory.map((r, i) => (
               <li key={`${r.track_id}-${r.played_at}-${i}`}>
-                <Link
-                  href={`/store/${r.track_id}`}
-                  className="block px-3 py-2 rounded-lg bg-white/[0.03] border border-[#2B2821] hover:bg-white/[0.06] hover:border-[#3B372F] transition-colors"
-                >
-                  <p className="text-[11px] text-[#F7EBDD] truncate font-mono">{r.track_id.slice(0, 8)}</p>
-                  <p className="text-[9px] text-white/40 font-mono">
-                    {new Date(r.played_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
-                  </p>
-                </Link>
+                <BuyerLibraryTile
+                  track={r.track}
+                  subline={new Date(r.played_at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}
+                />
               </li>
             ))}
           </ul>
@@ -420,12 +403,7 @@ function BuyerLibrary({ token }: { token: string }) {
           <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
             {data.favorites.map((f) => (
               <li key={f.track_id}>
-                <Link
-                  href={`/store/${f.track_id}`}
-                  className="block px-3 py-2 rounded-lg bg-white/[0.03] border border-[#2B2821] hover:bg-white/[0.06] hover:border-[#3B372F] transition-colors"
-                >
-                  <p className="text-[11px] text-[#F7EBDD] truncate font-mono">{f.track_id.slice(0, 8)}</p>
-                </Link>
+                <BuyerLibraryTile track={f.track} />
               </li>
             ))}
           </ul>
@@ -459,7 +437,7 @@ function BuyerLibrary({ token }: { token: string }) {
           </button>
         </div>
         {data.playlists.length === 0 ? (
-          <p className="text-[12px] text-white/40">Build your own mixtapes from the producer's catalogue.</p>
+          <p className="text-[12px] text-white/40">Build your own mixtapes from the producer&apos;s catalogue.</p>
         ) : (
           <ul className="space-y-1.5">
             {data.playlists.map((p) => (
@@ -470,7 +448,9 @@ function BuyerLibrary({ token }: { token: string }) {
                 <ListMusic size={12} className="text-[#9B9282]" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-medium text-[#F7EBDD] truncate">{p.name}</p>
-                  <p className="text-[10px] font-mono text-[#9B9282]">{p.track_ids.length} tracks · updated {new Date(p.updated_at).toLocaleDateString()}</p>
+                  <p className="text-[10px] font-mono text-[#9B9282]">
+                    {p.track_ids.length} tracks · {buyerTrackTitles(p.tracks)} · updated {new Date(p.updated_at).toLocaleDateString()}
+                  </p>
                 </div>
                 <button
                   type="button"

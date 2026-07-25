@@ -6,6 +6,30 @@ import { parsePurchaseLineItems } from '@/lib/contracts';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface LicensePurchaseRow {
+  id: string;
+  buyer_email: string | null;
+  track_ids: unknown;
+  line_items: unknown;
+  license_type: string | null;
+  amount_usd: number | string | null;
+  stripe_session_id: string | null;
+  status: string | null;
+  download_unlocked: boolean | null;
+  needs_stems_upload: boolean | null;
+  created_at: string;
+}
+
+interface ProjectAccessLinkRow {
+  id: string;
+  project_id: string;
+  buyer_email: string | null;
+  stripe_session_id: string | null;
+  amount_usd: number | string | null;
+  created_at: string;
+  expires_at: string | null;
+}
+
 /**
  * GET /api/sales
  *
@@ -33,7 +57,9 @@ export async function GET() {
     // Hydrate track titles so the row shows "808 Crush — Lease" instead of a UUID.
     const trackIds = [
       ...new Set(
-        (purchases ?? []).flatMap((p: any) => (Array.isArray(p.track_ids) ? p.track_ids : [])),
+        ((purchases ?? []) as LicensePurchaseRow[]).flatMap((p) => (
+          Array.isArray(p.track_ids) ? p.track_ids.filter((id): id is string => typeof id === 'string') : []
+        )),
       ),
     ];
     const titleByTrack: Record<string, string> = {};
@@ -58,9 +84,9 @@ export async function GET() {
       .eq('seller_user_id', userId)
       .order('created_at', { ascending: false });
     if (alErr) throw alErr;
-    const accessLinks = links ?? [];
+    const accessLinks = (links ?? []) as ProjectAccessLinkRow[];
 
-    const referencedProjectIds = [...new Set(accessLinks.map((a: any) => a.project_id))];
+    const referencedProjectIds = [...new Set(accessLinks.map((a) => a.project_id))];
     const projectById: Record<string, string> = {};
     const projectIds: string[] = referencedProjectIds;
     if (referencedProjectIds.length > 0) {
@@ -86,7 +112,7 @@ export async function GET() {
     }
 
     // ── Normalise into a single sales feed ────────────────────────────────
-    const trackSales = (purchases ?? []).map((p: any) => {
+    const trackSales = ((purchases ?? []) as LicensePurchaseRow[]).map((p) => {
       // line_items is the canonical per-line breakdown; fall back to track_ids
       // for older rows written before line_items was introduced.
       // Zod-parse line_items so we don't trust raw webhook JSON.
@@ -121,7 +147,7 @@ export async function GET() {
       };
     });
 
-    const projectSales = accessLinks.map((a: any) => ({
+    const projectSales = accessLinks.map((a) => ({
       id: a.id,
       kind: 'project' as const,
       buyer_email: a.buyer_email,

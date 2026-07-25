@@ -43,26 +43,22 @@ function ffmpegEnv(): NodeJS.ProcessEnv {
 }
 
 /**
- * Resolve the ffmpeg binary. Prefer the bundled `ffmpeg-static` binary so the
- * transcode works on Vercel's serverless runtime (which ships no system
- * ffmpeg); fall back to `ffmpeg` on PATH for local/dev hosts where the static
- * package may be absent or the user prefers their own build.
+ * Resolve the ffmpeg binary candidates without importing `ffmpeg-static`.
+ *
+ * The package's JS entry point uses a dynamic require/path join that makes
+ * Turbopack's NFT tracer think the whole project should be included. The
+ * installed binary path is stable (`node_modules/ffmpeg-static/ffmpeg` on
+ * macOS/Linux), and next.config.ts explicitly traces that file for deployment.
  */
 let ffmpegBinCache: string | null = null;
-async function ffmpegBin(): Promise<string> {
-  if (ffmpegBinCache) return ffmpegBinCache;
-  try {
-    const mod = await import('ffmpeg-static');
-    const p = (mod as unknown as { default?: string }).default ?? (mod as unknown as string);
-    if (p && typeof p === 'string') {
-      ffmpegBinCache = p;
-      return p;
-    }
-  } catch {
-    // ffmpeg-static not installed — fall through to PATH lookup.
-  }
-  ffmpegBinCache = 'ffmpeg';
-  return ffmpegBinCache;
+function ffmpegCandidates(): string[] {
+  const candidates: string[] = [];
+  if (process.env.FFMPEG_BIN) candidates.push(process.env.FFMPEG_BIN);
+  candidates.push(
+    `./node_modules/ffmpeg-static/ffmpeg${process.platform === 'win32' ? '.exe' : ''}`,
+    'ffmpeg',
+  );
+  return [...new Set(candidates)];
 }
 
 /**
@@ -81,15 +77,63 @@ async function checkFfmpeg(): Promise<boolean> {
   if (ffmpegAvailable === false && Date.now() - ffmpegCheckedAt < FFMPEG_NEG_TTL_MS) {
     return false;
   }
-  const { spawn } = await import('child_process');
-  const bin = await ffmpegBin();
-  ffmpegAvailable = await new Promise<boolean>((resolve) => {
-    const proc = spawn(bin, ['-version'], { stdio: 'ignore', env: ffmpegEnv() });
-    proc.on('error', () => resolve(false));
-    proc.on('exit', (code) => resolve(code === 0));
-  });
+  const { spawn } = await import('node:child_process');
+  ffmpegAvailable = false;
+  for (const bin of ffmpegCandidates()) {
+    const ok = await new Promise<boolean>((resolve) => {
+      const proc = spawn(bin, ['-version'], { stdio: 'ignore', env: ffmpegEnv() });
+      proc.on('error', () => resolve(false));
+      proc.on('exit', (code) => resolve(code === 0));
+    });
+    if (ok) {
+      ffmpegBinCache = bin;
+      ffmpegAvailable = true;
+      break;
+    }
+  }
   ffmpegCheckedAt = Date.now();
   return ffmpegAvailable;
+}
+
+async function runFfmpegToBuffer(
+  args: string[],
+  input: Buffer,
+  timeoutMs: number,
+): Promise<Buffer | null> {
+  const { spawn } = await import('node:child_process');
+  const proc = spawn(ffmpegBinCache || 'ffmpeg', args, {
+    stdio: ['pipe', 'pipe', 'ignore'],
+    env: ffmpegEnv(),
+  });
+
+  const chunks: Buffer[] = [];
+  let settled = false;
+
+  return new Promise<Buffer | null>((resolve) => {
+    const finish = (value: Buffer | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(killer);
+      resolve(value);
+    };
+
+    const killer = setTimeout(() => {
+      try { proc.kill('SIGKILL'); } catch {}
+      finish(null);
+    }, timeoutMs);
+
+    proc.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+    proc.on('error', () => finish(null));
+    proc.on('exit', (code) => {
+      finish(code === 0 && chunks.length > 0 ? Buffer.concat(chunks) : null);
+    });
+
+    proc.stdin.on('error', () => {
+      try { proc.kill('SIGKILL'); } catch {}
+      finish(null);
+    });
+    proc.stdin.end(input);
+  });
 }
 
 /**
@@ -110,62 +154,24 @@ export async function convertToWavBuffer(input: Buffer): Promise<Buffer | null> 
     return null;
   }
 
-  // Dynamic imports keep Node built-ins out of any bundler's reach.
-  const { spawn } = await import('child_process');
-  // `node:fs` (not `fs`) so we bypass the Turbopack `fs -> empty stub` alias in
-  // next.config.ts — that alias is for the browser bundle; here we need real fs.
-  const { promises: fs } = await import('node:fs');
-  const path = await import('path');
-  const os = await import('os');
-  const crypto = await import('crypto');
-
-  // Unique temp paths so concurrent analyses don't clobber each other.
-  // Crypto-random suffix > pid because the same pid can run multiple
-  // converts in parallel under serverless concurrency.
-  const id = crypto.randomBytes(8).toString('hex');
-  const inPath = path.join(os.tmpdir(), `ag-in-${id}`);
-  const outPath = path.join(os.tmpdir(), `ag-out-${id}.wav`);
-
   try {
-    await fs.writeFile(inPath, input);
-
-    const ok = await new Promise<boolean>((resolve) => {
-      const proc = spawn(ffmpegBinCache || 'ffmpeg', [
-        '-y',           // overwrite output silently
-        '-i', inPath,
+    return await runFfmpegToBuffer([
+        '-i', 'pipe:0',
         '-ac', '1',     // mono
         '-ar', '44100', // 44.1 kHz
         '-c:a', 'pcm_s16le', // 16-bit signed PCM
         '-f', 'wav',
-        outPath,
-      ], { stdio: 'ignore', env: ffmpegEnv() });
+        'pipe:1',
+      ],
+      input,
       // Hard timeout — a malicious / corrupt file shouldn't be able to
       // hang the route forever. 30 seconds is plenty for any realistic
       // music length when transcoding to PCM.
-      const killer = setTimeout(() => proc.kill('SIGKILL'), 30_000);
-      proc.on('exit', (code) => {
-        clearTimeout(killer);
-        resolve(code === 0);
-      });
-      proc.on('error', () => {
-        clearTimeout(killer);
-        resolve(false);
-      });
-    });
-
-    if (!ok) {
-      console.warn('ffmpeg conversion failed for input — file likely corrupt or codec not supported.');
-      return null;
-    }
-
-    const out = await fs.readFile(outPath);
-    return out;
+      30_000,
+    );
   } catch (err) {
     console.warn('ffmpeg fallback errored:', err);
     return null;
-  } finally {
-    // Best-effort cleanup; ignore ENOENT if either file never got written.
-    await Promise.allSettled([fs.unlink(inPath), fs.unlink(outPath)]);
   }
 }
 
@@ -182,24 +188,9 @@ export async function createPreviewMp3Buffer(input: Buffer): Promise<Buffer | nu
     return null;
   }
 
-  const { spawn } = await import('child_process');
-  // `node:fs` (not `fs`) so we bypass the Turbopack `fs -> empty stub` alias in
-  // next.config.ts — that alias is for the browser bundle; here we need real fs.
-  const { promises: fs } = await import('node:fs');
-  const path = await import('path');
-  const os = await import('os');
-  const crypto = await import('crypto');
-
-  const id = crypto.randomBytes(8).toString('hex');
-  const inPath = path.join(os.tmpdir(), `ag-preview-in-${id}`);
-  const outPath = path.join(os.tmpdir(), `ag-preview-out-${id}.mp3`);
-
   try {
-    await fs.writeFile(inPath, input);
-    const ok = await new Promise<boolean>((resolve) => {
-      const proc = spawn(ffmpegBinCache || 'ffmpeg', [
-        '-y',
-        '-i', inPath,
+    return await runFfmpegToBuffer([
+        '-i', 'pipe:0',
         '-vn',
         '-map_metadata', '-1',
         '-ac', '2',
@@ -207,26 +198,14 @@ export async function createPreviewMp3Buffer(input: Buffer): Promise<Buffer | nu
         '-c:a', 'libmp3lame',
         '-b:a', '96k',
         '-f', 'mp3',
-        outPath,
-      ], { stdio: 'ignore', env: ffmpegEnv() });
-      const killer = setTimeout(() => proc.kill('SIGKILL'), 60_000);
-      proc.on('exit', (code) => {
-        clearTimeout(killer);
-        resolve(code === 0);
-      });
-      proc.on('error', () => {
-        clearTimeout(killer);
-        resolve(false);
-      });
-    });
-
-    if (!ok) return null;
-    return await fs.readFile(outPath);
+        'pipe:1',
+      ],
+      input,
+      60_000,
+    );
   } catch (err) {
     console.warn('Preview conversion failed:', err);
     return null;
-  } finally {
-    await Promise.allSettled([fs.unlink(inPath), fs.unlink(outPath)]);
   }
 }
 
@@ -250,26 +229,12 @@ export async function makePreviewMp3Buffer(
     return null;
   }
 
-  const { spawn } = await import('child_process');
-  // `node:fs` (not `fs`) so we bypass the Turbopack `fs -> empty stub` alias in
-  // next.config.ts — that alias is for the browser bundle; here we need real fs.
-  const { promises: fs } = await import('node:fs');
-  const path = await import('path');
-  const os = await import('os');
-  const crypto = await import('crypto');
-
-  const id = crypto.randomBytes(8).toString('hex');
-  const inPath = path.join(os.tmpdir(), `ag-mp3prev-in-${id}`);
-  const outPath = path.join(os.tmpdir(), `ag-mp3prev-out-${id}.mp3`);
   const seconds = Math.max(1, Math.floor(previewSeconds));
 
   try {
-    await fs.writeFile(inPath, input);
-    const ok = await new Promise<boolean>((resolve) => {
-      const proc = spawn(ffmpegBinCache || 'ffmpeg', [
-        '-y',
+    return await runFfmpegToBuffer([
         '-t', String(seconds), // keep only the first N seconds (the truncation)
-        '-i', inPath,
+        '-i', 'pipe:0',
         '-vn',
         '-map_metadata', '-1',
         '-ac', '2',
@@ -277,26 +242,14 @@ export async function makePreviewMp3Buffer(
         '-c:a', 'libmp3lame',
         '-b:a', '96k',
         '-f', 'mp3',
-        outPath,
-      ], { stdio: 'ignore', env: ffmpegEnv() });
-      const killer = setTimeout(() => proc.kill('SIGKILL'), 60_000);
-      proc.on('exit', (code) => {
-        clearTimeout(killer);
-        resolve(code === 0);
-      });
-      proc.on('error', () => {
-        clearTimeout(killer);
-        resolve(false);
-      });
-    });
-
-    if (!ok) return null;
-    return await fs.readFile(outPath);
+        'pipe:1',
+      ],
+      input,
+      60_000,
+    );
   } catch (err) {
     console.warn('mp3 preview conversion failed:', err);
     return null;
-  } finally {
-    await Promise.allSettled([fs.unlink(inPath), fs.unlink(outPath)]);
   }
 }
 

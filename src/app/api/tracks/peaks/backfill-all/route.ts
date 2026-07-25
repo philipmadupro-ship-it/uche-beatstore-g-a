@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { extractPeaks } from '@/lib/audio/peaks';
@@ -14,27 +14,32 @@ export const maxDuration = 300;
  * POST /api/tracks/peaks/backfill-all
  *
  * Owner-only batch backfill — re-runs the per-track peaks extractor
- * for every owned track that doesn't have a peaks_url yet. Used when
+ * for owned tracks that don't have a peaks_url yet. Used when
  * the producer wants accurate waveforms on tracks uploaded before
  * the peaks pipeline existed (or whose extraction silently failed).
+ * Pass ?store_listed=1 to limit the run to buyer-facing beats.
  *
  * Synchronous on purpose — single-producer storefront usually has
  * ≤50 tracks, well under the 300s function limit. Returns a per-track
  * summary so the caller can show what worked.
  */
-export async function POST() {
+export async function POST(req: NextRequest) {
   const auth = await requireUser();
   if (!auth.ok) return auth.res;
   const { userId, admin } = auth;
+  const listedOnly = req.nextUrl.searchParams.get('store_listed') === '1';
 
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
 
-  const { data: tracks, error } = await admin
+  let query = admin
     .from('tracks')
     .select('id, title, audio_url, peaks_url')
-    .eq('user_id', userId)
+    .eq('user_id', userId);
+  if (listedOnly) query = query.eq('store_listed', true);
+
+  const { data: tracks, error } = await query
     .is('peaks_url', null)
     .not('audio_url', 'is', null);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -59,6 +64,7 @@ export async function POST() {
   }
 
   const summary = {
+    scope: listedOnly ? 'store_listed' : 'all',
     total_needed: targets.length,
     succeeded: results.filter((r) => r.ok).length,
     failed: results.filter((r) => !r.ok).length,

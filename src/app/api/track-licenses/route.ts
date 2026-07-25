@@ -8,6 +8,20 @@ const log = createLogger('api.track-licenses');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface LicenseRow {
+  id: string;
+  name: string;
+  price_usd: number | string | null;
+  is_exclusive: boolean;
+  sort_order?: number | null;
+}
+
+interface TrackLicenseRow {
+  license_id: string;
+  enabled: boolean;
+  price_override_usd: number | string | null;
+}
+
 /**
  * GET /api/track-licenses?track_id=xxx
  *
@@ -68,11 +82,12 @@ export async function GET(req: NextRequest) {
         .eq('track_id', trackId),
     ]);
 
-    const linkMap = new Map(
-      (trackLinks ?? []).map((l: any) => [l.license_id, l]),
+    const links = (trackLinks ?? []) as TrackLicenseRow[];
+    const linkMap = new Map<string, TrackLicenseRow>(
+      links.map((l) => [l.license_id, l]),
     );
 
-    const licenses = (allLicenses ?? []).map((l: any) => {
+    const licenses = ((allLicenses ?? []) as LicenseRow[]).map((l) => {
       const link = linkMap.get(l.id);
       return {
         id: l.id,

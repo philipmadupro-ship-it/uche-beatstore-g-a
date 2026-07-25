@@ -6,6 +6,38 @@ import { errorMessage } from '@/lib/errors';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface AudioDiagnosticsTrackRow {
+  id: string;
+  title: string;
+  audio_url: string | null;
+}
+
+interface AudioDiagnosticsTrackEntry extends AudioDiagnosticsTrackRow {
+  audio_url_host: string | null;
+  host_matches_r2: boolean;
+  head_status: number | null;
+  head_content_type: string | null;
+  head_content_length: string | null;
+  head_error: string | null;
+}
+
+interface AudioDiagnosticsResponse {
+  env: {
+    app_url: string | null;
+    r2_public_url: string | null;
+    r2_account: boolean;
+    r2_access_key: boolean;
+    r2_secret_key: boolean;
+    r2_bucket: boolean;
+  };
+  proxy: {
+    r2_public_host: string | null;
+    r2_public_host_parse_error: string | null;
+  };
+  tracks: AudioDiagnosticsTrackEntry[];
+  hints: string[];
+}
+
 /**
  * GET /api/audio/diagnostics
  *
@@ -30,7 +62,7 @@ export const dynamic = 'force-dynamic';
  * Owner-gated so a random visitor can't enumerate R2 keys.
  */
 export async function GET() {
-  const out: Record<string, any> = {
+  const out: AudioDiagnosticsResponse = {
     env: {
       app_url: process.env.NEXT_PUBLIC_APP_URL ?? null,
       r2_public_url: process.env.NEXT_PUBLIC_R2_PUBLIC_URL ?? null,
@@ -94,8 +126,8 @@ export async function GET() {
     .order('created_at', { ascending: false })
     .limit(5);
 
-  for (const t of tracks ?? []) {
-    const entry: any = {
+  for (const t of (tracks ?? []) as AudioDiagnosticsTrackRow[]) {
+    const entry: AudioDiagnosticsTrackEntry = {
       id: t.id,
       title: t.title,
       audio_url: t.audio_url,
@@ -148,19 +180,19 @@ export async function GET() {
   if (sampled.length === 0) {
     out.hints.push('No tracks found for this user — upload one to test playback.');
   } else {
-    const hostMismatch = sampled.filter((t: any) => t.audio_url && !t.host_matches_r2 && !t.audio_url.startsWith('/'));
+    const hostMismatch = sampled.filter((t) => t.audio_url && !t.host_matches_r2 && !t.audio_url.startsWith('/'));
     if (hostMismatch.length) {
       out.hints.push(
         `${hostMismatch.length}/${sampled.length} tracks have an audio_url host that doesn't match NEXT_PUBLIC_R2_PUBLIC_URL. The /api/audio proxy will 403 these. Either update NEXT_PUBLIC_R2_PUBLIC_URL or re-upload the affected tracks.`,
       );
     }
-    const dead = sampled.filter((t: any) => t.head_status && t.head_status >= 400);
+    const dead = sampled.filter((t) => t.head_status && t.head_status >= 400);
     if (dead.length) {
       out.hints.push(
-        `${dead.length}/${sampled.length} tracks return ${dead.map((t: any) => t.head_status).join(',')} from R2 when fetched server-side. Bucket access policy may have changed, or the object key is wrong.`,
+        `${dead.length}/${sampled.length} tracks return ${dead.map((t) => t.head_status).join(',')} from R2 when fetched server-side. Bucket access policy may have changed, or the object key is wrong.`,
       );
     }
-    const unreachable = sampled.filter((t: any) => t.head_error && !t.head_status);
+    const unreachable = sampled.filter((t) => t.head_error && !t.head_status);
     if (unreachable.length) {
       out.hints.push(
         `${unreachable.length}/${sampled.length} tracks couldn't be reached at all from this server (network / DNS). First error: ${unreachable[0].head_error}`,

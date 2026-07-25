@@ -1,0 +1,4 @@
+interface:
+  display_name: "Beatstor Product Orchestrator"
+  short_description: "Route Beatstor work across prompt goals and existing skills"
+  default_prompt: "Use $beatstor-product-orchestrator to choose the right Beatstor skills, inspect prior progress, and continue the product build."

@@ -13,7 +13,7 @@ describe('GET /api/tracks/store-summary', () => {
     mockQuery.mockImplementation((table: string) => {
       if (table === 'tracks') {
         return [
-          { id: 'a', title: 'A', store_listed: true, store_featured: true, cover_url: 'cover.jpg', lease_price_usd: 25, bpm: 120 },
+          { id: 'a', title: 'A', store_listed: true, store_featured: true, cover_url: 'cover.jpg', lease_price_usd: 25, bpm: 120, peaks_url: 'https://r2/a.peaks.json' },
           { id: 'b', title: 'B', store_listed: true, store_featured: false, cover_url: null, lease_price_usd: null, exclusive_price_usd: null },
           { id: 'c', title: 'C', store_listed: false, store_featured: true, cover_url: null },
         ];
@@ -38,6 +38,7 @@ describe('GET /api/tracks/store-summary', () => {
       noCover: { count: 1, firstId: 'b' },
       noPrice: { count: 1, firstId: 'b' },
       noBpmKey: { count: 1, firstId: 'b' },
+      missingPeaks: { count: 1, firstId: 'b' },
     });
   });
 

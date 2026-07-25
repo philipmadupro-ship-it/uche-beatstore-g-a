@@ -8,6 +8,13 @@ const log = createLogger('api.tracks.id.heatmap');
 
 export const dynamic = 'force-dynamic';
 
+interface PlayHeadPingRow {
+  track_id: string;
+  share_token?: string | null;
+  position_seconds: number;
+  created_at?: string | null;
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: trackId } = await params;
 
@@ -28,12 +35,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     // Local-store fallback
-    const all = getAll('play_head_pings' as any) || [];
-    const pings = all.filter((p: any) => p.track_id === trackId);
+    const all = getAll<PlayHeadPingRow>('play_head_pings') || [];
+    const pings = all.filter((p) => p.track_id === trackId);
     return NextResponse.json({ pings });
-  } catch (error: any) {
+  } catch (error: unknown) {
     log.error('Heatmap GET error:', { error: errorMessage(error) });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }
 
@@ -67,7 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     // Local-store fallback
-    const ping = insert('play_head_pings' as any, {
+    const ping = insert('play_head_pings', {
       track_id: trackId,
       share_token: share_token || null,
       position_seconds: pos,
@@ -75,8 +82,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     });
 
     return NextResponse.json({ ping });
-  } catch (error: any) {
+  } catch (error: unknown) {
     log.error('Heatmap POST error:', { error: errorMessage(error) });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

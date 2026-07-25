@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { Clock, Send, Mail, BellRing, ArrowUp, ArrowDown, Check } from 'lucide-react';
 import type { Contact } from '@/lib/types';
 import type { CrmStage } from '@/lib/contracts';
@@ -53,6 +54,8 @@ function SortHeader({ label, col, active, dir, onSort, className }: { label: str
 }
 
 export function ContactsTable(p: Props) {
+  const [now] = useState(() => Date.now());
+
   return (
     <>
       {/* ── Desktop: the full data table (lg+, where 920px fits) ──────── */}
@@ -78,7 +81,7 @@ export function ContactsTable(p: Props) {
               const sel = p.selectedIds.has(c.id);
               const sends = p.sendCountByContact.get(c.id) ?? 0;
               const last = p.lastSentByContact.get(c.id);
-              const lastDays = last ? Math.floor((Date.now() - Date.parse(last)) / 86_400_000) : null;
+              const lastDays = last ? Math.floor((now - Date.parse(last)) / 86_400_000) : null;
               const tone = p.toneFor(c.id);
               const nudge = p.needsNudge(c.id);
               const isDrop = p.dropHoverId === c.id;
@@ -205,7 +208,7 @@ export function ContactsTable(p: Props) {
           const sel = p.selectedIds.has(c.id);
           const sends = p.sendCountByContact.get(c.id) ?? 0;
           const last = p.lastSentByContact.get(c.id);
-          const lastDays = last ? Math.floor((Date.now() - Date.parse(last)) / 86_400_000) : null;
+          const lastDays = last ? Math.floor((now - Date.parse(last)) / 86_400_000) : null;
           const tone = p.toneFor(c.id);
           const nudge = p.needsNudge(c.id);
           const tier = p.leadTierByContact?.get(c.id);

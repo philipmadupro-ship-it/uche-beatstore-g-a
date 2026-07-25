@@ -17,6 +17,8 @@
  *     generated yet (proxy fallback → full ~80MB WAV) is never cached.
  */
 
+import { canFetchReadableAudio, cdnAudioSrc } from '@/lib/audio/cdn';
+
 const DB_NAME = 'antigravity-preview-cache';
 const DB_VERSION = 1;
 const STORE_BLOBS = 'blobs';
@@ -183,7 +185,8 @@ export async function prefetchPreview(id: string, url: string): Promise<void> {
   if (!id || !url || typeof indexedDB === 'undefined') return;
   // Only cache direct http(s) previews — never the proxy fallback (which may
   // stream a full master for un-previewed tracks).
-  if (!/^https?:\/\//i.test(url)) return;
+  const readableUrl = cdnAudioSrc(url);
+  if (!/^https?:\/\//i.test(readableUrl) || !canFetchReadableAudio(readableUrl)) return;
   if (await getMeta(id)) {
     // Cached in a previous session — hydrate the in-memory blob URL so the
     // synchronous peekPreviewSrc fast path hits on the first tap.
@@ -194,7 +197,7 @@ export async function prefetchPreview(id: string, url: string): Promise<void> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { signal: ctrl.signal, mode: 'cors', credentials: 'omit' });
+    const res = await fetch(readableUrl, { signal: ctrl.signal, mode: 'cors', credentials: 'omit' });
     if (!res.ok) return;
     const len = Number(res.headers.get('content-length') || 0);
     if (len > PREVIEW_MAX_BYTES) { ctrl.abort(); return; } // don't cache masters
@@ -242,9 +245,10 @@ export function enqueuePrefetch(items: Array<{ id: string; url: string }>): void
   for (const it of items) {
     if (added >= MAX_QUEUE_PER_CALL) break;
     if (!it.id || !it.url || seen.has(it.id)) continue;
-    if (!/^https?:\/\//i.test(it.url)) continue; // skip proxy-fallback (no preview yet)
+    const readableUrl = cdnAudioSrc(it.url);
+    if (!/^https?:\/\//i.test(readableUrl) || !canFetchReadableAudio(readableUrl)) continue; // skip proxy-fallback/no-CORS URLs
     seen.add(it.id);
-    queue.push(it);
+    queue.push({ id: it.id, url: readableUrl });
     added += 1;
   }
   if (added) pump();

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Antigravity CRM Outreach"
+  short_description: "Contacts, sends, segments, and tracking"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $antigravity-crm-outreach to improve this contacts or beat-send workflow."
+policy:
+  allow_implicit_invocation: true

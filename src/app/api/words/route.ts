@@ -17,6 +17,29 @@ export const runtime = 'nodejs';
 
 interface DatamuseHit { word: string; score?: number; numSyllables?: number; tags?: string[] }
 
+interface DictionaryPhonetic {
+  audio?: string;
+}
+
+interface DictionaryDefinition {
+  definition?: string;
+  example?: string;
+}
+
+interface DictionaryMeaning {
+  partOfSpeech?: string;
+  definitions?: DictionaryDefinition[];
+  synonyms?: string[];
+  antonyms?: string[];
+}
+
+interface DictionaryEntry {
+  word?: string;
+  phonetic?: string;
+  phonetics?: DictionaryPhonetic[];
+  meanings?: DictionaryMeaning[];
+}
+
 const DATAMUSE = 'https://api.datamuse.com/words';
 
 async function dm(params: Record<string, string>) {
@@ -37,15 +60,15 @@ async function define(word: string) {
   }
   const arr = await res.json();
   if (!Array.isArray(arr)) return [];
-  return arr.map((e: any) => ({
+  return (arr as DictionaryEntry[]).map((e) => ({
     word: e.word,
     phonetic: e.phonetic ?? null,
-    audio: (e.phonetics || []).find((p: any) => p.audio)?.audio || null,
-    meanings: (e.meanings || []).map((m: any) => ({
+    audio: (e.phonetics || []).find((p) => p.audio)?.audio || null,
+    meanings: (e.meanings || []).map((m) => ({
       partOfSpeech: m.partOfSpeech,
       definitions: (m.definitions || [])
         .slice(0, 4)
-        .map((d: any) => ({ definition: d.definition, example: d.example ?? null })),
+        .map((d) => ({ definition: d.definition, example: d.example ?? null })),
       synonyms: m.synonyms || [],
       antonyms: m.antonyms || [],
     })),
@@ -78,7 +101,8 @@ export async function GET(req: NextRequest) {
       default:
         return NextResponse.json({ error: 'unknown kind' }, { status: 400 });
     }
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'lookup failed' }, { status: 502 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'lookup failed';
+    return NextResponse.json({ error: message || 'lookup failed' }, { status: 502 });
   }
 }

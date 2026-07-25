@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local agent/worktree artifacts are not part of the active app source.
+    ".claude/**",
+    ".codex/**",
+    ".kilo/**",
     // Python venv that bundles its own JS — not our code:
     "stem-service/**",
     "data/**",

@@ -44,6 +44,14 @@ interface CreatorShape {
   share_video_style?: string | null;
 }
 
+interface CaptureStreamCanvas extends HTMLCanvasElement {
+  captureStream(frameRate?: number): MediaStream;
+}
+
+interface CaptureStreamAudio extends HTMLAudioElement {
+  captureStream?: () => MediaStream;
+}
+
 const BARS = 48;
 
 export default function VerticalSharePage({
@@ -149,10 +157,10 @@ function VerticalShareContent({
   useEffect(() => {
     setCanRecord(
       typeof window !== 'undefined' &&
-      typeof (window as any).MediaRecorder !== 'undefined' &&
+      typeof window.MediaRecorder !== 'undefined' &&
       // Safari supports MediaRecorder but lacks captureStream on <div>
       // — feature-detect captureStream specifically.
-      typeof (HTMLCanvasElement.prototype as any).captureStream === 'function',
+      typeof HTMLCanvasElement.prototype.captureStream === 'function',
     );
   }, []);
 
@@ -188,9 +196,9 @@ function VerticalShareContent({
       }
     }
 
-    const canvasStream = (canvas as any).captureStream(30) as MediaStream;
+    const canvasStream = (canvas as CaptureStreamCanvas).captureStream(30);
     // Pipe the audio into the stream so the recording has sound
-    const audioStream = (audio as any).captureStream?.() as MediaStream | undefined;
+    const audioStream = (audio as CaptureStreamAudio).captureStream?.();
     if (audioStream) {
       audioStream.getAudioTracks().forEach((t) => canvasStream.addTrack(t));
     }
@@ -320,7 +328,7 @@ function VerticalShareContent({
     return (
       <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-[#9B9282] px-6">
         <Music size={28} />
-        <p className="text-[14px]">This share preview isn't available.</p>
+        <p className="text-[14px]">This share preview isn&apos;t available.</p>
         <Link href="/store" className="text-[11px] underline hover:text-[#F7EBDD]">Back to store</Link>
       </div>
     );

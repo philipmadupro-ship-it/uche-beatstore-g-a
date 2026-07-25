@@ -17,6 +17,7 @@ import {
   DollarSign, Globe, Music, Lock, FileText, Zap, AlertCircle,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { errorMessage } from '@/lib/errors';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -123,8 +124,8 @@ export function LicenseBuilder() {
       setLicenses((ls) => ls.map((x) => x.id === l.id ? updated.license : x));
       setDrafts((ds) => { const next = { ...ds }; delete next[l.id]; return next; });
       toast.success('License saved');
-    } catch (err: any) {
-      toast.error('Save failed', err.message);
+    } catch (err: unknown) {
+      toast.error('Save failed', errorMessage(err));
     } finally {
       setSaving((s) => ({ ...s, [l.id]: false }));
     }
@@ -146,8 +147,8 @@ export function LicenseBuilder() {
       setLicenses((ls) => [...ls, data.license]);
       setExpandedId(data.license.id);
       toast.success('License tier created');
-    } catch (err: any) {
-      toast.error('Create failed', err.message);
+    } catch (err: unknown) {
+      toast.error('Create failed', errorMessage(err));
     } finally {
       setCreating(false);
     }
@@ -161,8 +162,8 @@ export function LicenseBuilder() {
       setLicenses((ls) => ls.filter((l) => l.id !== id));
       setDrafts((d) => { const n = { ...d }; delete n[id]; return n; });
       toast.success('License deleted');
-    } catch (err: any) {
-      toast.error('Delete failed', err.message);
+    } catch (err: unknown) {
+      toast.error('Delete failed', errorMessage(err));
     } finally {
       setDeleting(null);
     }

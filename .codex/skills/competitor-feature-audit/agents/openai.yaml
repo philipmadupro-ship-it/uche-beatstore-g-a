@@ -1,0 +1,7 @@
+interface:
+  display_name: "Competitor Feature Audit"
+  short_description: "Reference research without copying"
+  brand_color: "#928779"
+  default_prompt: "Use $competitor-feature-audit to inspect this Beatstor competitor reference."
+policy:
+  allow_implicit_invocation: true

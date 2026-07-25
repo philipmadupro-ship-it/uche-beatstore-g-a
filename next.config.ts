@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+import { fileURLToPath } from "node:url";
+
+const projectRoot = fileURLToPath(new URL(".", import.meta.url)).replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
   // Baseline security headers on every response. HSTS forces HTTPS;
@@ -82,14 +85,11 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-  // Silence turbopack/webpack conflict in Next 16
-  // @ts-ignore
   turbopack: {
     // Pin the workspace root to THIS project. Without it, Turbopack walks up
     // and finds a stray ~/package-lock.json, rooting at the home directory —
-    // which breaks .env.local resolution and the fs alias below. process.cwd()
-    // is the project dir for `npm run dev` / `npm run build`.
-    root: process.cwd(),
+    // which breaks .env.local resolution and the fs alias below.
+    root: projectRoot,
     // essentia.js UMD build has `require('fs')` inline; alias to empty stub
     // so the client bundle doesn't crash. upload-sessions.ts previously used
     // fs too, but has been rewritten to use in-memory storage so it no longer

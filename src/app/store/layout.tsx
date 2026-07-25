@@ -6,6 +6,15 @@ import { StoreLayoutClient } from './StoreLayoutClient';
 
 export const dynamic = 'force-dynamic';
 
+interface StoreMetadataProfile {
+  display_name: string | null;
+  bio: string | null;
+  hero_image_url: string | null;
+  seo_title?: string | null;
+  seo_description?: string | null;
+  og_image_url?: string | null;
+}
+
 /**
  * Storefront-root metadata. Pulled from the populated creator_profile
  * (migration 055 fields with sensible fallbacks). Consumed by social
@@ -32,7 +41,7 @@ export async function generateMetadata(): Promise<Metadata> {
       .limit(1)
       .maybeSingle();
 
-    const c = data as any | null;
+    const c = data as StoreMetadataProfile | null;
     const title = c?.seo_title?.trim()
       || (c?.display_name ? `${c.display_name} — Beat store` : fallback.title!);
     const description = c?.seo_description?.trim()

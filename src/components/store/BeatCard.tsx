@@ -1,12 +1,16 @@
 'use client';
 
 /**
- * BeatCard — Untitled-grade store card.
+ * BeatCard — the store's grid card.
  *
- * Architecture: cover image IS the card. Title, type, and price are
- * overlaid on the bottom half with a gradient scrim so they're always
- * legible. The only element outside the cover is a compact buy strip —
- * keeping the card a clean, tight unit at any size.
+ * Quiet-luxury architecture (see docs/design-direction.md): the cover IS the
+ * card. One surface, one hairline edge, one accent. Title and metadata sit on
+ * a soft scrim; the single action lives in a quiet strip beneath.
+ *
+ * Deliberate reductions from the previous revision: the gradient "bezel" tray,
+ * the stacked ring shadow, the duplicated price pill (price already lives in
+ * the buy strip), the pulsing playing dot, and the heavy title text-shadow.
+ * Playing state is now communicated once, by the accent edge.
  */
 
 import { Heart, Download } from 'lucide-react';
@@ -46,20 +50,9 @@ export function BeatCard({
   const hasLicenseTiers = licenseCount > 0;
   const fromPrice = hasLicenseTiers ? lowestLicensePrice : priceLease ?? priceExclusive;
 
-  const ringStyle: React.CSSProperties = isPreview
-    ? { boxShadow: `0 0 0 1.5px ${accentColor}` }
-    : isPlaying
-      ? { boxShadow: `0 0 0 1px ${accentColor}66` }
-      : {};
-
-  // Double-bezel outer shell — the card sits inside a gradient "tray"
-  // that creates physical depth without a border. The inner card has its
-  // own surface, producing the machined-hardware look from the design system.
-  const bezelBg = isPreview
-    ? `linear-gradient(135deg, ${accentColor}55, ${accentColor}22)`
-    : isPlaying
-      ? `linear-gradient(135deg, ${accentColor}33, ${accentColor}11)`
-      : 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)';
+  // One edge treatment. Active (preview or playing) borrows the accent; every
+  // other state is a hairline that firms up slightly on hover.
+  const isActive = isPreview || isCurrent;
 
   return (
     <div
@@ -68,60 +61,46 @@ export function BeatCard({
       tabIndex={0}
       onClick={onPreview}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(); } }}
-      className="group cursor-pointer focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/40 rounded-[14px] p-[1.5px]"
+      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-[#171511] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E7D7BE]/50 ${
+        isActive ? '' : 'border-white/[0.06] hover:border-white/[0.12]'
+      }`}
       style={{
-        background: bezelBg,
-        ...ringStyle,
-        transition: 'transform 400ms cubic-bezier(0.32,0.72,0,1)',
+        ...(isActive ? { borderColor: accentColor } : {}),
+        transition: 'border-color 400ms cubic-bezier(0.32,0.72,0,1)',
       }}
     >
-    {/* Inner card — the actual surface */}
-    <div
-      className="relative rounded-[13px] overflow-hidden flex flex-col bg-[#171511] group-hover:shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
-      style={{ transition: 'box-shadow 400ms cubic-bezier(0.32,0.72,0,1)' }}
-    >
-      {/* ── Cover — clicking anywhere on cover opens the preview drawer.
-           The play button circle inside gets pointer-events-auto so
-           clicking it specifically plays without opening preview. */}
-      <div
-        className="relative w-full aspect-square overflow-hidden"
-      >
-        {/* Art or seeded gradient fallback */}
+      {/* ── Cover — clicking anywhere opens the preview drawer ── */}
+      <div className="relative w-full aspect-square overflow-hidden">
         {track.cover_url ? (
           <CoverImage
             src={track.cover_url}
             alt=""
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 280px"
-            className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.05] [transition:transform_700ms_cubic-bezier(0.32,0.72,0,1)]"
+            className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] [transition:transform_700ms_cubic-bezier(0.32,0.72,0,1)]"
           />
         ) : (
-          <div
-            className="absolute inset-0"
-            style={seededGradient(track.id)}
-          />
+          <div className="absolute inset-0" style={seededGradient(track.id)} />
         )}
 
-        {/* Gradient scrim — heavy at bottom for text legibility */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-black/5" />
+        {/* Single scrim — carries the title legibility on its own. */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
 
-        {/* ── Top row: BPM · wishlist ── */}
+        {/* ── Top row: status/BPM · wishlist ── */}
         <div className="absolute top-0 inset-x-0 flex items-start justify-between p-2.5 gap-2">
-          {/* BPM or status chip */}
           {track.exclusive_sold ? (
-            <span className="text-[9px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-black/60 text-[#E7D7BE]/80 border border-[#E7D7BE]/25 backdrop-blur-sm">
+            <span className="rounded bg-black/50 px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-[0.1em] text-white/70 backdrop-blur-sm">
               Sold
             </span>
           ) : track.free_download_enabled ? (
-            <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-[#6DC6A4] text-black">
+            <span className="rounded bg-black/50 px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-[0.1em] text-[#6DC6A4] backdrop-blur-sm">
               Free
             </span>
           ) : track.bpm ? (
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-black/50 text-white/75 backdrop-blur-sm">
+            <span className="rounded bg-black/50 px-1.5 py-0.5 text-[9px] font-mono tracking-[0.1em] text-white/70 backdrop-blur-sm">
               {track.bpm}
             </span>
           ) : <span />}
 
-          {/* Wishlist */}
           {onToggleWishlist ? (
             <button
               data-card-action
@@ -129,23 +108,23 @@ export function BeatCard({
               onClick={stop(onToggleWishlist)}
               aria-label={isWishlisted ? 'Remove from favorites' : 'Add to favorites'}
               aria-pressed={!!isWishlisted}
-              className={`tap -mr-2 -mt-2 flex size-11 shrink-0 items-center justify-center rounded-full backdrop-blur-sm transition-colors ${
-                isWishlisted
-                  ? 'bg-[#D6BE7A]/30 text-[#D6BE7A]'
-                  : 'bg-black/30 text-white/50 hover:text-white'
+              className={`tap -mr-2 -mt-2 flex size-11 shrink-0 items-center justify-center rounded-full transition-colors ${
+                isWishlisted ? 'text-[#c8a84b]' : 'text-white/50 hover:text-white'
               }`}
             >
-              <Heart size={12} fill={isWishlisted ? 'currentColor' : 'none'} />
+              <Heart size={13} fill={isWishlisted ? 'currentColor' : 'none'} />
             </button>
           ) : <span />}
         </div>
 
-        {/* ── Centre: play glyph (hover) — purely a "click to preview"
-             affordance. pointer-events-none so the click passes through to
-             the card's onPreview; you play from inside the drawer. ── */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none" style={{ transition: 'opacity 300ms cubic-bezier(0.22,1,0.36,1)' }}>
+        {/* ── Centre: play affordance on hover (pointer-events-none so the
+             click falls through to the card's onPreview). ── */}
+        <div
+          className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none"
+          style={{ transition: 'opacity 300ms cubic-bezier(0.32,0.72,0,1)' }}
+        >
           <div
-            className="w-11 h-11 rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+            className="flex h-11 w-11 items-center justify-center rounded-full"
             style={{ backgroundColor: accentColor }}
           >
             {isCurrent && isPlaying
@@ -154,93 +133,75 @@ export function BeatCard({
           </div>
         </div>
 
-        {/* ── Bottom overlay: title + key + price ── */}
-        <div className="absolute bottom-0 inset-x-0 p-2.5 flex flex-col items-start gap-1.5 sm:flex-row sm:items-end sm:justify-between sm:gap-2">
-          <div className="min-w-0 w-full flex-1">
-            {/* Playing indicator */}
-            {isCurrent && (
-              <span className="block w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] animate-pulse mb-1.5" />
-            )}
-            <p
-              className="text-[15px] sm:text-base font-bold text-[#FFF8EE] leading-tight truncate [text-shadow:0_2px_8px_rgba(0,0,0,0.95)]"
-              style={isCurrent ? { color: accentColor } : {}}
-            >
-              {track.title}
-            </p>
-            <p className="text-[9px] font-mono text-white/45 uppercase tracking-[0.1em] truncate mt-0.5">
-              {[track.type, keyLabel].filter(Boolean).join(' · ')}
-            </p>
-          </div>
-
-          {/* Price pill — accent tinted, shown when not free/sold */}
-          {!track.exclusive_sold && !track.free_download_enabled && fromPrice != null && (
-            <span
-              className="shrink-0 self-start text-[12px] font-bold tabular-nums px-2.5 py-1 rounded-lg text-black shadow-[0_2px_8px_rgba(0,0,0,0.4)] sm:self-auto"
-              style={{ backgroundColor: accentColor }}
-            >
-              {hasLicenseTiers ? 'from ' : ''}${fromPrice}
-            </span>
-          )}
+        {/* ── Bottom: title + metadata. Price is intentionally not repeated
+             here; it lives in the action strip below. ── */}
+        <div className="absolute bottom-0 inset-x-0 p-3">
+          <p
+            className="truncate text-[14px] font-semibold leading-snug text-[#F7EBDD]"
+            style={isActive ? { color: accentColor } : {}}
+          >
+            {track.title}
+          </p>
+          <p className="mt-1 truncate text-[9px] font-mono uppercase tracking-[0.14em] text-white/45">
+            {[track.type, keyLabel].filter(Boolean).join(' · ')}
+          </p>
         </div>
       </div>
 
-      {/* ── Buy strip — the only element outside the cover ── */}
+      {/* ── Action strip ── */}
       <div
         data-card-action
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#11100D] border-t border-white/[0.06]"
+        className="border-t border-white/[0.06]"
       >
         {track.exclusive_sold ? (
-          <div className="flex min-h-11 items-center justify-center text-[#E7D7BE]/40 text-[9px] font-mono uppercase tracking-wider">
+          <div className="flex min-h-11 items-center justify-center text-[11px] text-white/30">
             Exclusive sold
           </div>
         ) : track.free_download_enabled ? (
           <button
             onClick={stop(onFreeDownload)}
-            className="tap flex min-h-11 w-full items-center justify-center gap-1.5 text-[#6DC6A4] text-[9px] font-mono font-bold uppercase tracking-wider hover:bg-[#6DC6A4]/5 transition-colors"
+            className="tap flex min-h-11 w-full items-center justify-center gap-1.5 text-[11px] font-medium text-[#6DC6A4] transition-colors hover:bg-white/[0.03]"
           >
-            <Download size={10} />
+            <Download size={11} />
             Free download
           </button>
         ) : hasLicenseTiers ? (
           <button
             onClick={stop(onPreview)}
-            className="tap flex min-h-11 w-full items-center justify-center gap-2 text-[9px] font-mono font-bold uppercase tracking-wider text-[#F7EBDD] transition-colors hover:bg-white/[0.04]"
+            className="tap flex min-h-11 w-full items-center justify-center gap-1.5 text-[11px] font-medium text-[#F7EBDD] transition-colors hover:bg-white/[0.03]"
           >
             Choose license
             {fromPrice != null && (
-              <span className="text-[#B4AA99]">
-                from ${fromPrice}
-              </span>
+              <span className="tabular-nums text-white/45">from ${fromPrice}</span>
             )}
           </button>
         ) : (
-          <div className="flex min-h-11 items-stretch divide-x divide-white/[0.06]">
+          <div className="flex min-h-11 items-stretch">
             <button
               onClick={stop(onAddLease)}
               disabled={priceLease == null}
-              className="tap flex flex-1 flex-col items-center justify-center gap-px transition-colors hover:bg-white/[0.04] disabled:cursor-not-allowed disabled:opacity-25"
+              className="tap flex flex-1 items-center justify-center gap-1.5 text-[11px] transition-colors hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-25"
             >
-              <span className="text-[7px] font-mono uppercase tracking-[0.18em] text-white/25 leading-none">Lease</span>
-              <span className="text-[12px] font-bold text-[#F7EBDD] tabular-nums leading-none">
+              <span className="text-white/45">Lease</span>
+              <span className="font-semibold tabular-nums text-[#F7EBDD]">
                 {priceLease != null ? `$${priceLease}` : '—'}
               </span>
             </button>
+            <span className="my-2.5 w-px bg-white/[0.06]" aria-hidden />
             <button
               onClick={stop(onAddExclusive)}
               disabled={priceExclusive == null}
-              className="tap flex flex-1 flex-col items-center justify-center gap-px transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-25"
-              style={{ backgroundColor: `${accentColor}18` }}
+              className="tap flex flex-1 items-center justify-center gap-1.5 text-[11px] transition-colors hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-25"
             >
-              <span className="text-[7px] font-mono uppercase tracking-[0.18em] text-white/25 leading-none">Excl.</span>
-              <span className="text-[12px] font-bold tabular-nums leading-none" style={{ color: accentColor }}>
+              <span className="text-white/45">Exclusive</span>
+              <span className="font-semibold tabular-nums" style={{ color: accentColor }}>
                 {priceExclusive != null ? `$${priceExclusive}` : '—'}
               </span>
             </button>
           </div>
         )}
       </div>
-    </div>{/* /inner card */}
     </div>
   );
 }

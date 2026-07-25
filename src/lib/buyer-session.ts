@@ -15,6 +15,7 @@
  */
 
 const KEY = 'antigravity-buyer-token';
+const SESSION_MODE_KEY = 'antigravity-buyer-session-mode';
 
 export function getBuyerToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -43,6 +44,25 @@ export function clearBuyerToken(): void {
   }
 }
 
+export function setPersistentBuyerSession(active: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (active) window.localStorage.setItem(SESSION_MODE_KEY, '1');
+    else window.localStorage.removeItem(SESSION_MODE_KEY);
+  } catch {
+    /* noop */
+  }
+}
+
+function hasPersistentBuyerSession(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(SESSION_MODE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 interface BuyerActionResult {
   ok: boolean;
   data?: unknown;
@@ -56,16 +76,21 @@ interface BuyerActionResult {
  */
 async function dispatch(action: Record<string, unknown>): Promise<BuyerActionResult> {
   const token = getBuyerToken();
-  if (!token) return { ok: false, error: 'No buyer token' };
+  const sessionMode = !token && hasPersistentBuyerSession();
+  if (!token && !sessionMode) return { ok: false, error: 'No buyer session' };
+  const query = token
+    ? `token=${encodeURIComponent(token)}`
+    : 'session=1';
   try {
-    const res = await fetch(`/api/store/me?token=${encodeURIComponent(token)}`, {
+    const res = await fetch(`/api/store/me?${query}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(action),
     });
     if (res.status === 400) {
       // Token expired or invalid → wipe so future calls are no-ops.
-      clearBuyerToken();
+      if (token) clearBuyerToken();
+      else setPersistentBuyerSession(false);
       return { ok: false, error: 'Token expired' };
     }
     const data = await res.json().catch(() => ({}));

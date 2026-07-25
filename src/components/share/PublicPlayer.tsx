@@ -1,13 +1,30 @@
 'use client';
 
 import { useState } from 'react';
+import NextImage from 'next/image';
 import bcrypt from 'bcryptjs';
-import { Lock, Play, Pause, Download, Music } from 'lucide-react';
+import { Lock, Download, Music } from 'lucide-react';
 import { WavePlayer } from '@/components/player/WavePlayer';
 
+interface PublicShareLink {
+  password_hash?: string | null;
+}
+
+interface PublicTrack {
+  id: string;
+  title: string;
+  type?: string | null;
+  audio_url: string;
+  cover_url?: string | null;
+  peaks_url?: string | null;
+  bpm?: number | null;
+  key?: string | null;
+  scale?: string | null;
+}
+
 interface PublicPlayerProps {
-  shareLink: any;
-  tracks: any[];
+  shareLink: PublicShareLink;
+  tracks: PublicTrack[];
 }
 
 export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
@@ -19,8 +36,13 @@ export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
   const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const passwordHash = shareLink.password_hash;
+    if (!passwordHash) {
+      setIsUnlocked(true);
+      return;
+    }
     
-    const matches = await bcrypt.compare(password, shareLink.password_hash);
+    const matches = await bcrypt.compare(password, passwordHash);
     if (matches) {
       setIsUnlocked(true);
     } else {
@@ -67,9 +89,9 @@ export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
     <div className="max-w-4xl mx-auto p-8 lg:p-16 space-y-12">
       {/* Header */}
       <div className="flex flex-col md:flex-row items-center md:items-end gap-8 border-b border-[#2B2821] pb-12">
-        <div className="w-48 h-48 bg-[#1A1813] rounded-sm shadow-2xl flex items-center justify-center text-[#3B372F]">
+        <div className="relative w-48 h-48 bg-[#1A1813] rounded-sm shadow-2xl flex items-center justify-center text-[#3B372F] overflow-hidden">
           {activeTrack?.cover_url ? (
-            <img loading="lazy" src={activeTrack.cover_url} alt="" className="w-full h-full object-cover rounded-sm" />
+            <NextImage src={activeTrack.cover_url} alt="" fill sizes="192px" unoptimized className="object-cover" />
           ) : (
             <Music size={64} />
           )}

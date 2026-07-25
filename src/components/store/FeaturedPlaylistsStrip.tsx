@@ -38,9 +38,9 @@ export function FeaturedPlaylistsStrip({
       <div className="max-w-[1400px] mx-auto px-4 md:px-8 pt-8 pb-2">
         <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#9B9282] mb-4">{label}</p>
         <div className="flex gap-4 overflow-x-auto pb-3 no-scrollbar snap-x snap-mandatory">
-          {playlists.map((pl) => {
+          {playlists.map((pl, index) => {
             const href = detailHrefBase ? `${detailHrefBase}/${pl.id}` : '#';
-            const projectPrice = (pl as any).price_usd as number | null | undefined;
+            const projectPrice = pl.price_usd;
             return (
               <Link
                 key={pl.id}
@@ -57,6 +57,7 @@ export function FeaturedPlaylistsStrip({
                       <CoverImage
                         src={pl.cover_url}
                         sizes="(max-width: 640px) 45vw, 180px"
+                        priority={index === 0}
                         className="object-cover group-hover:scale-[1.04] transition-transform duration-500 ease-out"
                       />
                     ) : (
@@ -95,7 +96,7 @@ export function FeaturedPlaylistsStrip({
     <div className="max-w-[1400px] mx-auto px-4 md:px-8 pt-8 pb-2">
       <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#9B9282] mb-4">{label}</p>
       <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
-        {playlists.map((pl) => (
+        {playlists.map((pl, index) => (
           <button
             key={pl.id}
             onClick={() => setExpandedId((id) => (id === pl.id ? null : pl.id))}
@@ -103,7 +104,7 @@ export function FeaturedPlaylistsStrip({
           >
             <div className={`relative w-full aspect-square rounded-xl bg-[#171511] border overflow-hidden mb-2 flex items-center justify-center transition-all ${expandedId === pl.id ? 'border-[#E7D7BE]/40 shadow-lg shadow-[#E7D7BE]/5' : 'border-[#2B2821] group-hover:border-[#3B372F]'}`}>
               {pl.cover_url
-                ? <CoverImage src={pl.cover_url} sizes="140px" className="object-cover" />
+                ? <CoverImage src={pl.cover_url} sizes="140px" priority={index === 0} className="object-cover" />
                 : <ListMusic size={24} className="text-[#3B372F]" />}
             </div>
             <p className="text-[11px] font-medium text-[#F7EBDD] truncate">{pl.name}</p>
@@ -135,13 +136,13 @@ export function FeaturedPlaylistsStrip({
                     <ChevronRight size={11} />
                   </Link>
                 )}
-                {onBuyProject && (pl as any).price_usd != null && Number((pl as any).price_usd) > 0 && (
+                {onBuyProject && pl.price_usd != null && Number(pl.price_usd) > 0 && (
                   <button
-                    onClick={() => onBuyProject(pl as any)}
+                    onClick={() => onBuyProject(pl)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#E7D7BE] text-black text-[9px] font-mono uppercase tracking-widest hover:bg-[#F3E6D1] transition-colors"
                   >
                     <ShoppingBag size={11} />
-                    Buy project — ${(pl as any).price_usd}
+                    Buy project — ${pl.price_usd}
                   </button>
                 )}
                 {onAddAllToCart && pl.tracks.some((t) => priceFor(t, 'lease') != null) && (

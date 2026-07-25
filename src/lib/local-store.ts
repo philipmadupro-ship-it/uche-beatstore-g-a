@@ -4,36 +4,42 @@ import { nanoid } from 'nanoid';
 
 const DB_PATH = path.join(process.cwd(), 'data', 'db.json');
 
+type LocalRow = Record<string, never>;
+
 interface DBSchema {
-  tracks: any[];
-  playlists: any[];
-  playlist_tracks: any[];
-  projects: any[];
-  project_tracks: any[];
-  track_versions: any[];
-  share_plays: any[];
-  contacts: any[];
-  beat_sends: any[];
-  calendar_events: any[];
-  share_links: any[];
-  team_members: any[];
-  invites: any[];
-  stems: any[];
-  track_tags: any[];
-  rating_history: any[];
-  project_shares: any[];
-  project_comments: any[];
-  campaigns: any[];
-  campaign_targets: any[];
-  smart_playlists: any[];
-  project_tags: any[];
-  project_folders: any[];
-  project_folder_items: any[];
-  playlist_tags: any[];
-  playlist_folders: any[];
-  playlist_folder_items: any[];
-  contact_segments: any[];
-  contact_tags: any[];
+  tracks: LocalRow[];
+  playlists: LocalRow[];
+  playlist_tracks: LocalRow[];
+  projects: LocalRow[];
+  project_tracks: LocalRow[];
+  track_versions: LocalRow[];
+  share_plays: LocalRow[];
+  contacts: LocalRow[];
+  beat_sends: LocalRow[];
+  calendar_events: LocalRow[];
+  share_links: LocalRow[];
+  team_members: LocalRow[];
+  invites: LocalRow[];
+  stems: LocalRow[];
+  track_tags: LocalRow[];
+  rating_history: LocalRow[];
+  play_head_pings: LocalRow[];
+  project_shares: LocalRow[];
+  project_comments: LocalRow[];
+  campaigns: LocalRow[];
+  campaign_targets: LocalRow[];
+  smart_playlists: LocalRow[];
+  project_tags: LocalRow[];
+  project_folders: LocalRow[];
+  project_folder_items: LocalRow[];
+  playlist_tags: LocalRow[];
+  playlist_folders: LocalRow[];
+  playlist_folder_items: LocalRow[];
+  contact_segments: LocalRow[];
+  contact_tags: LocalRow[];
+  creator_profiles: LocalRow[];
+  licenses: LocalRow[];
+  track_licenses: LocalRow[];
 }
 
 function getEmptyDB(): DBSchema {
@@ -54,6 +60,7 @@ function getEmptyDB(): DBSchema {
     stems: [],
     track_tags: [],
     rating_history: [],
+    play_head_pings: [],
     project_shares: [],
     project_comments: [],
     campaigns: [],
@@ -67,6 +74,9 @@ function getEmptyDB(): DBSchema {
     playlist_folder_items: [],
     contact_segments: [],
     contact_tags: [],
+    creator_profiles: [],
+    licenses: [],
+    track_licenses: [],
   };
 }
 
@@ -80,7 +90,7 @@ function readDB(): DBSchema {
       fs.writeFileSync(DB_PATH, JSON.stringify(getEmptyDB(), null, 2));
     }
     const raw = fs.readFileSync(DB_PATH, 'utf-8');
-    return JSON.parse(raw);
+    return { ...getEmptyDB(), ...(JSON.parse(raw) as Partial<DBSchema>) };
   } catch {
     return getEmptyDB();
   }
@@ -94,17 +104,18 @@ function writeDB(db: DBSchema) {
   fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
 }
 
-export function getAll(table: keyof DBSchema) {
+export function getAll<T extends object = never>(table: keyof DBSchema): T[] {
   const db = readDB();
-  return db[table] || [];
+  return (db[table] || []) as unknown as T[];
 }
 
-export function getById(table: keyof DBSchema, id: string) {
+export function getById<T extends object = never>(table: keyof DBSchema, id: string): (T & { id?: string }) | null {
   const db = readDB();
-  return (db[table] || []).find((row: any) => row.id === id) || null;
+  const rows = (db[table] || []) as unknown as Array<T & { id?: string }>;
+  return rows.find((row) => row.id === id) || null;
 }
 
-export function insert(table: keyof DBSchema, row: any) {
+export function insert<T extends object>(table: keyof DBSchema, row: T): T & { id: string; created_at: string } {
   const db = readDB();
   const newRow = {
     id: nanoid(),
@@ -112,32 +123,40 @@ export function insert(table: keyof DBSchema, row: any) {
     ...row,
   };
   if (!db[table]) db[table] = [];
-  db[table].push(newRow);
+  db[table].push(newRow as unknown as LocalRow);
   writeDB(db);
   return newRow;
 }
 
-export function update(table: keyof DBSchema, id: string, partial: any) {
+export function update<T extends object = LocalRow>(
+  table: keyof DBSchema,
+  id: string,
+  partial: Partial<T>,
+): (T & { id?: string }) | null {
   const db = readDB();
-  const arr = db[table] || [];
-  const idx = arr.findIndex((row: any) => row.id === id);
+  const arr = (db[table] || []) as unknown as Array<T & { id?: string }>;
+  const idx = arr.findIndex((row) => row.id === id);
   if (idx === -1) return null;
   arr[idx] = { ...arr[idx], ...partial };
+  db[table] = arr as unknown as LocalRow[];
   writeDB(db);
   return arr[idx];
 }
 
 export function deleteRow(table: keyof DBSchema, id: string) {
   const db = readDB();
-  const arr = db[table] || [];
-  db[table] = arr.filter((row: any) => row.id !== id);
+  const arr = (db[table] || []) as Array<LocalRow & { id?: string }>;
+  db[table] = arr.filter((row) => row.id !== id);
   writeDB(db);
   return true;
 }
 
-export function query(table: keyof DBSchema, filter: (row: any) => boolean) {
+export function query<T extends object = never>(
+  table: keyof DBSchema,
+  filter: (row: T) => boolean,
+): T[] {
   const db = readDB();
-  return (db[table] || []).filter(filter);
+  return ((db[table] || []) as unknown as T[]).filter(filter);
 }
 
 /**

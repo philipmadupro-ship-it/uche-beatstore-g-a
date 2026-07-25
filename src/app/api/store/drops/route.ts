@@ -7,6 +7,12 @@ import { publicError } from '@/lib/api-error';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface ScheduledDropTrackRow {
+  id: string;
+  store_listed: boolean | null;
+  scheduled_publish_at: string | null;
+}
+
 /**
  * GET /api/store/drops   — public list of upcoming drops, soonest first.
  * POST /api/store/drops  — subscribe an email to a specific drop.
@@ -63,11 +69,12 @@ export async function POST(req: NextRequest) {
       .select('id, store_listed, scheduled_publish_at')
       .eq('id', parsed.data.track_id)
       .maybeSingle();
-    if (!track) return NextResponse.json({ error: 'Track not found' }, { status: 404 });
-    if ((track as any).store_listed) {
+    const scheduledTrack = track as ScheduledDropTrackRow | null;
+    if (!scheduledTrack) return NextResponse.json({ error: 'Track not found' }, { status: 404 });
+    if (scheduledTrack.store_listed) {
       return NextResponse.json({ error: 'Track is already live' }, { status: 400 });
     }
-    if (!(track as any).scheduled_publish_at) {
+    if (!scheduledTrack.scheduled_publish_at) {
       return NextResponse.json({ error: 'Track has no scheduled drop' }, { status: 400 });
     }
 

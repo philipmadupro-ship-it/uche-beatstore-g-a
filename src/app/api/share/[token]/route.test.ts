@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mockIsSupabaseConfigured = vi.fn();
-const mockFromQueue: Array<(table: string) => any> = [];
+const mockFromQueue: Array<(table: string) => unknown> = [];
 
 vi.mock('@/lib/db', () => ({
   isSupabaseConfigured: () => mockIsSupabaseConfigured(),
@@ -34,8 +34,31 @@ function maybeSingleResult(data: unknown, error: unknown = null) {
     select: () => ({
       eq: () => ({
         single: () => Promise.resolve({ data, error }),
+        maybeSingle: () => Promise.resolve({ data, error }),
       }),
     }),
+  });
+}
+
+function listResult(data: unknown, error: unknown = null) {
+  return () => ({
+    select: () => ({
+      in: () => Promise.resolve({ data, error }),
+    }),
+  });
+}
+
+function updateResult() {
+  return () => ({
+    update: () => ({
+      eq: () => Promise.resolve({ error: null }),
+    }),
+  });
+}
+
+function insertResult() {
+  return () => ({
+    insert: () => Promise.resolve({ error: null }),
   });
 }
 
@@ -70,5 +93,43 @@ describe('GET /api/share/[token]', () => {
     const body = await res.json();
     expect(body.error).toMatch(/revoked/i);
     expect(mockFromQueue).toHaveLength(0);
+  });
+
+  it('returns signed audio and peaks URLs for shared tracks', async () => {
+    vi.stubEnv('SHARE_MEDIA_TOKEN_SECRET', 'test-share-secret');
+    mockFromQueue.push(
+      maybeSingleResult({
+        token: 'share-token',
+        track_ids: ['track-1'],
+        revoked_at: null,
+        expires_at: null,
+        password_hash: null,
+        allow_downloads: false,
+        user_id: 'user-1',
+        plays: 0,
+      }),
+      listResult([
+        {
+          id: 'track-1',
+          title: 'Shared Beat',
+          audio_url: 'r2://private/tracks/a.wav',
+          preview_url: null,
+          peaks_url: 'https://pub.r2.dev/peaks/a.json',
+        },
+      ]),
+      listResult([]),
+      maybeSingleResult({ display_name: 'Seller One' }),
+      updateResult(),
+      insertResult(),
+    );
+
+    const mod = await loadRoute();
+    const res = await mod.GET(req(), { params: Promise.resolve({ token: 'share-token' }) });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.tracks[0].audio_url).toMatch(/^\/api\/share\/share-token\/preview\/track-1\?/);
+    expect(body.tracks[0].peaks_url).toMatch(/^\/api\/share\/share-token\/peaks\/track-1\?/);
+    expect(body.tracks[0].preview_url).toBeUndefined();
   });
 });

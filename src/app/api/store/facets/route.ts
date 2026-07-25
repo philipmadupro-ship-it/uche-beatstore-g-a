@@ -9,14 +9,17 @@ export const dynamic = 'force-dynamic';
 type FacetTrack = {
   id: string;
   user_id?: string | null;
+  store_listed?: boolean | null;
   key?: string | null;
   bpm?: number | null;
   lease_price_usd?: number | null;
 };
 
+type FacetTag = { track_id: string; tag: string; category: string | null };
+
 function buildFacetPayload(
   tracks: FacetTrack[],
-  tags: Array<{ track_id: string; tag: string; category: string | null }>,
+  tags: FacetTag[],
 ) {
   const trackIds = new Set(tracks.map((track) => track.id));
   const genres = new Set<string>();
@@ -56,7 +59,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 export async function GET() {
   try {
     if (!isSupabaseConfigured()) {
-      const tracks = ((getAll('tracks') as any[]) || [])
+      const tracks = getAll<FacetTrack>('tracks')
         .filter((track) => track.store_listed === true)
         .map((track) => ({
           id: track.id,
@@ -64,7 +67,7 @@ export async function GET() {
           bpm: track.bpm ?? null,
           lease_price_usd: track.lease_price_usd ?? null,
         }));
-      const tags = ((getAll('track_tags' as any) as any[]) || []).map((tag) => ({
+      const tags = getAll<FacetTag>('track_tags').map((tag) => ({
         track_id: tag.track_id,
         tag: tag.tag,
         category: tag.category ?? null,
@@ -102,7 +105,7 @@ export async function GET() {
         .select('track_id,tag,category')
         .in('track_id', ids);
       if (tagError) throw tagError;
-      return (tagRows ?? []) as Array<{ track_id: string; tag: string; category: string | null }>;
+      return (tagRows ?? []) as FacetTag[];
     }));
     const tags = tagChunks.flat();
 

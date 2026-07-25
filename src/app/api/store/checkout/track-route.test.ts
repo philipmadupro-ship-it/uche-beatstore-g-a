@@ -2,7 +2,7 @@
  * Track-mode route tests for /api/store/checkout.
  *
  * Reliability contract:
- * - exclusive checkout writes stems_pending_track_ids when delivery files are not ready
+ * - exclusive checkout rejects tracks without a WAV or ready stems
  * - exclusive checkout leaves stems_pending_track_ids empty when either ready stems or a WAV exists
  * - promo usage is not incremented until the paid webhook completion path
  */
@@ -177,6 +177,48 @@ describe('POST /api/store/checkout — track mode exclusive delivery metadata', 
     expect(args.metadata.store_session_id).toBe('store-session-1');
   });
 
+  it('rejects a stems-included custom tier when delivery files are missing', async () => {
+    const licenseId = '12121212-1212-4121-8121-121212121212';
+    mockTracks.push({
+      id: 'track-1',
+      user_id: 'seller-1',
+      title: 'Trackout Draft',
+      store_listed: true,
+      exclusive_sold: false,
+      lease_price_usd: 30,
+      exclusive_price_usd: 250,
+      wav_url: null,
+      stems_status: 'pending',
+    });
+    mockLicenses.push({
+      id: licenseId,
+      user_id: 'seller-1',
+      name: 'Trackout',
+      price_usd: 99,
+      is_exclusive: false,
+      is_free: false,
+      file_types: ['MP3', 'WAV', 'STEMS'],
+      stems_included: true,
+    });
+    mockTrackLicenses.push({
+      track_id: 'track-1',
+      license_id: licenseId,
+      price_override_usd: null,
+      enabled: true,
+    });
+
+    const mod = await loadRoute();
+    const res = await mod.POST(postBody({
+      buyer_email: 'buyer@example.test',
+      items: [{ track_id: 'track-1', license_id: licenseId, license_type: 'lease' }],
+    }));
+
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error).toMatch(/needs a WAV master or ready stems/i);
+    expect(mockSessionsCreate).not.toHaveBeenCalled();
+  });
+
   it('rejects a custom license that belongs to another seller', async () => {
     const licenseId = '22222222-2222-4222-8222-222222222222';
     mockTracks.push({
@@ -209,7 +251,7 @@ describe('POST /api/store/checkout — track mode exclusive delivery metadata', 
     expect(mockSessionsCreate).not.toHaveBeenCalled();
   });
 
-  it('allows exclusive checkout and marks stems pending when neither WAV nor ready stems exist', async () => {
+  it('rejects exclusive checkout when neither WAV nor ready stems exist', async () => {
     mockTracks.push({
       id: 'track-1',
       user_id: 'seller-1',
@@ -225,12 +267,10 @@ describe('POST /api/store/checkout — track mode exclusive delivery metadata', 
     const mod = await loadRoute();
     const res = await mod.POST(postBody(exclusiveBody()));
 
-    expect(res.status).toBe(200);
-    expect(mockSessionsCreate).toHaveBeenCalledTimes(1);
-    const args = mockSessionsCreate.mock.calls[0][0];
-    expect(args.line_items[0].price_data.unit_amount).toBe(25000);
-    expect(args.metadata.license_type).toBe('exclusive');
-    expect(args.metadata.stems_pending_track_ids).toBe('track-1');
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error).toMatch(/needs a WAV master or ready stems/i);
+    expect(mockSessionsCreate).not.toHaveBeenCalled();
   });
 
   it('allows exclusive checkout when stems are ready', async () => {
@@ -289,7 +329,7 @@ describe('POST /api/store/checkout — track mode exclusive delivery metadata', 
       exclusive_price_usd: 250,
       lease_price_usd: 30,
       wav_url: null,
-      stems_status: 'none',
+      stems_status: 'done',
     });
     mockPromo = {
       code: 'SAVE10',

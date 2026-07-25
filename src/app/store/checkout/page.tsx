@@ -11,6 +11,7 @@ import {
 import { loadStripe } from '@stripe/stripe-js';
 import { useCart } from '@/hooks/useCart';
 import { getStoreSessionId, trackStoreEvent } from '@/lib/store/track-event';
+import { CoverImage } from '@/components/ui/CoverImage';
 
 // Load Stripe. The previous fallback hardcoded a real `pk_test_…` from
 // another Stripe account, which would silently route payments to that
@@ -50,6 +51,8 @@ function CheckoutContent() {
 
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [termsError, setTermsError] = useState('');
   const [isInitializing, setIsInitializing] = useState(false);
   const [clientSecret, setClientSecret] = useState('');
   const [initError, setInitError] = useState('');
@@ -164,6 +167,11 @@ function CheckoutContent() {
       setEmailError(err);
       return;
     }
+    if (!termsAccepted) {
+      setTermsError('Please confirm the license and digital delivery terms before payment.');
+      return;
+    }
+    setTermsError('');
     triggerCheckoutInit(email);
   };
 
@@ -415,9 +423,40 @@ function CheckoutContent() {
                 )}
                 {!emailError && <p id="checkout-email-help" className="sr-only">Your receipt, license, and download link will be sent here.</p>}
               </div>
+              <label
+                htmlFor="checkout-license-terms"
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-colors ${termsError ? 'border-red-500/40 bg-red-950/15' : 'border-white/[0.06] bg-white/[0.02] hover:border-white/[0.10]'}`}
+              >
+                <input
+                  id="checkout-license-terms"
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => {
+                    setTermsAccepted(e.target.checked);
+                    if (e.target.checked) setTermsError('');
+                  }}
+                  aria-describedby={termsError ? 'checkout-license-terms-error' : 'checkout-license-terms-help'}
+                  className="mt-0.5 size-4 shrink-0 accent-[#E7D7BE]"
+                />
+                <span className="min-w-0">
+                  <span className="block text-[10px] font-mono uppercase tracking-[0.16em] text-[#D0C3AF]">
+                    License and delivery terms
+                  </span>
+                  <span id="checkout-license-terms-help" className="mt-1 block text-[10px] leading-relaxed text-[#9B9282]">
+                    I understand this is a digital purchase. Track licenses are delivered under the selected tier, project bundles include the listed project tracks, and exclusive availability is verified again before payment is created.
+                  </span>
+                </span>
+              </label>
+              {termsError && (
+                <p id="checkout-license-terms-error" role="alert" className="text-[10px] text-red-400 font-mono flex items-center gap-1">
+                  <AlertTriangle size={10} aria-hidden="true" />
+                  {termsError}
+                </p>
+              )}
               <button
                 type="submit"
-                className="w-full py-3.5 rounded-xl bg-[#E7D7BE] hover:bg-[#F3E6D1] active:scale-[0.99] text-black text-[11px] font-bold uppercase tracking-wider transition-all focus:outline-none focus:ring-2 focus:ring-[#E7D7BE]/30"
+                disabled={!termsAccepted}
+                className="w-full py-3.5 rounded-xl bg-[#E7D7BE] hover:bg-[#F3E6D1] active:scale-[0.99] text-black text-[11px] font-bold uppercase tracking-wider transition-all focus:outline-none focus:ring-2 focus:ring-[#E7D7BE]/30 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Continue to Payment
               </button>
@@ -536,9 +575,9 @@ function CheckoutContent() {
             <ul className="divide-y divide-white/[0.03] px-5 max-h-[280px] overflow-y-auto">
               {items.map((i) => (
                 <li key={i.id} className="py-4 flex gap-3.5 items-start">
-                  <div className="w-12 h-12 rounded-lg bg-[#090907] border border-[#2B2821] overflow-hidden shrink-0">
+                  <div className="relative w-12 h-12 rounded-lg bg-[#090907] border border-[#2B2821] overflow-hidden shrink-0">
                     {i.track.cover_url ? (
-                      <img loading="lazy" src={i.track.cover_url} alt="" className="w-full h-full object-cover" />
+                      <CoverImage src={i.track.cover_url} alt="" sizes="48px" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[#9B9282]">
                         <Music size={16} />

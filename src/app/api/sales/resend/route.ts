@@ -9,6 +9,40 @@ const log = createLogger('api.sales.resend');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface SalesResendBody {
+  id?: unknown;
+  kind?: unknown;
+}
+
+interface ProjectAccessResendRow {
+  id: string;
+  project_id: string;
+  buyer_email: string;
+  stripe_session_id: string | null;
+  token: string;
+  amount_usd: number | null;
+  created_at: string | null;
+  projects: ProjectAccessProfileRow | ProjectAccessProfileRow[] | null;
+}
+
+interface ProjectAccessProfileRow {
+  user_id: string;
+  name: string;
+}
+
+interface LicensePurchaseResendRow {
+  id: string;
+  buyer_email: string;
+  stripe_session_id: string;
+  license_type: string | null;
+  track_ids: string[] | null;
+}
+
+function firstProjectProfile(projects: ProjectAccessResendRow['projects']): ProjectAccessProfileRow | null {
+  if (Array.isArray(projects)) return projects[0] ?? null;
+  return projects;
+}
+
 /**
  * POST /api/sales/resend  body: { id: string, kind: 'track' | 'project' }
  *
@@ -28,7 +62,7 @@ export async function POST(req: NextRequest) {
   const { userId, admin } = auth;
 
   try {
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as SalesResendBody;
     const id = typeof body.id === 'string' ? body.id : '';
     const kind = body.kind === 'project' ? 'project' : 'track';
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
@@ -48,15 +82,16 @@ export async function POST(req: NextRequest) {
         .eq('id', id)
         .maybeSingle();
       if (!access) return NextResponse.json({ error: 'Sale not found' }, { status: 404 });
-      const proj = (access as any).projects;
+      const projectAccess = access as unknown as ProjectAccessResendRow;
+      const proj = firstProjectProfile(projectAccess.projects);
       if (!proj || proj.user_id !== userId) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      const accessUrl = `${APP_URL}/store/projects/access/${(access as any).token}`;
+      const accessUrl = `${APP_URL}/store/projects/access/${projectAccess.token}`;
       await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
-        to: (access as any).buyer_email,
+        to: projectAccess.buyer_email,
         subject: `Your project "${proj.name}" is ready (resend)`,
         html: `
           <div style="font-family: sans-serif; background: #090907; color: #F7EBDD; padding: 40px; border-radius: 20px; max-width: 560px;">
@@ -74,7 +109,7 @@ export async function POST(req: NextRequest) {
           </div>
         `,
       });
-      log.info('project delivery resent', { access_id: id, project_id: (access as any).project_id });
+      log.info('project delivery resent', { access_id: id, project_id: projectAccess.project_id });
       return NextResponse.json({ ok: true });
     }
 
@@ -86,11 +121,12 @@ export async function POST(req: NextRequest) {
       .eq('seller_user_id', userId)
       .maybeSingle();
     if (!purchase) return NextResponse.json({ error: 'Sale not found' }, { status: 404 });
+    const licensePurchase = purchase as LicensePurchaseResendRow;
 
-    const downloadUrl = `${APP_URL}/store/download?session_id=${(purchase as any).stripe_session_id}`;
+    const downloadUrl = `${APP_URL}/store/download?session_id=${licensePurchase.stripe_session_id}`;
     await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
-      to: (purchase as any).buyer_email,
+      to: licensePurchase.buyer_email,
       subject: `Your license is ready (resend)`,
       html: `
         <div style="font-family: sans-serif; background: #090907; color: #F7EBDD; padding: 40px; border-radius: 20px; max-width: 560px;">

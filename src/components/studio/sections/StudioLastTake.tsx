@@ -18,6 +18,9 @@ interface Props {
  * download attribute on blob URLs unconditionally.
  */
 export function StudioLastTake({ take, saving, onSave }: Props) {
+  const extension = take.mime.includes('webm') ? 'webm' : 'audio';
+  const downloadName = `studio-take-${take.size}.${extension}`;
+
   return (
     <div className="border border-[#1A1813] rounded-lg p-5 bg-[#090907]">
       <div className="flex items-center justify-between mb-3">
@@ -30,7 +33,7 @@ export function StudioLastTake({ take, saving, onSave }: Props) {
         <div className="flex items-center gap-2">
           <a
             href={take.url}
-            download={`studio-take-${Date.now()}.webm`}
+            download={downloadName}
             className="flex items-center gap-2 px-3 py-2 rounded-md border border-[#211F1A] bg-[#171511] text-[#D0C3AF] hover:text-white text-[11px] font-medium transition-colors"
           >
             <Download size={11} /> Download

@@ -5,14 +5,29 @@ import { useRouter } from 'next/navigation';
 import {
   Search, Music, Layers, Users, Disc3, ListMusic, Calendar,
   Link2, Settings, Sliders, CloudOff, ArrowRight, Loader2,
+  type LucideIcon,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { usePlayer } from '@/hooks/usePlayer';
+import type { Track } from '@/lib/types';
+
+interface SearchTrackResult extends Pick<Track, 'id' | 'title' | 'type' | 'cover_url' | 'audio_url'> {
+  duration_seconds?: number | null;
+}
 
 interface SearchResults {
-  tracks: { id: string; title: string; type?: string; cover_url?: string | null; audio_url?: string | null }[];
+  tracks: SearchTrackResult[];
   projects: { id: string; name: string; cover_url?: string | null }[];
   contacts: { id: string; name: string; email?: string | null; role?: string | null; label?: string | null }[];
+}
+
+interface CommandItem {
+  kind: 'route' | 'track' | 'project' | 'contact';
+  id: string;
+  label: string;
+  sub?: string;
+  action: () => void;
+  icon: LucideIcon;
 }
 
 const ROUTE_COMMANDS = [
@@ -93,7 +108,7 @@ export function CommandPalette() {
 
   // Flatten results into a single list for keyboard navigation
   const flat = useMemo(() => {
-    const items: { kind: 'route' | 'track' | 'project' | 'contact'; id: string; label: string; sub?: string; action: () => void; icon: any }[] = [];
+    const items: CommandItem[] = [];
 
     const filtered = q.trim().length > 0
       ? ROUTE_COMMANDS.filter((r) => r.label.toLowerCase().includes(q.trim().toLowerCase()))
@@ -117,7 +132,7 @@ export function CommandPalette() {
         sub: t.type ? t.type.toUpperCase() : 'TRACK',
         icon: Music,
         action: () => {
-          if (t.audio_url) setPlayerTrack(t as any);
+          if (t.audio_url) setPlayerTrack(t as Track);
           setOpen(false);
         },
       });

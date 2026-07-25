@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, Loader2, Send, User } from 'lucide-react';
+import { errorMessage } from '@/lib/errors';
 import type { CreatorProfile } from './types';
 
 interface Props {
@@ -47,8 +48,8 @@ export function StoreContactForm({ creator, accentColor }: Props) {
       }
       setSent(true);
       setName(''); setEmail(''); setSubject(''); setMessage('');
-    } catch (err: any) {
-      setError(err.message || 'Failed to send message.');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Failed to send message.');
     } finally {
       setSending(false);
     }
@@ -71,7 +72,7 @@ export function StoreContactForm({ creator, accentColor }: Props) {
           <div className="text-center py-10 px-6 rounded-2xl bg-[#171511] border border-[#2B2821]">
             <CheckCircle2 size={28} className="text-[#6DC6A4] mx-auto mb-3" />
             <p className="text-[14px] font-medium text-[#F7EBDD] mb-1">Message sent!</p>
-            <p className="text-[12px] text-[#9B9282]">You'll hear back soon.</p>
+            <p className="text-[12px] text-[#9B9282]">You&apos;ll hear back soon.</p>
             <button onClick={() => setSent(false)} className="mt-4 text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F7EBDD] transition-colors">
               Send another
             </button>

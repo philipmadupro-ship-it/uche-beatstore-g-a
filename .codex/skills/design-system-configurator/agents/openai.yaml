@@ -1,0 +1,7 @@
+interface:
+  display_name: "Design System Configurator"
+  short_description: "Tokens, themes, variants, presets"
+  brand_color: "#B9AA95"
+  default_prompt: "Use $design-system-configurator to make this Beatstor system configurable."
+policy:
+  allow_implicit_invocation: true

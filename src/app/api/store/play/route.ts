@@ -10,6 +10,11 @@ const log = createLogger('api.store.play');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface StorePlayableTrackRow {
+  user_id: string | null;
+  store_listed: boolean | null;
+}
+
 /**
  * POST /api/store/play  body: { track_id: string, source?: string }
  *
@@ -59,7 +64,8 @@ export async function POST(req: NextRequest) {
       .select('id, user_id, store_listed')
       .eq('id', trackId)
       .maybeSingle();
-    if (!track || !(track as any).store_listed) {
+    const playableTrack = track as StorePlayableTrackRow | null;
+    if (!playableTrack || !playableTrack.store_listed) {
       return NextResponse.json({ ok: true, skipped: 'not-listed' });
     }
 
@@ -83,7 +89,7 @@ export async function POST(req: NextRequest) {
 
     const { error: insertErr } = await admin.from('store_plays').insert({
       track_id: trackId,
-      seller_user_id: (track as any).user_id ?? null,
+      seller_user_id: playableTrack.user_id ?? null,
       ip_hash: ipHash,
       source: source || null,
     });

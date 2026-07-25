@@ -106,8 +106,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         },
       })),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     log.error('Similar tracks error:', { error: errorMessage(error) });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

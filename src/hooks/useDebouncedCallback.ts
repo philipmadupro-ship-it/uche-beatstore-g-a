@@ -17,11 +17,13 @@ export function useDebouncedCallback<T extends (...args: never[]) => void>(
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
 
-  return useCallback(((...args: Parameters<T>) => {
+  const debounced = useCallback((...args: Parameters<T>) => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       callbackRef.current(...args);
     }, Math.max(0, delayMs));
-  }) as T, [delayMs]);
+  }, [delayMs]);
+
+  return debounced as T;
 }

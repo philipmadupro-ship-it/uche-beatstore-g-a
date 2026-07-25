@@ -13,6 +13,15 @@ export const dynamic = 'force-dynamic';
 
 const log = createLogger('api.sales.deliver-stems');
 
+interface StemDeliveryPurchaseRow {
+  id: string;
+  seller_user_id: string | null;
+  buyer_email: string;
+  stripe_session_id: string | null;
+  needs_stems_upload: boolean | null;
+  stems_delivery_email_sent: boolean | null;
+}
+
 /**
  * POST /api/sales/deliver-stems  body: { purchase_id }
  *
@@ -42,15 +51,16 @@ export async function POST(req: NextRequest) {
       .select('id, seller_user_id, buyer_email, stripe_session_id, needs_stems_upload, stems_delivery_email_sent')
       .eq('id', parsed.data.purchase_id)
       .maybeSingle();
-    if (!purchase || (purchase as any).seller_user_id !== userId) {
+    const stemPurchase = purchase as StemDeliveryPurchaseRow | null;
+    if (!stemPurchase || stemPurchase.seller_user_id !== userId) {
       return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
     }
-    if ((purchase as any).stems_delivery_email_sent) {
+    if (stemPurchase.stems_delivery_email_sent) {
       return NextResponse.json({ error: 'Stems already delivered' }, { status: 409 });
     }
 
-    const buyerEmail = (purchase as any).buyer_email as string;
-    const sessionId = (purchase as any).stripe_session_id as string | null;
+    const buyerEmail = stemPurchase.buyer_email;
+    const sessionId = stemPurchase.stripe_session_id;
     const downloadUrl = sessionId ? `${getAppUrl()}/store/download?session_id=${sessionId}` : `${getAppUrl()}/store`;
 
     // Email the buyer (best-effort but we report failure so the producer knows).

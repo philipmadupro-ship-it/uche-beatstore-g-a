@@ -7,6 +7,13 @@ import { emailShell, emailButton, emailHeading } from '@/lib/email/templates';
 
 const log = createLogger('stems.auto-deliver');
 
+interface PendingStemPurchase {
+  id: string;
+  buyer_email: string;
+  stripe_session_id: string | null;
+  status: string | null;
+}
+
 /**
  * Auto-deliver stems to every buyer waiting on them for a track.
  *
@@ -43,8 +50,8 @@ export async function autoDeliverStems(
       return { delivered: 0 };
     }
 
-    const pending = (purchases ?? []).filter(
-      (p: any) => p.status === 'paid' || p.status == null,
+    const pending = ((purchases ?? []) as PendingStemPurchase[]).filter(
+      (p) => p.status === 'paid' || p.status == null,
     );
     if (pending.length === 0) return { delivered: 0 };
 
@@ -53,7 +60,7 @@ export async function autoDeliverStems(
     const appUrl = getAppUrl();
 
     let delivered = 0;
-    for (const p of pending as any[]) {
+    for (const p of pending) {
       // Mark delivered FIRST (claim the row) so a concurrent flip of
       // stems_status can't double-send. The update is conditional on the flag
       // still being false; if another invocation already claimed it, rowCount

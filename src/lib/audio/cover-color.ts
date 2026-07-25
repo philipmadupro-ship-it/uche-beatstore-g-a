@@ -8,11 +8,14 @@
  * Results are cached per-URL so re-opening the same track is instant.
  */
 
+import { canFetchReadableAudio } from '@/lib/audio/cdn';
+
 const cache = new Map<string, string>();
 
 /** Returns an `rgb(r,g,b)` string, or null if extraction fails. */
 export async function extractCoverColor(url: string): Promise<string | null> {
   if (!url) return null;
+  if (!canFetchReadableAudio(url)) return null;
   if (cache.has(url)) return cache.get(url)!;
 
   return new Promise((resolve) => {

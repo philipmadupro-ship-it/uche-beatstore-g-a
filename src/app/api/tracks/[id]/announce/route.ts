@@ -5,13 +5,28 @@ import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { getAppUrl } from '@/lib/env';
-import { slugify } from '@/lib/slug';
 import { emailShell, emailButton, emailHeading, emailFooter } from '@/lib/email/templates';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const log = createLogger('api.tracks.announce');
+
+interface AnnounceTrackRow {
+  id: string;
+  title: string | null;
+  cover_url: string | null;
+  store_listed: boolean | null;
+  drop_notified_at: string | null;
+}
+
+interface FollowerEmailRow {
+  email: string | null;
+}
+
+interface CreatorProfileNameRow {
+  display_name: string | null;
+}
 
 /**
  * POST /api/tracks/[id]/announce — fan out a "new drop" email to the
@@ -42,10 +57,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .eq('id', id)
       .maybeSingle();
     if (!track) return NextResponse.json({ error: 'Track not found' }, { status: 404 });
-    if (!(track as any).store_listed) {
+    const announceTrack = track as AnnounceTrackRow;
+    if (!announceTrack.store_listed) {
       return NextResponse.json({ error: 'List the beat before announcing' }, { status: 400 });
     }
-    if ((track as any).drop_notified_at && !force) {
+    if (announceTrack.drop_notified_at && !force) {
       return NextResponse.json({ ok: true, notified: 0, alreadySent: true });
     }
 
@@ -57,7 +73,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .from('producer_follows')
       .select('email')
       .eq('producer_user_id', userId);
-    const emails = [...new Set((followers ?? []).map((f: any) => f.email).filter(Boolean))];
+    const emails = [
+      ...new Set(
+        ((followers ?? []) as FollowerEmailRow[])
+          .map((f) => f.email)
+          .filter((email): email is string => Boolean(email)),
+      ),
+    ];
 
     let notified = 0;
     const resendKey = process.env.RESEND_API_KEY;
@@ -67,11 +89,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         .select('display_name')
         .eq('user_id', userId)
         .maybeSingle();
-      const producerName = (prof as any)?.display_name || 'A producer you follow';
+      const producerName = (prof as CreatorProfileNameRow | null)?.display_name || 'A producer you follow';
       const beatUrl = `${getAppUrl()}/store/${id}`;
       const manageUrl = `${getAppUrl()}/store/account`;
-      const title = (track as any).title as string;
-      const cover = (track as any).cover_url as string | null;
+      const title = announceTrack.title || 'Untitled beat';
+      const cover = announceTrack.cover_url;
 
       const resend = new Resend(resendKey);
       const results = await Promise.allSettled(emails.map((to) =>

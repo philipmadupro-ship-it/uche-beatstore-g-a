@@ -8,6 +8,40 @@ import { publicError } from '@/lib/api-error';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface LicensePurchaseAccountRow {
+  id: string;
+  amount_usd: number | string | null;
+  line_items: unknown;
+  stripe_session_id: string | null;
+  created_at: string | null;
+  status: string | null;
+  fulfillment_email_sent: boolean | null;
+}
+
+interface TrackTitleRow {
+  id: string;
+  title: string;
+}
+
+interface ProjectAccessAccountRow {
+  id: string;
+  project_id: string;
+  token: string | null;
+  amount_usd: number | string | null;
+  stripe_session_id: string | null;
+  created_at: string | null;
+}
+
+interface ProjectSummaryRow {
+  id: string;
+  name: string;
+  cover_url: string | null;
+}
+
+function isNonEmptyString(value: string | null | undefined): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
 /**
  * GET /api/store/account/me
  *
@@ -50,15 +84,16 @@ export async function GET() {
     ]);
 
     // Batch-load track titles so the account shows WHAT was bought, not "2 tracks".
-    const allItems = (lpRes.data ?? []).flatMap((r: any) => parsePurchaseLineItems(r.line_items));
-    const trackIds = [...new Set(allItems.map((i) => i.track_id).filter(Boolean))];
+    const licenseRows = (lpRes.data ?? []) as LicensePurchaseAccountRow[];
+    const allItems = licenseRows.flatMap((r) => parsePurchaseLineItems(r.line_items));
+    const trackIds = [...new Set(allItems.map((i) => i.track_id).filter(isNonEmptyString))];
     const titleMap = new Map<string, string>();
     if (trackIds.length > 0) {
       const { data: tracks } = await admin.from('tracks').select('id, title').in('id', trackIds);
-      for (const t of (tracks ?? []) as any[]) titleMap.set(t.id, t.title);
+      for (const t of (tracks ?? []) as TrackTitleRow[]) titleMap.set(t.id, t.title);
     }
 
-    const trackLicenses = (lpRes.data ?? []).map((row: any) => ({
+    const trackLicenses = licenseRows.map((row) => ({
       id: row.id,
       kind: 'track' as const,
       items: parsePurchaseLineItems(row.line_items).map((i) => ({
@@ -74,19 +109,20 @@ export async function GET() {
         : null,
     }));
 
-    const projectIds = [...new Set((paRes.data ?? []).map((r: any) => r.project_id).filter(Boolean))];
+    const projectAccessRows = (paRes.data ?? []) as ProjectAccessAccountRow[];
+    const projectIds = [...new Set(projectAccessRows.map((r) => r.project_id).filter(isNonEmptyString))];
     const projectMap = new Map<string, { name: string; cover_url: string | null }>();
     if (projectIds.length > 0) {
       const { data: projects } = await admin
         .from('projects')
         .select('id, name, cover_url')
         .in('id', projectIds);
-      for (const p of (projects ?? []) as any[]) {
+      for (const p of (projects ?? []) as ProjectSummaryRow[]) {
         projectMap.set(p.id, { name: p.name, cover_url: p.cover_url });
       }
     }
 
-    const projectBundles = (paRes.data ?? []).map((row: any) => ({
+    const projectBundles = projectAccessRows.map((row) => ({
       id: row.id,
       kind: 'project' as const,
       project: projectMap.get(row.project_id) ?? { name: 'Untitled project', cover_url: null },

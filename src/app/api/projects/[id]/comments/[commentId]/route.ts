@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, update } from '@/lib/local-store';
 import { requireRowOwnership } from '@/lib/auth/ownership';
+import { errorMessage } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 
@@ -52,7 +53,7 @@ export async function DELETE(
 
     update('project_comments', commentId, { deleted_at: new Date().toISOString() });
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

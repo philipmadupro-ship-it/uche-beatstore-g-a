@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, useLayoutEffect } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -72,9 +72,9 @@ export function Dropdown<T extends string = string>({
   const selected = options.find((o) => o.value === value);
   const display = selected?.label ?? placeholder;
 
-  const reposition = useCallback(() => {
+  const measureCoords = useCallback(() => {
     const el = triggerRef.current;
-    if (!el) return;
+    if (!el) return null;
     const r = el.getBoundingClientRect();
     // Estimate menu height from option count when we don't have a
     // rendered ref yet (first paint). 30px per option + 8px padding
@@ -83,29 +83,46 @@ export function Dropdown<T extends string = string>({
     const spaceBelow = window.innerHeight - r.bottom;
     const spaceAbove = r.top;
     const openUp = spaceBelow < menuHeight + 8 && spaceAbove > spaceBelow;
-    setCoords({
+    return {
       top: openUp ? Math.max(8, r.top - menuHeight - 4) : r.bottom + 4,
       left: align === 'right' ? r.right - (menuWidth ?? r.width) : r.left,
       width: menuWidth ?? r.width,
       openUp,
-    });
+    };
   }, [align, menuWidth, options.length]);
 
-  // useLayoutEffect on open so the first paint of the menu is
-  // already correctly positioned (no flicker frame at top-left).
-  useLayoutEffect(() => {
-    if (!open) return;
-    reposition();
-    setHighlight(options.findIndex((o) => o.value === value));
-  }, [open, options, value, reposition]);
+  const reposition = useCallback(() => {
+    const nextCoords = measureCoords();
+    if (nextCoords) setCoords(nextCoords);
+  }, [measureCoords]);
+
+  const getSelectedIndex = useCallback(
+    () => options.findIndex((o) => o.value === value),
+    [options, value],
+  );
+
+  const handleTriggerClick = () => {
+    if (disabled) return;
+    setOpen((wasOpen) => {
+      if (wasOpen) return false;
+      const nextCoords = measureCoords();
+      if (nextCoords) setCoords(nextCoords);
+      setHighlight(getSelectedIndex());
+      return true;
+    });
+  };
 
   // After the menu mounts and we know its real height, recompute
   // once so the openUp decision uses the actual height instead of
   // the estimate.
   useEffect(() => {
     if (!open) return;
-    requestAnimationFrame(() => reposition());
-  }, [open, reposition]);
+    const frame = requestAnimationFrame(() => {
+      reposition();
+      setHighlight(getSelectedIndex());
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, reposition, getSelectedIndex]);
 
   // Outside click, ESC, arrow keys, scroll, resize, ResizeObserver.
   useEffect(() => {
@@ -158,7 +175,7 @@ export function Dropdown<T extends string = string>({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={ariaLabel}
-        onClick={() => !disabled && setOpen((o) => !o)}
+        onClick={handleTriggerClick}
         className={cn(
           'inline-flex items-center justify-between gap-2 px-3 py-2 rounded-md',
           'bg-[#171511] border border-[#211F1A] text-[11px] text-[#F7EBDD]',

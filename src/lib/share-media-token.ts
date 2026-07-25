@@ -21,6 +21,12 @@ export function signedSharePreviewUrl(token: string, trackId: string): string {
   return `/api/share/${encodeURIComponent(token)}/preview/${encodeURIComponent(trackId)}?expires=${expires}&sig=${encodeURIComponent(sig)}`;
 }
 
+export function signedSharePeaksUrl(token: string, trackId: string): string {
+  const expires = Math.floor(Date.now() / 1000) + GRANT_TTL_SECONDS;
+  const sig = signature(token, trackId, expires);
+  return `/api/share/${encodeURIComponent(token)}/peaks/${encodeURIComponent(trackId)}?expires=${expires}&sig=${encodeURIComponent(sig)}`;
+}
+
 export function verifyShareMediaGrant(
   token: string,
   trackId: string,

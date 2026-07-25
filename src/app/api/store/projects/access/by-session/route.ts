@@ -6,6 +6,10 @@ import { publicError } from '@/lib/api-error';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface ProjectAccessTokenRow {
+  token: string;
+}
+
 /**
  * GET /api/store/projects/access/by-session?session_id=cs_xxx
  *
@@ -49,7 +53,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'pending' }, { status: 404 });
     }
 
-    return NextResponse.json({ token: (data as any).token });
+    return NextResponse.json({ token: (data as ProjectAccessTokenRow).token });
   } catch (err) {
     return publicError(err);
   }

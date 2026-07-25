@@ -65,3 +65,34 @@ export function playbackAudioSrc(url: string | null | undefined): string {
   }
   return resolved;
 }
+
+/**
+ * True when browser fetch() may read audio bytes without triggering CORS noise.
+ *
+ * Plain <audio> playback can stream public R2 URLs directly, but fetch() cannot
+ * read them unless the bucket/CDN sends CORS headers. We use this only for
+ * background cache/warmup paths that need readable bytes; normal playback still
+ * uses playbackAudioSrc().
+ */
+export function canFetchReadableAudio(url: string | null | undefined): boolean {
+  if (!url) return false;
+  const resolved = cdnAudioSrc(url);
+  if (!resolved) return false;
+  if (resolved.startsWith('/') || resolved.startsWith('blob:')) return true;
+  if (!/^https?:\/\//i.test(resolved)) return false;
+
+  const cdn = process.env.NEXT_PUBLIC_R2_CDN_URL?.replace(/\/$/, '');
+  if (cdn && resolved.startsWith(cdn)) return true;
+
+  const r2 = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '');
+  if (r2 && resolved.startsWith(r2)) return false;
+
+  try {
+    const host = new URL(resolved).hostname;
+    if (host.endsWith('.r2.dev')) return false;
+  } catch {
+    return false;
+  }
+
+  return true;
+}

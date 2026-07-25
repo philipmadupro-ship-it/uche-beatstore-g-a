@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Check } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { errorMessage } from '@/lib/errors';
 
 interface GlobalLicense {
   id: string;
@@ -73,10 +74,10 @@ export function TrackLicensePanel({ trackId, globalLicenses }: {
         body: JSON.stringify({ track_id: trackId, license_id: licenseId, enabled: next.enabled, price_override_usd: next.price_override_usd }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Rollback
       setRows((prev) => prev.map((r) => r.license_id === licenseId ? current : r));
-      toast.error('Failed to save', err.message);
+      toast.error('Failed to save', errorMessage(err));
     } finally { setSaving(null); }
   };
 

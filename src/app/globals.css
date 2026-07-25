@@ -105,6 +105,63 @@
  * Component code should reference these vars and never hardcode the
  * hex. Legacy hardcoded values have been swept toward this palette. */
 :root {
+  /* De Roche primitive palette — source tokens for the dark luxury
+   * earth/stone direction. Component work should prefer the semantic
+   * aliases below instead of reaching for these directly. */
+  --dr-black-950: #0B0B0A;
+  --dr-black-900: #11110F;
+  --dr-charcoal-850: #181815;
+  --dr-charcoal-800: #1E1E1A;
+  --dr-basalt-750: #282722;
+  --dr-stone-700: #34322C;
+  --dr-earth-650: #413B32;
+  --dr-umber-600: #554A3D;
+  --dr-taupe-550: #6C6255;
+  --dr-stone-500: #80776A;
+  --dr-clay-450: #928779;
+  --dr-beige-400: #AA9C89;
+  --dr-sand-350: #B9AA95;
+  --dr-limestone-300: #C8BBA7;
+  --dr-bone-200: #D8CEBE;
+  --dr-chalk-150: #E6DED1;
+  --dr-paper-100: #EEE8DD;
+
+  /* De Roche semantic layer. These intentionally coexist with the
+   * legacy app tokens while components migrate incrementally. */
+  --background-primary: var(--dr-black-950);
+  --background-secondary: var(--dr-black-900);
+  --background-elevated: var(--dr-charcoal-850);
+  --background-recessed: #070706;
+  --background-inverse: var(--dr-paper-100);
+  --surface-primary: var(--dr-charcoal-850);
+  --surface-secondary: var(--dr-charcoal-800);
+  --surface-hover: var(--dr-basalt-750);
+  --surface-active: var(--dr-stone-700);
+  --surface-selected: #2F2C25;
+  --surface-disabled: #201F1B;
+  --text-primary: var(--dr-chalk-150);
+  --text-secondary: var(--dr-bone-200);
+  --text-tertiary: var(--dr-beige-400);
+  --text-inverse: var(--dr-black-900);
+  --text-disabled: var(--dr-taupe-550);
+  --border-subtle: #24231E;
+  --border-default: var(--dr-basalt-750);
+  --border-strong: var(--dr-stone-700);
+  --border-focus: #C4B49C;
+  --brand-primary: #C4B49C;
+  --brand-primary-hover: #D0C2AE;
+  --brand-primary-active: #AA9980;
+  --brand-on-primary: var(--dr-black-900);
+  --wave-low: #A9412D;
+  --wave-low-mid: #C88B46;
+  --wave-mid: #9A6E83;
+  --wave-high-mid: #695FAD;
+  --wave-high: #3C78A8;
+  --wave-air: #71A4B5;
+  --success: #6FA58A;
+  --warning: #C88B46;
+  --information: #71A4B5;
+
   /* HSL base values for high-fidelity dynamic opacity blending */
   --bg-page-hsl: 60 10% 3%;
   --bg-card-hsl: 40 15% 8%;
@@ -117,12 +174,12 @@
   --accent-tint-hsl: 37 14% 18%;
 
   /* Page surfaces — dark graphite, not brown-black. */
-  --bg-page: hsl(var(--bg-page-hsl));
-  --bg-card: hsl(var(--bg-card-hsl));
-  --bg-hover: hsl(var(--bg-hover-hsl));
-  --text-primary: hsl(var(--text-primary-hsl));
-  --text-secondary: hsl(var(--text-secondary-hsl));
-  --text-tertiary: #6E685B;
+  --bg-page: var(--background-primary);
+  --bg-card: var(--surface-primary);
+  --bg-hover: var(--surface-hover);
+  --text-primary: var(--dr-chalk-150);
+  --text-secondary: var(--dr-bone-200);
+  --text-tertiary: var(--dr-beige-400);
   /* Readable floor for SMALL content text. The faded tertiary tints
    * (#6E685B…#B4AA99) are part of the mood but fail WCAG AA on the dark
    * bg (1.5–3.8:1); use this (~5:1 on #090907) anywhere a user must read
@@ -130,16 +187,16 @@
   --text-readable: #B4AA99;
   /* Accent — champagne beige + two adjacents (lighter for hover/active,
    * dimmer for pressed/borders). */
-  --accent: hsl(var(--accent-hsl));
-  --accent-light: hsl(var(--accent-light-hsl));
-  --accent-dim: hsl(var(--accent-dim-hsl));
-  --accent-tint: hsl(var(--accent-tint-hsl));
+  --accent: var(--brand-primary);
+  --accent-light: var(--brand-primary-hover);
+  --accent-dim: var(--brand-primary-active);
+  --accent-tint: #2F2C25;
   --star: #D6BE7A;
   /* Muted hint/placeholder/icon text — the canonical value for the dozens of
    * ad-hoc `#9B9282` usages. Slightly above the decorative tertiary fades. */
   --text-muted: #9B9282;
-  --border: #2B2821;
-  --border-hover: #3B372F;
+  --border: var(--border-default);
+  --border-hover: var(--border-strong);
   /* Error states — previously bespoke per component (Field used #8d3a2f /
    * #ff8b73 / #ffb7a8). Canonicalised so error styling is consistent and
    * editable in one place. `--error-text` clears AA on the dark bg. */
@@ -154,6 +211,34 @@
   --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-decelerate: cubic-bezier(0.22, 1, 0.36, 1);
   --font-store: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+[data-theme="de-roche-archive"] {
+  color-scheme: light;
+  --background-primary: var(--dr-paper-100);
+  --background-secondary: var(--dr-chalk-150);
+  --background-elevated: var(--dr-bone-200);
+  --background-recessed: var(--dr-limestone-300);
+  --background-inverse: var(--dr-black-950);
+  --surface-primary: var(--dr-chalk-150);
+  --surface-secondary: var(--dr-bone-200);
+  --surface-hover: var(--dr-limestone-300);
+  --surface-active: var(--dr-sand-350);
+  --surface-selected: #D1C5B5;
+  --surface-disabled: #D8D0C3;
+  --text-primary: var(--dr-black-900);
+  --text-secondary: var(--dr-earth-650);
+  --text-tertiary: var(--dr-taupe-550);
+  --text-inverse: var(--dr-paper-100);
+  --text-disabled: var(--dr-stone-500);
+  --border-subtle: #D2C7B8;
+  --border-default: var(--dr-limestone-300);
+  --border-strong: var(--dr-taupe-550);
+  --border-focus: var(--dr-black-900);
+  --brand-primary: #C4B49C;
+  --brand-primary-hover: #D0C2AE;
+  --brand-primary-active: #AA9980;
+  --brand-on-primary: var(--dr-black-900);
 }
 
 /* ── Touch hit-area expansion ──────────────────────────────────────────

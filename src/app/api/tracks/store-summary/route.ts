@@ -21,6 +21,7 @@ type SummaryTrack = {
   free_download_enabled: boolean | null;
   exclusive_sold: boolean | null;
   voice_tag_enabled: boolean | null;
+  peaks_url?: string | null;
 };
 
 type SummaryLicense = {
@@ -34,6 +35,16 @@ type SummaryTrackLicense = {
   license_id: string;
   price_override_usd: number | null;
   enabled: boolean | null;
+};
+
+type LocalSummaryTrack = Partial<SummaryTrack> & {
+  id: string;
+  title: string;
+};
+
+type LocalCreatorProfile = {
+  license_lease_price_usd?: number | null;
+  license_exclusive_price_usd?: number | null;
 };
 
 type SummaryPriceContext = {
@@ -88,6 +99,7 @@ function summarize(rows: SummaryTrack[], context: SummaryPriceContext = {}) {
     noCover: listed.filter((track) => !track.cover_url),
     noPrice: listed.filter((track) => !hasSellablePrice(track, context, linksByTrack.get(track.id) ?? [])),
     noBpmKey: listed.filter((track) => track.bpm == null && !track.key),
+    missingPeaks: listed.filter((track) => !track.peaks_url),
   };
 
   return {
@@ -98,6 +110,7 @@ function summarize(rows: SummaryTrack[], context: SummaryPriceContext = {}) {
       noCover: { count: issues.noCover.length, firstId: issues.noCover[0]?.id ?? null },
       noPrice: { count: issues.noPrice.length, firstId: issues.noPrice[0]?.id ?? null },
       noBpmKey: { count: issues.noBpmKey.length, firstId: issues.noBpmKey[0]?.id ?? null },
+      missingPeaks: { count: issues.missingPeaks.length, firstId: issues.missingPeaks[0]?.id ?? null },
     },
   };
 }
@@ -105,8 +118,7 @@ function summarize(rows: SummaryTrack[], context: SummaryPriceContext = {}) {
 export async function GET() {
   try {
     if (!isSupabaseConfigured()) {
-      const localQuery = query as unknown as (table: string, predicate: (row: any) => boolean) => any[];
-      const rows = (query('tracks', () => true) as any[]).map((track) => ({
+      const rows = query<LocalSummaryTrack>('tracks', () => true).map((track) => ({
         id: track.id,
         title: track.title,
         type: track.type ?? null,
@@ -122,14 +134,15 @@ export async function GET() {
         free_download_enabled: !!track.free_download_enabled,
         exclusive_sold: !!track.exclusive_sold,
         voice_tag_enabled: !!track.voice_tag_enabled,
+        peaks_url: track.peaks_url ?? null,
       }));
-      const profile = localQuery('creator_profiles', () => true)[0] ?? {};
-      const licenses = localQuery('licenses', () => true).map((license) => ({
+      const profile = query<LocalCreatorProfile>('creator_profiles', () => true)[0] ?? {};
+      const licenses = query<SummaryLicense>('licenses', () => true).map((license) => ({
         id: license.id,
         price_usd: license.price_usd ?? null,
         is_free: !!license.is_free,
       }));
-      const trackLicenses = localQuery('track_licenses', () => true).map((link) => ({
+      const trackLicenses = query<SummaryTrackLicense>('track_licenses', () => true).map((link) => ({
         track_id: link.track_id,
         license_id: link.license_id,
         price_override_usd: link.price_override_usd ?? null,
@@ -150,7 +163,7 @@ export async function GET() {
       .from('tracks')
       .select([
         'id', 'title', 'type', 'cover_url',
-        'bpm', 'key', 'scale',
+        'bpm', 'key', 'scale', 'peaks_url',
         'store_listed', 'store_featured', 'store_sort_order',
         'lease_price_usd', 'exclusive_price_usd',
         'free_download_enabled', 'exclusive_sold', 'voice_tag_enabled',

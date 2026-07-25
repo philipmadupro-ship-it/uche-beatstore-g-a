@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Track, TrackStatus, TrackType } from '@/lib/types';
 import { StarRating } from '@/components/tracks/StarRating';
 
@@ -35,20 +35,34 @@ interface Props {
   onRatingChange: (newRating: number) => void;
 }
 
+type BpmDraft = {
+  trackId: string;
+  initial: string;
+  value: string;
+};
+
 export function TrackMetadataEditor({ track, onPatch, onRatingChange }: Props) {
-  const [bpmDraft, setBpmDraft] = useState<string>(track.bpm != null ? String(track.bpm) : '');
-  useEffect(() => {
-    setBpmDraft(track.bpm != null ? String(track.bpm) : '');
-  }, [track.id, track.bpm]);
+  const [bpmDraftOverride, setBpmDraftOverride] = useState<BpmDraft | null>(null);
+  const canonicalBpmDraft = track.bpm != null ? String(track.bpm) : '';
+  const bpmDraft = bpmDraftOverride?.trackId === track.id && bpmDraftOverride.initial === canonicalBpmDraft
+    ? bpmDraftOverride.value
+    : canonicalBpmDraft;
+
+  const setBpmDraft = (value: string) => {
+    setBpmDraftOverride({ trackId: track.id, initial: canonicalBpmDraft, value });
+  };
 
   const commitBpm = () => {
     const trimmed = bpmDraft.trim();
     const next = trimmed === '' ? null : Number(trimmed);
     if (next !== null && (!Number.isFinite(next) || next < 20 || next > 300)) {
-      setBpmDraft(track.bpm != null ? String(track.bpm) : '');
+      setBpmDraftOverride(null);
       return;
     }
-    if (next === (track.bpm ?? null)) return;
+    if (next === (track.bpm ?? null)) {
+      setBpmDraftOverride(null);
+      return;
+    }
     onPatch({ bpm: next });
   };
 

@@ -21,16 +21,18 @@ const PIPELINE_ROWS: [string, string][] = [
   ['sent', '#B4AA99'],
 ];
 
-/** Single compact stats line. Pipeline funnel tucked behind a Popover. */
-export function ContactsStatsBar({ stats }: { stats: ContactsStats }) {
-  const Metric = ({ color, value, label }: { color: string; value: string | number; label: string }) => (
+function Metric({ color, value, label }: { color: string; value: string | number; label: string }) {
+  return (
     <span className="inline-flex items-center gap-1.5">
       <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
       <span className="text-[12px] text-[#F7EBDD] font-medium tabular-nums">{value}</span>
       <span className="text-[11px] text-[#9B9282]">{label}</span>
     </span>
   );
+}
 
+/** Single compact stats line. Pipeline funnel tucked behind a Popover. */
+export function ContactsStatsBar({ stats }: { stats: ContactsStats }) {
   return (
     <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mb-5 px-1">
       <Metric color="#D0C3AF" value={stats.total.toLocaleString()} label="contacts" />
@@ -46,7 +48,7 @@ export function ContactsStatsBar({ stats }: { stats: ContactsStats }) {
         width={240}
         trigger={({ open, toggle, ref }) => (
           <button
-            ref={ref as any}
+            ref={ref}
             onClick={toggle}
             className={`ml-auto inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[11px] font-medium border transition-colors ${
               open ? 'bg-[var(--accent-tint)] border-[var(--accent-dim)]/40 text-[#F3E6D1]' : 'border-[var(--border)] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[var(--border-hover)]'

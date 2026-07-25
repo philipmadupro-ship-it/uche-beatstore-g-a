@@ -74,7 +74,7 @@ export default function RootLayout({
     // The mismatch is noise from the extension, not a real SSR bug. The
     // suppression is scoped to the *top-level* attributes; mismatches in
     // children still throw normally.
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" className="dark" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <AudioHostPreconnect />
       </head>

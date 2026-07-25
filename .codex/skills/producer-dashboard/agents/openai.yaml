@@ -1,0 +1,7 @@
+interface:
+  display_name: "Producer Dashboard"
+  short_description: "Producer operations and analytics"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $producer-dashboard to improve this Beatstor producer workflow."
+policy:
+  allow_implicit_invocation: true

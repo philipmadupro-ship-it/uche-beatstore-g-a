@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import React from 'react';
 import { createPortal } from 'react-dom';
+import Image from 'next/image';
 import {
   Play, Pause, SkipBack, SkipForward, Download, Volume2, VolumeX,
   Music, Lock, Loader2, Shield, MessageSquare, Send, Eye, Edit3,
@@ -104,6 +105,17 @@ interface Comment {
   created_at: string;
 }
 
+interface ProjectShareResponse {
+  project?: ShareProject | null;
+  playlist?: SharePlaylist | null;
+  track?: ShareTrackMeta | null;
+  share?: ShareInfo;
+  tracks?: ShareTrack[];
+  creator?: CreatorProfile | null;
+  licenses?: LicenseTier[];
+  error?: string;
+}
+
 /**
  * Public listener page for project shares.
  *
@@ -167,7 +179,6 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [unlocking, setUnlocking] = useState(false);
-  const [stems, setStems] = useState<any[]>([]);
   const [licenses, setLicenses] = useState<LicenseTier[]>([]);
 
   // We keep the unlocked password in memory so subsequent fetches
@@ -250,7 +261,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
       const res = await fetch(`/api/projects/share/${token}`, {
         headers: pw ? { 'x-share-password': pw } : {},
       });
-      const data = await res.json();
+      const data = await res.json() as ProjectShareResponse;
       if (res.status === 401) {
         setRequiresPassword(true);
         if (pw) setPasswordError(data.error || 'Incorrect password');
@@ -270,14 +281,13 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
       setProject(data.project ?? null);
       setPlaylist(data.playlist ?? null);
       setShareTrackMeta(data.track ?? null);
-      setShare(data.share);
+      setShare(data.share ?? null);
       setTracks(data.tracks ?? []);
-      setStems(data.stems ?? []);
       // Creator profile is optional — the API only returns it when the
       // owner has filled out their settings form. Client variant
       // degrades section-by-section when fields are missing.
       setCreator(data.creator ?? null);
-      setLicenses((data.licenses as LicenseTier[]) ?? []);
+      setLicenses(data.licenses ?? []);
       setRequiresPassword(false);
       if (pw) passwordRef.current = pw;
     } catch {
@@ -765,7 +775,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           <div className="flex items-end gap-4 sm:gap-5">
             <div className="w-16 h-16 sm:w-24 sm:h-24 bg-[#1A1813] rounded-xl overflow-hidden border border-[#211F1A] shrink-0">
               {project.cover_url
-                ? <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
+                ? <Image src={project.cover_url} alt="" width={96} height={96} className="w-full h-full object-cover" unoptimized />
                 : <div className="w-full h-full flex items-center justify-center text-[#6E685B] text-3xl font-black">{project.name.charAt(0)}</div>
               }
             </div>
@@ -831,7 +841,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-[#1A1813] rounded border border-[#211F1A] overflow-hidden shrink-0">
                 {activeTrack.cover_url
-                  ? <img loading="lazy" src={activeTrack.cover_url} alt="" className="w-full h-full object-cover" />
+                  ? <Image src={activeTrack.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized />
                   : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={14} /></div>
                 }
               </div>
@@ -1010,7 +1020,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
 
                   <div className="w-7 h-7 bg-[#1A1813] rounded border border-[#211F1A] overflow-hidden shrink-0">
                     {t.cover_url
-                      ? <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                      ? <Image src={t.cover_url} alt="" width={28} height={28} className="w-full h-full object-cover" unoptimized />
                       : <div className="w-full h-full flex items-center justify-center text-[#3B372F]"><Music size={11} /></div>
                     }
                   </div>
@@ -1141,7 +1151,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           ) : (
             <div className="bg-[#090907] border border-[#161616] rounded-md px-4 py-3 flex items-center gap-2 text-[#9B9282]">
               <Eye size={11} />
-              <span className="text-[11px]">This link is view-only — the sender didn't enable comments.</span>
+              <span className="text-[11px]">This link is view-only — the sender didn&apos;t enable comments.</span>
             </div>
           )}
         </section>

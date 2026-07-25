@@ -9,6 +9,19 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
+interface ProjectMetadataRow {
+  name: string;
+  description: string | null;
+  cover_url: string | null;
+  price_usd: number | string | null;
+  user_id: string | null;
+  store_featured: boolean | null;
+}
+
+interface CreatorNameRow {
+  display_name: string | null;
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const fallback: Metadata = { title: 'Project bundle — U2C Beatstore' };
@@ -25,7 +38,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
     if (!project) return fallback;
 
-    const p = project as any;
+    const p = project as ProjectMetadataRow;
     let displayName: string | null = null;
     if (p.user_id) {
       const { data: prof } = await admin
@@ -33,7 +46,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         .select('display_name')
         .eq('user_id', p.user_id)
         .maybeSingle();
-      displayName = (prof as any)?.display_name ?? null;
+      displayName = (prof as CreatorNameRow | null)?.display_name ?? null;
     }
 
     const title = displayName ? `${p.name} — ${displayName}` : p.name;

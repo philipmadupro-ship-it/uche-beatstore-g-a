@@ -20,6 +20,53 @@ const TRACK_FIELDS = [
   'store_listed',
 ].join(', ');
 
+interface StorePlaylistRow {
+  id: string;
+  user_id?: string | null;
+  name: string;
+  description?: string | null;
+  cover_url?: string | null;
+  store_featured?: boolean | null;
+  created_at?: string | null;
+}
+
+interface PlaylistTrackRow {
+  track_id: string;
+  position: number | null;
+}
+
+interface StorePlaylistTrack extends Record<string, unknown> {
+  id: string;
+  title?: string | null;
+  type?: string | null;
+  audio_url?: string | null;
+  peaks_url?: string | null;
+  cover_url?: string | null;
+  duration_seconds?: number | null;
+  bpm?: number | null;
+  key?: string | null;
+  scale?: string | null;
+  lease_price_usd?: number | null;
+  exclusive_price_usd?: number | null;
+  free_download_enabled?: boolean | null;
+  store_listed?: boolean | null;
+}
+
+interface StorePlaylistCreator {
+  display_name?: string | null;
+  bio?: string | null;
+  hero_image_url?: string | null;
+  instagram_handle?: string | null;
+  twitter_handle?: string | null;
+  spotify_url?: string | null;
+  soundcloud_url?: string | null;
+  website_url?: string | null;
+  contact_email?: string | null;
+  accent_color?: string | null;
+  license_lease_price_usd?: number | null;
+  license_exclusive_price_usd?: number | null;
+}
+
 /**
  * GET /api/store/playlists/[id]
  *
@@ -58,7 +105,8 @@ export async function GET(
     if (plErr) throw plErr;
     if (!playlist) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const sellerId = (playlist as any).user_id as string | undefined;
+    const playlistRow = playlist as StorePlaylistRow;
+    const sellerId = playlistRow.user_id ?? undefined;
 
     const junctionRes = await admin
       .from('playlist_tracks')
@@ -66,16 +114,16 @@ export async function GET(
       .eq('playlist_id', id)
       .order('position', { ascending: true });
 
-    const junction = (junctionRes.data ?? []) as Array<{ track_id: string; position: number | null }>;
+    const junction = (junctionRes.data ?? []) as PlaylistTrackRow[];
     const trackIds = junction.map((j) => j.track_id);
 
-    const trackMap: Record<string, any> = {};
+    const trackMap: Record<string, ReturnType<typeof redactPublicTrackMedia<StorePlaylistTrack>>> = {};
     if (trackIds.length > 0) {
       const { data: trackRows } = await admin
         .from('tracks')
         .select(TRACK_FIELDS)
         .in('id', trackIds);
-      for (const t of (trackRows ?? []) as any[]) {
+      for (const t of (trackRows ?? []) as unknown as StorePlaylistTrack[]) {
         if (!t.store_listed) continue; // unlisted tracks invisible in public playlist
         trackMap[t.id] = redactPublicTrackMedia({ ...t, cover_url: sanitizeUrl(t.cover_url) });
       }
@@ -85,7 +133,7 @@ export async function GET(
       .map((j) => trackMap[j.track_id])
       .filter(Boolean);
 
-    let creator: Record<string, unknown> | null = null;
+    let creator: StorePlaylistCreator | null = null;
     let profileLease: number | null = null;
     let profileExclusive: number | null = null;
     if (sellerId) {
@@ -100,22 +148,22 @@ export async function GET(
         ].join(', '))
         .eq('user_id', sellerId)
         .maybeSingle();
-      creator = (prof as Record<string, unknown> | null) ?? null;
+      creator = (prof as StorePlaylistCreator | null) ?? null;
       if (creator) {
         if (creator.hero_image_url) {
-          creator = { ...creator, hero_image_url: sanitizeUrl(creator.hero_image_url as string) };
+          creator = { ...creator, hero_image_url: sanitizeUrl(creator.hero_image_url) };
         }
-        profileLease = (creator as any).license_lease_price_usd ?? null;
-        profileExclusive = (creator as any).license_exclusive_price_usd ?? null;
+        profileLease = creator.license_lease_price_usd ?? null;
+        profileExclusive = creator.license_exclusive_price_usd ?? null;
       }
     }
 
     const safePlaylist = {
-      id: (playlist as any).id,
-      name: (playlist as any).name,
-      description: (playlist as any).description ?? null,
-      cover_url: sanitizeUrl((playlist as any).cover_url),
-      created_at: (playlist as any).created_at,
+      id: playlistRow.id,
+      name: playlistRow.name,
+      description: playlistRow.description ?? null,
+      cover_url: sanitizeUrl(playlistRow.cover_url),
+      created_at: playlistRow.created_at,
     };
 
     return NextResponse.json({

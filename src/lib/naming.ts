@@ -5,6 +5,14 @@
 import { getAll, isSupabaseConfigured } from '@/lib/local-store';
 import { createClient } from '@/lib/supabase/server';
 
+type NameRow = {
+  name?: string | null;
+};
+
+function rowNames(rows: NameRow[] | null | undefined): string[] {
+  return (rows ?? []).map((row) => row.name ?? '');
+}
+
 /** "Project 01", "Project 02" — padded to 2 digits, per-user unique */
 export async function nextProjectName(userId: string | null): Promise<string> {
   let existing: string[] = [];
@@ -14,12 +22,12 @@ export async function nextProjectName(userId: string | null): Promise<string> {
       const supabase = await createClient();
       const q = supabase.from('projects').select('name');
       const { data } = userId ? await q.eq('user_id', userId) : await q;
-      existing = (data ?? []).map((r: any) => r.name ?? '');
+      existing = rowNames(data as NameRow[] | null);
     } catch {
       existing = [];
     }
   } else {
-    existing = getAll('projects').map((p: any) => p.name ?? '');
+    existing = rowNames(getAll<NameRow>('projects'));
   }
 
   const nums = existing
@@ -68,12 +76,12 @@ export async function nextPlaylistName(userId: string | null): Promise<string> {
       const supabase = await createClient();
       const q = supabase.from('playlists').select('name');
       const { data } = userId ? await q.eq('user_id', userId) : await q;
-      existing = (data ?? []).map((r: any) => r.name ?? '');
+      existing = rowNames(data as NameRow[] | null);
     } catch {
       existing = [];
     }
   } else {
-    existing = getAll('playlists').map((p: any) => p.name ?? '');
+    existing = rowNames(getAll<NameRow>('playlists'));
   }
 
   const nums = existing

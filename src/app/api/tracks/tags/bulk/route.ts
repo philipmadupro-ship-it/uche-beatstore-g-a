@@ -5,6 +5,17 @@ import { readBody } from '@/lib/validate';
 import { errorMessage } from '@/lib/errors';
 import { ContactsBulkTagsBodySchema } from '@/lib/contracts';
 
+interface TrackIdRow {
+  id: string;
+}
+
+interface TrackTagRow {
+  id?: string;
+  track_id: string;
+  tag: string;
+  category?: string | null;
+}
+
 /**
  * POST /api/tracks/tags/bulk — add and/or remove tags across many tracks in
  * one request. Mirrors /api/contacts/tags/bulk/route.ts exactly, targeting
@@ -30,7 +41,7 @@ export async function POST(req: NextRequest) {
         .select('id')
         .in('id', ids)
         .or(`user_id.eq.${safeId},user_id.is.null`);
-      const ownedIds = (owned ?? []).map((t: any) => t.id);
+      const ownedIds = ((owned ?? []) as TrackIdRow[]).map((t) => t.id);
       if (ownedIds.length === 0) return NextResponse.json({ updated: 0 });
 
       if (remove.length) {
@@ -47,14 +58,17 @@ export async function POST(req: NextRequest) {
     const idset = new Set(ids);
     if (remove.length) {
       const removeSet = new Set(remove);
-      (getAll('track_tags') as any[])
+      getAll<TrackTagRow>('track_tags')
         .filter((r) => idset.has(r.track_id) && removeSet.has(r.tag))
-        .forEach((r) => deleteRow('track_tags', r.id));
+        .forEach((r) => { if (r.id) deleteRow('track_tags', r.id); });
     }
     if (add.length) {
       for (const tid of ids) {
         for (const tag of add) {
-          const exists = query('track_tags', (t) => (t as any).track_id === tid && (t as any).tag === tag).length > 0;
+          const exists = query<TrackTagRow>(
+            'track_tags',
+            (t) => t.track_id === tid && t.tag === tag,
+          ).length > 0;
           if (!exists) insert('track_tags', { track_id: tid, tag, category: 'custom' });
         }
       }

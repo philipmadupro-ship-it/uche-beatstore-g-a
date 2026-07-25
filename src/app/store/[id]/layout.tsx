@@ -9,6 +9,21 @@ interface Props {
   params: Promise<{ id: string }>;
 }
 
+interface StoreMetadataTrack {
+  title: string;
+  cover_url: string | null;
+  description: string | null;
+  bpm: number | null;
+  key: string | null;
+  scale: string | null;
+  user_id: string | null;
+  store_listed: boolean | null;
+}
+
+interface CreatorNameRow {
+  display_name: string | null;
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const fallback: Metadata = { title: 'Beat — U2C Beatstore' };
@@ -25,7 +40,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
     if (!track) return fallback;
 
-    const t = track as any;
+    const t = track as StoreMetadataTrack;
     let displayName: string | null = null;
     if (t.user_id) {
       const { data: prof } = await admin
@@ -33,7 +48,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         .select('display_name')
         .eq('user_id', t.user_id)
         .maybeSingle();
-      displayName = (prof as any)?.display_name ?? null;
+      displayName = (prof as CreatorNameRow | null)?.display_name ?? null;
     }
 
     const title = displayName ? `${t.title} — ${displayName}` : t.title;

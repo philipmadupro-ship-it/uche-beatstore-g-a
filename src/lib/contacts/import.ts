@@ -13,7 +13,24 @@
  *    the parsed contact so the preview UI can flag bad rows
  */
 
-const HEADER_ALIASES: Record<string, string[]> = {
+type ContactImportColumn =
+  | 'name'
+  | 'email'
+  | 'phone'
+  | 'role'
+  | 'label'
+  | 'category'
+  | 'genre'
+  | 'country'
+  | 'city'
+  | 'instagram'
+  | 'twitter'
+  | 'website'
+  | 'notes';
+
+export type ColumnMap = Record<ContactImportColumn, number | null>;
+
+const HEADER_ALIASES: Record<ContactImportColumn, string[]> = {
   name: [
     'name', 'full name', 'fullname', 'contact', 'contact name',
     'artist', 'artist name', 'first name', 'display name', 'username',
@@ -36,22 +53,6 @@ function normalizeHeader(h: string): string {
   return h.trim().toLowerCase().replace(/[_\-\s]+/g, ' ').replace(/\s+/g, ' ');
 }
 
-export interface ColumnMap {
-  name: number | null;
-  email: number | null;
-  phone: number | null;
-  role: number | null;
-  label: number | null;
-  category: number | null;
-  genre: number | null;
-  country: number | null;
-  city: number | null;
-  instagram: number | null;
-  twitter: number | null;
-  website: number | null;
-  notes: number | null;
-}
-
 export function inferColumnMap(headers: string[]): ColumnMap {
   const norm = headers.map(normalizeHeader);
   const map: ColumnMap = {
@@ -62,14 +63,14 @@ export function inferColumnMap(headers: string[]): ColumnMap {
   for (const [field, aliases] of Object.entries(HEADER_ALIASES)) {
     for (let i = 0; i < norm.length; i++) {
       if (aliases.some((a) => norm[i] === a)) {
-        if ((map as any)[field] == null) (map as any)[field] = i;
+        if (map[field as ContactImportColumn] == null) map[field as ContactImportColumn] = i;
       }
     }
     // Looser substring match if no exact hit
-    if ((map as any)[field] == null) {
+    if (map[field as ContactImportColumn] == null) {
       for (let i = 0; i < norm.length; i++) {
         if (aliases.some((a) => norm[i].includes(a))) {
-          if ((map as any)[field] == null) (map as any)[field] = i;
+          if (map[field as ContactImportColumn] == null) map[field as ContactImportColumn] = i;
         }
       }
     }
@@ -184,16 +185,16 @@ export interface RowResult {
   errors: string[];
 }
 
-function pick(row: any[], i: number | null): string {
+function pick(row: readonly unknown[], i: number | null): string {
   if (i == null) return '';
   return String(row[i] ?? '').trim();
 }
 
-export function rowsToContacts(headers: string[], rows: any[][]): ParsedContact[] {
+export function rowsToContacts(headers: string[], rows: unknown[][]): ParsedContact[] {
   return rowsToResults(headers, rows).map((r) => r.contact);
 }
 
-export function rowsToResults(headers: string[], rows: any[][]): RowResult[] {
+export function rowsToResults(headers: string[], rows: unknown[][]): RowResult[] {
   const map = inferColumnMap(headers);
   const out: RowResult[] = [];
 

@@ -27,6 +27,29 @@ export interface AudioFeatures {
   _reason?: string;
 }
 
+interface AudioDecodeResult {
+  channelData?: Float32Array[];
+  _channelData?: Float32Array[];
+  sampleRate?: number;
+  getChannelData?: (channel: number) => Float32Array;
+}
+
+type AudioDecodeFn = (buffer: Buffer) => Promise<AudioDecodeResult | null>;
+
+interface AudioDecodeModule {
+  default: AudioDecodeFn;
+}
+
+interface MusicTempoResult {
+  tempo: number | string;
+}
+
+type MusicTempoConstructor = new (samples: number[]) => MusicTempoResult;
+
+interface MusicTempoModule {
+  default: MusicTempoConstructor;
+}
+
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
 // Temperley/Kostka-Payne revised key profiles. The original Krumhansl-
@@ -283,7 +306,7 @@ async function tryDecode(buffer: Buffer): Promise<
   | { _err: string }
 > {
   try {
-    const decode = (await import('audio-decode')).default as any;
+    const decode = ((await import('audio-decode')) as AudioDecodeModule).default;
     const result = await decode(buffer);
 
     // audio-decode v3 returns `{ channelData: Float32Array[], sampleRate }`.
@@ -417,7 +440,7 @@ export async function analyzeAudio(buffer: Buffer): Promise<AudioFeatures> {
         samples.push(sum / (end - i));
       }
 
-      const MusicTempo = ((await import('music-tempo')) as any).default;
+      const MusicTempo = ((await import('music-tempo')) as MusicTempoModule).default;
       const mt = new MusicTempo(samples);
       let tempo = Number(mt.tempo);
 

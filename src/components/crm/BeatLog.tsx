@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { BeatSend, Contact } from '@/lib/types';
 import { Mail, CheckCircle, Clock, XCircle, ArrowUpRight, Music } from 'lucide-react';
 import Link from 'next/link';
@@ -34,8 +35,8 @@ function nameToAvatar(name: string) {
   return AVATAR_PALETTES[Math.abs(h) % AVATAR_PALETTES.length];
 }
 
-function relativeDays(iso: string): string {
-  const days = Math.floor((Date.now() - Date.parse(iso)) / 86_400_000);
+function relativeDays(iso: string, nowMs: number): string {
+  const days = Math.floor((nowMs - Date.parse(iso)) / 86_400_000);
   if (days < 1) return 'today';
   if (days === 1) return '1d ago';
   if (days < 30) return `${days}d ago`;
@@ -44,6 +45,7 @@ function relativeDays(iso: string): string {
 }
 
 export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
+  const [nowMs] = useState(() => Date.now());
   const contactById = new Map(contacts.map((c) => [c.id, c]));
 
   const sorted = [...sends].sort((a, b) =>
@@ -79,7 +81,7 @@ export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
           const contact = contactById.get(send.contact_id);
           const name = contact?.name ?? `Contact ${send.contact_id.slice(0, 6)}`;
           const av = nameToAvatar(name);
-          const daysDiff = (Date.now() - Date.parse(send.sent_at)) / 86_400_000;
+          const daysDiff = (nowMs - Date.parse(send.sent_at)) / 86_400_000;
           const needsNudge = send.status === 'sent' && daysDiff > 5;
           const trackCount = send.track_ids?.length ?? 0;
 
@@ -103,7 +105,7 @@ export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
                     </span>
                   )}
                 </div>
-                <p className="text-[9px] font-mono text-[#9B9282] mt-0.5">{relativeDays(send.sent_at)}</p>
+                <p className="text-[9px] font-mono text-[#9B9282] mt-0.5">{relativeDays(send.sent_at, nowMs)}</p>
               </div>
 
               {/* Track count */}

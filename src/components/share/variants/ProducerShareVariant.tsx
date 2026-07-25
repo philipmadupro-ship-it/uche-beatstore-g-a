@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 import { Music, Play, Pause, SkipBack, SkipForward, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
@@ -145,7 +146,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
             {currentTrack && (
               <div className="flex flex-col items-center">
                 <ShareWaveformVinyl
-                  track={currentTrack as any}
+                  track={currentTrack}
                   projectCover={project.cover_url}
                   caption={null}
                   isPlaying={isPlaying}
@@ -297,7 +298,14 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                     >
                       <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-[#090907] border border-[#2B2821] shrink-0">
                         {t.cover_url ? (
-                          <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                          <Image
+                            src={t.cover_url}
+                            alt=""
+                            width={36}
+                            height={36}
+                            className="w-full h-full object-cover"
+                            unoptimized
+                          />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-[#3B372F]">
                             <Music size={12} />

@@ -11,6 +11,17 @@ const log = createLogger('cron.abandoned-carts');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface AbandonedCartRow {
+  id: string;
+  seller_user_id: string | null;
+  buyer_email: string;
+  items: Array<{ name: string; price_usd: number }> | null;
+  total_usd: number | string | null;
+  reminder_count: number;
+  reminded_at: string | null;
+  recovery_code: string | null;
+}
+
 /**
  * Abandoned-cart recovery cron (mig 071).
  *
@@ -45,13 +56,13 @@ export async function GET(req: NextRequest) {
       .order('created_at', { ascending: true })
       .limit(100);
 
-    const allRows = (carts ?? []) as any[];
+    const allRows = (carts ?? []) as AbandonedCartRow[];
 
     // Dedupe by buyer email: a buyer who retries checkout spawns several cart
     // rows — we only want ONE reminder per person. Keep the newest pending cart
     // per email; suppress the rest (bump them to reminder_count 2 so they never
     // fire). Rows are ordered oldest-first, so the last seen per email is newest.
-    const newestByEmail = new Map<string, any>();
+    const newestByEmail = new Map<string, AbandonedCartRow>();
     for (const c of allRows) newestByEmail.set(c.buyer_email, c);
     const rows = [...newestByEmail.values()];
     const suppressIds = allRows.filter((c) => newestByEmail.get(c.buyer_email)?.id !== c.id).map((c) => c.id);
@@ -96,7 +107,7 @@ export async function GET(req: NextRequest) {
 
       if (!resendKey) continue;
       try {
-        const items = (cart.items ?? []) as Array<{ name: string; price_usd: number }>;
+        const items = cart.items ?? [];
         const itemTable = emailItemTable(items.slice(0, 6).map((i) => ({ label: i.name, value: `$${Number(i.price_usd).toFixed(2)}` })));
         const checkoutUrl = code ? `${checkoutBase}?promo=${code}` : checkoutBase;
         const discountBlock = code

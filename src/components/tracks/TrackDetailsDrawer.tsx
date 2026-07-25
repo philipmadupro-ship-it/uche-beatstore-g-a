@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast, confirmToast } from '@/hooks/useToast';
+import { errorMessage } from '@/lib/errors';
 import { TrackVersionsPanel } from '@/components/tracks/TrackVersionsPanel';
 import { ProjectCommentsPanel } from '@/components/projects/ProjectCommentsPanel';
 import { TrackAnalysisSection } from '@/components/tracks/drawer/TrackAnalysisSection';
@@ -37,6 +38,37 @@ interface TrackDetailsDrawerProps {
   projectId?: string | null;
 }
 
+interface StemData {
+  vocals_url: string;
+  drums_url: string;
+  bass_url: string;
+  other_url: string;
+}
+
+interface ApiErrorResponse {
+  error?: string;
+}
+
+interface StemStartResponse extends ApiErrorResponse {
+  jobId?: string;
+}
+
+interface StemJob {
+  status?: string;
+  progress?: number;
+  error?: string | null;
+  stems?: {
+    vocals?: string | null;
+    drums?: string | null;
+    bass?: string | null;
+    other?: string | null;
+  } | null;
+}
+
+interface StemStatusResponse {
+  job?: StemJob | null;
+}
+
 export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projectId }: TrackDetailsDrawerProps) {
   const { addToQueue, setTrack, currentTrack, isPlaying, setPlaying } = usePlayer();
   const router = useRouter();
@@ -54,7 +86,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
 
   const track = trackProp ? ({ ...trackProp, ...optimistic } as Track) : null;
   const [showStems, setShowStems] = useState(false);
-  const [stemData, setStemData] = useState<any>(null);
+  const [stemData, setStemData] = useState<StemData | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [stemStatus, setStemStatus] = useState<'idle' | 'processing' | 'ready'>('idle');
   const [stemProgress, setStemProgress] = useState<number>(0);
@@ -89,14 +121,11 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
 
   if (!track) return null;
 
-  const patchTrack = async (patch: Record<string, any>) => {
+  const patchTrack = async (patch: Record<string, unknown>) => {
     if (!track?.id) return;
-    // Snapshot prior values so we can roll back on error
-    const prior: Record<string, any> = {};
-    for (const k of Object.keys(patch)) prior[k] = (track as any)[k];
 
     // Optimistic
-    setOptimistic((o) => ({ ...o, ...patch }));
+    setOptimistic((o) => ({ ...o, ...(patch as Partial<Track>) }));
 
     try {
       const res = await fetch(`/api/tracks/${track.id}`, {
@@ -105,24 +134,24 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         body: JSON.stringify(patch),
       });
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
+        const j = await res.json().catch(() => ({})) as ApiErrorResponse;
         // Roll back the keys we changed
         setOptimistic((o) => {
           const next = { ...o };
-          for (const k of Object.keys(patch)) delete (next as any)[k];
+          for (const k of Object.keys(patch) as Array<keyof Track>) delete next[k];
           return next;
         });
         toast.error('Update failed', j.error || `HTTP ${res.status}`);
         return;
       }
       if (onUpdate) onUpdate();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setOptimistic((o) => {
         const next = { ...o };
-        for (const k of Object.keys(patch)) delete (next as any)[k];
+        for (const k of Object.keys(patch) as Array<keyof Track>) delete next[k];
         return next;
       });
-      toast.error('Update failed', err?.message);
+      toast.error('Update failed', errorMessage(err));
     }
   };
 
@@ -168,11 +197,12 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         });
 
         if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
+          const err = await res.json().catch(() => ({})) as ApiErrorResponse;
           throw new Error(err.error || `Failed to start stem split (${res.status})`);
         }
 
-        const { jobId } = await res.json();
+        const { jobId } = await res.json() as StemStartResponse;
+        if (!jobId) throw new Error('Stem service did not return a job id.');
 
         // Clear any prior poll (e.g. user retried before the previous one
         // finished) to avoid stacking duplicate intervals.
@@ -201,7 +231,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
               return;
             }
             const statusRes = await fetch(`/api/stems/${jobId}`);
-            const { job } = await statusRes.json();
+            const { job } = await statusRes.json() as StemStatusResponse;
 
             if (!job) return;
 
@@ -233,7 +263,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
           }
         }, 4000);
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Stem split error:', err);
         setStemStatus('idle');
         setShowStems(false);
@@ -241,7 +271,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         // surface that verbatim so the user knows which side to fix.
         toast.error(
           'Stem separation unavailable',
-          err.message || 'Start the Demucs service or set MOISES_API_KEY.',
+          errorMessage(err) || 'Start the Demucs service or set MOISES_API_KEY.',
         );
       }
     }
@@ -288,7 +318,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         method: 'POST',
         body: formData,
       });
-      const json = await res.json().catch(() => ({}));
+      const json = await res.json().catch(() => ({})) as ApiErrorResponse;
       if (!res.ok) {
         toast.error('Replace failed', json.error || `HTTP ${res.status}`);
         return;
@@ -298,9 +328,9 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
       if (onUpdate) onUpdate();
       setVersionsRefreshKey((k) => k + 1);
       toast.success('Replacement saved', 'Previous version archived in History.');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error('Replace failed', err?.message);
+      toast.error('Replace failed', errorMessage(err));
     } finally {
       setIsReplacing(false);
     }
@@ -407,7 +437,10 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                   global player bar, so this just promotes the track to it. */}
               {track.audio_url && (
                 <button
-                  onClick={() => { currentTrack?.id === track.id ? setPlaying(!isPlaying) : setTrack(track); }}
+                  onClick={() => {
+                    if (currentTrack?.id === track.id) setPlaying(!isPlaying);
+                    else setTrack(track);
+                  }}
                   title={currentTrack?.id === track.id && isPlaying ? 'Pause' : 'Play'}
                   className="p-2 bg-white/[0.04] rounded-xl border border-white/[0.06] hover:border-[#E7D7BE]/40 text-[#F7EBDD] hover:text-[#E7D7BE] transition-colors backdrop-blur-sm"
                 >
@@ -540,8 +573,9 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                 track={track}
                 onOptimistic={(n) => setOptimistic((o) => ({ ...o, notes: n }))}
                 onRollback={() => setOptimistic((o) => {
-                  const { notes: _n, ...rest } = o;
-                  return rest;
+                  const next = { ...o };
+                  delete next.notes;
+                  return next;
                 })}
                 onSaved={onUpdate}
               />

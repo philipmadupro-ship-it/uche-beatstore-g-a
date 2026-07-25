@@ -3,30 +3,10 @@ import { uploadImage } from '@/lib/storage/upload';
 import { requireUser } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { imageUploadErrorMessage, validateImageUpload } from '@/lib/upload/image-validation';
 const log = createLogger('api.upload.image');
 
 export const runtime = 'nodejs';
-
-// Cap upload size at 8 MB. Images this large are almost always unintentional
-// (full-resolution camera shots) and pollute the bucket; the UI displays
-// covers at most ~500px square.
-const MAX_BYTES = 8 * 1024 * 1024;
-
-const ALLOWED_MIME = new Set([
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'image/avif',
-]);
-
-const MIME_TO_EXT: Record<string, string> = {
-  'image/jpeg': 'jpg',
-  'image/png': 'png',
-  'image/webp': 'webp',
-  'image/gif': 'gif',
-  'image/avif': 'avif',
-};
 
 /**
  * POST /api/upload/image
@@ -57,29 +37,21 @@ export async function POST(req: NextRequest) {
     if (file.size === 0) {
       return NextResponse.json({ error: 'Empty file' }, { status: 400 });
     }
-    if (file.size > MAX_BYTES) {
-      return NextResponse.json(
-        { error: `Image too large (${Math.round(file.size / 1024 / 1024)} MB, max ${MAX_BYTES / 1024 / 1024} MB)` },
-        { status: 413 },
-      );
-    }
-    if (!ALLOWED_MIME.has(file.type)) {
-      return NextResponse.json(
-        { error: `Unsupported image type "${file.type}". Use JPEG, PNG, WebP, GIF, or AVIF.` },
-        { status: 415 },
-      );
+    const validation = validateImageUpload(file);
+    if (!validation.ok) {
+      const status = validation.error === 'too-large' ? 413 : 415;
+      return NextResponse.json({ error: imageUploadErrorMessage(validation.error) }, { status });
     }
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const ext = MIME_TO_EXT[file.type] ?? 'bin';
 
     // Delegate to shared uploadImage — handles R2 vs local fallback,
     // uses the shared r2 client, and sets correct cache headers.
-    const url = await uploadImage(buffer, ext, file.type);
+    const url = await uploadImage(buffer, validation.extension, validation.mimeType);
     return NextResponse.json({ success: true, url });
-  } catch (error: any) {
+  } catch (error) {
     log.error('Image Upload Error:', { error: errorMessage(error) });
-    return NextResponse.json({ error: error.message || 'Upload failed' }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(error) || 'Upload failed' }, { status: 500 });
   }
 }

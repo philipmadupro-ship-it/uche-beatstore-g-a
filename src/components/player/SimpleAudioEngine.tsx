@@ -37,7 +37,7 @@ export function SimpleAudioEngine() {
 
   const {
     currentTrack, isPlaying, volume, duckGain, seekTarget,
-    setProgress, setPlaying, next,
+    setProgress, setPlaying, setBuffering, setPlaybackError, next,
   } = usePlayer();
 
   const trackId = currentTrack?.id;
@@ -60,11 +60,17 @@ export function SimpleAudioEngine() {
     // Only reset src when it actually changes — avoids re-buffering on
     // unrelated re-renders.
     if (a.src !== instant) {
+      setBuffering(true);
+      setPlaybackError(null);
       a.src = instant;
       a.load();
     }
     if (isPlaying) {
-      a.play().catch(() => { /* autoplay block — user will press play */ });
+      a.play().catch(() => {
+        setBuffering(false);
+        setPlaybackError('Tap play to start this preview.');
+        setPlaying(false);
+      });
     }
 
     // Background: prefer an explicit offline download, then a persisted (but
@@ -79,7 +85,11 @@ export function SimpleAudioEngine() {
           if (a.currentTime > 0 && !a.paused) return; // already audible — leave it
           a.src = blob;
           a.load();
-          if (isPlaying) a.play().catch(() => {});
+          if (isPlaying) a.play().catch(() => {
+            setBuffering(false);
+            setPlaybackError('Tap play to start this preview.');
+            setPlaying(false);
+          });
         } catch {
           // best-effort; the network stream is already loading
         }
@@ -95,11 +105,17 @@ export function SimpleAudioEngine() {
     const a = audioRef.current;
     if (!a) return;
     if (isPlaying) {
-      a.play().catch(() => { /* autoplay block */ });
+      setPlaybackError(null);
+      a.play().catch(() => {
+        setBuffering(false);
+        setPlaybackError('Tap play to start this preview.');
+        setPlaying(false);
+      });
     } else {
       a.pause();
+      setBuffering(false);
     }
-  }, [isPlaying, trackId]);
+  }, [isPlaying, trackId, setBuffering, setPlaybackError, setPlaying]);
 
   // ── Volume (× duck × loudness normalization) ──────────────────────────
   useEffect(() => {
@@ -117,7 +133,6 @@ export function SimpleAudioEngine() {
       a.currentTime = Math.max(0, Math.min(1, seekTarget)) * dur;
     }
     usePlayer.setState({ seekTarget: null });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seekTarget]);
 
   return (
@@ -131,8 +146,26 @@ export function SimpleAudioEngine() {
           setProgress(a.currentTime / a.duration);
         }
       }}
-      onEnded={() => next()}
-      onPlay={() => setPlaying(true)}
+      onLoadStart={() => {
+        if (isPlaying) setBuffering(true);
+      }}
+      onWaiting={() => setBuffering(true)}
+      onCanPlay={() => setBuffering(false)}
+      onPlaying={() => {
+        setBuffering(false);
+        setPlaybackError(null);
+        setPlaying(true);
+      }}
+      onPause={() => setBuffering(false)}
+      onEnded={() => {
+        setBuffering(false);
+        next();
+      }}
+      onError={() => {
+        setBuffering(false);
+        setPlaybackError('Preview stream unavailable. Try another beat.');
+        setPlaying(false);
+      }}
     />
   );
 }

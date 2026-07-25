@@ -1,0 +1,7 @@
+interface:
+  display_name: "Marketplace And Licensing"
+  short_description: "Licenses, cart, checkout, downloads"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $marketplace-and-licensing to update Beatstor commerce."
+policy:
+  allow_implicit_invocation: true

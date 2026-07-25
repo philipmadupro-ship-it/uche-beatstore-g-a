@@ -5,6 +5,17 @@ import { readBody, parsePagination } from '@/lib/validate';
 import { errorMessage } from '@/lib/errors';
 import { ContactsBatchPatchBodySchema } from '@/lib/contracts';
 
+interface ContactTagRow {
+  id?: string;
+  contact_id: string;
+  tag: string;
+  category?: string | null;
+}
+
+interface ContactRow {
+  id: string;
+}
+
 /**
  * Contacts list + create — runs through the storage facade so the
  * `if (supabase) else (local)` boilerplate is centralized.
@@ -30,13 +41,13 @@ export async function GET(req: NextRequest) {
     if (isSupabaseConfigured()) {
       const admin = createServiceClient();
       const { data: tagRows } = await admin.from('contact_tags').select('contact_id, tag, category').in('contact_id', ids);
-      (tagRows ?? []).forEach((r: any) => {
+      ((tagRows ?? []) as ContactTagRow[]).forEach((r) => {
         const arr = tagsByContact.get(r.contact_id) ?? [];
-        arr.push({ tag: r.tag, category: r.category });
+        arr.push({ tag: r.tag, category: r.category ?? null });
         tagsByContact.set(r.contact_id, arr);
       });
     } else {
-      (getAll('contact_tags') as any[]).forEach((r) => {
+      getAll<ContactTagRow>('contact_tags').forEach((r) => {
         const arr = tagsByContact.get(r.contact_id) ?? [];
         arr.push({ tag: r.tag, category: r.category ?? null });
         tagsByContact.set(r.contact_id, arr);
@@ -101,7 +112,7 @@ export async function PATCH(req: NextRequest) {
 
     // Local-store fallback.
     const idset = new Set(ids);
-    const rows = query('contacts', (c) => idset.has((c as any).id)) as any[];
+    const rows = query<ContactRow>('contacts', (c) => idset.has(c.id));
     rows.forEach((r) => update('contacts', r.id, patch));
     return NextResponse.json({ updated: rows.length });
   } catch (err) {

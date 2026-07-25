@@ -25,6 +25,51 @@ type LicenseLookup = {
   file_types?: string[] | null;
   stems_included?: boolean | null;
 };
+type WebhookCheckoutSession = {
+  id: string;
+  amount_total?: number | null;
+  amount_subtotal?: number | null;
+  customer?: string | null;
+  customer_email?: string | null;
+  customer_details?: { name?: string | null } | null;
+  payment_intent?: string | null;
+  metadata?: Record<string, string> | null;
+};
+type WebhookEvent = {
+  id: string;
+  type: string;
+  data: { object: unknown };
+};
+type WebhookCharge = {
+  payment_intent?: string | null;
+};
+type TrackTitleRow = {
+  id: string;
+  title?: string | null;
+};
+type CreatorProfileRow = {
+  contact_email?: string | null;
+  display_name?: string | null;
+  license_template_md?: string | null;
+};
+type ProjectOwnerRow = {
+  user_id?: string | null;
+};
+type ProjectAccessRow = {
+  id: string;
+  token: string;
+};
+type PurchaseIdRow = {
+  id: string;
+};
+type PurchaseNotificationRow = {
+  seller_user_id?: string | null;
+  amount_usd?: number | null;
+  buyer_email?: string | null;
+};
+type RefundPurchaseRow = {
+  line_items?: unknown;
+};
 
 /**
  * POST /api/stripe/webhook
@@ -188,7 +233,7 @@ async function recordStorePurchaseEvent(
 // ── Background fulfillment ──────────────────────────────────────────────────
 
 async function runFulfillment(params: {
-  session: any;
+  session: WebhookCheckoutSession;
   meta: Record<string, string>;
   purchaseId: string;
   trackIds: string[];
@@ -243,7 +288,9 @@ async function runFulfillment(params: {
             .from('tracks')
             .select('id, title')
             .in('id', trackIds);
-          const titles = (trackRows ?? []).map((t: any) => t.title).filter(Boolean);
+          const titles = ((trackRows ?? []) as TrackTitleRow[])
+            .map((t) => t.title)
+            .filter((title): title is string => Boolean(title));
           const what = titles.length === 0 ? 'a track'
             : titles.length === 1 ? titles[0]
             : `${titles[0]} + ${titles.length - 1} more`;
@@ -331,8 +378,9 @@ async function runFulfillment(params: {
           .select('contact_email, display_name')
           .eq('user_id', meta.seller_user_id)
           .maybeSingle();
-        let producerEmail = (prof as any)?.contact_email as string | null | undefined;
-        const producerName = (prof as any)?.display_name as string | null | undefined;
+        const profile = prof as CreatorProfileRow | null;
+        let producerEmail = profile?.contact_email;
+        const producerName = profile?.display_name;
         if (!producerEmail) {
           const { data: userRes } = await admin.auth.admin.getUserById(meta.seller_user_id);
           producerEmail = userRes?.user?.email ?? null;
@@ -345,7 +393,7 @@ async function runFulfillment(params: {
             .from('tracks')
             .select('id, title')
             .in('id', stemsPendingIds);
-          const titles = (trackRows ?? []).map((t: any) => t.title || t.id);
+          const titles = ((trackRows ?? []) as TrackTitleRow[]).map((t) => t.title || t.id);
 
           const resend = new Resend(process.env.RESEND_API_KEY);
           await resend.emails.send({
@@ -416,7 +464,7 @@ async function runFulfillment(params: {
     ]);
 
     const titlesByTrack = new Map<string, string>(
-      ((trackRows ?? []) as any[]).map((t) => [t.id, t.title as string]),
+      ((trackRows ?? []) as TrackTitleRow[]).map((t) => [t.id, t.title ?? `Track ${t.id.slice(0, 8)}`]),
     );
     const orderedTitles = lineItems.map(
       (li) => titlesByTrack.get(li.track_id) ?? `Track ${li.track_id.slice(0, 8)}`,
@@ -570,7 +618,7 @@ async function runFulfillment(params: {
 // ── Project storefront fulfillment ────────────────────────────────────────────
 
 async function runProjectFulfillment(params: {
-  session: any;
+  session: WebhookCheckoutSession;
   meta: Record<string, string>;
   accessId: string;
   accessToken: string;
@@ -623,7 +671,8 @@ async function runProjectFulfillment(params: {
           .select('name')
           .eq('id', projectId)
           .maybeSingle();
-        if (p?.name) projName = p.name;
+        const projectRow = p as { name?: string | null } | null;
+        if (projectRow?.name) projName = projectRow.name;
       } catch {}
 
       const accessUrl = `${APP_URL}/store/projects/access/${accessToken}`;
@@ -677,9 +726,9 @@ export async function POST(req: NextRequest) {
   // MUST read raw bytes before any JSON parsing — Stripe HMAC covers the exact body
   const rawBody = await req.text();
   const stripe = getStripe();
-  let event: any;
+  let event: WebhookEvent;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, secret);
+    event = stripe.webhooks.constructEvent(rawBody, signature, secret) as WebhookEvent;
   } catch (err) {
     log.warn('signature verification failed', { error: errorMessage(err) });
     return NextResponse.json({ error: 'Bad signature' }, { status: 400 });
@@ -692,7 +741,7 @@ export async function POST(req: NextRequest) {
 
       // ── checkout.session.completed ─────────────────────────────────────────
       case 'checkout.session.completed': {
-        const session = event.data.object as any;
+        const session = event.data.object as WebhookCheckoutSession;
         const meta: Record<string, string> = session.metadata ?? {};
 
         // ── Layer 1 idempotency: event-level ──────────────────────────────
@@ -756,7 +805,7 @@ export async function POST(req: NextRequest) {
               .select('user_id')
               .eq('id', projectId)
               .maybeSingle();
-            sellerForAccess = (proj as any)?.user_id ?? null;
+            sellerForAccess = (proj as ProjectOwnerRow | null)?.user_id ?? null;
           }
 
           const { data: createdAccess, error: accessInsertErr } = await admin
@@ -773,8 +822,7 @@ export async function POST(req: NextRequest) {
 
           if (accessInsertErr) throw accessInsertErr;
 
-          const accessId = createdAccess.id;
-          const accessToken = createdAccess.token;
+          const { id: accessId, token: accessToken } = createdAccess as ProjectAccessRow;
 
           // Fulfillment (CRM + email with /store/projects/access/${token})
           await runProjectFulfillment({
@@ -920,7 +968,7 @@ export async function POST(req: NextRequest) {
 
           if (upsertErr) throw upsertErr;
 
-          const purchaseId = (upsertedRows as any[])?.[0]?.id;
+          const purchaseId = ((upsertedRows ?? []) as PurchaseIdRow[])[0]?.id;
           if (!purchaseId) {
             throw new Error('Failed to retrieve purchase ID after upsert');
           }
@@ -976,7 +1024,7 @@ export async function POST(req: NextRequest) {
       // Both events revoke download access. The purchase row is kept for audit.
       case 'charge.refunded':
       case 'charge.dispute.created': {
-        const charge = event.data.object as any;
+        const charge = event.data.object as WebhookCharge;
         const newStatus = event.type === 'charge.refunded' ? 'refunded' : 'disputed';
 
         const { error } = await admin
@@ -1000,17 +1048,18 @@ export async function POST(req: NextRequest) {
             .select('seller_user_id, amount_usd, buyer_email')
             .eq('stripe_payment_intent', charge.payment_intent)
             .maybeSingle();
-          if ((purchaseForNotif as any)?.seller_user_id) {
+          const purchaseNotification = purchaseForNotif as PurchaseNotificationRow | null;
+          if (purchaseNotification?.seller_user_id) {
             const kindLabel = event.type === 'charge.refunded' ? 'refund' : 'dispute';
-            const amtLabel = `$${Number((purchaseForNotif as any).amount_usd ?? 0).toFixed(2)}`;
+            const amtLabel = `$${Number(purchaseNotification.amount_usd ?? 0).toFixed(2)}`;
             await admin.from('notifications').insert({
-              user_id: (purchaseForNotif as any).seller_user_id,
+              user_id: purchaseNotification.seller_user_id,
               kind: kindLabel,
               title: event.type === 'charge.refunded'
                 ? `Refund issued — ${amtLabel}`
                 : `Dispute opened — ${amtLabel}`,
-              body: (purchaseForNotif as any).buyer_email ?? undefined,
-              data: { payment_intent: charge.payment_intent, amount_usd: (purchaseForNotif as any).amount_usd },
+              body: purchaseNotification.buyer_email ?? undefined,
+              data: { payment_intent: charge.payment_intent, amount_usd: purchaseNotification.amount_usd },
             });
           }
         } catch (ne) {
@@ -1025,10 +1074,12 @@ export async function POST(req: NextRequest) {
               .eq('stripe_payment_intent', charge.payment_intent)
               .maybeSingle();
 
-            if (purchase?.line_items) {
-              const exclusiveTracks = (purchase.line_items as any[])
-                .filter((li: any) => li.license_type === 'exclusive')
-                .map((li: any) => li.track_id);
+            const refundPurchase = purchase as RefundPurchaseRow | null;
+            if (Array.isArray(refundPurchase?.line_items)) {
+              const exclusiveTracks = refundPurchase.line_items
+                .map(parsePurchaseLineItem)
+                .filter((li: PurchaseLineItem | null): li is PurchaseLineItem => li?.license_type === 'exclusive')
+                .map((li) => li.track_id);
               if (exclusiveTracks.length > 0) {
                 await admin
                   .from('tracks')

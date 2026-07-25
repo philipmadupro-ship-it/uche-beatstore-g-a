@@ -1,18 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import NextImage from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Music, Mail, Globe, ExternalLink,
-  Play, Pause, ChevronRight, Mic2, Loader2, ShoppingCart,
+  Play, Pause, ChevronRight, Mic2, ShoppingCart,
   CheckCircle2, XCircle, X as CloseIcon, Tag, Zap,
-  Clock, Hash, SkipForward, SkipBack,
+  SkipForward, SkipBack,
 } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
 import { CartDrawer } from '@/components/share/CartDrawer';
 import { ShareTrackDetailsDrawer } from '@/components/share/ShareTrackDetailsDrawer';
 import { LicenseSelector } from '@/components/store/LicenseSelector';
 import type { LicenseTier } from '@/components/store/LicenseSelector';
+import type { Track as CartTrack } from '@/lib/types';
 
 function InstagramIcon({ size = 12 }: { size?: number }) {
   return (
@@ -58,6 +60,7 @@ interface CreatorProfile {
 
 interface Track {
   id: string;
+  user_id?: string | null;
   title: string;
   type: string;
   audio_url: string;
@@ -69,6 +72,9 @@ interface Track {
   description?: string | null;
   lease_price_usd?: number | null;
   exclusive_price_usd?: number | null;
+  wav_url?: string | null;
+  stems_status?: CartTrack['stems_status'] | null;
+  created_at?: string | null;
 }
 
 interface Project {
@@ -118,6 +124,18 @@ function resolvePrice(
   return d ? base * (1 - d / 100) : base;
 }
 
+function toCartTrack(track: Track): CartTrack {
+  return {
+    ...track,
+    user_id: track.user_id ?? '',
+    type: track.type as CartTrack['type'],
+    duration_seconds: track.duration_seconds ?? null,
+    bpm: track.bpm ?? null,
+    stems_status: track.stems_status ?? 'none',
+    created_at: track.created_at ?? '',
+  };
+}
+
 function KeyBadge({ keyName, scale }: { keyName?: string | null; scale?: string | null }) {
   if (!keyName) return null;
   const isMinor = scale === 'minor';
@@ -147,24 +165,18 @@ export function ClientShareVariant({
   currentTime,
   duration,
   progressPct,
-  waveRef,
   onSeek,
 }: Props) {
   const { addItem, items: cartItems, setIsOpen: setCartOpen, isOpen: cartOpen } = useCart();
   const searchParams = useSearchParams();
   const router = useRouter();
   const purchaseStatus = searchParams?.get('purchase');
-  const [bannerOpen, setBannerOpen] = useState(false);
+  const bannerOpen = purchaseStatus === 'success' || purchaseStatus === 'cancelled';
   const [selectedTrackForDetails, setSelectedTrackForDetails] = useState<Track | null>(null);
   const [headerVisible, setHeaderVisible] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    setBannerOpen(purchaseStatus === 'success' || purchaseStatus === 'cancelled');
-  }, [purchaseStatus]);
-
   const dismissBanner = () => {
-    setBannerOpen(false);
     const url = new URL(window.location.href);
     url.searchParams.delete('purchase');
     url.searchParams.delete('session_id');
@@ -234,7 +246,7 @@ export function ClientShareVariant({
     const price = tier.is_exclusive
       ? resolvePrice(shareExclusivePrice, track.exclusive_price_usd, creatorExclusivePrice, discount) ?? tier.price_usd
       : resolvePrice(shareLeasePrice, track.lease_price_usd, creatorLeasePrice, discount) ?? tier.price_usd;
-    addItem(track as any, {
+    addItem(toCartTrack(track), {
       id: tier.id,
       name: tier.name,
       price_usd: price,
@@ -322,7 +334,7 @@ export function ClientShareVariant({
       {/* ── Hero ── */}
       <div ref={heroRef} className="relative w-full h-[50vh] md:h-[60vh] overflow-hidden">
         {heroImage ? (
-          <img src={heroImage} alt="" className="absolute inset-0 w-full h-full object-cover" loading="eager" />
+          <NextImage src={heroImage} alt="" fill priority unoptimized className="object-cover" />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-[#342F27] via-[#171511] to-[#090907]" />
         )}
@@ -433,7 +445,7 @@ export function ClientShareVariant({
                         className="relative w-11 h-11 rounded-lg overflow-hidden bg-[#171511] border border-[#2B2821] shrink-0 focus:outline-none"
                       >
                         {t.cover_url ? (
-                          <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                          <NextImage src={t.cover_url} alt="" fill sizes="44px" unoptimized className="object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
                             <Music size={16} />
@@ -641,9 +653,9 @@ export function ClientShareVariant({
 
           <div className="max-w-5xl mx-auto px-4 md:px-8 py-3 flex items-center gap-4">
             {/* Cover */}
-            <div className="w-9 h-9 rounded-lg overflow-hidden bg-[#171511] border border-[#2B2821] shrink-0">
+            <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-[#171511] border border-[#2B2821] shrink-0">
               {playingTrack.cover_url ? (
-                <img src={playingTrack.cover_url} alt="" className="w-full h-full object-cover" />
+                <NextImage src={playingTrack.cover_url} alt="" fill sizes="36px" unoptimized className="object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
                   <Music size={12} />

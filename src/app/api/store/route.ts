@@ -19,6 +19,103 @@ function sanitizeUrl(url: string | null | undefined): string | null {
   return url.replace(/^(https?:\/\/)+/, 'https://');
 }
 
+type TrackTagRow = {
+  track_id: string;
+  tag: string;
+  category?: string | null;
+};
+
+type StoreTrackRow = Record<string, unknown> & {
+  id: string;
+  user_id?: string | null;
+  title?: string | null;
+  type?: string | null;
+  preview_url?: string | null;
+  cover_url?: string | null;
+  wav_url?: string | null;
+  duration_seconds?: number | string | null;
+  bpm?: number | string | null;
+  key?: string | null;
+  scale?: string | null;
+  rating?: number | string | null;
+  description?: string | null;
+  lease_price_usd?: number | string | null;
+  store_listed?: boolean | null;
+  store_featured?: boolean | null;
+  free_download_enabled?: boolean | null;
+  store_sort_order?: number | string | null;
+  voice_tag_enabled?: boolean | null;
+  created_at?: string | null;
+};
+
+type CreatorProfileRow = Record<string, unknown> & {
+  user_id?: string | null;
+  hero_image_url?: string | null;
+  voice_tag_url?: string | null;
+  voice_tag_interval_seconds?: number | string | null;
+};
+
+type PlaylistRow = Record<string, unknown> & {
+  id: string;
+  name?: string | null;
+  cover_url?: string | null;
+  store_featured?: boolean | null;
+  store_order?: number | string | null;
+  created_at?: string | null;
+};
+
+type PlaylistTrackRow = {
+  playlist_id: string;
+  track_id: string;
+  position?: number | string | null;
+};
+
+type ProjectRow = Record<string, unknown> & {
+  id: string;
+  name?: string | null;
+  cover_url?: string | null;
+  description?: string | null;
+  price_usd?: number | string | null;
+  store_featured?: boolean | null;
+  store_order?: number | string | null;
+  created_at?: string | null;
+};
+
+type ProjectTrackRow = {
+  project_id: string;
+  track_id: string;
+  position?: number | string | null;
+};
+
+type PlayCountRow = {
+  track_id: string;
+  play_count?: number | string | null;
+};
+
+type LicenseRow = Record<string, unknown>;
+
+type StoreQueryResult = {
+  data?: unknown;
+  error?: { message?: string } | null;
+};
+
+type StoreQuery = PromiseLike<StoreQueryResult> & {
+  in(column: string, values: readonly unknown[]): StoreQuery;
+  eq(column: string, value: unknown): StoreQuery;
+  or(filters: string): StoreQuery;
+  order(column: string, options?: Record<string, unknown>): StoreQuery;
+  range(from: number, to: number): StoreQuery;
+  gte(column: string, value: unknown): StoreQuery;
+  lte(column: string, value: unknown): StoreQuery;
+  lt(column: string, value: unknown): StoreQuery;
+  gt(column: string, value: unknown): StoreQuery;
+  ilike(column: string, pattern: string): StoreQuery;
+};
+
+function getLocalRows<T>(table: Parameters<typeof getAll>[0] | 'creator_profiles'): T[] {
+  return (getAll(table as Parameters<typeof getAll>[0]) as T[]) ?? [];
+}
+
 function parsePagination(req: NextRequest) {
   const rawLimit = req.nextUrl.searchParams.get('limit');
   if (!rawLimit) return null;
@@ -54,7 +151,7 @@ function parseStoreFilters(req: NextRequest) {
 }
 
 function localFilterAndSortTracks(
-  tracks: any[],
+  tracks: StoreTrackRow[],
   tagsByTrack: Record<string, Array<{ tag: string; category: string | null }>>,
   filters: ReturnType<typeof parseStoreFilters>,
 ) {
@@ -135,9 +232,9 @@ export async function GET(req: NextRequest) {
     const filters = parseStoreFilters(req);
 
     if (!isSupabaseConfigured()) {
-      const allStoreTracks = (getAll('tracks') as any[]).filter((t) => t.store_listed === true);
+      const allStoreTracks = getLocalRows<StoreTrackRow>('tracks').filter((t) => t.store_listed === true);
       const localTagsByTrack: Record<string, Array<{ tag: string; category: string | null }>> = {};
-      for (const row of ((getAll('track_tags' as any) as any[]) || [])) {
+      for (const row of getLocalRows<TrackTagRow>('track_tags')) {
         if (!localTagsByTrack[row.track_id]) localTagsByTrack[row.track_id] = [];
         localTagsByTrack[row.track_id].push({ tag: row.tag, category: row.category ?? null });
       }
@@ -153,34 +250,34 @@ export async function GET(req: NextRequest) {
             : null,
         }
         : null;
-      const profiles = (getAll('creator_profiles' as any) as any[]) || [];
+      const profiles = getLocalRows<CreatorProfileRow>('creator_profiles');
       const creator = profiles[0] ?? null;
 
       // Featured playlists + projects from the local store so devs without
       // Supabase configured still see meaningful data on /store.
-      const allPlaylists = (getAll('playlists' as any) as any[]) || [];
-      const playlistTracks = (getAll('playlist_tracks' as any) as any[]) || [];
+      const allPlaylists = getLocalRows<PlaylistRow>('playlists');
+      const playlistTracks = getLocalRows<PlaylistTrackRow>('playlist_tracks');
       const featuredPlaylistRows = allPlaylists
         .filter((pl) => pl.store_featured === true)
-        .sort((a, b) => (a.store_order ?? 999) - (b.store_order ?? 999));
+        .sort((a, b) => Number(a.store_order ?? 999) - Number(b.store_order ?? 999));
       const featuredPlaylists = featuredPlaylistRows.map((pl) => {
         const plTrackIds = playlistTracks
           .filter((j) => j.playlist_id === pl.id)
-          .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+          .sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0))
           .map((j) => j.track_id);
         const plTracks = allStoreTracks.filter((t) => plTrackIds.includes(t.id)).map(redactPublicTrackMedia);
         return { id: pl.id, name: pl.name, cover_url: pl.cover_url ?? null, store_order: pl.store_order ?? null, tracks: plTracks };
       });
 
-      const allProjects = (getAll('projects' as any) as any[]) || [];
-      const projectTracks = (getAll('project_tracks' as any) as any[]) || [];
+      const allProjects = getLocalRows<ProjectRow>('projects');
+      const projectTracks = getLocalRows<ProjectTrackRow>('project_tracks');
       const featuredProjectRows = allProjects
         .filter((p) => p.store_featured === true)
-        .sort((a, b) => (a.store_order ?? 999) - (b.store_order ?? 999));
+        .sort((a, b) => Number(a.store_order ?? 999) - Number(b.store_order ?? 999));
       const featuredProjects = featuredProjectRows.map((proj) => {
         const projTrackIds = projectTracks
           .filter((j) => j.project_id === proj.id)
-          .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+          .sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0))
           .map((j) => j.track_id);
         const projTracks = allStoreTracks.filter((t) => projTrackIds.includes(t.id)).map(redactPublicTrackMedia);
         return {
@@ -231,7 +328,7 @@ export async function GET(req: NextRequest) {
 
     // ── Tracks ─────────────────────────────────────────────────────────────
     // Try with store_sort_order first (migration 033). Fall back without it.
-    let tracksAny: any[] = [];
+    let tracksAny: StoreTrackRow[] = [];
     let requiredTrackIds: string[] | null = null;
 
     const intersectTrackIds = (ids: string[]) => {
@@ -250,14 +347,14 @@ export async function GET(req: NextRequest) {
         .ilike('tag', tag);
       const { data: tagRows, error: tagError } = await tagQuery;
       if (tagError) throw tagError;
-      intersectTrackIds(((tagRows ?? []) as any[]).map((row) => row.track_id));
+      intersectTrackIds(((tagRows ?? []) as TrackTagRow[]).map((row) => row.track_id));
     };
 
     await applyTagFilter('genre', filters.genre);
     await applyTagFilter('mood', filters.mood);
 
     const safeSearch = filters.q.replace(/[%,()]/g, ' ').trim();
-    const applyTrackFilters = (query: any) => {
+    const applyTrackFilters = (query: StoreQuery): StoreQuery => {
       let next = query;
       if (filters.type === 'beats') {
         next = next.in('type', ['beat', 'instrumental']);
@@ -283,7 +380,7 @@ export async function GET(req: NextRequest) {
       return next;
     };
 
-    const applyTrackOrdering = (query: any, includeStoreOrder: boolean) => {
+    const applyTrackOrdering = (query: StoreQuery, includeStoreOrder: boolean): StoreQuery => {
       switch (filters.sort) {
         case 'bpm-asc':
           return query.order('bpm', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
@@ -305,7 +402,7 @@ export async function GET(req: NextRequest) {
       }
     };
 
-    let withSortOrderQuery = applyTrackFilters(admin
+    let withSortOrderQuery = applyTrackFilters((admin
       .from('tracks')
       .select([
         'id', 'user_id', 'title', 'type',
@@ -315,7 +412,7 @@ export async function GET(req: NextRequest) {
         'lease_price_usd', 'exclusive_price_usd', 'wav_url', 'preview_url',
         'store_listed', 'store_featured', 'free_download_enabled', 'store_sort_order', 'voice_tag_enabled', 'exclusive_sold', 'created_at',
       ].join(', '))
-      .eq('store_listed', true));
+      .eq('store_listed', true)) as unknown as StoreQuery);
     if (sellerId) {
       withSortOrderQuery = withSortOrderQuery.or(`user_id.eq.${safeSeller},user_id.is.null`);
     }
@@ -329,7 +426,7 @@ export async function GET(req: NextRequest) {
     const withSortOrder = await withSortOrderOrdered;
 
     if (withSortOrder.error) {
-      let fallbackQuery = applyTrackFilters(admin
+      let fallbackQuery = applyTrackFilters((admin
         .from('tracks')
         .select([
           'id', 'user_id', 'title', 'type',
@@ -339,7 +436,7 @@ export async function GET(req: NextRequest) {
           'lease_price_usd', 'exclusive_price_usd', 'wav_url', 'preview_url',
           'store_listed', 'free_download_enabled', 'created_at',
         ].join(', '))
-        .eq('store_listed', true));
+        .eq('store_listed', true)) as unknown as StoreQuery);
       if (sellerId) {
         fallbackQuery = fallbackQuery.or(`user_id.eq.${safeSeller},user_id.is.null`);
       }
@@ -352,9 +449,9 @@ export async function GET(req: NextRequest) {
       }
       const fallback = await fallbackOrdered;
       if (fallback.error) throw fallback.error;
-      tracksAny = (fallback.data as any[]) ?? [];
+      tracksAny = (fallback.data as StoreTrackRow[]) ?? [];
     } else {
-      tracksAny = (withSortOrder.data as any[]) ?? [];
+      tracksAny = (withSortOrder.data as StoreTrackRow[]) ?? [];
     }
 
     const hasMoreTracks = pagination ? tracksAny.length > pagination.limit : false;
@@ -365,7 +462,7 @@ export async function GET(req: NextRequest) {
     // ── Play counts — for popular sort (not exposed to buyers) ─────────
     // Batch in chunks of 100 so large catalogues don't hit the PostgREST
     // URL length limit and the query planner can use the index efficiently.
-    const trackIds = tracksAny.map((t: any) => t.id).filter(Boolean);
+    const trackIds = tracksAny.map((t) => t.id).filter(Boolean);
     const BATCH = 100;
     const chunkIds = <T>(arr: T[]): T[][] => {
       const out: T[][] = [];
@@ -373,7 +470,7 @@ export async function GET(req: NextRequest) {
       return out;
     };
 
-    let playCountByTrack: Record<string, number> = {};
+    const playCountByTrack: Record<string, number> = {};
     if (trackIds.length > 0) {
       try {
         for (const chunk of chunkIds(trackIds)) {
@@ -382,7 +479,7 @@ export async function GET(req: NextRequest) {
             .select('track_id, play_count')
             .in('track_id', chunk);
           if (playCountError) throw playCountError;
-          for (const row of (playRows ?? []) as any[]) {
+          for (const row of (playRows ?? []) as PlayCountRow[]) {
             playCountByTrack[row.track_id] = Number(row.play_count ?? 0);
           }
         }
@@ -395,7 +492,7 @@ export async function GET(req: NextRequest) {
               .from('store_plays')
               .select('track_id')
               .in('track_id', chunk);
-            for (const row of (playRows ?? []) as any[]) {
+            for (const row of (playRows ?? []) as Pick<PlayCountRow, 'track_id'>[]) {
               playCountByTrack[row.track_id] = (playCountByTrack[row.track_id] ?? 0) + 1;
             }
           }
@@ -406,7 +503,7 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Tags — join track_tags for all returned tracks ──────────────────
-    let tagsByTrack: Record<string, Array<{ tag: string; category: string | null }>> = {};
+    const tagsByTrack: Record<string, Array<{ tag: string; category: string | null }>> = {};
     if (trackIds.length > 0) {
       try {
         for (const chunk of chunkIds(trackIds)) {
@@ -414,7 +511,7 @@ export async function GET(req: NextRequest) {
             .from('track_tags')
             .select('track_id, tag, category')
             .in('track_id', chunk);
-          for (const row of (tagRows ?? []) as any[]) {
+          for (const row of (tagRows ?? []) as TrackTagRow[]) {
             if (!tagsByTrack[row.track_id]) tagsByTrack[row.track_id] = [];
             tagsByTrack[row.track_id].push({ tag: row.tag, category: row.category ?? null });
           }
@@ -425,11 +522,11 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Creator profile ─────────────────────────────────────────────────────
-    sellerId = sellerId ?? tracksAny.find((t: any) => !!t.user_id)?.user_id;
+    sellerId = sellerId ?? tracksAny.find((t) => !!t.user_id)?.user_id ?? undefined;
     // Re-derive the safe form now that sellerId may have changed.
     safeSeller = safeSellerId(sellerId);
 
-    let creator: Record<string, unknown> | null = null;
+    let creator: CreatorProfileRow | null = null;
     let featuredPlaylists: Record<string, unknown>[] = [];
 
     if (sellerId) {
@@ -460,9 +557,9 @@ export async function GET(req: NextRequest) {
           ].join(', '))
           .eq('user_id', sellerId)
           .maybeSingle();
-        creator = (profileBase.data as Record<string, unknown> | null) ?? null;
+        creator = (profileBase.data as CreatorProfileRow | null) ?? null;
       } else {
-        creator = (profileWithNew.data as Record<string, unknown> | null) ?? null;
+        creator = (profileWithNew.data as CreatorProfileRow | null) ?? null;
       }
 
       // Sanitize hero image URL
@@ -488,8 +585,8 @@ export async function GET(req: NextRequest) {
       if (playlistsResult.error) {
         console.error('[store] featured playlists query error:', playlistsResult.error.message);
       } else if (playlistsResult.data?.length) {
-        const playlists = playlistsResult.data as any[];
-        const plIds = playlists.map((p: any) => p.id);
+        const playlists = playlistsResult.data as PlaylistRow[];
+        const plIds = playlists.map((p) => p.id);
 
         const junctionRes = await admin
           .from('playlist_tracks')
@@ -497,24 +594,24 @@ export async function GET(req: NextRequest) {
           .in('playlist_id', plIds)
           .order('position', { ascending: true });
 
-        const junction = (junctionRes.data ?? []) as any[];
-        const playlistTrackIds = [...new Set(junction.map((j: any) => j.track_id))];
+        const junction = (junctionRes.data ?? []) as PlaylistTrackRow[];
+        const playlistTrackIds = [...new Set(junction.map((j) => j.track_id))];
 
-        let playlistTrackMap: Record<string, any> = {};
+        const playlistTrackMap: Record<string, StoreTrackRow & { has_wav: boolean }> = {};
         if (playlistTrackIds.length > 0) {
           const { data: ptRows } = await admin
             .from('tracks')
-            .select('id, title, type, audio_url, preview_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled')
+            .select('id, title, type, audio_url, preview_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled, exclusive_sold, wav_url, stems_status')
             .in('id', playlistTrackIds);
-          for (const t of (ptRows ?? []) as any[]) {
-            playlistTrackMap[t.id] = redactPublicTrackMedia({ ...t, cover_url: sanitizeUrl(t.cover_url) });
+          for (const t of (ptRows ?? []) as StoreTrackRow[]) {
+            playlistTrackMap[t.id] = redactPublicTrackMedia({ ...t, cover_url: sanitizeUrl(t.cover_url), has_wav: Boolean(t.wav_url) });
           }
         }
 
-        featuredPlaylists = playlists.map((pl: any) => {
+        featuredPlaylists = playlists.map((pl) => {
           const plTracks = junction
-            .filter((j: any) => j.playlist_id === pl.id)
-            .map((j: any) => playlistTrackMap[j.track_id])
+            .filter((j) => j.playlist_id === pl.id)
+            .map((j) => playlistTrackMap[j.track_id])
             .filter(Boolean);
           return {
             ...pl,
@@ -547,8 +644,8 @@ export async function GET(req: NextRequest) {
       if (projectsResult.error) {
         console.error('[store] featured projects query error:', projectsResult.error.message);
       } else if (projectsResult.data?.length) {
-        const projects = projectsResult.data as any[];
-        const projIds = projects.map((p: any) => p.id);
+        const projects = projectsResult.data as ProjectRow[];
+        const projIds = projects.map((p) => p.id);
 
         const junctionRes = await admin
           .from('project_tracks')
@@ -556,25 +653,25 @@ export async function GET(req: NextRequest) {
           .in('project_id', projIds)
           .order('position', { ascending: true });
 
-        const junction = (junctionRes.data ?? []) as any[];
-        const projectTrackIds = [...new Set(junction.map((j: any) => j.track_id))];
+        const junction = (junctionRes.data ?? []) as ProjectTrackRow[];
+        const projectTrackIds = [...new Set(junction.map((j) => j.track_id))];
 
-        let projectTrackMap: Record<string, any> = {};
+        const projectTrackMap: Record<string, StoreTrackRow & { has_wav: boolean }> = {};
         if (projectTrackIds.length > 0) {
           const { data: ptRows } = await admin
             .from('tracks')
-            .select('id, title, type, audio_url, preview_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled')
+            .select('id, title, type, audio_url, preview_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled, exclusive_sold, wav_url, stems_status')
             .in('id', projectTrackIds);
-          for (const t of (ptRows ?? []) as any[]) {
-            projectTrackMap[t.id] = redactPublicTrackMedia({ ...t, cover_url: sanitizeUrl(t.cover_url) });
+          for (const t of (ptRows ?? []) as StoreTrackRow[]) {
+            projectTrackMap[t.id] = redactPublicTrackMedia({ ...t, cover_url: sanitizeUrl(t.cover_url), has_wav: Boolean(t.wav_url) });
           }
         }
 
-        featuredProjects = projects.map((proj: any) => {
+        featuredProjects = projects.map((proj) => {
           const projTracks = junction
-            .filter((j: any) => j.project_id === proj.id)
-            .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
-            .map((j: any) => projectTrackMap[j.track_id])
+            .filter((j) => j.project_id === proj.id)
+            .sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0))
+            .map((j) => projectTrackMap[j.track_id])
             .filter(Boolean);
           return {
             id: proj.id,
@@ -592,7 +689,7 @@ export async function GET(req: NextRequest) {
     }
 
     // ── Licenses (from licenses table, migration 031) ────────────────────
-    let licenses: any[] = [];
+    let licenses: LicenseRow[] = [];
     if (sellerId) {
       try {
         const { data: licenseRows } = await admin
@@ -609,17 +706,17 @@ export async function GET(req: NextRequest) {
     // Strip owner uuid + sanitize cover_url + attach tags to each track
     // Voice tag (mig 072): attach the creator's tag to beats that opted in so
     // the preview player can overlay it client-side. Owner downloads stay clean.
-    const tagUrl = (creator as any)?.voice_tag_url ?? null;
-    const tagInterval = (creator as any)?.voice_tag_interval_seconds ?? 20;
-    const safeTracks = tracksAny.map(({ user_id: _u, cover_url, ...rest }: any) => redactPublicTrackMedia({
-      ...rest,
-      cover_url: sanitizeUrl(cover_url),
+    const tagUrl = typeof creator?.voice_tag_url === 'string' ? creator.voice_tag_url : null;
+    const tagInterval = creator?.voice_tag_interval_seconds ?? 20;
+    const safeTracks = tracksAny.map((track) => redactPublicTrackMedia({
+      ...track,
+      cover_url: sanitizeUrl(track.cover_url),
       // Derive WAV availability before redaction nulls wav_url, so the store
       // can show a "WAV" badge without exposing the private master URL.
-      has_wav: Boolean(rest.wav_url),
-      tags: tagsByTrack[rest.id] ?? [],
-      play_count: playCountByTrack[rest.id] ?? 0,
-      ...(rest.voice_tag_enabled && tagUrl ? { voice_tag_url: tagUrl, voice_tag_interval: tagInterval } : {}),
+      has_wav: Boolean(track.wav_url),
+      tags: tagsByTrack[track.id] ?? [],
+      play_count: playCountByTrack[track.id] ?? 0,
+      ...(track.voice_tag_enabled && tagUrl ? { voice_tag_url: tagUrl, voice_tag_interval: tagInterval } : {}),
     }));
 
     // Public catalogue → CDN-cacheable. Short s-maxage so newly listed

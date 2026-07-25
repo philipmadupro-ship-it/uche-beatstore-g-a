@@ -1,0 +1,7 @@
+interface:
+  display_name: "Antigravity Testing Release"
+  short_description: "Tests, builds, CI, and release checks"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $antigravity-testing-release to validate this Antigravity change before release."
+policy:
+  allow_implicit_invocation: true

@@ -11,7 +11,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mockIsSupabaseConfigured = vi.fn();
-const mockFromQueue: Array<(table: string) => any> = [];
+type ProjectRouteMockChain = { select: () => unknown };
+const mockFromQueue: Array<(table: string) => ProjectRouteMockChain> = [];
 
 vi.mock('@/lib/local-store', () => ({
   isSupabaseConfigured: () => mockIsSupabaseConfigured(),

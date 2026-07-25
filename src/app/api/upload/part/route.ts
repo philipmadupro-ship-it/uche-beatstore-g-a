@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUploadPartUrl, uploadPart } from '@/lib/storage/multipart';
 import { getSession, recordPart } from '@/lib/storage/upload-sessions';
 import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
+import { errorMessage } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -165,8 +166,8 @@ export async function PUT(req: NextRequest) {
       received: updated?.parts.length ?? 0,
       totalParts: session.totalParts,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('upload/part error:', err);
-    return NextResponse.json({ error: err?.message || 'part upload failed' }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(err) || 'part upload failed' }, { status: 500 });
   }
 }

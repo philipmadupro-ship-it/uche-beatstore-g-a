@@ -4,6 +4,16 @@ import { NextRequest } from 'next/server';
 const mockQuery = vi.fn();
 const mockScopedList = vi.fn();
 
+interface MockTrackRow {
+  id: string;
+  title: string;
+  type: string;
+  bpm?: number;
+  key?: string;
+  store_listed: boolean;
+  created_at: string;
+}
+
 vi.mock('@/lib/db', () => ({
   scopedList: (...args: unknown[]) => mockScopedList(...args),
   isErrorResponse: () => false,
@@ -27,7 +37,7 @@ function seedTracks() {
     { id: 'track-2', title: 'Soft Keys', type: 'song', bpm: 95, key: 'F', store_listed: false, created_at: '2026-01-04T00:00:00Z' },
     { id: 'track-3', title: 'Trap Bounce', type: 'beat', bpm: 150, key: 'G', store_listed: true, created_at: '2026-01-03T00:00:00Z' },
   ];
-  mockQuery.mockImplementation((table: string, predicate: (row: any) => boolean) => {
+  mockQuery.mockImplementation((table: string, predicate: (row: MockTrackRow) => boolean) => {
     if (table === 'tracks') return tracks.filter(predicate);
     return [];
   });
@@ -92,7 +102,7 @@ describe('GET /api/tracks', () => {
       store_listed: true,
       created_at: new Date(Date.UTC(2026, 0, 1, 0, 0, 600 - index)).toISOString(),
     }));
-    mockQuery.mockImplementation((table: string, predicate: (row: any) => boolean) => {
+    mockQuery.mockImplementation((table: string, predicate: (row: MockTrackRow) => boolean) => {
       if (table === 'tracks') return tracks.filter(predicate);
       return [];
     });

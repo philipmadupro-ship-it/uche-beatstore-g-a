@@ -1,0 +1,7 @@
+interface:
+  display_name: "Antigravity Supabase Safety"
+  short_description: "Migrations, RLS, ownership, and indexes"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $antigravity-supabase-safety before adding this migration or RLS change."
+policy:
+  allow_implicit_invocation: true

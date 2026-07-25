@@ -28,6 +28,8 @@ import {
   ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { errorMessage } from '@/lib/errors';
+import Link from 'next/link';
 import { DEFAULT_TEMPLATE_MD, VARIABLE_LIST } from '@/lib/contracts/license-template';
 import { CARD_STYLE_META, VIDEO_STYLE_META } from '@/lib/share/styles';
 import { normalizeThemeColor } from '@/lib/theme/colors';
@@ -36,6 +38,8 @@ import { ArtistBioBlock } from '@/components/store/ArtistBioBlock';
 import { BeatCard } from '@/components/store/BeatCard';
 import { TrackLicensePanel } from '@/components/store/TrackLicensePanel';
 import type { StoreTrack, CreatorProfile } from '@/components/store/types';
+import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { getStoreEditorAttentionIssues } from '@/lib/store-editor/attention-issues';
 
 const TRACK_LIST_BATCH_SIZE = 80;
 
@@ -380,26 +384,36 @@ function ShareStylePicker({
   );
 }
 
-function BackfillPeaksButton() {
+function BackfillPeaksButton({
+  listedOnly = false,
+  missingCount,
+  onComplete,
+}: {
+  listedOnly?: boolean;
+  missingCount?: number;
+  onComplete?: () => void | Promise<void>;
+}) {
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ succeeded: number; failed: number; total_needed: number } | null>(null);
+  const [result, setResult] = useState<{ scope?: string; succeeded: number; failed: number; total_needed: number } | null>(null);
   const run = async () => {
     setBusy(true);
     setResult(null);
     try {
-      const res = await fetch('/api/tracks/peaks/backfill-all', { method: 'POST' });
+      const url = listedOnly ? '/api/tracks/peaks/backfill-all?store_listed=1' : '/api/tracks/peaks/backfill-all';
+      const res = await fetch(url, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setResult(data);
       if (data.total_needed === 0) {
-        toast.success('All tracks already have peaks');
+        toast.success(listedOnly ? 'Listed beats already have peaks' : 'All tracks already have peaks');
       } else if (data.failed === 0) {
         toast.success(`Regenerated ${data.succeeded} waveforms`);
       } else {
         toast.warning(`${data.succeeded}/${data.total_needed} done`, `${data.failed} failed`);
       }
-    } catch (err: any) {
-      toast.error('Backfill failed', err?.message ?? 'try again');
+      await onComplete?.();
+    } catch (err: unknown) {
+      toast.error('Backfill failed', err instanceof Error ? err.message : 'try again');
     } finally {
       setBusy(false);
     }
@@ -413,12 +427,16 @@ function BackfillPeaksButton() {
         className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#E7D7BE] text-black text-[12px] font-bold uppercase tracking-wider hover:bg-[#F3E6D1] transition-colors disabled:opacity-50"
       >
         {busy ? <Loader2 size={12} className="animate-spin" /> : <Music size={12} />}
-        {busy ? 'Regenerating…' : 'Regenerate all waveforms'}
+        {busy
+          ? 'Regenerating…'
+          : listedOnly
+            ? `Regenerate listed waveforms${missingCount && missingCount > 0 ? ` (${missingCount})` : ''}`
+            : 'Regenerate all waveforms'}
       </button>
       {result && (
         <p className="text-[11px] text-[#D0C3AF]">
           {result.total_needed === 0
-            ? 'Nothing needed — every track already has its peaks.'
+            ? (listedOnly ? 'Nothing needed — every listed beat already has its peaks.' : 'Nothing needed — every track already has its peaks.')
             : `${result.succeeded}/${result.total_needed} succeeded${result.failed > 0 ? ` · ${result.failed} failed` : ''}.`}
         </p>
       )}
@@ -451,6 +469,7 @@ interface TrackRow {
   title: string;
   type: string;
   cover_url: string | null;
+  peaks_url: string | null;
   bpm: number | null;
   key: string | null;
   scale: string | null;
@@ -473,15 +492,49 @@ interface TrackStoreSummary {
     noCover: { count: number; firstId: string | null };
     noPrice: { count: number; firstId: string | null };
     noBpmKey: { count: number; firstId: string | null };
+    missingPeaks: { count: number; firstId: string | null };
   };
 }
 
-function mapTrackRow(t: any): TrackRow {
+// Raw API row shapes — typed boundaries for the /api/tracks and /api/projects
+// responses this page consumes (mirrors the typed-cast pattern used across
+// the API route cleanups).
+type ApiTrackRow = {
+  id: string;
+  title: string;
+  type: string;
+  cover_url?: string | null;
+  peaks_url?: string | null;
+  bpm?: number | null;
+  key?: string | null;
+  scale?: string | null;
+  store_listed?: boolean | null;
+  store_featured?: boolean | null;
+  store_sort_order?: number | null;
+  scheduled_publish_at?: string | null;
+  lease_price_usd?: number | null;
+  exclusive_price_usd?: number | null;
+  free_download_enabled?: boolean | null;
+  exclusive_sold?: boolean | null;
+  voice_tag_enabled?: boolean | null;
+};
+
+type ApiProjectRow = {
+  id: string;
+  name: string;
+  cover_url?: string | null;
+  price_usd?: number | null;
+  store_featured?: boolean | null;
+  store_order?: number | null;
+};
+
+function mapTrackRow(t: ApiTrackRow): TrackRow {
   return {
     id: t.id,
     title: t.title,
     type: t.type,
     cover_url: t.cover_url ?? null,
+    peaks_url: t.peaks_url ?? null,
     bpm: t.bpm ?? null,
     key: t.key ?? null,
     scale: t.scale ?? null,
@@ -536,6 +589,7 @@ function StorePreview({
       title: t.title,
       type: t.type as StoreTrack['type'],
       audio_url: '',
+      peaks_url: t.peaks_url,
       cover_url: t.cover_url,
       bpm: t.bpm,
       key: t.key,
@@ -769,7 +823,7 @@ export default function StoreEditorPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
       if (requestId !== trackSearchRequestRef.current) return [];
-      const rows = ((data.tracks ?? []) as any[]).map(mapTrackRow).sort((a, b) => {
+      const rows = ((data.tracks ?? []) as ApiTrackRow[]).map(mapTrackRow).sort((a, b) => {
         if (a.store_listed && !b.store_listed) return -1;
         if (!a.store_listed && b.store_listed) return 1;
         if (a.store_sort_order != null && b.store_sort_order != null) return a.store_sort_order - b.store_sort_order;
@@ -809,7 +863,7 @@ export default function StoreEditorPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
       if (requestId !== producerPickRequestRef.current) return;
-      const rows = ((data.tracks ?? []) as any[]).map(mapTrackRow);
+      const rows = ((data.tracks ?? []) as ApiTrackRow[]).map(mapTrackRow);
       setProducerPickCandidates((prev) => {
         if (!append) return rows;
         const seen = new Set(prev.map((track) => track.id));
@@ -828,7 +882,7 @@ export default function StoreEditorPage() {
     if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
     const nextSummary: TrackStoreSummary = {
       ...data,
-      producerPicks: ((data.producerPicks ?? []) as any[]).map(mapTrackRow),
+      producerPicks: ((data.producerPicks ?? []) as ApiTrackRow[]).map(mapTrackRow),
     };
     setTrackSummary(nextSummary);
     return nextSummary;
@@ -928,7 +982,7 @@ export default function StoreEditorPage() {
         setPromoCodes(promod.codes ?? []);
         setTrackSummary({
           ...summaryData,
-          producerPicks: ((summaryData.producerPicks ?? []) as any[]).map(mapTrackRow),
+          producerPicks: ((summaryData.producerPicks ?? []) as ApiTrackRow[]).map(mapTrackRow),
         });
         const firstTrackPage = await loadTrackPage({ search: '' });
         void loadTrackLicenseLinks(firstTrackPage.filter((t) => t.store_listed).map((t) => t.id));
@@ -972,7 +1026,7 @@ export default function StoreEditorPage() {
           .sort((a, b) => (a.store_order ?? 999) - (b.store_order ?? 999));
         setFeatured(feat);
 
-        const allProjects: ProjectRow[] = (prd.projects ?? []).map((p: any) => ({
+        const allProjects: ProjectRow[] = ((prd.projects ?? []) as ApiProjectRow[]).map((p) => ({
           id: p.id,
           name: p.name,
           cover_url: p.cover_url ?? null,
@@ -999,15 +1053,11 @@ export default function StoreEditorPage() {
     if (!file) return;
     setHeroUploading(true);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/upload/image', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Upload failed');
-      setForm((f) => ({ ...f, hero_image_url: data.url }));
+      const heroImageUrl = await uploadImageFile(file);
+      setForm((f) => ({ ...f, hero_image_url: heroImageUrl }));
       toast.success('Hero image uploaded');
-    } catch (err: any) {
-      toast.error('Upload failed', err.message);
+    } catch (err) {
+      toast.error('Upload failed', err instanceof Error ? err.message : 'Try again');
     } finally {
       setHeroUploading(false);
       if (heroFileRef.current) heroFileRef.current.value = '';
@@ -1167,7 +1217,7 @@ export default function StoreEditorPage() {
       // everything newly listed) instead of one email per beat — so listing a
       // batch never spams. drop_notified_at (NULL = pending) is the queue;
       // the cron stamps it after the digest sends.
-    } catch (err: any) {
+    } catch (err) {
       // Rollback
       if (before && after) patchTrackSummaryVisibility(after, before);
       setAllTracks((prev) =>
@@ -1175,7 +1225,7 @@ export default function StoreEditorPage() {
       );
       const restored = allTracks.map((t) => t.id === trackId ? { ...t, store_listed: currentlyListed } : t);
       setPreviewTracks(restored.filter((t) => t.store_listed).slice(0, 3));
-      toast.error('Failed to update', err.message);
+      toast.error('Failed to update', errorMessage(err));
     } finally {
       setTogglingTrack(null);
     }
@@ -1215,7 +1265,7 @@ export default function StoreEditorPage() {
       }
       toast.success(nextState ? "Pinned to Producer's Picks" : "Removed from picks");
       void refreshTrackSummary().catch(() => {});
-    } catch (err: any) {
+    } catch (err) {
       // Rollback
       if (before && after) patchTrackSummaryVisibility(after, before);
       setAllTracks((prev) =>
@@ -1226,7 +1276,7 @@ export default function StoreEditorPage() {
           ? prev.filter((track) => track.id !== trackId)
           : [...prev.filter((track) => track.id !== trackId), before]);
       }
-      toast.error('Failed to update', err.message);
+      toast.error('Failed to update', errorMessage(err));
     }
   };
 
@@ -1241,9 +1291,9 @@ export default function StoreEditorPage() {
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
       toast.success(nextState ? 'Voice tag on for this beat' : 'Voice tag off');
-    } catch (err: any) {
+    } catch (err) {
       setAllTracks((prev) => prev.map((t) => t.id === trackId ? { ...t, voice_tag_enabled: currentlyOn } : t));
-      toast.error('Failed to update', err.message);
+      toast.error('Failed to update', errorMessage(err));
     }
   };
 
@@ -1257,9 +1307,9 @@ export default function StoreEditorPage() {
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
       toast.success(nextState ? 'Free download on' : 'Free download off');
-    } catch (err: any) {
+    } catch (err) {
       setAllTracks((prev) => prev.map((t) => t.id === trackId ? { ...t, free_download_enabled: currentlyOn } : t));
-      toast.error('Failed to update', err.message);
+      toast.error('Failed to update', errorMessage(err));
     }
   };
 
@@ -1282,9 +1332,9 @@ export default function StoreEditorPage() {
         throw new Error(d.error ?? `HTTP ${res.status}`);
       }
       toast.success(isoOrNull ? 'Scheduled' : 'Schedule cleared');
-    } catch (err: any) {
+    } catch (err) {
       setAllTracks(prev);
-      toast.error('Could not schedule', err?.message ?? 'try again');
+      toast.error('Could not schedule', errorMessage(err) || 'try again');
     }
   };
 
@@ -1317,8 +1367,8 @@ export default function StoreEditorPage() {
       setPromoCodes((prev) => [data.code, ...prev]);
       setPromoForm({ code: '', kind: 'percent', value: '', max_uses: '', expires_at: '' });
       toast.success(`Code ${data.code.code} created`);
-    } catch (err: any) {
-      toast.error('Could not create code', err?.message ?? 'try again');
+    } catch (err) {
+      toast.error('Could not create code', errorMessage(err) || 'try again');
     } finally {
       setPromoCreating(false);
     }
@@ -1336,9 +1386,9 @@ export default function StoreEditorPage() {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error ?? `HTTP ${res.status}`);
       }
-    } catch (err: any) {
+    } catch (err) {
       setPromoCodes((prev) => prev.map((c) => c.code === code ? { ...c, active: !nextActive } : c));
-      toast.error('Could not update', err?.message ?? 'try again');
+      toast.error('Could not update', errorMessage(err) || 'try again');
     }
   };
   const deletePromoCode = async (code: string) => {
@@ -1352,9 +1402,9 @@ export default function StoreEditorPage() {
         throw new Error(d.error ?? `HTTP ${res.status}`);
       }
       toast.success(`Deleted ${code}`);
-    } catch (err: any) {
+    } catch (err) {
       setPromoCodes(prev);
-      toast.error('Could not delete', err?.message ?? 'try again');
+      toast.error('Could not delete', errorMessage(err) || 'try again');
     }
   };
 
@@ -1463,8 +1513,8 @@ export default function StoreEditorPage() {
                 return { ok: false, status: res.status, error: j.error || `HTTP ${res.status}` };
               }
               return { ok: true };
-            } catch (err: any) {
-              return { ok: false, error: err?.message || 'Network error' };
+            } catch (err) {
+              return { ok: false, error: errorMessage(err) || 'Network error' };
             }
           }),
         );
@@ -1480,7 +1530,7 @@ export default function StoreEditorPage() {
         try {
           const prRes = await fetch('/api/projects');
           const prd = await prRes.json();
-          const allP: ProjectRow[] = (prd.projects ?? []).map((p: any) => ({
+          const allP: ProjectRow[] = ((prd.projects ?? []) as ApiProjectRow[]).map((p) => ({
             id: p.id,
             name: p.name,
             cover_url: p.cover_url ?? null,
@@ -1503,8 +1553,8 @@ export default function StoreEditorPage() {
           })),
         );
       }
-    } catch (err: any) {
-      toast.error('Save failed', err.message);
+    } catch (err) {
+      toast.error('Save failed', errorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -1517,6 +1567,8 @@ export default function StoreEditorPage() {
   const producerPicks = trackSummary?.producerPicks ?? allTracks.filter((t) => t.store_listed && t.store_featured).slice(0, 12);
   const producerPickIds = new Set(producerPicks.map((track) => track.id));
   const availableProducerPicks = producerPickCandidates.filter((track) => !producerPickIds.has(track.id));
+  const listedMissingPeaksCount = trackSummary?.issues.missingPeaks.count
+    ?? allTracks.filter((t) => t.store_listed && !t.peaks_url).length;
 
   const hasReadyPrice = (track: TrackRow): boolean => {
     const legacyReady = (
@@ -1680,7 +1732,7 @@ export default function StoreEditorPage() {
                   <input
                     ref={heroFileRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp"
                     className="hidden"
                     onChange={handleHeroUpload}
                   />
@@ -2020,9 +2072,9 @@ export default function StoreEditorPage() {
               {playlists.length === 0 && (
                 <p className="text-[11px] text-[#6E685B]">
                   No playlists yet — create some in{' '}
-                  <a href="/playlists" className="text-[#D0C3AF] underline underline-offset-2 hover:text-[#E7D7BE] transition-colors">
+                  <Link href="/playlists" className="text-[#D0C3AF] underline underline-offset-2 hover:text-[#E7D7BE] transition-colors">
                     Playlists
-                  </a>.
+                  </Link>.
                 </p>
               )}
             </Section>
@@ -2141,9 +2193,9 @@ export default function StoreEditorPage() {
               {projects.length === 0 && (
                 <p className="text-[11px] text-[#6E685B]">
                   No projects yet — create some in{' '}
-                  <a href="/projects" className="text-[#D0C3AF] underline underline-offset-2 hover:text-[#E7D7BE] transition-colors">
+                  <Link href="/projects" className="text-[#D0C3AF] underline underline-offset-2 hover:text-[#E7D7BE] transition-colors">
                     Projects
-                  </a>.
+                  </Link>.
                 </p>
               )}
             </Section>
@@ -2300,7 +2352,7 @@ export default function StoreEditorPage() {
             >
               <p className="text-[11px] text-[#9B9282]">
                 Toggle beats on or off to control what appears in your public store. To set prices and cover art, open the beat in your{' '}
-                <a href="/library" className="text-[#D0C3AF] underline underline-offset-2 hover:text-[#E7D7BE] transition-colors">Library</a>.
+                <Link href="/library" className="text-[#D0C3AF] underline underline-offset-2 hover:text-[#E7D7BE] transition-colors">Library</Link>.
               </p>
 
               {/* Search */}
@@ -2327,18 +2379,14 @@ export default function StoreEditorPage() {
               </div>
 
               {/* Needs attention — surfaces listed beats with quality
-                  issues that hurt conversion (no cover, no price set, no
-                  BPM/key metadata). Producer can fix in /library. */}
+                  issues that hurt conversion (no cover, no price set,
+                  BPM/key metadata, or generic waveform sidecars). */}
               {(() => {
-                const listed = allTracks.filter((t) => t.store_listed);
-                const noCover = trackSummary?.issues.noCover ?? { count: listed.filter((t) => !t.cover_url).length, firstId: listed.find((t) => !t.cover_url)?.id ?? null };
-                const noPrice = trackSummary?.issues.noPrice ?? { count: listed.filter((t) => !hasReadyPrice(t)).length, firstId: listed.find((t) => !hasReadyPrice(t))?.id ?? null };
-                const noBpmKey = trackSummary?.issues.noBpmKey ?? { count: listed.filter((t) => t.bpm == null && !t.key).length, firstId: listed.find((t) => t.bpm == null && !t.key)?.id ?? null };
-                const issues = [
-                  noCover.count > 0 && noCover.firstId && { label: 'no cover art', count: noCover.count, firstId: noCover.firstId },
-                  noPrice.count > 0 && noPrice.firstId && { label: 'no price set', count: noPrice.count, firstId: noPrice.firstId },
-                  noBpmKey.count > 0 && noBpmKey.firstId && { label: 'no BPM or key', count: noBpmKey.count, firstId: noBpmKey.firstId },
-                ].filter(Boolean) as Array<{ label: string; count: number; firstId: string }>;
+                const issues = getStoreEditorAttentionIssues({
+                  tracks: allTracks,
+                  summary: trackSummary?.issues,
+                  hasReadyPrice,
+                });
                 if (issues.length === 0) return null;
                 return (
                   <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-3">
@@ -2348,15 +2396,28 @@ export default function StoreEditorPage() {
                     <ul className="space-y-1">
                       {issues.map((i) => (
                         <li key={i.label}>
-                          <a
-                            href={`/library/${i.firstId}`}
-                            className="text-[11px] text-[#D0C3AF] hover:text-amber-300 flex items-center gap-2 group"
-                          >
+                          {i.kind === 'waveforms' ? (
+                            <button
+                              type="button"
+                              onClick={() => openSection('waveforms')}
+                              className="w-full text-[11px] text-[#D0C3AF] hover:text-amber-300 flex items-center gap-2 group text-left"
+                            >
+                              <span className="w-1 h-1 rounded-full bg-amber-400/60" />
+                              <span className="tabular-nums font-mono text-amber-400/90">{i.count}</span>
+                              <span>listed beat{i.count === 1 ? '' : 's'} {i.label}</span>
+                              <span className="opacity-0 group-hover:opacity-100 text-amber-400/80 ml-auto">Open waveforms</span>
+                            </button>
+                          ) : (
+                            <a
+                              href={`/library/${i.firstId}`}
+                              className="text-[11px] text-[#D0C3AF] hover:text-amber-300 flex items-center gap-2 group"
+                            >
                             <span className="w-1 h-1 rounded-full bg-amber-400/60" />
                             <span className="tabular-nums font-mono text-amber-400/90">{i.count}</span>
                             <span>listed beat{i.count === 1 ? '' : 's'} {i.label}</span>
                             <span className="opacity-0 group-hover:opacity-100 text-amber-400/80 ml-auto">→</span>
-                          </a>
+                            </a>
+                          )}
                         </li>
                       ))}
                     </ul>
@@ -2369,9 +2430,9 @@ export default function StoreEditorPage() {
                 <div className="rounded-xl border border-dashed border-[#2B2821] py-10 text-center">
                   <Music size={20} className="text-[#3B372F] mx-auto mb-2" />
                   <p className="text-[12px] text-[#9B9282]">No beats in your library yet.</p>
-                  <a href="/library" className="mt-2 inline-block text-[10px] font-mono text-[#D0C3AF] hover:text-[#E7D7BE] underline underline-offset-2 transition-colors">
+                  <Link href="/library" className="mt-2 inline-block text-[10px] font-mono text-[#D0C3AF] hover:text-[#E7D7BE] underline underline-offset-2 transition-colors">
                     Upload your first beat →
-                  </a>
+                  </Link>
                 </div>
               ) : (
                 <div className="max-h-[60dvh] space-y-1 overflow-y-auto overscroll-contain pr-1 sm:max-h-[480px]">
@@ -2842,12 +2903,21 @@ export default function StoreEditorPage() {
               icon={<Music size={15} />}
               open={openSections.has('waveforms')}
               onToggle={() => toggleSection('waveforms')}
-              badge="batch tool"
+              badge={listedMissingPeaksCount > 0
+                ? `${listedMissingPeaksCount} missing`
+                : 'all ready'}
             >
               <p className="text-[11px] text-[#9B9282]">
-                If your beats' waveforms in /store look generic, that's because the original peaks weren't computed at upload. Regenerate them now — the player will then draw the real shape of every file.
+                If your listed beats are showing generic waveforms in /store, the original peaks were not computed at upload. Regenerate them now so the player can draw the real shape of each buyer-facing file.
               </p>
-              <BackfillPeaksButton />
+              <BackfillPeaksButton
+                listedOnly
+                missingCount={listedMissingPeaksCount}
+                onComplete={async () => {
+                  await refreshTrackSummary();
+                  await loadTrackPage({ search: loadedTrackSearchRef.current ?? trackSearch });
+                }}
+              />
             </Section>
 
             {/* Discount codes — promo_codes (mig 047) */}
@@ -3082,8 +3152,8 @@ function VoiceTagSection({
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
       onUploaded(data.voice_tag_url);
       toast.success('Voice tag uploaded', 'Now toggle it on per beat in the listing manager.');
-    } catch (err: any) {
-      toast.error('Upload failed', err.message);
+    } catch (err) {
+      toast.error('Upload failed', errorMessage(err));
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = '';

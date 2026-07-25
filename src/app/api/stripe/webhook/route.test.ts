@@ -401,24 +401,54 @@ describe('POST /api/stripe/webhook', () => {
 const SELLER = '11111111-1111-4111-8111-111111111111';
 const PROJECT = '22222222-2222-4222-8222-222222222222';
 
-function installDb(responder: (ctx: { table: string; op: string; payload?: any }) => any) {
-  const writes: Array<{ table: string; op: string; payload?: any }> = [];
+type DbOperation = 'select' | 'insert' | 'upsert' | 'update' | 'delete';
+
+interface DbContext {
+  table: string;
+  op: DbOperation;
+  payload?: unknown;
+}
+
+interface SupabaseTestChain extends PromiseLike<unknown> {
+  select: (...args: unknown[]) => SupabaseTestChain;
+  insert: (payload: unknown) => SupabaseTestChain;
+  upsert: (payload: unknown) => SupabaseTestChain;
+  update: (payload: unknown) => SupabaseTestChain;
+  delete: () => SupabaseTestChain;
+  eq: (...args: unknown[]) => SupabaseTestChain;
+  in: (...args: unknown[]) => SupabaseTestChain;
+  gte: (...args: unknown[]) => SupabaseTestChain;
+  lt: (...args: unknown[]) => SupabaseTestChain;
+  gt: (...args: unknown[]) => SupabaseTestChain;
+  or: (...args: unknown[]) => SupabaseTestChain;
+  not: (...args: unknown[]) => SupabaseTestChain;
+  order: (...args: unknown[]) => SupabaseTestChain;
+  limit: (...args: unknown[]) => SupabaseTestChain;
+  maybeSingle: () => Promise<unknown>;
+  single: () => Promise<unknown>;
+  catch: <TResult = never>(
+    onrejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null,
+  ) => Promise<unknown | TResult>;
+}
+
+function installDb(responder: (ctx: DbContext) => unknown) {
+  const writes: DbContext[] = [];
   mockFrom.mockImplementation((table: string) => {
-    let op = 'select';
-    let payload: any;
+    let op: DbOperation = 'select';
+    let payload: unknown;
     const settle = () => Promise.resolve(responder({ table, op, payload }) ?? { data: null, error: null });
-    const chain: any = {
+    const chain: SupabaseTestChain = {
       select: () => chain,
-      insert: (p: any) => { op = 'insert'; payload = p; writes.push({ table, op, payload: p }); return chain; },
-      upsert: (p: any) => { op = 'upsert'; payload = p; writes.push({ table, op, payload: p }); return chain; },
-      update: (p: any) => { op = 'update'; payload = p; writes.push({ table, op, payload: p }); return chain; },
+      insert: (p: unknown) => { op = 'insert'; payload = p; writes.push({ table, op, payload: p }); return chain; },
+      upsert: (p: unknown) => { op = 'upsert'; payload = p; writes.push({ table, op, payload: p }); return chain; },
+      update: (p: unknown) => { op = 'update'; payload = p; writes.push({ table, op, payload: p }); return chain; },
       delete: () => { op = 'delete'; writes.push({ table, op }); return chain; },
       eq: () => chain, in: () => chain, gte: () => chain, lt: () => chain, gt: () => chain,
       or: () => chain, not: () => chain, order: () => chain, limit: () => chain,
       maybeSingle: () => settle(),
       single: () => settle(),
-      then: (f: any, r: any) => settle().then(f, r),
-      catch: (r: any) => settle().catch(r),
+      then: (onfulfilled, onrejected) => settle().then(onfulfilled, onrejected),
+      catch: (onrejected) => settle().catch(onrejected),
     };
     return chain;
   });

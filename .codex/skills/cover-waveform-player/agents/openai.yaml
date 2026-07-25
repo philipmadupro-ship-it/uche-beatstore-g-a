@@ -1,0 +1,7 @@
+interface:
+  display_name: "Cover Waveform Player"
+  short_description: "Real waveform cover-player system"
+  brand_color: "#3C78A8"
+  default_prompt: "Use $cover-waveform-player to build the Beatstor cover waveform player."
+policy:
+  allow_implicit_invocation: true

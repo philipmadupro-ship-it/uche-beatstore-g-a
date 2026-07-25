@@ -6,6 +6,10 @@ import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 import { errorMessage } from '@/lib/errors';
 
+type TrackIdRow = {
+  id: string;
+};
+
 export async function GET() {
   try {
     if (isSupabaseConfigured()) {
@@ -94,7 +98,7 @@ export async function POST(req: NextRequest) {
         .in('id', uniqueTrackIds as string[]);
       if (tracksError) throw tracksError;
 
-      const ownedIds = new Set((ownedTracks ?? []).map((track: any) => track.id));
+      const ownedIds = new Set(((ownedTracks ?? []) as TrackIdRow[]).map((track) => track.id));
       if (ownedIds.size !== uniqueTrackIds.length) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
@@ -108,15 +112,15 @@ export async function POST(req: NextRequest) {
       if (error) throw error;
       return NextResponse.json({
         url: `${APP_URL}/share/${token}`,
-        token,
         ...data,
+        token,
       });
     } else {
       const data = insert('share_links', payload);
       return NextResponse.json({
         url: `${APP_URL}/share/${token}`,
-        token,
         ...data,
+        token,
       });
     }
   } catch (error) {

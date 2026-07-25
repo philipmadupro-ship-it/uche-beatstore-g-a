@@ -1,10 +1,16 @@
 'use client';
 
-import { useCallback, useState } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { AlertTriangle, Upload, CheckCircle2, Loader2, FileAudio } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react';
+import { useDropzone, type FileRejection } from 'react-dropzone';
+import { AlertTriangle, Upload, CheckCircle2, Loader2, FileAudio, X } from 'lucide-react';
 import { analyzeAudio } from '@/lib/audio/analyze.client';
 import { useUploadManager } from '@/lib/upload/manager';
+import {
+  readUploadTypeDraft,
+  uploadFileExtension,
+  uploadRejectionMessage,
+  writeUploadTypeDraft,
+} from '@/lib/upload/dropzone-draft';
 import type { TrackType } from '@/lib/types';
 
 interface DropZoneProps {
@@ -39,11 +45,14 @@ function fmtBytes(b: number): string {
 }
 
 interface FileCard {
+  id: string;
   file: File;
   ext: string;
   analyzing: boolean;
   queued: boolean;
   done: boolean;
+  rejected?: boolean;
+  error?: string;
   analysisError?: boolean;
   bpm?: number | null;
   key?: string | null;
@@ -52,36 +61,72 @@ interface FileCard {
 
 export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumental' }: DropZoneProps) {
   const enqueue = useUploadManager((s) => s.enqueue);
-  const [selectedType, setSelectedType] = useState<TrackType>(defaultType);
+  const [selectedType, setSelectedType] = useState<TrackType>(() => readUploadTypeDraft(defaultType));
   const [cards, setCards] = useState<FileCard[]>([]);
+  const mountedRef = useRef(false);
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const onDrop = useCallback(async (accepted: File[]) => {
-    if (accepted.length === 0) return;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    writeUploadTypeDraft(selectedType);
+  }, [selectedType]);
+
+  const safeSetCards = useCallback((next: SetStateAction<FileCard[]>) => {
+    if (mountedRef.current) setCards(next);
+  }, []);
+
+  const onDrop = useCallback(async (accepted: File[], rejected: FileRejection[]) => {
+    if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+
+    const rejectedCards: FileCard[] = rejected.map((item, i) => ({
+      id: `rejected-${item.file.name}-${item.file.size}-${i}`,
+      file: item.file,
+      ext: uploadFileExtension(item.file.name),
+      analyzing: false,
+      queued: false,
+      done: false,
+      rejected: true,
+      error: uploadRejectionMessage(item.errors),
+    }));
+
+    if (accepted.length === 0) {
+      safeSetCards(rejectedCards);
+      return;
+    }
 
     // Populate cards immediately so the user sees their files right away.
     const initial: FileCard[] = accepted.map((f) => ({
+      id: `accepted-${f.name}-${f.size}-${f.lastModified}`,
       file: f,
-      ext: f.name.split('.').pop()?.toLowerCase() || 'audio',
+      ext: uploadFileExtension(f.name),
       analyzing: true,
       queued: false,
       done: false,
     }));
-    setCards(initial);
+    const acceptedOffset = rejectedCards.length;
+    safeSetCards([...rejectedCards, ...initial]);
 
     // Run analysis in parallel, update each card as its result lands.
     const analyses = await Promise.all(
       accepted.map(async (f, i) => {
         try {
           const result = await analyzeAudio(f);
-          setCards((prev) => prev.map((c, ci) =>
-            ci === i
+          safeSetCards((prev) => prev.map((c, ci) =>
+            ci === acceptedOffset + i
               ? { ...c, analyzing: false, bpm: result?.bpm ?? null, key: result?.key ?? null, scale: result?.scale ?? null }
               : c,
           ));
           return result;
         } catch {
-          setCards((prev) => prev.map((c, ci) =>
-            ci === i ? { ...c, analyzing: false, analysisError: true } : c,
+          safeSetCards((prev) => prev.map((c, ci) =>
+            ci === acceptedOffset + i ? { ...c, analyzing: false, analysisError: true } : c,
           ));
           return null;
         }
@@ -95,16 +140,19 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
         projectId: playlistId ?? null,
         analysis: analyses[i],
         onSuccess: () => {
-          setCards((prev) => prev.map((c, ci) => ci === i ? { ...c, done: true } : c));
+          safeSetCards((prev) => prev.map((c, ci) => ci === acceptedOffset + i ? { ...c, done: true } : c));
           onUploadSuccess?.();
         },
       });
-      setCards((prev) => prev.map((c, ci) => ci === i ? { ...c, queued: true } : c));
+      safeSetCards((prev) => prev.map((c, ci) => ci === acceptedOffset + i ? { ...c, queued: true } : c));
     });
 
-    // Clear cards after 4 seconds so the zone resets for the next batch.
-    setTimeout(() => setCards([]), 4000);
-  }, [enqueue, playlistId, onUploadSuccess, selectedType]);
+    // Clear successful/queued cards after a short beat; rejected files stay
+    // visible until dismissed so the producer has time to act on the reason.
+    clearTimerRef.current = setTimeout(() => {
+      safeSetCards((prev) => prev.filter((card) => card.rejected && !card.done && !card.queued));
+    }, 4000);
+  }, [enqueue, playlistId, onUploadSuccess, safeSetCards, selectedType]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -121,8 +169,10 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
   });
 
   const analyzing = cards.some((c) => c.analyzing);
-  const allQueued = cards.length > 0 && cards.every((c) => c.queued);
-  const allDone = cards.length > 0 && cards.every((c) => c.done);
+  const uploadableCards = cards.filter((c) => !c.rejected);
+  const rejectedCards = cards.filter((c) => c.rejected);
+  const allQueued = uploadableCards.length > 0 && uploadableCards.every((c) => c.queued);
+  const allDone = uploadableCards.length > 0 && uploadableCards.every((c) => c.done);
 
   return (
     <div className="space-y-3">
@@ -144,10 +194,14 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
           </button>
         ))}
       </div>
+      <p id="upload-dropzone-help" className="sr-only">
+        Upload WAV, FLAC, AIFF, MP3, M4A, or OGG audio files up to 500 MB.
+      </p>
 
       {/* Drop zone */}
       <div
         {...getRootProps()}
+        aria-describedby="upload-dropzone-help upload-dropzone-status"
         className={`
           relative overflow-hidden group cursor-pointer
           border-2 border-dashed rounded-2xl transition-[transform,background-color,border-color,box-shadow] duration-300
@@ -163,13 +217,15 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
         {cards.length > 0 ? (
           /* Per-file cards — shown once files are dropped. */
           <div className="p-4 space-y-2">
-            {cards.map((card, i) => {
+            {cards.map((card) => {
               const fmtCls = FORMAT_STYLE[card.ext] ?? FORMAT_STYLE.ogg;
               return (
                 <div
-                  key={i}
+                  key={card.id}
                   className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                    card.done
+                    card.rejected
+                      ? 'bg-red-500/[0.04] border-red-500/25'
+                      : card.done
                       ? 'bg-green-500/[0.04] border-green-500/20'
                       : 'bg-[#171511] border-[#2B2821]'
                   }`}
@@ -187,6 +243,11 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
                         {card.ext.toUpperCase()}
                       </span>
                       <span className="text-[9px] font-mono text-[#837B6D]">{fmtBytes(card.file.size)}</span>
+                      {card.rejected && (
+                        <span className="text-[8px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border text-red-300 bg-red-500/10 border-red-500/25">
+                          Not queued
+                        </span>
+                      )}
                       {!card.analyzing && card.analysisError && (
                         <span className="text-[8px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border text-[#E2C16D] bg-[#1f1a0a]/50 border-[#3a2f1f]">
                           Analysis skipped
@@ -205,11 +266,28 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
                         </span>
                       )}
                     </div>
+                    {card.error && (
+                      <p className="mt-1 text-[10px] leading-snug text-red-300" role="alert">
+                        {card.error}
+                      </p>
+                    )}
                   </div>
 
                   {/* State icon */}
                   <div className="shrink-0">
-                    {card.analyzing ? (
+                    {card.rejected ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCards((prev) => prev.filter((item) => item.id !== card.id));
+                        }}
+                        className="tap grid size-8 place-items-center rounded text-red-300 hover:bg-red-500/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+                        aria-label={`Dismiss upload error for ${card.file.name}`}
+                      >
+                        <X size={14} />
+                      </button>
+                    ) : card.analyzing ? (
                       <Loader2 size={14} className="animate-spin text-[#E7D7BE]" />
                     ) : card.done ? (
                       <CheckCircle2 size={14} className="text-green-400" />
@@ -223,18 +301,23 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
               );
             })}
             {analyzing && (
-              <p className="text-[9px] font-mono uppercase tracking-wider text-[#837B6D] text-center pt-1">
+              <p id="upload-dropzone-status" className="text-[9px] font-mono uppercase tracking-wider text-[#837B6D] text-center pt-1" aria-live="polite">
                 Analyzing audio — BPM and key detected automatically
               </p>
             )}
             {!allDone && allQueued && (
-              <p className="text-[9px] font-mono uppercase tracking-wider text-[#E7D7BE]/70 text-center pt-1">
+              <p id="upload-dropzone-status" className="text-[9px] font-mono uppercase tracking-wider text-[#E7D7BE]/70 text-center pt-1" aria-live="polite">
                 Queued in Uploads tray — upload continues in the background
               </p>
             )}
             {allDone && (
-              <p className="text-[9px] font-mono uppercase tracking-wider text-green-400/70 text-center pt-1">
+              <p id="upload-dropzone-status" className="text-[9px] font-mono uppercase tracking-wider text-green-400/70 text-center pt-1" aria-live="polite">
                 Upload complete — library refreshes automatically
+              </p>
+            )}
+            {rejectedCards.length > 0 && !analyzing && !allQueued && !allDone && (
+              <p id="upload-dropzone-status" className="text-[9px] font-mono uppercase tracking-wider text-red-300/80 text-center pt-1" aria-live="polite">
+                {rejectedCards.length} file{rejectedCards.length === 1 ? '' : 's'} need attention before upload
               </p>
             )}
           </div>
@@ -254,7 +337,7 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
                 {isDragActive ? 'Drop to ingest' : 'Drop beats or click to upload'}
               </p>
               <p className="text-[9px] font-mono text-[#6E685B] mt-0.5">
-                WAV · FLAC · AIFF · MP3 · M4A · up to 500 MB
+                WAV · FLAC · AIFF · MP3 · M4A · OGG · up to 500 MB
               </p>
             </div>
           </div>

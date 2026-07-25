@@ -8,6 +8,18 @@ import { normalizeThemeColor } from '@/lib/theme/colors';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface ShareCardTrackRow {
+  title: string | null;
+  cover_url: string | null;
+  user_id: string | null;
+}
+
+interface ShareCardProfileRow {
+  display_name: string | null;
+  accent_color: string | null;
+  share_card_style: string | null;
+}
+
 /**
  * GET /api/store/share-card?track_id=<uuid>&kind=licensed|playing&style=<id>
  *
@@ -43,18 +55,20 @@ export async function GET(req: NextRequest) {
         .eq('id', trackId)
         .maybeSingle();
       if (track) {
-        title = (track as any).title || title;
-        cover = (track as any).cover_url ?? null;
-        const sellerId = (track as any).user_id;
+        const trackRow = track as ShareCardTrackRow;
+        title = trackRow.title || title;
+        cover = trackRow.cover_url ?? null;
+        const sellerId = trackRow.user_id;
         if (sellerId) {
           const { data: prof } = await admin
             .from('creator_profiles')
             .select('display_name, accent_color, share_card_style')
             .eq('user_id', sellerId)
             .maybeSingle();
-          producer = (prof as any)?.display_name ?? producer;
-          accent = normalizeThemeColor((prof as any)?.accent_color, accent);
-          preferredStyle = (prof as any)?.share_card_style ?? null;
+          const profile = prof as ShareCardProfileRow | null;
+          producer = profile?.display_name ?? producer;
+          accent = normalizeThemeColor(profile?.accent_color, accent);
+          preferredStyle = profile?.share_card_style ?? null;
         }
       }
     } catch {/* defaults */}

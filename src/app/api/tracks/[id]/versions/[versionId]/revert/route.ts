@@ -8,6 +8,25 @@ const log = createLogger('api.tracks.id.versions.versionId.revert');
 
 export const runtime = 'nodejs';
 
+type TrackVersionSnapshot = {
+  id: string;
+  track_id: string;
+  version_number?: number | null;
+  audio_url?: string | null;
+  duration_seconds?: number | null;
+  bpm?: number | null;
+  key?: string | null;
+  scale?: string | null;
+  loudness?: number | null;
+  energy?: number | null;
+  danceability?: number | null;
+  valence?: number | null;
+  acousticness?: number | null;
+  notes?: string | null;
+};
+
+type TrackVersionTrack = Omit<TrackVersionSnapshot, 'track_id' | 'version_number'>;
+
 /**
  * POST /api/tracks/[id]/versions/[versionId]/revert
  *
@@ -87,12 +106,14 @@ export async function POST(
     }
 
     // Local-store fallback
-    const current = getById('tracks', id);
-    const target = (getAll('track_versions') as any[]).find((v) => v.id === versionId && v.track_id === id);
+    const current = getById<TrackVersionTrack>('tracks', id);
+    const target = getAll<TrackVersionSnapshot>('track_versions').find((v) => v.id === versionId && v.track_id === id);
     if (!current) return NextResponse.json({ error: 'Track not found' }, { status: 404 });
     if (!target)  return NextResponse.json({ error: 'Version not found' }, { status: 404 });
 
-    const allV = (getAll('track_versions') as any[]).filter((v) => v.track_id === id);
+    const allV = getAll<TrackVersionSnapshot>('track_versions')
+      .filter((v): v is TrackVersionSnapshot & { version_number: number } =>
+        v.track_id === id && typeof v.version_number === 'number');
     const { number, label } = nextVersionLabel(allV);
     insert('track_versions', {
       track_id: id,
@@ -126,8 +147,8 @@ export async function POST(
     });
 
     return NextResponse.json({ track: updated });
-  } catch (error: any) {
+  } catch (error: unknown) {
     log.error('Revert error:', { error: errorMessage(error) });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

@@ -11,6 +11,7 @@
  *   - malformed inputs                     → null
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { createHmac } from 'node:crypto';
 import { signBuyerToken, verifyBuyerToken } from './buyer-tokens';
 
 const ORIGINAL_KEY = process.env.STRIPE_WEBHOOK_SECRET;
@@ -30,7 +31,7 @@ describe('buyer-tokens', () => {
     const claims = verifyBuyerToken(token);
     expect(claims).not.toBeNull();
     expect(claims?.email).toBe('buyer@example.com');
-    expect(claims!.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    expect(claims?.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
   });
 
   it('rejects a token whose email segment has been swapped', () => {
@@ -56,8 +57,9 @@ describe('buyer-tokens', () => {
   it('rejects an expired token', () => {
     const emailB64 = Buffer.from('a@example.com').toString('base64url');
     const exp = Math.floor(Date.now() / 1000) - 1;
-    const { createHmac } = require('node:crypto');
-    const sig = createHmac('sha256', process.env.STRIPE_WEBHOOK_SECRET)
+    const secret = process.env.STRIPE_WEBHOOK_SECRET ?? '';
+    expect(secret).not.toBe('');
+    const sig = createHmac('sha256', secret)
       .update(`${emailB64}.${exp}`)
       .digest('base64url');
     expect(verifyBuyerToken(`${emailB64}.${exp}.${sig}`)).toBeNull();

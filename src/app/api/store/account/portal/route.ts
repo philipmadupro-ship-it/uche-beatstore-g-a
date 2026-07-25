@@ -15,6 +15,10 @@ const bodySchema = z.object({
   token: z.string().min(1),
 });
 
+interface CustomerPurchaseRow {
+  buyer_stripe_customer: string | null;
+}
+
 /**
  * POST /api/store/account/portal
  *
@@ -57,7 +61,7 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .maybeSingle();
 
-    const customerId = (row as any)?.buyer_stripe_customer as string | null;
+    const customerId = (row as CustomerPurchaseRow | null)?.buyer_stripe_customer ?? null;
     if (!customerId) {
       return NextResponse.json(
         { error: 'No Stripe customer on file for this email yet' },

@@ -115,7 +115,7 @@ export function ProjectDetailHeader(props: Props) {
           <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
             {uploadingArt ? <Loader2 size={16} className="animate-spin text-white" /> : <Camera size={16} className="text-white" />}
           </div>
-          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={onArtChange} />
+          <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg,image/png,image/webp" onChange={onArtChange} />
         </div>
       )}
 

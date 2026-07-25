@@ -1,0 +1,7 @@
+interface:
+  display_name: "QA And Regression Testing"
+  short_description: "Workflow tests and regression gates"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $qa-and-regression-testing to verify this Beatstor change."
+policy:
+  allow_implicit_invocation: true

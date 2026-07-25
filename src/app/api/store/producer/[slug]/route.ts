@@ -17,6 +17,13 @@ const TRACK_FIELDS = [
   'store_listed', 'free_download_enabled', 'created_at',
 ].join(', ');
 
+interface CreatorProfileRow {
+  user_id: string;
+  display_name: string | null;
+}
+
+type PublicProducerTrackRow = Record<string, unknown>;
+
 /**
  * GET /api/store/producer/:slug
  *
@@ -48,7 +55,7 @@ export async function GET(
     const admin = createServiceClient();
 
     // 1. Resolve creator by slug (exact column match first, then generated fallback)
-    let { data: creator, error: cErr } = await admin
+    const { data: exactCreator, error: cErr } = await admin
       .from('creator_profiles')
       .select([
         'user_id', 'display_name', 'bio', 'hero_image_url', 'credits',
@@ -61,6 +68,7 @@ export async function GET(
       .maybeSingle();
 
     if (cErr) throw cErr;
+    let creator = exactCreator as CreatorProfileRow | null;
 
     // Fallback: match creators whose display_name slugifies to the requested slug
     // (useful when the slug column hasn't been backfilled yet)
@@ -76,8 +84,8 @@ export async function GET(
         ].join(', '))
         .not('display_name', 'is', null);
 
-      creator = (candidates ?? []).find(
-        (c: any) => slugify(c.display_name || '') === decodedSlug,
+      creator = ((candidates ?? []) as unknown as CreatorProfileRow[]).find(
+        (c) => slugify(c.display_name || '') === decodedSlug,
       ) ?? null;
     }
 
@@ -85,10 +93,7 @@ export async function GET(
       return NextResponse.json({ error: 'Producer not found' }, { status: 404 });
     }
 
-    // Supabase's generic types can't follow the `.select(...).join(', ')`
-    // pattern, so creator narrows to GenericStringError | null here.
-    // Cast through `any` since we already proved it's truthy above.
-    const sellerId = (creator as any).user_id as string;
+    const sellerId = creator.user_id;
 
     // 2. Fetch all store-listed tracks, playlists, projects in parallel
     const [tracksRes, playlistsRes, projectsRes] = await Promise.all([
@@ -112,9 +117,7 @@ export async function GET(
         .order('store_order', { ascending: true }),
     ]);
 
-    // Strip user_id from tracks before responding
-    const safeTracks = (tracksRes.data ?? [])
-      .map(({ user_id: _u, ...rest }: any) => rest)
+    const safeTracks = ((tracksRes.data ?? []) as unknown as PublicProducerTrackRow[])
       .map(redactPublicTrackMedia);
 
     const res = NextResponse.json({

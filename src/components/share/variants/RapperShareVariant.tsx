@@ -50,7 +50,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
   return (
     <div className="min-h-screen bg-[#090907] text-[#F7EBDD] font-sans flex flex-col relative overflow-hidden">
       {/* Ambient background accent */}
-      <div 
+      <div
         className="absolute w-[800px] h-[800px] rounded-full pointer-events-none opacity-[0.03] blur-[150px]"
         style={{
           background: 'radial-gradient(circle, #7F77DD 0%, transparent 70%)',
@@ -66,7 +66,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
       {currentTrack && (
         <div className="w-full px-4 sm:px-6 md:px-12 pt-10 sm:pt-12 pb-6 flex justify-center z-10">
           <ShareWaveformVinyl
-            track={currentTrack as any}
+            track={currentTrack}
             projectCover={project.cover_url}
             caption={displayName}
             isPlaying={isPlaying}

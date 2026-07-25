@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { abortMultipart } from '@/lib/storage/multipart';
 import { getSession, markStatus, deleteSession } from '@/lib/storage/upload-sessions';
 import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
+import { errorMessage } from '@/lib/errors';
 
 export const runtime = 'nodejs';
 
@@ -25,8 +26,8 @@ export async function POST(req: NextRequest) {
     await markStatus(sessionId, 'aborted');
     await deleteSession(sessionId);
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('upload/abort error:', err);
-    return NextResponse.json({ error: err?.message || 'abort failed' }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(err) || 'abort failed' }, { status: 500 });
   }
 }

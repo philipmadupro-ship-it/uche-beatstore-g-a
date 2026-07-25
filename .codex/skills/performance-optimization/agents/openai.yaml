@@ -1,0 +1,7 @@
+interface:
+  display_name: "Performance Optimization"
+  short_description: "Speed, media, queries, and rendering"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $performance-optimization to speed up this Beatstor flow."
+policy:
+  allow_implicit_invocation: true

@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mockIsSupabaseConfigured = vi.fn();
-const mockFromQueue: Array<(table: string) => any> = [];
+const mockFromQueue: Array<(table: string) => unknown> = [];
 
 vi.mock('@/lib/local-store', () => ({
   isSupabaseConfigured: () => mockIsSupabaseConfigured(),
@@ -118,7 +118,7 @@ describe('GET /api/store/projects/access/[token]', () => {
 
     // 4. tracks.select().in
     mockFromQueue.push(listResult([
-      { id: 'track-a', title: 'Track A', type: 'beat', audio_url: 'https://r2/a.mp3', wav_url: 'https://r2/a.wav', cover_url: null },
+      { id: 'track-a', title: 'Track A', type: 'beat', audio_url: 'https://r2/a.mp3', wav_url: 'https://r2/a.wav', peaks_url: 'https://r2/a.peaks.json', cover_url: null },
     ]));
 
     // 5. track_tags.select().in (genre/mood chips for the listening page)
@@ -138,6 +138,7 @@ describe('GET /api/store/projects/access/[token]', () => {
     expect(body.tracks[0].audio_url).toContain('format=mp3');
     expect(body.tracks[0].wav_url).toContain('/api/store/projects/access/');
     expect(body.tracks[0].wav_url).toContain('format=wav');
+    expect(body.tracks[0].peaks_url).toBe(`/api/store/projects/access/${TOKEN}/peaks?track_id=track-a`);
     // Regression (B2-19): buyer_email no longer in response to avoid
     // leaking PII to anyone who shares the access URL.
     expect(body.access).not.toHaveProperty('buyer_email');

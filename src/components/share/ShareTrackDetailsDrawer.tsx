@@ -1,7 +1,9 @@
 'use client';
 
+import NextImage from 'next/image';
 import { X, Play, Pause, Music, ShoppingCart, Info, CheckCircle, XCircle, Tag } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
+import type { Track as CartTrack } from '@/lib/types';
 
 interface CreatorProfile {
   display_name?: string | null;
@@ -12,6 +14,7 @@ interface CreatorProfile {
 
 interface Track {
   id: string;
+  user_id?: string | null;
   title: string;
   type: string;
   audio_url: string;
@@ -23,6 +26,9 @@ interface Track {
   description?: string | null;
   lease_price_usd?: number | null;
   exclusive_price_usd?: number | null;
+  wav_url?: string | null;
+  stems_status?: CartTrack['stems_status'] | null;
+  created_at?: string | null;
 }
 
 interface ShareTrackDetailsDrawerProps {
@@ -63,6 +69,18 @@ const LICENSE_FEATURES = {
     { label: 'Radio & sync clearance', included: true },
   ],
 };
+
+function toCartTrack(track: Track): CartTrack {
+  return {
+    ...track,
+    user_id: track.user_id ?? '',
+    type: track.type as CartTrack['type'],
+    duration_seconds: track.duration_seconds ?? null,
+    bpm: track.bpm ?? null,
+    stems_status: track.stems_status ?? 'none',
+    created_at: track.created_at ?? '',
+  };
+}
 
 export function ShareTrackDetailsDrawer({
   track,
@@ -139,7 +157,7 @@ export function ShareTrackDetailsDrawer({
     if (!shareToken) return;
     const price = licenseType === 'lease' ? leasePrice : exclusivePrice;
     if (price == null) return;
-    addItem(track as any, {
+    addItem(toCartTrack(track), {
       id: licenseType === 'lease' ? 'basic-lease' : 'exclusive-rights',
       name: licenseType === 'lease' ? 'Basic Lease' : 'Exclusive Rights',
       price_usd: price,
@@ -205,7 +223,7 @@ export function ShareTrackDetailsDrawer({
           {/* Cover */}
           <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-[#171511] border border-[#2B2821] group shadow-2xl">
             {cover ? (
-              <img src={cover} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+              <NextImage src={cover} alt="" fill sizes="440px" unoptimized className="object-cover transition-transform duration-500 group-hover:scale-105" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
                 <Music size={64} />

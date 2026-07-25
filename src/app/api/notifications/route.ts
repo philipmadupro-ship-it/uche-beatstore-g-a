@@ -6,6 +6,10 @@ import { errorMessage } from '@/lib/errors';
 
 export const dynamic = 'force-dynamic';
 
+interface NotificationRow {
+  read: boolean | null;
+}
+
 export async function GET() {
   try {
     const result = await requireUser();
@@ -26,7 +30,7 @@ export async function GET() {
 
     if (error) throw error;
     const notifications = data ?? [];
-    const unread = notifications.filter((n: any) => !n.read).length;
+    const unread = (notifications as NotificationRow[]).filter((n) => !n.read).length;
     return NextResponse.json({ notifications, unread });
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });

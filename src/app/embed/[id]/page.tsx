@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useRef, useState } from 'react';
+import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, Music, ExternalLink, Check, Copy } from 'lucide-react';
 
 /**
@@ -35,19 +35,20 @@ function proxied(src: string | null | undefined): string | null {
   return src.startsWith('/') ? src : `/api/audio?src=${encodeURIComponent(src)}`;
 }
 
+function getTopLevelWindowState(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.self === window.top;
+  } catch {
+    return false;
+  }
+}
+
 export default function EmbedPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [track, setTrack] = useState<EmbedTrack | null>(null);
   const [error, setError] = useState(false);
-  const [topLevel, setTopLevel] = useState(false);
-
-  useEffect(() => {
-    try {
-      setTopLevel(window.self === window.top);
-    } catch {
-      setTopLevel(false); // cross-origin access throws → we're framed
-    }
-  }, []);
+  const [topLevel] = useState(getTopLevelWindowState);
 
   useEffect(() => {
     let alive = true;
@@ -244,13 +245,12 @@ function EmbedCard({ track }: { track: EmbedTrack }) {
 
 function EmbedSnippet({ id }: { id: string }) {
   const [copied, setCopied] = useState(false);
-  const [origin, setOrigin] = useState('');
+  const [origin] = useState(() => (typeof window === 'undefined' ? '' : window.location.origin));
 
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
-
-  const snippet = `<iframe src="${origin}/embed/${id}" width="100%" height="180" frameborder="0" loading="lazy" style="border-radius:16px;max-width:480px" allow="autoplay"></iframe>`;
+  const snippet = useMemo(
+    () => `<iframe src="${origin}/embed/${id}" width="100%" height="180" frameborder="0" loading="lazy" style="border-radius:16px;max-width:480px" allow="autoplay"></iframe>`,
+    [origin, id],
+  );
 
   const copy = () => {
     navigator.clipboard

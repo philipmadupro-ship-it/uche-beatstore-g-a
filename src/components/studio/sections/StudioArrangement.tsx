@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Scissors, Trash2, RotateCcw, Play } from 'lucide-react';
 import { audioSrc } from '@/lib/audio/url';
 import { cn } from '@/lib/utils';
@@ -64,6 +64,10 @@ interface Props {
  */
 const PEAKS_CACHE = new Map<string, number[]>();
 
+interface AudioContextWindow extends Window {
+  webkitAudioContext?: typeof AudioContext;
+}
+
 interface Clip {
   /** Stable id used as the React key + drag handle. */
   id: string;
@@ -119,7 +123,6 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
   // ── Hydrate from server ─────────────────────────────────────────────
   useEffect(() => {
     let aborted = false;
-    setHydratedTrackId(null);
     (async () => {
       try {
         const res = await fetch(`/api/tracks/${trackId}/arrangement`, { cache: 'no-store' });
@@ -145,35 +148,6 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
     return () => { aborted = true; };
   }, [trackId]);
 
-  // ── Debounced save ──────────────────────────────────────────────────
-  // Persists any change to markers / order 600ms after the last edit.
-  // Skips while the component is hydrating (hydratedTrackId !== trackId)
-  // so the server isn't asked to overwrite itself with the empty
-  // defaults the client briefly holds before the GET lands.
-  useEffect(() => {
-    if (hydratedTrackId !== trackId) return;
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(async () => {
-      setSaveState('saving');
-      try {
-        const res = await fetch(`/api/tracks/${trackId}/arrangement`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ markers, ordering: order }),
-        });
-        setSaveState(res.ok ? 'saved' : 'error');
-        // Flash "Saved" briefly then fall back to idle so the panel
-        // doesn't permanently advertise success.
-        if (res.ok) setTimeout(() => setSaveState('idle'), 1200);
-      } catch {
-        setSaveState('error');
-      }
-    }, 600);
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
-  }, [markers, order, trackId, hydratedTrackId]);
-
   // ── Derived clips ───────────────────────────────────────────────────
   // Sorted markers turn into [0, m0, m1, ..., duration] which then
   // become N+1 clips. The clip ids are stable across re-renders by
@@ -197,31 +171,59 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
     return out;
   }, [markers, duration]);
 
-  // Keep `order` in sync with derived clip ids. When the clip set
-  // changes (split / merge), we splice the new ids in at the same
-  // position as the old, removing ids that no longer exist. This
-  // preserves the user's manual reorder across edits.
-  useEffect(() => {
-    setOrder((prev) => {
-      const ids = clipsInTime.map((c) => c.id);
-      // Drop ids that no longer exist + append new ones at the end.
-      const kept = prev.filter((id) => ids.includes(id));
-      const added = ids.filter((id) => !kept.includes(id));
-      return [...kept, ...added];
-    });
-  }, [clipsInTime]);
-
   const clipById = useMemo(() => {
     const m = new Map<string, Clip>();
     for (const c of clipsInTime) m.set(c.id, c);
     return m;
   }, [clipsInTime]);
 
+  const clipIds = useMemo(() => clipsInTime.map((c) => c.id), [clipsInTime]);
+  const effectiveOrder = useMemo(() => {
+    const kept = order.filter((id) => clipById.has(id));
+    const added = clipIds.filter((id) => !kept.includes(id));
+    return [...kept, ...added];
+  }, [order, clipById, clipIds]);
+
+  // ── Debounced save ──────────────────────────────────────────────────
+  // Persists any change to markers / order 600ms after the last edit.
+  // Skips while the component is hydrating (hydratedTrackId !== trackId)
+  // so the server isn't asked to overwrite itself with the empty
+  // defaults the client briefly holds before the GET lands.
+  useEffect(() => {
+    if (hydratedTrackId !== trackId) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      setSaveState('saving');
+      try {
+        const res = await fetch(`/api/tracks/${trackId}/arrangement`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ markers, ordering: effectiveOrder }),
+        });
+        setSaveState(res.ok ? 'saved' : 'error');
+        // Flash "Saved" briefly then fall back to idle so the panel
+        // doesn't permanently advertise success.
+        if (res.ok) setTimeout(() => setSaveState('idle'), 1200);
+      } catch {
+        setSaveState('error');
+      }
+    }, 600);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [markers, effectiveOrder, trackId, hydratedTrackId]);
+
   // ── Peaks for the ribbon (same fetch + decode strategy as StudioWaveform) ──
   useEffect(() => {
-    if (!url) { setPeaks(null); return; }
+    if (!url) {
+      queueMicrotask(() => setPeaks(null));
+      return;
+    }
     const cached = PEAKS_CACHE.get(url);
-    if (cached) { setPeaks(cached); return; }
+    if (cached) {
+      queueMicrotask(() => setPeaks(cached));
+      return;
+    }
 
     let aborted = false;
     (async () => {
@@ -243,7 +245,7 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
         const r = await fetch(audioSrc(url));
         if (!r.ok) return;
         const buf = await r.arrayBuffer();
-        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        const AC = window.AudioContext || (window as AudioContextWindow).webkitAudioContext;
         if (!AC) return;
         const ctx = new AC();
         const decoded = await ctx.decodeAudioData(buf.slice(0));
@@ -347,7 +349,7 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
   }, [peaks, ribbonWidth, markers, currentTime, duration, bpm]);
 
   // ── Operations ──────────────────────────────────────────────────────
-  const splitAtPlayhead = () => {
+  const splitAtPlayhead = useCallback(() => {
     if (duration <= 0) return;
     // Reject splits that would create a too-short sliver (< 100ms),
     // and dedupe — clicking Split twice without seeking shouldn't
@@ -355,7 +357,7 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
     if (markers.some((m) => Math.abs(m - currentTime) < 0.1)) return;
     if (currentTime < 0.1 || currentTime > duration - 0.1) return;
     setMarkers((ms) => [...ms, currentTime]);
-  };
+  }, [currentTime, duration, markers]);
 
   // Document-level pointer listeners for trim. We attach once and
   // gate on `trimRef.current` — when it's null we do nothing. Using
@@ -395,7 +397,9 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
   // the studio page without accidentally cutting their track. Bound
   // through a ref so handler identity stays stable across renders.
   const splitRef = useRef(splitAtPlayhead);
-  splitRef.current = splitAtPlayhead;
+  useEffect(() => {
+    splitRef.current = splitAtPlayhead;
+  }, [splitAtPlayhead]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 's' && e.key !== 'S') return;
@@ -464,8 +468,8 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
   // feed it up to the parent's playback engine via the `onPlayConfigChange`
   // callback without recomputing twice per render.
   const orderedClips = useMemo<Clip[]>(
-    () => order.map((id) => clipById.get(id)).filter((c): c is Clip => !!c),
-    [order, clipById],
+    () => effectiveOrder.map((id) => clipById.get(id)).filter((c): c is Clip => !!c),
+    [effectiveOrder, clipById],
   );
 
   // Bubble up the current ordered clip list + play mode whenever either
@@ -540,7 +544,7 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
           </button>
           <button
             onClick={resetAll}
-            disabled={markers.length === 0 && order.length === clipsInTime.length}
+            disabled={markers.length === 0 && effectiveOrder.length === clipsInTime.length}
             className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider px-2.5 py-1.5 rounded-md bg-[#171511] border border-[#211F1A] text-[#B4AA99] hover:text-white hover:border-[#3B372F] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             title="Clear all cuts"
           >

@@ -10,6 +10,12 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
+interface ProducerMetadataRow {
+  display_name: string | null;
+  bio: string | null;
+  hero_image_url: string | null;
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const decoded = decodeURIComponent(slug).trim().toLowerCase();
@@ -31,14 +37,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
         .select('display_name, bio, hero_image_url')
         .not('display_name', 'is', null);
       creator =
-        (candidates ?? []).find(
-          (c: any) => slugify(c.display_name || '') === decoded,
+        ((candidates ?? []) as ProducerMetadataRow[]).find(
+          (c) => slugify(c.display_name || '') === decoded,
         ) ?? null;
     }
 
     if (!creator) return fallback;
 
-    const c = creator as any;
+    const c = creator as ProducerMetadataRow;
     const title = c.display_name ? `${c.display_name} — beats + samples` : 'Producer';
     const description = c.bio?.trim() || `Listen, license, and follow ${c.display_name || 'this producer'}.`;
     const url = `${getAppUrl()}/store/producer/${slug}`;

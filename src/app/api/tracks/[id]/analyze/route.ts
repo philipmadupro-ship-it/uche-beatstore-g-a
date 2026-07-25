@@ -270,7 +270,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         /preview_(url|status)|schema cache/i.test(error.message)
       ) {
         log.warn('preview columns not in schema cache; retrying without them', { trackId: id });
-        const { preview_url: _pu, preview_status: _ps, ...rest } = patch;
+        const rest: AnalysisPatch = { ...patch };
+        delete rest.preview_url;
+        delete rest.preview_status;
         ({ data, error } = await runUpdate(rest));
       }
       if (error) throw error;

@@ -10,6 +10,14 @@ const log = createLogger('api.invite');
 import { readBody } from '@/lib/validate';
 import { InviteCreateBodySchema } from '@/lib/contracts';
 
+interface InviteRow {
+  id?: string;
+  email: string;
+  role: string;
+  token: string;
+  expires_at: string;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const parsed = await readBody(req, InviteCreateBodySchema);
@@ -30,7 +38,7 @@ export async function POST(req: NextRequest) {
     const token = nanoid(16);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    let invite: any;
+    let invite: InviteRow;
 
     if (isSupabaseConfigured()) {
       const supabaseAdmin = createServiceClient();

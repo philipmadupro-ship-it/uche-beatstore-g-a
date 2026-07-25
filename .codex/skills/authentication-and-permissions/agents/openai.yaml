@@ -1,0 +1,7 @@
+interface:
+  display_name: "Authentication And Permissions"
+  short_description: "Auth boundaries and server permissions"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $authentication-and-permissions to verify this Beatstor auth boundary."
+policy:
+  allow_implicit_invocation: true

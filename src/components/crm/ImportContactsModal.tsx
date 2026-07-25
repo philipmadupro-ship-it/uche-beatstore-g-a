@@ -3,8 +3,9 @@
 import { useMemo, useRef, useState } from 'react';
 import {
   X, Upload, FileSpreadsheet, Loader2, Check, AlertTriangle, Info,
-  Mail, Phone, Globe, Tag, AtSign,
+  Mail, Phone, Tag, AtSign,
 } from 'lucide-react';
+import { errorMessage } from '@/lib/errors';
 
 interface PreviewContact {
   name: string;
@@ -89,8 +90,8 @@ export function ImportContactsModal({ onClose, onSuccess }: Props) {
       });
       setSkipped(initSkip);
       setPreview(json);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setParsing(false);
     }
@@ -157,8 +158,8 @@ export function ImportContactsModal({ onClose, onSuccess }: Props) {
       if (!res.ok) throw new Error(json.error || 'Import failed');
       setResult(json);
       onSuccess();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (err: unknown) {
+      setError(errorMessage(err));
     } finally {
       setImporting(false);
     }

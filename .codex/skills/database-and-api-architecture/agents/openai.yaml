@@ -1,0 +1,7 @@
+interface:
+  display_name: "Database And API Architecture"
+  short_description: "Data models, APIs, RLS, contracts"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $database-and-api-architecture to design this Beatstor data/API change."
+policy:
+  allow_implicit_invocation: true

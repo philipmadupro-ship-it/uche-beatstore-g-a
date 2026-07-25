@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { Loader2, TrendingUp, Users } from 'lucide-react';
+import { errorMessage } from '@/lib/errors';
 
 interface Ping {
   position_seconds: number;
@@ -25,9 +26,9 @@ export function TrackHeatmap({ trackId, durationSeconds }: TrackHeatmapProps) {
         if (!res.ok) throw new Error(`HTTP error ${res.status}`);
         const data = await res.json();
         setPings(data.pings || []);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error loading heatmap:', err);
-        setError(err.message || 'Failed to load heatmap data');
+        setError(errorMessage(err) || 'Failed to load heatmap data');
       } finally {
         setLoading(false);
       }

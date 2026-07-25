@@ -261,7 +261,7 @@ export async function readAssembledBuffer(audioUrl: string, maxAttempts = 4): Pr
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await readStoredObject(audioUrl);
-    } catch (err: any) {
+    } catch (err: unknown) {
       lastErr = err instanceof Error ? err : new Error(String(err));
     }
     if (attempt < maxAttempts) {

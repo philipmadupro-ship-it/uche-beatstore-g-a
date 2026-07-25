@@ -17,6 +17,101 @@ const TRACK_FIELDS = [
   'store_listed', 'free_download_enabled', 'voice_tag_enabled', 'exclusive_sold', 'created_at',
 ].join(', ');
 
+interface StoreTrackRow extends Record<string, unknown> {
+  id: string;
+  user_id?: string | null;
+  title?: string | null;
+  type?: string | null;
+  audio_url?: string | null;
+  preview_url?: string | null;
+  peaks_url?: string | null;
+  cover_url?: string | null;
+  duration_seconds?: number | null;
+  bpm?: number | null;
+  key?: string | null;
+  scale?: string | null;
+  rating?: number | null;
+  description?: string | null;
+  lease_price_usd?: number | null;
+  exclusive_price_usd?: number | null;
+  store_listed?: boolean | null;
+  free_download_enabled?: boolean | null;
+  voice_tag_enabled?: boolean | null;
+  exclusive_sold?: boolean | null;
+  created_at?: string | null;
+}
+
+interface CreatorProfile {
+  display_name?: string | null;
+  bio?: string | null;
+  hero_image_url?: string | null;
+  credits?: string | null;
+  license_lease_price_usd?: number | null;
+  license_exclusive_price_usd?: number | null;
+  license_notes?: string | null;
+  instagram_handle?: string | null;
+  twitter_handle?: string | null;
+  spotify_url?: string | null;
+  soundcloud_url?: string | null;
+  website_url?: string | null;
+  contact_email?: string | null;
+  accent_color?: string | null;
+  share_card_style?: string | null;
+  share_video_style?: string | null;
+  voice_tag_url?: string | null;
+  voice_tag_interval_seconds?: number | null;
+}
+
+interface LicenseRow {
+  id: string;
+  name: string;
+  description?: string | null;
+  price_usd?: number | null;
+  is_free?: boolean | null;
+  file_types?: string[] | null;
+  stems_included?: boolean | null;
+  is_exclusive?: boolean | null;
+  streaming_limit?: number | null;
+  distribution_limit?: number | null;
+  commercial_rights?: boolean | null;
+  sync_rights?: boolean | null;
+  broadcast_rights?: boolean | null;
+  credit_required?: boolean | null;
+}
+
+interface TrackLicenseLink {
+  license_id: string;
+  price_override_usd: number | null;
+  enabled: boolean;
+}
+
+interface PublicLicenseTier {
+  id: string;
+  name: string;
+  price_usd: number;
+  description?: string | null;
+  is_free: boolean;
+  file_types: string[];
+  stems_included: boolean;
+  is_exclusive: boolean;
+  streaming_limit: number | null;
+  distribution_limit: number | null;
+  commercial_rights: boolean;
+  sync_rights: boolean;
+  broadcast_rights: boolean;
+  credit_required: boolean;
+}
+
+interface LicensePurchaseRow {
+  buyer_email?: string | null;
+  track_ids?: string[] | null;
+}
+
+interface TrackTagRow {
+  tag: string;
+  category: string;
+}
+
 /**
  * Resolve the license tiers to show on a product page.
  *
@@ -32,17 +127,17 @@ async function resolveLicenses(
   admin: ReturnType<typeof createServiceClient>,
   sellerId: string,
   trackId: string,
-  track: any,
-  creator: any,
-): Promise<any[]> {
+  track: StoreTrackRow,
+  creator: CreatorProfile | null,
+): Promise<PublicLicenseTier[]> {
   // Fetch all of the seller's license tiers + any per-track overrides in one round-trip
   const [{ data: allLicenses }, { data: trackLinks }] = await Promise.all([
     admin.from('licenses').select('*').eq('user_id', sellerId).order('sort_order', { ascending: true }),
     admin.from('track_licenses').select('license_id, price_override_usd, enabled').eq('track_id', trackId),
   ]);
 
-  const licenses = allLicenses ?? [];
-  const links = (trackLinks ?? []) as Array<{ license_id: string; price_override_usd: number | null; enabled: boolean }>;
+  const licenses = (allLicenses ?? []) as LicenseRow[];
+  const links = (trackLinks ?? []) as TrackLicenseLink[];
 
   // If there are no custom license tiers at all, fall back to the legacy 2-tier system
   if (licenses.length === 0) {
@@ -55,24 +150,24 @@ async function resolveLicenses(
   const useLinked = linkedIds.size > 0;
 
   const activeTiers = licenses
-    .filter((l: any) => {
+    .filter((l) => {
       if (useLinked) return linkedIds.has(l.id) && links.find((x) => x.license_id === l.id)?.enabled !== false;
       return true; // global: show all tiers
     })
-    .map((l: any) => {
+    .map((l): PublicLicenseTier => {
       const link = links.find((x) => x.license_id === l.id);
       const price = link?.price_override_usd != null ? Number(link.price_override_usd) : Number(l.price_usd);
       return {
         id: l.id,
         name: l.name,
         price_usd: price,
-        description: l.description,
+        description: l.description ?? null,
         is_free: l.is_free || price === 0,
         file_types: l.file_types ?? ['MP3'],
         stems_included: l.stems_included ?? false,
         is_exclusive: l.is_exclusive ?? false,
-        streaming_limit: l.streaming_limit,
-        distribution_limit: l.distribution_limit,
+        streaming_limit: l.streaming_limit ?? null,
+        distribution_limit: l.distribution_limit ?? null,
         commercial_rights: l.commercial_rights ?? true,
         sync_rights: l.sync_rights ?? false,
         broadcast_rights: l.broadcast_rights ?? false,
@@ -84,8 +179,8 @@ async function resolveLicenses(
   return activeTiers.length > 0 ? activeTiers : buildLegacyTiers(track, creator);
 }
 
-function buildLegacyTiers(track: any, creator: any): any[] {
-  const tiers: any[] = [];
+function buildLegacyTiers(track: StoreTrackRow, creator: CreatorProfile | null): PublicLicenseTier[] {
+  const tiers: PublicLicenseTier[] = [];
   const leasePrice = resolveLegacyPrice(track.lease_price_usd, creator?.license_lease_price_usd);
   const exclPrice = resolveLegacyPrice(track.exclusive_price_usd, creator?.license_exclusive_price_usd);
 
@@ -128,10 +223,16 @@ function buildLegacyTiers(track: any, creator: any): any[] {
   return tiers;
 }
 
-function resolveLegacyPrice(trackOverride: any, profileDefault: any): number | null {
+function resolveLegacyPrice(trackOverride: number | null | undefined, profileDefault: number | null | undefined): number | null {
   if (trackOverride != null && Number(trackOverride) > 0) return Number(trackOverride);
   if (profileDefault != null && Number(profileDefault) > 0) return Number(profileDefault);
   return null;
+}
+
+function stripUserId<T extends { user_id?: string | null }>(row: T): Omit<T, 'user_id'> {
+  const { user_id: _userId, ...rest } = row;
+  void _userId;
+  return rest;
 }
 
 /**
@@ -153,14 +254,14 @@ export async function GET(
 
   try {
     if (!isSupabaseConfigured()) {
-      const track = getById('tracks', id) as any;
+      const track = getById<StoreTrackRow>('tracks', id);
       if (!track || !track.store_listed) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
-      const all = (getAll('tracks') as any[]).filter(
+      const all = getAll<StoreTrackRow>('tracks').filter(
         (t) => t.store_listed === true && t.id !== id,
       );
-      const profiles = (getAll('creator_profiles' as any) as any[]) || [];
+      const profiles = getAll<CreatorProfile>('creator_profiles');
       const creator = profiles[0] ?? null;
       return NextResponse.json({
         track: redactPublicTrackMedia(track),
@@ -181,7 +282,8 @@ export async function GET(
     if (tErr) throw tErr;
     if (!track) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const sellerId = (track as any).user_id as string | undefined;
+    const storeTrack = track as unknown as StoreTrackRow;
+    const sellerId = storeTrack.user_id ?? undefined;
 
     // Creator profile + related tracks + licenses in parallel where possible
     const [creatorRes, relatedRes] = await Promise.all([
@@ -205,13 +307,14 @@ export async function GET(
         .from('tracks')
         .select(TRACK_FIELDS)
         .eq('store_listed', true)
-        .eq('type', (track as any).type)
+        .eq('type', storeTrack.type)
         .neq('id', id)
         .order('created_at', { ascending: false })
         .limit(6),
     ]);
 
-    let related = (relatedRes.data as any[]) ?? [];
+    const creator = (creatorRes.data as CreatorProfile | null) ?? null;
+    let related = ((relatedRes.data as unknown as StoreTrackRow[] | null) ?? []);
 
     // Top up with different-type tracks if same-type didn't fill the 6 slots
     if (related.length < 6) {
@@ -219,18 +322,18 @@ export async function GET(
         .from('tracks')
         .select(TRACK_FIELDS)
         .eq('store_listed', true)
-        .neq('type', (track as any).type)
+        .neq('type', storeTrack.type)
         .neq('id', id)
         .order('created_at', { ascending: false })
         .limit(6 - related.length);
-      related = [...related, ...(more ?? [])];
+      related = [...related, ...((more as unknown as StoreTrackRow[] | null) ?? [])];
     }
 
     // Resolve license tiers (custom tiers → legacy fallback)
     const [licenses, tagsRes] = await Promise.all([
       sellerId
-        ? resolveLicenses(admin, sellerId, id, track, creatorRes.data)
-        : Promise.resolve(buildLegacyTiers(track, creatorRes.data)),
+        ? resolveLicenses(admin, sellerId, id, storeTrack, creator)
+        : Promise.resolve(buildLegacyTiers(storeTrack, creator)),
       admin.from('track_tags').select('tag, category').eq('track_id', id),
     ]);
 
@@ -238,7 +341,7 @@ export async function GET(
     // Buyers who bought THIS track, then the other tracks those same
     // buyers bought, ranked by co-purchase frequency. Best-effort: any
     // failure (missing column, no sales) just yields an empty strip.
-    let fansAlsoBought: any[] = [];
+    let fansAlsoBought: StoreTrackRow[] = [];
     if (sellerId) {
       try {
         const { data: withThis } = await admin
@@ -246,9 +349,9 @@ export async function GET(
           .select('buyer_email, track_ids')
           .eq('seller_user_id', sellerId)
           .eq('status', 'paid')
-          .contains('track_ids', [id]);
+            .contains('track_ids', [id]);
 
-        const buyers = [...new Set((withThis ?? []).map((p: any) => p.buyer_email).filter(Boolean))];
+        const buyers = [...new Set(((withThis ?? []) as LicensePurchaseRow[]).map((p) => p.buyer_email).filter((email): email is string => Boolean(email)))];
         if (buyers.length > 0) {
           const { data: theirPurchases } = await admin
             .from('license_purchases')
@@ -259,7 +362,7 @@ export async function GET(
 
           // Tally co-purchased track ids (excluding the current track)
           const counts = new Map<string, number>();
-          for (const p of (theirPurchases ?? []) as any[]) {
+          for (const p of (theirPurchases ?? []) as LicensePurchaseRow[]) {
             for (const tid of (p.track_ids ?? [])) {
               if (tid && tid !== id) counts.set(tid, (counts.get(tid) ?? 0) + 1);
             }
@@ -273,8 +376,8 @@ export async function GET(
               .in('id', rankedIds);
             // Preserve the co-purchase ranking order
             const order = new Map(rankedIds.map((tid, i) => [tid, i]));
-            fansAlsoBought = (fanTracks ?? []).sort(
-              (a: any, b: any) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99),
+            fansAlsoBought = ((fanTracks ?? []) as unknown as StoreTrackRow[]).sort(
+              (a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99),
             );
           }
         }
@@ -284,23 +387,21 @@ export async function GET(
     }
 
     // Strip user_id off every track before responding
-    const stripUserId = ({ user_id: _u, ...rest }: any) => rest;
-    const safeTrack = redactPublicTrackMedia(stripUserId(track));
+    const safeTrack = redactPublicTrackMedia(stripUserId(storeTrack));
     // Voice tag (mig 072) — attach the creator's tag when this beat opted in,
     // so the preview player overlays it. Owner downloads remain clean.
-    const cr = creatorRes.data as any;
-    if ((safeTrack as any).voice_tag_enabled && cr?.voice_tag_url) {
-      (safeTrack as any).voice_tag_url = cr.voice_tag_url;
-      (safeTrack as any).voice_tag_interval = cr.voice_tag_interval_seconds ?? 20;
+    if (safeTrack.voice_tag_enabled && creator?.voice_tag_url) {
+      safeTrack.voice_tag_url = creator.voice_tag_url;
+      safeTrack.voice_tag_interval = creator.voice_tag_interval_seconds ?? 20;
     }
     const safeRelated = related.map(stripUserId).map(redactPublicTrackMedia);
     const safeFans = fansAlsoBought.map(stripUserId).map(redactPublicTrackMedia);
 
     const res = NextResponse.json({
       track: safeTrack,
-      creator: creatorRes.data ?? null,
+      creator,
       licenses,
-      tags: tagsRes.data ?? [],
+      tags: (tagsRes.data as TrackTagRow[] | null) ?? [],
       related: safeRelated,
       fans_also_bought: safeFans,
     });

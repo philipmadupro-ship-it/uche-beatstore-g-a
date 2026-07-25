@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
+import type { Track } from '@/lib/types';
 
 /**
  * Voice-tag overlay for store previews (mig 072).
@@ -16,6 +17,11 @@ import { usePlayer } from '@/hooks/usePlayer';
  * stream and fire the tag when playback crosses each interval bucket. Mount
  * once in the store layout; renders nothing.
  */
+interface VoiceTaggedTrack extends Track {
+  voice_tag_url?: string | null;
+  voice_tag_interval?: number | null;
+}
+
 export function VoiceTagPlayer() {
   const currentTrack = usePlayer((s) => s.currentTrack);
   const isPlaying = usePlayer((s) => s.isPlaying);
@@ -32,8 +38,9 @@ export function VoiceTagPlayer() {
   // it never ducks the beat or spams retries.
   const failedRef = useRef(false);
 
-  const tagUrl = (currentTrack as any)?.voice_tag_url as string | undefined;
-  const interval = Math.max(5, Number((currentTrack as any)?.voice_tag_interval) || 20);
+  const taggedTrack = currentTrack as VoiceTaggedTrack | null;
+  const tagUrl = taggedTrack?.voice_tag_url ?? undefined;
+  const interval = Math.max(5, Number(taggedTrack?.voice_tag_interval) || 20);
 
   // Lazily create the audio element + load the tag when the track changes.
   useEffect(() => {

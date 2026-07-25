@@ -1,0 +1,7 @@
+interface:
+  display_name: "UI Polish Review"
+  short_description: "Final visual and interaction pass"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $ui-polish-review to finish this Beatstor screen."
+policy:
+  allow_implicit_invocation: true

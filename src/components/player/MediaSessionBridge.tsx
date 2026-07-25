@@ -81,10 +81,10 @@ export function MediaSessionBridge() {
       ['nexttrack',     () => next()],
       ['previoustrack', () => prev()],
       // OS scrubber drag → seek to absolute time.
-      ['seekto', (d: any) => { const t = dur(); if (t > 0 && typeof d?.seekTime === 'number') seekTo(d.seekTime / t); }],
+      ['seekto', (d: MediaSessionActionDetails) => { const t = dur(); if (t > 0 && typeof d.seekTime === 'number') seekTo(d.seekTime / t); }],
       // Hardware ±10s (headphone double-tap, lock-screen skip buttons).
-      ['seekforward',  (d: any) => { const t = dur(); if (t > 0) seekTo(Math.min(1, usePlayer.getState().progress + (d?.seekOffset ?? 10) / t)); }],
-      ['seekbackward', (d: any) => { const t = dur(); if (t > 0) seekTo(Math.max(0, usePlayer.getState().progress - (d?.seekOffset ?? 10) / t)); }],
+      ['seekforward',  (d: MediaSessionActionDetails) => { const t = dur(); if (t > 0) seekTo(Math.min(1, usePlayer.getState().progress + (d.seekOffset ?? 10) / t)); }],
+      ['seekbackward', (d: MediaSessionActionDetails) => { const t = dur(); if (t > 0) seekTo(Math.max(0, usePlayer.getState().progress - (d.seekOffset ?? 10) / t)); }],
     ];
 
     for (const [action, handler] of handlers) {

@@ -1,0 +1,7 @@
+interface:
+  display_name: "De Roche Visual System"
+  short_description: "Dark earth-and-stone Beatstor identity"
+  brand_color: "#AA9C89"
+  default_prompt: "Use $de-roche-visual-system to align this Beatstor UI with the De Roche direction."
+policy:
+  allow_implicit_invocation: true

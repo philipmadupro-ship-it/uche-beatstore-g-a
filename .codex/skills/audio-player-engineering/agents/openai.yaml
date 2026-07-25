@@ -1,0 +1,7 @@
+interface:
+  display_name: "Audio Player Engineering"
+  short_description: "Persistent streaming player architecture"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $audio-player-engineering to improve Beatstor playback."
+policy:
+  allow_implicit_invocation: true

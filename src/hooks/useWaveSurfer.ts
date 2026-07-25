@@ -34,9 +34,30 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type WaveSurferType from 'wavesurfer.js';
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type RegionsPluginInstance = any; // wavesurfer plugin types are loose; we
-                                  // duck-type. Region API is small and stable.
+
+interface RegionRuntime {
+  id: string;
+  start: number;
+  end: number;
+  color?: string;
+}
+
+interface RegionsPluginInstance {
+  enableDragSelection?: (options: { color: string }) => void;
+  getRegions: () => RegionRuntime[];
+  on: (event: string, callback: (region?: RegionRuntime) => void) => void;
+  addRegion: (region: { start: number; end: number; color?: string }) => RegionRuntime;
+  clearRegions?: () => void;
+}
+
+interface WaveSurferPluginFactory<TOptions = Record<string, unknown>, TPlugin = unknown> {
+  create: (options?: TOptions) => TPlugin;
+}
+
+type WaveSurferWithMedia = {
+  mediaElement?: HTMLMediaElement;
+  audio?: HTMLMediaElement;
+};
 
 export interface RegionInfo {
   id: string;
@@ -254,9 +275,11 @@ export function useWaveSurfer({
         try {
           const regMod = await import('wavesurfer.js/dist/plugins/regions.js');
           if (cancelled) return;
-          // The plugin module exports a default with .create()
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const RegionsPlugin = (regMod as any).default;
+          // The plugin module exports a default with .create().
+          const RegionsPlugin = regMod.default as WaveSurferPluginFactory<
+            Record<string, unknown>,
+            RegionsPluginInstance
+          >;
           const plugin = RegionsPlugin.create();
           regionsPluginRef.current = plugin;
           plugins.push(plugin);
@@ -273,8 +296,7 @@ export function useWaveSurfer({
           // against real time codes.
           const tlMod = await import('wavesurfer.js/dist/plugins/timeline.js');
           if (cancelled) return;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const TimelinePlugin = (tlMod as any).default;
+          const TimelinePlugin = tlMod.default as WaveSurferPluginFactory;
           plugins.push(TimelinePlugin.create());
         } catch (err) {
           console.warn('Timeline plugin failed to load:', err);
@@ -288,8 +310,11 @@ export function useWaveSurfer({
           // so consumers opt in deliberately (DAW mode toggle, etc).
           const spMod = await import('wavesurfer.js/dist/plugins/spectrogram.js');
           if (cancelled) return;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const SpectrogramPlugin = (spMod as any).default;
+          const SpectrogramPlugin = spMod.default as WaveSurferPluginFactory<{
+            height: number;
+            fftSamples: number;
+            labels: boolean;
+          }>;
           plugins.push(SpectrogramPlugin.create({
             height: spectrogramHeight,
             fftSamples: spectrogramFft,
@@ -311,8 +336,7 @@ export function useWaveSurfer({
         height,
         normalize: true,
         interact: true,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        plugins: plugins as any,
+        plugins: plugins as never,
       });
       wsRef.current = w;
 
@@ -330,8 +354,7 @@ export function useWaveSurfer({
         const plugin = regionsPluginRef.current;
         if (plugin) {
           plugin.enableDragSelection?.({ color: regionsDefaultColor });
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const emit = (regions: any[]) => {
+          const emit = (regions: RegionRuntime[]) => {
             const mapped: RegionInfo[] = (regions ?? []).map((r) => ({
               id: String(r.id),
               start: r.start,
@@ -345,11 +368,10 @@ export function useWaveSurfer({
           plugin.on('region-updated', () => emit(plugin.getRegions()));
           plugin.on('region-removed', () => emit(plugin.getRegions()));
           if (regionsLoop) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            plugin.on('region-out', (region: any) => {
+            plugin.on('region-out', (region) => {
               // When playback exits the region while it's the active loop,
               // jump back to its start and keep playing.
-              if (w.isPlaying()) {
+              if (region && w.isPlaying()) {
                 w.setTime(region.start);
               }
             });
@@ -410,7 +432,8 @@ export function useWaveSurfer({
           w.pause();
 
           // Release underlying media element to prevent mobile browser memory leaks
-          const media = (w as any).mediaElement ?? (w as any).audio;
+          const mediaHost = w as unknown as WaveSurferWithMedia;
+          const media = mediaHost.mediaElement ?? mediaHost.audio;
           if (media) {
             media.removeAttribute('src');
             media.load();

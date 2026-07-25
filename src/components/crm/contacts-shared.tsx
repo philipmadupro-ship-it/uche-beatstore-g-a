@@ -136,16 +136,20 @@ export function relativeDays(iso: string | undefined): string {
 
 // ── Pipeline pill (send-status progress) ──────────────────────────────────
 const PIPELINE_STAGES = ['sent', 'opened', 'interested', 'negotiating', 'placed'] as const;
+type PipelineStage = (typeof PIPELINE_STAGES)[number];
 const STAGE_FILL: Record<string, string> = {
   sent: 'bg-[#B4AA99]', opened: 'bg-[#7aa8e8]', interested: 'bg-[#F3E6D1]',
   negotiating: 'bg-[#e8a86a]', placed: 'bg-[#6DC6A4]',
 };
+function isPipelineStage(status: string): status is PipelineStage {
+  return PIPELINE_STAGES.includes(status as PipelineStage);
+}
 export function PipelinePill({ status }: { status: string | null }) {
   if (!status) return <span className="text-[11px] text-[#6E685B]">—</span>;
   if (status === 'pass') {
     return <span className="text-[10px] font-medium text-red-400/80 bg-red-500/10 px-1.5 py-0.5 rounded">Pass</span>;
   }
-  const idx = PIPELINE_STAGES.indexOf(status as any);
+  const idx = isPipelineStage(status) ? PIPELINE_STAGES.indexOf(status) : -1;
   return (
     <div className="flex items-center gap-1.5">
       <div className="flex items-center gap-0.5">

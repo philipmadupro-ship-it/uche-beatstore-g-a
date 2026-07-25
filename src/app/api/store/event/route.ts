@@ -12,6 +12,11 @@ const log = createLogger('api.store.event');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface StoreEventTrackRow {
+  id: string;
+  user_id: string | null;
+}
+
 /**
  * POST /api/store/event
  * body: { event_type, session_id, track_id?, license_id?, metadata? }
@@ -64,9 +69,10 @@ export async function POST(req: NextRequest) {
         .select('id, user_id')
         .eq('id', track_id)
         .maybeSingle();
-      if (track) {
-        resolvedTrackId = (track as any).id;
-        sellerUserId = (track as any).user_id ?? null;
+      const eventTrack = track as StoreEventTrackRow | null;
+      if (eventTrack) {
+        resolvedTrackId = eventTrack.id;
+        sellerUserId = eventTrack.user_id ?? null;
       }
     }
 

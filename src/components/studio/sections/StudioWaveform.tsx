@@ -44,6 +44,10 @@ interface Props {
  */
 const PEAKS_CACHE = new Map<string, number[]>();
 
+interface AudioContextWindow extends Window {
+  webkitAudioContext?: typeof AudioContext;
+}
+
 export function StudioWaveform({
   url,
   peaksUrl,
@@ -75,10 +79,16 @@ export function StudioWaveform({
 
   // ── Peaks load ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (!url) { setPeaks(null); return; }
+    if (!url) {
+      queueMicrotask(() => setPeaks(null));
+      return;
+    }
     const key = url;
     const cached = PEAKS_CACHE.get(key);
-    if (cached) { setPeaks(cached); return; }
+    if (cached) {
+      queueMicrotask(() => setPeaks(cached));
+      return;
+    }
 
     let aborted = false;
     (async () => {
@@ -109,7 +119,7 @@ export function StudioWaveform({
         const r = await fetch(audioSrc(url));
         if (!r.ok) return;
         const buf = await r.arrayBuffer();
-        const AC = window.AudioContext || (window as any).webkitAudioContext;
+        const AC = window.AudioContext || (window as AudioContextWindow).webkitAudioContext;
         if (!AC) return;
         const ctx = new AC();
         const decoded = await ctx.decodeAudioData(buf.slice(0));
@@ -198,8 +208,8 @@ export function StudioWaveform({
     setHoverX(e.clientX - rect.left);
   };
   const handleLeave = () => setHoverX(null);
-  const hoverTime = hoverX != null && wrapRef.current && duration > 0
-    ? (hoverX / wrapRef.current.getBoundingClientRect().width) * duration
+  const hoverTime = hoverX != null && width > 0 && duration > 0
+    ? (hoverX / width) * duration
     : null;
 
   return (

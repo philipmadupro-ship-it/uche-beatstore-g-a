@@ -176,7 +176,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
     if (!viewedTrackId) return;
     trackStoreEvent('pdp_view', {
       track_id: viewedTrackId,
-      metadata: { seller_user_id: (track as any)?.user_id },
+      metadata: { seller_user_id: track?.user_id },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewedTrackId]);
@@ -222,13 +222,15 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
   };
 
   const handleAddToCart = (tier: LicenseTier) => {
-    addItem(track, {
+    const added = addItem(track, {
       id: tier.id,
       name: tier.name,
       price_usd: tier.price,
       file_types: tier.fileTypes,
       is_exclusive: tier.isExclusive,
+      stems_included: tier.stemsIncluded,
     });
+    if (!added) return;
     toast.success(`Added "${track.title}" (${tier.name}) to cart`);
     setIsOpen(true);
   };
@@ -269,13 +271,19 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
       <div className="relative overflow-hidden">
         {/* Blurred cover as atmospheric background */}
         {track.cover_url && (
-          <img
-            src={track.cover_url}
-            alt=""
+          <div
             aria-hidden
-            className="absolute inset-0 w-full h-full object-cover scale-110 pointer-events-none"
+            className="absolute inset-0 pointer-events-none"
             style={{ filter: 'blur(80px)', opacity: 0.18 }}
-          />
+          >
+            <CoverImage
+              src={track.cover_url}
+              alt=""
+              sizes="100vw"
+              priority
+              className="object-cover scale-110"
+            />
+          </div>
         )}
         {/* Gradient: dark top (nav area) → transparent middle → solid page bg at bottom */}
         <div className="absolute inset-0 bg-gradient-to-b from-[#090907]/80 via-transparent to-[#090907]" />
@@ -620,7 +628,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                       <Link key={r.id} href={`/store/${r.id}`} className="flex items-center gap-3 rounded-lg hover:bg-[#1A1813] p-1.5 -mx-1.5 transition-colors group">
                         <div className="w-9 h-9 rounded-md overflow-hidden bg-[#090907] shrink-0">
                           {r.cover_url
-                            ? <img src={r.cover_url} alt="" className="w-full h-full object-cover" />
+                            ? <div className="relative h-full w-full"><CoverImage src={r.cover_url} alt="" sizes="36px" className="object-cover" /></div>
                             : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={12} /></div>}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -886,7 +894,7 @@ function RelatedCard({ track }: { track: Track }) {
     <Link href={`/store/${track.id}`} className="group flex flex-col rounded-xl border border-[#2B2821] bg-[#171511] overflow-hidden hover:border-[#3B372F] transition-all">
       <div className="relative w-full aspect-square bg-[#090907]">
         {track.cover_url ? (
-          <img loading="lazy" src={track.cover_url} alt={track.title} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
+          <CoverImage src={track.cover_url} alt={track.title} sizes="(max-width: 640px) 50vw, 220px" className="object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-[#9B9282] bg-gradient-to-br from-[#2B2821] to-[#090907]">
             <Music size={20} />

@@ -8,7 +8,7 @@ import {
   Music, Search, ShoppingCart,
   X, CheckCircle2, XCircle, Link2, LayoutGrid,
   List, SlidersHorizontal, Disc3, ShieldCheck,
-  CreditCard, Download, BadgeCheck, Sparkles, ArrowRight,
+  CreditCard, Download, BadgeCheck, Sparkles, ArrowRight, Clock3,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { buildHarmonicOrder } from '@/lib/audio/harmonic';
@@ -22,6 +22,12 @@ import { RecommendationsStrip } from '@/components/store/RecommendationsStrip';
 import { useWishlist } from '@/hooks/useWishlist';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
 import { filterAndSortTracks, type StoreTrack as StoreTrackFilter } from '@/lib/store/filters';
+import { buildStoreFilterParams, parseStoreFilterParams } from '@/lib/store/url-state';
+import {
+  addRecentStoreSearch,
+  buildStoreSearchSuggestions,
+  normalizeRecentStoreSearches,
+} from '@/lib/store/search-suggestions';
 import {
   type StoreTrack, type CreatorProfile, type FeaturedPlaylist, type PlaylistTrackItem,
   type TypeFilter, type ViewMode, type LicenseTier,
@@ -40,6 +46,7 @@ import { DropCountdown } from '@/components/store/DropCountdown';
 import { logPlay } from '@/lib/buyer-session';
 import { BeatCard } from '@/components/store/BeatCard';
 import { BeatPreviewDrawer } from '@/components/store/BeatPreviewDrawer';
+import { CoverImage } from '@/components/ui/CoverImage';
 import { trackStoreEvent } from '@/lib/store/track-event';
 
 /* ─── Suspense wrapper ───────────────────────────────────────── */
@@ -66,6 +73,7 @@ function money(value: number | null | undefined) {
 }
 
 const STORE_PAGE_SIZE = 80;
+const STORE_RECENT_SEARCHES_KEY = 'antigravity-store-recent-searches';
 
 type StorePageInfo = {
   hasMore: boolean;
@@ -160,10 +168,11 @@ function StoreSalesSpotlight({
         {track && (
           <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-[#14110D]/80 p-3">
             {track.cover_url && (
-              <img
+              <CoverImage
                 src={track.cover_url}
                 alt=""
-                aria-hidden
+                sizes="100vw"
+                priority
                 className="absolute inset-0 h-full w-full object-cover opacity-15 blur-2xl scale-110"
               />
             )}
@@ -175,7 +184,7 @@ function StoreSalesSpotlight({
                 className="group relative aspect-square overflow-hidden rounded-xl bg-[#090907] text-left"
               >
                 {track.cover_url ? (
-                  <img src={track.cover_url} alt="" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]" />
+                  <CoverImage src={track.cover_url} alt="" sizes="104px" priority className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]" />
                 ) : (
                   <div className="grid h-full w-full place-items-center bg-[#171511] text-[#9B9282]">
                     <Music size={28} />
@@ -230,7 +239,7 @@ function StoreSalesSpotlight({
             <div className="flex h-full gap-3">
               <Link href={`/store/projects/${project.id}`} className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-[#090907] sm:size-24">
                 {projectCover ? (
-                  <img src={projectCover} alt="" className="h-full w-full object-cover" />
+                  <CoverImage src={projectCover} alt="" sizes="96px" className="h-full w-full object-cover" />
                 ) : (
                   <div className="grid h-full w-full place-items-center text-[#9B9282]">
                     <Music size={22} />
@@ -297,11 +306,34 @@ function StorePage() {
   // Debounced search
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [highlightedSuggestionIndex, setHighlightedSuggestionIndex] = useState(-1);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSearchChange = useCallback((v: string) => {
     setSearch(v);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     searchTimer.current = setTimeout(() => setDebouncedSearch(v), 200);
+  }, []);
+  const rememberSearch = useCallback((value: string) => {
+    const updated = addRecentStoreSearch(recentSearches, value);
+    setRecentSearches(updated);
+    try {
+      localStorage.setItem(STORE_RECENT_SEARCHES_KEY, JSON.stringify(updated));
+    } catch { /* private mode */ }
+  }, [recentSearches]);
+  const applySearch = useCallback((value: string) => {
+    const next = value.trim();
+    setSearch(next);
+    setDebouncedSearch(next);
+    setSearchFocused(false);
+    rememberSearch(next);
+  }, [rememberSearch]);
+  const clearRecentSearches = useCallback(() => {
+    setRecentSearches([]);
+    try {
+      localStorage.removeItem(STORE_RECENT_SEARCHES_KEY);
+    } catch { /* private mode */ }
   }, []);
 
   const serverStoreQuery = useMemo(() => {
@@ -419,6 +451,13 @@ function StorePage() {
     try {
       const stored = localStorage.getItem('store-view-mode');
       if (stored === 'grid' || stored === 'list') setViewMode(stored);
+      const rawRecent = localStorage.getItem(STORE_RECENT_SEARCHES_KEY);
+      if (rawRecent) {
+        const parsed = JSON.parse(rawRecent) as unknown;
+        if (Array.isArray(parsed)) {
+          setRecentSearches(normalizeRecentStoreSearches(parsed.filter((item): item is string => typeof item === 'string')));
+        }
+      }
     } catch { /* private mode */ }
   }, []);
   const changeViewMode = useCallback((mode: ViewMode) => {
@@ -449,6 +488,29 @@ function StorePage() {
 
   const searchParams = useSearchParams();
   const router = useRouter();
+  const [urlFiltersHydrated, setUrlFiltersHydrated] = useState(false);
+
+  useEffect(() => {
+    if (urlFiltersHydrated) return;
+    const parsed = parseStoreFilterParams(new URLSearchParams(searchParams?.toString() ?? ''));
+    setSearch(parsed.searchQuery);
+    setDebouncedSearch(parsed.searchQuery);
+    setTypeFilter(parsed.typeFilter);
+    setGenreFilter(parsed.genreFilter);
+    setMoodFilter(parsed.moodFilter);
+    setKeyFilter(parsed.keyFilter);
+    setScaleFilter(parsed.scaleFilter);
+    setDurationBucket(parsed.durationBucket);
+    setFreeOnly(parsed.freeOnly);
+    setFavoritesOnly(parsed.favoritesOnly);
+    setNewThisWeek(parsed.newThisWeek);
+    setSortBy(parsed.sortBy);
+    if (parsed.bpmMin != null) setBpmMin(parsed.bpmMin);
+    if (parsed.bpmMax != null) setBpmMax(parsed.bpmMax);
+    if (parsed.priceMin != null) setPriceMin(parsed.priceMin);
+    if (parsed.priceMax != null) setPriceMax(parsed.priceMax);
+    setUrlFiltersHydrated(true);
+  }, [searchParams, urlFiltersHydrated]);
 
   const handleBuyProject = (proj: FeaturedPlaylist) => {
     if (!proj?.id) return;
@@ -504,6 +566,29 @@ function StorePage() {
     return Array.from(keys).sort();
   }, [facetsQuery.data?.keys, tracks]);
 
+  const searchSuggestions = useMemo(() => buildStoreSearchSuggestions({
+    query: search,
+    tracks: tracks as StoreTrackFilter[],
+    genres: availableGenres,
+    moods: availableMoods,
+    keys: availableKeys,
+    recentSearches,
+  }), [availableGenres, availableKeys, availableMoods, recentSearches, search, tracks]);
+
+  const showSearchSuggestions = searchFocused && searchSuggestions.length > 0;
+  const highlightedSuggestion = highlightedSuggestionIndex >= 0
+    ? searchSuggestions[highlightedSuggestionIndex]
+    : null;
+  useEffect(() => {
+    if (!showSearchSuggestions) {
+      setHighlightedSuggestionIndex(-1);
+      return;
+    }
+    setHighlightedSuggestionIndex((current) => (
+      current >= searchSuggestions.length ? searchSuggestions.length - 1 : current
+    ));
+  }, [searchSuggestions.length, showSearchSuggestions]);
+
   const bpmRange = useMemo(() => {
     if (facetsQuery.data?.bpmRange) return facetsQuery.data.bpmRange;
     const bpms = tracks.map((t) => t.bpm).filter(Boolean) as number[];
@@ -551,6 +636,7 @@ function StorePage() {
   const effectivePriceMin = priceMin === 0 ? priceRange.min : priceMin;
   const effectivePriceMax = priceMax === 99999 ? priceRange.max : priceMax;
   const priceRangeActive = effectivePriceMin > priceRange.min || effectivePriceMax < priceRange.max;
+  const bpmRangeActive = effectiveBpmMin > bpmRange.min || effectiveBpmMax < bpmRange.max;
 
   const hasActiveFilters =
     debouncedSearch.trim() !== '' ||
@@ -558,7 +644,28 @@ function StorePage() {
     genreFilter !== '' || moodFilter !== '' || keyFilter !== '' || scaleFilter !== '' ||
     freeOnly || favoritesOnly || newThisWeek || durationBucket !== '' ||
     priceRangeActive ||
-    effectiveBpmMin > bpmRange.min || effectiveBpmMax < bpmRange.max;
+    bpmRangeActive;
+
+  const emptyStateSuggestions = useMemo(() => {
+    const suggestions: Array<{ label: string; kind: 'genre' | 'mood'; value: string }> = [];
+    availableGenres.slice(0, 3).forEach((genre) => suggestions.push({ label: genre, kind: 'genre', value: genre }));
+    availableMoods.slice(0, 3).forEach((mood) => suggestions.push({ label: mood, kind: 'mood', value: mood }));
+    return suggestions.slice(0, 4);
+  }, [availableGenres, availableMoods]);
+
+  const applyEmptyStateSuggestion = (suggestion: { kind: 'genre' | 'mood'; value: string }) => {
+    setSearch('');
+    setDebouncedSearch('');
+    setGenreFilter(suggestion.kind === 'genre' ? suggestion.value : '');
+    setMoodFilter(suggestion.kind === 'mood' ? suggestion.value : '');
+    setKeyFilter('');
+    setScaleFilter('');
+    setDurationBucket('');
+    setFreeOnly(false);
+    setFavoritesOnly(false);
+    setNewThisWeek(false);
+    setTypeFilter('all');
+  };
 
   const resetFilters = () => {
     setGenreFilter('');
@@ -577,6 +684,55 @@ function StorePage() {
     setDebouncedSearch('');
     setTypeFilter('all');
   };
+
+  useEffect(() => {
+    if (!urlFiltersHydrated) return;
+    const current = new URLSearchParams(searchParams?.toString() ?? '');
+    const next = buildStoreFilterParams(current, {
+      searchQuery: debouncedSearch,
+      typeFilter,
+      genreFilter,
+      moodFilter,
+      keyFilter,
+      scaleFilter,
+      durationBucket,
+      freeOnly,
+      favoritesOnly,
+      newThisWeek,
+      sortBy,
+      bpmMin: effectiveBpmMin,
+      bpmMax: effectiveBpmMax,
+      bpmRangeActive,
+      priceMin: effectivePriceMin,
+      priceMax: effectivePriceMax,
+      priceRangeActive,
+    });
+    const nextSearch = next.toString();
+    const currentSearch = searchParams?.toString() ?? '';
+    if (nextSearch === currentSearch) return;
+    router.replace(nextSearch ? `/store?${nextSearch}` : '/store', { scroll: false });
+  }, [
+    urlFiltersHydrated,
+    searchParams,
+    router,
+    debouncedSearch,
+    typeFilter,
+    genreFilter,
+    moodFilter,
+    keyFilter,
+    scaleFilter,
+    durationBucket,
+    freeOnly,
+    favoritesOnly,
+    newThisWeek,
+    sortBy,
+    effectiveBpmMin,
+    effectiveBpmMax,
+    bpmRangeActive,
+    effectivePriceMin,
+    effectivePriceMax,
+    priceRangeActive,
+  ]);
 
   // Filter + sort delegated to the pure helper in @/lib/store/filters so
   // the logic is covered by Vitest (lib/store/filters.test.ts) and future
@@ -716,25 +872,27 @@ function StorePage() {
   const addToCart = (t: StoreTrack, type: 'lease' | 'exclusive') => {
     const price = priceFor(t, type);
     if (price == null) { toast.error(`No ${type} price set for ${t.title}`); return; }
-    addItem(t as Track, {
+    const added = addItem(t as Track, {
       id: `${type}-${t.id}`,
       name: type === 'lease' ? 'Lease' : 'Exclusive',
       price_usd: price,
       file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
       is_exclusive: type === 'exclusive',
+      stems_included: type === 'exclusive',
     });
-    toast.success(`Added: ${t.title} (${type})`);
+    if (added) toast.success(`Added: ${t.title} (${type})`);
   };
 
   const addLicenseToCart = (t: StoreTrack, license: LicenseTier) => {
-    addItem(t as Track, {
+    const added = addItem(t as Track, {
       id: license.id,
       name: license.name,
       price_usd: Number(license.price_usd ?? 0),
       file_types: license.file_types?.length ? license.file_types : ['MP3'],
       is_exclusive: !!license.is_exclusive,
+      stems_included: !!license.stems_included,
     });
-    toast.success(`Added: ${t.title} (${license.name})`);
+    if (added) toast.success(`Added: ${t.title} (${license.name})`);
   };
 
   const addAllToCart = (trackList: PlaylistTrackItem[], type: 'lease' | 'exclusive') => {
@@ -750,12 +908,13 @@ function StorePage() {
           price_usd: price,
           file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
           is_exclusive: type === 'exclusive',
+          stems_included: type === 'exclusive',
         },
       });
     }
     if (pairs.length === 0) { toast.error(`No ${type} price set for any track`); return; }
-    addItems(pairs);
-    toast.success(`${pairs.length} beat${pairs.length !== 1 ? 's' : ''} added to cart`);
+    const addedCount = addItems(pairs);
+    if (addedCount > 0) toast.success(`${addedCount} beat${addedCount !== 1 ? 's' : ''} added to cart`);
   };
 
   const handleCopyLink = () => {
@@ -855,14 +1014,15 @@ function StorePage() {
                 const price = (type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd)
                   ?? (type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd);
                 if (!price) { toast.error(`No ${type} price set`); return; }
-                addItem({ ...t, user_id: '', stems_status: 'none', created_at: '' } as Track, {
+                const added = addItem({ ...t, user_id: '', stems_status: t.stems_status ?? 'none', created_at: '' } as Track, {
                   id: `${type}-${t.id}`,
                   name: type === 'lease' ? 'Lease' : 'Exclusive',
                   price_usd: Number(price),
                   file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
                   is_exclusive: type === 'exclusive',
+                  stems_included: type === 'exclusive',
                 });
-                toast.success(`Added: ${t.title} (${type})`);
+                if (added) toast.success(`Added: ${t.title} (${type})`);
               }}
               onAddAllToCart={addAllToCart}
               onBuyProject={handleBuyProject}
@@ -890,14 +1050,15 @@ function StorePage() {
                 const price = (type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd)
                   ?? (type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd);
                 if (!price) { toast.error(`No ${type} price set`); return; }
-                addItem({ ...t, user_id: '', stems_status: 'none', created_at: '' } as Track, {
+                const added = addItem({ ...t, user_id: '', stems_status: t.stems_status ?? 'none', created_at: '' } as Track, {
                   id: `${type}-${t.id}`,
                   name: type === 'lease' ? 'Lease' : 'Exclusive',
                   price_usd: Number(price),
                   file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
                   is_exclusive: type === 'exclusive',
+                  stems_included: type === 'exclusive',
                 });
-                toast.success(`Added: ${t.title} (${type})`);
+                if (added) toast.success(`Added: ${t.title} (${type})`);
               }}
               onAddAllToCart={addAllToCart}
             />
@@ -958,13 +1119,102 @@ function StorePage() {
           <div className="relative order-2 min-w-0 basis-full sm:order-none sm:basis-auto sm:flex-1 sm:min-w-[160px] sm:max-w-sm">
             <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B4AA99]" />
             <input
+              role="combobox"
               type="text"
               aria-label="Search beats"
+              aria-autocomplete="list"
+              aria-expanded={showSearchSuggestions}
+              aria-controls="store-search-suggestions"
+              aria-activedescendant={highlightedSuggestion ? `store-search-suggestion-${highlightedSuggestionIndex}` : undefined}
               placeholder="Search title, key, BPM, tag…"
               value={search}
               onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => window.setTimeout(() => setSearchFocused(false), 120)}
+              onKeyDown={(e) => {
+                if (showSearchSuggestions && e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setHighlightedSuggestionIndex((current) => (current + 1) % searchSuggestions.length);
+                  return;
+                }
+                if (showSearchSuggestions && e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setHighlightedSuggestionIndex((current) => (
+                    current <= 0 ? searchSuggestions.length - 1 : current - 1
+                  ));
+                  return;
+                }
+                if (showSearchSuggestions && e.key === 'Home') {
+                  e.preventDefault();
+                  setHighlightedSuggestionIndex(0);
+                  return;
+                }
+                if (showSearchSuggestions && e.key === 'End') {
+                  e.preventDefault();
+                  setHighlightedSuggestionIndex(searchSuggestions.length - 1);
+                  return;
+                }
+                if (e.key === 'Enter') {
+                  e.currentTarget.blur();
+                  applySearch(highlightedSuggestion?.value ?? search);
+                }
+                if (e.key === 'Escape') setSearchFocused(false);
+              }}
               className="w-full min-h-11 bg-[#171511] border border-[#2B2821] rounded-full py-2 pl-8 pr-3 text-[12px] text-[#F7EBDD] placeholder:text-[#B4AA99] focus:outline-none focus:border-[#3B372F]"
             />
+            {showSearchSuggestions && (
+              <div
+                id="store-search-suggestions"
+                role="listbox"
+                className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 overflow-hidden rounded-xl border border-white/[0.08] bg-[#11100D]/[0.98] shadow-[0_18px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+              >
+                <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
+                  <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
+                    {search.trim() ? 'Suggestions' : 'Recent searches'}
+                  </span>
+                  {recentSearches.length > 0 && !search.trim() && (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={clearRecentSearches}
+                      className="text-[8px] font-mono uppercase tracking-[0.16em] text-[#B4AA99] transition-colors hover:text-[#F7EBDD]"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-72 overflow-y-auto py-1">
+                  {searchSuggestions.map((suggestion, index) => (
+                    <button
+                      key={`${suggestion.kind}-${suggestion.value}`}
+                      id={`store-search-suggestion-${index}`}
+                      type="button"
+                      role="option"
+                      aria-selected={highlightedSuggestionIndex === index}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => applySearch(suggestion.value)}
+                      onMouseEnter={() => setHighlightedSuggestionIndex(index)}
+                      className={`tap flex min-h-11 w-full items-center gap-2 px-3 text-left transition-colors hover:bg-white/[0.04] focus:bg-white/[0.04] focus:outline-none ${highlightedSuggestionIndex === index ? 'bg-white/[0.05]' : ''}`}
+                    >
+                      <span
+                        className="grid size-7 shrink-0 place-items-center rounded-full border"
+                        style={{ borderColor: `${accentColor}33`, color: accentColor, backgroundColor: `${accentColor}10` }}
+                      >
+                        {suggestion.kind === 'recent' ? <Clock3 size={12} /> : <Search size={12} />}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[12px] font-medium text-[#F7EBDD]">{suggestion.label}</span>
+                        {suggestion.hint && (
+                          <span className="block truncate text-[8px] font-mono uppercase tracking-[0.18em] text-[#9B9282]">
+                            {suggestion.hint}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Sub-type filters */}
@@ -1117,16 +1367,30 @@ function StorePage() {
               </div>
             )
           ) : filtered.length === 0 ? (
-            <div className="text-center py-32 border border-dashed border-[#2B2821] rounded-lg">
+            <div className="px-4 py-24 text-center sm:py-32 border border-dashed border-[#2B2821] rounded-lg">
               <Music size={28} className="text-[#9B9282] mx-auto mb-3" />
               <p className="text-sm text-[#F7EBDD] mb-1">
                 {tracks.length === 0 ? 'No beats in the store yet' : 'No beats match your filters'}
               </p>
-              <p className="text-[11px] text-[#9B9282]">
+              <p className="mx-auto max-w-md text-[11px] text-[#9B9282]">
                 {tracks.length === 0 ? 'Check back soon.' : 'Try adjusting or resetting filters.'}
               </p>
+              {tracks.length > 0 && emptyStateSuggestions.length > 0 && (
+                <div className="mx-auto mt-5 flex max-w-lg flex-wrap items-center justify-center gap-2">
+                  {emptyStateSuggestions.map((suggestion) => (
+                    <button
+                      key={`${suggestion.kind}-${suggestion.value}`}
+                      type="button"
+                      onClick={() => applyEmptyStateSuggestion(suggestion)}
+                      className="tap min-h-10 rounded-full border border-[#2B2821] bg-[#171511] px-3 text-[9px] font-mono uppercase tracking-[0.16em] text-[#D0C3AF] transition-colors hover:border-[#D4BFA0]/40 hover:text-[#F7EBDD] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907]"
+                    >
+                      Browse {suggestion.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               {hasActiveFilters && (
-                <button onClick={resetFilters} className="mt-4 text-[10px] font-mono uppercase tracking-wider text-[#E7D7BE] hover:text-white transition-colors">
+                <button onClick={resetFilters} className="tap mt-5 min-h-10 px-3 text-[10px] font-mono uppercase tracking-wider text-[#E7D7BE] hover:text-white transition-colors">
                   Reset filters
                 </button>
               )}

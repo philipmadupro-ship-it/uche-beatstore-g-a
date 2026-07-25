@@ -1,6 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/hooks/useToast';
+
+type OptimisticRating = {
+  trackId: string;
+  initial: number;
+  value: number;
+};
 
 /**
  * Optimistic star-rating mutation hook.
@@ -23,13 +29,11 @@ export function useRating(
   initial: number,
   onChange?: (newRating: number) => void,
 ) {
-  const [rating, setRating] = useState(initial);
+  const [optimistic, setOptimistic] = useState<OptimisticRating | null>(null);
   const qc = useQueryClient();
-
-  // Sync local state when the track (or its rating) changes upstream.
-  useEffect(() => {
-    setRating(initial);
-  }, [trackId, initial]);
+  const rating = optimistic?.trackId === trackId && optimistic.initial === initial
+    ? optimistic.value
+    : initial;
 
   const { mutate: rate, isPending: loading } = useMutation({
     mutationFn: async (value: number) => {
@@ -39,19 +43,22 @@ export function useRating(
         body: JSON.stringify({ rating: value }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
+        const body = await res.json().catch((): unknown => ({}));
+        const message = typeof body === 'object' && body !== null && 'error' in body
+          ? String(body.error)
+          : `Rating failed (${res.status})`;
         // Bubble the server's error string so onError can show it.
-        throw new Error(body.error || `Rating failed (${res.status})`);
+        throw new Error(message);
       }
       return res.json();
     },
     onMutate: async (newValue) => {
-      setRating(newValue);
+      setOptimistic({ trackId, initial, value: newValue });
       await qc.cancelQueries({ queryKey: ['tracks'] });
-      return { previousValue: initial };
+      return { previousValue: rating };
     },
     onError: (err: Error, _newValue, context) => {
-      if (context) setRating(context.previousValue);
+      setOptimistic(context ? { trackId, initial, value: context.previousValue } : null);
       toast.error('Couldn’t save rating', err.message);
     },
     onSuccess: (_data, newValue) => {

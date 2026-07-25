@@ -5,6 +5,27 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 const log = createLogger('api.share.token.analytics');
 
+interface ShareAnalyticsLink {
+  token: string;
+  user_id?: string | null;
+  title?: string | null;
+  track_ids?: string[] | null;
+  created_at?: string | null;
+  expires_at?: string | null;
+}
+
+interface SharePlayRow {
+  link_token: string;
+  track_id?: string | null;
+  ip_hash?: string | null;
+  played_at: string;
+}
+
+interface ShareAnalyticsTrack {
+  id: string;
+  title: string;
+}
+
 /**
  * GET /api/share/[token]/analytics
  *
@@ -19,9 +40,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   const { token } = await params;
 
   try {
-    let plays: any[] = [];
-    let tracks: any[] = [];
-    let share: any = null;
+    let plays: SharePlayRow[] = [];
+    let tracks: ShareAnalyticsTrack[] = [];
+    let share: ShareAnalyticsLink | null = null;
 
     if (isSupabaseConfigured()) {
       // Analytics is for the link OWNER, not recipients. Recipients only have
@@ -45,29 +66,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       if (shareRow.user_id && shareRow.user_id !== user.id) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
-      share = shareRow;
+      share = shareRow as ShareAnalyticsLink;
 
       const { data: playRows } = await supabase
         .from('share_plays')
         .select('*')
         .eq('link_token', token);
-      plays = playRows ?? [];
+      plays = (playRows ?? []) as SharePlayRow[];
 
       if (share.track_ids?.length) {
         const { data: tr } = await supabase
           .from('tracks')
           .select('id, title')
           .in('id', share.track_ids);
-        tracks = tr ?? [];
+        tracks = (tr ?? []) as ShareAnalyticsTrack[];
       }
     } else {
-      const allLinks = getAll('share_links');
-      share = allLinks.find((s: any) => s.token === token);
+      const allLinks = getAll<ShareAnalyticsLink>('share_links');
+      share = allLinks.find((s) => s.token === token) ?? null;
       if (!share) return NextResponse.json({ error: 'Share link not found' }, { status: 404 });
-      plays = query('share_plays', (p: any) => p.link_token === token);
-      const allTracks = getAll('tracks');
+      plays = query<SharePlayRow>('share_plays', (p) => p.link_token === token);
+      const allTracks = getAll<ShareAnalyticsTrack>('tracks');
       const ids = new Set(share.track_ids || []);
-      tracks = allTracks.filter((t: any) => ids.has(t.id)).map((t: any) => ({ id: t.id, title: t.title }));
+      tracks = allTracks.filter((t) => ids.has(t.id)).map((t) => ({ id: t.id, title: t.title }));
     }
 
     const trackTitle = new Map<string, string>();
@@ -120,8 +141,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       timeline,
       by_track,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     log.error('Share analytics error:', { error: errorMessage(error) });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

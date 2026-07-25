@@ -6,9 +6,11 @@
  * tag filters. Used by both project and playlist detail pages.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Image from 'next/image';
 import { X, Search, Music, Loader2, Check, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { fmtBpm, fmtKey, fmtDuration } from '@/lib/audio/format';
+import { errorMessage } from '@/lib/errors';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 
 interface Props {
@@ -23,8 +25,39 @@ const TYPE_OPTIONS = ['all', 'beat', 'instrumental', 'song', 'remix'] as const;
 const KEY_OPTIONS = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const TRACK_PAGE_SIZE = 80;
 
+interface LibraryTrackTag {
+  tag: string;
+  category?: string | null;
+}
+
+interface LibraryTrack {
+  id: string;
+  title: string;
+  type: string;
+  cover_url?: string | null;
+  duration_seconds?: number | null;
+  bpm?: number | null;
+  key?: string | null;
+  scale?: string | null;
+  track_tags?: LibraryTrackTag[] | null;
+}
+
+interface TracksResponse {
+  tracks?: LibraryTrack[];
+  pageInfo?: {
+    hasMore?: boolean;
+    nextCursor?: string | null;
+  };
+  error?: string;
+}
+
+interface AddTracksResponse {
+  added?: number;
+  error?: string;
+}
+
 export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdded, title = 'Add from library' }: Props) {
-  const [tracks, setTracks] = useState<any[]>([]);
+  const [tracks, setTracks] = useState<LibraryTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -40,26 +73,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const params = buildTrackQuery();
-        const res = await fetch(`/api/tracks?${params.toString()}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
-        setTracks(data.tracks || []);
-        setHasMore(Boolean(data.pageInfo?.hasMore));
-        setNextCursor(data.pageInfo?.nextCursor ?? null);
-      } catch (err: any) { setError(err?.message || 'Failed to load library'); }
-      finally { setLoading(false); }
-    }, 220);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, typeFilter, bpmMin, bpmMax, keyFilter, selectedTags]);
-
-  const buildTrackQuery = (cursor?: string | null) => {
+  const buildTrackQuery = useCallback((cursor?: string | null) => {
     const params = new URLSearchParams({
       paged: '1',
       lean: '1',
@@ -73,7 +87,25 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
     if (keyFilter) params.set('key', keyFilter);
     if (selectedTags.size === 1) params.set('tag', [...selectedTags][0]);
     return params;
-  };
+  }, [bpmMax, bpmMin, keyFilter, search, selectedTags, typeFilter]);
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = buildTrackQuery();
+        const res = await fetch(`/api/tracks?${params.toString()}`);
+        const data = await res.json() as TracksResponse;
+        if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+        setTracks(data.tracks || []);
+        setHasMore(Boolean(data.pageInfo?.hasMore));
+        setNextCursor(data.pageInfo?.nextCursor ?? null);
+      } catch (err: unknown) { setError(errorMessage(err) || 'Failed to load library'); }
+      finally { setLoading(false); }
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [buildTrackQuery]);
 
   const loadMore = async () => {
     if (!hasMore || !nextCursor || loadingMore) return;
@@ -82,17 +114,17 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
     try {
       const params = buildTrackQuery(nextCursor);
       const res = await fetch(`/api/tracks?${params.toString()}`);
-      const data = await res.json();
+      const data = await res.json() as TracksResponse;
       if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
       setTracks((current) => {
         const seen = new Set(current.map((track) => track.id));
-        const incoming = (data.tracks || []).filter((track: any) => !seen.has(track.id));
+        const incoming = (data.tracks || []).filter((track) => !seen.has(track.id));
         return [...current, ...incoming];
       });
       setHasMore(Boolean(data.pageInfo?.hasMore));
       setNextCursor(data.pageInfo?.nextCursor ?? null);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load more tracks');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Failed to load more tracks');
     } finally {
       setLoadingMore(false);
     }
@@ -104,7 +136,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
     const q = search.trim().toLowerCase();
     return tracks.filter((t) => {
       if (selectedTags.size > 0) {
-        const owned = (t.track_tags ?? []).map((tt: any) => tt.tag);
+        const owned = (t.track_tags ?? []).map((tt) => tt.tag);
         if (![...selectedTags].every((sel) => owned.includes(sel))) return false;
       }
       if (q) return (t.title || '').toLowerCase().includes(q);
@@ -112,11 +144,26 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
     });
   }, [tracks, search, selectedTags]);
 
-  const toggle = (id: string) => setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const toggleTag = (tag: string) => setSelectedTags((prev) => { const n = new Set(prev); n.has(tag) ? n.delete(tag) : n.add(tag); return n; });
+  const toggle = (id: string) => setSelected((prev) => {
+    const n = new Set(prev);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    return n;
+  });
+  const toggleTag = (tag: string) => setSelectedTags((prev) => {
+    const n = new Set(prev);
+    if (n.has(tag)) n.delete(tag);
+    else n.add(tag);
+    return n;
+  });
   const nonExcluded = filtered.filter((t) => !excluded.has(t.id));
   const allSel = nonExcluded.length > 0 && nonExcluded.every((t) => selected.has(t.id));
-  const toggleAll = () => setSelected((prev) => { const n = new Set(prev); allSel ? nonExcluded.forEach((t) => n.delete(t.id)) : nonExcluded.forEach((t) => n.add(t.id)); return n; });
+  const toggleAll = () => setSelected((prev) => {
+    const n = new Set(prev);
+    if (allSel) nonExcluded.forEach((t) => n.delete(t.id));
+    else nonExcluded.forEach((t) => n.add(t.id));
+    return n;
+  });
   const clearFilters = () => { setSearch(''); setTypeFilter('all'); setBpmMin(''); setBpmMax(''); setKeyFilter(''); setSelectedTags(new Set()); };
   const activeCount = [typeFilter !== 'all', bpmMin !== '', bpmMax !== '', keyFilter !== '', selectedTags.size > 0].filter(Boolean).length;
 
@@ -125,10 +172,10 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
     setSubmitting(true); setError(null);
     try {
       const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ track_ids: [...selected] }) });
-      const data = await res.json().catch(() => ({}));
+      const data = await res.json().catch(() => ({})) as AddTracksResponse;
       if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
       onAdded?.(data.added ?? selected.size); onClose();
-    } catch (err: any) { setError(err?.message || 'Failed to add'); }
+    } catch (err: unknown) { setError(errorMessage(err) || 'Failed to add'); }
     finally { setSubmitting(false); }
   };
 
@@ -235,13 +282,13 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
                         {isSel && <Check size={11} className="text-black" />}
                       </div>
                       <div className="w-10 h-10 rounded-lg bg-[#171511] border border-[#211F1A] flex items-center justify-center shrink-0 overflow-hidden">
-                        {t.cover_url ? <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" /> : <Music size={14} className="text-[#6E685B]" />}
+                        {t.cover_url ? <Image src={t.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized /> : <Music size={14} className="text-[#6E685B]" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-medium text-[#F7EBDD] truncate">{t.title}</p>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <span className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">{t.type}</span>
-                          {(t.track_tags ?? []).slice(0, 2).map((tt: any) => (
+                          {(t.track_tags ?? []).slice(0, 2).map((tt) => (
                             <span key={tt.tag} className="text-[8px] font-mono uppercase tracking-wider text-[#D0C3AF] bg-[#211F1A] border border-[#3B372F] px-1 py-0.5 rounded">{tt.tag}</span>
                           ))}
                           {isExcluded && <span className="text-[8px] font-mono text-[#837B6D]">already added</span>}

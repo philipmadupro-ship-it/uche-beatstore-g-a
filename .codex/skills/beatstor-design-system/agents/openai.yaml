@@ -1,0 +1,7 @@
+interface:
+  display_name: "Beatstor Design System"
+  short_description: "Premium music-marketplace UI rules"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $beatstor-design-system to design this Beatstor interface consistently."
+policy:
+  allow_implicit_invocation: true

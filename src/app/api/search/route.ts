@@ -7,6 +7,28 @@ const log = createLogger('api.search');
 
 export const runtime = 'nodejs';
 
+interface SearchTrackRow {
+  id: string;
+  title?: string | null;
+  type?: string | null;
+  cover_url?: string | null;
+  audio_url?: string | null;
+}
+
+interface SearchProjectRow {
+  id: string;
+  name?: string | null;
+  cover_url?: string | null;
+}
+
+interface SearchContactRow {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  role?: string | null;
+  label?: string | null;
+}
+
 /**
  * GET /api/search?q=foo
  *
@@ -60,7 +82,7 @@ export async function GET(req: NextRequest) {
     const matches = (s: string | null | undefined) =>
       (s || '').toLowerCase().includes(lower);
 
-    const tracks = (getAll('tracks') as any[])
+    const tracks = getAll<SearchTrackRow>('tracks')
       .filter((t) => matches(t.title))
       .slice(0, 5)
       .map((t) => ({
@@ -71,19 +93,19 @@ export async function GET(req: NextRequest) {
         audio_url: t.audio_url,
       }));
 
-    const projects = (getAll('projects') as any[])
+    const projects = getAll<SearchProjectRow>('projects')
       .filter((p) => matches(p.name))
       .slice(0, 5)
       .map((p) => ({ id: p.id, name: p.name, cover_url: p.cover_url }));
 
-    const contacts = (getAll('contacts') as any[])
+    const contacts = getAll<SearchContactRow>('contacts')
       .filter((c) => matches(c.name) || matches(c.email))
       .slice(0, 5)
       .map((c) => ({ id: c.id, name: c.name, email: c.email, role: c.role, label: c.label }));
 
     return NextResponse.json({ tracks, projects, contacts });
-  } catch (err: any) {
+  } catch (err: unknown) {
     log.error('Search error:', { error: errorMessage(err) });
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
 }

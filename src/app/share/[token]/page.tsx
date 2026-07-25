@@ -17,6 +17,35 @@ import { RapperShareVariant } from '@/components/share/variants/RapperShareVaria
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
 
+type RecipientKind = 'client' | 'producer' | 'rapper' | 'friend';
+
+interface LegacyShareShape {
+  title?: string | null;
+  allow_downloads?: boolean | null;
+  recipient_kind?: RecipientKind | null;
+  sales_enabled?: boolean | null;
+  lease_price_usd?: number | null;
+  exclusive_price_usd?: number | null;
+  discount_percent?: number | null;
+}
+
+interface LegacyCreatorShape {
+  display_name?: string | null;
+  bio?: string | null;
+  hero_image_url?: string | null;
+  credits?: string | null;
+  license_lease_price_usd?: number | null;
+  license_exclusive_price_usd?: number | null;
+  license_notes?: string | null;
+  license_agreement?: string | null;
+  instagram_handle?: string | null;
+  twitter_handle?: string | null;
+  spotify_url?: string | null;
+  soundcloud_url?: string | null;
+  website_url?: string | null;
+  contact_email?: string | null;
+}
+
 export default function PublicSharePage({ params: paramsPromise }: { params: Promise<{ token: string }> }) {
   const params = React.use(paramsPromise);
   const token = params.token;
@@ -62,9 +91,8 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [unlocking, setUnlocking] = useState(false);
-  const [share, setShare] = useState<any | null>(null);
-  const [creator, setCreator] = useState<any | null>(null);
-  const [stems, setStems] = useState<any[]>([]);
+  const [share, setShare] = useState<LegacyShareShape | null>(null);
+  const [creator, setCreator] = useState<LegacyCreatorShape | null>(null);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -111,7 +139,6 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       setShareTitle(data.share?.title || 'Shared tracks');
       setShare(data.share || null);
       setCreator(data.creator || null);
-      setStems(data.stems || []);
       setAllowDownloads(data.share?.allow_downloads !== false);
       setRequiresPassword(false);
     } catch {
@@ -125,7 +152,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   // Log real-time listener playhead coordinates (heatmap)
   useEffect(() => {
     if (!isPlaying || !activeTrack?.id) return;
-    
+
     const sendPing = async () => {
       try {
         await fetch(`/api/tracks/${activeTrack.id}/heatmap`, {
@@ -722,7 +749,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   );
 }
 
-function LicenseInfoSection({ creator }: { creator: any }) {
+function LicenseInfoSection({ creator }: { creator: LegacyCreatorShape }) {
   const [open, setOpen] = useState<'lease' | 'exclusive' | null>(null);
 
   const tiers = [

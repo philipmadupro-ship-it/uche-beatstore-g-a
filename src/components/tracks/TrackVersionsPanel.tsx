@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, History as HistoryIcon, RotateCcw, Download, Loader2 } from 'lucide-react';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
+import { errorMessage } from '@/lib/errors';
 
 interface TrackVersion {
   id: string;
@@ -34,7 +35,7 @@ export function TrackVersionsPanel({
   const [loading, setLoading] = useState(false);
   const [revertingId, setRevertingId] = useState<string | null>(null);
 
-  const fetchVersions = async () => {
+  const fetchVersions = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/tracks/${trackId}/versions`);
@@ -45,16 +46,16 @@ export function TrackVersionsPanel({
     } finally {
       setLoading(false);
     }
-  };
+  }, [trackId]);
 
   // Lazy-load when first opened, refetch when refreshKey changes (after replace)
   useEffect(() => {
     if (open && versions === null) fetchVersions();
-  }, [open]);
+  }, [fetchVersions, open, versions]);
 
   useEffect(() => {
     if (open) fetchVersions();
-  }, [refreshKey]);
+  }, [fetchVersions, open, refreshKey]);
 
   // Realtime: refetch the list when a new version row lands (replace
   // flow) or an existing one mutates. Versions are rare + the list is
@@ -87,8 +88,8 @@ export function TrackVersionsPanel({
       toast.success(`Reverted to ${v.version_label}`);
       await fetchVersions();
       if (onReverted) onReverted();
-    } catch (err: any) {
-      toast.error('Revert failed', err?.message);
+    } catch (err: unknown) {
+      toast.error('Revert failed', errorMessage(err));
     } finally {
       setRevertingId(null);
     }

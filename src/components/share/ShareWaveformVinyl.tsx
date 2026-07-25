@@ -1,18 +1,24 @@
 'use client';
 
+import NextImage from 'next/image';
 import { Music, Play, Pause } from 'lucide-react';
 import { WavePlayer } from '@/components/player/WavePlayer';
+import type { Track as PlayerTrack } from '@/lib/types';
 
 interface Track {
   id: string;
+  user_id?: string | null;
   title: string;
   type: string;
   audio_url: string;
   cover_url?: string | null;
   peaks_url?: string | null;
+  duration_seconds?: number | null;
   bpm?: number | null;
   key?: string | null;
   scale?: string | null;
+  stems_status?: PlayerTrack['stems_status'] | null;
+  created_at?: string | null;
 }
 
 interface Props {
@@ -33,6 +39,18 @@ interface Props {
   size?: 'compact' | 'large';
   /** External waveRef from parent's WaveSurfer hook. */
   waveRef?: React.RefObject<HTMLDivElement | null>;
+}
+
+function toPlayerTrack(track: Track): PlayerTrack {
+  return {
+    ...track,
+    user_id: track.user_id ?? '',
+    type: track.type as PlayerTrack['type'],
+    duration_seconds: track.duration_seconds ?? null,
+    bpm: track.bpm ?? null,
+    stems_status: track.stems_status ?? 'none',
+    created_at: track.created_at ?? '',
+  };
 }
 
 /**
@@ -87,7 +105,7 @@ export function ShareWaveformVinyl({
             tiny spindle hole punched through. */}
         <div className={`${dim.inner} rounded-full overflow-hidden border-4 border-[#090907] relative`}>
           {cover ? (
-            <img loading="lazy" src={cover} alt="" className="w-full h-full object-cover" />
+            <NextImage src={cover} alt="" fill sizes={size === 'compact' ? '192px' : '288px'} unoptimized className="object-cover" />
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907] flex items-center justify-center text-[#D0C3AF]">
               <Music size={32} />
@@ -149,7 +167,7 @@ export function ShareWaveformVinyl({
             url={track.audio_url}
             peaksUrl={track.peaks_url ?? null}
             trackId={track.id}
-            track={track as any}
+            track={toPlayerTrack(track)}
             height={48}
           />
         )}

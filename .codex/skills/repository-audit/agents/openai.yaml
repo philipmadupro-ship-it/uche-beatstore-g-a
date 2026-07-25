@@ -1,0 +1,7 @@
+interface:
+  display_name: "Repository Audit"
+  short_description: "Map repo structure before implementation"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $repository-audit to inspect this Beatstor workspace before changing code."
+policy:
+  allow_implicit_invocation: true

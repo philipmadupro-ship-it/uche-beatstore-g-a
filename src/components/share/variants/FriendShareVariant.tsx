@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { SkipForward, SkipBack } from 'lucide-react';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 
@@ -39,7 +38,7 @@ interface Props {
 export function FriendShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying }: Props) {
   const currentTrack = tracks.find((t) => t.id === playingId) || tracks[0];
   const displayName = creator?.display_name || project.name;
-  
+
   const handlePrev = () => {
     if (!playingId || tracks.length <= 1) return;
     const idx = tracks.findIndex((t) => t.id === playingId);
@@ -55,7 +54,7 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
   return (
     <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center text-[#F7EBDD] p-6 relative overflow-hidden font-sans">
       {/* Soft elegant ambient background glow */}
-      <div 
+      <div
         className="absolute w-[600px] h-[600px] rounded-full pointer-events-none opacity-[0.04] blur-[120px]"
         style={{
           background: 'radial-gradient(circle, #7F77DD 0%, transparent 70%)',
@@ -119,7 +118,7 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
             <div className="divide-y divide-[#211F1A]">
               {tracks.map((t, i) => {
                 const active = playingId === t.id;
-                const dur = (t as any).duration_seconds;
+                const dur = t.duration_seconds ?? 0;
                 return (
                   <button
                     key={t.id}

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import { Track } from '@/lib/types';
 import { buildShuffleOrder, nextInShuffle, newShuffleSeed } from '@/lib/audio/shuffle';
 
@@ -10,6 +10,8 @@ interface PlayerState {
   queue: Track[];
   history: Track[];
   isPlaying: boolean;
+  isBuffering: boolean;
+  playbackError: string | null;
   progress: number;
   volume: number;
   shuffle: boolean;
@@ -43,6 +45,8 @@ interface PlayerState {
   clearQueue: () => void;
   togglePlay: () => void;
   setPlaying: (isPlaying: boolean) => void;
+  setBuffering: (isBuffering: boolean) => void;
+  setPlaybackError: (message: string | null) => void;
   setProgress: (progress: number) => void;
   setVolume: (volume: number) => void;
   /** Set the transient duck gain (0..1). Used by the voice-tag overlay. */
@@ -60,6 +64,12 @@ interface PlayerState {
   cycleRepeat: () => void;
 }
 
+const serverStorage: StateStorage = {
+  getItem: () => null,
+  setItem: () => undefined,
+  removeItem: () => undefined,
+};
+
 export const usePlayer = create<PlayerState>()(
   persist(
     (set, get) => ({
@@ -67,6 +77,8 @@ export const usePlayer = create<PlayerState>()(
       queue: [],
       history: [],
       isPlaying: false,
+      isBuffering: false,
+      playbackError: null,
       progress: 0,
       volume: 0.8,
       shuffle: false,
@@ -88,6 +100,8 @@ export const usePlayer = create<PlayerState>()(
           return {
             currentTrack: track,
             isPlaying: true,
+            isBuffering: true,
+            playbackError: null,
             progress: 0,
             // Ensure the new track lives in the queue so the queue drawer
             // reflects what's actually playing. If it's already there we
@@ -143,8 +157,13 @@ export const usePlayer = create<PlayerState>()(
 
       clearQueue: () => set({ queue: [] }),
 
-      togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
+      togglePlay: () => set((state) => ({
+        isPlaying: !state.isPlaying,
+        playbackError: state.isPlaying ? state.playbackError : null,
+      })),
       setPlaying: (isPlaying) => set({ isPlaying }),
+      setBuffering: (isBuffering) => set({ isBuffering }),
+      setPlaybackError: (message) => set({ playbackError: message, isBuffering: false }),
       setProgress: (progress) => set({ progress }),
       setVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)) }),
       setDuckGain: (g) => set({ duckGain: Math.max(0, Math.min(1, g)) }),
@@ -156,7 +175,7 @@ export const usePlayer = create<PlayerState>()(
 
         // repeat one → restart current
         if (repeat === 'one') {
-          set({ progress: 0, isPlaying: true });
+          set({ progress: 0, isPlaying: true, isBuffering: true, playbackError: null });
           return;
         }
 
@@ -186,6 +205,8 @@ export const usePlayer = create<PlayerState>()(
             shuffleOrder: order,
             progress: 0,
             isPlaying: true,
+            isBuffering: true,
+            playbackError: null,
             history: [...history, currentTrack].slice(-50),
           });
           return;
@@ -203,6 +224,8 @@ export const usePlayer = create<PlayerState>()(
           currentTrack: nextTrack,
           progress: 0,
           isPlaying: true,
+          isBuffering: true,
+          playbackError: null,
           history: [...history, currentTrack].slice(-50),
         });
       },
@@ -225,6 +248,8 @@ export const usePlayer = create<PlayerState>()(
             history: state.history.slice(0, -1),
             progress: 0,
             isPlaying: true,
+            isBuffering: true,
+            playbackError: null,
           }));
           return;
         }
@@ -232,7 +257,7 @@ export const usePlayer = create<PlayerState>()(
         // Fallback to queue index
         const index = queue.findIndex((t) => t.id === currentTrack.id);
         const prevTrack = queue[index - 1] || queue[queue.length - 1];
-        if (prevTrack) set({ currentTrack: prevTrack, progress: 0, isPlaying: true });
+        if (prevTrack) set({ currentTrack: prevTrack, progress: 0, isPlaying: true, isBuffering: true, playbackError: null });
       },
 
       toggleShuffle: () =>
@@ -260,7 +285,7 @@ export const usePlayer = create<PlayerState>()(
     }),
     {
       name: 'antigravity-player',
-      storage: createJSONStorage(() => (typeof window !== 'undefined' ? localStorage : (undefined as any))),
+      storage: createJSONStorage(() => (typeof window !== 'undefined' ? localStorage : serverStorage)),
       // Don't persist transient playback state
       partialize: (state) => ({
         volume: state.volume,

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Accessibility And Keyboard Navigation"
+  short_description: "Keyboard, semantics, focus, contrast"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $accessibility-and-keyboard-navigation to audit this Beatstor UI."
+policy:
+  allow_implicit_invocation: true

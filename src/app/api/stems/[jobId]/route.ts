@@ -83,8 +83,8 @@ export async function GET(
     const job = await pollJob(jobId).catch(() => null);
 
     if (!job) {
-      const allStems = getAll('stems');
-      const localJob = allStems.find((s: StemRow) => s.job_id === jobId);
+      const allStems = getAll<StemRow>('stems');
+      const localJob = allStems.find((s) => s.job_id === jobId);
       if (!localJob) return NextResponse.json({ error: 'Job not found' }, { status: 404 });
       return NextResponse.json({ job: localJob });
     }
@@ -170,8 +170,8 @@ export async function GET(
           void autoDeliverStems(supabase, trackId);
         }
       } else {
-        const allStems = getAll('stems');
-        const localJob = allStems.find((s: StemRow) => s.job_id === jobId);
+        const allStems = getAll<StemRow>('stems');
+        const localJob = allStems.find((s) => s.job_id === jobId);
         if (localJob) {
           trackId = localJob.track_id ?? null;
           update('stems', localJob.id, dbUpdate);
@@ -215,8 +215,8 @@ async function loadStemRow(jobId: string): Promise<StemRow | null> {
     const { data } = await supabase.from('stems').select('*').eq('job_id', jobId).maybeSingle();
     return data ?? null;
   }
-  const all = getAll('stems');
-  return all.find((s: StemRow) => s.job_id === jobId) ?? null;
+  const all = getAll<StemRow>('stems');
+  return all.find((s) => s.job_id === jobId) ?? null;
 }
 
 async function resolveTrackTitle(jobId: string): Promise<string> {
@@ -229,9 +229,9 @@ async function resolveTrackTitle(jobId: string): Promise<string> {
         if (track?.title) return track.title;
       }
     } else {
-      const stemRow = getAll('stems').find((s: StemRow) => s.job_id === jobId);
+      const stemRow = getAll<StemRow>('stems').find((s) => s.job_id === jobId);
       if (stemRow?.track_id) {
-        const track = getById('tracks', stemRow.track_id);
+        const track = getById<{ title?: string | null }>('tracks', stemRow.track_id);
         if (track?.title) return track.title;
       }
     }

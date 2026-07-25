@@ -9,6 +9,7 @@ import {
   removeCached,
 } from '@/lib/offline/audio-cache';
 import { audioSrc } from '@/lib/audio/url';
+import { errorMessage } from '@/lib/errors';
 
 export function useOfflineCache() {
   const [cached, setCached] = useState<OfflineMeta[]>([]);
@@ -60,8 +61,8 @@ export function useOfflineTrack(trackId: string | null | undefined) {
           if (total > 0) setProgress(loaded / total);
         });
         setMeta(m);
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e: unknown) {
+        setError(errorMessage(e));
       } finally {
         setDownloading(false);
       }

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { cdnAudioSrc } from './cdn';
+import { canFetchReadableAudio, cdnAudioSrc } from './cdn';
 
 const R2 = 'https://pub-abc.r2.dev';
 const CDN = 'https://cdn.example.com';
@@ -48,5 +48,28 @@ describe('cdnAudioSrc', () => {
     process.env.NEXT_PUBLIC_R2_PUBLIC_URL = R2;
     process.env.NEXT_PUBLIC_R2_CDN_URL = CDN;
     expect(cdnAudioSrc('https://other.com/x.mp3')).toBe('https://other.com/x.mp3');
+  });
+});
+
+describe('canFetchReadableAudio', () => {
+  it('allows same-origin and CDN URLs', () => {
+    process.env.NEXT_PUBLIC_R2_PUBLIC_URL = R2;
+    process.env.NEXT_PUBLIC_R2_CDN_URL = CDN;
+
+    expect(canFetchReadableAudio('/uploads/a.mp3')).toBe(true);
+    expect(canFetchReadableAudio(`${R2}/audio/song.mp3`)).toBe(true);
+  });
+
+  it('blocks raw public R2 URLs when no CDN rewrite is configured', () => {
+    process.env.NEXT_PUBLIC_R2_PUBLIC_URL = R2;
+
+    expect(canFetchReadableAudio(`${R2}/audio/song.mp3`)).toBe(false);
+    expect(canFetchReadableAudio('https://pub-example.r2.dev/audio/song.mp3')).toBe(false);
+  });
+
+  it('allows custom absolute hosts because they are expected to own CORS policy', () => {
+    process.env.NEXT_PUBLIC_R2_PUBLIC_URL = R2;
+
+    expect(canFetchReadableAudio('https://media.example.com/previews/song.mp3')).toBe(true);
   });
 });

@@ -8,6 +8,40 @@ import { errorMessage } from '@/lib/errors';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface StripeDiagnostics {
+  env: {
+    stripe_secret_key: boolean;
+    stripe_webhook_secret: boolean;
+    app_url: string | null;
+    resend_api_key: boolean;
+  };
+  stripe: {
+    configured: boolean;
+    account_id: string | null;
+    account_error: string | null;
+  };
+  supabase: {
+    configured: boolean;
+    license_purchases_table: boolean | null;
+    recent_purchases_count: number;
+  };
+  seller: {
+    authenticated: boolean;
+    shares_for_sale: number;
+    profile_lease_price: number | null;
+    profile_exclusive_price: number | null;
+    tracks_with_price_override: number;
+  };
+  webhook?: {
+    endpoint_registered: boolean;
+    url: string | null;
+    status: string | null;
+    missing_events: string[];
+    error: string | null;
+  };
+  hints: string[];
+}
+
 /**
  * GET /api/stripe/diagnostics
  *
@@ -30,7 +64,7 @@ export const dynamic = 'force-dynamic';
  *      lease/exclusive prices set
  */
 export async function GET() {
-  const out: Record<string, any> = {
+  const out: StripeDiagnostics = {
     env: {
       stripe_secret_key: !!process.env.STRIPE_SECRET_KEY,
       stripe_webhook_secret: !!process.env.STRIPE_WEBHOOK_SECRET,

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Responsive UI Engineering"
+  short_description: "Viewport-safe layouts and controls"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $responsive-ui-engineering to make this Beatstor layout work across breakpoints."
+policy:
+  allow_implicit_invocation: true

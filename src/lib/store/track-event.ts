@@ -11,6 +11,7 @@
  * components and Zustand stores.
  */
 import type { StoreEventType } from '@/lib/store/funnel';
+import { logPlay } from '@/lib/buyer-session';
 
 const SESSION_KEY = 'antigravity-store-session';
 
@@ -70,6 +71,9 @@ function getAttribution(): Record<string, string> {
  */
 export function trackStoreEvent(eventType: StoreEventType, input: StoreEventInput = {}): void {
   if (typeof window === 'undefined') return;
+  if (eventType === 'preview_play' && input.track_id) {
+    void logPlay(input.track_id);
+  }
   const session_id = getStoreSessionId();
   if (!session_id) return;
 

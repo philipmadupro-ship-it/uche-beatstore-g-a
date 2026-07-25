@@ -6,14 +6,58 @@ import { createHash } from 'crypto';
 import { errorMessage } from '@/lib/errors';
 import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
-import { signedSharePreviewUrl } from '@/lib/share-media-token';
+import { signedSharePeaksUrl, signedSharePreviewUrl } from '@/lib/share-media-token';
 import { cdnAudioSrc } from '@/lib/audio/cdn';
 
 const log = createLogger('api.share.token');
 
+type ShareAudioTrack = {
+  id: string;
+  preview_url?: string | null;
+  peaks_url?: string | null;
+};
+
+type LocalShareLink = {
+  id: string;
+  token: string;
+  track_ids?: string[] | null;
+  allow_downloads?: boolean | null;
+  revoked_at?: string | null;
+  expires_at?: string | null;
+  password_hash?: string | null;
+  plays?: number | null;
+};
+
+type LocalShareTrack = ShareAudioTrack & Record<string, unknown>;
+
+type LocalStem = {
+  track_id?: string | null;
+  status?: string | null;
+};
+
+type LocalCreatorProfile = {
+  user_id?: string | null;
+};
+
+function withoutPasswordHash<T extends { password_hash?: unknown }>(row: T): Omit<T, 'password_hash'> {
+  const safe = { ...row };
+  delete safe.password_hash;
+  return safe;
+}
+
+function toPublicShareTrack(track: LocalShareTrack, token: string) {
+  const safe = { ...track };
+  delete safe.preview_url;
+  return {
+    ...safe,
+    audio_url: shareAudioUrl(track, token),
+    peaks_url: track.peaks_url ? signedSharePeaksUrl(token, track.id) : null,
+  };
+}
+
 /** Prefer the direct public preview clip (fast + edge-cached + prefetchable);
  *  fall back to the signed proxy for tracks without a generated preview. */
-function shareAudioUrl(track: any, token: string): string {
+function shareAudioUrl(track: ShareAudioTrack, token: string): string {
   const p = track?.preview_url;
   if (typeof p === 'string' && /^https?:\/\//i.test(p)) return cdnAudioSrc(p);
   return signedSharePreviewUrl(token, track.id);
@@ -70,19 +114,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
           .select('track_id, status, vocals_url, drums_url, bass_url, other_url')
           .in('track_id', share.track_ids)
       ]);
-      const tracks = tracksRes.data || [];
-      const safeTracks = tracks.map((track: any) => {
-        const { preview_url: _p, ...rest } = track;
-        return { ...rest, audio_url: shareAudioUrl(track, token) };
-      });
+      const tracks = (tracksRes.data || []) as LocalShareTrack[];
+      const safeTracks = tracks.map((track) => toPublicShareTrack(track, token));
       const stems = share.allow_downloads
-        ? (stemsRes.data || []).map((stem: any) => ({
+        ? ((stemsRes.data || []) as LocalStem[]).map((stem) => ({
             track_id: stem.track_id,
             status: stem.status,
           }))
         : [];
 
-      let creator: any = null;
+      let creator: Record<string, unknown> | null = null;
       if (share.user_id) {
         const { data: profile } = await supabaseAdmin
           .from('creator_profiles')
@@ -109,13 +150,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         log.warn('share_plays insert failed:', { error: errorMessage(err) });
       }
 
-      const { password_hash, ...safeShare } = share;
+      const safeShare = withoutPasswordHash(share);
       return NextResponse.json({ share: safeShare, tracks: safeTracks, creator, stems });
     }
 
     // Local fallback
-    const allLinks = getAll('share_links');
-    const share = allLinks.find((s: any) => s.token === token);
+    const allLinks = getAll<LocalShareLink>('share_links');
+    const share = allLinks.find((s) => s.token === token);
 
     if (!share) {
       return NextResponse.json({ error: 'Share link not found or expired' }, { status: 404 });
@@ -139,25 +180,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       }
     }
 
-    const allTracks = getAll('tracks');
+    const allTracks = getAll<LocalShareTrack>('tracks');
     const trackIdSet = new Set(share.track_ids || []);
     // Preserve original ordering from share.track_ids
     const tracks = (share.track_ids || [])
-      .map((id: string) => allTracks.find((t: any) => t.id === id))
-      .filter(Boolean)
-      .map((track: any) => { const { preview_url: _p, ...rest } = track; return { ...rest, audio_url: shareAudioUrl(track, token) }; });
+      .map((id: string) => allTracks.find((t) => t.id === id))
+      .filter((track): track is LocalShareTrack => Boolean(track))
+      .map((track) => toPublicShareTrack(track, token));
 
     // Fetch mock stems
-    const allStems = getAll('stems' as any) || [];
+    const allStems = getAll<LocalStem>('stems');
     const stems = share.allow_downloads
       ? allStems
-          .filter((s: any) => trackIdSet.has(s.track_id))
-          .map((stem: any) => ({ track_id: stem.track_id, status: stem.status }))
+          .filter((s) => !!s.track_id && trackIdSet.has(s.track_id))
+          .map((stem) => ({ track_id: stem.track_id, status: stem.status }))
       : [];
 
     // Fetch mock creator profile
-    const allProfiles = getAll('creator_profiles' as any) || [];
-    const creator = allProfiles.find((p: any) => p.user_id === 'local-user') || null;
+    const allProfiles = getAll<LocalCreatorProfile>('creator_profiles');
+    const creator = allProfiles.find((p) => p.user_id === 'local-user') || null;
 
     update('share_links', share.id, { plays: (share.plays || 0) + 1 });
 
@@ -172,7 +213,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       log.warn('share_plays insert failed:', { error: errorMessage(err) });
     }
 
-    const { password_hash, ...safeShare } = share;
+    const safeShare = withoutPasswordHash(share);
     return NextResponse.json({ share: safeShare, tracks, creator, stems });
   } catch (error) {
     log.error('share GET failed', { token, error: errorMessage(error) });
@@ -211,8 +252,8 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ t
       if (error) throw error;
       return NextResponse.json({ success: true });
     }
-    const all = getAll('share_links');
-    const link = all.find((l: any) => l.token === token);
+    const all = getAll<LocalShareLink>('share_links');
+    const link = all.find((l) => l.token === token);
     if (link) deleteRow('share_links', link.id);
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -238,7 +279,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
   const { token } = await params;
   try {
     const body = await req.json().catch(() => ({}));
-    const patch: Record<string, any> = {};
+    const patch: Record<string, unknown> = {};
     if (typeof body.title === 'string') patch.title = body.title.trim().slice(0, 200) || null;
     if (typeof body.allow_downloads === 'boolean') patch.allow_downloads = body.allow_downloads;
     if (body.expires_days != null) {
@@ -281,16 +322,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
         .select('*')
         .single();
       if (error) throw error;
-      const { password_hash: _hash, ...safe } = data;
+      const safe = withoutPasswordHash(data as LocalShareLink);
       return NextResponse.json({ share: safe });
     }
 
     // Local-store fallback
-    const all = getAll('share_links');
-    const link = all.find((l: any) => l.token === token);
+    const all = getAll<LocalShareLink>('share_links');
+    const link = all.find((l) => l.token === token);
     if (!link) return NextResponse.json({ error: 'Share link not found' }, { status: 404 });
     const updated = update('share_links', link.id, patch);
-    const { password_hash: _h, ...safe } = updated as any;
+    const safe = withoutPasswordHash(updated as LocalShareLink);
     return NextResponse.json({ share: safe });
   } catch (error) {
     log.error('share PATCH failed', { token, error: errorMessage(error) });

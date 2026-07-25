@@ -7,6 +7,51 @@ import { redactPublicTrackMedia } from '@/lib/store/public-media';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface StoreProjectRow {
+  id: string;
+  user_id: string | null;
+  name: string;
+  cover_url: string | null;
+  description: string | null;
+  price_usd: number | string | null;
+  store_featured: boolean | null;
+  created_at: string | null;
+}
+
+interface ProjectTrackJunctionRow {
+  track_id: string;
+  position: number | null;
+}
+
+interface StoreProjectTrackRow extends Record<string, unknown> {
+  id: string;
+  title: string | null;
+  type: string | null;
+  audio_url: string | null;
+  peaks_url: string | null;
+  cover_url: string | null;
+  duration_seconds: number | null;
+  bpm: number | null;
+  key: string | null;
+  scale: string | null;
+  lease_price_usd: number | string | null;
+  exclusive_price_usd: number | string | null;
+  free_download_enabled: boolean | null;
+}
+
+interface CreatorProfileRow extends Record<string, unknown> {
+  display_name: string | null;
+  bio: string | null;
+  hero_image_url: string | null;
+  instagram_handle: string | null;
+  twitter_handle: string | null;
+  spotify_url: string | null;
+  soundcloud_url: string | null;
+  website_url: string | null;
+  contact_email: string | null;
+  accent_color: string | null;
+}
+
 function sanitizeUrl(url: string | null | undefined): string | null {
   if (!url) return null;
   return url.replace(/^(https?:\/\/)+/, 'https://');
@@ -49,7 +94,8 @@ export async function GET(
     if (pErr) throw pErr;
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const sellerId = (project as any).user_id as string | undefined;
+    const projectRow = project as StoreProjectRow;
+    const sellerId = projectRow.user_id ?? undefined;
 
     const junctionRes = await admin
       .from('project_tracks')
@@ -57,16 +103,16 @@ export async function GET(
       .eq('project_id', id)
       .order('position', { ascending: true });
 
-    const junction = (junctionRes.data ?? []) as Array<{ track_id: string; position: number | null }>;
+    const junction = (junctionRes.data ?? []) as ProjectTrackJunctionRow[];
     const trackIds = junction.map((j) => j.track_id);
 
-    let trackMap: Record<string, any> = {};
+    const trackMap: Record<string, StoreProjectTrackRow> = {};
     if (trackIds.length > 0) {
       const { data: trackRows } = await admin
         .from('tracks')
         .select(TRACK_FIELDS)
         .in('id', trackIds);
-      for (const t of (trackRows ?? []) as any[]) {
+      for (const t of (trackRows ?? []) as unknown as StoreProjectTrackRow[]) {
         trackMap[t.id] = redactPublicTrackMedia({ ...t, cover_url: sanitizeUrl(t.cover_url) });
       }
     }
@@ -87,13 +133,21 @@ export async function GET(
         ].join(', '))
         .eq('user_id', sellerId)
         .maybeSingle();
-      creator = (prof as Record<string, unknown> | null) ?? null;
+      creator = (prof as CreatorProfileRow | null) ?? null;
       if (creator && creator.hero_image_url) {
         creator = { ...creator, hero_image_url: sanitizeUrl(creator.hero_image_url as string) };
       }
     }
 
-    const { user_id: _u, ...safeProject } = project as any;
+    const safeProject = {
+      id: projectRow.id,
+      name: projectRow.name,
+      cover_url: projectRow.cover_url,
+      description: projectRow.description,
+      price_usd: projectRow.price_usd,
+      store_featured: projectRow.store_featured,
+      created_at: projectRow.created_at,
+    };
 
     const res = NextResponse.json({
       project: { ...safeProject, cover_url: sanitizeUrl(safeProject.cover_url) },

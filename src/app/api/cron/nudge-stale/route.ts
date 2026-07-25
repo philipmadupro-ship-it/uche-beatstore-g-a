@@ -63,6 +63,14 @@ const TONE_COPY: Record<'gentle' | 'direct' | 'final', { subject: string; body: 
   },
 };
 
+interface BeatSendWithContactRow {
+  id: string;
+  share_token: string;
+  sent_at: string;
+  nudge_count: number | null;
+  contact: { name: string; email: string | null } | null;
+}
+
 export async function GET(req: NextRequest) {
   // Vercel cron auth: rejects any request that doesn't carry the
   // CRON_SECRET bearer token. Without this, anyone hitting the URL
@@ -102,12 +110,12 @@ export async function GET(req: NextRequest) {
     const fired: Array<{ sendId: string; tone: string; email: string }> = [];
     const failed: Array<{ sendId: string; error: string }> = [];
 
-    for (const s of sends ?? []) {
-      const contact = (s as any).contact as { name: string; email: string | null } | null;
+    for (const s of (sends ?? []) as unknown as BeatSendWithContactRow[]) {
+      const contact = s.contact;
       if (!contact?.email) continue;
 
       const days = (now - Date.parse(s.sent_at)) / 86_400_000;
-      const nudgeCount = (s as any).nudge_count ?? 0;
+      const nudgeCount = s.nudge_count ?? 0;
 
       // Pick the next milestone that's both passed AND not yet fired.
       const milestone = MILESTONES[nudgeCount];
@@ -140,7 +148,7 @@ export async function GET(req: NextRequest) {
         // status to `negotiating` so the contact drops off the
         // owner's "Needs Nudge" chip — the loop is done, no more
         // automatic sends.
-        const patch: Record<string, any> = {
+        const patch: { nudge_count: number; last_nudge_at: string; status?: 'negotiating' } = {
           nudge_count: nudgeCount + 1,
           last_nudge_at: new Date().toISOString(),
         };

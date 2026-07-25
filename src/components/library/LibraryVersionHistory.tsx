@@ -36,6 +36,10 @@ interface Props {
  * fresh elsewhere.
  */
 export function LibraryVersionHistory({ track, versions }: Props) {
+  const liveCreatedAt = track.created_at
+    ? new Date(track.created_at).toLocaleString()
+    : 'Unknown date';
+
   return (
     <div className="mb-10">
       <div className="flex items-center justify-between mb-4">
@@ -69,7 +73,7 @@ export function LibraryVersionHistory({ track, versions }: Props) {
             <div className="flex-1 min-w-0">
               <p className="text-[12px] font-medium text-white truncate">{track.title}</p>
               <p className="text-[10px] font-mono text-[#D0C3AF]">
-                {new Date(track.created_at || Date.now()).toLocaleString()} · current master
+                {liveCreatedAt} · current master
               </p>
             </div>
             <span className="text-[10px] font-mono text-[#F3E6D1] w-16 text-right">{fmtBpm(track.bpm)}</span>

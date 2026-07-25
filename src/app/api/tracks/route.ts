@@ -14,6 +14,36 @@ import { parsePagination } from '@/lib/validate';
 
 const log = createLogger('api.tracks.list');
 
+type TrackIdRow = {
+  track_id: string;
+};
+
+type PlaylistTrackFilterRow = TrackIdRow & {
+  playlist_id: string;
+};
+
+type ProjectTrackFilterRow = TrackIdRow & {
+  project_id: string;
+};
+
+type TrackTagFilterRow = TrackIdRow & {
+  tag: string;
+};
+
+type TrackListRow = {
+  id: string;
+  type?: string | null;
+  key?: string | null;
+  rating?: number | null;
+  bpm?: number | null;
+  peaks_url?: string | null;
+  duration_seconds?: number | null;
+  store_listed?: boolean | null;
+  title?: string | null;
+  description?: string | null;
+  created_at?: string | null;
+};
+
 function parsePositiveInt(value: string | null, fallback: number, max = 100) {
   const parsed = value ? Number.parseInt(value, 10) : fallback;
   if (!Number.isFinite(parsed)) return fallback;
@@ -182,7 +212,7 @@ async function listBoundedTracks(
   }
 
   if (!isSupabaseConfigured()) {
-    let rows = query('tracks', () => true) as any[];
+    let rows = query<TrackListRow>('tracks', () => true);
     rows = rows.filter((track) => {
       if (junctionIds && !junctionIds.includes(track.id)) return false;
       if (filters.type && filters.type !== 'all' && track.type !== filters.type) return false;
@@ -220,7 +250,7 @@ async function listBoundedTracks(
   let dbQuery = owner.admin
     .from('tracks')
     .select([
-      'id', 'title', 'type', 'cover_url', 'duration_seconds',
+      'id', 'title', 'type', 'cover_url', 'duration_seconds', 'peaks_url',
       'bpm', 'key', 'scale', 'rating', 'store_listed',
       'store_featured', 'store_sort_order', 'scheduled_publish_at',
       'lease_price_usd', 'exclusive_price_usd', 'free_download_enabled',
@@ -253,7 +283,7 @@ async function listBoundedTracks(
     .range(cursor, cursor + limit);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const rows = (data ?? []) as any[];
+  const rows = (data ?? []) as unknown as TrackListRow[];
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
   const payload = {
@@ -288,7 +318,7 @@ async function resolveJunctionIds({
         .eq('playlist_id', playlistId);
       return (data ?? []).map((r: { track_id: string }) => r.track_id);
     }
-    const rows = query('playlist_tracks', (j) => (j as { playlist_id: string }).playlist_id === playlistId) as { track_id: string }[];
+    const rows = query<PlaylistTrackFilterRow>('playlist_tracks', (j) => j.playlist_id === playlistId);
     return rows.map((j) => j.track_id);
   }
 
@@ -301,7 +331,7 @@ async function resolveJunctionIds({
         .eq('project_id', projectId);
       return (data ?? []).map((r: { track_id: string }) => r.track_id);
     }
-    const rows = query('project_tracks', (j) => (j as { project_id: string }).project_id === projectId) as { track_id: string }[];
+    const rows = query<ProjectTrackFilterRow>('project_tracks', (j) => j.project_id === projectId);
     return rows.map((j) => j.track_id);
   }
 
@@ -314,7 +344,7 @@ async function resolveJunctionIds({
         .eq('tag', tag);
       return (data ?? []).map((r: { track_id: string }) => r.track_id);
     }
-    const rows = query('track_tags', (t) => (t as { tag: string }).tag === tag) as { track_id: string }[];
+    const rows = query<TrackTagFilterRow>('track_tags', (t) => t.tag === tag);
     return rows.map((t) => t.track_id);
   }
 

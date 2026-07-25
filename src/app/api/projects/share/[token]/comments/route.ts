@@ -9,6 +9,17 @@ const log = createLogger('api.projects.share.token.comments');
 
 export const runtime = 'nodejs';
 
+interface LocalProjectShareRow {
+  token: string;
+  project_id: string;
+}
+
+interface LocalProjectCommentRow {
+  project_id: string;
+  deleted_at?: string | null;
+  created_at?: string | null;
+}
+
 /**
  * Project comments — guest authoring via a share link.
  *
@@ -46,10 +57,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   const password = req.headers.get('x-share-password');
   try {
     if (!isSupabaseConfigured()) {
-      const shares = getAll('project_shares') as any[];
+      const shares = getAll<LocalProjectShareRow>('project_shares');
       const share = shares.find((s) => s.token === token);
       if (!share) return NextResponse.json({ error: 'Link not found' }, { status: 404 });
-      const comments = (getAll('project_comments') as any[])
+      const comments = getAll<LocalProjectCommentRow>('project_comments')
         .filter((c) => c.project_id === share.project_id && !c.deleted_at)
         .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
       return NextResponse.json({ comments });
@@ -66,8 +77,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       .order('created_at', { ascending: true });
     if (error) throw error;
     return NextResponse.json({ comments: data ?? [] });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }
 
@@ -95,7 +106,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     if (text.length > 5000) return NextResponse.json({ error: 'Comment too long' }, { status: 400 });
 
     if (!isSupabaseConfigured()) {
-      const share = (getAll('project_shares') as any[]).find((s) => s.token === token);
+      const share = getAll<LocalProjectShareRow>('project_shares').find((s) => s.token === token);
       if (!share) return NextResponse.json({ error: 'Link not found' }, { status: 404 });
       const row = insert('project_comments', {
         project_id: share.project_id,
@@ -141,8 +152,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       .single();
     if (error) throw error;
     return NextResponse.json({ comment: data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     log.error('Project comment error:', { error: errorMessage(error) });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

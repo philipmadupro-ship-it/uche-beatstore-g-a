@@ -2,16 +2,23 @@
 
 import { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
-import { ChevronLeft, ChevronRight, Plus, MapPin } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+
+interface CalendarEvent {
+  id: string;
+  title: string;
+  date: string;
+  type?: string | null;
+}
 
 export function CalendarView() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
 
   useEffect(() => {
     fetch('/api/calendar')
       .then(res => res.json())
-      .then(data => setEvents(data))
+      .then((data: unknown) => setEvents(Array.isArray(data) ? data as CalendarEvent[] : []))
       .catch(console.error);
   }, []);
 

@@ -9,6 +9,11 @@ import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface CommentableTrackRow {
+  user_id: string | null;
+  store_listed: boolean | null;
+}
+
 /**
  * GET /api/store/comments/[trackId]   — public list of non-hidden
  *                                        comments sorted by timestamp,
@@ -92,10 +97,11 @@ export async function POST(
       .eq('id', trackId)
       .maybeSingle();
     if (tErr) throw tErr;
-    if (!track || !(track as any).store_listed) {
+    const commentableTrack = track as CommentableTrackRow | null;
+    if (!commentableTrack || !commentableTrack.store_listed) {
       return NextResponse.json({ error: 'Track not available for comments' }, { status: 404 });
     }
-    const sellerId = (track as any).user_id as string | null;
+    const sellerId = commentableTrack.user_id;
     if (!sellerId) {
       return NextResponse.json({ error: 'Track has no owner' }, { status: 400 });
     }

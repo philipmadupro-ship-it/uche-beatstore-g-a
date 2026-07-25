@@ -9,12 +9,29 @@
  *   2. set SENTRY_DSN (server) and/or NEXT_PUBLIC_SENTRY_DSN (client)
  *   3. (optional, for source maps) wrap next.config with withSentryConfig
  *
- * The dynamic import uses a non-literal specifier so TypeScript treats the
- * module as `any` and doesn't fail the build when the package isn't present.
+ * The dynamic import is hidden from the bundler so missing optional package
+ * warnings do not pollute local dev/build logs when a DSN is present.
  */
 import { setReporter } from '@/lib/observability';
 
 let initialized = false;
+
+type OptionalSentry = {
+  init: (options: {
+    dsn: string;
+    environment?: string;
+    tracesSampleRate: number;
+  }) => void;
+  captureException: (error: unknown, context?: { extra: Record<string, unknown> }) => void;
+  captureMessage: (message: string, context?: { extra: Record<string, unknown> }) => void;
+};
+
+function importOptionalSentry(): Promise<OptionalSentry> {
+  const runtimeImport = new Function('specifier', 'return import(specifier)') as (
+    specifier: string,
+  ) => Promise<OptionalSentry>;
+  return runtimeImport('@sentry/nextjs');
+}
 
 export async function initSentry(): Promise<void> {
   if (initialized) return;
@@ -23,10 +40,7 @@ export async function initSentry(): Promise<void> {
   initialized = true;
 
   try {
-    // Non-literal specifier → optional dependency, resolved only at runtime.
-    const pkg = '@sentry/nextjs';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Sentry = (await import(pkg as string)) as any;
+    const Sentry = await importOptionalSentry();
 
     Sentry.init({
       dsn,

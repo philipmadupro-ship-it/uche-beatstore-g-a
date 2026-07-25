@@ -8,6 +8,19 @@ const log = createLogger('api.projects.share.token.tracks');
 
 export const runtime = 'nodejs';
 
+interface ProjectShareEditorRow {
+  project_id: string;
+  revoked_at?: string | null;
+  expires_at?: string | null;
+  password_hash?: string | null;
+  role?: string | null;
+}
+
+interface ProjectTrackPositionRow {
+  track_id: string;
+  position: number | null;
+}
+
 /**
  * PATCH /api/projects/share/[token]/tracks
  *   body: { track_ids: string[] }   — full ordered tracklist
@@ -35,11 +48,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
       return NextResponse.json({ error: 'Reorder requires Supabase' }, { status: 501 });
     }
 
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as { track_ids?: unknown };
     const trackIds: unknown = body.track_ids;
     if (!Array.isArray(trackIds) || trackIds.length === 0 || !trackIds.every((t) => typeof t === 'string')) {
       return NextResponse.json({ error: 'track_ids: string[] required' }, { status: 400 });
     }
+    const ordered = trackIds;
 
     const admin = createServiceClient();
     const { data: share, error: sErr } = await admin
@@ -49,16 +63,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
       .maybeSingle();
     if (sErr) throw sErr;
     if (!share) return NextResponse.json({ error: 'Link not found' }, { status: 404 });
-    if (share.revoked_at) return NextResponse.json({ error: 'Link revoked' }, { status: 410 });
-    if (share.expires_at && new Date(share.expires_at).getTime() < Date.now()) {
+    const editorShare = share as ProjectShareEditorRow;
+    if (editorShare.revoked_at) return NextResponse.json({ error: 'Link revoked' }, { status: 410 });
+    if (editorShare.expires_at && new Date(editorShare.expires_at).getTime() < Date.now()) {
       return NextResponse.json({ error: 'Link expired' }, { status: 410 });
     }
-    if (share.password_hash) {
+    if (editorShare.password_hash) {
       if (!submittedPassword) return NextResponse.json({ requiresPassword: true }, { status: 401 });
-      const ok = await bcrypt.compare(submittedPassword, share.password_hash);
+      const ok = await bcrypt.compare(submittedPassword, editorShare.password_hash);
       if (!ok) return NextResponse.json({ requiresPassword: true, error: 'Bad password' }, { status: 401 });
     }
-    if (share.role !== 'editor') {
+    if (editorShare.role !== 'editor') {
       return NextResponse.json({ error: 'This link does not grant edit access.' }, { status: 403 });
     }
 
@@ -69,11 +84,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     const { data: junction, error: jErr } = await admin
       .from('project_tracks')
       .select('track_id, position')
-      .eq('project_id', share.project_id);
+      .eq('project_id', editorShare.project_id);
     if (jErr) throw jErr;
 
-    const existing = new Set((junction ?? []).map((j: any) => j.track_id));
-    const unknown = (trackIds as string[]).find((t) => !existing.has(t));
+    const junctionRows = (junction ?? []) as ProjectTrackPositionRow[];
+    const existing = new Set(junctionRows.map((j) => j.track_id));
+    const unknown = ordered.find((t) => !existing.has(t));
     if (unknown) {
       return NextResponse.json(
         { error: `Track ${unknown} is not in this project. Editors can reorder but not add.` },
@@ -86,11 +102,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     // preserving their relative order. This is rare in practice — the
     // client sends the full list — but the semantics matter if a client
     // ever sends a partial reorder.
-    const ordered = trackIds as string[];
-    const omitted = (junction ?? [])
-      .filter((j: any) => !ordered.includes(j.track_id))
-      .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0))
-      .map((j: any) => j.track_id);
+    const omitted = junctionRows
+      .filter((j) => !ordered.includes(j.track_id))
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
+      .map((j) => j.track_id);
 
     const finalOrder = [...ordered, ...omitted];
 
@@ -100,7 +115,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
       const { error: uErr } = await admin
         .from('project_tracks')
         .update({ position: i + 1 })
-        .eq('project_id', share.project_id)
+        .eq('project_id', editorShare.project_id)
         .eq('track_id', finalOrder[i]);
       if (uErr) throw uErr;
     }
@@ -108,11 +123,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     await admin
       .from('projects')
       .update({ updated_at: new Date().toISOString() })
-      .eq('id', share.project_id);
+      .eq('id', editorShare.project_id);
 
     return NextResponse.json({ success: true, count: finalOrder.length });
-  } catch (error: any) {
+  } catch (error: unknown) {
     log.error('Editor reorder error:', { error: errorMessage(error) });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

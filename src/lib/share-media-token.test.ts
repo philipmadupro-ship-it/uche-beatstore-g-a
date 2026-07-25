@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { signedSharePreviewUrl, verifyShareMediaGrant } from './share-media-token';
+import { signedSharePeaksUrl, signedSharePreviewUrl, verifyShareMediaGrant } from './share-media-token';
 
 describe('share media grants', () => {
   it('creates a short-lived grant that verifies only for the same share and track', () => {
@@ -49,5 +49,20 @@ describe('share media grants', () => {
     ).toBe(false);
 
     vi.useRealTimers();
+  });
+
+  it('creates a peaks grant on the tokenized peaks route', () => {
+    vi.stubEnv('SHARE_MEDIA_TOKEN_SECRET', 'test-share-secret');
+    const url = new URL(signedSharePeaksUrl('share-a', 'track-a'), 'http://localhost');
+
+    expect(url.pathname).toBe('/api/share/share-a/peaks/track-a');
+    expect(
+      verifyShareMediaGrant(
+        'share-a',
+        'track-a',
+        url.searchParams.get('expires'),
+        url.searchParams.get('sig'),
+      ),
+    ).toBe(true);
   });
 });

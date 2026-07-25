@@ -43,6 +43,11 @@ export interface EngineOptions {
   reverbDecay?: number;
 }
 
+type AudioContextWindow = Window & {
+  AudioContext?: typeof AudioContext;
+  webkitAudioContext?: typeof AudioContext;
+};
+
 function makeImpulse(ctx: AudioContext, seconds = 2.4, decay = 2.6): AudioBuffer {
   const rate = ctx.sampleRate;
   const length = Math.max(1, Math.floor(rate * seconds));
@@ -78,7 +83,9 @@ export class StudioEngine {
   masterAnalyser: AnalyserNode;
 
   constructor(opts: EngineOptions = {}) {
-    const Ctx = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
+    const audioWindow = window as AudioContextWindow;
+    const Ctx = audioWindow.AudioContext || audioWindow.webkitAudioContext;
+    if (!Ctx) throw new Error('Web Audio API is not available');
     this.ctx = new Ctx();
 
     this.masterIn = this.ctx.createGain();

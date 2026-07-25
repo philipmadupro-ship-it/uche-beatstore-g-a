@@ -1,10 +1,11 @@
 'use client';
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreHorizontal, Image as ImageIcon, Pencil, FolderInput, Trash2, Loader2, X, Pin, Tag } from 'lucide-react';
+import { MoreHorizontal, Image as ImageIcon, Pencil, FolderInput, Trash2, Loader2, Pin, Tag } from 'lucide-react';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { PlaylistFolderSelect } from './PlaylistFolderSelect';
 import { PlaylistTagPicker } from './PlaylistTagPicker';
+import { uploadImageFile } from '@/lib/upload/image-upload-client';
 
 interface PlaylistLite { id: string; name: string; pinned?: boolean; cover_url?: string | null }
 
@@ -34,11 +35,8 @@ export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'r
     const file = e.target.files?.[0]; if (!file) return;
     setBusy('cover');
     try {
-      const fd = new FormData(); fd.append('file', file);
-      const up = await fetch('/api/upload/image', { method: 'POST', body: fd });
-      const data = await up.json();
-      if (!up.ok) throw new Error(data?.error || 'Upload failed');
-      await patch({ cover_url: data.url }, 'cover');
+      const coverUrl = await uploadImageFile(file);
+      await patch({ cover_url: coverUrl }, 'cover');
       toast.success('Cover updated'); setOpen(false);
     } catch (err) { toast.error('Cover upload failed', err instanceof Error ? err.message : ''); setBusy(null); }
     finally { if (fileRef.current) fileRef.current.value = ''; }
@@ -56,13 +54,18 @@ export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'r
     try {
       const res = await fetch(`/api/playlists/${playlist.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      toast.success('Playlist deleted'); onDeleted ? onDeleted() : onChanged?.();
+      toast.success('Playlist deleted');
+      if (onDeleted) {
+        onDeleted();
+      } else {
+        onChanged?.();
+      }
     } catch (err) { toast.error("Couldn't delete", err instanceof Error ? err.message : ''); setBusy(null); }
   };
 
   return (
     <>
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onCoverFile} />
+      <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onCoverFile} />
       <div className="relative">
         <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((v) => !v); setNameDraft(playlist.name); setRenaming(false); }} aria-label="Playlist options"
           className="w-7 h-7 rounded-full flex items-center justify-center bg-black/40 backdrop-blur-sm text-[#D0C3AF] hover:text-white hover:bg-black/60 transition-colors">

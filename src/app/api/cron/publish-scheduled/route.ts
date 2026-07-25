@@ -10,6 +10,12 @@ const log = createLogger('cron.publish-scheduled');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface DueTrackRow {
+  id: string;
+  title: string;
+  user_id: string | null;
+}
+
 /**
  * GET /api/cron/publish-scheduled
  *
@@ -49,7 +55,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, published: 0 });
     }
 
-    const ids = dueRows.map((r: any) => r.id as string);
+    const dueTracks = dueRows as unknown as DueTrackRow[];
+    const ids = dueTracks.map((r) => r.id);
     const { error: updateErr } = await admin
       .from('tracks')
       .update({ store_listed: true, scheduled_publish_at: null })
@@ -58,7 +65,7 @@ export async function GET(req: NextRequest) {
 
     log.info('scheduled publish fired', {
       count: dueRows.length,
-      tracks: dueRows.map((r: any) => ({ id: r.id, title: r.title, user_id: r.user_id })),
+      tracks: dueTracks.map((r) => ({ id: r.id, title: r.title, user_id: r.user_id })),
     });
 
     // Fan out "drop is live" emails to subscribers (mig 059). Best-
@@ -77,7 +84,7 @@ export async function GET(req: NextRequest) {
           .is('notified_at', null);
         const subscribers = (subs ?? []) as Array<{ id: string; track_id: string; email: string }>;
         const titleById = new Map<string, string>(
-          dueRows.map((r: any) => [r.id as string, r.title as string]),
+          dueTracks.map((r) => [r.id, r.title]),
         );
         for (const s of subscribers) {
           try {

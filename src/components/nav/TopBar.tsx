@@ -27,6 +27,7 @@ import {
   Library,
   BarChart3,
   Send,
+  Palette,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
@@ -94,6 +95,7 @@ const NAV_GROUPS: NavGroup[] = [
     key: 'store', label: 'Store', icon: Store,
     items: [
       { label: 'Editor', href: '/store-editor', icon: Store },
+      { label: 'Cover Art', href: '/cover-art', icon: Palette },
       { label: 'Sales', href: '/sales', icon: ShoppingBag },
       { label: 'Analytics', href: '/analytics', icon: BarChart3 },
     ],
@@ -134,7 +136,6 @@ export function TopBar() {
   const openPalette = useCommandPalette((s) => s.setOpen);
   const [activityOpen, setActivityOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  useEffect(() => { setMobileOpen(false); }, [pathname]);
 
   const group = activeGroupFor(pathname);
 
@@ -154,7 +155,12 @@ export function TopBar() {
     } catch {/* silent */}
   };
 
-  useEffect(() => { fetchNotifs(); }, []);
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      void fetchNotifs();
+    }, 0);
+    return () => window.clearTimeout(id);
+  }, []);
   // 60-second polling fallback in case the realtime subscription doesn't fire
   // (e.g. the notifications table isn't in the realtime publication yet).
   useEffect(() => {

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Antigravity Feature Workflow"
+  short_description: "Implement beatstore features safely"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $antigravity-feature-workflow to implement this Antigravity feature end to end."
+policy:
+  allow_implicit_invocation: true

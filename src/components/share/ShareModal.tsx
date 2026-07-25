@@ -1,9 +1,13 @@
 'use client';
 
+import Image from 'next/image';
 import { X, Lock, Link2, Download, Calendar, Check, Copy, Loader2, Globe } from 'lucide-react';
 import { useState } from 'react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { errorMessage } from '@/lib/errors';
+
+type RecipientKind = 'client' | 'producer' | 'rapper' | 'friend';
 
 interface ShareModalProps {
   onClose: () => void;
@@ -24,7 +28,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [recipientKind, setRecipientKind] = useState<'client' | 'producer' | 'rapper' | 'friend'>('client');
+  const [recipientKind, setRecipientKind] = useState<RecipientKind>('client');
 
   const generateLink = async () => {
     if (!trackIds.length) {
@@ -52,8 +56,8 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to create link');
       setShareUrl(data.url);
-    } catch (err: any) {
-      setError(err.message || 'Something went wrong');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Something went wrong');
     } finally {
       setGenerating(false);
     }
@@ -78,7 +82,14 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
         <div className="p-8 border-b border-[#2B2821] bg-gradient-to-b from-[#1A1813] to-[#090907] flex items-start gap-5">
           <div className="w-16 h-16 bg-[#211F1A] rounded-xl overflow-hidden shrink-0 border border-[#3B372F]">
             {coverUrl ? (
-              <img loading="lazy" src={coverUrl} alt="" className="w-full h-full object-cover" />
+              <Image
+                src={coverUrl}
+                alt=""
+                width={64}
+                height={64}
+                className="w-full h-full object-cover"
+                unoptimized
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-[#837B6D] font-black text-2xl uppercase">
                 {title[0] || '?'}
@@ -105,7 +116,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
               <label className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282] block">Audience Variant</label>
               <Dropdown
                 value={recipientKind}
-                onChange={(val) => setRecipientKind(val as any)}
+                onChange={setRecipientKind}
                 options={[
                   { value: 'client', label: 'Client Variant (Bio / Placements / Pricing)' },
                   { value: 'producer', label: 'Producer Variant (Stems Mixer & Tech Specs)' },

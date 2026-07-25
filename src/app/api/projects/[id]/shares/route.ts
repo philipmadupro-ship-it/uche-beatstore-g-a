@@ -4,17 +4,13 @@ import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 import { isSupabaseConfigured, insert, query, requireRowOwnership } from '@/lib/db';
 import { readBody } from '@/lib/validate';
-import { ProjectShareCreateBodySchema, SHARE_ROLES } from '@/lib/contracts';
+import { ProjectShareCreateBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('api.projects.shares');
 
 export const runtime = 'nodejs';
-
-// Role tuple now lives in @/lib/contracts (SHARE_ROLES) so the client
-// can import the same list. Kept as a local alias for readability.
-const ROLES = SHARE_ROLES;
 
 /**
  * Project-share owner CRUD.
@@ -27,18 +23,11 @@ const ROLES = SHARE_ROLES;
  * round-trips so the share modal can render expiry / role / play counts.
  */
 
-interface ShareRow {
+interface LocalProjectShareRow {
   id: string;
   project_id: string;
   token: string;
-  role: 'viewer' | 'commenter' | 'editor';
-  allow_downloads: boolean;
-  expires_at: string | null;
-  invited_email: string | null;
-  label: string | null;
-  plays: number;
-  created_at: string;
-  revoked_at: string | null;
+  created_at?: string | null;
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -56,7 +45,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ shares: data ?? [] });
     }
 
-    const shares = (query('project_shares', (s) => (s as any).project_id === id) as any[])
+    const shares = query<LocalProjectShareRow>('project_shares', (s) => s.project_id === id)
       .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     return NextResponse.json({ shares });
   } catch (error) {

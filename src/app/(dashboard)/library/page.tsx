@@ -23,7 +23,8 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { DropZone } from '@/components/upload/DropZone';
 import { TrackCard } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
-import { Track } from '@/lib/types';
+import { Track, Playlist, Project } from '@/lib/types';
+import { errorMessage } from '@/lib/errors';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
@@ -71,6 +72,16 @@ function keyRank(t: { key?: string | null; scale?: string | null }): number {
   // C major then C minor, D major then D minor, etc.
   return base * 2 + (t.scale === 'minor' ? 1 : 0);
 }
+
+// The API's rich track select inlines `track_tags(tag, category)` as a join —
+// extend Track locally rather than growing the shared type for one filtering
+// concern (mirrors the same pattern already used in TrackCard.tsx).
+type TrackTag = { tag: string; category?: string | null };
+type TrackWithInlineTags = Track & { track_tags?: TrackTag[] };
+
+// List APIs attach `track_count` at read time (junction-count join).
+type HomePlaylist = Playlist & { track_count?: number };
+type HomeProject = Project & { track_count?: number };
 
 export default function LibraryPage() {
   // Proper Track typing rather than the previous `any[]` — catches column
@@ -121,7 +132,7 @@ export default function LibraryPage() {
     keys: new Set<string>(),
   }));
   // ── Smart playlists — saved auto-updating filter views (mig 067) ──
-  const [smartPlaylists, setSmartPlaylists] = useState<Array<{ id: string; name: string; filter: any }>>([]);
+  const [smartPlaylists, setSmartPlaylists] = useState<Array<{ id: string; name: string; filter: Record<string, unknown> }>>([]);
   const [activeSmartId, setActiveSmartId] = useState<string | null>(null);
   const fetchSmartPlaylists = useCallback(() => {
     fetch('/api/smart-playlists').then(r => r.ok ? r.json() : null)
@@ -148,13 +159,16 @@ export default function LibraryPage() {
       toast.success('Smart playlist saved', 'It updates automatically as new tracks match.');
       setSmartNameOpen(false);
       fetchSmartPlaylists();
-    } catch (e: any) { toast.error('Could not save', e.message); }
+    } catch (e) { toast.error('Could not save', errorMessage(e)); }
     finally { setSavingSmart(false); }
   };
 
-  const applySmartPlaylist = (sp: { id: string; filter: any }) => {
+  const applySmartPlaylist = (sp: { id: string; filter: Record<string, unknown> }) => {
     setFilters(deserializeFilters(sp.filter));
-    if (typeof sp.filter?.typeFilter === 'string') setTypeFilter(sp.filter.typeFilter);
+    const savedType = sp.filter?.typeFilter;
+    if (savedType === 'all' || savedType === 'beat' || savedType === 'instrumental' || savedType === 'song' || savedType === 'remix') {
+      setTypeFilter(savedType);
+    }
     setActiveSmartId(sp.id);
     setShowFilters(true);
     setBrowseMode('all');
@@ -220,8 +234,8 @@ export default function LibraryPage() {
         toast.success('New release started', 'Project + playlist created — add tracks and cover art.');
         router.push(`/projects/${projData.project.id}`);
       }
-    } catch (err: any) {
-      toast.error('Could not create', err.message);
+    } catch (err) {
+      toast.error('Could not create', errorMessage(err));
     } finally {
       setCreatingRelease(false);
     }
@@ -275,8 +289,8 @@ export default function LibraryPage() {
       setSelectedIds(new Set());
       setSelectMode(false);
       router.push(`/projects/${projectId}`);
-    } catch (err: any) {
-      toast.error('Could not create pack', err.message);
+    } catch (err) {
+      toast.error('Could not create pack', errorMessage(err));
     } finally {
       setPacking(false);
     }
@@ -320,9 +334,9 @@ export default function LibraryPage() {
       });
       setHasMoreTracks(Boolean(data.pageInfo?.hasMore));
       setNextTrackCursor(data.pageInfo?.nextCursor ?? null);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching tracks:', err);
-      setFetchError(err?.message || 'Failed to load tracks');
+      setFetchError(errorMessage(err) || 'Failed to load tracks');
       // Keep any cached list on screen (stale-while-revalidate) — only blank
       // the view when we never had data to show.
       if (!append && !getCached('library:tracks')) setTracks([]);
@@ -357,9 +371,10 @@ export default function LibraryPage() {
       .catch(() => undefined);
   }, []);
 
-  // Playlists + projects for the home grid
-  const [playlists, setPlaylists] = useState<any[]>([]);
-  const [projects, setProjects] = useState<any[]>([]);
+  // Playlists + projects for the home grid. `track_count` is attached by both
+  // list APIs at read time (junction-count join), so extend the base types here.
+  const [playlists, setPlaylists] = useState<HomePlaylist[]>([]);
+  const [projects, setProjects] = useState<HomeProject[]>([]);
   useEffect(() => {
     fetch('/api/playlists').then(r => r.ok ? r.json() : null).then(d => { if (d?.playlists) setPlaylists(d.playlists); }).catch(() => undefined);
     fetch('/api/projects').then(r => r.ok ? r.json() : null).then(d => { if (d?.projects) setProjects(d.projects); }).catch(() => undefined);
@@ -403,9 +418,9 @@ export default function LibraryPage() {
       if (filters.rating != null && (t.rating == null || t.rating < filters.rating)) return false;
       // Genre filter — track_tags come down from the API rich select
       if (filters.genres.size > 0) {
-        const trackGenres: string[] = ((t as any).track_tags ?? [])
-          .filter((tt: any) => tt.category === 'genre')
-          .map((tt: any) => tt.tag);
+        const trackGenres: string[] = ((t as TrackWithInlineTags).track_tags ?? [])
+          .filter((tt) => tt.category === 'genre')
+          .map((tt) => tt.tag);
         if (!Array.from(filters.genres).some((g) => trackGenres.includes(g))) return false;
       }
       if (!q) return true;
@@ -444,8 +459,8 @@ export default function LibraryPage() {
         // Tracks with a set store_sort_order come first (ascending),
         // then tracks with no order fall to the bottom sorted by created_at.
         sorted.sort((a, b) => {
-          const ao = (a as any).store_sort_order;
-          const bo = (b as any).store_sort_order;
+          const ao = a.store_sort_order;
+          const bo = b.store_sort_order;
           if (ao == null && bo == null) return String(b.created_at).localeCompare(String(a.created_at));
           if (ao == null) return 1;
           if (bo == null) return -1;
@@ -478,18 +493,18 @@ export default function LibraryPage() {
   // Derives rendered rows from DEFAULT_HOME_ROWS, applying home filter
   // chips and the analytics play counts for sort=plays.
   const homeRows = useMemo(() => {
-    const getGenres = (t: any): string[] =>
-      (t.track_tags ?? []).filter((tt: any) => tt.category === 'genre').map((tt: any) => tt.tag);
+    const getGenres = (t: Track): string[] =>
+      ((t as TrackWithInlineTags).track_tags ?? []).filter((tt) => tt.category === 'genre').map((tt) => tt.tag);
 
     const applyTrackFilter = (cfg: HomeRowConfig): Track[] => {
       const f = cfg.filter ?? {};
       let pool = tracks.filter((t) => {
         // Row-level filters
         if (f.genres?.length && !f.genres.some(g => getGenres(t).includes(g))) return false;
-        if (f.statuses?.length && !f.statuses.includes(t.status as any)) return false;
+        if (f.statuses?.length && (!t.status || !f.statuses.includes(t.status))) return false;
         if (f.types?.length && !f.types.includes(t.type)) return false;
-        if (f.storeListed && !(t as any).store_listed) return false;
-        if (f.notStoreListed && (t as any).store_listed) return false;
+        if (f.storeListed && !t.store_listed) return false;
+        if (f.notStoreListed && t.store_listed) return false;
         if (f.minRating != null && (t.rating ?? 0) < f.minRating) return false;
         // Home filter chips (additive on top of row filter)
         if (homeGenre && !getGenres(t).includes(homeGenre)) return false;
@@ -511,19 +526,19 @@ export default function LibraryPage() {
       .map((cfg) => {
         if (cfg.source === 'recent') {
           // "Recently played" comes from player history (Zustand persist)
-          return { cfg, tracks: [] as Track[], playlists: [] as any[], projects: [] as any[], isRecent: true };
+          return { cfg, tracks: [] as Track[], playlists: [] as HomePlaylist[], projects: [] as HomeProject[], isRecent: true };
         }
         if (cfg.source === 'playlists') {
           const pl = [...playlists].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, cfg.maxItems ?? 8);
-          return { cfg, tracks: [] as Track[], playlists: pl, projects: [] as any[], isRecent: false };
+          return { cfg, tracks: [] as Track[], playlists: pl, projects: [] as HomeProject[], isRecent: false };
         }
         if (cfg.source === 'projects') {
           const pr = [...projects].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))).slice(0, cfg.maxItems ?? 8);
-          return { cfg, tracks: [] as Track[], playlists: [] as any[], projects: pr, isRecent: false };
+          return { cfg, tracks: [] as Track[], playlists: [] as HomePlaylist[], projects: pr, isRecent: false };
         }
         // tracks
         const rowTracks = applyTrackFilter(cfg);
-        return { cfg, tracks: rowTracks, playlists: [] as any[], projects: [] as any[], isRecent: false };
+        return { cfg, tracks: rowTracks, playlists: [] as HomePlaylist[], projects: [] as HomeProject[], isRecent: false };
       })
       .filter((row) => {
         if (row.isRecent) return true; // always show, content is from player state
@@ -579,9 +594,9 @@ export default function LibraryPage() {
     return { avgBpm, topKey, topKeyScale, topType, avgRating };
   }, [tracks]);
 
-  const listedTracks = useMemo(() => tracks.filter((t: any) => t.store_listed), [tracks]);
+  const listedTracks = useMemo(() => tracks.filter((t) => t.store_listed), [tracks]);
   const attentionCount = useMemo(() => {
-    return listedTracks.filter((t: any) =>
+    return listedTracks.filter((t) =>
       !t.cover_url || (!t.lease_price_usd && !t.exclusive_price_usd) || !t.bpm
     ).length;
   }, [listedTracks]);
@@ -607,7 +622,7 @@ export default function LibraryPage() {
     // Build a working copy with sort orders assigned (fill nulls with position)
     const withOrder = filtered.map((t, i) => ({
       ...t,
-      store_sort_order: (t as any).store_sort_order ?? i,
+      store_sort_order: t.store_sort_order ?? i,
     }));
 
     // Swap the two
@@ -635,7 +650,7 @@ export default function LibraryPage() {
     });
   };
 
-  const playTrack = (track: any) => {
+  const playTrack = (track: Track) => {
     // Queue rule: the filtered view if it's the user's current context
     // (multiple visible tracks → they're browsing a subset), otherwise
     // the full library. A filter-of-one would otherwise leave "next"
@@ -658,7 +673,7 @@ export default function LibraryPage() {
   const stale = useMemo(
     () =>
       tracks.filter(
-        (t: any) =>
+        (t) =>
           !!t.audio_url &&
           /\.(mp3|wav)(?:\?|$)/i.test(t.audio_url) &&
           t.preview_status !== 'ready',
@@ -725,8 +740,8 @@ export default function LibraryPage() {
       setTracks((prev) => prev.filter((t) => t.id !== track.id));
       if (selectedTrack?.id === track.id) setSelectedTrack(null);
       toast.success('Track deleted');
-    } catch (err: any) {
-      toast.error('Delete failed', err?.message);
+    } catch (err) {
+      toast.error('Delete failed', errorMessage(err));
     }
   };
 
@@ -911,7 +926,7 @@ export default function LibraryPage() {
                 sub: `${listedTracks.length} listed`,
                 icon: <Store size={15} />,
                 accent: '#9d95e8',
-                cover: listedTracks.find((t: any) => t.cover_url)?.cover_url ?? null,
+                cover: listedTracks.find((t) => t.cover_url)?.cover_url ?? null,
               },
               {
                 href: '/projects',
@@ -919,7 +934,7 @@ export default function LibraryPage() {
                 sub: 'Sessions',
                 icon: <FolderOpen size={15} />,
                 accent: '#E7D7BE',
-                cover: tracks.filter((t: any) => t.cover_url)[1]?.cover_url ?? null,
+                cover: tracks.filter((t) => t.cover_url)[1]?.cover_url ?? null,
               },
               {
                 href: '/sales',
@@ -927,7 +942,7 @@ export default function LibraryPage() {
                 sub: analyticsStats ? `$${analyticsStats.gross_usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : 'Revenue',
                 icon: <ShoppingBag size={15} />,
                 accent: '#6DC6A4',
-                cover: tracks.filter((t: any) => t.cover_url)[2]?.cover_url ?? null,
+                cover: tracks.filter((t) => t.cover_url)[2]?.cover_url ?? null,
               },
               {
                 href: '/analytics',
@@ -935,7 +950,7 @@ export default function LibraryPage() {
                 sub: analyticsStats ? `${analyticsStats.plays} plays` : 'Engagement',
                 icon: <BarChart2 size={15} />,
                 accent: '#D6BE7A',
-                cover: tracks.filter((t: any) => t.cover_url)[3]?.cover_url ?? null,
+                cover: tracks.filter((t) => t.cover_url)[3]?.cover_url ?? null,
               },
             ] as const).map(({ href, label, sub, icon, accent, cover }) => (
               <Link key={href} href={href} className="group relative flex items-center gap-0 rounded-xl border border-[#2B2821] bg-[#171511] hover:bg-[#1e1a14] overflow-hidden transition-all hover:border-[#3B372F] hover:shadow-xl">
@@ -1262,24 +1277,24 @@ export default function LibraryPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      const allSelected = filtered.every((t: any) => selectedIds.has(t.id));
+                      const allSelected = filtered.every((t) => selectedIds.has(t.id));
                       setSelectedIds((prev) => {
                         const next = new Set(prev);
                         if (allSelected) {
-                          filtered.forEach((t: any) => next.delete(t.id));
+                          filtered.forEach((t) => next.delete(t.id));
                         } else {
-                          filtered.forEach((t: any) => next.add(t.id));
+                          filtered.forEach((t) => next.add(t.id));
                         }
                         return next;
                       });
                     }}
                     className={`w-4 h-4 rounded flex items-center justify-center transition-colors cursor-pointer border ${
-                      filtered.length > 0 && filtered.every((t: any) => selectedIds.has(t.id))
+                      filtered.length > 0 && filtered.every((t) => selectedIds.has(t.id))
                         ? 'bg-[#E7D7BE] border-[#F3E6D1]'
                         : 'border-[#3B372F] hover:border-[#837B6D]'
                     }`}
                   >
-                    {filtered.length > 0 && filtered.every((t: any) => selectedIds.has(t.id)) && (
+                    {filtered.length > 0 && filtered.every((t) => selectedIds.has(t.id)) && (
                       <span className="text-white text-[9px] leading-none">✓</span>
                     )}
                   </button>
@@ -1315,7 +1330,7 @@ export default function LibraryPage() {
               })}
               <span />
             </div>
-            {pageTracks.map((t: any, i: number) => {
+            {pageTracks.map((t, i) => {
               const absIdx = currentPage * PAGE_SIZE + i;
               return (
                 <TrackCard
@@ -1657,7 +1672,7 @@ function MiniTrackCard({
 }
 
 // ── MiniPlaylistCard ─────────────────────────────────────────────
-function MiniPlaylistCard({ playlist }: { playlist: any }) {
+function MiniPlaylistCard({ playlist }: { playlist: HomePlaylist }) {
   return (
     <Link href={`/playlists/${playlist.id}`} className="group relative shrink-0 w-[130px] sm:w-[150px] cursor-pointer block">
       <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#171511] border border-[#2B2821] group-hover:border-[#3B372F] mb-2 transition-all">
@@ -1678,7 +1693,7 @@ function MiniPlaylistCard({ playlist }: { playlist: any }) {
 }
 
 // ── MiniProjectCard ──────────────────────────────────────────────
-function MiniProjectCard({ project }: { project: any }) {
+function MiniProjectCard({ project }: { project: HomeProject }) {
   return (
     <Link href={`/projects/${project.id}`} className="group relative shrink-0 w-[130px] sm:w-[150px] cursor-pointer block">
       <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#171511] border border-[#2B2821] group-hover:border-[#3B372F] mb-2 transition-all">
@@ -1705,8 +1720,8 @@ function HomeRow({
 }: {
   cfg: HomeRowConfig;
   tracks: Track[];
-  playlists: any[];
-  projects: any[];
+  playlists: HomePlaylist[];
+  projects: HomeProject[];
   recentHistory?: Track[];
   currentTrackId: string | null;
   isPlaying: boolean;

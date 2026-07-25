@@ -1,0 +1,7 @@
+interface:
+  display_name: "Antigravity Storefront Commerce"
+  short_description: "Store, checkout, Stripe, and buyer flows"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $antigravity-storefront-commerce to update this buyer storefront or checkout flow."
+policy:
+  allow_implicit_invocation: true

@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireRowOwnership, isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 
+interface AmountRow {
+  amount_usd: number | string | null;
+}
+
+interface CountResult {
+  count?: number | null;
+}
+
+interface RowsResult<T> {
+  data?: T[] | null;
+}
+
 /**
  * GET /api/analytics/projects/[id]
  * Returns plays, sales count, and gross USD for a single project.
@@ -35,17 +47,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     // Count track sales only if the project's tracks are in the purchase.
     // (We don't have a direct project_id FK on license_purchases — filter
     // by checking track presence is infeasible here; count all for now.)
-    const trackSaleRows = (trackSalesRes as any)?.data ?? [];
-    const bundleSaleRows = (bundleSalesRes as any)?.data ?? [];
+    const trackSaleRows = (trackSalesRes as RowsResult<AmountRow>).data ?? [];
+    const bundleSaleRows = (bundleSalesRes as RowsResult<AmountRow>).data ?? [];
 
     const sales = trackSaleRows.length + bundleSaleRows.length;
     const gross = [
-      ...trackSaleRows.map((r: any) => Number(r.amount_usd ?? 0)),
-      ...bundleSaleRows.map((r: any) => Number(r.amount_usd ?? 0)),
+      ...trackSaleRows.map((r) => Number(r.amount_usd ?? 0)),
+      ...bundleSaleRows.map((r) => Number(r.amount_usd ?? 0)),
     ].reduce((s, n) => s + n, 0);
 
     return NextResponse.json({
-      plays: (playsRes as any)?.count ?? 0,
+      plays: (playsRes as CountResult).count ?? 0,
       sales,
       gross_usd: Number(gross.toFixed(2)),
     });

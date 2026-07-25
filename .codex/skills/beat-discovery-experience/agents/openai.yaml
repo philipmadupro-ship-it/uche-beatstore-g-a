@@ -1,0 +1,7 @@
+interface:
+  display_name: "Beat Discovery Experience"
+  short_description: "Search, filters, cards, and browsing"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $beat-discovery-experience to improve Beatstor browsing and filters."
+policy:
+  allow_implicit_invocation: true

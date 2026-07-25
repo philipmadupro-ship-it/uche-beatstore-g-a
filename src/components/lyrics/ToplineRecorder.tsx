@@ -23,6 +23,21 @@ interface Topline {
   created_at: string;
 }
 
+interface StemFile extends Topline {
+  category?: string | null;
+}
+
+function isToplineFile(file: unknown): file is StemFile {
+  return typeof file === 'object' &&
+    file !== null &&
+    'category' in file &&
+    (file as { category?: unknown }).category === 'topline' &&
+    typeof (file as { id?: unknown }).id === 'string' &&
+    typeof (file as { label?: unknown }).label === 'string' &&
+    typeof (file as { url?: unknown }).url === 'string' &&
+    typeof (file as { created_at?: unknown }).created_at === 'string';
+}
+
 function pickMime(): string {
   if (typeof MediaRecorder === 'undefined') return '';
   const prefs = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
@@ -52,7 +67,8 @@ export function ToplineRecorder({ trackId }: { trackId: string }) {
       const res = await fetch(`/api/tracks/${trackId}/stem-files`, { cache: 'no-store' });
       if (!res.ok) return;
       const data = await res.json();
-      setItems((data.files ?? []).filter((f: any) => f.category === 'topline'));
+      const files = Array.isArray(data.files) ? data.files : [];
+      setItems(files.filter(isToplineFile));
     } catch {
       // best-effort
     }

@@ -5,6 +5,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { licenseAvailability } from '@/lib/store/license-availability';
 
 const log = createLogger('api.store.checkout');
 export const runtime = 'nodejs';
@@ -334,11 +335,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Exclusive deliverable check — allow checkout, but mark exclusive
-    // tracks that still need WAV/stems so the webhook can flag the sale.
-    const stemsReady = (stemsStatus: string | null | undefined) =>
-      stemsStatus === 'ready' || stemsStatus === 'done' || stemsStatus === 'complete';
-
     // ── Creator profile (for legacy price fallback) ──────────────────────────
     const sellerUserId = trackRows[0]?.user_id ?? undefined;
     let profileLease: number | null = null;
@@ -412,7 +408,6 @@ export async function POST(req: NextRequest) {
     const trackById = new Map(trackRows.map((t) => [t.id, t]));
     const lineItems: LineItems = [];
     const unpriced: string[] = [];
-    const stemsPendingTrackIds = new Set<string>();
     const cartItemsMeta: Array<{ track_id: string; license_id: string; license_type: string }> = [];
 
     for (const it of rawItems) {
@@ -478,14 +473,12 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      const customTierNeedsStems = customLicense?.stems_included === true && !stemsReady(track.stems_status);
-      const legacyExclusiveNeedsFiles =
-        !customLicense &&
-        resolvedType === 'exclusive' &&
-        !track.wav_url &&
-        !stemsReady(track.stems_status);
-      if (customTierNeedsStems || legacyExclusiveNeedsFiles) {
-        stemsPendingTrackIds.add(track.id);
+      const availability = licenseAvailability(track, {
+        is_exclusive: resolvedType === 'exclusive',
+        stems_included: customLicense?.stems_included,
+      });
+      if (!availability.available) {
+        return NextResponse.json({ error: availability.message }, { status: 409 });
       }
 
       const displayName = customLicense
@@ -545,7 +538,7 @@ export async function POST(req: NextRequest) {
         cart_items: JSON.stringify(cartItemsMeta.slice(0, 25)),
         promo_code: promo?.code ?? '',
         bundle_discount_percent: bundle.applied ? String(bundle.percent) : '',
-        stems_pending_track_ids: [...stemsPendingTrackIds].join(','),
+        stems_pending_track_ids: '',
         store_session_id: storeSessionId,
       },
       return_url: `${APP_URL}/store/download?session_id={CHECKOUT_SESSION_ID}`,

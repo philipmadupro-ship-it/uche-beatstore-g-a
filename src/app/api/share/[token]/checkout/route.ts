@@ -13,6 +13,80 @@ const log = createLogger('api.share.checkout');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+interface ShareCheckoutBody {
+  buyer_email?: unknown;
+  cart_items?: unknown;
+}
+
+interface ShareCheckoutItem {
+  track_id: string;
+  license_id: string;
+}
+
+interface ProjectShareCheckoutRow {
+  project_id: string;
+  lease_price_usd?: number | null;
+  exclusive_price_usd?: number | null;
+  discount_percent?: number | null;
+  projects?: {
+    user_id?: string | null;
+    name?: string | null;
+  } | null;
+}
+
+interface LinkShareCheckoutRow {
+  user_id: string;
+  title?: string | null;
+  lease_price_usd?: number | null;
+  exclusive_price_usd?: number | null;
+  discount_percent?: number | null;
+}
+
+interface CreatorPriceProfile {
+  license_lease_price_usd?: number | null;
+  license_exclusive_price_usd?: number | null;
+}
+
+interface CheckoutTrackRow {
+  id: string;
+  title: string;
+  lease_price_usd?: number | null;
+  exclusive_price_usd?: number | null;
+}
+
+interface CheckoutLicenseRow {
+  id: string;
+  name: string;
+  price_usd?: number | null;
+  is_exclusive?: boolean | null;
+  is_free?: boolean | null;
+}
+
+interface TrackLicenseOverrideRow {
+  track_id: string;
+  license_id: string;
+  price_override_usd?: number | null;
+  enabled?: boolean | null;
+}
+
+interface ShareCheckoutLineItem {
+  price_data: {
+    currency: 'usd';
+    unit_amount: number;
+    product_data: {
+      name: string;
+      description?: string;
+    };
+  };
+  quantity: 1;
+}
+
+function isShareCheckoutItem(item: unknown): item is ShareCheckoutItem {
+  if (!item || typeof item !== 'object') return false;
+  const record = item as Record<string, unknown>;
+  return typeof record.track_id === 'string' && typeof record.license_id === 'string';
+}
+
 /**
  * POST /api/share/[token]/checkout
  *   body: {
@@ -66,8 +140,8 @@ export async function POST(
   }
 
   try {
-    const body = await req.json().catch(() => ({}));
-    const rawItems: any[] = Array.isArray(body.cart_items) ? body.cart_items : [];
+    const body = await req.json().catch(() => ({})) as ShareCheckoutBody;
+    const rawItems = Array.isArray(body.cart_items) ? body.cart_items.filter(isShareCheckoutItem) : [];
     const buyerEmail = typeof body.buyer_email === 'string' ? body.buyer_email.trim() : '';
 
     if (!rawItems.length) {
@@ -94,8 +168,9 @@ export async function POST(
       .maybeSingle();
 
     if (projShare) {
-      sellerUserId = (projShare as any).projects?.user_id ?? null;
-      projectName = (projShare as any).projects?.name ?? null;
+      const projectShare = projShare as ProjectShareCheckoutRow;
+      sellerUserId = projectShare.projects?.user_id ?? null;
+      projectName = projectShare.projects?.name ?? null;
       shareLeasePrice = projShare.lease_price_usd != null ? Number(projShare.lease_price_usd) : null;
       shareExclusivePrice = projShare.exclusive_price_usd != null ? Number(projShare.exclusive_price_usd) : null;
       shareDiscountPercent = projShare.discount_percent != null ? Number(projShare.discount_percent) : null;
@@ -107,11 +182,12 @@ export async function POST(
         .maybeSingle();
 
       if (linkShare) {
-        sellerUserId = linkShare.user_id;
-        projectName = linkShare.title;
-        shareLeasePrice = linkShare.lease_price_usd != null ? Number(linkShare.lease_price_usd) : null;
-        shareExclusivePrice = linkShare.exclusive_price_usd != null ? Number(linkShare.exclusive_price_usd) : null;
-        shareDiscountPercent = linkShare.discount_percent != null ? Number(linkShare.discount_percent) : null;
+        const linkShareRow = linkShare as LinkShareCheckoutRow;
+        sellerUserId = linkShareRow.user_id;
+        projectName = linkShareRow.title ?? null;
+        shareLeasePrice = linkShareRow.lease_price_usd != null ? Number(linkShareRow.lease_price_usd) : null;
+        shareExclusivePrice = linkShareRow.exclusive_price_usd != null ? Number(linkShareRow.exclusive_price_usd) : null;
+        shareDiscountPercent = linkShareRow.discount_percent != null ? Number(linkShareRow.discount_percent) : null;
         isProjectShare = false;
       }
     }
@@ -126,9 +202,10 @@ export async function POST(
       .select('license_lease_price_usd, license_exclusive_price_usd')
       .eq('user_id', sellerUserId)
       .maybeSingle();
+    const profileRow = profile as CreatorPriceProfile | null;
 
     // ── Resolve tracks ────────────────────────────────────────────────────────
-    const trackIds = [...new Set(rawItems.map((i: any) => i.track_id as string))];
+    const trackIds = [...new Set(rawItems.map((i) => i.track_id))];
     const { data: tracks } = await admin
       .from('tracks')
       .select('id, title, lease_price_usd, exclusive_price_usd')
@@ -141,18 +218,18 @@ export async function POST(
     // ── Resolve custom license rows ──────────────────────────────────────────
     const customLicenseIds = [...new Set(
       rawItems
-        .map((i: any) => i.license_id)
+        .map((i) => i.license_id)
         .filter(isUUID),
     )];
 
-    const licenseById = new Map<string, any>();
+    const licenseById = new Map<string, CheckoutLicenseRow>();
     if (customLicenseIds.length > 0) {
       const { data: licenseRows } = await admin
         .from('licenses')
         .select('id, name, price_usd, is_exclusive, is_free')
         .eq('user_id', sellerUserId)
         .in('id', customLicenseIds);
-      for (const row of licenseRows ?? []) licenseById.set(row.id, row);
+      for (const row of (licenseRows ?? []) as CheckoutLicenseRow[]) licenseById.set(row.id, row);
     }
 
     // Per-track overrides for custom tiers (track_licenses.price_override_usd)
@@ -163,7 +240,7 @@ export async function POST(
         .select('track_id, license_id, price_override_usd, enabled')
         .in('track_id', trackIds)
         .in('license_id', customLicenseIds);
-      for (const row of overrideRows ?? []) {
+      for (const row of (overrideRows ?? []) as TrackLicenseOverrideRow[]) {
         trackLicenseOverrides.set(
           `${row.track_id}::${row.license_id}`,
           row.enabled ? (row.price_override_usd ?? null) : null,
@@ -172,13 +249,13 @@ export async function POST(
     }
 
     // ── Build Stripe line items ──────────────────────────────────────────────
-    const trackById = new Map((tracks as any[]).map((t) => [t.id, t]));
-    const lineItems: any[] = [];
+    const trackById = new Map(((tracks ?? []) as CheckoutTrackRow[]).map((t) => [t.id, t]));
+    const lineItems: ShareCheckoutLineItem[] = [];
     const unpriced: string[] = [];
     const cartItemsMeta: Array<{ track_id: string; license_id: string; license_type: string }> = [];
 
     for (const item of rawItems) {
-      const track = trackById.get(item.track_id) as any;
+      const track = trackById.get(item.track_id);
       if (!track) continue;
 
       const rawLicenseId: string = item.license_id ?? '';
@@ -217,8 +294,8 @@ export async function POST(
         const shareOverride = resolvedType === 'lease' ? shareLeasePrice : shareExclusivePrice;
         const trackOverride = resolvedType === 'lease' ? track.lease_price_usd : track.exclusive_price_usd;
         const profileDefault = resolvedType === 'lease'
-          ? profile?.license_lease_price_usd
-          : profile?.license_exclusive_price_usd;
+          ? profileRow?.license_lease_price_usd
+          : profileRow?.license_exclusive_price_usd;
 
         basePrice =
           shareOverride ??

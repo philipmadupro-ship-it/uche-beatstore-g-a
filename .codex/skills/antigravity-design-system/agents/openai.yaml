@@ -1,0 +1,7 @@
+interface:
+  display_name: "Antigravity Design System"
+  short_description: "Warm dark UI, motion, and accessibility"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $antigravity-design-system to polish this Antigravity interface."
+policy:
+  allow_implicit_invocation: true

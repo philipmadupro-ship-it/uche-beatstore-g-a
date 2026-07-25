@@ -13,6 +13,7 @@
  */
 
 import { useState, use, useMemo } from 'react';
+import Image from 'next/image';
 import {
   Loader2, ListMusic, Play, Pause, Music, ShoppingBag, Check,
   Headphones, Clock, Heart, MoreHorizontal,
@@ -28,6 +29,7 @@ import { GlassPage } from '@/components/store/GlassPage';
 import { ProducerProfile } from '@/components/store/ProducerProfile';
 import { normalizeThemeColor } from '@/lib/theme/colors';
 import type { Track } from '@/lib/types';
+import type { CartItem } from '@/hooks/useCart';
 
 interface PlaylistTrack {
   id: string;
@@ -112,7 +114,7 @@ export default function PlaylistPage({
     },
   });
   const playlist = data?.playlist ?? null;
-  const tracks = data?.tracks ?? [];
+  const tracks = useMemo(() => data?.tracks ?? [], [data?.tracks]);
   const creator = data?.creator ?? null;
   const fallback = data?.pricing_fallback ?? { lease: null, exclusive: null };
   const error = queryError ? (queryError as Error).message : null;
@@ -348,7 +350,7 @@ export default function PlaylistPage({
                     const lp = priceFor(t, 'lease');
                     const ep = priceFor(t, 'exclusive');
                     const wishlisted = isWishlisted(t.id);
-                    const cartHasTrack = cartItems.some((it: any) => it.track?.id === t.id);
+                    const cartHasTrack = cartItems.some((it: CartItem) => it.track?.id === t.id);
 
                     return (
                       <li
@@ -376,7 +378,7 @@ export default function PlaylistPage({
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-[#090907] border border-white/[0.06] shrink-0">
                             {t.cover_url
-                              ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                              ? <Image src={t.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized />
                               : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={14} /></div>}
                             {(isHov || isCur) && (
                               <button

@@ -9,6 +9,7 @@ import {
 import { toast, confirmToast } from '@/hooks/useToast';
 import { ProjectFolderSelect } from './ProjectFolderSelect';
 import { TemplatePicker } from './TemplatePicker';
+import { uploadImageFile } from '@/lib/upload/image-upload-client';
 
 interface ProjectLite {
   id: string;
@@ -71,12 +72,8 @@ export function ProjectOptionsMenu({
     if (!file) return;
     setBusy('cover');
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const up = await fetch('/api/upload/image', { method: 'POST', body: fd });
-      const data = await up.json();
-      if (!up.ok) throw new Error(data?.error || 'Upload failed');
-      await patch({ cover_url: data.url }, 'cover');
+      const coverUrl = await uploadImageFile(file);
+      await patch({ cover_url: coverUrl }, 'cover');
       toast.success('Cover updated');
       setOpen(false);
     } catch (err) {
@@ -120,7 +117,7 @@ export function ProjectOptionsMenu({
 
   return (
     <>
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onCoverFile} />
+      <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onCoverFile} />
       <div className="relative">
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((v) => !v); setNameDraft(project.name); setRenaming(false); }}

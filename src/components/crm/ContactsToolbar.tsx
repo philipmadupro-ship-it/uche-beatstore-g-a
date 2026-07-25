@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, ChevronDown, Plus, Download, RefreshCw, Bookmark, BookmarkPlus, X, Check, Loader2 } from 'lucide-react';
+import { Search, ChevronDown, Plus, Download, RefreshCw, Bookmark, BookmarkPlus, X, Check } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 
 export interface Segment { id: string; name: string; filters: { search?: string; category?: string; status?: string; sort?: string } }
@@ -32,7 +32,7 @@ function FilterButton({ label, badge, children, align = 'left' }: { label: strin
       width={220}
       trigger={({ open, toggle, ref }) => (
         <button
-          ref={ref as any}
+          ref={(el) => ref(el)}
           onClick={toggle}
           className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[11px] font-medium border transition-colors ${
             open || badge ? 'bg-[var(--accent-tint)] border-[var(--accent-dim)]/40 text-[#F3E6D1]' : 'border-[var(--border)] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[var(--border-hover)]'
@@ -126,7 +126,7 @@ export function ContactsToolbar(p: Props) {
           align="right" width={240}
           open={segMenuOpen} onOpenChange={setSegMenuOpen}
           trigger={({ open, toggle, ref }) => (
-            <button ref={ref as any} onClick={toggle}
+            <button ref={(el) => ref(el)} onClick={toggle}
               className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[11px] font-medium border transition-colors ${open || p.activeSegmentId ? 'bg-[var(--accent-tint)] border-[var(--accent-dim)]/40 text-[#F3E6D1]' : 'border-[var(--border)] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[var(--border-hover)]'}`}>
               <Bookmark size={12} /> Segments <ChevronDown size={11} className={open ? 'rotate-180' : ''} />
             </button>

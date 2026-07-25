@@ -13,11 +13,11 @@
  * link is the secret.
  */
 
-import { useEffect, useMemo, useState, use, useRef } from 'react';
+import { useEffect, useMemo, useState, use, useRef, useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
+import Image from 'next/image';
 import {
-  Loader2, Layers, Play, Pause, Music, Download, Lock, Mail,
+  Loader2, Layers, Play, Pause, Music, Download, Lock,
   Heart, MoreHorizontal, Headphones, Clock,
   Plus, Check, Copy,
 } from 'lucide-react';
@@ -89,6 +89,23 @@ function topTag(t: AccessTrack): string | null {
   return sorted[0]?.tag ?? null;
 }
 
+const FOLLOW_STORAGE_KEY = 'antigravity-followed-producers';
+const FOLLOW_STORAGE_EVENT = 'antigravity-followed-producers-changed';
+
+function getFollowedProducerSnapshot(): string {
+  if (typeof window === 'undefined') return '[]';
+  return window.localStorage.getItem(FOLLOW_STORAGE_KEY) ?? '[]';
+}
+
+function subscribeToFollowedProducers(onStoreChange: () => void): () => void {
+  window.addEventListener('storage', onStoreChange);
+  window.addEventListener(FOLLOW_STORAGE_EVENT, onStoreChange);
+  return () => {
+    window.removeEventListener('storage', onStoreChange);
+    window.removeEventListener(FOLLOW_STORAGE_EVENT, onStoreChange);
+  };
+}
+
 /* ─── Row context menu ────────────────────────────────────────── */
 
 function RowMenu({
@@ -157,7 +174,6 @@ export default function ProjectAccessPage({
   const { token } = use(params);
 
   const [tab, setTab] = useState<'overview' | 'tracks' | 'producer'>('overview');
-  const [following, setFollowing] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
 
   const { currentTrack, isPlaying, setTrack: playTrack, togglePlay, setQueue } = usePlayer();
@@ -179,28 +195,33 @@ export default function ProjectAccessPage({
     retry: false,
   });
   const project = data?.project ?? null;
-  const tracks = data?.tracks ?? [];
+  const tracks = useMemo(() => data?.tracks ?? [], [data?.tracks]);
   const creator = data?.creator ?? null;
   const invalid = isError || (!loading && !project);
 
-  // localStorage-backed follow (no auth required)
-  useEffect(() => {
-    if (!creator?.display_name) return;
+  const followedProducerSnapshot = useSyncExternalStore(
+    subscribeToFollowedProducers,
+    getFollowedProducerSnapshot,
+    () => '[]',
+  );
+  const following = useMemo(() => {
+    if (!creator?.display_name) return false;
     try {
-      const raw = localStorage.getItem('antigravity-followed-producers');
-      const set = new Set(raw ? (JSON.parse(raw) as string[]) : []);
-      setFollowing(set.has(creator.display_name));
-    } catch {/* noop */}
-  }, [creator?.display_name]);
+      return new Set(JSON.parse(followedProducerSnapshot) as string[]).has(creator.display_name);
+    } catch {
+      return false;
+    }
+  }, [creator?.display_name, followedProducerSnapshot]);
   const onToggleFollow = () => {
     if (!creator?.display_name) return;
     try {
-      const raw = localStorage.getItem('antigravity-followed-producers');
+      const raw = localStorage.getItem(FOLLOW_STORAGE_KEY);
       const set = new Set<string>(raw ? (JSON.parse(raw) as string[]) : []);
       const name = creator.display_name;
-      if (set.has(name)) { set.delete(name); setFollowing(false); toast.info('Unfollowed', name); }
-      else { set.add(name); setFollowing(true); toast.success('Following', name); }
-      localStorage.setItem('antigravity-followed-producers', JSON.stringify([...set]));
+      if (set.has(name)) { set.delete(name); toast.info('Unfollowed', name); }
+      else { set.add(name); toast.success('Following', name); }
+      localStorage.setItem(FOLLOW_STORAGE_KEY, JSON.stringify([...set]));
+      window.dispatchEvent(new Event(FOLLOW_STORAGE_EVENT));
     } catch { /* noop */ }
   };
 
@@ -407,7 +428,7 @@ function TrackList({
       </div>
 
       <ul>
-        {list.map((t, i) => {
+        {list.map((t) => {
           const isCur = currentTrack?.id === t.id;
           const isCurPlaying = isCur && isPlaying;
           const isHov = hovered === t.id;
@@ -424,7 +445,7 @@ function TrackList({
               {/* Cover with hover-play overlay */}
               <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-[#090907] border border-white/[0.06] shrink-0">
                 {t.cover_url
-                  ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                  ? <Image src={t.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized />
                   : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={14} /></div>}
                 {(isHov || isCur) && (
                   <button

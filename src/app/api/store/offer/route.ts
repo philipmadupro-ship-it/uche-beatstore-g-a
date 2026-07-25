@@ -14,6 +14,17 @@ export const dynamic = 'force-dynamic';
 
 const log = createLogger('api.store.offer');
 
+interface OfferTrackRow {
+  id: string;
+  title: string;
+  user_id: string;
+  store_listed: boolean | null;
+}
+
+interface OfferCreatorProfileRow {
+  contact_email: string | null;
+}
+
 /**
  * GET /api/store/offer — the authed producer's received offers, newest first.
  * Used by the /sales Offers tab.
@@ -85,11 +96,12 @@ export async function POST(req: NextRequest) {
       .select('id, title, user_id, store_listed')
       .eq('id', track_id)
       .maybeSingle();
-    if (!track || !(track as any).store_listed) {
+    const offerTrack = track as OfferTrackRow | null;
+    if (!offerTrack || !offerTrack.store_listed) {
       return NextResponse.json({ error: 'Track not available' }, { status: 404 });
     }
-    const sellerId = (track as any).user_id as string;
-    const trackTitle = (track as any).title as string;
+    const sellerId = offerTrack.user_id;
+    const trackTitle = offerTrack.title;
 
     // 1. Persist the offer.
     const { data: offer, error: offerErr } = await admin
@@ -128,7 +140,7 @@ export async function POST(req: NextRequest) {
           .select('contact_email')
           .eq('user_id', sellerId)
           .maybeSingle();
-        let producerEmail = (prof as any)?.contact_email as string | null;
+        let producerEmail = (prof as OfferCreatorProfileRow | null)?.contact_email ?? null;
         if (!producerEmail) {
           const { data: authUser } = await admin.auth.admin.getUserById(sellerId);
           producerEmail = authUser?.user?.email ?? null;

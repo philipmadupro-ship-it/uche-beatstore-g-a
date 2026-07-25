@@ -2,6 +2,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ContactsView } from '@/components/crm/ContactsView';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/auth/ownership';
+import { errorMessage } from '@/lib/errors';
 import { isSupabaseConfigured, getAll } from '@/lib/local-store';
 import type { Contact, BeatSend } from '@/lib/types';
 
@@ -69,9 +70,9 @@ async function loadInitialData(): Promise<{
       beatSends: (sendsRes.data || []) as BeatSend[],
       error: contactsRes.error?.message || null,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Contacts SSR fetch failed:', err);
-    return { contacts: [], beatSends: [], error: err?.message || 'Fetch failed' };
+    return { contacts: [], beatSends: [], error: errorMessage(err) || 'Fetch failed' };
   }
 }
 

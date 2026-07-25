@@ -1,7 +1,9 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 import { X, CheckCircle2, Loader2 } from 'lucide-react';
+import { errorMessage } from '@/lib/errors';
 import type { StoreTrack } from './types';
 
 interface Props {
@@ -41,8 +43,8 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
       document.body.removeChild(a);
       setSuccess(true);
       setTimeout(() => onClose(), 2000);
-    } catch (err: any) {
-      setError(err.message || 'Download failed. Please try again.');
+    } catch (err: unknown) {
+      setError(errorMessage(err) || 'Download failed. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -60,7 +62,14 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
 
         <div className="flex items-center gap-3 mb-5">
           {track.cover_url && (
-            <img src={track.cover_url} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+            <Image
+              src={track.cover_url}
+              alt=""
+              width={48}
+              height={48}
+              className="w-12 h-12 rounded-lg object-cover shrink-0"
+              unoptimized
+            />
           )}
           <div>
             <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-1">Free download</p>
@@ -77,7 +86,7 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
         ) : (
           <>
             <p className="text-[11px] text-[#B4AA99] mb-4 leading-relaxed">
-              Enter your email to get the download. We'll occasionally send new releases — no spam.
+              Enter your email to get the download. We&apos;ll occasionally send new releases — no spam.
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-3">

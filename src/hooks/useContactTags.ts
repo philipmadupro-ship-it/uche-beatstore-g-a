@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { tagNamesFromRows } from '@/lib/tags/rows';
 
 export function useContactTags(contactId: string) {
   const qc = useQueryClient();
@@ -8,7 +9,7 @@ export function useContactTags(contactId: string) {
       const res = await fetch(`/api/contacts/${contactId}/tags`);
       if (!res.ok) throw new Error('Failed to fetch contact tags');
       const rows = await res.json();
-      return Array.isArray(rows) ? rows.map((r: any) => r.tag) : [];
+      return tagNamesFromRows(rows);
     },
   });
   const toggleTag = useMutation({

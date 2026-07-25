@@ -19,6 +19,7 @@ import {
   Wand2, X, Loader2, Mic, Upload, Music, ShoppingBag, Square,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { errorMessage } from '@/lib/errors';
 
 interface MatchTrack {
   id: string;
@@ -68,7 +69,6 @@ export function BeatMatchModal({
       reset();
       stopRecording(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   /* ── Submit a blob to the server for matching ── */
@@ -90,10 +90,11 @@ export function BeatMatchModal({
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
       setResult(json as MatchResult);
       setPhase('done');
-    } catch (err) {
-      setErrorMsg((err as Error)?.message ?? 'Match failed');
+    } catch (err: unknown) {
+      const message = errorMessage(err);
+      setErrorMsg(message || 'Match failed');
       setPhase('error');
-      toast.error('Could not match', (err as Error)?.message ?? 'Try a different clip');
+      toast.error('Could not match', message || 'Try a different clip');
     }
   };
 
@@ -135,8 +136,8 @@ export function BeatMatchModal({
           return next;
         });
       }, 1000);
-    } catch (err) {
-      toast.error('Mic permission denied', (err as Error)?.message ?? '');
+    } catch (err: unknown) {
+      toast.error('Mic permission denied', errorMessage(err));
     }
   };
 
@@ -147,7 +148,7 @@ export function BeatMatchModal({
     setRecording(false);
     if (!rec) return;
     if (cancel) {
-      try { rec.ondataavailable = null as any; rec.onstop = null as any; rec.stop(); } catch {/* noop */}
+      try { rec.ondataavailable = null; rec.onstop = null; rec.stop(); } catch {/* noop */}
     } else if (rec.state === 'recording') {
       rec.stop();
     }
@@ -194,7 +195,7 @@ export function BeatMatchModal({
               Drop a vocal — find beats that fit
             </h3>
             <p className="mt-1.5 text-[12px] text-white/55 leading-relaxed">
-              Record a 30-second a cappella or upload a vocal clip. We'll match the tempo against every beat in this catalogue and rank the best fits — half-time / double-time aware.
+              Record a 30-second a cappella or upload a vocal clip. We&apos;ll match the tempo against every beat in this catalogue and rank the best fits — half-time / double-time aware.
             </p>
 
             {/* Idle state — input options */}

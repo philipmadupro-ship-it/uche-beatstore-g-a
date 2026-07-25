@@ -23,6 +23,7 @@ import { fmtDuration } from '@/lib/audio/format';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { DropZone } from '@/components/upload/DropZone';
+import { uploadImageFile } from '@/lib/upload/image-upload-client';
 
 type PlaylistDetail = {
   id: string;
@@ -106,18 +107,11 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
     if (!file) return;
     setUploadingArt(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/upload/image', { method: 'POST', body: formData });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.url) {
-        toast.error('Cover upload failed', data.error || `HTTP ${res.status}`);
-        return;
-      }
+      const coverUrl = await uploadImageFile(file);
       const patch = await fetch(`/api/playlists/${params.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cover_url: data.url }),
+        body: JSON.stringify({ cover_url: coverUrl }),
       });
       if (!patch.ok) {
         const e = await patch.json().catch(() => ({}));
@@ -125,6 +119,8 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
         return;
       }
       fetchData();
+    } catch (err) {
+      toast.error('Cover upload failed', err instanceof Error ? err.message : 'Try again');
     } finally {
       setUploadingArt(false);
     }
@@ -362,7 +358,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
                 {uploadingArt ? <Loader2 size={20} className="animate-spin text-white" /> : <Camera size={20} className="text-white" />}
               </div>
-              <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleArtChange} />
+              <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handleArtChange} />
             </div>
           </div>
 

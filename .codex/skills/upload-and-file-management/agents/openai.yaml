@@ -1,0 +1,7 @@
+interface:
+  display_name: "Upload And File Management"
+  short_description: "Secure uploads, R2, audio assets"
+  brand_color: "#D4BFA0"
+  default_prompt: "Use $upload-and-file-management to improve Beatstor uploads."
+policy:
+  allow_implicit_invocation: true

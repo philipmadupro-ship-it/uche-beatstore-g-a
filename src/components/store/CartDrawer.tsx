@@ -10,7 +10,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShoppingCart, X, Music } from 'lucide-react';
+import { FileText, ShoppingCart, X, Music } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
 import { useHydrated } from '@/hooks/useHydrated';
 import type { Track } from '@/lib/types';
@@ -40,6 +40,7 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
   const router = useRouter();
   const [buyerEmail, setBuyerEmail] = useState('');
   const [promoCode, setPromoCode] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   // Gate cart-derived values on a client-mounted flag. items + total
   // come from useCart (Zustand + localStorage persist), so SSR renders
@@ -65,7 +66,7 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
   }, [mounted]);
 
   const handleCheckout = () => {
-    if (items.length === 0) return;
+    if (items.length === 0 || !termsAccepted) return;
     onClose();
     const params = new URLSearchParams();
     if (buyerEmail.trim() && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(buyerEmail.trim())) {
@@ -121,9 +122,30 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
             placeholder="Promo code"
             className="w-full bg-[#090907] border border-[#2B2821] rounded-md py-2.5 px-3 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] uppercase"
           />
+          <label
+            htmlFor="cart-license-terms"
+            className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 text-left transition-colors hover:border-white/[0.10]"
+          >
+            <input
+              id="cart-license-terms"
+              type="checkbox"
+              checked={termsAccepted}
+              onChange={(e) => setTermsAccepted(e.target.checked)}
+              className="mt-0.5 size-4 shrink-0 accent-[#E7D7BE]"
+            />
+            <span className="min-w-0">
+              <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-[#D0C3AF]">
+                <FileText size={10} aria-hidden="true" />
+                License terms
+              </span>
+              <span className="mt-1 block text-[10px] leading-relaxed text-[#9B9282]">
+                I understand each beat is delivered digitally under the selected license tier, and exclusive availability is verified again at checkout.
+              </span>
+            </span>
+          </label>
           <Button
             onClick={handleCheckout}
-            disabled={items.length === 0}
+            disabled={items.length === 0 || !termsAccepted}
             variant="primary"
             className="w-full"
           >

@@ -3,18 +3,27 @@
 import { usePlayer } from '@/hooks/usePlayer';
 import {
   Volume2, VolumeX,
-  ListMusic, Music, Shuffle, Repeat, ChevronDown, X,
+  ListMusic, Music, Shuffle, Repeat, ChevronDown,
+  AlertTriangle, Loader2,
 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';
 import { MarqueeText } from './MarqueeText';
 import { SimpleAudioEngine } from './SimpleAudioEngine';
 import { MiniWaveform } from './MiniWaveform';
+import { CoverWaveform } from './CoverWaveform';
 import { QueueDrawer } from './QueueDrawer';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { extractCoverColor } from '@/lib/audio/cover-color';
-import { cdnAudioSrc } from '@/lib/audio/cdn';
+import { canFetchReadableAudio, cdnAudioSrc } from '@/lib/audio/cdn';
+import { CoverImage } from '@/components/ui/CoverImage';
+import { keyboardSeekFraction } from '@/lib/audio/seek-accessibility';
+import { getPlayerStreamStatus } from '@/lib/audio/player-status';
+
+const subscribeToClientSnapshot = () => () => undefined;
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
 
 /**
  * Floating mini-player pill, centered along the bottom edge.
@@ -30,7 +39,7 @@ import { cdnAudioSrc } from '@/lib/audio/cdn';
 export function PlayerBar() {
   const {
     currentTrack, isPlaying, togglePlay, next, prev,
-    volume, setVolume, progress, queue, seekTo,
+    volume, setVolume, progress, queue, seekTo, isBuffering, playbackError,
     // Pulled from the store now, not local useState — local state
     // was decorative; the playback engine in usePlayer reads these
     // values to decide auto-advance / shuffle order.
@@ -55,14 +64,14 @@ export function PlayerBar() {
     // the full ~80MB file through the origin, burning mobile data and choking
     // the active stream's bandwidth.
     const warmSrc = cdnAudioSrc(upcoming.audio_url);
-    if (/^https?:\/\//i.test(warmSrc)) {
+    if (/^https?:\/\//i.test(warmSrc) && canFetchReadableAudio(warmSrc)) {
       fetch(warmSrc, { signal: ctrl.signal, priority: 'low' as RequestPriority }).catch(() => {});
     }
     if (upcoming.peaks_url) {
       fetch(upcoming.peaks_url, { signal: ctrl.signal, cache: 'force-cache' }).catch(() => {});
     }
     return () => ctrl.abort();
-  }, [currentTrack?.id, isPlaying, shuffle, repeat, queue]);
+  }, [currentTrack, isPlaying, shuffle, repeat, queue]);
   // Mute is implemented by setting engine volume to 0 and stashing
   // the previous level so we can restore it on unmute. Without this,
   // clicking mute just flipped a local boolean — the audio kept
@@ -79,8 +88,7 @@ export function PlayerBar() {
   };
   const [queueOpen, setQueueOpen] = useState(false);
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
+  const mounted = useSyncExternalStore(subscribeToClientSnapshot, getClientSnapshot, getServerSnapshot);
 
   // ── Ambient color from cover art ────────────────────────────────
   // Extracted once per cover and used to tint the Now Playing overlay.
@@ -88,10 +96,11 @@ export function PlayerBar() {
   const coverUrl = currentTrack?.cover_url ?? null;
   useEffect(() => {
     let cancelled = false;
-    if (!coverUrl) { setAmbient(null); return; }
+    if (!coverUrl) return;
     extractCoverColor(coverUrl).then((c) => { if (!cancelled) setAmbient(c); });
     return () => { cancelled = true; };
   }, [coverUrl]);
+  const displayAmbient = coverUrl ? ambient : null;
 
   // ── Global keyboard shortcuts ───────────────────────────────────
   // Space play/pause · ←/→ seek 5s · ↑/↓ volume · n/p next/prev · m mute.
@@ -102,8 +111,12 @@ export function PlayerBar() {
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const dur = currentTrack?.duration_seconds || 0;
+      const canAttemptPlayback = Boolean(currentTrack?.audio_url);
       switch (e.key) {
-        case ' ': e.preventDefault(); togglePlay(); break;
+        case ' ':
+          e.preventDefault();
+          if (canAttemptPlayback) togglePlay();
+          break;
         case 'ArrowRight': if (dur > 0) { e.preventDefault(); seekTo(Math.min(1, progress + 5 / dur)); } break;
         case 'ArrowLeft':  if (dur > 0) { e.preventDefault(); seekTo(Math.max(0, progress - 5 / dur)); } break;
         case 'ArrowUp':   e.preventDefault(); setVolume(Math.min(1, volume + 0.1)); break;
@@ -131,6 +144,25 @@ export function PlayerBar() {
 
   const totalSeconds = currentTrack.duration_seconds || 0;
   const currentSeconds = totalSeconds * progress;
+  const streamStatus = getPlayerStreamStatus({
+    hasAudioUrl: Boolean(currentTrack.audio_url),
+    isPlaying,
+    isBuffering,
+    playbackError,
+    trackType: currentTrack.type,
+    bpm: currentTrack.bpm,
+  });
+  const handlePrimaryPlay = () => {
+    if (!streamStatus.canAttemptPlayback) return;
+    togglePlay();
+  };
+  const handleSeekKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!streamStatus.canSeek) return;
+    const nextFraction = keyboardSeekFraction(e.key, progress, totalSeconds);
+    if (nextFraction == null) return;
+    e.preventDefault();
+    seekTo(nextFraction);
+  };
 
   return (
     <>
@@ -175,7 +207,7 @@ export function PlayerBar() {
               aria-label="Open Now Playing"
             >
               {currentTrack.cover_url ? (
-                <img loading="lazy" src={currentTrack.cover_url} alt="" className="w-full h-full object-cover" />
+                <CoverImage src={currentTrack.cover_url} alt="" sizes="44px" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-[#6E685B] bg-gradient-to-br from-[#342F27] to-[#090907]">
                   <Music size={14} />
@@ -189,15 +221,20 @@ export function PlayerBar() {
               <MarqueeText text={currentTrack.title || 'Untitled'} className="text-[12px] font-medium text-[#F7EBDD] leading-tight" />
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span className="text-[10px] font-mono text-[#9B9282] uppercase tracking-wider">
-                  {currentTrack.type}{currentTrack.bpm ? ` · ${currentTrack.bpm}` : ''}
+                  {streamStatus.metaLabel}
                 </span>
-                {currentTrack.key && (
+                {streamStatus.badgeLabel ? (
+                  <span className="inline-flex items-center gap-1 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wider leading-none text-red-200 bg-red-950/50 border border-red-400/20">
+                    <AlertTriangle size={9} />
+                    {streamStatus.badgeLabel}
+                  </span>
+                ) : currentTrack.key && (
                   <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wider leading-none ${
-                    (currentTrack as any).scale === 'minor'
+                    currentTrack.scale === 'minor'
                       ? 'text-[#9d95e8] bg-[#1a1833]/70 border border-[#534AB7]/25'
                       : 'text-[#c8a47a] bg-[#1f1a10]/70 border border-[#3d3020]/35'
                   }`}>
-                    {currentTrack.key}{(currentTrack as any).scale === 'minor' ? 'm' : ''}
+                    {currentTrack.key}{currentTrack.scale === 'minor' ? 'm' : ''}
                   </span>
                 )}
               </div>
@@ -237,11 +274,16 @@ export function PlayerBar() {
               <PrevGlyph size={15} />
             </button>
             <button
-              onClick={togglePlay}
-              className="w-10 h-10 rounded-full flex items-center justify-center text-black ml-0.5 mr-0.5 bg-gradient-to-b from-white to-[#ece4d4] hover:scale-[1.07] active:scale-95 transition-transform duration-150 shadow-[0_3px_12px_rgba(0,0,0,0.35),0_0_0_0.5px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)]"
+              onClick={handlePrimaryPlay}
+              disabled={!streamStatus.canAttemptPlayback}
+              className={cn(
+                'w-10 h-10 rounded-full flex items-center justify-center text-black ml-0.5 mr-0.5 bg-gradient-to-b from-white to-[#ece4d4] active:scale-95 transition-transform duration-150 shadow-[0_3px_12px_rgba(0,0,0,0.35),0_0_0_0.5px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)]',
+                streamStatus.canAttemptPlayback ? 'hover:scale-[1.07]' : 'cursor-not-allowed opacity-55',
+              )}
               aria-label={isPlaying ? 'Pause' : 'Play'}
+              title={streamStatus.detail ?? streamStatus.title}
             >
-              {isPlaying ? <PauseGlyph size={16} /> : <PlayGlyph size={16} className="ml-0.5" />}
+              {isBuffering ? <Loader2 size={16} className="animate-spin" /> : isPlaying ? <PauseGlyph size={16} /> : <PlayGlyph size={16} className="ml-0.5" />}
             </button>
             <button onClick={next} className="w-8 h-8 flex items-center justify-center rounded-full text-[#D0C3AF] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Next track">
               <NextGlyph size={15} />
@@ -348,16 +390,17 @@ export function PlayerBar() {
             onClick={() => setNowPlayingOpen(false)}
             className="absolute inset-0 cursor-default"
           >
-            {ambient && (
+            {displayAmbient && (
               <div
                 className="absolute inset-0 transition-colors duration-700"
-                style={{ background: `linear-gradient(180deg, ${ambient} 0%, #090907 80%)` }}
+                style={{ background: `linear-gradient(180deg, ${displayAmbient} 0%, #090907 80%)` }}
               />
             )}
             {currentTrack.cover_url ? (
-              <img
+              <CoverImage
                 src={currentTrack.cover_url}
                 alt=""
+                sizes="100vw"
                 className="w-full h-full object-cover scale-125 blur-[72px] opacity-40"
               />
             ) : null}
@@ -388,17 +431,26 @@ export function PlayerBar() {
               </button>
             </div>
 
-            {/* Square cover art — large, Spotify-style hero. */}
+            {/* Square cover art — De Roche cover-waveform hero. It observes
+                the global player and real peaks_url data; it never creates a
+                second audio engine. */}
             <div className="flex items-center justify-center pt-5 pb-1">
-              <div className="w-full aspect-square rounded-2xl overflow-hidden border border-white/[0.08] shadow-[0_28px_70px_-12px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.05)]">
-                {currentTrack.cover_url ? (
-                  <img src={currentTrack.cover_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907] flex items-center justify-center">
-                    <Music size={48} className="text-[#6E685B]" />
-                  </div>
-                )}
-              </div>
+              <CoverWaveform
+                trackId={currentTrack.id}
+                title={currentTrack.title || 'Untitled'}
+                coverUrl={currentTrack.cover_url}
+                ambientColor={displayAmbient}
+                peaksUrl={currentTrack.peaks_url}
+                progress={progress}
+                state={streamStatus.coverState}
+                onSeek={(fraction) => {
+                  if (totalSeconds <= 0 || !streamStatus.canSeek) return;
+                  seekTo(fraction);
+                }}
+                onRetry={playbackError && streamStatus.canAttemptPlayback ? togglePlay : undefined}
+                statusDetail={streamStatus.detail}
+                className="w-full"
+              />
             </div>
 
             {/* Track info */}
@@ -415,11 +467,11 @@ export function PlayerBar() {
                 )}
                 {currentTrack.key && (
                   <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                    (currentTrack as any).scale === 'minor'
+                    currentTrack.scale === 'minor'
                       ? 'text-[#9d95e8] bg-[#1a1833]/70 border border-[#534AB7]/30'
                       : 'text-[#c8a47a] bg-[#1f1a10]/70 border border-[#3d3020]/40'
                   }`}>
-                    {currentTrack.key}{(currentTrack as any).scale === 'minor' ? 'm' : ''}
+                    {currentTrack.key}{currentTrack.scale === 'minor' ? 'm' : ''}
                   </span>
                 )}
               </div>
@@ -429,16 +481,22 @@ export function PlayerBar() {
               <div className="mt-6">
                 <div
                   role="slider"
-                  aria-label="Seek"
+                  tabIndex={0}
+                  aria-label={`Seek ${currentTrack.title || 'current track'}`}
                   aria-valuenow={Math.round(progress * 100)}
                   aria-valuemin={0}
                   aria-valuemax={100}
+                  aria-valuetext={`${formatTime(currentSeconds)} elapsed of ${formatTime(totalSeconds)}`}
+                  onKeyDown={handleSeekKeyDown}
                   onClick={(e) => {
-                    if (totalSeconds <= 0) return;
+                    if (totalSeconds <= 0 || !streamStatus.canSeek) return;
                     const r = e.currentTarget.getBoundingClientRect();
                     seekTo(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)));
                   }}
-                  className="group/seek relative h-4 flex items-center cursor-pointer"
+                  className={cn(
+                    'group/seek relative h-4 flex items-center',
+                    streamStatus.canSeek ? 'cursor-pointer' : 'cursor-not-allowed opacity-70',
+                  )}
                 >
                   <div className="w-full h-[5px] rounded-full bg-white/[0.13] overflow-hidden">
                     <div
@@ -462,25 +520,37 @@ export function PlayerBar() {
                 <button
                   onClick={toggleShuffle}
                   className={cn('w-10 h-10 flex items-center justify-center rounded-full transition-colors', shuffle ? 'text-[#F3E6D1]' : 'text-[#B4AA99] hover:text-white')}
+                  aria-label={shuffle ? 'Turn shuffle off' : 'Turn shuffle on'}
+                  aria-pressed={shuffle}
                 >
                   <Shuffle size={18} />
                 </button>
-                <button onClick={prev} className="w-10 h-10 flex items-center justify-center rounded-full text-[#cdbf9f] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all">
+                <button onClick={prev} className="w-10 h-10 flex items-center justify-center rounded-full text-[#cdbf9f] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Previous track">
                   <PrevGlyph size={26} />
                 </button>
                 <button
-                  onClick={togglePlay}
-                  className="w-[3.75rem] h-[3.75rem] rounded-full flex items-center justify-center text-[#090907] bg-[#E7D7BE] hover:bg-[#E2CDA8] hover:scale-[1.05] active:scale-95 transition-all duration-150 shadow-[0_10px_30px_-8px_rgba(231,215,190,0.55)]"
+                  onClick={handlePrimaryPlay}
+                  disabled={!streamStatus.canAttemptPlayback}
+                  className={cn(
+                    'w-[3.75rem] h-[3.75rem] rounded-full flex items-center justify-center text-[#090907] bg-[#E7D7BE] active:scale-95 transition-all duration-150 shadow-[0_10px_30px_-8px_rgba(231,215,190,0.55)]',
+                    streamStatus.canAttemptPlayback ? 'hover:bg-[#E2CDA8] hover:scale-[1.05]' : 'cursor-not-allowed opacity-55',
+                  )}
                   aria-label={isPlaying ? 'Pause' : 'Play'}
+                  title={streamStatus.detail ?? streamStatus.title}
                 >
                   {isPlaying ? <PauseGlyph size={25} /> : <PlayGlyph size={25} className="ml-1" />}
                 </button>
-                <button onClick={next} className="w-10 h-10 flex items-center justify-center rounded-full text-[#cdbf9f] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all">
+                <button onClick={next} className="w-10 h-10 flex items-center justify-center rounded-full text-[#cdbf9f] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Next track">
                   <NextGlyph size={26} />
                 </button>
                 <button
                   onClick={cycleRepeat}
                   className={cn('relative w-10 h-10 flex items-center justify-center rounded-full transition-colors', repeat !== 'off' ? 'text-[#F3E6D1]' : 'text-[#B4AA99] hover:text-white')}
+                  aria-label={
+                    repeat === 'off' ? 'Turn repeat all on' :
+                    repeat === 'all' ? 'Switch to repeat one' : 'Turn repeat off'
+                  }
+                  aria-pressed={repeat !== 'off'}
                 >
                   <Repeat size={18} />
                   {repeat === 'one' && <span className="absolute -top-0.5 -right-0.5 text-[7px] font-bold leading-none">1</span>}
@@ -489,13 +559,15 @@ export function PlayerBar() {
 
               {/* Volume */}
               <div className="flex items-center gap-3 px-2">
-                <button onClick={toggleMute} className="text-[#B4AA99] hover:text-white transition-colors">
+                <button onClick={toggleMute} className="text-[#B4AA99] hover:text-white transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
                   {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
                 </button>
                 <input
                   type="range" min="0" max="1" step="0.01" value={volume}
                   onChange={(e) => setVolume(parseFloat(e.target.value))}
                   className="flex-1 h-1 cursor-pointer accent-[#F7EBDD] rounded-full"
+                  aria-label="Volume"
+                  aria-valuetext={`${Math.round(volume * 100)} percent`}
                 />
                 <Volume2 size={15} className="text-[#B4AA99] opacity-80" />
               </div>

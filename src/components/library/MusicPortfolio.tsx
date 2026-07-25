@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef, useEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useCallback, useState, useSyncExternalStore } from 'react';
+import Image from 'next/image';
 import { gsap } from 'gsap';
 import { ScrambleTextPlugin } from 'gsap/ScrambleTextPlugin';
 
@@ -62,15 +63,15 @@ function fmtDuration(secs: number | null | undefined): string {
 }
 
 function usePrefersReducedMotion(): boolean {
-    const [prefersReduced, setPrefersReduced] = useState(false);
-    useEffect(() => {
-        const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-        setPrefersReduced(mq.matches);
-        const handler = (e: MediaQueryListEvent) => setPrefersReduced(e.matches);
-        mq.addEventListener('change', handler);
-        return () => mq.removeEventListener('change', handler);
-    }, []);
-    return prefersReduced;
+    return useSyncExternalStore(
+        (onStoreChange) => {
+            const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+            mq.addEventListener('change', onStoreChange);
+            return () => mq.removeEventListener('change', onStoreChange);
+        },
+        () => window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+        () => false,
+    );
 }
 
 export default function MusicPortfolio({
@@ -93,9 +94,6 @@ export default function MusicPortfolio({
     const lastHoveredRef = useRef<string | null>(null);
     const [hoveredId, setHoveredId] = useState<string | null>(null);
     const prefersReduced = usePrefersReducedMotion();
-
-    const getRow = useCallback((id: string) => rowRefs.current.get(id), []);
-    const getTitleSpan = useCallback((id: string) => titleRefs.current.get(id), []);
 
     // Background image transition on hover
     useEffect(() => {
@@ -232,13 +230,14 @@ export default function MusicPortfolio({
 
     // Cleanup on unmount
     useEffect(() => {
+        const titleNodes = titleRefs.current;
         return () => {
             if (idleTimelineRef.current) {
                 idleTimelineRef.current.kill();
                 idleTimelineRef.current = null;
             }
             if (debounceRef.current) clearTimeout(debounceRef.current);
-            titleRefs.current.forEach((span) => {
+            titleNodes.forEach((span) => {
                 gsap.killTweensOf(span);
             });
         };
@@ -364,10 +363,13 @@ export default function MusicPortfolio({
                                     className="w-8 h-8 shrink-0 rounded overflow-hidden relative group/cover"
                                 >
                                     {track.cover_url ? (
-                                        <img
+                                        <Image
                                             src={track.cover_url}
                                             alt=""
+                                            width={32}
+                                            height={32}
                                             className="w-full h-full object-cover"
+                                            unoptimized
                                         />
                                     ) : (
                                         <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907]" />

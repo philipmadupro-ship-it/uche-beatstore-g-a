@@ -2,11 +2,133 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { isSupabaseConfigured, getAll, query } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
-import { signedSharePreviewUrl } from '@/lib/share-media-token';
+import { signedSharePeaksUrl, signedSharePreviewUrl } from '@/lib/share-media-token';
 import { cdnAudioSrc } from '@/lib/audio/cdn';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+type ShareContentType = 'project' | 'playlist' | 'track';
+type ShareRole = 'viewer' | 'commenter' | 'editor' | string;
+type RecipientKind = 'client' | 'producer' | 'rapper' | 'friend' | string;
+
+interface ProjectShareRow {
+  id: string;
+  project_id?: string | null;
+  playlist_id?: string | null;
+  track_id?: string | null;
+  token: string;
+  role: ShareRole;
+  allow_downloads: boolean;
+  revoked_at?: string | null;
+  expires_at?: string | null;
+  password_hash?: string | null;
+  invited_email?: string | null;
+  label?: string | null;
+  plays?: number | null;
+  created_at?: string | null;
+  recipient_kind?: RecipientKind | null;
+  sales_enabled?: boolean | null;
+  content_type?: ShareContentType | null;
+}
+
+interface ProjectAccessRow {
+  id: string;
+  project_id: string;
+  buyer_email?: string | null;
+  token: string;
+  created_at?: string | null;
+}
+
+interface ProjectRow {
+  id: string;
+  name: string;
+  cover_url?: string | null;
+  description?: string | null;
+  bpm_target?: number | null;
+  key_target?: string | null;
+  status?: string | null;
+  user_id?: string | null;
+}
+
+interface PlaylistRow {
+  id: string;
+  name: string;
+  cover_url?: string | null;
+  user_id?: string | null;
+}
+
+interface TrackRow {
+  id: string;
+  title: string;
+  type?: string | null;
+  user_id?: string | null;
+  audio_url?: string | null;
+  preview_url?: string | null;
+  peaks_url?: string | null;
+  cover_url?: string | null;
+  duration_seconds?: number | null;
+  bpm?: number | null;
+  key?: string | null;
+  scale?: string | null;
+  lyrics?: string | null;
+  description?: string | null;
+  lease_price_usd?: number | null;
+  exclusive_price_usd?: number | null;
+}
+
+interface TrackJunctionRow {
+  track_id: string;
+  role?: string | null;
+  position?: number | null;
+}
+
+interface StemRow {
+  track_id: string;
+  status?: string | null;
+  vocals_url?: string | null;
+  drums_url?: string | null;
+  bass_url?: string | null;
+  other_url?: string | null;
+}
+
+interface LicenseRow {
+  id: string;
+  name: string;
+  description?: string | null;
+  price_usd?: number | null;
+  is_free?: boolean | null;
+  file_types?: string[] | null;
+  stems_included?: boolean | null;
+  is_exclusive?: boolean | null;
+  sort_order?: number | null;
+}
+
+interface CreatorProfile {
+  display_name?: string | null;
+  bio?: string | null;
+  hero_image_url?: string | null;
+  credits?: string | null;
+  license_lease_price_usd?: number | null;
+  license_exclusive_price_usd?: number | null;
+  license_notes?: string | null;
+  instagram_handle?: string | null;
+  twitter_handle?: string | null;
+  spotify_url?: string | null;
+  soundcloud_url?: string | null;
+  website_url?: string | null;
+  contact_email?: string | null;
+}
+
+interface EditableProjectPatch {
+  description?: string | null;
+  name?: string;
+  updated_at?: string;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Unexpected server error';
+}
 
 /**
  * Public reader for project shares.
@@ -36,8 +158,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
   try {
     if (!isSupabaseConfigured()) {
-      const share = (getAll('project_shares') as any[]).find((s) => s.token === token);
+      const share = getAll<ProjectShareRow>('project_shares').find((s) => s.token === token);
       if (!share) return NextResponse.json({ error: 'Link not found' }, { status: 404 });
+      if (!share.project_id) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
       const tracks = resolveLocalTracks(share.project_id).map((track) => publicShareTrack(track, token));
       return NextResponse.json({
         share: redactShare(share),
@@ -55,7 +178,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       .maybeSingle();
     if (error) throw error;
 
-    let share: any = dbShare;
+    let share = dbShare as ProjectShareRow | null;
     if (!share) {
       // Fallback for paid storefront project purchases (migration 042)
       const { data: paidAccess } = await admin
@@ -64,19 +187,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         .eq('token', token)
         .maybeSingle();
       if (paidAccess) {
+        const access = paidAccess as ProjectAccessRow;
         share = {
-          id: paidAccess.id,
-          project_id: paidAccess.project_id,
-          token: paidAccess.token,
+          id: access.id,
+          project_id: access.project_id,
+          token: access.token,
           role: 'viewer',
           allow_downloads: true,
           revoked_at: null,
           expires_at: null,
           password_hash: null,
-          invited_email: paidAccess.buyer_email,
+          invited_email: access.buyer_email,
           label: 'Storefront purchase',
           plays: 0,
-          created_at: paidAccess.created_at,
+          created_at: access.created_at,
           recipient_kind: 'client',
           sales_enabled: false,
           content_type: 'project',
@@ -107,7 +231,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
     async function fetchCreator(userId: string) {
       const { data } = await admin.from('creator_profiles').select(CREATOR_FIELDS).eq('user_id', userId).maybeSingle();
-      return data ?? null;
+      return (data as CreatorProfile | null) ?? null;
     }
 
     // Fire-and-forget play counter (only for real project_shares rows, not paid access tokens)
@@ -115,42 +239,48 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       admin.from('project_shares').update({ plays: (share.plays ?? 0) + 1 }).eq('id', share.id).then(() => {});
     }
 
-    const contentType: string = (share as any).content_type ?? 'project';
+    const contentType = share.content_type ?? 'project';
 
     // ── Playlist share ──────────────────────────────────────────────────
     if (contentType === 'playlist') {
-      const playlistId = (share as any).playlist_id;
+      const playlistId = share.playlist_id;
       const [{ data: playlist }, { data: junction }] = await Promise.all([
         admin.from('playlists').select('id, name, cover_url, user_id').eq('id', playlistId).maybeSingle(),
         admin.from('playlist_tracks').select('track_id, position').eq('playlist_id', playlistId).order('position', { ascending: true }),
       ]);
-      const trackIds = (junction ?? []).map((j: any) => j.track_id);
-      let tracks: any[] = [];
-      let stems: any[] = [];
+      const playlistRow = playlist as PlaylistRow | null;
+      const junctionRows = (junction ?? []) as TrackJunctionRow[];
+      const trackIds = junctionRows.map((j) => j.track_id);
+      let tracks: ReturnType<typeof publicShareTrack>[] = [];
+      let stems: ReturnType<typeof redactStems> = [];
       if (trackIds.length) {
         const [tracksRes, stemsRes] = await Promise.all([
           admin.from('tracks').select(TRACK_FIELDS).in('id', trackIds),
           admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').in('track_id', trackIds),
         ]);
-        stems = redactStems(stemsRes.data, share.allow_downloads);
-        const byId = new Map((tracksRes.data ?? []).map((t: any) => [t.id, t]));
-        tracks = (junction ?? []).map((j: any) => byId.get(j.track_id)).filter(Boolean).map((track) => publicShareTrack(track, token));
+        stems = redactStems(stemsRes.data as StemRow[] | null, share.allow_downloads);
+        const byId = new Map(((tracksRes.data ?? []) as TrackRow[]).map((t) => [t.id, t]));
+        tracks = junctionRows
+          .map((j) => byId.get(j.track_id))
+          .filter((track): track is TrackRow => Boolean(track))
+          .map((track) => publicShareTrack(track, token));
       }
-      const creator = playlist?.user_id ? await fetchCreator(playlist.user_id) : null;
-      const { user_id: _u, ...playlistPublic } = (playlist ?? {}) as any;
+      const creator = playlistRow?.user_id ? await fetchCreator(playlistRow.user_id) : null;
+      const playlistPublic = redactUserId(playlistRow);
       return NextResponse.json({ share: redactShare(share), playlist: playlistPublic, project: null, tracks, creator, stems });
     }
 
     // ── Single-track share ──────────────────────────────────────────────
     if (contentType === 'track') {
-      const trackId = (share as any).track_id;
+      const trackId = share.track_id;
       const { data: trackRow } = await admin.from('tracks').select(`${TRACK_FIELDS}, user_id`).eq('id', trackId).maybeSingle();
-      const tracks = trackRow ? [publicShareTrack(trackRow as any, token)] : [];
-      const stems = trackRow
+      const track = trackRow as TrackRow | null;
+      const tracks = track ? [publicShareTrack(track, token)] : [];
+      const stems = track
         ? redactStems((await admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').eq('track_id', trackId)).data, share.allow_downloads)
         : [];
-      const creator = (trackRow as any)?.user_id ? await fetchCreator((trackRow as any).user_id) : null;
-      const trackPublic = trackRow ? { id: trackRow.id, title: trackRow.title, cover_url: (trackRow as any).cover_url } : null;
+      const creator = track?.user_id ? await fetchCreator(track.user_id) : null;
+      const trackPublic = track ? { id: track.id, title: track.title, cover_url: track.cover_url } : null;
       return NextResponse.json({ share: redactShare(share), track: trackPublic, project: null, playlist: null, tracks, creator, stems });
     }
 
@@ -166,36 +296,38 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         .eq('project_id', share.project_id)
         .order('position', { ascending: true }),
     ]);
+    const projectRow = project as ProjectRow | null;
+    const junctionRows = (junction ?? []) as TrackJunctionRow[];
 
-    const trackIds = (junction ?? []).map((j: any) => j.track_id);
+    const trackIds = junctionRows.map((j) => j.track_id);
 
     // Creator depends on project.user_id; tracks/stems depend on junction.
     // Run all three in parallel now that those inputs are resolved.
     const [creator, tracksRes, stemsRes] = await Promise.all([
-      project?.user_id ? fetchCreator(project.user_id) : Promise.resolve(null),
-      trackIds.length ? admin.from('tracks').select(TRACK_FIELDS).in('id', trackIds) : Promise.resolve({ data: [] as any[] }),
-      trackIds.length ? admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').in('track_id', trackIds) : Promise.resolve({ data: [] as any[] }),
+      projectRow?.user_id ? fetchCreator(projectRow.user_id) : Promise.resolve(null),
+      trackIds.length ? admin.from('tracks').select(TRACK_FIELDS).in('id', trackIds) : Promise.resolve({ data: [] as TrackRow[] }),
+      trackIds.length ? admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').in('track_id', trackIds) : Promise.resolve({ data: [] as StemRow[] }),
     ]);
 
-    const stems = redactStems(stemsRes.data, share.allow_downloads);
-    const byId = new Map(((tracksRes as any).data ?? []).map((t: any) => [t.id, t]));
+    const stems = redactStems(stemsRes.data as StemRow[] | null, share.allow_downloads);
+    const byId = new Map(((tracksRes.data ?? []) as TrackRow[]).map((t) => [t.id, t]));
     const tracks = trackIds.length
-      ? (junction ?? []).map((j: any) => byId.get(j.track_id)).filter(Boolean)
+      ? junctionRows.map((j) => byId.get(j.track_id)).filter((track): track is TrackRow => Boolean(track))
       : [];
     const safeTracks = tracks.map((track) => publicShareTrack(track, token));
 
-    const projectPublic = project ? (() => { const { user_id: _u, ...rest } = project; return rest; })() : null;
+    const projectPublic = redactUserId(projectRow);
 
     // ── Producer's custom license tiers (for client share page) ────────
-    let licenses: any[] = [];
-    if (project?.user_id) {
+    let licenses: LicenseRow[] = [];
+    if (projectRow?.user_id) {
       try {
         const { data: licData } = await admin
           .from('licenses')
           .select('id, name, description, price_usd, is_free, file_types, stems_included, is_exclusive, sort_order')
-          .eq('user_id', project.user_id)
+          .eq('user_id', projectRow.user_id)
           .order('sort_order', { ascending: true });
-        licenses = licData ?? [];
+        licenses = (licData as LicenseRow[] | null) ?? [];
       } catch {
         // licenses table may not exist in all deployments — non-fatal
       }
@@ -211,9 +343,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       stems,
       licenses,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Project share read error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }
 
@@ -262,8 +394,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     // Whitelist editable fields. Names like `user_id` / `created_at` are
     // explicitly excluded; we don't trust the share token for ownership
     // changes regardless of role.
-    const body = await req.json().catch(() => ({}));
-    const patch: Record<string, any> = {};
+    const body = await req.json().catch(() => ({})) as { description?: unknown; name?: unknown };
+    const patch: EditableProjectPatch = {};
     if (typeof body.description === 'string') {
       const v = body.description.trim();
       if (v.length > 5000) {
@@ -291,13 +423,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
       .single();
     if (error) throw error;
     return NextResponse.json({ project: data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Editor PATCH error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }
 
-function redactShare(s: any) {
+function redactShare(s: ProjectShareRow) {
   // Never echo password_hash or created_by — recipients have no
   // business seeing either. `recipient_kind` drives the share page
   // variant; `sales_enabled` gates whether the license card renders
@@ -313,8 +445,10 @@ function redactShare(s: any) {
   };
 }
 
-function publicShareTrack(track: any, token: string) {
-  const { user_id: _u, audio_url: _audio, preview_url, ...rest } = track;
+function publicShareTrack(track: TrackRow, token: string) {
+  const { user_id: _userId, audio_url: _audioUrl, preview_url, ...rest } = track;
+  void _userId;
+  void _audioUrl;
   // Stream the public preview clip straight from R2 (fast + edge-cached +
   // prefetchable) when it exists; fall back to the signed proxy for tracks
   // whose preview hasn't been generated yet. The preview is the truncated,
@@ -326,25 +460,33 @@ function publicShareTrack(track: any, token: string) {
     ...rest,
     preview_url: null,
     audio_url: direct ?? signedSharePreviewUrl(token, track.id),
+    peaks_url: track.peaks_url ? signedSharePeaksUrl(token, track.id) : null,
   };
 }
 
-function redactStems(stems: any[] | null | undefined, allowDownloads: boolean) {
+function redactStems(stems: StemRow[] | null | undefined, allowDownloads: boolean) {
   if (!allowDownloads) return [];
-  return (stems ?? []).map((stem: any) => ({
+  return (stems ?? []).map((stem) => ({
     track_id: stem.track_id,
     status: stem.status,
   }));
 }
 
+function redactUserId<T extends { user_id?: string | null }>(row: T | null | undefined) {
+  if (!row) return null;
+  const { user_id: _userId, ...rest } = row;
+  void _userId;
+  return rest;
+}
+
 function resolveLocalProject(projectId: string) {
-  const projects = getAll('projects') as any[];
+  const projects = getAll<ProjectRow>('projects');
   return projects.find((p) => p.id === projectId) || null;
 }
 
 function resolveLocalTracks(projectId: string) {
-  const pt = query('project_tracks', (j: any) => j.project_id === projectId)
-    .sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
-  const ids = new Set(pt.map((j: any) => j.track_id));
-  return (getAll('tracks') as any[]).filter((t) => ids.has(t.id));
+  const pt = query<TrackJunctionRow & { project_id: string }>('project_tracks', (j) => j.project_id === projectId)
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const ids = new Set(pt.map((j) => j.track_id));
+  return getAll<TrackRow>('tracks').filter((t) => ids.has(t.id));
 }

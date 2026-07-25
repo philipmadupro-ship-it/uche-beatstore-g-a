@@ -15,6 +15,24 @@ interface MusicTempoResult {
   beats?: number[];
 }
 
+type MusicTempoConstructor = new (input: Float32Array | number[]) => MusicTempoResult;
+
+interface AudioDecodeResult {
+  channelData?: Float32Array[];
+  sampleRate?: number;
+  getChannelData?: (ch: number) => Float32Array;
+  numberOfChannels?: number;
+  length?: number;
+  duration?: number;
+}
+
+type AudioDecodeFn = (buffer: Buffer) => Promise<AudioDecodeResult | null>;
+
+interface AudioDecodeModule {
+  default?: AudioDecodeFn;
+  decodeAudio?: AudioDecodeFn;
+}
+
 export interface BpmResult {
   bpm: number;
   /** Total decoded duration in seconds. */
@@ -25,8 +43,8 @@ const SAMPLE_DOWN = 4; // music-tempo handles ~5-10 sec at 44.1k just fine; we d
 
 export async function estimateBpm(buffer: Buffer): Promise<BpmResult | null> {
   try {
-    const decodeMod = await import('audio-decode');
-    const decode = (decodeMod as any).default ?? (decodeMod as any).decodeAudio;
+    const decodeMod = (await import('audio-decode')) as AudioDecodeModule;
+    const decode = decodeMod.default ?? decodeMod.decodeAudio;
     if (typeof decode !== 'function') {
       console.warn('[bpm] audio-decode export not a function', Object.keys(decodeMod));
       return null;
@@ -35,15 +53,7 @@ export async function estimateBpm(buffer: Buffer): Promise<BpmResult | null> {
     // audio-decode v3 returns { channelData: Float32Array[], sampleRate }
     // — no getChannelData, no length, no duration. Normalise to the
     // older AudioBuffer-like shape so the rest of the code reads naturally.
-    let raw: {
-      channelData?: Float32Array[];
-      sampleRate?: number;
-      // v2 fallback fields
-      getChannelData?: (ch: number) => Float32Array;
-      numberOfChannels?: number;
-      length?: number;
-      duration?: number;
-    } | null = null;
+    let raw: AudioDecodeResult | null = null;
     try {
       raw = await decode(buffer);
     } catch (decodeErr) {
@@ -85,10 +95,8 @@ export async function estimateBpm(buffer: Buffer): Promise<BpmResult | null> {
       mono[i] = ((left[j] ?? 0) + (rightChan[j] ?? 0)) * 0.5;
     }
 
-    const MusicTempoMod = await import('music-tempo');
-    const MusicTempo = ((MusicTempoMod as any).default ?? MusicTempoMod) as new (
-      input: Float32Array | number[],
-    ) => MusicTempoResult;
+    const musicTempoMod = (await import('music-tempo')) as { default?: MusicTempoConstructor };
+    const MusicTempo = musicTempoMod.default ?? (musicTempoMod as unknown as MusicTempoConstructor);
     let result: MusicTempoResult;
     try {
       result = new MusicTempo(Array.from(mono));

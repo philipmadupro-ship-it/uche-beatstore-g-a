@@ -27,6 +27,20 @@ export interface AudioFeatures {
 
 const EMPTY: AudioFeatures = { bpm: null, key: null, scale: null, loudness: null, duration: null };
 
+interface EssentiaRuntime {
+  arrayToVector(input: Float32Array): unknown;
+  RhythmExtractor2013(signal: unknown): { bpm: number };
+  KeyExtractor(signal: unknown): { key?: string | null; scale?: string | null };
+  LoudnessEBUR128(left: unknown, right: unknown): { integratedLoudness: number };
+  delete(): void;
+}
+
+type EssentiaFactory = () => Promise<EssentiaRuntime>;
+
+interface EssentiaModule {
+  EssentiaWASM: EssentiaFactory | { EssentiaWASM?: EssentiaFactory };
+}
+
 export async function analyzeAudio(file: File): Promise<AudioFeatures> {
   if (typeof window === 'undefined') return { ...EMPTY };
   return runEssentia(await file.arrayBuffer());
@@ -84,11 +98,14 @@ async function runEssentia(buffer: ArrayBuffer): Promise<AudioFeatures> {
     if (ctx) {
       try { await ctx.close(); } catch {}
     }
-    
+
     // Fallback: local direct main-thread analysis so it NEVER breaks
     try {
-      const { EssentiaWASM } = (await import('essentia.js')) as any;
-      const factory = EssentiaWASM.EssentiaWASM ?? EssentiaWASM;
+      const { EssentiaWASM } = (await import('essentia.js') as unknown as EssentiaModule);
+      const factory = typeof EssentiaWASM === 'function'
+        ? EssentiaWASM
+        : EssentiaWASM.EssentiaWASM;
+      if (!factory) throw new Error('Essentia WASM factory not found');
       const essentia = await factory();
 
       const fallbackCtx = new AudioContext();
