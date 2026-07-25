@@ -47,12 +47,10 @@ export function FeaturedPlaylistsStrip({
                 href={href}
                 className="group shrink-0 w-[180px] sm:w-[200px] md:w-[220px] snap-start"
               >
-                {/* Cover — double-bezel */}
-                <div
-                  className="w-full aspect-square rounded-[14px] p-[1.5px] mb-3 overflow-hidden"
-                  style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)' }}
-                >
-                  <div className="relative w-full h-full rounded-[13px] overflow-hidden bg-[#171511]">
+                {/* Flat hairline instead of a gradient bezel tray — same
+                    reduction applied to BeatCard and the store detail page. */}
+                <div className="mb-3 aspect-square w-full overflow-hidden rounded-xl bg-white/[0.06] p-px">
+                  <div className="relative w-full h-full rounded-xl overflow-hidden bg-[#171511]">
                     {pl.cover_url ? (
                       <CoverImage
                         src={pl.cover_url}

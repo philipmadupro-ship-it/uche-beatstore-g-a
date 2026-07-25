@@ -166,17 +166,13 @@ function StoreSalesSpotlight({
     <section className="mx-auto mt-6 max-w-[1400px] px-4 md:px-8">
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.48fr)]">
         {track && (
-          <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-[#14110D]/80 p-3">
-            {track.cover_url && (
-              <CoverImage
-                src={track.cover_url}
-                alt=""
-                sizes="100vw"
-                priority
-                className="absolute inset-0 h-full w-full object-cover opacity-15 blur-2xl scale-110"
-              />
-            )}
-            <div className="relative grid gap-3 sm:grid-cols-[104px_minmax(0,1fr)] sm:items-center">
+          // Flat surface — a blurred full-bleed copy of the same cover used to
+          // sit behind this panel, duplicating the sharp 104px thumbnail right
+          // next to it and tinting the whole card with whatever hue the cover
+          // happened to be (this is what produced an off-palette purple panel
+          // whenever a purple-toned cover was featured).
+          <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-[#14110D] p-3">
+            <div className="grid gap-3 sm:grid-cols-[104px_minmax(0,1fr)] sm:items-center">
               <button
                 type="button"
                 onClick={() => onPreview(track)}
@@ -207,7 +203,7 @@ function StoreSalesSpotlight({
                 <h2 className="truncate text-[18px] font-bold leading-tight text-[#F7EBDD] sm:text-[24px]">
                   {track.title}
                 </h2>
-                <p className="mt-1.5 max-w-xl truncate text-[10px] font-mono uppercase tracking-[0.16em] text-[#9B9282]">
+                <p className="mt-1.5 max-w-xl truncate text-[9px] font-mono uppercase tracking-[0.16em] text-[#9B9282]">
                   {[track.type, track.bpm ? `${track.bpm} BPM` : null, track.key ? `${track.key}${track.scale === 'minor' ? 'm' : ''}` : null].filter(Boolean).join(' · ')}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -251,14 +247,18 @@ function StoreSalesSpotlight({
                 <Link href={`/store/projects/${project.id}`} className="mt-1 line-clamp-2 text-[18px] font-bold leading-tight text-[#F7EBDD] hover:text-[#D0C3AF]">
                   {project.name}
                 </Link>
-                <p className="mt-1 text-[10px] font-mono uppercase tracking-[0.16em] text-[#9B9282]">
+                <p className="mt-1 text-[9px] font-mono uppercase tracking-[0.16em] text-[#9B9282]">
                   {project.tracks?.length ?? 0} tracks{projectPrice != null && projectPrice > 0 ? ` · ${money(projectPrice)}` : ''}
                 </p>
                 <button
                   type="button"
                   onClick={() => onBuyProject(project)}
                   disabled={projectPrice == null || projectPrice <= 0}
-                  className="tap mt-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-[9px] font-bold uppercase tracking-wider text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  // self-start stops the flex-col parent's default stretch —
+                  // without it this became a full-width filled slab, the only
+                  // heavy CTA on a hero row where its sibling card uses compact
+                  // pills. Same anatomy as the Play/Choose license pair.
+                  className="tap mt-auto inline-flex min-h-11 w-fit items-center justify-center gap-2 self-start rounded-full px-4 text-[9px] font-bold uppercase tracking-wider text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                   style={{ backgroundColor: accentColor }}
                 >
                   <ShoppingCart size={12} />

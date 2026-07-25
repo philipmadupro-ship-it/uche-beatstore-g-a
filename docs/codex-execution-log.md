@@ -5132,3 +5132,48 @@
 - The list-mode wishlist gap on mobile is open and needs a product decision: either surface the heart on mobile or add a favourite action to the row overflow menu.
 - Off-palette purple on the Daily Pick panel and the heavy Buy Bundle slab remain open from the previous pass.
 - The projects and playlists carousels use a `rounded-[14px] p-[1.5px]` gradient bezel that the pass-1 and pass-2b reductions have not yet reached.
+
+## 2026-07-25 - Quiet Luxury Pass 2c: Featured Hero, Buy Bundle, Carousel Bezels
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: reduction-first workflow, browser-verified before commit per the lesson from the mobile sweep.
+- `.codex/skills/beatstor-design-system`: token vocabulary for the flattened surfaces.
+- `.codex/skills/qa-and-regression-testing`: live screenshots before and after every structural change in this pass, not just class counts.
+
+### Area Inspected
+
+- `src/app/store/page.tsx` (the featured track/project hero, ~line 130-270)
+- `src/components/store/FeaturedPlaylistsStrip.tsx`
+
+### Changes Made
+
+- Removed the blurred full-bleed cover backdrop from the featured-beat hero panel. It sat behind a panel that already shows the same cover sharply at 104px, so it was a duplicate of adjacent content, and it tinted the whole card with whatever hue the current cover happened to be - confirmed live: a purple-toned cover produced a purple panel with no connection to the amber accent palette.
+- Collapsed the hero's two metadata sizes (10px and 9px used for the same kind of label) to 9px throughout.
+- The project card's "Buy bundle" button was rendered as a full-width filled slab despite being `inline-flex` - the parent's `flex-col` default `align-items: stretch` was sizing it to the full card width. Confirmed via live DOM measurement (button and parent both 762px). Added `w-fit self-start` so it matches the compact-pill anatomy of the sibling track card's Play/Choose license buttons - the same card row was showing two different button languages.
+- `FeaturedPlaylistsStrip`: flattened the last remaining gradient "bezel tray" (the projects/playlists carousel cover frame) to a flat hairline ring, the same reduction already applied to BeatCard, the drawers, and the store detail page in earlier passes.
+
+### Problems Discovered
+
+- The purple panel the product owner flagged as off-brand was not a colour decision anywhere in the code - it was cover-art bleed-through from a decorative blur layer. This is a good example of why `docs/design-direction.md` treats "flatter, calmer surfaces" as higher priority than colour audits: the fix was structural (remove the duplicate blurred layer), not a palette change.
+- `w-fit` versus a flex parent's stretch default is an easy way to accidentally produce a "heavy slab" button; this is worth watching for in any card component built on `flex flex-col`.
+- This was the last gradient "bezel tray" of its kind found in the storefront so far (BeatCard, the detail page's five instances, and this carousel).
+
+### Problems Fixed
+
+- The featured-beat hero panel is now a flat, on-palette surface at every cover colour.
+- The project card's CTA now matches its sibling track card's button anatomy instead of introducing a second, heavier button language on the same row.
+- Projects/playlists carousel cards share the same flat-hairline treatment as every other card in the store.
+
+### Tests Performed
+
+- Browser: live screenshots of the featured hero and carousel before and after each change at desktop width; live DOM measurement confirming the Buy bundle button's stretch cause and its corrected width after `self-start`.
+- `npx tsc --noEmit` - passed.
+- `npx eslint src/app/store/page.tsx src/components/store/FeaturedPlaylistsStrip.tsx` - 0 errors, 0 warnings.
+- `npm test` - passed, 100 files and 538 tests.
+- `npm run build` - passed, 55 static pages generated.
+
+### Remaining Concerns
+
+- This pass was desktop-only; the featured hero and carousel have not been re-checked at 375px since these edits.
+- Surface order per `docs/design-direction.md`: checkout (`src/app/store/checkout/page.tsx`, 803 lines, 11 text sizes, 15 hex colours) is next, then share pages, then dashboard home/library, then projects/playlists/store-editor, then a final modals/empty-states sweep.
