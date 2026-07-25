@@ -5223,3 +5223,48 @@
 - This closes the store/checkout/detail/drawer cluster identified in pass 2b. Per `docs/design-direction.md` surface order, next is the share pages (all four variants), then dashboard home/library, then projects/playlists/store-editor, then a final modals/empty-states sweep.
 - The Stripe embedded-checkout iframe itself (`#checkout-element`) is out of this product's styling control and was not touched or assessed.
 - The checkout page's 15 hardcoded hex colours were not consolidated in this pass, matching the same deliberate deferral noted for the detail page in pass 2b - that needs per-usage judgement, not a blanket pass.
+
+## 2026-07-26 - Quiet Luxury Pass 3: Client Share Variant
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: reduction-first workflow, browser-verified with a live share link and a real cart item.
+- `.codex/skills/marketplace-and-licensing`: preserved the cart/license/discount resolution logic while restyling its buttons.
+- `.codex/skills/responsive-ui-engineering` / `.codex/skills/accessibility-and-keyboard-navigation`: tap-target measurement on the fixed now-playing bar.
+- `.codex/skills/antigravity-testing-release`: typecheck, focused lint, full suite, production build.
+
+### Area Inspected
+
+- `src/components/share/variants/ClientShareVariant.tsx` (763 lines - the variant a buyer with `sales_enabled` actually purchases through)
+- `src/components/share/variants/ProducerShareVariant.tsx`, `RapperShareVariant.tsx`, `FriendShareVariant.tsx` (audited, not changed - see Problems Discovered)
+
+### Changes Made
+
+- Track-list buy button was a three-line stack: an 8px strikethrough price, an 11px current price, and a 7px uppercase tier name - the smallest text size found anywhere in the product. Collapsed to two lines (tier label, then price with strikethrough inline) and merged the 7px size into the file's existing 8px scale.
+- Collapsed seven `text-[10px]` mono-metadata occurrences (cart labels, track index, type, seek time) into the file's `text-[9px]` scale.
+- Now-playing transport controls (prev/play/next) and the cart shortcut measured 32x32 and 36x36 live - below the 40px floor. Raised to a 40px hit area using the same negative-margin technique as the store list rows, so the visible icon and button size are pixel-identical; confirmed live via DOM measurement (all four buttons now report exactly 40x40).
+- Removed the now-playing bar's decorative shadow (`shadow-[0_-8px_40px_rgba(0,0,0,0.6)]`); the existing `border-t` already separates it from scrolling content. Left `backdrop-blur-xl` in place - the bar is `fixed`, which the performance guardrail explicitly allows.
+
+### Problems Discovered
+
+- The three-line price stack repeated the exact anti-pattern already removed from `BeatCard` and `StoreListView` in earlier passes, at an even smaller extreme (7px).
+- `ProducerShareVariant`, `RapperShareVariant`, and `FriendShareVariant` were audited and found already disciplined: `ProducerShareVariant`'s 48px sizes are a deliberate large BPM/key display (the equivalent of the store detail page's price display, not noise) and its 8px sizes are legitimate fine-grained key-compatibility grid labels. None of the three needed structural changes in this pass.
+
+### Problems Fixed
+
+- `ClientShareVariant` text sizes: 9 distinct -> 7 (8/9/11/12/13/14/15px), all now legitimate as three tiers of metadata/body/heading. The 7px size is gone entirely from the file.
+- Now-playing bar transport controls meet the 40px tap floor without any visible size change.
+
+### Tests Performed
+
+- Browser: loaded a live share link (`/projects/share/vHpGLDNytC8J`) with a real cart item persisted from the checkout pass's seed, at both 375px and 1280px; live DOM measurement of the fixed now-playing bar's four buttons before and after the tap-target fix (32/36px -> 40x40 confirmed).
+- `npx tsc --noEmit` - passed.
+- `npx eslint src/components/share/variants/ClientShareVariant.tsx` - 0 errors, 0 warnings.
+- `npm test` - passed, 100 files and 538 tests.
+- `npm run build` - passed, 55 static pages generated.
+
+### Remaining Concerns
+
+- This pass covered only `ClientShareVariant`; the other three variants needed no changes but were not screenshotted live in this pass, only audited by reading.
+- `ClientShareVariant` still carries 24 hardcoded hex colours, matching the same deliberate deferral as the store detail page and checkout - consolidating those needs per-usage judgement, not a blanket pass.
+- Per `docs/design-direction.md` surface order, next is dashboard home/library, then projects/playlists/store-editor, then a final modals/empty-states sweep.

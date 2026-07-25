@@ -303,7 +303,7 @@ export function ClientShareVariant({
                   </span>
                 </>
               ) : (
-                <span className="text-[10px] text-[#B4AA99] font-mono">Cart</span>
+                <span className="text-[9px] text-[#B4AA99] font-mono">Cart</span>
               )}
             </button>
           )}
@@ -363,7 +363,7 @@ export function ClientShareVariant({
                 </span>
               </>
             ) : (
-              <span className="text-[10px] text-white/60 font-mono">Cart</span>
+              <span className="text-[9px] text-white/60 font-mono">Cart</span>
             )}
           </button>
         )}
@@ -474,7 +474,7 @@ export function ClientShareVariant({
                         className="min-w-0 text-left flex-1"
                       >
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-[10px] font-mono text-[#6E685B] tabular-nums ${isCurrent ? 'text-[#E7D7BE]' : ''}`}>
+                          <span className={`text-[9px] font-mono text-[#6E685B] tabular-nums ${isCurrent ? 'text-[#E7D7BE]' : ''}`}>
                             {String(i + 1).padStart(2, '0')}
                           </span>
                           <p className={`text-[14px] font-medium truncate transition-colors ${
@@ -489,7 +489,7 @@ export function ClientShareVariant({
                           )}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span className="text-[10px] font-mono text-[#9B9282] uppercase tracking-wider">{t.type}</span>
+                          <span className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider">{t.type}</span>
                           {t.key && <KeyBadge keyName={t.key} scale={t.scale} />}
                         </div>
                       </button>
@@ -539,16 +539,18 @@ export function ClientShareVariant({
                                   : 'bg-[#171511] border-[#3B372F] hover:border-[#E7D7BE]/40 hover:bg-[#211F1A]'
                               }`}
                             >
-                              {origPrice && (
-                                <span className="text-[8px] font-mono text-[#6E685B] line-through tabular-nums">
-                                  ${Math.round(origPrice)}
-                                </span>
-                              )}
-                              <span className={`text-[11px] font-mono font-bold tabular-nums leading-none ${isExcl ? 'text-[#E7D7BE]' : 'text-[#F3E6D1]'}`}>
-                                ${Math.round(price)}
-                              </span>
-                              <span className={`text-[7px] font-mono uppercase tracking-wider mt-0.5 ${isExcl ? 'text-[#D0C3AF]' : 'text-[#B4AA99]'}`}>
+                              <span className={`text-[8px] font-mono uppercase tracking-wider ${isExcl ? 'text-[#D0C3AF]' : 'text-[#B4AA99]'}`}>
                                 {selTier?.name ?? 'Add'}
+                              </span>
+                              <span className="flex items-center gap-1 leading-none">
+                                {origPrice && (
+                                  <span className="text-[8px] font-mono text-[#6E685B] line-through tabular-nums">
+                                    ${Math.round(origPrice)}
+                                  </span>
+                                )}
+                                <span className={`text-[11px] font-mono font-bold tabular-nums ${isExcl ? 'text-[#E7D7BE]' : 'text-[#F3E6D1]'}`}>
+                                  ${Math.round(price)}
+                                </span>
                               </span>
                             </button>
                           );
@@ -639,7 +641,7 @@ export function ClientShareVariant({
 
       {/* ── Sticky Now-Playing bar ── */}
       {playingTrack && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-[#11100D]/95 backdrop-blur-xl border-t border-[#2B2821] shadow-[0_-8px_40px_rgba(0,0,0,0.6)]">
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#2B2821] bg-[#11100D]/95 backdrop-blur-xl">
           {/* Seek bar — full-width clickable strip at the very top of the bar */}
           <div
             onClick={handleSeekClick}
@@ -667,11 +669,11 @@ export function ClientShareVariant({
             <div className="flex-1 min-w-0">
               <p className="text-[12px] font-medium text-white truncate">{playingTrack.title}</p>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[10px] font-mono text-[#9B9282] tabular-nums">
+                <span className="text-[9px] font-mono text-[#9B9282] tabular-nums">
                   {fmt(currentTime)}
                 </span>
-                <span className="text-[10px] font-mono text-[#6E685B]">/</span>
-                <span className="text-[10px] font-mono text-[#9B9282] tabular-nums">
+                <span className="text-[9px] font-mono text-[#6E685B]">/</span>
+                <span className="text-[9px] font-mono text-[#9B9282] tabular-nums">
                   {duration > 0 ? fmt(duration) : fmt(playingTrack.duration_seconds || 0)}
                 </span>
               </div>
@@ -682,20 +684,20 @@ export function ClientShareVariant({
               <button
                 onClick={handlePrev}
                 disabled={playingIdx <= 0}
-                className="w-8 h-8 flex items-center justify-center text-[#B4AA99] hover:text-white disabled:opacity-30 transition-colors"
+                className="-m-1 flex size-10 items-center justify-center text-[#B4AA99] transition-colors hover:text-white disabled:opacity-30"
               >
                 <SkipBack size={14} fill="currentColor" />
               </button>
               <button
                 onClick={() => onPlay(playingTrack)}
-                className="w-9 h-9 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 active:scale-95 transition-transform shadow"
+                className="-m-0.5 flex size-10 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105 active:scale-95"
               >
                 {isPlaying ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" className="ml-0.5" />}
               </button>
               <button
                 onClick={handleNext}
                 disabled={playingIdx >= tracks.length - 1}
-                className="w-8 h-8 flex items-center justify-center text-[#B4AA99] hover:text-white disabled:opacity-30 transition-colors"
+                className="-m-1 flex size-10 items-center justify-center text-[#B4AA99] transition-colors hover:text-white disabled:opacity-30"
               >
                 <SkipForward size={14} fill="currentColor" />
               </button>
@@ -705,7 +707,7 @@ export function ClientShareVariant({
             {shareToken && (
               <button
                 onClick={() => setCartOpen(true)}
-                className="relative w-9 h-9 flex items-center justify-center text-[#B4AA99] hover:text-[#E7D7BE] transition-colors shrink-0"
+                className="relative -m-0.5 flex size-10 shrink-0 items-center justify-center text-[#B4AA99] transition-colors hover:text-[#E7D7BE]"
               >
                 <ShoppingCart size={15} />
                 {cartCount > 0 && (
