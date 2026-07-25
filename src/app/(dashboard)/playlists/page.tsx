@@ -218,7 +218,7 @@ export default function PlaylistsPage() {
                     <>
                       <button
                         onClick={async (e) => { e.preventDefault(); e.stopPropagation(); try { const res = await fetch(`/api/playlists/${playlist.id}/tracks`); const data = await res.json(); const tracks = Array.isArray(data) ? data : data.tracks ?? []; if (tracks.length > 0) { setQueue(tracks); setTrack(tracks[0]); } } catch {} }}
-                        className="absolute bottom-2 left-2 grid size-7 place-items-center rounded-full bg-white text-black shadow-lg transition-transform hover:scale-105 sm:size-9"
+                        className="absolute bottom-2 left-2 grid size-7 place-items-center rounded-full bg-white text-black transition-transform hover:scale-105 sm:size-9"
                         title="Play playlist"
                       >
                         <PlayGlyph size={11} className="ml-0.5 sm:size-[13px]" />

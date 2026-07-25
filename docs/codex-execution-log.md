@@ -5355,3 +5355,45 @@
 
 - The home filter-chip row (genre/status/type toggles, three dividers) sits directly below the "Library" header and is real functional chrome competing for the same visual band as the newly-emphasised heading. It was left alone this pass because reducing its visibility (e.g. collapsing it behind a toggle) would be an interaction change, not a restyle, and this workstream's standing rule is zero behaviour change. Flagging it as the next candidate if the product owner wants the homepage feel pushed further - but that decision needs the owner, not a unilateral behaviour change.
 - Per the explicit request to continue, next is projects and playlists.
+
+## 2026-07-26 - Quiet Luxury Pass 5: Projects And Playlists
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: inspected before implementing, per the standing discipline - did not force changes onto pages that already comply.
+- `.codex/skills/producer-dashboard`: confirmed `/projects` and `/playlists` share `PageHeader`, `MediaCard`, `Button`, and `EmptyState` rather than hand-rolling chrome.
+- `.codex/skills/antigravity-testing-release`: typecheck, focused lint, full suite, production build; live browser verification.
+
+### Area Inspected
+
+- `src/app/(dashboard)/projects/page.tsx` (344 lines)
+- `src/app/(dashboard)/playlists/page.tsx` (277 lines)
+- `src/components/layout/PageHeader.tsx` (shared by both, and by every other disciplined dashboard surface)
+- `src/components/ui/MediaCard.tsx` (shared card renderer for both grids)
+
+### Changes Made
+
+- `playlists/page.tsx`: removed a decorative `shadow-lg` from the play-overlay button on each playlist card - the button is a high-contrast white circle on a cover image and needs no additional shadow to read, the same reduction already applied everywhere else in this lane.
+
+### Problems Discovered
+
+- Both pages measured already clean before this pass: 0 arbitrary radii, 0 decorative shadows (bar the one fixed here), 0 gradients beyond a legitimate no-cover fallback fill, and a disciplined 3-4 size type scale plus the shared header's display sizes.
+- The reason is structural, not luck: both pages build on `PageHeader` (real 28-40px bold `font-heading` title, correctly small mono eyebrow/meta) and `MediaCard` (2-size type scale, no shadow/radius drift). This is the same shared-component discipline that pass 4b showed was missing from `/library`'s hand-rolled "Library" header - confirms that building and reusing `PageHeader` was the correct fix there, and that these two pages didn't need the same repair because they were never hand-rolled in the first place.
+- Verified live: loading `/playlists` renders the exact calm heading hierarchy (large bold title, small mono eyebrow, quiet meta/actions) that pass 4b had to add by hand to the Library page's secondary header.
+
+### Problems Fixed
+
+- The one decorative shadow found (playlist card play button) is removed.
+
+### Tests Performed
+
+- Browser: loaded `/playlists` live in the authenticated session; confirmed the `PageHeader` renders the calm heading hierarchy with no manual intervention.
+- `npx tsc --noEmit` - passed.
+- `npx eslint` on both pages plus `MediaCard.tsx` and `PageHeader.tsx` - 0 errors; pre-existing `no-img-element` warnings unchanged.
+- `npm test` - passed, 100 files and 538 tests.
+- `npm run build` - passed, 55 static pages generated.
+
+### Remaining Concerns
+
+- Neither page's project/playlist detail view (`/projects/[id]`, `/playlists/[id]`) was audited this pass - only the list pages named in the surface order.
+- Per `docs/design-direction.md` surface order, the remaining lane is store-editor, then a final modals/empty-states sweep.
