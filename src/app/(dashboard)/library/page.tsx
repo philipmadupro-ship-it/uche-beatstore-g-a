@@ -804,7 +804,7 @@ export default function LibraryPage() {
             toolbar sit underneath, outside the hero, so the hero only
             owns identity + primary intent. */}
         {/* ── Hero — Spotify-style: large cover + blurred backdrop ── */}
-        <div className="relative mb-5 rounded-[28px] overflow-hidden border border-white/[0.06] shadow-[0_24px_60px_rgba(0,0,0,0.6)] transition-all duration-700" style={{ minHeight: 160 }}>
+        <div className="relative mb-5 rounded-[28px] overflow-hidden border border-white/[0.06] transition-all duration-700" style={{ minHeight: 160 }}>
           {/* Full-bleed blurred backdrop from cover art */}
           <div
             className="absolute inset-0 z-0 bg-cover bg-center scale-110 transition-all duration-700"
@@ -819,7 +819,7 @@ export default function LibraryPage() {
 
           <div className="relative z-10 flex items-end gap-5 md:gap-7 p-5 sm:p-7">
             {/* Square cover tile — like Spotify playlist header */}
-            <div className={`w-[100px] h-[100px] sm:w-[132px] sm:h-[132px] rounded-2xl overflow-hidden shrink-0 shadow-[0_16px_40px_rgba(0,0,0,0.7)] border border-white/[0.08] bg-[#171511] transition-all duration-500 ${isPlaying ? 'ring-2 ring-white/20' : ''}`}>
+            <div className={`w-[100px] h-[100px] sm:w-[132px] sm:h-[132px] rounded-2xl overflow-hidden shrink-0 border border-white/[0.08] bg-[#171511] transition-all duration-500 ${isPlaying ? 'ring-2 ring-white/20' : ''}`}>
               {heroCoverUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={heroCoverUrl} alt="" className="w-full h-full object-cover" />
@@ -834,7 +834,7 @@ export default function LibraryPage() {
               <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/50 mb-1.5">
                 {currentTrack ? 'Now playing' : 'Your workspace'}
               </p>
-              <h1 className="text-[24px] sm:text-[36px] md:text-[46px] font-bold tracking-tight text-white leading-none font-heading mb-2 drop-shadow-lg">
+              <h1 className="text-[24px] sm:text-[36px] md:text-[46px] font-bold tracking-tight text-white leading-none font-heading mb-2">
                 {currentTrack?.title ?? 'Home'}
               </h1>
               <p className="text-[11px] font-mono text-white/50 mb-4">
@@ -843,7 +843,7 @@ export default function LibraryPage() {
                   : `${tracks.length} track${tracks.length !== 1 ? 's' : ''}${totalDurationLabel ? ` · ${totalDurationLabel}` : ''}`}
               </p>
               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                <button onClick={playAll} disabled={!filtered.length} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-6 sm:py-2.5 rounded-full bg-white text-black text-[10px] sm:text-[12px] font-bold hover:bg-[#F7EBDD] active:scale-[0.98] disabled:opacity-40 transition-all shadow-lg">
+                <button onClick={playAll} disabled={!filtered.length} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-6 sm:py-2.5 rounded-full bg-white text-black text-[10px] sm:text-[12px] font-bold hover:bg-[#F7EBDD] active:scale-[0.98] disabled:opacity-40 transition-all">
                   <PlayGlyph size={12} className="ml-0.5 sm:size-[14px]" />
                   Play all
                 </button>
@@ -925,7 +925,7 @@ export default function LibraryPage() {
                 label: 'Your Store',
                 sub: `${listedTracks.length} listed`,
                 icon: <Store size={15} />,
-                accent: '#9d95e8',
+                accent: '#E7D7BE',
                 cover: listedTracks.find((t) => t.cover_url)?.cover_url ?? null,
               },
               {
@@ -941,7 +941,7 @@ export default function LibraryPage() {
                 label: 'Sales',
                 sub: analyticsStats ? `$${analyticsStats.gross_usd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : 'Revenue',
                 icon: <ShoppingBag size={15} />,
-                accent: '#6DC6A4',
+                accent: '#E7D7BE',
                 cover: tracks.filter((t) => t.cover_url)[2]?.cover_url ?? null,
               },
               {
@@ -949,7 +949,7 @@ export default function LibraryPage() {
                 label: 'Analytics',
                 sub: analyticsStats ? `${analyticsStats.plays} plays` : 'Engagement',
                 icon: <BarChart2 size={15} />,
-                accent: '#D6BE7A',
+                accent: '#E7D7BE',
                 cover: tracks.filter((t) => t.cover_url)[3]?.cover_url ?? null,
               },
             ] as const).map(({ href, label, sub, icon, accent, cover }) => (
@@ -1099,14 +1099,14 @@ export default function LibraryPage() {
             }}
             className={`shrink-0 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[10px] sm:text-[12px] font-medium capitalize transition-colors flex items-center gap-1.5 ${
               offlineOnly
-                ? 'bg-[#7F77DD] text-white border border-[#7F77DD]/40 shadow-[0_0_8px_rgba(127,119,221,0.4)]'
+                ? 'bg-[#E7D7BE] text-black border border-[#E7D7BE]/40'
                 : 'bg-white/[0.04] border border-white/[0.06] text-[#D0C3AF] hover:text-white hover:bg-white/[0.08]'
             }`}
           >
             <span>Offline</span>
             {cachedIds.size > 0 && (
-              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                offlineOnly ? 'bg-white text-[#7F77DD]' : 'bg-[#7F77DD]/20 text-[#AFA9EC]'
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${
+                offlineOnly ? 'bg-black/20 text-black' : 'bg-[#E7D7BE]/20 text-[#E7D7BE]'
               }`}>
                 {cachedIds.size}
               </span>
@@ -1139,7 +1139,7 @@ export default function LibraryPage() {
               <SlidersHorizontal size={11} />
               Filters
               {hasActiveFilters(filters) && (
-                <span className="w-4 h-4 rounded-full bg-[#E7D7BE] text-black text-[8px] font-bold flex items-center justify-center leading-none">
+                <span className="w-4 h-4 rounded-full bg-[#E7D7BE] text-black text-[9px] font-bold flex items-center justify-center leading-none">
                   {activeFilterCount(filters)}
                 </span>
               )}
@@ -1322,7 +1322,7 @@ export default function LibraryPage() {
                     }`}
                   >
                     {label}
-                    <span className="text-[8px]">
+                    <span className="text-[9px]">
                       {isActive ? (sortMode === 'bpm-desc' ? '↓' : '↑') : ''}
                     </span>
                   </button>
@@ -1581,7 +1581,7 @@ export default function LibraryPage() {
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => !savingSmart && setSmartNameOpen(false)}>
           <div className="w-full max-w-sm rounded-2xl border border-[#2B2821] bg-[#11100D] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#E7D7BE]">Smart playlist</p>
-            <h3 className="text-[15px] font-bold text-[#F7EBDD] mt-1 mb-1">Save current filters</h3>
+            <h3 className="text-[16px] font-bold text-[#F7EBDD] mt-1 mb-1">Save current filters</h3>
             <p className="text-[11px] text-[#B4AA99] mb-4">Auto-updates as new tracks match these filters.</p>
             <input
               autoFocus
@@ -1641,7 +1641,7 @@ function MiniTrackCard({
           : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#211F1A] to-[#090907]"><Music size={24} className="text-[#6E685B]" /></div>}
         {/* State badge */}
         {track.status && track.status !== 'archived' && (
-          <span className={`absolute top-1.5 left-1.5 text-[7px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
+          <span className={`absolute top-1.5 left-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
             track.status === 'maq'        ? 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' :
             track.status === 'finished'   ? 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]'   :
             track.status === 'needs_work' ? 'bg-[#1f1a0a] text-[#D6BE7A] border-[#3a2f1f]'   : ''
@@ -1679,7 +1679,7 @@ function MiniPlaylistCard({ playlist }: { playlist: HomePlaylist }) {
         {playlist.cover_url
           // eslint-disable-next-line @next/next/no-img-element
           ? <img src={playlist.cover_url} alt={playlist.name} className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1f1a33] to-[#090907]"><ListMusic size={24} className="text-[#9d95e8]/40" /></div>}
+          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1f1a33] to-[#090907]"><ListMusic size={24} className="text-[#E7D7BE]/40" /></div>}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-black/30">
           <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
             <PlayGlyph size={15} className="text-white ml-0.5" />
@@ -1822,7 +1822,7 @@ function PackBuilderModal({
       <div className="w-full max-w-md rounded-2xl border border-[#2B2821] bg-[#11100D] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between mb-4">
           <div>
-            <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#9d95e8]">Beat pack</p>
+            <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#E7D7BE]">Beat pack</p>
             <h3 className="text-[16px] font-bold text-[#F7EBDD] mt-1">Bundle {tracks.length} beats</h3>
           </div>
           <button onClick={onClose} disabled={busy} className="text-[#9B9282] hover:text-[#F7EBDD] transition-colors disabled:opacity-40"><X size={16} /></button>
@@ -1841,7 +1841,7 @@ function PackBuilderModal({
                 onClick={() => { if (selectable) setCoverUrl(t.cover_url!); }}
                 title={selectable ? `Use "${t.title}" as cover` : t.title}
                 className={`shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-[#171511] border transition-all ${
-                  isCover ? 'border-[#9d95e8] ring-2 ring-[#9d95e8]/40' : 'border-[#2B2821] hover:border-[#3B372F]'
+                  isCover ? 'border-[#E7D7BE] ring-2 ring-[#E7D7BE]/40' : 'border-[#2B2821] hover:border-[#3B372F]'
                 } ${selectable ? 'cursor-pointer' : 'cursor-default opacity-60'}`}
               >
                 {t.cover_url
@@ -1867,12 +1867,12 @@ function PackBuilderModal({
             {/* Discount slider */}
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">Discount</label>
-              <span className="text-[11px] font-mono text-[#9d95e8] tabular-nums">{discount}% off</span>
+              <span className="text-[11px] font-mono text-[#E7D7BE] tabular-nums">{discount}% off</span>
             </div>
             <input
               type="range" min={0} max={60} step={5} value={discount}
               onChange={(e) => setDiscount(Number(e.target.value))}
-              className="w-full accent-[#9d95e8] mb-4"
+              className="w-full accent-[#E7D7BE] mb-4"
             />
             {/* Price math */}
             <div className="rounded-xl border border-[#2B2821] bg-[#171511] px-4 py-3 mb-5 space-y-1.5">
@@ -1896,7 +1896,7 @@ function PackBuilderModal({
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B4AA99]">$</span>
               <input
                 type="number" min={1} value={manualPrice} onChange={(e) => setManualPrice(e.target.value)} placeholder="50"
-                className="w-full bg-[#171511] border border-[#2B2821] rounded-lg pl-7 pr-3 py-2.5 text-[14px] text-[#F7EBDD] focus:outline-none focus:border-[#3B372F] tabular-nums"
+                className="w-full bg-[#171511] border border-[#2B2821] rounded-lg pl-7 pr-3 py-2.5 text-[13px] text-[#F7EBDD] focus:outline-none focus:border-[#3B372F] tabular-nums"
               />
             </div>
             <p className="text-[10px] text-[#9B9282] mb-5">No lease prices on these beats yet — set the pack price directly.</p>
@@ -1906,7 +1906,7 @@ function PackBuilderModal({
         <button
           onClick={() => onCreate(name, price, coverUrl)}
           disabled={!valid || busy}
-          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-bold uppercase tracking-wider bg-[#9d95e8] text-black hover:bg-[#b3aef0] transition-colors disabled:opacity-40"
+          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-bold uppercase tracking-wider bg-[#E7D7BE] text-black hover:bg-[#F3E6D1] transition-colors disabled:opacity-40"
         >
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Package size={13} />}
           Create &amp; list pack

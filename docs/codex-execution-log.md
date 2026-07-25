@@ -5268,3 +5268,49 @@
 - This pass covered only `ClientShareVariant`; the other three variants needed no changes but were not screenshotted live in this pass, only audited by reading.
 - `ClientShareVariant` still carries 24 hardcoded hex colours, matching the same deliberate deferral as the store detail page and checkout - consolidating those needs per-usage judgement, not a blanket pass.
 - Per `docs/design-direction.md` surface order, next is dashboard home/library, then projects/playlists/store-editor, then a final modals/empty-states sweep.
+
+## 2026-07-26 - Quiet Luxury Pass 4: Dashboard Home/Library
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: reduction-first workflow, browser-verified live in an authenticated session.
+- `.codex/skills/producer-dashboard`: kept the hero, quick-actions grid, home rows, and Beat Pack builder functionally identical while restyling them.
+- `.codex/skills/beatstor-design-system`: enforced the "one accent" rule this pass centred on.
+- `.codex/skills/antigravity-testing-release`: typecheck, focused lint, full suite, production build.
+
+### Area Inspected
+
+- `src/app/(dashboard)/library/page.tsx` (1917 lines - the producer's dashboard home)
+
+### Changes Made
+
+- Hero panel: removed the panel's decorative shadow (a hairline border already separates it), the cover tile's decorative shadow (kept its border and the functional `isPlaying` ring - a real state signal, not decoration), the H1's `drop-shadow-lg` (redundant given the existing dark scrim), and the Play-all button's `shadow-lg`. Four shadow treatments on one hero collapsed to zero.
+- Quick-actions grid ("Your Store", "Projects", "Sales", "Analytics"): each tile was tinted a different decorative hue (`#9d95e8`, `#E7D7BE`, `#6DC6A4`, `#D6BE7A`) purely as a category colour - exactly the pattern `docs/design-direction.md` names by example under "one accent." Unified all four to the file's own established accent (`#E7D7BE`, already used 16 times elsewhere in the file). Confirmed live: all four tiles now compute to the identical `rgba(231, 215, 190, ...)` background.
+- Offline filter chip: its active state used an off-palette purple (`#7F77DD` / `#AFA9EC`) with a matching glow shadow. Replaced with the file's accent and removed the glow.
+- Beat Pack builder modal: replaced the same off-palette purple (icon colour, cover-selection ring, range-input accent, discount text, submit button) with the file's accent throughout.
+- Collapsed the smallest, most ambiguous text sizes: the MAQ/WIP status badge (7px, the smallest size in the file) and three 8px badge/count occurrences merged into the file's 9px metadata scale; two single-occurrence sizes (15px modal heading, 14px price input) merged into their nearest established neighbours (16px, 13px).
+
+### Problems Discovered
+
+- The quick-actions grid and the Beat Pack modal both independently reintroduced the same off-palette purple (`#9d95e8`/`#7F77DD`) that the store's featured-hero pass had already identified as a source of "this doesn't look like our brand" - confirming it as a recurring pattern rather than an isolated incident, worth flagging for any future new component in this codebase.
+- This file is large enough (1917 lines) that a blanket collapse of its remaining 10/11/12/13px sizes was deliberately NOT attempted this pass: several of the 10px occurrences are one half of a genuine `text-[10px] sm:text-[12px]` responsive pair used across the primary hero buttons and filter chips. Merging 10->9 or 12->11 without checking each one individually risked silently breaking an intentional responsive step, unlike the accidental drift found in the checkout and detail-page passes. Left this scale alone rather than force a reduction that outpaced how much of the file had actually been read.
+
+### Problems Fixed
+
+- Zero decorative shadows remain in the hero (was 2, plus 2 more on adjacent text/button elements - 4 total collapsed to 0).
+- Zero off-palette purple remains anywhere in the file - verified live via computed styles, all four quick-action tiles and the Beat Pack modal now resolve to the single accent colour.
+- Smallest text size in the file raised from 7px to 9px.
+
+### Tests Performed
+
+- Browser: loaded `/library` in an authenticated dashboard session; screenshotted the hero and quick-actions grid before and after; live computed-style check confirming all four quick-action tiles resolve to the identical accent colour post-fix.
+- `npx tsc --noEmit` - passed.
+- `npx eslint "src/app/(dashboard)/library/page.tsx"` - 0 errors, 2 pre-existing warnings (unchanged from the lint-zero pass).
+- `npm test` - passed, 100 files and 538 tests.
+- `npm run build` - passed, 55 static pages generated.
+
+### Remaining Concerns
+
+- The file's 10/11/12/13px scale was deliberately left uncollapsed this pass for the reason above; a future pass should read the whole file (not just the hero/quick-actions/modal regions touched here) before attempting that reduction.
+- List view, grid view, and portfolio view (the three main content-density modes below the hero) were not part of this pass's scope; per `docs/design-direction.md` surface order, the remaining dashboard work is projects/playlists/store-editor, then a final modals/empty-states sweep.
+- The file's 39 hardcoded hex colours were not consolidated, matching the same deliberate deferral noted on every prior surface.
