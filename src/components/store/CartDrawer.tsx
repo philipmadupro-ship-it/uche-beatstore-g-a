@@ -87,7 +87,7 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
       icon={<ShoppingCart size={16} aria-hidden="true" />}
       side="right"
       size="md"
-      className="bg-gradient-to-b from-[#101012]/95 via-[var(--bg-page)]/95 to-[var(--bg-page)]/95 backdrop-blur-2xl"
+      className="bg-[var(--bg-page)]"
       contentClassName="px-3 py-3"
       footer={(
         <div className="space-y-3">
@@ -98,10 +98,10 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
             </div>
           )}
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-[#B4AA99]">Total</span>
+            <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#B4AA99]">Total</span>
             {bundleQualifies ? (
               <span className="flex items-baseline gap-2">
-                <span className="text-[12px] font-mono text-[#9B9282] line-through tabular-nums">${total.toLocaleString()}</span>
+                <span className="text-[11px] font-mono text-[#9B9282] line-through tabular-nums">${total.toLocaleString()}</span>
                 <span className="text-[18px] font-bold text-white tabular-nums">${bundleTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
               </span>
             ) : (
@@ -113,14 +113,14 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
             value={buyerEmail}
             onChange={(e) => setBuyerEmail(e.target.value)}
             placeholder="Your email for the license"
-            className="w-full bg-[#090907] border border-[#2B2821] rounded-md py-2.5 px-3 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F]"
+            className="w-full rounded-lg border border-white/[0.08] bg-[#090907] px-3 py-2.5 text-[11px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:border-white/[0.16] focus:outline-none"
           />
           <input
             type="text"
             value={promoCode}
             onChange={(e) => setPromoCode(e.target.value)}
             placeholder="Promo code"
-            className="w-full bg-[#090907] border border-[#2B2821] rounded-md py-2.5 px-3 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] uppercase"
+            className="w-full rounded-lg border border-white/[0.08] bg-[#090907] px-3 py-2.5 text-[11px] uppercase text-[#F7EBDD] placeholder:text-[#9B9282] focus:border-white/[0.16] focus:outline-none"
           />
           <label
             htmlFor="cart-license-terms"
@@ -134,11 +134,11 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
               className="mt-0.5 size-4 shrink-0 accent-[#E7D7BE]"
             />
             <span className="min-w-0">
-              <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.16em] text-[#D0C3AF]">
+              <span className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">
                 <FileText size={10} aria-hidden="true" />
                 License terms
               </span>
-              <span className="mt-1 block text-[10px] leading-relaxed text-[#9B9282]">
+              <span className="mt-1 block text-[9px] leading-relaxed text-[#9B9282]">
                 I understand each beat is delivered digitally under the selected license tier, and exclusive availability is verified again at checkout.
               </span>
             </span>
@@ -152,14 +152,14 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
             <ShoppingCart size={13} />
             Checkout
           </Button>
-          <p className="text-[10px] text-[#9B9282] text-center font-mono">
+          <p className="text-[9px] text-[#9B9282] text-center font-mono">
             Secure checkout via Stripe
           </p>
         </div>
       )}
     >
       {items.length === 0 ? (
-        <div className="text-center py-16 text-[#9B9282] text-[12px]">Cart empty</div>
+        <div className="text-center py-16 text-[#9B9282] text-[11px]">Cart empty</div>
       ) : (
         <ul className="space-y-2">
           {items.map((i) => (
@@ -173,8 +173,8 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
                   : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={14} /></div>}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[12px] font-medium text-[#F7EBDD] truncate">{i.track.title}</p>
-                <p className="text-[10px] font-mono text-[#B4AA99] uppercase tracking-wider mt-0.5">
+                <p className="text-[11px] font-medium text-[#F7EBDD] truncate">{i.track.title}</p>
+                <p className="text-[9px] font-mono text-[#B4AA99] uppercase tracking-wider mt-0.5">
                   {i.license.name} · ${i.license.price_usd.toLocaleString()}
                 </p>
               </div>

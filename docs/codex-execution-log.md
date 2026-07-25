@@ -4939,3 +4939,52 @@
 - Browser verification has not been run for this pass. The visual claims here are structural (counted classes), not observed; the store grid and list need a real viewport check at 375px and desktop before this surface is called done.
 - The remaining `no-img-element` warnings still overlap this lane and should be absorbed by later surface passes rather than fixed piecemeal.
 - Next surface in the ordered list: `/store/[id]` detail plus the preview drawer, cart drawer, and checkout.
+
+## 2026-07-25 - Quiet Luxury Pass 2a: Preview And Cart Drawers
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: reduction-first workflow and the before/after noise-count gate.
+- `.codex/skills/beatstor-design-system`: kept every value inside the existing token set.
+- `.codex/skills/marketplace-and-licensing`: preserved the license-tier selection and add-to-cart contract while restyling the buy bar.
+- `.codex/skills/accessibility-and-keyboard-navigation`: preserved aria labels on close/play, tap sizing, and focus behavior.
+- `.codex/skills/antigravity-testing-release`: typecheck, focused lint, full suite, production build.
+
+### Area Inspected
+
+- `src/components/store/BeatPreviewDrawer.tsx`
+- `src/components/store/CartDrawer.tsx`
+- `src/app/store/[id]/page.tsx` and `src/app/store/checkout/page.tsx` (audited only - see Remaining Concerns)
+
+### Changes Made
+
+- `BeatPreviewDrawer`: removed the duplicate "Full page" call to action from the cover hero (the full-width link at the end of the scroll area is now the single route to the detail page), removed the redundant "Preview" badge chip, and dropped the play control's heavy drop shadow.
+- `BeatPreviewDrawer`: the buy bar is now a solid accent button on one line instead of a two-tone gradient with the tier name stacked above the price as a microlabel. This also removed `#c5a880`, an undocumented colour that existed only inside that gradient.
+- `BeatPreviewDrawer`: hero title 22px bold to 20px semibold, hero type label moved off the accent onto the metadata scale, studio-spec tiles moved from inline `style` objects to classes, and the similar-beats rows unified to the 11px body size with an 8px thumbnail radius.
+- `CartDrawer`: replaced the three-stop gradient plus `backdrop-blur-2xl` footer with a solid surface, normalised inputs to the 8px control radius, and collapsed the type scale.
+
+### Problems Discovered
+
+- The preview drawer offered two separate routes to the same destination - an accent-tinted pill crowding the hero title and a full-width link at the bottom - so the hero had two competing calls to action on top of the play control.
+- The buy bar repeated the pattern already removed from the store cards: a mono microlabel stacked over the value.
+- `#c5a880` appeared nowhere in the design tokens and existed solely as the second stop of the buy-bar gradient.
+- The accent was being used decoratively for the hero type label, which conflicts with reserving it for primary action and active state.
+
+### Problems Fixed
+
+- `BeatPreviewDrawer` noise counts: text sizes 6 -> 3, radii 4 -> 3, shadow treatments 1 -> 0, hardcoded hex colours 9 -> 6. The two remaining gradients are the cover fallback and the title scrim, both functional.
+- `CartDrawer` noise counts: text sizes 4 -> 3, radii 3 -> 2, decorative gradient/blur layers 2 -> 0.
+- The drawers now share the store cards' anatomy: one accent, one metadata scale, single-line price actions.
+
+### Tests Performed
+
+- `npx tsc --noEmit` - passed.
+- `npx eslint src/components/store/BeatPreviewDrawer.tsx src/components/store/CartDrawer.tsx` - 0 errors, 0 warnings.
+- `npm test` - passed, 100 files and 538 tests.
+- `npm run build` - passed, 55 static pages generated.
+
+### Remaining Concerns
+
+- Surface 2 was deliberately split. `src/app/store/[id]/page.tsx` (1003 lines, 13 distinct text sizes, 14 distinct radii, 12 gradients, 18 hex colours) and `src/app/store/checkout/page.tsx` (803 lines, 11 text sizes, 15 hex colours) are the two densest files in the store and each deserve their own reviewable pass. The detail page is the single worst offender in the codebase by every noise metric.
+- Browser verification still outstanding for all quiet-luxury passes so far; the claims are counted class changes, not observed rendering.
+- Next passes: 2b `/store/[id]` detail page, then 2c checkout.

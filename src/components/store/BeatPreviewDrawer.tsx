@@ -88,14 +88,12 @@ export function BeatPreviewDrawer({
       {selectedTier ? (
         <button
           onClick={handleAddSelectedLicense}
-          className="tap flex flex-1 flex-col items-center justify-center gap-0.5 rounded-xl py-3 text-[11px] font-bold uppercase tracking-widest text-black transition-all hover:opacity-90 active:scale-[0.99]"
-          style={{ background: `linear-gradient(to right, ${accentColor}, #c5a880)` }}
+          className="tap flex flex-1 items-center justify-center gap-2 rounded-xl py-3.5 text-[11px] font-semibold text-black transition-opacity hover:opacity-90 active:scale-[0.99]"
+          style={{ backgroundColor: accentColor }}
         >
-          <span className="font-mono text-[9px] tracking-wider text-black/60">
-            {selectedTier.name}
-          </span>
-          <span className="flex items-center gap-1">
-            <ShoppingBag size={12} />
+          <ShoppingBag size={13} />
+          <span>{selectedTier.name}</span>
+          <span className="tabular-nums text-black/55">
             {selectedTier.is_free ? 'Free' : `$${Number(selectedTier.price_usd).toLocaleString()}`}
           </span>
         </button>
@@ -131,9 +129,7 @@ export function BeatPreviewDrawer({
           <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-[#090907]" />
 
           <div className="absolute top-0 inset-x-0 z-20 flex items-start justify-between p-4">
-            <span className="rounded-full border border-white/[0.08] bg-black/25 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.25em] text-white/55 backdrop-blur-md">
-              Preview
-            </span>
+            <span />
             <button
               type="button"
               onClick={onClose}
@@ -146,27 +142,15 @@ export function BeatPreviewDrawer({
 
           {/* Title + type overlay at bottom */}
           <div className="absolute bottom-0 inset-x-0 p-5 z-10">
-            <p className="text-[11px] font-mono uppercase tracking-[0.2em] mb-1.5" style={{ color: accentColor }}>
+            <p className="mb-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-white/45">
               {track.type}
             </p>
-            <div className="flex items-start justify-between gap-3">
-              <p
-                className="text-[22px] font-bold text-white leading-tight truncate flex-1"
-                style={isCurrent ? { color: accentColor } : {}}
-              >
-                {track.title}
-              </p>
-              {/* Open full page CTA — prominent, easy to tap */}
-              <Link
-                href={`/store/${track.id}`}
-                className="tap flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 py-2 text-[10px] font-mono uppercase tracking-wider transition-all hover:opacity-90"
-                style={{ backgroundColor: `${accentColor}22`, color: accentColor, border: `1px solid ${accentColor}40` }}
-                title="View full page"
-              >
-                <ExternalLink size={11} />
-                <span className="hidden sm:inline">Full page</span>
-              </Link>
-            </div>
+            <p
+              className="truncate text-[20px] font-semibold leading-tight text-white"
+              style={isCurrent ? { color: accentColor } : {}}
+            >
+              {track.title}
+            </p>
             <TagChips tags={track.tags ?? []} max={3} accentGenre />
           </div>
 
@@ -177,7 +161,7 @@ export function BeatPreviewDrawer({
             className="absolute inset-0 flex items-center justify-center z-[5]"
           >
             <div
-              className="w-14 h-14 rounded-full flex items-center justify-center shadow-[0_8px_32px_rgba(0,0,0,0.6)]"
+              className="flex h-14 w-14 items-center justify-center rounded-full"
               style={{
                 backgroundColor: accentColor,
                 transition: 'transform 300ms cubic-bezier(0.32,0.72,0,1), opacity 200ms',
@@ -213,7 +197,7 @@ export function BeatPreviewDrawer({
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">License</p>
               {selectedTier && !track.free_download_enabled && (
-                <p className="rounded-full border border-white/[0.06] bg-white/[0.03] px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider text-[#B4AA99]">
+                <p className="text-[11px] font-semibold tabular-nums text-[#F7EBDD]">
                   {selectedTier.is_free ? 'Free' : `$${Number(selectedTier.price_usd).toLocaleString()}`}
                 </p>
               )}
@@ -240,9 +224,9 @@ export function BeatPreviewDrawer({
                 { label: 'Stems', value: track.stems_status === 'done' ? 'Available' : 'Not included' },
                 { label: 'WAV', value: (track as { has_wav?: boolean }).has_wav ? 'Uploaded' : 'On request' },
               ].map(({ label, value }) => (
-                <div key={label} className="flex flex-col gap-0.5 rounded-xl px-3 py-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                  <span className="text-[8px] font-mono uppercase tracking-[0.18em] text-white/25">{label}</span>
-                  <span className={`text-[12px] font-semibold ${label === 'Stems' && track.stems_status === 'done' ? 'text-[#6DC6A4]' : 'text-[#F7EBDD]'}`}>{value}</span>
+                <div key={label} className="flex flex-col gap-1 rounded-xl border border-white/[0.06] px-3 py-3">
+                  <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-white/35">{label}</span>
+                  <span className={`text-[11px] font-semibold ${label === 'Stems' && track.stems_status === 'done' ? 'text-[#6DC6A4]' : 'text-[#F7EBDD]'}`}>{value}</span>
                 </div>
               ))}
             </div>
@@ -257,15 +241,15 @@ export function BeatPreviewDrawer({
                   <button
                     key={s.id}
                     onClick={() => onSelectTrack(s)}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#1A1813] border border-transparent hover:border-white/[0.05] transition-all text-left group"
+                    className="group flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.03]"
                   >
-                    <div className="relative w-8 h-8 rounded-md overflow-hidden bg-[#090907] shrink-0">
+                    <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-[#090907]">
                       {s.cover_url
                         ? <CoverImage src={s.cover_url} sizes="32px" className="object-cover" />
                         : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={12} /></div>}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-medium text-[#F7EBDD] truncate group-hover:text-[#E7D7BE] transition-colors">{s.title}</p>
+                      <p className="truncate text-[11px] font-medium text-[#F7EBDD] transition-colors group-hover:text-[#E7D7BE]">{s.title}</p>
                       <p className="text-[9px] font-mono text-[#9B9282] uppercase">
                         {s.bpm ? `${s.bpm} BPM` : ''}{s.key ? ` · ${s.key}` : ''}
                       </p>
@@ -281,7 +265,7 @@ export function BeatPreviewDrawer({
             {/* Open full page — bottom of scrollable area, very visible */}
             <Link
               href={`/store/${track.id}`}
-              className="mt-6 flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-[11px] font-mono uppercase tracking-wider transition-colors border border-[#3B372F] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#9B9282]"
+              className="mt-6 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/[0.08] text-[11px] font-medium text-[#B4AA99] transition-colors hover:border-white/[0.16] hover:text-[#F7EBDD]"
             >
               <ExternalLink size={12} />
               View full beat page
