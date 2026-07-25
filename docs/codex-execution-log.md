@@ -5177,3 +5177,49 @@
 
 - This pass was desktop-only; the featured hero and carousel have not been re-checked at 375px since these edits.
 - Surface order per `docs/design-direction.md`: checkout (`src/app/store/checkout/page.tsx`, 803 lines, 11 text sizes, 15 hex colours) is next, then share pages, then dashboard home/library, then projects/playlists/store-editor, then a final modals/empty-states sweep.
+
+## 2026-07-25 - Quiet Luxury Pass 2d: Checkout, Browser-Verified With A Live Cart
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: reduction-first workflow; browser-verified with a real cart item before shipping, per the standing lesson from the earlier mobile sweep.
+- `.codex/skills/marketplace-and-licensing`: reviewed the Stripe embedded-checkout mount logic and cart/promo/total calculations before touching anything, to guarantee only className strings changed.
+- `.codex/skills/responsive-ui-engineering` / `.codex/skills/accessibility-and-keyboard-navigation`: 375px tap-target check on checkout specifically, since it is a form plus a payment flow - the highest-stakes surface restyled so far.
+- `.codex/skills/antigravity-testing-release`: typecheck, focused lint, full suite, production build.
+
+### Area Inspected
+
+- `src/app/store/checkout/page.tsx` (803 lines - the last of the four densest store files identified in pass 2b)
+
+### Changes Made
+
+- Collapsed 11 distinct text sizes to 6: three ambiguous small sizes (8, 10, 12px) merged into the established 9px metadata / 11px body-and-values scale; two near-duplicate responsive H1 pairs (26->34 and 28->36, used respectively by the empty-cart state and the normal header, which never render together) unified to one pair.
+- Collapsed two arbitrary large radii (22px, 24px) to the 20px large-panel value already established on the store detail page.
+- Removed three near-identical decorative drop shadows (`shadow-[0_24px_80px_rgba(0,0,0,0.45)]`, `_0.38)]`, `_0.28)]`) from cards that already sit on the page's own dark background behind a hairline border - the same reduction applied to every prior surface.
+- Fixed a real 375px bug found during verification: the promo-code input and its Apply button rendered at 32px tall, below the 40px floor. Added `min-h-10` to both.
+- Left the sticky mobile total bar's `backdrop-blur` untouched - it is on a `fixed` element, which is exactly the case `docs/design-direction.md` and the performance guardrail allow.
+
+### Problems Discovered
+
+- This was the densest of the four files flagged in pass 2b (11 distinct text sizes, 15 hardcoded hex colours), and the most consequential to get right - it is the one page in the product that touches real payment.
+- The promo-code row's 32px controls would not have been caught by reading classes alone; they only showed up when measured against a live 375px viewport, reinforcing that every surface in this lane needs a browser pass, not just a diff review.
+
+### Problems Fixed
+
+- Checkout noise counts: text sizes 11 -> 6 (three of the six are the responsive display pair and total-amount size, all legitimate), arbitrary radii 2 -> 0 (unified into the existing 20px value), decorative shadows 3 -> 0.
+- Promo-code controls now meet the 40px tap floor.
+- Verified end-to-end with a real cart item seeded into the `antigravity-cart` localStorage store (mirroring the shape `useCart` persists): header, step tracker, contact form, payment section, order summary with a live line item, promo row, totals, payment-method badges, and trust guarantees all render as flat hairline-bordered cards at both desktop and mobile width, with zero horizontal overflow.
+
+### Tests Performed
+
+- Browser: seeded a real cart item via `localStorage['antigravity-cart']` and loaded `/store/checkout` live (not the empty-cart placeholder) at 1280px and 375px; screenshotted the header, contact form, payment section, and order summary; live DOM tap-target and overflow measurement at 375px before and after the promo-field fix.
+- `npx tsc --noEmit` - passed.
+- `npx eslint src/app/store/checkout/page.tsx` - 0 errors, 0 warnings.
+- `npm test` - passed, 100 files and 538 tests.
+- `npm run build` - passed, 55 static pages generated.
+
+### Remaining Concerns
+
+- This closes the store/checkout/detail/drawer cluster identified in pass 2b. Per `docs/design-direction.md` surface order, next is the share pages (all four variants), then dashboard home/library, then projects/playlists/store-editor, then a final modals/empty-states sweep.
+- The Stripe embedded-checkout iframe itself (`#checkout-element`) is out of this product's styling control and was not touched or assessed.
+- The checkout page's 15 hardcoded hex colours were not consolidated in this pass, matching the same deliberate deferral noted for the detail page in pass 2b - that needs per-usage judgement, not a blanket pass.

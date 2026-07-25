@@ -300,10 +300,10 @@ function CheckoutContent() {
     return (
       <div className="min-h-screen bg-[#090907] px-6 py-10 text-[#F7EBDD]">
         <div className="mx-auto flex min-h-[78vh] max-w-xl flex-col items-center justify-center text-center">
-          <div className="mb-6 grid size-20 place-items-center rounded-[24px] border border-[#2B2821] bg-[#171511] shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+          <div className="mb-6 grid size-20 place-items-center rounded-[20px] border border-[#2B2821] bg-[#171511]">
             <ShoppingBag size={26} className="text-[#D0C3AF]" />
           </div>
-          <p className="mb-3 text-[10px] font-mono uppercase tracking-[0.24em] text-[#9B9282]">Checkout</p>
+          <p className="mb-3 text-[9px] font-mono uppercase tracking-[0.24em] text-[#9B9282]">Checkout</p>
           <h1 className="text-[28px] font-bold leading-tight text-white sm:text-[36px]">Your cart is empty</h1>
           <p className="mt-3 max-w-sm text-[13px] leading-relaxed text-[#B4AA99]">
             Pick a beat, choose a license, then come back here for instant delivery after payment.
@@ -326,18 +326,18 @@ function CheckoutContent() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-32 pt-6 md:px-8 lg:pb-8">
-      <header className="mb-7 rounded-[24px] border border-[#211F1A] bg-[#11100d] px-5 py-5 shadow-[0_30px_90px_rgba(0,0,0,0.38)] md:px-7">
+      <header className="mb-7 rounded-[20px] border border-[#211F1A] bg-[#11100d] px-5 py-5 md:px-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <Link
               href="/store"
-              className="mb-4 inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#9B9282] transition-colors hover:text-[#D0C3AF]"
+              className="mb-4 inline-flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-wider text-[#9B9282] transition-colors hover:text-[#D0C3AF]"
             >
               <ArrowLeft size={11} />
               Back to store
             </Link>
-            <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#9B9282]">Secure checkout</p>
-            <h1 className="mt-2 text-[26px] font-bold leading-tight text-white sm:text-[34px]">
+            <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#9B9282]">Secure checkout</p>
+            <h1 className="mt-2 text-[28px] font-bold leading-tight text-white sm:text-[36px]">
               {isProjectPurchase ? 'Complete your bundle purchase' : 'License your selected beats'}
             </h1>
             <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-[#B4AA99]">
@@ -354,7 +354,7 @@ function CheckoutContent() {
                 key={step.label}
                 className={`rounded-xl border px-3 py-2 ${step.active ? 'border-[#E7D7BE]/25 bg-[#E7D7BE]/8 text-[#F7EBDD]' : 'border-white/[0.05] bg-white/[0.02] text-[#9B9282]'}`}
               >
-                <p className="text-[8px] font-mono uppercase tracking-[0.18em]">0{index + 1}</p>
+                <p className="text-[9px] font-mono uppercase tracking-[0.18em]">0{index + 1}</p>
                 <p className="mt-1 text-[11px] font-semibold">{step.label}</p>
               </div>
             ))}
@@ -381,14 +381,14 @@ function CheckoutContent() {
         </div>
 
         {/* 1. Contact Form */}
-        <div className="rounded-[22px] border border-[#2B2821] bg-[#171511] p-5 transition-all duration-300 md:p-6">
+        <div className="rounded-[20px] border border-[#2B2821] bg-[#171511] p-5 transition-all duration-300 md:p-6">
           <div className="flex items-center gap-3 mb-5">
             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-mono font-bold ${isEmailSubmitted ? 'bg-[#6DC6A4] text-black' : 'bg-[#E7D7BE] text-black'}`}>
               {isEmailSubmitted ? <Check size={12} /> : '1'}
             </div>
             <div>
-              <h2 className="text-[12px] font-mono uppercase tracking-wider text-white">Contact Information</h2>
-              <p className="text-[10px] text-[#B4AA99]">Where to send your purchase and license key</p>
+              <h2 className="text-[11px] font-mono uppercase tracking-wider text-white">Contact Information</h2>
+              <p className="text-[9px] text-[#B4AA99]">Where to send your purchase and license key</p>
             </div>
           </div>
 
@@ -416,7 +416,7 @@ function CheckoutContent() {
                   />
                 </div>
                 {emailError && (
-                  <p id="checkout-email-error" role="alert" className="text-[10px] text-red-400 mt-2 font-mono flex items-center gap-1">
+                  <p id="checkout-email-error" role="alert" className="text-[9px] text-red-400 mt-2 font-mono flex items-center gap-1">
                     <AlertTriangle size={10} aria-hidden="true" />
                     {emailError}
                   </p>
@@ -439,16 +439,16 @@ function CheckoutContent() {
                   className="mt-0.5 size-4 shrink-0 accent-[#E7D7BE]"
                 />
                 <span className="min-w-0">
-                  <span className="block text-[10px] font-mono uppercase tracking-[0.16em] text-[#D0C3AF]">
+                  <span className="block text-[9px] font-mono uppercase tracking-[0.16em] text-[#D0C3AF]">
                     License and delivery terms
                   </span>
-                  <span id="checkout-license-terms-help" className="mt-1 block text-[10px] leading-relaxed text-[#9B9282]">
+                  <span id="checkout-license-terms-help" className="mt-1 block text-[9px] leading-relaxed text-[#9B9282]">
                     I understand this is a digital purchase. Track licenses are delivered under the selected tier, project bundles include the listed project tracks, and exclusive availability is verified again before payment is created.
                   </span>
                 </span>
               </label>
               {termsError && (
-                <p id="checkout-license-terms-error" role="alert" className="text-[10px] text-red-400 font-mono flex items-center gap-1">
+                <p id="checkout-license-terms-error" role="alert" className="text-[9px] text-red-400 font-mono flex items-center gap-1">
                   <AlertTriangle size={10} aria-hidden="true" />
                   {termsError}
                 </p>
@@ -460,7 +460,7 @@ function CheckoutContent() {
               >
                 Continue to Payment
               </button>
-              <p className="text-[10px] text-[#9B9282] text-center pt-1">
+              <p className="text-[9px] text-[#9B9282] text-center pt-1">
                 Want to save purchases &amp; favorites?{' '}
                 <Link href="/store/account" className="text-[#D0C3AF] hover:text-[#F7EBDD] underline underline-offset-2 transition-colors">
                   Create your free U2C account
@@ -471,7 +471,7 @@ function CheckoutContent() {
             <div className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.01] border border-white/[0.03]">
               <div className="flex items-center gap-3">
                 <Mail size={14} className="text-[#D0C3AF]" />
-                <span className="text-[12px] text-[#F7EBDD] font-medium">{email}</span>
+                <span className="text-[11px] text-[#F7EBDD] font-medium">{email}</span>
               </div>
               {!clientSecret && isInitializing ? (
                 <Loader2 size={13} className="animate-spin text-[#9B9282]" />
@@ -488,15 +488,15 @@ function CheckoutContent() {
         </div>
 
         {/* 2. Payment Section */}
-        <div className={`rounded-[22px] border transition-all duration-300 ${isEmailSubmitted ? 'border-[#2B2821] bg-[#171511]' : 'border-[#2B2821]/30 bg-[#171511]/30 opacity-50 pointer-events-none'
+        <div className={`rounded-[20px] border transition-all duration-300 ${isEmailSubmitted ? 'border-[#2B2821] bg-[#171511]' : 'border-[#2B2821]/30 bg-[#171511]/30 opacity-50 pointer-events-none'
           } p-5 md:p-6`}>
           <div className="flex items-center gap-3 mb-5">
             <div className="w-7 h-7 rounded-full bg-[#171511] border border-[#2B2821] flex items-center justify-center text-[11px] font-mono text-[#D0C3AF] font-bold">
               2
             </div>
             <div>
-              <h2 className="text-[12px] font-mono uppercase tracking-wider text-white">Payment Details</h2>
-              <p className="text-[10px] text-[#B4AA99]">Secure, encrypted connection powered by Stripe</p>
+              <h2 className="text-[11px] font-mono uppercase tracking-wider text-white">Payment Details</h2>
+              <p className="text-[9px] text-[#B4AA99]">Secure, encrypted connection powered by Stripe</p>
             </div>
           </div>
 
@@ -504,13 +504,13 @@ function CheckoutContent() {
               env var is missing the publishable key is the sentinel,
               which Stripe will reject, so "test mode" is misleading. */}
           {stripeKeyMissing ? (
-            <div className="mb-5 p-3 rounded-xl bg-red-950/30 border border-red-500/30 text-[10px] text-red-300 font-mono leading-relaxed">
+            <div className="mb-5 p-3 rounded-xl bg-red-950/30 border border-red-500/30 text-[9px] text-red-300 font-mono leading-relaxed">
               ⚠ <strong>Stripe publishable key missing.</strong> Set
               <code className="mx-1 px-1 bg-red-500/10 rounded">NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>
               in the deployment environment. Checkout will not work until this is fixed.
             </div>
           ) : stripePublishableKey.startsWith('pk_test') && (
-            <div className="mb-5 p-3 rounded-xl bg-[#342F27]/60 border border-[#E7D7BE]/10 text-[10px] text-[#D0C3AF] font-mono leading-relaxed">
+            <div className="mb-5 p-3 rounded-xl bg-[#342F27]/60 border border-[#E7D7BE]/10 text-[9px] text-[#D0C3AF] font-mono leading-relaxed">
               💡 <strong>Test Mode Active:</strong> You can complete purchases using Stripe test cards (e.g. 4242 4242 4242 4242).
             </div>
           )}
@@ -536,7 +536,7 @@ function CheckoutContent() {
           {isEmailSubmitted && isInitializing && (
             <div className="py-12 flex flex-col items-center justify-center gap-3 text-center">
               <Loader2 size={24} className="animate-spin text-[#E7D7BE]" />
-              <p className="text-[10px] font-mono text-[#9B9282] uppercase tracking-wider">Securing payment channel…</p>
+              <p className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider">Securing payment channel…</p>
             </div>
           )}
 
@@ -544,7 +544,7 @@ function CheckoutContent() {
           <div id="checkout-element" className="min-h-[150px] transition-all duration-300" />
 
           {clientSecret && !initError && (
-            <div className="mt-6 pt-5 border-t border-white/[0.03] flex items-center justify-center gap-2 text-[10px] font-mono text-[#9B9282]">
+            <div className="mt-6 pt-5 border-t border-white/[0.03] flex items-center justify-center gap-2 text-[9px] font-mono text-[#9B9282]">
               <Lock size={10} />
               <span>SSL Gated Session · Powered by Stripe Elements</span>
             </div>
@@ -557,14 +557,14 @@ function CheckoutContent() {
       <aside className="space-y-5 lg:sticky lg:top-24">
 
         {/* Order Summary Box */}
-        <div className="flex flex-col overflow-hidden rounded-[22px] border border-[#2B2821] bg-[#171511] shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
+        <div className="flex flex-col overflow-hidden rounded-[20px] border border-[#2B2821] bg-[#171511]">
           <div className="px-5 py-4 border-b border-white/[0.04]">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#F7EBDD] flex items-center gap-2">
+              <h3 className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#F7EBDD] flex items-center gap-2">
                 <ShoppingBag size={12} className="text-[#D0C3AF]" />
                 Order summary
               </h3>
-              <span className="rounded-full border border-[#6DC6A4]/20 bg-[#6DC6A4]/10 px-2.5 py-1 text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4]">
+              <span className="rounded-full border border-[#6DC6A4]/20 bg-[#6DC6A4]/10 px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider text-[#6DC6A4]">
                 Instant delivery
               </span>
             </div>
@@ -585,12 +585,12 @@ function CheckoutContent() {
                     )}
                   </div>
                   <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="text-[12px] font-semibold text-white truncate">{i.track.title}</p>
+                    <p className="text-[11px] font-semibold text-white truncate">{i.track.title}</p>
                     <p className="text-[9px] font-mono text-[#B4AA99] uppercase tracking-wider">
                       {i.license.name} Tier
                     </p>
                   </div>
-                  <span className="text-[12px] font-mono font-bold text-white tabular-nums">
+                  <span className="text-[11px] font-mono font-bold text-white tabular-nums">
                     ${i.license.price_usd}
                   </span>
                 </li>
@@ -603,12 +603,12 @@ function CheckoutContent() {
                   <Package size={20} className="text-[#E7D7BE]" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[12px] font-semibold text-white">Full Project Bundle</p>
-                  <p className="text-[10px] text-[#B4AA99] font-mono truncate">Project ID: {projectIdForPurchase.slice(0, 8)}…</p>
+                  <p className="text-[11px] font-semibold text-white">Full Project Bundle</p>
+                  <p className="text-[9px] text-[#B4AA99] font-mono truncate">Project ID: {projectIdForPurchase.slice(0, 8)}…</p>
                 </div>
-                <span className="text-[12px] font-mono font-bold text-[#E7D7BE]">See price in Stripe</span>
+                <span className="text-[11px] font-mono font-bold text-[#E7D7BE]">See price in Stripe</span>
               </div>
-              <p className="mt-3 text-[10px] text-[#B4AA99]">All tracks in the project will be delivered with full access via your private link.</p>
+              <p className="mt-3 text-[9px] text-[#B4AA99]">All tracks in the project will be delivered with full access via your private link.</p>
             </div>
           )}
 
@@ -638,19 +638,19 @@ function CheckoutContent() {
                     onChange={(e) => setPromoCode(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); checkPromo(); } }}
                     placeholder="Promo code"
-                    className="flex-1 bg-[#090907] border border-[#2B2821] rounded-lg py-2 px-3 text-[11px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] uppercase"
+                    className="min-h-10 flex-1 rounded-lg border border-[#2B2821] bg-[#090907] px-3 py-2 text-[11px] uppercase text-[#F7EBDD] placeholder:text-[#9B9282] focus:border-[#3B372F] focus:outline-none"
                   />
                   <button
                     onClick={checkPromo}
                     disabled={isCheckingPromo || !promoCode.trim()}
-                    className="px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[10px] font-mono uppercase tracking-wider text-[#F7EBDD] hover:bg-white/[0.08] disabled:opacity-40 transition-colors"
+                    className="min-h-10 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-[9px] font-mono uppercase tracking-wider text-[#F7EBDD] transition-colors hover:bg-white/[0.08] disabled:opacity-40"
                   >
                     {isCheckingPromo ? <Loader2 size={10} className="animate-spin" /> : 'Apply'}
                   </button>
                 </div>
               )}
               {promoError && (
-                <p role="alert" className="text-[10px] text-red-400 mt-1.5">{promoError}</p>
+                <p role="alert" className="text-[9px] text-red-400 mt-1.5">{promoError}</p>
               )}
             </div>
           )}
@@ -658,22 +658,22 @@ function CheckoutContent() {
           {/* Totals (only for track cart; Stripe shows amount for project) */}
           {!isProjectPurchase && (
             <div className="px-5 py-4 bg-[#090907]/40 border-t border-white/[0.04] space-y-1">
-              <div className="flex justify-between items-center text-[10px] font-mono text-[#9B9282] uppercase tracking-wider">
+              <div className="flex justify-between items-center text-[9px] font-mono text-[#9B9282] uppercase tracking-wider">
                 <span>Subtotal</span>
                 <span>{usd(subtotal)}</span>
               </div>
               {promoTerms && discountDisplay && (
-                <div className="flex justify-between items-center text-[10px] font-mono text-[#6DC6A4] uppercase tracking-wider">
+                <div className="flex justify-between items-center text-[9px] font-mono text-[#6DC6A4] uppercase tracking-wider">
                   <span>Discount ({discountDisplay})</span>
                   <span>-{usd(promoDiscount)}</span>
                 </div>
               )}
-              <div className="flex justify-between items-center text-[10px] font-mono text-[#9B9282] uppercase tracking-wider">
+              <div className="flex justify-between items-center text-[9px] font-mono text-[#9B9282] uppercase tracking-wider">
                 <span>Processing Fee</span>
                 <span>$0.00</span>
               </div>
               <div className="flex justify-between items-center pt-2 mt-1 border-t border-white/[0.02]">
-                <span className="text-[10px] font-mono text-[#D0C3AF] uppercase tracking-wider">Total amount</span>
+                <span className="text-[9px] font-mono text-[#D0C3AF] uppercase tracking-wider">Total amount</span>
                 <span className="text-[18px] font-bold text-white tabular-nums">
                   {usd(estimatedTotal)}
                 </span>
@@ -686,7 +686,7 @@ function CheckoutContent() {
         {/* Accepted payment methods — text badges, no third-party logos so
             we don't pull in brand assets we don't have licenses for. Stripe
             handles all the actual mark rendering inside the iframe. */}
-        <div className="rounded-[22px] border border-[#2B2821] bg-[#171511] p-4">
+        <div className="rounded-[20px] border border-[#2B2821] bg-[#171511] p-4">
           <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Pay with</p>
           <div className="flex flex-wrap gap-1.5">
             {['Visa', 'Mastercard', 'Amex', 'Apple Pay', 'Google Pay', 'Link'].map((m) => (
@@ -704,7 +704,7 @@ function CheckoutContent() {
         </div>
 
         {/* Trust & Reassurance Badges */}
-        <div className="rounded-[22px] border border-[#2B2821] bg-[#171511] p-5 space-y-4">
+        <div className="rounded-[20px] border border-[#2B2821] bg-[#171511] p-5 space-y-4">
           <h4 className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">Purchase guarantees</h4>
 
           <div className="space-y-3.5">
@@ -750,7 +750,7 @@ function CheckoutContent() {
           </div>
 
           <div className="pt-4 border-t border-white/[0.04] text-center">
-            <p className="text-[10px] text-[#9B9282] font-mono leading-relaxed">
+            <p className="text-[9px] text-[#9B9282] font-mono leading-relaxed">
               Need assistance? Email us at <br />
               <span className="text-[#D0C3AF]">support@antigravity.fm</span>
             </p>
@@ -765,7 +765,7 @@ function CheckoutContent() {
           doesn't cover the last form fields. */}
       <div className="lg:hidden fixed left-0 right-0 bottom-0 z-30 bg-[#090907]/95 backdrop-blur border-t border-[#2B2821] px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center justify-between gap-3" role="status" aria-live="polite">
         <div className="min-w-0">
-          <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
+          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
             {isProjectPurchase ? 'Project bundle' : `${items.length} item${items.length === 1 ? '' : 's'}`}
           </p>
           <p className="text-[18px] font-bold text-white tabular-nums leading-tight">
