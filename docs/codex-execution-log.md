@@ -4988,3 +4988,48 @@
 - Surface 2 was deliberately split. `src/app/store/[id]/page.tsx` (1003 lines, 13 distinct text sizes, 14 distinct radii, 12 gradients, 18 hex colours) and `src/app/store/checkout/page.tsx` (803 lines, 11 text sizes, 15 hex colours) are the two densest files in the store and each deserve their own reviewable pass. The detail page is the single worst offender in the codebase by every noise metric.
 - Browser verification still outstanding for all quiet-luxury passes so far; the claims are counted class changes, not observed rendering.
 - Next passes: 2b `/store/[id]` detail page, then 2c checkout.
+
+## 2026-07-25 - Quiet Luxury Pass 2b: Store Detail Page
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: reduction-first workflow and the before/after noise-count gate.
+- `.codex/skills/beatstor-design-system`: token vocabulary for the collapsed type and radius scales.
+- `.codex/skills/marketplace-and-licensing`: preserved the license-tier ranking semantics while flattening how that ranking is drawn.
+- `.codex/skills/antigravity-testing-release`: typecheck, focused lint, full suite, production build.
+
+### Area Inspected
+
+- `src/app/store/[id]/page.tsx` (1003 lines - the densest file in the store by every noise metric)
+
+### Changes Made
+
+- Collapsed the type scale to a deliberate ramp: 9px mono metadata, 11px small body and controls, 13px body copy, 16px sub-headings, 32px price display, and the existing 28/36/48 responsive `h1`. The ambiguous 10px size was classified per class string rather than blanket-mapped - occurrences carrying `font-mono` became metadata at 9px, the rest became body at 11px.
+- Collapsed seven hand-picked arbitrary radii (13, 14, 16, 17, 18, 19, 20px) to the documented vocabulary: 12px via `rounded-xl` for cards and 20px for large panels.
+- Flattened every gradient "bezel tray" to a flat hairline ring: the cover art frame, the creator card, the similar-beats card, and the licenses panel. DOM structure and spacing are untouched - only the wrapper's directional gradient became a flat alpha.
+- License tiers keep their exclusive > recommended > standard ranking, now expressed as flat accent alpha steps instead of three directional gradients.
+- Replaced the fading gradient divider rule with a solid hairline.
+
+### Problems Discovered
+
+- The page carried 13 distinct text sizes and 14 distinct radii. Seven of those radii sat between 13px and 20px, values no viewer can distinguish from one another - they were hand-picked per component rather than drawn from a scale, which is a direct cause of the "busy" impression.
+- The double-bezel pattern already removed from `BeatCard` was repeated five more times here, so most major cards on the page carried two competing edges: a directional gradient tray plus the inner surface.
+- 10px was being used for both mono metadata labels and ordinary body copy, so the same size carried two different meanings.
+
+### Problems Fixed
+
+- Detail page noise counts: text sizes 13 -> 8 (of which 28/36/48 is a single responsive `h1` declaration, so five body sizes remain), arbitrary radii 7 -> 1, gradients 12 -> 4. The four survivors are functional: the cover scrim, two cover placeholder fills, and the `seededGradient` import used for missing artwork.
+- The detail page now shares the card, drawer, and list anatomy established in passes 1 and 2a.
+
+### Tests Performed
+
+- `npx tsc --noEmit` - passed.
+- `npx eslint "src/app/store/[id]/page.tsx"` - 0 errors, 0 warnings.
+- `npm test` - passed, 100 files and 538 tests.
+- `npm run build` - passed, 55 static pages generated.
+
+### Remaining Concerns
+
+- The page still carries 18 distinct hardcoded hex colours. Consolidating those needs per-usage judgement about which are semantic and which are drift, so it was deliberately left out of this structural pass rather than blanket-mapped.
+- Browser verification remains outstanding for every quiet-luxury pass so far. The type-scale collapse in particular changes rendered sizes across a long page and should be viewed at 375px and desktop before this surface is signed off.
+- Next pass: 2c checkout (`src/app/store/checkout/page.tsx`, 803 lines, 11 text sizes, 15 hex colours).
