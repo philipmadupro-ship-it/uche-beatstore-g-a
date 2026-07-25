@@ -5078,3 +5078,57 @@
 - Because Akira Expanded stays, every future pass must budget for its width: phrases that fit in a mono face at 9px will not fit at 11px in the same column. Prefer shorter labels over smaller type.
 - Off-palette purple on the Daily Pick panel and the heavy Buy Bundle slab remain open.
 - Passes 1, 2a, and 2b are now browser-verified at desktop width only. Next: 2c checkout, then a mobile sweep.
+
+## 2026-07-25 - Mobile Sweep: Storefront Tap Targets At 375px
+
+### Skills Used
+
+- `.codex/skills/responsive-ui-engineering`: 375px viewport behaviour, overflow, and tap-target sizing.
+- `.codex/skills/accessibility-and-keyboard-navigation`: WCAG 2.5.5 target sizing and the inline-link exemption.
+- `.codex/skills/qa-and-regression-testing`: live DOM measurement rather than reading classes.
+- `.codex/skills/quiet-luxury-ui`: kept every change to sizing only, no visual redesign in this pass.
+
+### Area Inspected
+
+- `/store` rendered at 375x812 against the local dev server.
+- `src/components/store/StoreListView.tsx`
+- `src/components/store/StoreSidebar.tsx`
+- `src/components/store/ProducerProfile.tsx`
+- `src/components/ui/Dropdown.tsx`
+- `src/app/store/page.tsx`
+
+### Changes Made
+
+- `StoreListView`: the per-row wishlist and overflow-menu buttons were 28x28. Raised to a 40px hit area using `size-10` with a compensating `-m-1.5`, so the visual footprint is unchanged. Row and header grid tracks widened from 24/28px to 32px to accommodate them.
+- `StoreSidebar`: the free-only, favourites-only, new-this-week toggles and the reset-filters button rendered at 33-37px. Added `tap min-h-11`, matching the convention already used by the type-filter pills in the same file.
+- `src/app/store/page.tsx`: the featured-project Buy bundle button was `min-h-9` (36px). Raised to `min-h-11` with slightly wider padding.
+- `Dropdown` (shared primitive): the trigger rendered at 35px because it relied on `py-2` alone. Added `min-h-10`. This lifts every dropdown trigger in the product, not just the storefront sort control.
+- `ProducerProfile`: social icons were 36px, raised to 40px, and gained an `aria-label` - they previously carried only a `title` attribute, which is not reliably announced.
+
+### Problems Discovered
+
+- Measured at 375px, the storefront had 16 interactive controls below the 40px floor set in `docs/design-direction.md`. The worst were the per-row overflow menus at 28x28, present on every beat row.
+- The `Dropdown` primitive was under-sized at its source, so every dropdown across the app inherited a 35px trigger.
+- `ProducerProfile` social links had no accessible name beyond `title`.
+- The page itself does NOT overflow horizontally at 375px: `document.scrollWidth` equals the 375px viewport. Twenty elements report as extending past the viewport edge, but all sit inside intentional snap-scroll carousels for projects and playlists.
+- The wishlist heart in list mode is `hidden md:flex`, so a mobile visitor cannot favourite from the list, and the row overflow menu offers no favourite action either. Grid mode does expose it. This is a pre-existing functional gap, not a regression, and was left alone because closing it changes behaviour rather than styling.
+
+### Problems Fixed
+
+- Sub-40px storefront controls reduced from 16 to 5. The five survivors are three inline text links inside sentences (exempt under WCAG 2.5.5 Target Size) and one card-title text link, plus a card title, none of which are icon controls.
+- Every dropdown trigger in the product now meets the 40px floor.
+
+### Tests Performed
+
+- Browser at 375x812: live DOM measurement of every `button`, `a`, and `[role=button]` inside `.store-ui` before and after; horizontal-overflow check against `document.documentElement.scrollWidth`.
+- `npx tsc --noEmit` - passed.
+- `npx eslint` on the five changed files - 0 errors, 0 warnings.
+- `npm test` - passed, 100 files and 538 tests.
+- `npm run build` - passed, 55 static pages generated.
+
+### Remaining Concerns
+
+- Only `/store` was swept at 375px. The beat detail page, checkout, the preview and cart drawers in their open state, and the share pages have not been measured at mobile width.
+- The list-mode wishlist gap on mobile is open and needs a product decision: either surface the heart on mobile or add a favourite action to the row overflow menu.
+- Off-palette purple on the Daily Pick panel and the heavy Buy Bundle slab remain open from the previous pass.
+- The projects and playlists carousels use a `rounded-[14px] p-[1.5px]` gradient bezel that the pass-1 and pass-2b reductions have not yet reached.

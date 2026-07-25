@@ -77,7 +77,8 @@ function SocialIcon({ href, title, children }: { href: string; title: string; ch
       title={title}
       target={isMail ? undefined : '_blank'}
       rel={isMail ? undefined : 'noopener noreferrer'}
-      className="w-9 h-9 rounded-full flex items-center justify-center bg-white/[0.05] border border-white/[0.08] text-white/65 hover:text-white hover:bg-white/[0.10] transition-colors"
+      aria-label={title}
+      className="flex size-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.05] text-white/65 transition-colors hover:bg-white/[0.10] hover:text-white"
     >
       {children}
     </a>

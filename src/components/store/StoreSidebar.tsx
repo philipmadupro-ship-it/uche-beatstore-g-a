@@ -436,7 +436,7 @@ export function StoreSidebar(props: Props) {
 
       <button
         onClick={() => setFreeOnly(!freeOnly)}
-        className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${freeOnly
+        className={`tap flex min-h-11 items-center justify-between rounded-lg border px-3 py-2.5 transition-all ${freeOnly
             ? 'bg-[#0e1f17]/60 border-[#6DC6A4]/30 text-[#6DC6A4]'
             : 'bg-transparent border-[#2B2821] text-[#B4AA99] hover:border-[#3B372F]'
           }`}
@@ -452,7 +452,7 @@ export function StoreSidebar(props: Props) {
 
       <button
         onClick={() => setFavoritesOnly(!favoritesOnly)}
-        className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${favoritesOnly
+        className={`tap flex min-h-11 items-center justify-between rounded-lg border px-3 py-2.5 transition-all ${favoritesOnly
             ? 'border-[#D6BE7A]/40 text-[#D6BE7A] bg-[#D6BE7A]/[0.08]'
             : 'bg-transparent border-[#2B2821] text-[#B4AA99] hover:border-[#3B372F]'
           }`}
@@ -468,7 +468,7 @@ export function StoreSidebar(props: Props) {
 
       <button
         onClick={() => setNewThisWeek(!newThisWeek)}
-        className="flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all"
+        className="tap flex min-h-11 items-center justify-between rounded-lg border px-3 py-2.5 transition-all"
         style={
           newThisWeek
             ? { borderColor: `${accentColor}66`, color: accentColor, backgroundColor: `${accentColor}14` }
@@ -487,7 +487,7 @@ export function StoreSidebar(props: Props) {
       <button
         onClick={onReset}
         disabled={!hasActiveFilters}
-        className="flex items-center gap-1.5 justify-center px-3 py-2 rounded-lg border border-[#2B2821] text-[10px] font-mono uppercase tracking-wider transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:border-[#E7D7BE]/40 hover:text-[#E7D7BE] text-[#B4AA99]"
+        className="tap flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-[#2B2821] px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-[#B4AA99] transition-all hover:border-[#E7D7BE]/40 hover:text-[#E7D7BE] disabled:cursor-not-allowed disabled:opacity-30"
       >
         <RotateCcw size={10} />
         Reset filters

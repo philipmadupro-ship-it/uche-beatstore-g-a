@@ -258,7 +258,7 @@ function StoreSalesSpotlight({
                   type="button"
                   onClick={() => onBuyProject(project)}
                   disabled={projectPrice == null || projectPrice <= 0}
-                  className="tap mt-auto inline-flex min-h-9 items-center justify-center gap-2 rounded-full px-3 text-[9px] font-bold uppercase tracking-wider text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="tap mt-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full px-4 text-[9px] font-bold uppercase tracking-wider text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                   style={{ backgroundColor: accentColor }}
                 >
                   <ShoppingCart size={12} />

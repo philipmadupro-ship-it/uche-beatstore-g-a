@@ -177,7 +177,9 @@ export function Dropdown<T extends string = string>({
         aria-label={ariaLabel}
         onClick={handleTriggerClick}
         className={cn(
-          'inline-flex items-center justify-between gap-2 px-3 py-2 rounded-md',
+          // min-h-10 keeps the trigger at the 40px tap-target floor set in
+          // docs/design-direction.md; py-2 alone rendered it at 35px.
+          'inline-flex min-h-10 items-center justify-between gap-2 px-3 py-2 rounded-md',
           'bg-[#171511] border border-[#211F1A] text-[11px] text-[#F7EBDD]',
           'hover:border-[#3B372F] transition-colors',
           'focus:outline-none focus:border-[#E7D7BE]/40 focus:ring-1 focus:ring-[#E7D7BE]/20',

@@ -55,7 +55,7 @@ export function StoreListView({
     <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-[#171511]">
 
       {/* Header row */}
-      <div className="relative hidden md:grid grid-cols-[36px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_24px_24px] gap-4 px-4 md:px-6 py-2.5 border-b border-white/[0.05] text-[9px] font-mono uppercase tracking-[0.18em] text-white/40">
+      <div className="relative hidden md:grid grid-cols-[36px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_32px_32px] gap-4 px-4 md:px-6 py-2.5 border-b border-white/[0.05] text-[9px] font-mono uppercase tracking-[0.18em] text-white/40">
         <span />
         <span>Title</span>
         <span>Tags · Rating</span>
@@ -93,7 +93,7 @@ export function StoreListView({
               }}
               onMouseEnter={() => setHovered(t.id)}
               onMouseLeave={() => setHovered((v) => (v === t.id ? null : v))}
-              className={`relative grid grid-cols-[44px_minmax(0,1fr)_auto_28px] md:grid-cols-[44px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_24px_24px] gap-3 md:gap-4 items-center px-4 md:px-6 py-3 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/40 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
+              className={`relative grid grid-cols-[44px_minmax(0,1fr)_auto_32px] md:grid-cols-[44px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_32px_32px] gap-3 md:gap-4 items-center px-4 md:px-6 py-3 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/40 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
               style={isPreview ? { boxShadow: `inset 2px 0 0 ${accentColor}` } : isCur ? { boxShadow: `inset 2px 0 0 ${accentColor}80` } : {}}
             >
               {/* Cover w/ hover-play */}
@@ -225,7 +225,7 @@ export function StoreListView({
                 aria-pressed={wishlisted}
                 aria-label={wishlisted ? `Remove ${t.title} from favorites` : `Add ${t.title} to favorites`}
                 title={wishlisted ? 'Remove from favorites' : 'Add to favorites'}
-                className="hidden md:flex w-7 h-7 rounded-full items-center justify-center hover:bg-white/[0.06] transition-colors"
+                className="-m-1.5 hidden size-10 items-center justify-center rounded-full transition-colors hover:bg-white/[0.06] md:flex"
                 style={wishlisted ? { color: '#c8a84b' } : { color: 'rgba(255,255,255,0.45)' }}
               >
                 <Heart size={13} fill={wishlisted ? 'currentColor' : 'none'} />
@@ -238,7 +238,7 @@ export function StoreListView({
                   onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === t.id ? null : t.id); }}
                   aria-label={`More options for ${t.title}`}
                   aria-expanded={menuFor === t.id}
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-white/45 hover:text-white hover:bg-white/[0.06] transition-colors"
+                  className="-m-1.5 flex size-10 items-center justify-center rounded-full text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white"
                   title="More"
                 >
                   <MoreHorizontal size={14} />
