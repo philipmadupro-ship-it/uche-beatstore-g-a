@@ -54,7 +54,7 @@ export function PlaylistFolderSelect({ playlistId, onClose, onSaved }: { playlis
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl border border-[#2B2821] bg-[#11100D] shadow-2xl flex flex-col max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-sm rounded-2xl border border-[#2B2821] bg-[#11100D] flex flex-col max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-[#211F1A]">
           <div className="flex items-center gap-2"><FolderPlus size={13} className="text-[#D0C3AF]" /><h3 className="text-[12px] font-bold text-[#F7EBDD]">Move to folders</h3></div>
           <button onClick={onClose} className="text-[#9B9282] hover:text-white"><X size={14} /></button>

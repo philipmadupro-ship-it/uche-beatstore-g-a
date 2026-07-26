@@ -951,7 +951,7 @@ function OfferModal({ trackId, trackTitle, accent, onClose }: {
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl border border-[#2B2821] bg-[#11100D] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-sm rounded-2xl border border-[#2B2821] bg-[#11100D] p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between mb-4">
           <div>
             <p className="text-[9px] font-mono uppercase tracking-[0.25em]" style={{ color: accent }}>Make an offer</p>

@@ -893,7 +893,7 @@ export default function LibraryPage() {
             {releaseDropdownOpen && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setReleaseDropdownOpen(false)} />
-                <div className="absolute left-0 top-full mt-1.5 z-40 w-48 bg-[#171511] border border-[#2B2821] rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="absolute left-0 top-full mt-1.5 z-40 w-48 bg-[#171511] border border-[#2B2821] rounded-xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
                   {[
                     { mode: 'both' as const, label: 'Project + Playlist', sub: 'Full release flow' },
                     { mode: 'project' as const, label: 'Project only', sub: 'Production session' },
@@ -1509,7 +1509,7 @@ export default function LibraryPage() {
       {/* Bulk edit popover */}
       {bulkEditOpen && selectedIds.size > 0 && (
         <div className="fixed bottom-44 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-2 fade-in duration-200">
-          <div className="bg-[#171511] border border-[#2B2821] rounded-2xl shadow-2xl p-4 w-72 space-y-3">
+          <div className="bg-[#171511] border border-[#2B2821] rounded-2xl p-4 w-72 space-y-3">
             <p className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">
               Edit {selectedIds.size} track{selectedIds.size === 1 ? '' : 's'}
             </p>
@@ -1579,7 +1579,7 @@ export default function LibraryPage() {
 
       {smartNameOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => !savingSmart && setSmartNameOpen(false)}>
-          <div className="w-full max-w-sm rounded-2xl border border-[#2B2821] bg-[#11100D] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm rounded-2xl border border-[#2B2821] bg-[#11100D] p-6" onClick={(e) => e.stopPropagation()}>
             <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#E7D7BE]">Smart playlist</p>
             <h3 className="text-[16px] font-bold text-[#F7EBDD] mt-1 mb-1">Save current filters</h3>
             <p className="text-[11px] text-[#B4AA99] mb-4">Auto-updates as new tracks match these filters.</p>
@@ -1819,7 +1819,7 @@ function PackBuilderModal({
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-[#2B2821] bg-[#11100D] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-2xl border border-[#2B2821] bg-[#11100D] p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between mb-4">
           <div>
             <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#E7D7BE]">Beat pack</p>

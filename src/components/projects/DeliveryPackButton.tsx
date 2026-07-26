@@ -67,7 +67,7 @@ export function DeliveryPackButton({ projectId, projectName }: Props) {
 
       {open && files && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-[#2B2821] bg-[#11100D] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-md rounded-2xl border border-[#2B2821] bg-[#11100D]" onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-[#211F1A] flex items-center justify-between">
               <div>
                 <h3 className="text-[13px] font-semibold text-[#F7EBDD]">Delivery pack</h3>

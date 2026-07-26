@@ -5487,3 +5487,48 @@
 - `src/design-system/foundations/`, `themes/`, and the player-preset files remain in the repository as unused-outside-cover-art infrastructure. They are not being deleted (they have real test coverage and may inform a future cover-art expansion) but should not be treated as the product's active design direction by a future session that hasn't read this entry.
 - The pasted brief's competitor-research section (section 24-25, "Prod by Jack") was not actioned - it explicitly requires a URL the product owner has not yet supplied, and is out of scope for a visual-direction decision regardless.
 - Returning to the quiet-luxury plan: the one item remaining per `docs/design-direction.md`'s surface order is the final modals/empty-states sweep across the app.
+
+## 2026-07-26 - Quiet Luxury Pass 7 (Final): Modals And Empty States Sweep
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: reduction-first workflow, app-wide this time rather than one page/component.
+- `.codex/skills/accessibility-and-keyboard-navigation`: verified the shared `Modal`'s focus trap, Escape handling, and `role="dialog"` semantics were unaffected by the shadow removal - live, in the browser.
+- `.codex/skills/antigravity-testing-release`: typecheck, focused lint, full suite, production build, live browser verification.
+
+### Area Inspected
+
+- `src/components/ui/Modal.tsx` (shared primitive, 9 real consumers)
+- `src/components/ui/EmptyState.tsx` (shared primitive, 11 real consumers)
+- The 6 files that hand-roll their own modal overlay instead of using `Modal`: `PlaylistFolderSelect.tsx`, `ProjectFolderSelect.tsx`, `DeliveryPackButton.tsx`, `AddFromLibraryModal.tsx`, `library/page.tsx` (two modals: smart-playlist save, Beat Pack builder, plus one dropdown/one popover), `store/[id]/page.tsx` (one modal)
+- 5 files with hand-rolled empty states outside `EmptyState`: `projects/page.tsx` (already fixed in pass 5), `store/orders/page.tsx`, `StudioTrackPicker.tsx`, `StudioWorkstation.tsx`, `AddFromLibraryModal.tsx`
+
+### Changes Made
+
+- `Modal.tsx`: removed `shadow-[0_30px_90px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.04)]` from the panel - the same border+shadow double-treatment removed from every card, drawer, and panel earlier in this lane, except this time the fix is on the ONE shared component 9 different modals across the app render through, so it propagated everywhere at once without touching 9 separate files.
+- The 6 hand-rolled modal panels all independently paired a hairline border with Tailwind's `shadow-2xl` on the exact same anatomy - the overlay/backdrop, then a bordered panel. Removed `shadow-2xl` from all six. Also caught two more instances of the identical pattern inside `library/page.tsx` that weren't strictly "modals" (a dropdown menu, a popover) but shared the same border+shadow stacking - fixed those too since the anatomy is identical.
+- `StudioWorkstation.tsx`: found while checking hand-rolled empty states nearby - removed the same border+shadow stacking from the session console card, and a glow shadow (`shadow-lg shadow-[#E7D7BE]/15`) from the play button, matching every other primary play/action button already de-shadowed this session (BeatCard, ClientShareVariant, the playlist card's play overlay).
+
+### Problems Discovered
+
+- The app has two parallel modal implementations: the shared `Modal` component (proper focus trap, Escape handling, portal, `role="dialog"`) and 6 places that hand-roll the same visual pattern with a plain `fixed inset-0` div and no focus management. This is a real architectural inconsistency (`docs/design-direction.md` principle 7, "one anatomy per pattern") but converting the hand-rolled instances to the shared component is a structural change - it could alter focus trapping, keyboard behaviour, or animation timing - not a pure restyle, so it was deliberately left as a flagged gap rather than attempted under this lane's zero-behaviour-change rule.
+- `EmptyState.tsx` itself required no changes; it was already disciplined (no shadow, no gradient, correct heading treatment, semantic tokens). Of the 5 hand-rolled empty states found, 4 were already clean (0 shadows/gradients) and only `StudioWorkstation.tsx`'s was carrying the border+shadow pattern.
+
+### Problems Fixed
+
+- Every open modal in the product - the 9 through the shared component and the 6 hand-rolled ones - now presents a single flat, hairline-bordered surface with no competing shadow, verified live (see Tests Performed).
+- The two stray dropdown/popover instances in `library/page.tsx` with the same double-treatment are fixed as a byproduct.
+- `StudioWorkstation`'s session console and play button match the flat-surface, no-shadow-on-solid-buttons convention used everywhere else.
+
+### Tests Performed
+
+- Browser: opened the "New playlist" modal (routes through the shared `Modal` component) live in the authenticated session; `getComputedStyle` on `.ui-modal-panel` confirmed `boxShadow: none` and the hairline border intact; screenshotted the rendered panel to confirm it reads calm with the backdrop blur doing the separation work.
+- `npx tsc --noEmit` - passed.
+- `npx eslint` across `Modal.tsx`, all 6 hand-rolled modal files, and `StudioWorkstation.tsx` - 0 errors; only pre-existing warnings (unused var, exhaustive-deps, no-img-element) unchanged.
+- `npm test` - passed, 100 files and 538 tests.
+- `npm run build` - passed, 55 static pages generated.
+
+### Remaining Concerns
+
+- The dual modal-implementation architecture (shared `Modal` vs. 6 hand-rolled instances) is a real inconsistency but out of scope for a visual-only pass; converting the hand-rolled instances to the shared component would need its own reviewable pass with explicit sign-off that behaviour changes (focus trap, keyboard handling) are acceptable.
+- This closes every item in `docs/design-direction.md`'s named surface order (store cards/rows, drawers, detail page, mobile sweep, featured hero/carousel, checkout, share pages, dashboard home/library x2, projects, playlists, store-editor, modals/empty-states). The quiet-luxury lane as originally scoped is complete; any further work is either the flagged architectural item above or a fresh pass the product owner explicitly asks for.

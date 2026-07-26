@@ -613,7 +613,7 @@ export function StudioWorkstation() {
               {/* Session console — track identity + waveform first, with
                   utility controls kept small so the waveform remains the
                   studio's primary work surface. */}
-              <div className="rounded-2xl border border-[#1A1813] bg-[#090907] p-3 shadow-[0_18px_48px_rgba(0,0,0,0.22)] sm:p-4">
+              <div className="rounded-2xl border border-[#1A1813] bg-[#090907] p-3 sm:p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
                   {active.cover_url ? (
@@ -643,7 +643,7 @@ export function StudioWorkstation() {
                 </div>
                 <button
                   onClick={togglePlay}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E7D7BE] text-black shadow-lg shadow-[#E7D7BE]/15 transition-transform hover:scale-105 active:scale-95 sm:h-11 sm:w-11"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E7D7BE] text-black transition-transform hover:scale-105 active:scale-95 sm:h-11 sm:w-11"
                 >
                     {isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" className="ml-0.5" />}
                 </button>

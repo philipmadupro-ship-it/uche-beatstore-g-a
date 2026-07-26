@@ -181,7 +181,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
-      <div className="bg-[#11100D] border border-[#211F1A] rounded-2xl w-full max-w-3xl max-h-[88vh] overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-[#11100D] border border-[#211F1A] rounded-2xl w-full max-w-3xl max-h-[88vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 h-14 border-b border-[#1A1813] shrink-0">
