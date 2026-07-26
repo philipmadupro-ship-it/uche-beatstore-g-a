@@ -217,11 +217,8 @@ export default function LinksPage() {
           description="Every share you've sent. Tap a card to open and copy."
           meta={`${links.length} link${links.length !== 1 ? 's' : ''}${links.length > 0 ? ` · ${links.reduce((s, l) => s + (l.plays ?? 0), 0).toLocaleString()} plays` : ''}`}
           actions={
-            <LiquidGlassButton
-                onClick={() => setShowQuickShare(true)}
-                variant="primary"
-                leadingIcon={<Plus size={13} aria-hidden="true" />}
-              >
+            <LiquidGlassButton onClick={() => setShowQuickShare(true)}>
+                <Plus size={13} aria-hidden="true" />
                 New share
             </LiquidGlassButton>
           }
@@ -291,11 +288,8 @@ export default function LinksPage() {
             title="No share links yet"
             description="Share a project or track to create one."
             action={
-              <LiquidGlassButton
-                onClick={() => setShowQuickShare(true)}
-                variant="primary"
-                leadingIcon={<Plus size={13} aria-hidden="true" />}
-              >
+              <LiquidGlassButton onClick={() => setShowQuickShare(true)}>
+                <Plus size={13} aria-hidden="true" />
                 New share
               </LiquidGlassButton>
             }

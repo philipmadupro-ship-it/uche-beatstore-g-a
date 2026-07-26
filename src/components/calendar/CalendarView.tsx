@@ -50,7 +50,8 @@ export function CalendarView() {
               <ChevronRight size={18} />
             </button>
           </div>
-          <LiquidGlassButton variant="primary" leadingIcon={<Plus size={14} />}>
+          <LiquidGlassButton>
+            <Plus size={14} />
             New Event
           </LiquidGlassButton>
         </div>
