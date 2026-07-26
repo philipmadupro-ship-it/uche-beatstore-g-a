@@ -5661,3 +5661,45 @@
 
 - The owner asked for the same track-row treatment on the store editor's listing manager; its rows are a separate inline implementation in `store-editor/page.tsx` and are the explicit next pass.
 - The native file-picker dialog cannot be exercised by the headless browser check; the `open()` wiring is type-checked and the input is confirmed present in the DOM, but a human click on "Upload beat" is the final confirmation.
+
+---
+
+## Pass: Track drawer polish + store-editor rows + broken worktree cleanup
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: cleaned remaining decorative excess (gradients, colored shadows, off-palette purple) in the right-side track details drawer and store-editor's beat listing rows.
+- `.codex/skills/antigravity-testing-release`: full gate before push; diagnosed and fixed a real build break unrelated to this pass.
+
+### Area Inspected
+
+- `src/components/tracks/TrackDetailsDrawer.tsx` — the right-side popup that opens on track-row click (the owner's pasted reference component was describing behavior this drawer already implements: a row click opening a slide-in right panel).
+- `src/app/(dashboard)/store-editor/page.tsx` — the Beat Listing row manager (queued from the previous pass).
+- `src/app/(dashboard)/links/page.tsx`, `src/components/calendar/CalendarView.tsx` — unrelated but build-blocking.
+
+### Changes Made
+
+- **TrackDetailsDrawer**: removed the gradient header wash, the radial-gradient corner glow, the heavy outer drop shadow, and `shadow-lg` accents on the view-toggle tabs. Fixed a broken Tailwind class (`border-white/` with no opacity value, from an earlier bad edit) on three buttons. Fixed off-palette purple (occurrences 7, 8, 9) on the minor-scale key badge, the Insights key stat card, and the Mood vibe-meter bar — all now use the documented accent/neutral tokens instead of `#9d95e8`/`#534AB7`.
+- **Store-editor Beat Listing rows**: flattened the listed/draft row backgrounds from a green-tinted `bg-[#0e140e]` to a neutral `bg-white/[0.03]`, matching the "status signaled by badge, not by tinting the whole row" pattern already applied to `TrackCard.tsx`.
+
+### Problems Discovered
+
+- **Worktree/branch mismatch.** This session's assigned worktree (`.claude/worktrees/optimistic-hoover-fceae2`) was on an unrelated branch (`claude/interesting-sinoussi-11797b`, "perf" commits) with no relation to this design work. All actual edits — this pass and every prior one in this thread — land in the primary checkout `/Users/philipmadu/antigravity` on `codex/phase-two-conversion-polish`, confirmed against the owner's cited commit `3fe5698`.
+- **Unpushed commits.** Two commits (the album-view feature and the beige→white/alpha migration) were sitting locally, unpushed to either remote — this is why the owner wasn't seeing the changes live.
+- **Build-breaking migration bug.** The beige→white/alpha migration commit (`3fe5698`) swapped three raw buttons for `LiquidGlassButton` but passed `variant`/`leadingIcon` props the component doesn't accept (`LiquidGlassButtonProps` is `children` + `active` only) — `tsc` failed on `links/page.tsx` (x2) and `CalendarView.tsx`.
+
+### Problems Fixed
+
+- Fixed the three `LiquidGlassButton` call sites (icon rendered as a child instead of a nonexistent `leadingIcon` prop; dropped `variant`).
+- Verified `tsc --noEmit` clean, `eslint` 0 errors (96 pre-existing warnings), 538/538 tests, production build green (55 pages).
+- Pushed feature branch + `main` to both `vercel` and `origin`.
+
+### Tests Performed
+
+- `npx tsc --noEmit`, `npx eslint .`, `npm test`, `npm run build` — all green on the main checkout.
+- Live check via the owner's already-running local dev server (localhost:3000): page loads, no console errors. Local DB was empty (0 tracks) so row-click verification of the drawer/store-editor changes couldn't be exercised interactively this pass — covered by the type-checked JSX and the visual diff instead.
+
+### Remaining Concerns
+
+- The store-editor pass only touched row background tinting; the section still has denser functional chrome (schedule picker, license panel, feature/free/voice-tag toggles) than the library's rows by necessity — did not strip those, since they're utility, not decoration.
+- "Projects and everything" (owner's third stated target) — `TrackCard.tsx` is shared across library/projects/playlists, so most of that inherits already; not independently re-verified live this pass.
