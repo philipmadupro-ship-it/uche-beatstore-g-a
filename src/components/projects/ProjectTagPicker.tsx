@@ -46,9 +46,9 @@ export function ProjectTagPicker({ projectId }: { projectId: string }) {
                 <button
                   key={tag}
                   onClick={() => handleToggle(tag, category === 'project type' ? 'project_type' : category)}
-                  className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 border ${
+                  className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors border ${
                     active
-                      ? 'bg-white/10 text-white border-white/50 shadow-lg shadow-white/10'
+                      ? 'bg-white/10 text-white border-white/50'
                       : 'bg-transparent text-white/40 border-white/20 hover:border-white/30 hover:text-white/80'
                   }`}
                 >

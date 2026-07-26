@@ -365,7 +365,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
               visual anchor on the project page. */}
           <div className="lg:sticky lg:top-10 lg:self-start">
             <div
-              className="mx-auto aspect-square w-full max-w-[270px] sm:max-w-[360px] lg:max-w-none bg-white/[0.04] rounded-[24px] sm:rounded-[28px] lg:rounded-2xl border border-white/[0.05] overflow-hidden group relative cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+              className="mx-auto aspect-square w-full max-w-[270px] sm:max-w-[360px] lg:max-w-none bg-white/[0.04] rounded-[20px] border border-white/[0.05] overflow-hidden group relative cursor-pointer"
               onClick={() => fileInputRef.current?.click()}
             >
               {project?.cover_url ? (

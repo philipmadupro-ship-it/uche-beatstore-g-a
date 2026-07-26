@@ -262,10 +262,10 @@ export default function SalesPage() {
               <KpiCard label="All time" value={fmtMoney(totals.revenue_usd)} icon={<DollarSign size={13} />} accent="#6DC6A4" />
               <KpiCard label="Last 30d" value={fmtMoney(kpis.rev30)} icon={<TrendingUp size={13} />} accent='#FFFFFF' />
               <KpiCard label="Orders" value={String(totals.count)} icon={<ShoppingBag size={13} />} accent='rgba(255,255,255,0.8)' />
-              <KpiCard label="Avg sale" value={totals.count > 0 ? fmtMoney(kpis.avgSale) : '—'} icon={<Tag size={13} />} accent="#9d95e8" />
+              <KpiCard label="Avg sale" value={totals.count > 0 ? fmtMoney(kpis.avgSale) : '—'} icon={<Tag size={13} />} accent='rgba(255,255,255,0.8)' />
               <KpiCard label="Last 90d" value={fmtMoney(kpis.rev90)} icon={<TrendingUp size={13} />} accent='#FFFFFF' className={statsExpanded ? '' : 'hidden sm:block'} />
               <KpiCard label="Last 7d" value={fmtMoney(kpis.rev7)} icon={<ArrowUpRight size={13} />} accent='#FFFFFF' className={statsExpanded ? '' : 'hidden sm:block'} />
-              <KpiCard label="Leases" value={String(kpis.leases)} icon={<Tag size={13} />} accent="#9d95e8" className={statsExpanded ? '' : 'hidden sm:block'} />
+              <KpiCard label="Leases" value={String(kpis.leases)} icon={<Tag size={13} />} accent='rgba(255,255,255,0.8)' className={statsExpanded ? '' : 'hidden sm:block'} />
               <KpiCard label="Exclusives" value={String(kpis.exclusives)} icon={<Crown size={13} />} accent="#e8a06a" className={statsExpanded ? '' : 'hidden sm:block'} />
             </div>
             <button

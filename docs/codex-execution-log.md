@@ -5703,3 +5703,42 @@
 
 - The store-editor pass only touched row background tinting; the section still has denser functional chrome (schedule picker, license panel, feature/free/voice-tag toggles) than the library's rows by necessity — did not strip those, since they're utility, not decoration.
 - "Projects and everything" (owner's third stated target) — `TrackCard.tsx` is shared across library/projects/playlists, so most of that inherits already; not independently re-verified live this pass.
+
+---
+
+## Pass: Design-direction sweep — sales, analytics, projects (off-palette purple + radii/shadow)
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`, guided directly by `docs/design-direction.md` ("the master visual prompt") — principle 3 (one accent, kill decorative multi-accent tints) and principle 4 (flatter surfaces, 8/12/20 radii vocabulary, one border OR one shadow).
+- `.codex/skills/antigravity-testing-release`: full gate before push.
+
+### Area Inspected
+
+- `src/app/(dashboard)/sales/page.tsx`, `src/app/(dashboard)/analytics/page.tsx` — KPI/engagement card accents and the activity sparkline.
+- `src/components/projects/ProjectFilterBar.tsx`, `src/components/projects/ProjectTagPicker.tsx` — folder rename input, tag-picker active state.
+- `src/app/(dashboard)/projects/[id]/page.tsx` — project hero cover.
+
+### Changes Made
+
+- **Off-palette purple, occurrences 10–14.** Sales' "Avg sale"/"Leases" KPI accents, analytics' "Tracks with plays" engagement card, the activity-chart sparkline (stroke + gradient stops, 2 spots), the "MAQ" status chip, and the folder-rename input's focus border all used `#9d95e8`/`#7F77DD`/`#534AB7` as decorative tints with no semantic meaning (not free/rating). All moved to white/neutral, matching sibling cards on the same row that already used white.
+- **Shadow-on-active-state removed.** `ProjectTagPicker`'s active tag pill had `shadow-lg shadow-white/10` stacked on top of its border — one accent signal (the border) is enough per "max one border OR one shadow."
+- **Off-vocabulary radii + heavy shadow on the project hero cover.** `rounded-[24px]/[28px]` collapsed to the documented 20px hero radius; dropped the `shadow-[0_8px_32px_rgba(0,0,0,0.4)]` since the cover already has a border.
+
+### Problems Discovered
+
+- The purple tint was scattered as a "just pick a different color for variety" pattern across KPI/stat cards in sales and analytics — not a single reused constant, so each had to be found and fixed independently rather than via one shared token fix.
+
+### Problems Fixed
+
+- All five files above verified via `tsc --noEmit` (clean), `eslint` (0 errors, pre-existing warnings only), full test suite (538/538), and production build (55 pages).
+
+### Tests Performed
+
+- `npx tsc --noEmit`, `npx eslint` scoped to touched dirs, `npm test`, `npm run build` — all green.
+- Live: `/projects` loaded via the owner's running dev server, no console errors. Local DB has 0 tracks, so sales/analytics KPI cards and the project hero couldn't be exercised with real data this pass — covered by source review + build gate instead.
+
+### Remaining Concerns
+
+- Playlists (`/playlists`, `/playlists/[id]`) and the rest of `/sales`, `/analytics` beyond the spots above were scanned for the specific violation classes (purple, gradients, off-radii shadows) but not given a full line-by-line "count the styles" pass per the design-direction doc's stricter definition of done — worth a dedicated pass if the owner wants surface 5 fully closed out.
+- Surface 6 (PlayerBar + modals/toasts/empty states) is still open per the design-direction doc's surface order.

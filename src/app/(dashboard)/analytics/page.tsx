@@ -60,7 +60,7 @@ type DatePreset = '7d' | '30d' | '90d' | 'all';
 type TypeFilter = 'all' | 'beat' | 'instrumental' | 'song' | 'remix';
 
 const STATUS_OPTIONS = [
-  { value: 'maq',        label: 'MAQ',      color: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
+  { value: 'maq',        label: 'MAQ',      color: 'bg-white/[0.04] text-white/70 border-white/15' },
   { value: 'needs_work', label: 'WIP',      color: 'bg-[#1f1a0a] text-white border-[#3a2f1f]'   },
   { value: 'finished',   label: 'Finished', color: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]'   },
   { value: 'archived',   label: 'Archived', color: 'bg-[#0E0E0E] text-white/60 border-white/10'   },
@@ -396,7 +396,7 @@ export default function AnalyticsPage() {
             {/* Engagement KPIs */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-5">
               <EngagementCard label={`Total plays (${DATE_OPTIONS.find(d => d.value === datePreset)?.label ?? ''})`} value={String(filteredByTrack.length > 0 ? filteredTotalPlays : totals?.plays ?? 0)} icon={<Headphones size={14} />} accent="#FFFFFF" />
-              <EngagementCard label="Tracks with plays" value={String(filteredByTrack.filter((t) => t.plays > 0).length)} icon={<Music size={14} />} accent="#9d95e8" />
+              <EngagementCard label="Tracks with plays" value={String(filteredByTrack.filter((t) => t.plays > 0).length)} icon={<Music size={14} />} accent="#FFFFFF" />
               <EngagementCard
                 label="Avg plays / track"
                 value={filteredByTrack.filter((t) => t.plays > 0).length > 0
@@ -419,12 +419,12 @@ export default function AnalyticsPage() {
                 <svg viewBox={`0 0 ${activityLine.w} ${activityLine.h}`} className="w-full" preserveAspectRatio="none" style={{ height: activityLine.h }}>
                   <defs>
                     <linearGradient id="engageGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#9d95e8" stopOpacity="0.25" />
-                      <stop offset="100%" stopColor="#9d95e8" stopOpacity="0" />
+                      <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
                     </linearGradient>
                   </defs>
                   <polyline points={`0,${activityLine.h} ${activityLine.pts} ${activityLine.w},${activityLine.h}`} fill="url(#engageGrad)" stroke="none" />
-                  <polyline points={activityLine.pts} fill="none" stroke="#9d95e8" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+                  <polyline points={activityLine.pts} fill="none" stroke="#FFFFFF" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
                 </svg>
               </div>
             )}
