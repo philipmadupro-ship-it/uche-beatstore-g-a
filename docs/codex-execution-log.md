@@ -5532,3 +5532,49 @@
 
 - The dual modal-implementation architecture (shared `Modal` vs. 6 hand-rolled instances) is a real inconsistency but out of scope for a visual-only pass; converting the hand-rolled instances to the shared component would need its own reviewable pass with explicit sign-off that behaviour changes (focus trap, keyboard handling) are acceptable.
 - This closes every item in `docs/design-direction.md`'s named surface order (store cards/rows, drawers, detail page, mobile sweep, featured hero/carousel, checkout, share pages, dashboard home/library x2, projects, playlists, store-editor, modals/empty-states). The quiet-luxury lane as originally scoped is complete; any further work is either the flagged architectural item above or a fresh pass the product owner explicitly asks for.
+
+## 2026-07-26 - Library Homepage: Liquid Glass Actions, Attention Moved To Notifications
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: applied the "one primary, everything else recedes" rule to the hero action row.
+- `.codex/skills/producer-dashboard`: preserved every action and its behaviour while relocating where the store-attention signal surfaces.
+- `.codex/skills/antigravity-testing-release`: typecheck, focused lint, full suite, production build, live browser verification with real data.
+
+### Area Inspected
+
+- `src/app/(dashboard)/library/page.tsx` (the dashboard homepage)
+- `src/app/store/projects/[id]/page.tsx` (the product owner's cited reference for the desired button treatment)
+- `src/components/nav/TopBar.tsx` (notifications centre)
+- `src/app/api/tracks/store-summary/route.ts` (server-computed listing-issue counts)
+
+### Changes Made
+
+- **Liquid glass actions.** Read the store project page the owner referenced: its action button is a translucent white fill with a hairline border and a lift on hover (`bg-white/[0.08] border-white/[0.10]`). Applied that language plus `backdrop-blur-md` - which is what makes it read as glass against the hero's blurred cover backdrop - to Shuffle, Analyze N, Select, Upload beat, and the New release split button.
+- **One primary.** "New release" was a second solid filled CTA (accent fill + `shadow-sm`) competing with the solid white "Play all" in the same visual band. It is now glass like its neighbours, leaving "Play all" as the single solid button on the page. Its dropdown, split-divider, and every handler are untouched.
+- **Attention moved to the notifications centre.** Removed the "N beats need attention" chip from the homepage. `TopBar` now fetches `/api/tracks/store-summary` and renders a pinned, actionable row at the top of the notifications dropdown (`N beats need attention` / "Listed without a cover, price, or BPM and key") linking to `/store-editor`.
+- Deleted the now-orphaned `attentionCount` memo and the unused `AlertCircle` import from the library page. `listedTracks` stays - still used by the "Your Store" tile.
+
+### Problems Discovered
+
+- The attention count is derived, not a row in the `notifications` table, so it has nothing to mark as read. Folding it into the `unread` badge would have produced a badge that can never be dismissed - it would reappear on every poll until the producer fixed every listing. It is therefore rendered as a pinned item in the dropdown but deliberately excluded from the unread count, and the reasoning is commented at the call site so a future change doesn't "fix" it back into the badge.
+- The count was previously computed client-side over the whole in-memory track list. The nav has no reason to hold the catalogue, so the relocated version uses the existing server-computed `/api/tracks/store-summary` endpoint instead - same three conditions (no cover, no price, no BPM/key), computed once on the server.
+- The empty-state condition needed widening: the dropdown previously showed "No notifications yet" whenever `notifs.length === 0`, which would have rendered that message directly beneath a visible attention row. Now gated on both being empty.
+
+### Problems Fixed
+
+- Verified live via computed styles: Shuffle and Upload beat both report `backdrop-filter: blur(12px)` with a 6% white fill and 10% white border; "Play all" remains solid white with no blur - confirming one primary and the rest transparent.
+- Verified live with real data: the notifications dropdown renders "2 beats need attention - Listed without a cover, price, or BPM and key" linking to `/store-editor`, and the chip no longer appears anywhere on the homepage.
+
+### Tests Performed
+
+- Browser: loaded `/library` authenticated; computed-style check on the action row; opened the notifications dropdown and confirmed the attention row renders with a real count from live data.
+- `npx tsc --noEmit` - passed.
+- `npx eslint` on both changed files - 0 errors, 2 pre-existing warnings on the library page unchanged.
+- `npm test` - passed, 100 files and 538 tests.
+- `npm run build` - passed, 55 static pages generated.
+
+### Remaining Concerns
+
+- Two further crowding candidates on this page were deliberately NOT touched, because both would change interaction or remove information rather than restyle: (1) the home filter-chip row (13 chips plus two dividers, the densest band on the page) - collapsing it behind a toggle is an interaction change; (2) the four quick-action tiles (Your Store / Projects / Sales / Analytics), which duplicate destinations already in the TopBar nav but also carry live stats (listed count, gross revenue, plays) that would be lost on removal. Both need the product owner's call.
+- The relocated attention row is fetched once on mount; it does not poll. If a producer fixes a listing in another tab the nav count will be stale until navigation. Acceptable for a low-frequency signal, noted rather than solved.

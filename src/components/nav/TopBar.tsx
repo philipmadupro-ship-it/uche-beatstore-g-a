@@ -155,9 +155,34 @@ export function TopBar() {
     } catch {/* silent */}
   };
 
+  // ── Store attention ────────────────────────────────────────────
+  // Listed beats missing a cover, a price, or BPM/key. This used to be a chip
+  // on the library page; it belongs with the other things demanding the
+  // producer's attention. Server-computed via /api/tracks/store-summary so we
+  // don't pull the whole catalogue into the nav just to count three fields.
+  //
+  // Deliberately NOT added to `unread`: that badge is backed by the
+  // notifications table and is cleared by marking rows read. A derived count
+  // has nothing to mark, so folding it in would leave a badge that can never
+  // be dismissed.
+  const [attention, setAttention] = useState(0);
+
+  const fetchAttention = async () => {
+    try {
+      const res = await fetch('/api/tracks/store-summary');
+      if (!res.ok) return;
+      const j = await res.json();
+      const i = j?.issues ?? {};
+      setAttention(
+        (i.noCover?.count ?? 0) + (i.noPrice?.count ?? 0) + (i.noBpmKey?.count ?? 0),
+      );
+    } catch {/* silent */}
+  };
+
   useEffect(() => {
     const id = window.setTimeout(() => {
       void fetchNotifs();
+      void fetchAttention();
     }, 0);
     return () => window.clearTimeout(id);
   }, []);
@@ -306,7 +331,26 @@ export function TopBar() {
                   </button>
                 </div>
                 <div className="max-h-80 overflow-y-auto">
-                  {notifs.length === 0 ? (
+                  {attention > 0 && (
+                    <Link
+                      href="/store-editor"
+                      onClick={() => setNotifOpen(false)}
+                      className="flex items-start gap-3 border-b border-[#211F1A]/60 px-4 py-3 transition-colors hover:bg-white/[0.03]"
+                    >
+                      <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border border-[#3B372F] bg-[#211F1A]">
+                        <AlertTriangle size={13} className="text-[#D6BE7A]" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[12px] font-medium leading-tight text-[#F7EBDD]">
+                          {attention} beat{attention === 1 ? '' : 's'} need attention
+                        </p>
+                        <p className="mt-0.5 text-[10px] leading-snug text-[#8a7a5c]">
+                          Listed without a cover, price, or BPM and key
+                        </p>
+                      </div>
+                    </Link>
+                  )}
+                  {notifs.length === 0 && attention === 0 ? (
                     <div className="px-4 py-8 text-center text-[11px] text-[#B4AA99]">
                       No notifications yet
                     </div>

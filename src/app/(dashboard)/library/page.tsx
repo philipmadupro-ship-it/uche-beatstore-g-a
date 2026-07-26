@@ -10,7 +10,7 @@ import { PageContainer } from '@/components/layout/PageHeader';
 import {
   Loader2, Music, Search, Sparkles, Shuffle, Disc3, LayoutList, LayoutGrid,
   SlidersHorizontal, Store, FolderOpen, ListMusic, BarChart2,
-  ShoppingBag, ArrowRight, AlertCircle,
+  ShoppingBag, ArrowRight,
   Upload, Rocket, ChevronLeft, ChevronRight, ChevronDown, X, Package, Tag,
 } from 'lucide-react';
 import { PlayGlyph } from '@/components/player/TransportIcons';
@@ -595,11 +595,6 @@ export default function LibraryPage() {
   }, [tracks]);
 
   const listedTracks = useMemo(() => tracks.filter((t) => t.store_listed), [tracks]);
-  const attentionCount = useMemo(() => {
-    return listedTracks.filter((t) =>
-      !t.cover_url || (!t.lease_price_usd && !t.exclusive_price_usd) || !t.bpm
-    ).length;
-  }, [listedTracks]);
 
   const playAll = () => {
     if (filtered.length === 0) return;
@@ -847,16 +842,16 @@ export default function LibraryPage() {
                   <PlayGlyph size={12} className="ml-0.5 sm:size-[14px]" />
                   Play all
                 </button>
-                <button onClick={shuffleAll} disabled={!filtered.length} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full bg-white/[0.10] border border-white/[0.12] text-[#F7EBDD] text-[10px] sm:text-[12px] font-medium hover:bg-white/[0.18] disabled:opacity-40 transition-colors backdrop-blur-sm">
+                <button onClick={shuffleAll} disabled={!filtered.length} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full bg-white/[0.06] border border-white/[0.10] backdrop-blur-md hover:bg-white/[0.12] hover:border-white/[0.18] text-[#F7EBDD] text-[10px] sm:text-[12px] font-medium disabled:opacity-40 transition-colors">
                   <Shuffle size={11} className="sm:size-3" />
                   Shuffle
                 </button>
                 {stale.length > 0 && (
-                  <button onClick={runBulkAnalyze} disabled={!!bulkAnalyzing} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-white/60 text-[10px] sm:text-[12px] font-medium hover:bg-white/[0.12] disabled:opacity-40 transition-colors">
+                  <button onClick={runBulkAnalyze} disabled={!!bulkAnalyzing} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full bg-white/[0.06] border border-white/[0.10] backdrop-blur-md hover:bg-white/[0.12] hover:border-white/[0.18] text-[#F7EBDD] text-[10px] sm:text-[12px] font-medium disabled:opacity-40 transition-colors">
                     {bulkAnalyzing ? <><Loader2 size={11} className="animate-spin" /><span>{bulkAnalyzing.done}/{bulkAnalyzing.total}</span></> : <><Sparkles size={11} /><span>Analyze {stale.length}</span></>}
                   </button>
                 )}
-                <button onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }} className={`text-[10px] sm:text-[11px] font-medium px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full transition-colors sm:ml-auto backdrop-blur-sm ${selectMode ? 'bg-white/[0.15] border border-white/[0.20] text-white' : 'bg-white/[0.06] border border-white/[0.08] text-white/50 hover:text-white'}`}>
+                <button onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }} className={`text-[10px] sm:text-[11px] font-medium px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full backdrop-blur-md transition-colors sm:ml-auto ${selectMode ? 'bg-white/[0.16] border border-white/[0.22] text-white' : 'bg-white/[0.06] border border-white/[0.10] text-[#F7EBDD] hover:bg-white/[0.12] hover:border-white/[0.18]'}`}>
                   {selectMode ? 'Done' : 'Select'}
                 </button>
               </div>
@@ -866,25 +861,25 @@ export default function LibraryPage() {
 
         {/* ── Quick actions ──────────────────────────────────────── */}
         <div className="flex items-center gap-2 mb-5 flex-wrap">
-          <button onClick={() => window.scrollTo({ top: 9999, behavior: 'smooth' })} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-[#171511] border border-[#2B2821] text-[11px] font-medium text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F] hover:bg-[#18140f] transition-all">
+          <button onClick={() => window.scrollTo({ top: 9999, behavior: 'smooth' })} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/[0.06] border border-white/[0.10] backdrop-blur-md hover:bg-white/[0.12] hover:border-white/[0.18] text-[11px] font-medium text-[#F7EBDD] transition-colors">
             <Upload size={13} />Upload beat
           </button>
 
           {/* New Release — split button with dropdown */}
           <div className="relative">
-            <div className="flex items-center rounded-full overflow-hidden bg-[#E7D7BE] text-black shadow-sm">
+            <div className="flex items-center overflow-hidden rounded-full bg-white/[0.06] border border-white/[0.10] backdrop-blur-md hover:bg-white/[0.12] hover:border-white/[0.18] text-[#F7EBDD] transition-colors">
               <button
                 onClick={() => handleNewRelease('both')}
                 disabled={creatingRelease}
-                className="flex items-center gap-1.5 pl-3.5 pr-2.5 py-2 text-[11px] font-bold hover:bg-[#F3E6D1] transition-colors disabled:opacity-60"
+                className="flex items-center gap-1.5 pl-3.5 pr-2.5 py-2 text-[11px] font-semibold transition-colors disabled:opacity-60"
               >
                 {creatingRelease ? <Loader2 size={13} className="animate-spin" /> : <Rocket size={13} />}
                 New release
               </button>
-              <div className="w-px h-4 bg-black/20" />
+              <div className="h-4 w-px bg-white/[0.12]" />
               <button
                 onClick={() => setReleaseDropdownOpen((v) => !v)}
-                className="px-2 py-2 hover:bg-[#F3E6D1] transition-colors"
+                className="px-2 py-2 transition-colors hover:bg-white/[0.08]"
                 aria-label="Release options"
               >
                 <ChevronDown size={12} />
@@ -973,15 +968,9 @@ export default function LibraryPage() {
             ))}
           </div>
 
-          {/* Attention stays surfaced without repeating dashboard navigation. */}
-          <div className="flex flex-wrap gap-2 items-center justify-end">
-            {attentionCount > 0 && (
-              <Link href="/store-editor" className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-[#3a2f1f]/50 bg-[#1f1510]/60 text-[10px] font-mono text-[#D6BE7A] hover:bg-[#241a0e]/80 transition-colors">
-                <AlertCircle size={11} className="shrink-0" />
-                {attentionCount} beat{attentionCount === 1 ? '' : 's'} need attention
-              </Link>
-            )}
-          </div>
+          {/* "Beats need attention" now lives in the notifications center
+              (TopBar), alongside everything else demanding the producer's
+              attention, rather than competing for space on the homepage. */}
         </div>
 
         {/* ── Library section header + browse toggle ─────────────── */}
