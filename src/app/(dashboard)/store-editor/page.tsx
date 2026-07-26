@@ -19,11 +19,12 @@
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import Image from 'next/image';
 import {
   Loader2, Save, ExternalLink, ChevronDown, ChevronRight,
   Image as ImageIcon, Upload, Globe,
   Music, ListMusic, DollarSign, Eye, EyeOff,
-  GripVertical, Check, X, Plus, Layers, Search,
+  GripVertical, X, Plus, Layers, Search,
   ShoppingBag, Star, Tag, Trash2, Clock, Mic2, Play, Download,
   ArrowUp, ArrowDown,
 } from 'lucide-react';
@@ -356,8 +357,7 @@ function ShareStylePicker({
             >
               <div className="aspect-[9/16] bg-[#090907] overflow-hidden">
                 {thumbUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={thumbUrl} alt="" className="w-full h-full object-cover" />
+                  <Image src={thumbUrl} alt="" width={64} height={64} unoptimized className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-[#6E685B] text-[10px] font-mono uppercase tracking-wider">
                     {s.label}
@@ -625,10 +625,10 @@ function StorePreview({
               <div key={pl.id} className="shrink-0 w-14">
                 <div className="w-14 h-14 rounded-lg bg-[#211F1A] border border-[#3B372F] overflow-hidden flex items-center justify-center mb-1">
                   {pl.cover_url
-                    ? <img src={pl.cover_url} alt="" className="w-full h-full object-cover" />
+                    ? <Image src={pl.cover_url} alt="" width={56} height={56} unoptimized className="w-full h-full object-cover" />
                     : <ListMusic size={14} className="text-[#6E685B]" />}
                 </div>
-                <p className="text-[7px] text-[#B4AA99] truncate leading-tight">{pl.name}</p>
+                <p className="text-[8px] text-[#B4AA99] truncate leading-tight">{pl.name}</p>
               </div>
             ))}
           </div>
@@ -644,15 +644,15 @@ function StorePreview({
               <div key={pr.id} className="shrink-0 w-14">
                 <div className="w-14 h-14 rounded-lg bg-[#211F1A] border border-[#3B372F] overflow-hidden flex items-center justify-center mb-1 relative">
                   {pr.cover_url
-                    ? <img src={pr.cover_url} alt="" className="w-full h-full object-cover" />
+                    ? <Image src={pr.cover_url} alt="" width={56} height={56} unoptimized className="w-full h-full object-cover" />
                     : <Layers size={14} className="text-[#6E685B]" />}
                   {pr.price_usd != null && Number(pr.price_usd) > 0 && (
-                    <span className="absolute bottom-0 left-0 right-0 text-[7px] font-mono font-bold py-0.5 text-center text-black" style={{ backgroundColor: accent }}>
+                    <span className="absolute bottom-0 left-0 right-0 text-[8px] font-mono font-bold py-0.5 text-center text-black" style={{ backgroundColor: accent }}>
                       ${pr.price_usd}
                     </span>
                   )}
                 </div>
-                <p className="text-[7px] text-[#B4AA99] truncate leading-tight">{pr.name}</p>
+                <p className="text-[8px] text-[#B4AA99] truncate leading-tight">{pr.name}</p>
               </div>
             ))}
           </div>
@@ -964,17 +964,16 @@ export default function StoreEditorPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [profileRes, playlistRes, storeRes, trackSummaryRes, projectsRes, promoRes, licensesRes] = await Promise.all([
+        const [profileRes, playlistRes, trackSummaryRes, projectsRes, promoRes, licensesRes] = await Promise.all([
           fetch('/api/profile'),
           fetch('/api/playlists'),
-          fetch('/api/store'),
           fetch('/api/tracks/store-summary'),
           fetch('/api/projects'),
           fetch('/api/promo-codes'),
           fetch('/api/licenses'),
         ]);
-        const [pd, pld, sd, summaryData, prd, promod, ld] = await Promise.all([
-          profileRes.json(), playlistRes.json(), storeRes.json(), trackSummaryRes.json(), projectsRes.json(), promoRes.json(), licensesRes.json(),
+        const [pd, pld, summaryData, prd, promod, ld] = await Promise.all([
+          profileRes.json(), playlistRes.json(), trackSummaryRes.json(), projectsRes.json(), promoRes.json(), licensesRes.json(),
         ]);
         const loadedGlobalLicenses = ((ld.licenses ?? []) as GlobalLicense[])
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
@@ -1713,7 +1712,7 @@ export default function StoreEditorPage() {
                     onClick={() => heroFileRef.current?.click()}
                   >
                     {form.hero_image_url ? (
-                      <img src={form.hero_image_url} alt="" className="w-full h-full object-cover" />
+                      <Image src={form.hero_image_url} alt="" width={144} height={96} unoptimized className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
                         <ImageIcon size={18} />
@@ -1988,7 +1987,7 @@ export default function StoreEditorPage() {
                       <GripVertical size={13} className="text-[#6E685B] group-hover:text-[#9B9282] shrink-0" />
                       <div className="w-9 h-9 rounded-lg overflow-hidden bg-[#211F1A] border border-[#3B372F] shrink-0">
                         {pl.cover_url
-                          ? <img src={pl.cover_url} alt="" className="w-full h-full object-cover" />
+                          ? <Image src={pl.cover_url} alt="" width={36} height={36} unoptimized className="w-full h-full object-cover" />
                           : <div className="w-full h-full flex items-center justify-center"><ListMusic size={12} className="text-[#6E685B]" /></div>}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -2049,7 +2048,7 @@ export default function StoreEditorPage() {
                       >
                         <div className="w-8 h-8 rounded-md overflow-hidden bg-[#211F1A] border border-[#3B372F] shrink-0">
                           {pl.cover_url
-                            ? <img src={pl.cover_url} alt="" className="w-full h-full object-cover" />
+                            ? <Image src={pl.cover_url} alt="" width={32} height={32} unoptimized className="w-full h-full object-cover" />
                             : <div className="w-full h-full flex items-center justify-center"><ListMusic size={10} className="text-[#6E685B]" /></div>}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -2106,7 +2105,7 @@ export default function StoreEditorPage() {
                       <GripVertical size={13} className="text-[#6E685B] group-hover:text-[#9B9282] shrink-0" />
                       <div className="w-9 h-9 rounded-lg overflow-hidden bg-[#211F1A] border border-[#3B372F] shrink-0">
                         {pr.cover_url
-                          ? <img src={pr.cover_url} alt="" className="w-full h-full object-cover" />
+                          ? <Image src={pr.cover_url} alt="" width={36} height={36} unoptimized className="w-full h-full object-cover" />
                           : <div className="w-full h-full flex items-center justify-center"><Layers size={12} className="text-[#6E685B]" /></div>}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -2168,7 +2167,7 @@ export default function StoreEditorPage() {
                       >
                         <div className="w-8 h-8 rounded-md overflow-hidden bg-[#211F1A] border border-[#3B372F] shrink-0">
                           {pr.cover_url
-                            ? <img src={pr.cover_url} alt="" className="w-full h-full object-cover" />
+                            ? <Image src={pr.cover_url} alt="" width={32} height={32} unoptimized className="w-full h-full object-cover" />
                             : <div className="w-full h-full flex items-center justify-center"><Layers size={10} className="text-[#6E685B]" /></div>}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -2236,7 +2235,7 @@ export default function StoreEditorPage() {
                     <div key={t.id} className="flex items-center gap-3 rounded-xl border border-[#D6BE7A]/25 bg-[#D6BE7A]/[0.06] px-3 py-2">
                       <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-[#D6BE7A]/20 bg-[#11100D]">
                         {t.cover_url
-                          ? <img src={t.cover_url} alt="" className="h-full w-full object-cover" />
+                          ? <Image src={t.cover_url} alt="" width={40} height={40} unoptimized className="h-full w-full object-cover" />
                           : <div className="flex h-full w-full items-center justify-center text-[#6E685B]"><Music size={13} /></div>}
                       </div>
                       <div className="min-w-0 flex-1">
@@ -2291,7 +2290,7 @@ export default function StoreEditorPage() {
                         <div key={t.id} className="flex items-center gap-3 rounded-xl border border-[#211F1A] bg-[#090907] px-3 py-2">
                           <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md border border-[#2B2821] bg-[#11100D]">
                             {t.cover_url
-                              ? <img src={t.cover_url} alt="" className="h-full w-full object-cover" />
+                              ? <Image src={t.cover_url} alt="" width={36} height={36} unoptimized className="h-full w-full object-cover" />
                               : <div className="flex h-full w-full items-center justify-center text-[#6E685B]"><Music size={12} /></div>}
                           </div>
                           <div className="min-w-0 flex-1">
@@ -2467,7 +2466,7 @@ export default function StoreEditorPage() {
                         {/* Cover art */}
                         <div className="w-9 h-9 rounded-md overflow-hidden bg-[#211F1A] border border-[#3B372F] shrink-0">
                           {t.cover_url
-                            ? <img src={t.cover_url} alt="" className="w-full h-full object-cover" />
+                            ? <Image src={t.cover_url} alt="" width={36} height={36} unoptimized className="w-full h-full object-cover" />
                             : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={12} /></div>}
                         </div>
 
@@ -2538,7 +2537,7 @@ export default function StoreEditorPage() {
                               <Clock size={12} />
                             </button>
                             {scheduleOpenFor === t.id && (
-                              <div className="absolute right-0 top-9 z-30 w-64 rounded-xl bg-[#11100D] border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] p-3">
+                              <div className="absolute right-0 top-9 z-30 w-64 rounded-xl bg-[#11100D] border border-white/[0.10] p-3">
                                 <p className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mb-2">
                                   Auto-publish at
                                 </p>
@@ -2671,8 +2670,8 @@ export default function StoreEditorPage() {
                             title={t.voice_tag_enabled ? 'Voice tag on (preview only)' : 'Add voice tag to preview'}
                             className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center border transition-colors ${
                               t.voice_tag_enabled
-                                ? 'bg-[#9d95e8]/15 border-[#9d95e8]/40 text-[#9d95e8]'
-                                : 'bg-white/[0.03] border-[#2B2821] text-[#9B9282] hover:text-[#9d95e8] hover:border-[#9d95e8]/30'
+                                ? 'bg-[#E7D7BE]/15 border-[#E7D7BE]/40 text-[#E7D7BE]'
+                                : 'bg-white/[0.03] border-[#2B2821] text-[#9B9282] hover:text-[#E7D7BE] hover:border-[#E7D7BE]/30'
                             }`}
                           >
                             <Mic2 size={12} />
@@ -2832,7 +2831,7 @@ export default function StoreEditorPage() {
                 />
                 {form.og_image_url && (
                   <div className="mt-2 rounded-lg overflow-hidden border border-[#2B2821] max-w-md">
-                    <img src={form.og_image_url} alt="Share card preview" className="w-full h-auto" />
+                    <Image src={form.og_image_url} alt="Share card preview" width={1200} height={630} unoptimized className="w-full h-auto" />
                   </div>
                 )}
               </Field>
@@ -3070,7 +3069,11 @@ export default function StoreEditorPage() {
               onToggle={() =>
                 setOpenSections((prev) => {
                   const next = new Set(prev);
-                  next.has('licenses') ? next.delete('licenses') : next.add('licenses');
+                  if (next.has('licenses')) {
+                    next.delete('licenses');
+                  } else {
+                    next.add('licenses');
+                  }
                   return next;
                 })
               }
@@ -3169,11 +3172,11 @@ function VoiceTagSection({
       </p>
 
       {value ? (
-        <div className="flex items-center gap-3 rounded-xl border border-[#9d95e8]/25 bg-[#9d95e8]/[0.05] px-4 py-3">
+        <div className="flex items-center gap-3 rounded-xl border border-[#E7D7BE]/25 bg-[#E7D7BE]/[0.05] px-4 py-3">
           <button
             type="button"
             onClick={() => { audioRef.current?.play().catch(() => undefined); }}
-            className="w-9 h-9 rounded-full bg-[#9d95e8]/15 border border-[#9d95e8]/30 text-[#9d95e8] flex items-center justify-center hover:bg-[#9d95e8]/25 transition-colors shrink-0"
+            className="w-9 h-9 rounded-full bg-[#E7D7BE]/15 border border-[#E7D7BE]/30 text-[#E7D7BE] flex items-center justify-center hover:bg-[#E7D7BE]/25 transition-colors shrink-0"
             title="Preview tag"
           >
             <Play size={13} fill="currentColor" className="ml-0.5" />
@@ -3200,7 +3203,7 @@ function VoiceTagSection({
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-[#3B372F] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#9d95e8]/40 transition-all text-[12px] font-medium disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-[#3B372F] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#E7D7BE]/40 transition-all text-[12px] font-medium disabled:opacity-50"
         >
           {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
           {uploading ? 'Uploading…' : 'Upload voice tag (MP3/WAV, <5 MB)'}

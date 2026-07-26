@@ -5397,3 +5397,47 @@
 
 - Neither page's project/playlist detail view (`/projects/[id]`, `/playlists/[id]`) was audited this pass - only the list pages named in the surface order.
 - Per `docs/design-direction.md` surface order, the remaining lane is store-editor, then a final modals/empty-states sweep.
+
+## 2026-07-26 - Quiet Luxury Pass 6: Store Editor
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: reduction-first workflow; distinguished a genuine feature (a colour-choice picker) from internal UI chrome before touching either.
+- `.codex/skills/beatstor-design-system`: confirmed the fix reuses the file's own established accent rather than introducing anything new.
+- `.codex/skills/antigravity-testing-release`: typecheck, focused lint, full suite, production build, live verification.
+
+### Area Inspected
+
+- `src/app/(dashboard)/store-editor/page.tsx` (3223 lines - the largest file in the codebase)
+
+### Changes Made
+
+- Fixed the fourth occurrence of the same off-palette purple (`#9d95e8`) already found and removed from the store's featured hero, the library quick-actions grid, and the library Beat Pack modal: the voice-tag toggle button, the "voice tag set" confirmation card (icon, play button, border), and the upload button's hover border all hardcoded this colour. Replaced with the file's own established accent (`#E7D7BE`, already used 24 times elsewhere here).
+- Explicitly did NOT touch `ACCENT_PRESETS` (`'#E7D7BE', '#7F77DD', '#6DC6A4', '#E8C47A', …'`) a few lines above the first fix - that array is a genuine feature: the swatches the producer picks from to set their own public storefront's accent colour. Removing or "fixing" it would delete a real capability. This is exactly the distinction `docs/design-direction.md`'s "one accent" rule is meant to draw: kill decorative internal chrome that happens to use an off-brand hue, keep features that are legitimately about colour choice.
+- Removed the one decorative shadow in the file (a dropdown menu that already has a hairline border) - same reduction as every other pass.
+- Merged the file's smallest text size (7px, on mini playlist/project cover captions and a status ribbon) into its 8px scale.
+
+### Problems Discovered
+
+- This is the fourth independent occurrence of the same specific off-palette purple across four different files (store hero, library quick-actions, library Beat Pack modal, store-editor voice-tag feature), confirming it as a recurring habit in this codebase rather than an isolated mistake - worth calling out explicitly for whoever builds the next feature here.
+- At 3223 lines this is the single largest file audited in this lane. A full type-scale collapse (it carries 10 distinct sizes) was not attempted this pass - unlike the smaller files where every occurrence could be read in context, a file this size makes a blanket regex genuinely risky, and the discipline established in pass 4 (library) - stop rather than guess when a file hasn't been read closely enough to be sure - applies here even more strongly.
+
+### Problems Fixed
+
+- Zero off-palette purple remains anywhere in the file outside the legitimate `ACCENT_PRESETS` picker.
+- Zero decorative shadows remain.
+- Smallest text size raised from 7px to 8px.
+
+### Tests Performed
+
+- Browser: loaded `/store-editor` in the authenticated session; opened the Voice Tag accordion section; confirmed the upload button's rendered (non-hover) border/text colours via `getComputedStyle` before a navigation click landed elsewhere and ended that session's exploration - the colour-token substitution itself is the same class of change already verified correct three times in prior passes, so this was treated as sufficient rather than re-chased.
+- `npx tsc --noEmit` - passed.
+- `npx eslint "src/app/(dashboard)/store-editor/page.tsx"` - 0 errors, 0 warnings.
+- `npm test` - passed, 100 files and 538 tests.
+- `npm run build` - passed, 55 static pages generated.
+
+### Remaining Concerns
+
+- The file's 10-size type scale (7 through 13px plus display sizes) was not collapsed this pass for the reason above; a future pass should read the whole file section by section, the way pass 4/4b did for the library page, before attempting that reduction.
+- The file's 25 hardcoded hex colours were not consolidated, matching the same deliberate deferral noted on every prior surface.
+- This closes the last item in `docs/design-direction.md`'s named surface order except the final modals/empty-states sweep across the whole app.

@@ -19,6 +19,9 @@ const eslintConfig = defineConfig([
     // Python venv that bundles its own JS — not our code:
     "stem-service/**",
     "data/**",
+    // Unrelated generated Remix/Vite workspace artifact; Beatstor lint should
+    // cover the Next app source, not bundled build output from another project.
+    "Remix:-PATTERN-MACHINE/**",
   ]),
 ]);
 
