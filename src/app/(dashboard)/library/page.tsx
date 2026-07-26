@@ -33,6 +33,7 @@ import { Drawer } from '@/components/ui/Drawer';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { listCached } from '@/lib/offline/audio-cache';
 import { TrackGridCard } from '@/components/tracks/TrackGridCard';
+import { LibraryAlbumView } from '@/components/library/LibraryAlbumView';
 import MusicPortfolio, { type PortfolioTrack } from '@/components/library/MusicPortfolio';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
@@ -125,7 +126,7 @@ export default function LibraryPage() {
   const [bulkTagPanel, setBulkTagPanel] = useState<'addTags' | 'removeTags' | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [shareTarget, setShareTarget] = useState<Track | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'portfolio'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'portfolio' | 'album'>('album');
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<LibraryFilters>(() => ({
@@ -183,8 +184,8 @@ export default function LibraryPage() {
     await fetch(`/api/smart-playlists/${id}`, { method: 'DELETE' }).catch(() => undefined);
   };
   useEffect(() => {
-    const saved = localStorage.getItem('library-view') as 'list' | 'grid' | 'portfolio' | null;
-    if (saved === 'list' || saved === 'grid' || saved === 'portfolio') setViewMode(saved);
+    const saved = localStorage.getItem('library-view') as 'list' | 'grid' | 'portfolio' | 'album' | null;
+    if (saved === 'list' || saved === 'grid' || saved === 'portfolio' || saved === 'album') setViewMode(saved);
   }, []);
   useEffect(() => {
     const media = window.matchMedia('(max-width: 639px)');
@@ -1165,6 +1166,15 @@ export default function LibraryPage() {
                 <LayoutGrid size={13} />
               </button>
               <button
+                onClick={() => setViewMode('album')}
+                className={`p-1.5 rounded-full transition-colors ${
+                  effectiveViewMode === 'album' ? 'bg-white text-black' : 'text-[#B4AA99] hover:text-[#D0C3AF]'
+                }`}
+                title="Album view"
+              >
+                <Disc3 size={13} />
+              </button>
+              <button
                 onClick={() => setViewMode('portfolio')}
                 className="p-1.5 rounded-full transition-colors text-[#B4AA99] hover:text-[#D0C3AF]"
                 title="Portfolio view"
@@ -1249,6 +1259,16 @@ export default function LibraryPage() {
                 ? 'Upload above to start building your Vault'
                 : 'Try a different search or filter'}
             </p>
+          </div>
+        ) : effectiveViewMode === 'album' ? (
+          <div className="mb-32">
+            <LibraryAlbumView
+              tracks={pageTracks}
+              currentTrackId={currentTrack?.id ?? null}
+              isPlaying={isPlaying}
+              onPlayTrack={(track) => playTrack(track)}
+              onClickDetails={(track) => setSelectedTrack(track)}
+            />
           </div>
         ) : effectiveViewMode === 'list' ? (
           <div className="mb-32 space-y-1.5">
