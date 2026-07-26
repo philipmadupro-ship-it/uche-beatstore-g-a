@@ -32,13 +32,13 @@ interface Particle {
 
 interface ParticleTextProps {
   text: string;
-  /** Defaults to the antigravity accent #E7D7BE. */
+  /** Defaults to the antigravity accent #FFFFFF. */
   color?: string;
   /** Pass-through className for the wrapping <div>. */
   className?: string;
 }
 
-export function ParticleText({ text, color = '#E7D7BE', className }: ParticleTextProps) {
+export function ParticleText({ text, color = '#FFFFFF', className }: ParticleTextProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 

@@ -190,7 +190,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
               return (
                 <div
                   key={s.id}
-                  className="border border-[#211F1A] bg-[#11100D] rounded-lg p-4 hover:border-[#3B372F] transition-colors"
+                  className="border border-white/10 bg-white/[0.02] rounded-lg p-4 hover:border-white/20 transition-colors"
                 >
                   <div className="flex items-center justify-between gap-2 mb-2">
                     {/* Status as a self-contained dropdown — click to
@@ -218,7 +218,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
                             className="fixed inset-0 z-[80]"
                             onClick={() => setOpenStatusId(null)}
                           />
-                          <div className="absolute top-full left-0 mt-1 z-[81] bg-[#090907] border border-[#2B2821] rounded-md shadow-2xl py-1 min-w-[140px]">
+                          <div className="absolute top-full left-0 mt-1 z-[81] bg-[#090907] border border-white/20 rounded-md shadow-2xl py-1 min-w-[140px]">
                             {STATUS_OPTIONS.map((opt) => {
                               const cfg = statusConfig(opt);
                               const OptIcon = cfg.icon;
@@ -230,7 +230,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
                                   className={`w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-left transition-colors ${
                                     isCurrent
                                       ? `${cfg.bg} ${cfg.color}`
-                                      : `text-[#D0C3AF] hover:bg-[#1A1813] hover:text-white`
+                                      : `text-white/80 hover:bg-white/10 hover:text-white`
                                   }`}
                                 >
                                   <OptIcon size={10} />
@@ -243,7 +243,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
                         </>
                       )}
                     </div>
-                    <span className="text-[9px] font-mono text-[#9B9282]">
+                    <span className="text-[9px] font-mono text-white/40">
                       {s.sent_at
                         ? new Date(s.sent_at).toLocaleString('en-US', {
                           month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
@@ -254,10 +254,10 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
 
                   {/* Track list — uses hydrated titles when available */}
                   <div className="flex items-start gap-2 mb-2">
-                    <Music size={11} className="text-[#B4AA99] mt-0.5 shrink-0" />
+                    <Music size={11} className="text-white/60 mt-0.5 shrink-0" />
                     <div className="text-[11px] text-[#bbb] leading-relaxed">
                       {totalCount === 0 ? (
-                        <span className="text-[#9B9282]">No tracks recorded</span>
+                        <span className="text-white/40">No tracks recorded</span>
                       ) : (
                         <>
                           {titles
@@ -265,13 +265,13 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
                             .slice(0, 5)
                             .join(', ')}
                           {knownCount < totalCount && (
-                            <span className="text-[#9B9282]">
+                            <span className="text-white/40">
                               {' '}
                               {hydrating ? '· loading…' : `· +${totalCount - knownCount} more`}
                             </span>
                           )}
                           {knownCount === 0 && !hydrating && (
-                            <span className="text-[#9B9282]">{totalCount} track{totalCount === 1 ? '' : 's'}</span>
+                            <span className="text-white/40">{totalCount} track{totalCount === 1 ? '' : 's'}</span>
                           )}
                         </>
                       )}
@@ -280,7 +280,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
 
                   {/* Message preview */}
                   {s.message && (
-                    <p className="text-[11px] text-[#D0C3AF] leading-relaxed bg-[#090907] border-l-2 border-[#C9BCA8]/40 pl-3 py-1.5 my-2 italic">
+                    <p className="text-[11px] text-white/80 leading-relaxed bg-[#090907] border-l-2 border-white/40 pl-3 py-1.5 my-2 italic">
                       {s.message}
                     </p>
                   )}
@@ -291,7 +291,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
                       href={`/share/${s.share_token}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[10px] font-mono text-[#E7D7BE] hover:text-[#F3E6D1] mt-2"
+                      className="inline-flex items-center gap-1 text-[10px] font-mono text-white hover:text-white/80 mt-2"
                     >
                       <ExternalLink size={9} />
                       Open share link
@@ -303,7 +303,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
           )}
 
           {hydrating && sorted.length > 0 && (
-            <div className="flex items-center justify-center py-3 text-[10px] text-[#9B9282]">
+            <div className="flex items-center justify-center py-3 text-[10px] text-white/40">
               <Loader2 size={11} className="animate-spin mr-2" />
               Resolving track titles…
             </div>
@@ -314,12 +314,12 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
 
 function statusConfig(status: BeatSend['status']) {
   switch (status) {
-    case 'sent':        return { icon: Mail, color: 'text-[#D0C3AF]', bg: 'bg-[#211F1A]', label: 'Sent' };
+    case 'sent':        return { icon: Mail, color: 'text-white/80', bg: 'bg-white/10', label: 'Sent' };
     case 'opened':      return { icon: Clock, color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Opened' };
-    case 'interested':  return { icon: ArrowUpRight, color: 'text-[#D6BE7A]', bg: 'bg-[#D6BE7A]/10', label: 'Interested' };
+    case 'interested':  return { icon: ArrowUpRight, color: 'text-amber-400', bg: 'bg-amber-400/10', label: 'Interested' };
     case 'negotiating': return { icon: Clock, color: 'text-purple-400', bg: 'bg-purple-400/10', label: 'Negotiating' };
     case 'placed':      return { icon: CheckCircle, color: 'text-green-500', bg: 'bg-green-500/10', label: 'Placed' };
     case 'pass':        return { icon: XCircle, color: 'text-red-500', bg: 'bg-red-500/10', label: 'Pass' };
-    default:            return { icon: Mail, color: 'text-[#9B9282]', bg: 'bg-[#211F1A]', label: String(status) };
+    default:            return { icon: Mail, color: 'text-white/40', bg: 'bg-white/10', label: String(status) };
   }
 }

@@ -111,7 +111,7 @@ export function NudgeModal({ contact, latestSend, onClose, onSuccess }: NudgeMod
           </div>
           <div className="flex justify-between items-center">
             <span>Original Campaign Tracks:</span>
-            <span className="text-[#F3E6D1] truncate max-w-[220px]">
+            <span className="text-white truncate max-w-[220px]">
               {loadingTracks ? 'Loading...' : tracks.map((t) => t.title.toUpperCase()).join(', ') || 'None'}
             </span>
           </div>
@@ -129,7 +129,7 @@ export function NudgeModal({ contact, latestSend, onClose, onSuccess }: NudgeMod
 
         {/* Footer Actions */}
         <div className="flex flex-col gap-3 border-t border-[var(--border)] pt-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-1.5 text-[9px] text-[#9B9282] font-mono">
+          <div className="flex items-center gap-1.5 text-[9px] text-white/40 font-mono">
             <Clock size={10} />
             <span>Sends via Resend Client</span>
           </div>

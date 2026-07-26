@@ -37,7 +37,7 @@ export function LicenseSelector({
   tiers,
   selectedId,
   onSelect,
-  accentColor = '#E7D7BE',
+  accentColor = '#FFFFFF',
   isFreeDownload,
   onFreeDownload,
 }: LicenseSelectorProps) {
@@ -55,7 +55,7 @@ export function LicenseSelector({
 
   if (tiers.length === 0) {
     return (
-      <p className="text-[11px] text-[#9B9282] text-center py-4 font-mono">
+      <p className="text-[11px] text-white/40 text-center py-4 font-mono">
         No licenses configured
       </p>
     );
@@ -71,13 +71,13 @@ export function LicenseSelector({
             onClick={() => onSelect(tier.id)}
             className={`w-full text-left px-4 py-3.5 rounded-xl border-2 transition-all ${
               isSelected
-                ? 'border-[#E7D7BE] bg-[#1a1610]/40'
-                : 'border-[#2B2821] hover:border-[#E7D7BE]/40 bg-transparent'
+                ? 'border-white/30 bg-[#1a1610]/40'
+                : 'border-white/10 hover:border-white/ bg-transparent'
             }`}
             style={isSelected ? { borderColor: accentColor } : {}}
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[12px] font-semibold text-[#F7EBDD]">{tier.name}</span>
+              <span className="text-[12px] font-semibold text-white">{tier.name}</span>
               <span
                 className="text-[13px] font-bold tabular-nums"
                 style={{ color: accentColor }}
@@ -86,14 +86,14 @@ export function LicenseSelector({
               </span>
             </div>
             {tier.description && (
-              <p className="text-[10px] text-[#B4AA99] leading-relaxed">{tier.description}</p>
+              <p className="text-[10px] text-white/60 leading-relaxed">{tier.description}</p>
             )}
             {tier.file_types && tier.file_types.length > 0 && (
               <div className="flex gap-1 mt-2 flex-wrap">
                 {tier.file_types.map((ft) => (
                   <span
                     key={ft}
-                    className="text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#2B2821] text-[#B4AA99] border border-[#3B372F]"
+                    className="text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/20 text-white/60 border border-white/20"
                   >
                     {ft}
                   </span>

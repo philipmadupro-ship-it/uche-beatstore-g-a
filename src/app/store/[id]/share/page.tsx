@@ -62,7 +62,7 @@ export default function VerticalSharePage({
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-[#090907] flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-[#9B9282]" />
+        <Loader2 size={20} className="animate-spin text-white/40" />
       </div>
     }>
       <VerticalShareContent params={params} />
@@ -254,7 +254,7 @@ function VerticalShareContent({
       if (coverImg) {
         ctx.drawImage(coverImg, -300, -300, 600, 600);
       } else {
-        ctx.fillStyle = '#211F1A';
+        ctx.fillStyle = 'rgba(255,255,255,0.05)';
         ctx.fillRect(-300, -300, 600, 600);
       }
       ctx.restore();
@@ -320,28 +320,28 @@ function VerticalShareContent({
   if (isLoading) {
     return (
       <div className="min-h-screen bg-[#090907] flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-[#9B9282]" />
+        <Loader2 size={20} className="animate-spin text-white/40" />
       </div>
     );
   }
   if (isError || !track) {
     return (
-      <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-[#9B9282] px-6">
+      <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-white/40 px-6">
         <Music size={28} />
         <p className="text-[14px]">This share preview isn&apos;t available.</p>
-        <Link href="/store" className="text-[11px] underline hover:text-[#F7EBDD]">Back to store</Link>
+        <Link href="/store" className="text-[11px] underline hover:text-white">Back to store</Link>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black text-[#F7EBDD] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
       {/* Floating controls (outside the stage so they don't appear in a
           screen-recorded frame) */}
       <div className="fixed top-3 left-3 right-3 z-20 flex items-center gap-2 justify-between">
         <Link
           href={`/store/${id}`}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-[#171511]/80 backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04]/80 backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
         >
           <ArrowLeft size={11} />
           Exit
@@ -352,7 +352,7 @@ function VerticalShareContent({
               type="button"
               onClick={startRecord}
               disabled={recording}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-[#171511]/80 backdrop-blur border border-white/[0.10] text-[#F7EBDD] text-[11px] font-mono uppercase tracking-wider hover:bg-[#211F1A]/90 transition-colors disabled:opacity-40"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04]/80 backdrop-blur border border-white/[0.10] text-white text-[11px] font-mono uppercase tracking-wider hover:bg-white/[0.05]/90 transition-colors disabled:opacity-40"
               title="Capture a 15-second WebM (Chromium browsers only)"
             >
               {recording ? <Loader2 size={11} className="animate-spin" /> : <Video size={11} />}
@@ -362,7 +362,7 @@ function VerticalShareContent({
           <button
             type="button"
             onClick={copyLink}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-[#171511]/80 backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04]/80 backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
           >
             <Copy size={11} />
             Copy link
@@ -409,7 +409,7 @@ function VerticalShareContent({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" style={coverFilter ? { filter: coverFilter } : undefined} />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907] flex items-center justify-center text-white/40">
+              <div className="w-full h-full bg-gradient-to-br from-white/10 to-[#090907] flex items-center justify-center text-white/40">
                 <Music size={40} />
               </div>
             )}

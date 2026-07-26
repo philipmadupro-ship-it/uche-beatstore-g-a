@@ -117,7 +117,7 @@ export function ProjectTrackList({
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`px-3 py-1.5 text-[11px] font-medium rounded-md transition-colors ${
-                activeTab === tab ? 'bg-[#1A1813] text-white' : 'text-[#9B9282] hover:text-[#F7EBDD]'
+                activeTab === tab ? 'bg-white/10 text-white font-bold' : 'text-white/50 hover:text-white'
               }`}
             >
               {tab}
@@ -132,8 +132,8 @@ export function ProjectTrackList({
               aria-pressed={selectMode}
               className={`flex min-h-9 items-center gap-2 rounded-md border px-3 text-[10px] font-mono uppercase tracking-[0.14em] transition-colors ${
                 selectMode
-                  ? 'border-[#E7D7BE]/45 bg-[#E7D7BE]/14 text-[#E7D7BE]'
-                  : 'border-[#211F1A] bg-[#171511] text-[#B4AA99] hover:border-[#3B372F] hover:text-[#F7EBDD]'
+                  ? 'border-white/40 bg-white/15 text-white font-bold'
+                  : 'border-white/10 bg-white/[0.04] text-white/60 hover:border-white/20 hover:text-white'
               }`}
             >
               <CheckSquare size={12} />
@@ -141,11 +141,11 @@ export function ProjectTrackList({
             </button>
           )}
           <div className="relative w-56 sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" size={12} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={12} />
             <input
               type="text"
               placeholder="Search tracks or tags"
-              className="w-full bg-[#171511] border border-[#211F1A] rounded-md py-2 pl-8 pr-3 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] transition-colors"
+              className="w-full bg-white/[0.04] border border-white/10 rounded-md py-2 pl-8 pr-3 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 transition-colors"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -156,13 +156,13 @@ export function ProjectTrackList({
       {/* Tag chips — only when there are tags to filter on */}
       {availableTags.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap mb-4">
-          <Tag size={11} className="text-[#6E685B] shrink-0" />
+          <Tag size={11} className="text-white/40 shrink-0" />
           {availableTags.map((tag) => {
             const on = selectedTags.has(tag);
             return (
               <button key={tag} onClick={() => toggleTag(tag)}
                 className={`px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${
-                  on ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]'
+                  on ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
                 }`}>
                 {tag}
               </button>
@@ -170,7 +170,7 @@ export function ProjectTrackList({
           })}
           {selectedTags.size > 0 && (
             <button onClick={() => setSelectedTags(new Set())}
-              className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#F7EBDD] transition-colors ml-1">
+              className="flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-white/50 hover:text-white transition-colors ml-1">
               <X size={10} /> Clear
             </button>
           )}
@@ -181,7 +181,7 @@ export function ProjectTrackList({
       <div className="space-y-1.5 pb-1 mb-32">
         {/* Header mirrors the Store-style product row: cover/play,
             title/meta, vibe, time, rating/offline, actions. */}
-        <div className="hidden md:grid md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_70px_112px_32px] items-center gap-4 px-3 h-8 text-[9px] font-mono uppercase tracking-wider text-[#6E685B]">
+        <div className="hidden md:grid md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_70px_112px_32px] items-center gap-4 px-3 h-8 text-[9px] font-mono uppercase tracking-wider text-white/40">
           {selectable ? (
             <span className="flex items-center justify-center">
               <input
@@ -189,7 +189,7 @@ export function ProjectTrackList({
                 checked={allSelected}
                 onChange={() => onSelectAll?.()}
                 aria-label="Select all visible tracks"
-                className="accent-[#E7D7BE] cursor-pointer"
+                className="accent-white cursor-pointer"
               />
             </span>
           ) : (
@@ -204,20 +204,20 @@ export function ProjectTrackList({
 
         {!visibleTracks.length ? (
           <div className="py-24 flex flex-col items-center justify-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-[#171511] border border-[#211F1A] flex items-center justify-center">
-              <Music size={16} className="text-[#6E685B]" />
+            <div className="w-10 h-10 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-center">
+              <Music size={16} className="text-white/40" />
             </div>
             {selectedTags.size > 0 || searchQuery ? (
-              <p className="text-[11px] font-mono uppercase tracking-wider text-[#6E685B]">No tracks match</p>
+              <p className="text-[11px] font-mono uppercase tracking-wider text-white/40">No tracks match</p>
             ) : (
               <>
-                <p className="text-[11px] font-mono uppercase tracking-wider text-[#6E685B]">No tracks in this project</p>
+                <p className="text-[11px] font-mono uppercase tracking-wider text-white/40">No tracks in this project</p>
                 <div className="flex items-center gap-3 mt-1">
-                  <button onClick={onAddFromLibrary} className="text-[11px] text-[#E7D7BE] hover:text-[#F3E6D1] font-medium flex items-center gap-1">
+                  <button onClick={onAddFromLibrary} className="text-[11px] text-white hover:text-white/80 font-medium flex items-center gap-1">
                     <Library size={11} /> Add from library
                   </button>
-                  <span className="text-[#3B372F]">·</span>
-                  <button onClick={onShowUpload} className="text-[11px] text-[#E7D7BE] hover:text-[#F3E6D1] font-medium flex items-center gap-1">
+                  <span className="text-white/30">·</span>
+                  <button onClick={onShowUpload} className="text-[11px] text-white hover:text-white/80 font-medium flex items-center gap-1">
                     <Plus size={11} /> Upload audio
                   </button>
                 </div>
@@ -232,7 +232,7 @@ export function ProjectTrackList({
               onDrop={onReorder ? handleDrop(i) : undefined}
               onDragEnd={() => { dragIdxRef.current = null; setDragOverIdx(null); }}
               className={`group relative transition-colors ${
-                dragOverIdx === i ? 'bg-[#E7D7BE]/5 border-t-2 border-[#E7D7BE]/60' : ''
+                dragOverIdx === i ? 'bg-white/5 border-t-2 border-white/60' : ''
               }`}
             >
               {/* Grip handle — THIS element is draggable, not the whole row.
@@ -242,7 +242,7 @@ export function ProjectTrackList({
                 <div
                   draggable
                   onDragStart={handleGripDragStart(i)}
-                  className="absolute left-0 inset-y-0 flex items-center pl-1 cursor-grab active:cursor-grabbing z-10 opacity-0 group-hover:opacity-100 transition-opacity text-[#6E685B] hover:text-[#D0C3AF]"
+                  className="absolute left-0 inset-y-0 flex items-center pl-1 cursor-grab active:cursor-grabbing z-10 opacity-0 group-hover:opacity-100 transition-opacity text-white/40 hover:text-white"
                   title="Drag to reorder"
                 >
                   <GripVertical size={13} />

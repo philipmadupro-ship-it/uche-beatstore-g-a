@@ -28,10 +28,10 @@ export function escapeHtml(s: string | null | undefined): string {
 }
 
 const BG = '#090907';
-const TEXT = '#F7EBDD';
-const MUTED = '#D0C3AF';
-const FAINT = '#6E685B';
-const ACCENT = '#E7D7BE';
+const TEXT = '#FFFFFF';
+const MUTED = 'rgba(255,255,255,0.8)';
+const FAINT = 'rgba(255,255,255,0.3)';
+const ACCENT = '#FFFFFF';
 
 /** Wrap body HTML in the standard dark card shell with an uppercase eyebrow. */
 export function emailShell(eyebrow: string, bodyHtml: string): string {
@@ -48,7 +48,7 @@ export function emailButton(label: string, href: string): string {
 
 /** A footer "you follow X · manage" line. */
 export function emailFooter(text: string, manageHref: string): string {
-  return `<p style="color:${FAINT};font-size:10px;margin:20px 0 0">${text} <a href="${manageHref}" style="color:#B4AA99">Manage</a>.</p>`;
+  return `<p style="color:${FAINT};font-size:10px;margin:20px 0 0">${text} <a href="${manageHref}" style="color:#AAAAAA">Manage</a>.</p>`;
 }
 
 /** A two-column line-item table (name → right-aligned value). */

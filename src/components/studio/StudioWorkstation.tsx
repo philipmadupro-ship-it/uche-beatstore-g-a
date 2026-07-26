@@ -552,11 +552,11 @@ export function StudioWorkstation() {
       {/* Header */}
       <div className="mb-5 sm:mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">Sketchpad</p>
+          <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">Sketchpad</p>
           <h1 className="font-heading text-[30px] leading-none text-white">Studio</h1>
         </div>
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-          <span className="hidden rounded-full border border-[#211F1A] bg-[#11100D] px-3 py-2 text-[10px] font-mono uppercase tracking-[0.18em] text-[#837B6D] sm:inline-flex">
+          <span className="hidden rounded-full border border-white/10 bg-white/[0.02] px-3 py-2 text-[10px] font-mono uppercase tracking-[0.18em] text-white/40 sm:inline-flex">
             Loop · EQ · record
           </span>
           {recording ? (
@@ -577,7 +577,7 @@ export function StudioWorkstation() {
           {active && (
             <button
               onClick={reset}
-              className="flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-[#211F1A] bg-[#171511] px-3.5 py-2 text-[10px] font-mono font-bold uppercase tracking-[0.16em] text-[#D0C3AF] transition-colors hover:text-white"
+              className="flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-[10px] font-mono font-bold uppercase tracking-[0.16em] text-white/80 transition-colors hover:text-white"
             >
               <RotateCcw size={11} /> Reset
             </button>
@@ -601,10 +601,10 @@ export function StudioWorkstation() {
         {/* Workstation */}
         <main className={active ? 'order-1 lg:order-2' : 'order-2 lg:order-2'}>
           {!active ? (
-            <div className="border border-dashed border-[#211F1A] rounded-lg py-20 sm:py-32 text-center px-4">
-              <Sliders size={28} className="text-[#6E685B] mx-auto mb-4" />
-              <p className="text-[13px] text-[#F7EBDD] mb-1">Pick a track to start</p>
-              <p className="text-[11px] text-[#9B9282]">
+            <div className="border border-dashed border-white/10 rounded-lg py-20 sm:py-32 text-center px-4">
+              <Sliders size={28} className="text-white/30 mx-auto mb-4" />
+              <p className="text-[13px] text-white mb-1">Pick a track to start</p>
+              <p className="text-[11px] text-white/40">
                 EQ · sends · loop · live recording
               </p>
             </div>
@@ -613,26 +613,26 @@ export function StudioWorkstation() {
               {/* Session console — track identity + waveform first, with
                   utility controls kept small so the waveform remains the
                   studio's primary work surface. */}
-              <div className="rounded-2xl border border-[#1A1813] bg-[#090907] p-3 sm:p-4">
+              <div className="rounded-2xl border border-[#0E0E0E] bg-[#090907] p-3 sm:p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
                   {active.cover_url ? (
                     <img loading="lazy"
                       src={audioSrc(active.cover_url) || active.cover_url}
                       alt=""
-                      className="h-11 w-11 shrink-0 rounded-lg border border-[#211F1A] object-cover sm:h-12 sm:w-12"
+                      className="h-11 w-11 shrink-0 rounded-lg border border-white/10 object-cover sm:h-12 sm:w-12"
                     />
                   ) : (
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[#211F1A] bg-[#1A1813] sm:h-12 sm:w-12">
-                      <Music2 size={18} className="text-[#837B6D]" />
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#0E0E0E] sm:h-12 sm:w-12">
+                      <Music2 size={18} className="text-white/40" />
                     </div>
                   )}
                   <div className="min-w-0">
-                    <p className="mb-1 text-[9px] font-mono uppercase tracking-[0.18em] text-[#9B9282] sm:text-[10px] sm:tracking-[0.2em]">
+                    <p className="mb-1 text-[9px] font-mono uppercase tracking-[0.18em] text-white/40 sm:text-[10px] sm:tracking-[0.2em]">
                       Now in studio
                     </p>
                     <h2 className="truncate text-[15px] font-medium text-white sm:text-[17px]">{active.title}</h2>
-                    <p className="mt-1 truncate text-[10px] font-mono uppercase tracking-wider text-[#9B9282] sm:text-[11px]">
+                    <p className="mt-1 truncate text-[10px] font-mono uppercase tracking-wider text-white/40 sm:text-[11px]">
                       {active.bpm ? `${Math.round(active.bpm * effectiveRate)} BPM` : '— BPM'}
                       {active.key && ` · ${active.key}${active.scale ? ' ' + active.scale : ''}`}
                       {tempo !== 1 && ` · ${(tempo * 100).toFixed(0)}%`}
@@ -643,7 +643,7 @@ export function StudioWorkstation() {
                 </div>
                 <button
                   onClick={togglePlay}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E7D7BE] text-black transition-transform hover:scale-105 active:scale-95 sm:h-11 sm:w-11"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105 active:scale-95 sm:h-11 sm:w-11"
                 >
                     {isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" className="ml-0.5" />}
                 </button>
@@ -717,20 +717,20 @@ export function StudioWorkstation() {
                   the document keydown listener below; triggerPad
                   routes through the engine the same way. */}
 
-              <details className="group rounded-2xl border border-[#1A1813] bg-[#090907]">
+              <details className="group rounded-2xl border border-[#0E0E0E] bg-[#090907]">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:hidden">
                   <div>
-                    <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#F7EBDD]">Mix + effects</p>
-                    <p className="mt-1 text-[10px] text-[#837B6D]">
+                    <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white">Mix + effects</p>
+                    <p className="mt-1 text-[10px] text-white/40">
                       {useStems ? 'Stem EQ' : 'Master EQ'} · sends · returns
                     </p>
                   </div>
-                  <span className="rounded-full border border-[#211F1A] bg-[#171511] px-3 py-1.5 text-[9px] font-mono uppercase tracking-[0.16em] text-[#B4AA99] transition-colors group-open:text-[#F3E6D1]">
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[9px] font-mono uppercase tracking-[0.16em] text-white/60 transition-colors group-open:text-white">
                     <span className="group-open:hidden">Open</span>
                     <span className="hidden group-open:inline">Close</span>
                   </span>
                 </summary>
-                <div className="grid grid-cols-1 gap-4 border-t border-[#1A1813] p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+                <div className="grid grid-cols-1 gap-4 border-t border-[#0E0E0E] p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_280px]">
                   <StudioMixer
                     useStems={useStems}
                     stemsLoading={stemsLoading}
@@ -770,11 +770,11 @@ export function StudioWorkstation() {
                   component is self-contained: it fetches and persists via
                   /api/tracks/[id]/lyrics, so we just need to mount it with
                   the active track id. */}
-              <div className="border border-[#1A1813] rounded-lg p-5 bg-[#090907]">
+              <div className="border border-[#0E0E0E] rounded-lg p-5 bg-[#090907]">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#F7EBDD]">Lyrics</p>
-                    <p className="text-[10px] text-[#9B9282] mt-1">Auto-saves as you type</p>
+                    <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white">Lyrics</p>
+                    <p className="text-[10px] text-white/40 mt-1">Auto-saves as you type</p>
                   </div>
                 </div>
                 <LyricsStudio trackId={active.id} />

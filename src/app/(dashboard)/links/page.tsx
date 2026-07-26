@@ -14,7 +14,7 @@ import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { ListContainer, ListRow } from '@/components/ui/ListRow';
 import { QuickShareModal } from '@/components/share/QuickShareModal';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
-import { Button } from '@/components/ui/Button';
+import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 interface ShareLink {
@@ -217,13 +217,13 @@ export default function LinksPage() {
           description="Every share you've sent. Tap a card to open and copy."
           meta={`${links.length} link${links.length !== 1 ? 's' : ''}${links.length > 0 ? ` · ${links.reduce((s, l) => s + (l.plays ?? 0), 0).toLocaleString()} plays` : ''}`}
           actions={
-            <Button
+            <LiquidGlassButton
                 onClick={() => setShowQuickShare(true)}
                 variant="primary"
                 leadingIcon={<Plus size={13} aria-hidden="true" />}
               >
                 New share
-            </Button>
+            </LiquidGlassButton>
           }
         />
 
@@ -236,25 +236,25 @@ export default function LinksPage() {
               <LinkMetric label="Downloads" value={linkSummary.downloadable.toLocaleString()} icon={<Download size={13} />} />
             </div>
 
-            <div className="mb-5 rounded-2xl border border-[#2B2821] bg-[#11100D] p-2.5">
+            <div className="mb-5 rounded-2xl border border-white/10 bg-white/[0.02] p-2.5">
               <div className="flex flex-col gap-2 md:flex-row md:items-center">
                 <div className="relative min-w-0 flex-1">
-                  <Search size={12} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" />
+                  <Search size={12} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search title, token, kind…"
-                    className="w-full rounded-full border border-[#2B2821] bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-[#F7EBDD] transition-colors placeholder:text-[#6E685B] focus:border-[#C9BCA8] focus:outline-none"
+                    className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-white transition-colors placeholder:text-white/30 focus:border-white/50 focus:outline-none"
                   />
                 </div>
-                <div className="flex overflow-x-auto rounded-full border border-[#2B2821] bg-[#090907] p-1">
+                <div className="flex overflow-x-auto rounded-full border border-white/10 bg-[#090907] p-1">
                   {LINK_FILTERS.map((f) => (
                     <button
                       key={f}
                       type="button"
                       onClick={() => setFilter(f)}
                       className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
-                        filter === f ? 'bg-[#342F27] text-[#F3E6D1]' : 'text-[#B4AA99] hover:text-[#F7EBDD]'
+                        filter === f ? 'bg-white/10 text-white' : 'text-white/60 hover:text-white'
                       }`}
                     >
                       {f}
@@ -263,7 +263,7 @@ export default function LinksPage() {
                 </div>
               </div>
               <div className="mt-2 flex items-center justify-between px-1">
-                <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#6E685B]">
+                <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/30">
                   {visibleLinks.length} shown
                   {visibleLinks.length !== links.length && ` · ${links.length} total`}
                 </p>
@@ -271,7 +271,7 @@ export default function LinksPage() {
                   <button
                     type="button"
                     onClick={() => { setSearch(''); setFilter('All'); }}
-                    className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#B4AA99] transition-colors hover:text-[#F7EBDD]"
+                    className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/60 transition-colors hover:text-white"
                   >
                     Clear
                   </button>
@@ -283,7 +283,7 @@ export default function LinksPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-32">
-            <Loader2 size={18} className="animate-spin text-[#6E685B]" />
+            <Loader2 size={18} className="animate-spin text-white/30" />
           </div>
         ) : links.length === 0 ? (
           <EmptyState
@@ -291,13 +291,13 @@ export default function LinksPage() {
             title="No share links yet"
             description="Share a project or track to create one."
             action={
-              <Button
+              <LiquidGlassButton
                 onClick={() => setShowQuickShare(true)}
                 variant="primary"
                 leadingIcon={<Plus size={13} aria-hidden="true" />}
               >
                 New share
-              </Button>
+              </LiquidGlassButton>
             }
             className="border-dashed py-32"
           />
@@ -335,7 +335,7 @@ export default function LinksPage() {
                       }}
                       className={cn(
                         'tap grid size-5 place-items-center rounded border transition-all',
-                        selected ? 'bg-[#E7D7BE] border-[#F3E6D1]' : 'border-[#3B372F] bg-[#090907]',
+                        selected ? 'bg-white border-white/30' : 'border-white/20 bg-[#090907]',
                       )}
                       role="checkbox"
                       aria-checked={selected}
@@ -346,11 +346,11 @@ export default function LinksPage() {
                   }
                   title={
                     <span className="flex items-center gap-2">
-                      <span className={cn('truncate', !link.title && 'font-mono text-[#D0C3AF]')}>
+                      <span className={cn('truncate', !link.title && 'font-mono text-white/80')}>
                         {link.title || link.token}
                       </span>
                       {isTop && (
-                        <span className="shrink-0 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#E7D7BE]/15 border border-[#E7D7BE]/30 text-[#E7D7BE]">
+                        <span className="shrink-0 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/15 border border-white/ text-white">
                           Top
                         </span>
                       )}
@@ -364,14 +364,14 @@ export default function LinksPage() {
                   }
                   trailing={
                     <>
-                      {link.password_protected && <Lock size={11} className="text-[#B4AA99]" aria-label="Password protected" />}
-                      {link.allow_downloads !== false && <Download size={11} className="text-[#B4AA99]" aria-label="Downloads enabled" />}
+                      {link.password_protected && <Lock size={11} className="text-white/60" aria-label="Password protected" />}
+                      {link.allow_downloads !== false && <Download size={11} className="text-white/60" aria-label="Downloads enabled" />}
                       <a
                         href={link.href}
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="tap grid size-7 place-items-center rounded-full text-[#B4AA99] hover:bg-white/[0.04] hover:text-white transition-colors"
+                        className="tap grid size-7 place-items-center rounded-full text-white/60 hover:bg-white/[0.04] hover:text-white transition-colors"
                         title="Open share page"
                       >
                         <ExternalLink size={12} />
@@ -398,10 +398,10 @@ export default function LinksPage() {
                   onClick={() => setActive(link)}
                   className={cn(
                     'group relative text-left rounded-2xl p-4 transition-all cursor-pointer overflow-hidden',
-                    'bg-gradient-to-br from-[#171511] to-[#090907] border',
+                    'bg-gradient-to-br from-[#111111] to-[#090907] border',
                     selected
-                      ? 'border-[#E7D7BE]/40 from-[#342F27]/40'
-                      : 'border-[#2B2821] hover:border-[#3B372F] hover:from-[#211F1A]',
+                      ? 'border-white/ from-white/10/40'
+                      : 'border-white/10 hover:border-white/20 hover:from-[#161616]',
                     'active:scale-[0.99]',
                     expired && 'opacity-40',
                   )}
@@ -423,8 +423,8 @@ export default function LinksPage() {
                     className={cn(
                       'absolute top-3 left-3 w-5 h-5 rounded border flex items-center justify-center transition-all z-10',
                       selected
-                        ? 'bg-[#E7D7BE] border-[#F3E6D1]'
-                        : 'border-[#3B372F] bg-[#090907] opacity-0 group-hover:opacity-100 hover:border-[#837B6D]',
+                        ? 'bg-white border-white/30'
+                        : 'border-white/20 bg-[#090907] opacity-0 group-hover:opacity-100 hover:border-white/30',
                     )}
                   >
                     {selected && <Check size={11} className="text-black" strokeWidth={3} />}
@@ -433,16 +433,16 @@ export default function LinksPage() {
                   {/* Title row — title dominant; flags + open shortcut quiet right. */}
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex min-w-0 flex-1 items-center gap-2">
-                      <h3 className={cn('truncate text-row-title', !link.title && 'font-mono text-[#D0C3AF]')}>
+                      <h3 className={cn('truncate text-row-title', !link.title && 'font-mono text-white/80')}>
                         {link.title || link.token}
                       </h3>
                       {isTop && (
-                        <span className="shrink-0 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#E7D7BE]/15 border border-[#E7D7BE]/30 text-[#E7D7BE]">
+                        <span className="shrink-0 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/15 border border-white/ text-white">
                           Top
                         </span>
                       )}
                     </div>
-                    <div className="flex shrink-0 items-center gap-1.5 text-[#B4AA99]">
+                    <div className="flex shrink-0 items-center gap-1.5 text-white/60">
                       {link.password_protected && <Lock size={11} aria-label="Password protected" />}
                       {link.allow_downloads !== false && <Download size={11} aria-label="Downloads enabled" />}
                       <a
@@ -471,9 +471,9 @@ export default function LinksPage() {
                   </p>
 
                   {/* Engagement bar — thin, low-contrast relative play share. */}
-                  <div className="h-0.5 bg-[#211F1A] rounded-full overflow-hidden">
+                  <div className="h-0.5 bg-white/[0.05] rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-[#6E685B] transition-all duration-700 group-hover:bg-[#C9BCA8]"
+                      className="h-full rounded-full bg-white/30 transition-all duration-700 group-hover:bg-white/80"
                       style={{ width: `${playPct}%` }}
                     />
                   </div>
@@ -576,12 +576,12 @@ function LinkMetric({
   tone?: 'default' | 'good';
 }) {
   return (
-    <div className="rounded-xl border border-[#2B2821] bg-[#171511] px-4 py-3">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[#9B9282]">
+    <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+      <div className="mb-1.5 flex items-center gap-1.5 text-white/40">
         {icon}
         <p className="text-[9px] font-mono uppercase tracking-[0.18em]">{label}</p>
       </div>
-      <p className={`text-[20px] font-semibold leading-none tabular-nums ${tone === 'good' ? 'text-[#6DC6A4]' : 'text-[#F7EBDD]'}`}>
+      <p className={`text-[20px] font-semibold leading-none tabular-nums ${tone === 'good' ? 'text-[#6DC6A4]' : 'text-white'}`}>
         {value}
       </p>
     </div>
@@ -653,7 +653,7 @@ function LinkPopup({
         onClick={(e) => e.stopPropagation()}
         className={cn(
           'w-full md:max-w-[480px] rounded-t-3xl md:rounded-2xl overflow-hidden relative',
-          'bg-gradient-to-b from-[#121210]/95 via-[#0e0d0a]/95 to-[#090907]/98',
+          'bg-gradient-to-b from-[#0A0A0A]/95 via-[#070707]/95 to-[#090907]/98',
           'backdrop-blur-2xl border border-white/[0.06]',
           'shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset]',
           'animate-in slide-in-from-bottom-4 md:zoom-in-95 duration-300',
@@ -663,24 +663,24 @@ function LinkPopup({
             drawer header and project share modal use. */}
         <div
           className="absolute -top-16 -left-16 w-44 h-44 rounded-full pointer-events-none opacity-25"
-          style={{ background: 'radial-gradient(circle, #E7D7BE 0%, transparent 70%)' }}
+          style={{ background: 'radial-gradient(circle, #FFFFFF 0%, transparent 70%)' }}
         />
 
         <div className="relative z-10 p-5 md:p-6">
           {/* Header row */}
           <div className="flex items-start justify-between gap-3 mb-5">
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#F3E6D1] mb-1">Share link</p>
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white mb-1">Share link</p>
               <h2 className="text-[18px] font-medium text-white truncate">
                 {link.title || `${link.kind || 'Share'} · ${link.track_ids?.length ?? 0} track${(link.track_ids?.length ?? 0) === 1 ? '' : 's'}`}
               </h2>
-              <p className="text-[11px] text-[#B4AA99] mt-1">
+              <p className="text-[11px] text-white/60 mt-1">
                 Created {formatDate(link.created_at)} · {link.plays ?? 0} play{(link.plays ?? 0) === 1 ? '' : 's'}
               </p>
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[#B4AA99] hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.12] transition-colors"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-black bg-white font-semibold shadow-md hover:bg-white/90/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.12] transition-colors"
             >
               <X size={14} />
             </button>
@@ -688,13 +688,13 @@ function LinkPopup({
 
           {/* URL card — full URL, selectable. Big tappable Copy at
               the right for the dominant action. */}
-          <div className="flex items-center gap-2 bg-white/[0.02] border border-[#C9BCA8]/30 rounded-xl px-3 py-2.5 mb-4 backdrop-blur-sm">
-            <Link2 size={12} className="text-[#F3E6D1] shrink-0" />
+          <div className="flex items-center gap-2 bg-white/[0.02] border border-white/ rounded-xl px-3 py-2.5 mb-4 backdrop-blur-sm">
+            <Link2 size={12} className="text-white shrink-0" />
             <input
               readOnly
               value={fullUrl}
               onClick={(e) => (e.currentTarget as HTMLInputElement).select()}
-              className="flex-1 bg-transparent text-[11px] text-[#F7EBDD] font-mono focus:outline-none truncate"
+              className="flex-1 bg-transparent text-[11px] text-white font-mono focus:outline-none truncate"
             />
           </div>
 
@@ -715,20 +715,20 @@ function LinkPopup({
           {/* Tracks on this link — small avatar + title row. Empty
               state shown while loading or if the share is empty. */}
           <div className="mb-5">
-            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Tracks on this link</p>
+            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-2">Tracks on this link</p>
             {tracks.length === 0 ? (
-              <p className="text-[10px] text-[#6E685B] font-mono">No tracks resolved</p>
+              <p className="text-[10px] text-white/30 font-mono">No tracks resolved</p>
             ) : (
               <ul className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
                 {tracks.map((t) => (
-                  <li key={t.id} className="flex items-center gap-2.5 text-[11px] text-[#D0C3AF]">
-                    <div className="w-6 h-6 rounded bg-[#090907] border border-[#2B2821] overflow-hidden shrink-0">
-                      <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
+                  <li key={t.id} className="flex items-center gap-2.5 text-[11px] text-white/80">
+                    <div className="w-6 h-6 rounded bg-[#090907] border border-white/10 overflow-hidden shrink-0">
+                      <div className="w-full h-full flex items-center justify-center text-white/30">
                         <Music size={10} />
                       </div>
                     </div>
-                    <span className="truncate flex-1 text-[#F7EBDD]">{t.title}</span>
-                    <span className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] shrink-0">{t.type}</span>
+                    <span className="truncate flex-1 text-white">{t.title}</span>
+                    <span className="text-[9px] font-mono uppercase tracking-wider text-white/40 shrink-0">{t.type}</span>
                   </li>
                 ))}
               </ul>
@@ -739,21 +739,21 @@ function LinkPopup({
               secondary action row. */}
           {editing && (
             <div className="mb-5 p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-3">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#F3E6D1]">Edit link</p>
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white">Edit link</p>
 
               <div>
-                <label className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] mb-1 block">Title</label>
+                <label className="text-[9px] font-mono uppercase tracking-wider text-white/60 mb-1 block">Title</label>
                 <input
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
                   placeholder={link.token}
-                  className="w-full bg-[#090907] border border-[#2B2821] rounded-md px-2.5 py-2 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8]"
+                  className="w-full bg-[#090907] border border-white/10 rounded-md px-2.5 py-2 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/50"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 {link.source === 'share_links' && <div>
-                  <label className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] mb-1 block">Expires in</label>
+                  <label className="text-[9px] font-mono uppercase tracking-wider text-white/60 mb-1 block">Expires in</label>
                   <Dropdown
                     value={editExpiresDays}
                     onChange={(v) => setEditExpiresDays(v)}
@@ -765,19 +765,19 @@ function LinkPopup({
                       { value: '14', label: '14 days' },
                       { value: '30', label: '30 days' },
                     ]}
-                    className="w-full bg-[#090907] border border-[#2B2821] rounded-md px-2.5 py-2 text-[11px] text-[#F7EBDD] focus:outline-none focus:border-[#C9BCA8]"
+                    className="w-full bg-[#090907] border border-white/10 rounded-md px-2.5 py-2 text-[11px] text-white focus:outline-none focus:border-white/50"
                   />
                 </div>}
                 <div>
-                  <label className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] mb-1 block">Downloads</label>
+                  <label className="text-[9px] font-mono uppercase tracking-wider text-white/60 mb-1 block">Downloads</label>
                   <button
                     type="button"
                     onClick={() => setEditAllowDownloads((v) => !v)}
                     className={cn(
                       'w-full px-2.5 py-2 text-[11px] font-medium rounded-md border transition-colors flex items-center justify-center gap-1.5',
                       editAllowDownloads
-                        ? 'bg-[#342F27] border-[#C9BCA8]/50 text-[#F3E6D1]'
-                        : 'bg-[#090907] border-[#2B2821] text-[#9B9282] hover:border-[#3B372F]',
+                        ? 'bg-white/10 border-white/ text-white'
+                        : 'bg-[#090907] border-white/10 text-white/40 hover:border-white/20',
                     )}
                   >
                     <Download size={11} />
@@ -787,15 +787,15 @@ function LinkPopup({
               </div>
 
               {link.source === 'share_links' && <div>
-                <label className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] mb-1 flex items-center justify-between">
-                  <span>Password {link.password_protected && <span className="text-[#9B9282] normal-case">(currently set)</span>}</span>
+                <label className="text-[9px] font-mono uppercase tracking-wider text-white/60 mb-1 flex items-center justify-between">
+                  <span>Password {link.password_protected && <span className="text-white/40 normal-case">(currently set)</span>}</span>
                   {link.password_protected && (
                     <button
                       type="button"
                       onClick={() => setEditClearPassword((v) => !v)}
                       className={cn(
                         'text-[9px] uppercase tracking-wider transition-colors',
-                        editClearPassword ? 'text-red-400' : 'text-[#B4AA99] hover:text-red-400',
+                        editClearPassword ? 'text-red-400' : 'text-white/60 hover:text-red-400',
                       )}
                     >
                       {editClearPassword ? 'Will clear' : 'Clear it'}
@@ -808,7 +808,7 @@ function LinkPopup({
                   onChange={(e) => setEditPassword(e.target.value)}
                   disabled={editClearPassword}
                   placeholder={link.password_protected ? '••••••' : 'No password'}
-                  className="w-full bg-[#090907] border border-[#2B2821] rounded-md px-2.5 py-2 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] disabled:opacity-40"
+                  className="w-full bg-[#090907] border border-white/10 rounded-md px-2.5 py-2 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 disabled:opacity-40"
                 />
               </div>}
 
@@ -816,14 +816,14 @@ function LinkPopup({
                 <button
                   onClick={handleSave}
                   disabled={savingEdit}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-[#E7D7BE] hover:bg-[#F3E6D1] disabled:opacity-40 text-black text-[11px] font-bold uppercase tracking-wider transition-colors"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-white hover:bg-white disabled:opacity-40 text-black text-[11px] font-bold uppercase tracking-wider transition-colors"
                 >
                   {savingEdit ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
                   Save
                 </button>
                 <button
                   onClick={() => { setEditing(false); setEditPassword(''); setEditClearPassword(false); }}
-                  className="px-4 py-2.5 rounded-md border border-[#2B2821] hover:border-[#3B372F] text-[#B4AA99] hover:text-white text-[11px] uppercase tracking-wider transition-colors"
+                  className="px-4 py-2.5 rounded-md border border-white/10 hover:border-white/20 text-white/60 hover:text-white text-[11px] uppercase tracking-wider transition-colors"
                 >
                   Cancel
                 </button>
@@ -836,14 +836,14 @@ function LinkPopup({
           <div className="flex items-center gap-2 mb-3">
             <button
               onClick={() => onCopy(link)}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#F7EBDD] active:scale-[0.98] transition-all"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-white active:scale-[0.98] transition-all"
             >
               {copied ? <Check size={13} /> : <Copy size={13} />}
               {copied ? 'Copied' : 'Copy link'}
             </button>
             <button
               onClick={() => onShare(link)}
-              className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#F7EBDD] text-[12px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors flex items-center gap-2"
+              className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-white text-[12px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors flex items-center gap-2"
             >
               <Share2 size={13} />
               <span className="hidden sm:inline">Share</span>
@@ -857,21 +857,21 @@ function LinkPopup({
               href={link.href}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-[11px] text-[#D0C3AF] hover:text-white transition-colors px-2 py-1"
+              className="inline-flex items-center gap-1.5 text-[11px] text-white/80 hover:text-white transition-colors px-2 py-1"
             >
               <ExternalLink size={11} />
               Open
             </a>
             <button
               onClick={() => setEditing((v) => !v)}
-              className="inline-flex items-center gap-1.5 text-[11px] text-[#D0C3AF] hover:text-white transition-colors px-2 py-1"
+              className="inline-flex items-center gap-1.5 text-[11px] text-white/80 hover:text-white transition-colors px-2 py-1"
             >
               <Pencil size={11} />
               {editing ? 'Close edit' : 'Edit'}
             </button>
             <button
               onClick={() => onDelete(link)}
-              className="inline-flex items-center gap-1.5 text-[11px] text-[#B4AA99] hover:text-red-400 transition-colors px-2 py-1"
+              className="inline-flex items-center gap-1.5 text-[11px] text-white/60 hover:text-red-400 transition-colors px-2 py-1"
             >
               <Trash2 size={11} />
               Delete
@@ -890,8 +890,8 @@ function LinkPopup({
 function FlagChip({ icon, label, tone }: { icon?: React.ReactNode; label: string; tone?: 'warn' | 'danger' }) {
   const cls =
     tone === 'danger' ? 'text-red-400 border-red-500/30' :
-    tone === 'warn' ? 'text-[#F3E6D1] border-[#C9BCA8]/30' :
-    'text-[#D0C3AF] border-[#3B372F]';
+    tone === 'warn' ? 'text-white border-white/' :
+    'text-white/80 border-white/20';
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border ${cls}`}>
       {icon}

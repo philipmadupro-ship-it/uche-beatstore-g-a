@@ -17,7 +17,7 @@ import { filterAndSortPlaylists, DEFAULT_PLAYLIST_FILTERS, type PlaylistFilterSt
 import { PlayGlyph } from '@/components/player/TransportIcons';
 import { seededGradient } from '@/lib/ui/cover-gradient';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
-import { Button } from '@/components/ui/Button';
+import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CreateProjectModal } from '@/components/layout/CreateProjectModal';
 
@@ -122,21 +122,19 @@ export default function PlaylistsPage() {
           description="Curated sets for sharing. Order tracks, generate links, send to people to play."
           meta={`${playlists.length} playlist${playlists.length !== 1 ? 's' : ''}`}
           actions={
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
+            <div className="flex flex-wrap items-center gap-2">
+              <LiquidGlassButton
                 onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
-                variant={selectMode ? 'accent' : 'secondary'}
-                size="sm"
+                active={selectMode}
               >
                 {selectMode ? 'Done' : 'Select'}
-              </Button>
-              <Button
+              </LiquidGlassButton>
+              <LiquidGlassButton
                 onClick={() => setCreateOpen(true)}
-                variant="primary"
-                leadingIcon={<Plus size={14} aria-hidden="true" />}
               >
+                <Plus size={13} aria-hidden="true" />
                 New playlist
-              </Button>
+              </LiquidGlassButton>
             </div>
           }
         />
@@ -144,20 +142,19 @@ export default function PlaylistsPage() {
         <PlaylistFilterBar value={filters} onChange={setFilters} folders={foldersWithCovers} onFoldersChanged={fetchFolders} resultCount={filtered.length} />
 
         {loading ? (
-          <div className="flex items-center justify-center py-32"><Loader2 size={18} className="animate-spin text-[#837B6D]" /></div>
+          <div className="flex items-center justify-center py-32"><Loader2 size={18} className="animate-spin text-white/40" /></div>
         ) : playlists.length === 0 ? (
           <EmptyState
             icon={<ListMusic size={22} aria-hidden="true" />}
             title="No playlists yet"
             description="Group tracks for clients, labels, or private listening."
             action={
-              <Button
+              <LiquidGlassButton
                 onClick={() => setCreateOpen(true)}
-                variant="secondary"
-                leadingIcon={<Plus size={12} aria-hidden="true" />}
               >
+                <Plus size={12} aria-hidden="true" />
                 Create first playlist
-              </Button>
+              </LiquidGlassButton>
             }
             className="py-32"
           />
@@ -165,15 +162,15 @@ export default function PlaylistsPage() {
           <>
           {!isFiltered && recentPlaylists.length > 0 && (
             <div className="mb-6">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] mb-3 flex items-center gap-2"><Clock size={10} /> Recently opened</p>
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3 flex items-center gap-2"><Clock size={10} /> Recently opened</p>
               <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
                 {recentPlaylists.map((p) => (
                   <Link key={p.id} href={`/playlists/${p.id}`} onClick={() => trackRecentOpen(p.id)}
-                    className="shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#2B2821] bg-[#171511] hover:border-[#3B372F] hover:bg-[#211F1A] transition-colors min-w-[180px] max-w-[240px]">
+                    className="shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.05] transition-colors min-w-[180px] max-w-[240px]">
                     <div className="w-8 h-8 rounded-md overflow-hidden bg-[#090907] shrink-0">
-                      {p.cover_url ? <img src={p.cover_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><ListMusic size={12} /></div>}
+                      {p.cover_url ? <img src={p.cover_url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white/40"><ListMusic size={12} /></div>}
                     </div>
-                    <span className="text-[11px] font-medium text-[#F7EBDD] truncate">{p.name}</span>
+                    <span className="text-[11px] font-medium text-white truncate">{p.name}</span>
                   </Link>
                 ))}
               </div>
@@ -181,8 +178,8 @@ export default function PlaylistsPage() {
           )}
           {filtered.length === 0 ? (
             <div className="text-center py-20">
-              <p className="text-[#9B9282] text-[13px] mb-3">No matches</p>
-              <button onClick={() => setFilters({ ...DEFAULT_PLAYLIST_FILTERS, tags: new Set() })} className="text-[#D0C3AF] hover:text-[#F7EBDD] text-[11px] underline underline-offset-2">Clear filters</button>
+              <p className="text-white/50 text-[13px] mb-3">No matches</p>
+              <button onClick={() => setFilters({ ...DEFAULT_PLAYLIST_FILTERS, tags: new Set() })} className="text-white/60 hover:text-white text-[11px] underline underline-offset-2">Clear filters</button>
             </div>
           ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-5">
@@ -234,10 +231,10 @@ export default function PlaylistsPage() {
                     <>
                       <span>{count} track{count !== 1 ? 's' : ''}</span>
                       {playlist.total_duration != null && playlist.total_duration > 0 && (
-                        <><span className="text-[#3B372F]">·</span><span>{fmtDuration(playlist.total_duration)}</span></>
+                        <><span className="text-white/30">·</span><span>{fmtDuration(playlist.total_duration)}</span></>
                       )}
                       {(playlist.tags?.length ?? 0) > 0 && (
-                        <><span className="text-[#3B372F]">·</span><span className="truncate">{playlist.tags!.slice(0, 2).map((t) => t.tag).join(' / ')}</span></>
+                        <><span className="text-white/30">·</span><span className="truncate">{playlist.tags!.slice(0, 2).map((t) => t.tag).join(' / ')}</span></>
                       )}
                     </>
                   }

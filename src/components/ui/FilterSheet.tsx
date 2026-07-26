@@ -59,7 +59,7 @@ export function FilterSheet({
     >
       {/* Drag handle */}
       <div className="flex justify-center pb-2 pt-1">
-        <div className="h-1 w-10 rounded-full bg-[#3B372F]" />
+        <div className="h-1 w-10 rounded-full bg-white/20" />
       </div>
       <p className="text-eyebrow mb-3">{title}</p>
       {children}

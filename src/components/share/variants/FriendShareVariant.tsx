@@ -52,7 +52,7 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
   };
 
   return (
-    <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center text-[#F7EBDD] p-6 relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center text-white p-6 relative overflow-hidden font-sans">
       {/* Soft elegant ambient background glow */}
       <div
         className="absolute w-[600px] h-[600px] rounded-full pointer-events-none opacity-[0.04] blur-[120px]"
@@ -67,8 +67,8 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
       <div className="w-full max-w-[420px] z-10 flex flex-col items-center">
         {/* Creator credit above vinyl */}
         <div className="mb-4 text-center">
-          <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#837B6D]">Shared by</p>
-          <p className="text-[13px] font-bold text-[#D0C3AF] mt-0.5 tracking-wide">{displayName}</p>
+          <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/40">Shared by</p>
+          <p className="text-[13px] font-bold text-white/80 mt-0.5 tracking-wide">{displayName}</p>
         </div>
 
         {/* Vinyl + waveform hero */}
@@ -86,7 +86,7 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
 
         {/* Track position indicator */}
         {tracks.length > 1 && playingId && (
-          <p className="text-[9px] font-mono text-[#837B6D] mb-4 tabular-nums tracking-widest">
+          <p className="text-[9px] font-mono text-white/40 mb-4 tabular-nums tracking-widest">
             {tracks.findIndex((t) => t.id === playingId) + 1} / {tracks.length}
           </p>
         )}
@@ -96,14 +96,14 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
           <button
             onClick={handlePrev}
             disabled={tracks.length <= 1}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-[#B4AA99] hover:text-[#F7EBDD] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/[0.02] border border-transparent hover:border-white/[0.05] transition-all"
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/[0.02] border border-transparent hover:border-white/[0.05] transition-all"
           >
             <SkipBack size={16} />
           </button>
           <button
             onClick={handleNext}
             disabled={tracks.length <= 1}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-[#B4AA99] hover:text-[#F7EBDD] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/[0.02] border border-transparent hover:border-white/[0.05] transition-all"
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/[0.02] border border-transparent hover:border-white/[0.05] transition-all"
           >
             <SkipForward size={16} />
           </button>
@@ -111,11 +111,11 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
 
         {/* Tracks list */}
         {tracks.length > 1 && (
-          <div className="w-full bg-[#0e0c09] border border-[#2B2821] rounded-2xl overflow-hidden max-h-52 overflow-y-auto">
-            <div className="px-4 py-2.5 border-b border-[#2B2821]">
-              <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#837B6D]">{tracks.length} tracks</p>
+          <div className="w-full bg-[#0e0c09] border border-white/10 rounded-2xl overflow-hidden max-h-52 overflow-y-auto">
+            <div className="px-4 py-2.5 border-b border-white/10">
+              <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/40">{tracks.length} tracks</p>
             </div>
-            <div className="divide-y divide-[#211F1A]">
+            <div className="divide-y divide-white/10">
               {tracks.map((t, i) => {
                 const active = playingId === t.id;
                 const dur = t.duration_seconds ?? 0;
@@ -124,23 +124,23 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
                     key={t.id}
                     onClick={() => onPlay(t)}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.015] transition-colors text-left ${
-                      active ? 'bg-[#171511]/60' : ''
+                      active ? 'bg-white/[0.04]/60' : ''
                     }`}
                   >
-                    <span className="font-mono text-[9px] text-[#837B6D] w-5 shrink-0 tabular-nums">{i + 1}</span>
-                    <span className={`flex-1 text-[12px] font-medium truncate ${active ? 'text-[#E7D7BE]' : 'text-[#F7EBDD]/80'}`}>
+                    <span className="font-mono text-[9px] text-white/40 w-5 shrink-0 tabular-nums">{i + 1}</span>
+                    <span className={`flex-1 text-[12px] font-medium truncate ${active ? 'text-white' : 'text-white/80'}`}>
                       {t.title}
                     </span>
                     {dur > 0 && (
-                      <span className="text-[9px] font-mono text-[#837B6D] tabular-nums shrink-0">
+                      <span className="text-[9px] font-mono text-white/40 tabular-nums shrink-0">
                         {Math.floor(dur / 60)}:{String(Math.floor(dur % 60)).padStart(2, '0')}
                       </span>
                     )}
                     {active && isPlaying && (
                       <span className="flex gap-0.5 items-end h-2 shrink-0 ml-1">
-                        <span className="w-0.5 h-1 bg-[#E7D7BE] animate-[pulse_0.6s_ease-in-out_infinite]" />
-                        <span className="w-0.5 h-2 bg-[#E7D7BE] animate-[pulse_0.8s_ease-in-out_infinite]" />
-                        <span className="w-0.5 h-1.5 bg-[#E7D7BE] animate-[pulse_0.7s_ease-in-out_infinite]" />
+                        <span className="w-0.5 h-1 bg-white animate-[pulse_0.6s_ease-in-out_infinite]" />
+                        <span className="w-0.5 h-2 bg-white animate-[pulse_0.8s_ease-in-out_infinite]" />
+                        <span className="w-0.5 h-1.5 bg-white animate-[pulse_0.7s_ease-in-out_infinite]" />
                       </span>
                     )}
                   </button>
@@ -152,7 +152,7 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
 
         {/* Project description if present */}
         {project.description && (
-          <p className="mt-6 text-center text-[11px] text-[#B4AA99] leading-relaxed max-w-[320px]">
+          <p className="mt-6 text-center text-[11px] text-white/60 leading-relaxed max-w-[320px]">
             {project.description}
           </p>
         )}

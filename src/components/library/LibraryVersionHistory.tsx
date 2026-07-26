@@ -44,41 +44,41 @@ export function LibraryVersionHistory({ track, versions }: Props) {
     <div className="mb-10">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <History size={14} className="text-[#E7D7BE]" />
-          <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#F7EBDD]">Version history</h2>
-          <span className="text-[10px] font-mono text-white bg-[#342F27] border border-[#C9BCA8]/40 rounded px-2 py-0.5">
+          <History size={14} className="text-white" />
+          <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white">Version history</h2>
+          <span className="text-[10px] font-mono text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/ rounded px-2 py-0.5">
             {versions.length}
           </span>
         </div>
-        <p className="text-[10px] text-[#9B9282] font-mono">
-          Current → <span className="text-[#F3E6D1]">v{(versions[0]?.version_number ?? 0) + 1}</span>
+        <p className="text-[10px] text-white/40 font-mono">
+          Current → <span className="text-white">v{(versions[0]?.version_number ?? 0) + 1}</span>
         </p>
       </div>
 
       {versions.length === 0 ? (
-        <div className="bg-gradient-to-b from-[#11100D] to-[#090907] border border-[#211F1A] rounded-xl py-10 text-center">
-          <History size={20} className="mx-auto text-[#3B372F] mb-3" />
-          <p className="text-[12px] text-[#D0C3AF] mb-1">No prior versions yet</p>
-          <p className="text-[10px] text-[#9B9282] font-mono uppercase tracking-wider">
+        <div className="bg-gradient-to-b from-[#0D0D0D] to-[#090907] border border-white/10 rounded-xl py-10 text-center">
+          <History size={20} className="mx-auto text-white/30 mb-3" />
+          <p className="text-[12px] text-white/80 mb-1">No prior versions yet</p>
+          <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider">
             Replacing the audio will snapshot the current file as v1
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-2">
           {/* Live row */}
-          <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-gradient-to-r from-[#342F27] to-[#0f0f1a] border border-[#C9BCA8]/40">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-[#F3E6D1] w-14 text-center bg-[#090907] border border-[#C9BCA8]/40 rounded py-1 px-1">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-gradient-to-r from-white/10 to-[#0f0f1a] border border-white/">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-white w-14 text-center bg-[#090907] border border-white/ rounded py-1 px-1">
               Live
             </span>
             <div className="flex-1 min-w-0">
               <p className="text-[12px] font-medium text-white truncate">{track.title}</p>
-              <p className="text-[10px] font-mono text-[#D0C3AF]">
+              <p className="text-[10px] font-mono text-white/80">
                 {liveCreatedAt} · current master
               </p>
             </div>
-            <span className="text-[10px] font-mono text-[#F3E6D1] w-16 text-right">{fmtBpm(track.bpm)}</span>
-            <span className="text-[10px] font-mono text-[#F3E6D1] w-16 text-right">{fmtKey(track.key, track.scale)}</span>
-            <span className="text-[10px] font-mono text-[#F3E6D1] w-14 text-right">{fmtDuration(track.duration_seconds)}</span>
+            <span className="text-[10px] font-mono text-white w-16 text-right">{fmtBpm(track.bpm)}</span>
+            <span className="text-[10px] font-mono text-white w-16 text-right">{fmtKey(track.key, track.scale)}</span>
+            <span className="text-[10px] font-mono text-white w-14 text-right">{fmtDuration(track.duration_seconds)}</span>
             <div className="w-6" />
           </div>
 
@@ -86,28 +86,28 @@ export function LibraryVersionHistory({ track, versions }: Props) {
           {versions.map((v) => (
             <div
               key={v.id}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[#11100D] border border-[#211F1A] hover:border-[#3B372F] hover:bg-[#1A1813] transition-colors group"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-white/[0.02] border border-white/10 hover:border-white/20 hover:bg-[#0E0E0E] transition-colors group"
             >
-              <span className="text-[10px] font-mono uppercase tracking-widest text-[#D0C3AF] w-14 text-center bg-[#090907] border border-[#211F1A] rounded py-1 px-1">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-white/80 w-14 text-center bg-[#090907] border border-white/10 rounded py-1 px-1">
                 {v.version_label || `v${v.version_number}`}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] text-[#F7EBDD] truncate">
+                <p className="text-[12px] text-white truncate">
                   {new Date(v.created_at).toLocaleDateString('en-US', {
                     month: 'short', day: 'numeric', year: 'numeric',
                     hour: 'numeric', minute: '2-digit',
                   })}
                 </p>
-                {v.notes && <p className="text-[10px] text-[#B4AA99] truncate font-mono">{v.notes}</p>}
+                {v.notes && <p className="text-[10px] text-white/60 truncate font-mono">{v.notes}</p>}
               </div>
-              <span className="text-[10px] font-mono text-[#B4AA99] w-16 text-right">{fmtBpm(v.bpm)}</span>
-              <span className="text-[10px] font-mono text-[#B4AA99] w-16 text-right">{fmtKey(v.key, v.scale)}</span>
-              <span className="text-[10px] font-mono text-[#B4AA99] w-14 text-right">{fmtDuration(v.duration_seconds)}</span>
+              <span className="text-[10px] font-mono text-white/60 w-16 text-right">{fmtBpm(v.bpm)}</span>
+              <span className="text-[10px] font-mono text-white/60 w-16 text-right">{fmtKey(v.key, v.scale)}</span>
+              <span className="text-[10px] font-mono text-white/60 w-14 text-right">{fmtDuration(v.duration_seconds)}</span>
               {v.audio_url ? (
                 <a
                   href={v.audio_url}
                   download
-                  className="text-[#9B9282] hover:text-[#F3E6D1] transition-colors p-1.5 rounded border border-transparent hover:border-[#211F1A]"
+                  className="text-white/40 hover:text-white transition-colors p-1.5 rounded border border-transparent hover:border-white/10"
                   title="Download version"
                 >
                   <Download size={12} />

@@ -66,24 +66,24 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
       {/* Drawer */}
       <div
         ref={drawerRef}
-        className="fixed right-0 top-0 bottom-0 w-full sm:w-[400px] bg-[#11100D] border-l border-[#2B2821] z-50 flex flex-col shadow-[0_0_80px_rgba(0,0,0,0.9)] animate-in slide-in-from-right duration-300"
+        className="fixed right-0 top-0 bottom-0 w-full sm:w-[400px] bg-white/[0.02] border-l border-white/10 z-50 flex flex-col shadow-[0_0_80px_rgba(0,0,0,0.9)] animate-in slide-in-from-right duration-300"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-[#2B2821] bg-[#0e0c09]">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 bg-[#0e0c09]">
           <div className="flex items-center gap-3">
-            <ShoppingCart size={16} className="text-[#E7D7BE]" />
-            <h2 className="text-[13px] font-bold uppercase tracking-[0.15em] text-[#F7EBDD]">
+            <ShoppingCart size={16} className="text-white" />
+            <h2 className="text-[13px] font-bold uppercase tracking-[0.15em] text-white">
               Cart
             </h2>
             {items.length > 0 && (
-              <span className="text-[10px] font-mono text-[#B4AA99] bg-[#211F1A] border border-[#3B372F] px-2 py-0.5 rounded-full">
+              <span className="text-[10px] font-mono text-white/60 bg-white/[0.05] border border-white/20 px-2 py-0.5 rounded-full">
                 {items.length} {items.length === 1 ? 'item' : 'items'}
               </span>
             )}
           </div>
           <button
             onClick={() => setIsOpen(false)}
-            className="w-8 h-8 flex items-center justify-center text-[#B4AA99] hover:text-[#F7EBDD] hover:bg-white/[0.04] rounded-lg transition-colors"
+            className="w-8 h-8 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors"
           >
             <X size={16} />
           </button>
@@ -93,10 +93,10 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
         <div className="flex-1 overflow-y-auto py-4 custom-scrollbar">
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
-              <div className="w-16 h-16 rounded-full bg-[#171511] border border-[#2B2821] flex items-center justify-center">
-                <ShoppingCart size={22} className="text-[#6E685B]" />
+              <div className="w-16 h-16 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center">
+                <ShoppingCart size={22} className="text-white/30" />
               </div>
-              <p className="text-[12px] text-[#9B9282] leading-relaxed">
+              <p className="text-[12px] text-white/40 leading-relaxed">
                 No beats in your cart yet.<br />Click a price to add one.
               </p>
             </div>
@@ -105,14 +105,14 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
               {items.map((item) => (
                 <li
                   key={item.id}
-                  className="flex items-start gap-3 p-3 rounded-xl bg-[#171511] border border-[#2B2821] group"
+                  className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/10 group"
                 >
                   {/* Cover */}
-                  <div className="w-11 h-11 rounded-lg overflow-hidden bg-[#211F1A] border border-[#3B372F] shrink-0">
+                  <div className="w-11 h-11 rounded-lg overflow-hidden bg-white/[0.05] border border-white/20 shrink-0">
                     {item.track.cover_url ? (
                       <img src={item.track.cover_url} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
+                      <div className="w-full h-full flex items-center justify-center text-white/30">
                         <Music size={14} />
                       </div>
                     )}
@@ -124,12 +124,12 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded font-bold ${
                         item.license.is_exclusive
-                          ? 'text-[#E7D7BE] bg-[#E7D7BE]/10 border border-[#E7D7BE]/20'
-                          : 'text-[#D0C3AF] bg-[#2B2821] border border-[#3B372F]'
+                          ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/'
+                          : 'text-white/80 bg-white/20 border border-white/20'
                       }`}>
                         {item.license.name}
                       </span>
-                      <span className="text-[9px] font-mono text-[#9B9282]">
+                      <span className="text-[9px] font-mono text-white/40">
                         {item.license.file_types.join(' · ')}
                       </span>
                     </div>
@@ -137,12 +137,12 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
 
                   {/* Price + Remove */}
                   <div className="flex flex-col items-end gap-2">
-                    <span className="text-[13px] font-mono font-bold text-[#F3E6D1] tabular-nums">
+                    <span className="text-[13px] font-mono font-bold text-white tabular-nums">
                       ${item.license.price_usd.toLocaleString()}
                     </span>
                     <button
                       onClick={() => removeItem(item.id)}
-                      className="opacity-0 group-hover:opacity-100 text-[#6E685B] hover:text-red-400 transition-all"
+                      className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-red-400 transition-all"
                     >
                       <Trash2 size={11} />
                     </button>
@@ -155,10 +155,10 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
 
         {/* Footer */}
         {items.length > 0 && (
-          <div className="border-t border-[#2B2821] px-6 py-6 space-y-4 bg-[#0e0c09]">
+          <div className="border-t border-white/10 px-6 py-6 space-y-4 bg-[#0e0c09]">
             {/* Total */}
             <div className="flex items-baseline justify-between">
-              <span className="text-[11px] font-mono uppercase tracking-wider text-[#B4AA99]">Total</span>
+              <span className="text-[11px] font-mono uppercase tracking-wider text-white/60">Total</span>
               <span className="text-2xl font-mono font-bold text-white tabular-nums">
                 ${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
@@ -166,7 +166,7 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
 
             {/* Email */}
             <div className="space-y-2">
-              <label className="text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] flex items-center gap-1.5">
+              <label className="text-[10px] font-mono uppercase tracking-wider text-white/60 flex items-center gap-1.5">
                 <Mail size={10} />
                 Email for license delivery
               </label>
@@ -175,7 +175,7 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(null); }}
                 placeholder="you@example.com"
-                className="w-full bg-[#11100D] border border-[#2B2821] focus:border-[#E7D7BE]/40 rounded-lg py-2.5 px-3 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] outline-none transition-colors"
+                className="w-full bg-white/[0.02] border border-white/10 focus:border-white/ rounded-lg py-2.5 px-3 text-[12px] text-white placeholder:text-white/30 outline-none transition-colors"
               />
               {error && (
                 <p className="text-[11px] text-red-400 leading-tight">{error}</p>
@@ -186,7 +186,7 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
             <button
               onClick={handleCheckout}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-[#E7D7BE] text-black text-[12px] font-bold uppercase tracking-widest hover:bg-[#F3E6D1] active:scale-[0.98] transition-all disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-white text-black text-[12px] font-bold uppercase tracking-widest hover:bg-white active:scale-[0.98] transition-all disabled:opacity-50"
             >
               {loading ? (
                 <Loader2 size={14} className="animate-spin" />
@@ -200,7 +200,7 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
 
             <button
               onClick={clearCart}
-              className="w-full text-[10px] font-mono uppercase tracking-wider text-[#6E685B] hover:text-[#B4AA99] transition-colors py-1"
+              className="w-full text-[10px] font-mono uppercase tracking-wider text-white/30 hover:text-white/60 transition-colors py-1"
             >
               Clear cart
             </button>

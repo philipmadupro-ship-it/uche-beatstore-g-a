@@ -21,7 +21,7 @@ export function AddEventModal({ onClose, onSuccess, initialDate }: AddEventModal
     date: initialDate ? initialDate.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
     type: 'release',
     notes: '',
-    color: '#E7D7BE'
+    color: '#FFFFFF'
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -101,7 +101,7 @@ export function AddEventModal({ onClose, onSuccess, initialDate }: AddEventModal
             Color palette
           </p>
           <div className="flex gap-2">
-            {['#E7D7BE', '#4CAF50', '#FF9800', '#F44336', '#2196F3'].map((c) => (
+            {['#FFFFFF', '#4CAF50', '#FF9800', '#F44336', '#2196F3'].map((c) => (
               <button
                 key={c}
                 type="button"

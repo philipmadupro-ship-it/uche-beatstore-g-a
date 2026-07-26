@@ -203,28 +203,28 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
         <div className="relative p-6 border-b border-white/[0.04] overflow-hidden">
           <div
             className="absolute -top-16 -left-16 w-44 h-44 rounded-full pointer-events-none opacity-25"
-            style={{ background: 'radial-gradient(circle, #E7D7BE 0%, transparent 70%)' }}
+            style={{ background: 'radial-gradient(circle, #FFFFFF 0%, transparent 70%)' }}
           />
           <div className="relative z-10 flex items-start gap-4">
-            <div className="w-14 h-14 bg-[#211F1A] rounded-xl overflow-hidden shrink-0 border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
+            <div className="w-14 h-14 bg-white/[0.05] rounded-xl overflow-hidden shrink-0 border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
               {coverUrl ? (
                 <img loading="lazy" src={coverUrl} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#837B6D] font-black text-xl uppercase bg-gradient-to-br from-[#342F27] to-[#090907]">
+                <div className="w-full h-full flex items-center justify-center text-white/40 font-black text-xl uppercase bg-gradient-to-br from-white/10 to-[#090907]">
                   {contentTitle.charAt(0)}
                 </div>
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold text-[#F3E6D1] uppercase tracking-[0.2em] mb-1">{CONTENT_LABELS[contentType]}</p>
+              <p className="text-[10px] font-bold text-white uppercase tracking-[0.2em] mb-1">{CONTENT_LABELS[contentType]}</p>
               <h2 className="text-[18px] font-medium text-white truncate">{contentTitle}</h2>
-              <p className="text-[11px] text-[#B4AA99] mt-1">
+              <p className="text-[11px] text-white/60 mt-1">
                 Create a link with a specific permission level. Each recipient can get their own.
               </p>
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[#B4AA99] hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.12] transition-colors backdrop-blur-sm"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-black bg-white font-semibold shadow-md hover:bg-white/90/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.12] transition-colors backdrop-blur-sm"
             >
               <X size={14} />
             </button>
@@ -232,11 +232,11 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="p-6 border-b border-[#2B2821] space-y-5">
-            <p className="text-[10px] font-bold text-[#D0C3AF] uppercase tracking-[0.2em]">New link</p>
+          <div className="p-6 border-b border-white/10 space-y-5">
+            <p className="text-[10px] font-bold text-white/80 uppercase tracking-[0.2em]">New link</p>
 
             <div>
-              <p className="text-[10px] text-[#B4AA99] uppercase tracking-wider mb-2">Audience</p>
+              <p className="text-[10px] text-white/60 uppercase tracking-wider mb-2">Audience</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {([
                   { key: 'client',   label: 'Client / A&R',  help: 'Bio + curated tracks + license card' },
@@ -251,12 +251,12 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                       onClick={() => setRecipientKind(k.key)}
                       className={`flex flex-col gap-1 px-3 py-3 rounded-lg border text-left transition-all ${
                         active
-                          ? 'bg-[#342F27] border-[#C9BCA8] text-[#F3E6D1]'
-                          : 'bg-[#090907] border-[#211F1A] text-[#D0C3AF] hover:border-[#3B372F]'
+                          ? 'bg-white/10 border-white/50 text-white'
+                          : 'bg-[#090907] border-white/10 text-white/80 hover:border-white/20'
                       }`}
                     >
                       <span className="text-[11px] font-medium">{k.label}</span>
-                      <span className="text-[9px] text-[#9B9282] leading-tight">{k.help}</span>
+                      <span className="text-[9px] text-white/40 leading-tight">{k.help}</span>
                     </button>
                   );
                 })}
@@ -264,7 +264,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
             </div>
 
             <div>
-              <p className="text-[10px] text-[#B4AA99] uppercase tracking-wider mb-2">Permission</p>
+              <p className="text-[10px] text-white/60 uppercase tracking-wider mb-2">Permission</p>
               <div className="grid grid-cols-3 gap-2">
                 {(['viewer', 'commenter', 'editor'] as const).map((r) => {
                   const Icon = ROLE_INFO[r].icon;
@@ -275,13 +275,13 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                       onClick={() => setRole(r)}
                       className={`flex flex-col gap-1 px-3 py-3 rounded-lg border text-left transition-all ${
                         active
-                          ? 'bg-[#342F27] border-[#C9BCA8] text-[#F3E6D1]'
-                          : 'bg-[#090907] border-[#211F1A] text-[#D0C3AF] hover:border-[#3B372F]'
+                          ? 'bg-white/10 border-white/50 text-white'
+                          : 'bg-[#090907] border-white/10 text-white/80 hover:border-white/20'
                       }`}
                     >
                       <Icon size={13} />
                       <span className="text-[11px] font-medium">{ROLE_INFO[r].label}</span>
-                      <span className="text-[9px] text-[#9B9282] leading-tight">{ROLE_INFO[r].help}</span>
+                      <span className="text-[9px] text-white/40 leading-tight">{ROLE_INFO[r].help}</span>
                     </button>
                   );
                 })}
@@ -315,7 +315,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Password"
-                  className="w-full bg-[#090907] border border-[#211F1A] rounded-md px-3 py-2 text-[12px] text-white placeholder:text-[#837B6D] focus:outline-none focus:border-[#C9BCA8]"
+                  className="w-full bg-[#090907] border border-white/10 rounded-md px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50"
                 />
               )}
               <ToggleRow
@@ -335,23 +335,23 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                     { value: '14', label: '14 days' },
                     { value: '30', label: '30 days' },
                   ]}
-                  className="w-full bg-[#090907] border border-[#211F1A] rounded-md px-3 py-2 text-xs text-white focus:outline-none focus:border-[#C9BCA8]"
+                  className="w-full bg-[#090907] border border-white/10 rounded-md px-3 py-2 text-xs text-white focus:outline-none focus:border-white/50"
                 />
               )}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="text-[10px] text-[#B4AA99] uppercase tracking-wider mb-1">Recipient (label)</p>
+                <p className="text-[10px] text-white/60 uppercase tracking-wider mb-1">Recipient (label)</p>
                 <input
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
                   placeholder="e.g. Label A&R"
-                  className="w-full bg-[#090907] border border-[#211F1A] rounded-md px-3 py-2 text-[11px] text-white placeholder:text-[#837B6D] focus:outline-none focus:border-[#C9BCA8]"
+                  className="w-full bg-[#090907] border border-white/10 rounded-md px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50"
                 />
               </div>
               <div>
-                <p className="text-[10px] text-[#B4AA99] uppercase tracking-wider mb-1 flex items-center gap-1">
+                <p className="text-[10px] text-white/60 uppercase tracking-wider mb-1 flex items-center gap-1">
                   <Mail size={9} /> Email (optional)
                 </p>
                 <input
@@ -359,32 +359,32 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                   value={invitedEmail}
                   onChange={(e) => setInvitedEmail(e.target.value)}
                   placeholder="them@example.com"
-                  className="w-full bg-[#090907] border border-[#211F1A] rounded-md px-3 py-2 text-[11px] text-white placeholder:text-[#837B6D] focus:outline-none focus:border-[#C9BCA8]"
+                  className="w-full bg-[#090907] border border-white/10 rounded-md px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50"
                 />
               </div>
             </div>
 
             {generatedUrl ? (
               <div className="space-y-3">
-                <div className="flex items-center gap-2 bg-white/[0.02] border border-[#C9BCA8]/30 rounded-xl px-3 py-2.5 backdrop-blur-sm">
-                  <Link2 size={12} className="text-[#F3E6D1] shrink-0" />
+                <div className="flex items-center gap-2 bg-white/[0.02] border border-white/ rounded-xl px-3 py-2.5 backdrop-blur-sm">
+                  <Link2 size={12} className="text-white shrink-0" />
                   <input
                     readOnly
                     value={generatedUrl}
-                    className="flex-1 bg-transparent text-[11px] text-[#F7EBDD] font-mono focus:outline-none truncate"
+                    className="flex-1 bg-transparent text-[11px] text-white font-mono focus:outline-none truncate"
                   />
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => doCopy(generatedUrl)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-[#F7EBDD] active:scale-[0.98] transition-all"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-white active:scale-[0.98] transition-all"
                   >
                     {copied ? <Check size={13} /> : <Copy size={13} />}
                     {copied ? 'Copied' : 'Copy link'}
                   </button>
                   <button
                     onClick={() => setGeneratedUrl(null)}
-                    className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-[#F7EBDD] text-[12px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors"
+                    className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-white text-[12px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors"
                   >
                     Create another
                   </button>
@@ -394,7 +394,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
               <button
                 onClick={generateLink}
                 disabled={generating}
-                className="w-full bg-white hover:bg-[#F7EBDD] disabled:opacity-40 text-black text-[12px] font-medium py-3 rounded-full transition-all active:scale-[0.99] flex items-center justify-center gap-2"
+                className="w-full bg-white hover:bg-white disabled:opacity-40 text-black text-[12px] font-medium py-3 rounded-full transition-all active:scale-[0.99] flex items-center justify-center gap-2"
               >
                 {generating ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
                 Generate link
@@ -403,15 +403,15 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
           </div>
 
           <div className="p-6">
-            <p className="text-[10px] font-bold text-[#D0C3AF] uppercase tracking-[0.2em] mb-3">
-              Active links {shares.length > 0 && <span className="text-[#9B9282]">({shares.length})</span>}
+            <p className="text-[10px] font-bold text-white/80 uppercase tracking-[0.2em] mb-3">
+              Active links {shares.length > 0 && <span className="text-white/40">({shares.length})</span>}
             </p>
             {loadingShares ? (
               <div className="flex items-center justify-center py-6">
-                <Loader2 size={14} className="animate-spin text-[#837B6D]" />
+                <Loader2 size={14} className="animate-spin text-white/40" />
               </div>
             ) : shares.length === 0 ? (
-              <p className="text-[11px] text-[#9B9282] py-3">No shares yet — generate one above.</p>
+              <p className="text-[11px] text-white/40 py-3">No shares yet — generate one above.</p>
             ) : (
               <div className="space-y-2">
                 {shares.map((s) => {
@@ -424,24 +424,24 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                     <div
                       key={s.id}
                       className={`group flex items-center gap-3 px-3 py-2.5 rounded-md border ${
-                        revoked || expired ? 'bg-[#090907] border-[#161616] opacity-50' : 'bg-[#090907] border-[#211F1A] hover:border-[#3B372F]'
+                        revoked || expired ? 'bg-[#090907] border-[#161616] opacity-50' : 'bg-[#090907] border-white/10 hover:border-white/20'
                       } transition-all`}
                     >
-                      <div className="w-7 h-7 rounded bg-[#342F27] border border-[#C9BCA8]/30 flex items-center justify-center shrink-0">
+                      <div className="w-7 h-7 rounded bg-white/10 border border-white/ flex items-center justify-center shrink-0">
                         <Icon size={11} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-medium text-[#F7EBDD] truncate">
+                          <span className="text-[11px] font-medium text-white truncate">
                             {s.label || s.invited_email || 'Untitled link'}
                           </span>
-                          <span className="text-[8px] font-bold text-[#F3E6D1] bg-[#342F27] border border-[#C9BCA8]/40 rounded px-1.5 py-0.5 uppercase">
+                          <span className="text-[8px] font-bold text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/ rounded px-1.5 py-0.5 uppercase">
                             {ROLE_INFO[s.role].label}
                           </span>
                           {revoked && <span className="text-[8px] text-red-400 uppercase">Revoked</span>}
                           {expired && !revoked && <span className="text-[8px] text-yellow-500 uppercase">Expired</span>}
                         </div>
-                        <p className="text-[9px] font-mono text-[#9B9282] mt-0.5 truncate">
+                        <p className="text-[9px] font-mono text-white/40 mt-0.5 truncate">
                           {s.plays} {s.plays === 1 ? 'play' : 'plays'} · created {fmtDate(s.created_at)}
                           {s.expires_at ? ` · expires ${fmtDate(s.expires_at)}` : ''}
                         </p>
@@ -449,14 +449,14 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => doCopy(url)}
-                          className="p-1.5 rounded text-[#B4AA99] hover:text-white hover:bg-[#211F1A]"
+                          className="p-1.5 rounded text-white/60 hover:text-white hover:bg-white/[0.05]"
                           title="Copy link"
                         >
                           <Copy size={11} />
                         </button>
                         <button
                           onClick={() => toggleDownloads(s)}
-                          className={`p-1.5 rounded hover:bg-[#211F1A] transition-colors ${s.allow_downloads ? 'text-[#E7D7BE]' : 'text-[#837B6D]'}`}
+                          className={`p-1.5 rounded hover:bg-white/[0.05] transition-colors ${s.allow_downloads ? 'text-white' : 'text-white/40'}`}
                           title={s.allow_downloads ? 'Downloads allowed — click to disable' : 'Downloads disabled — click to enable'}
                         >
                           <Download size={11} />
@@ -464,7 +464,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                         {contentType === 'project' && s.invited_email && !revoked && (
                           <button
                             onClick={() => sendInvite(s)}
-                            className="p-1.5 rounded text-[#B4AA99] hover:text-[#E7D7BE] hover:bg-[#211F1A]"
+                            className="p-1.5 rounded text-white/60 hover:text-white hover:bg-white/[0.05]"
                             title={`Email this link to ${s.invited_email}`}
                           >
                             <Send size={11} />
@@ -473,7 +473,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                         {!revoked && (
                           <button
                             onClick={() => revokeShare(s)}
-                            className="p-1.5 rounded text-[#B4AA99] hover:text-red-400 hover:bg-[#211F1A]"
+                            className="p-1.5 rounded text-white/60 hover:text-red-400 hover:bg-white/[0.05]"
                             title="Revoke link"
                           >
                             <Trash2 size={11} />
@@ -497,14 +497,14 @@ function ToggleRow({ icon, label, active, onToggle }: { icon: React.ReactNode; l
     <button
       onClick={onToggle}
       className={`w-full flex items-center justify-between px-3 py-2 rounded-md border transition-colors ${
-        active ? 'bg-[#342F27] border-[#C9BCA8]/40 text-[#F3E6D1]' : 'bg-[#090907] border-[#211F1A] text-[#D0C3AF] hover:border-[#3B372F]'
+        active ? 'bg-white/10 border-white/ text-white' : 'bg-[#090907] border-white/10 text-white/80 hover:border-white/20'
       }`}
     >
       <span className="flex items-center gap-2 text-[11px] font-medium">
         {icon}
         {label}
       </span>
-      <span className={`text-[9px] font-mono uppercase tracking-wider ${active ? 'text-[#F3E6D1]' : 'text-[#9B9282]'}`}>
+      <span className={`text-[9px] font-mono uppercase tracking-wider ${active ? 'text-white' : 'text-white/40'}`}>
         {active ? 'ON' : 'OFF'}
       </span>
     </button>

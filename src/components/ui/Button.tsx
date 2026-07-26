@@ -22,13 +22,13 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'bg-[var(--text-primary)] text-[#090907] border-transparent hover:bg-white shadow-[0_12px_36px_rgba(232,220,200,0.12)]',
+    'relative overflow-hidden bg-white/15 text-white border border-white/25 hover:bg-white/25 hover:border-white/40 backdrop-blur-xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.25),_0_4px_12px_rgba(0,0,0,0.2)]',
   accent:
-    'bg-[var(--accent)] text-[#090907] border-transparent hover:bg-[var(--accent-light)] shadow-[0_12px_36px_rgba(231,215,190,0.16)]',
+    'relative overflow-hidden bg-white/10 text-white border border-white/20 hover:bg-white/20 hover:border-white/35 backdrop-blur-xl shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),_0_4px_12px_rgba(0,0,0,0.15)]',
   secondary:
-    'bg-[var(--bg-card)] text-[var(--text-primary)] border-[var(--border)] hover:border-[var(--border-hover)] hover:bg-[var(--bg-hover)]',
+    'relative overflow-hidden bg-white/[0.04] text-white border border-white/10 hover:border-white/20 hover:bg-white/[0.08] backdrop-blur-lg shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]',
   ghost:
-    'bg-transparent text-[var(--text-readable)] border-transparent hover:bg-white/[0.04] hover:text-[var(--text-primary)]',
+    'bg-transparent text-white/70 border-transparent hover:bg-white/[0.06] hover:text-white',
   danger:
     'bg-[#2a1111] text-[#ffb7a8] border-[#5a241c] hover:bg-[#381612] hover:border-[#7a3428]',
 };

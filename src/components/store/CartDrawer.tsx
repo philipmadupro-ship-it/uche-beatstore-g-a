@@ -98,10 +98,10 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
             </div>
           )}
           <div className="flex items-center justify-between">
-            <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#B4AA99]">Total</span>
+            <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/60">Total</span>
             {bundleQualifies ? (
               <span className="flex items-baseline gap-2">
-                <span className="text-[11px] font-mono text-[#9B9282] line-through tabular-nums">${total.toLocaleString()}</span>
+                <span className="text-[11px] font-mono text-white/40 line-through tabular-nums">${total.toLocaleString()}</span>
                 <span className="text-[18px] font-bold text-white tabular-nums">${bundleTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
               </span>
             ) : (
@@ -113,14 +113,14 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
             value={buyerEmail}
             onChange={(e) => setBuyerEmail(e.target.value)}
             placeholder="Your email for the license"
-            className="w-full rounded-lg border border-white/[0.08] bg-[#090907] px-3 py-2.5 text-[11px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:border-white/[0.16] focus:outline-none"
+            className="w-full rounded-lg border border-white/[0.08] bg-[#090907] px-3 py-2.5 text-[11px] text-white placeholder:text-white/40 focus:border-white/[0.16] focus:outline-none"
           />
           <input
             type="text"
             value={promoCode}
             onChange={(e) => setPromoCode(e.target.value)}
             placeholder="Promo code"
-            className="w-full rounded-lg border border-white/[0.08] bg-[#090907] px-3 py-2.5 text-[11px] uppercase text-[#F7EBDD] placeholder:text-[#9B9282] focus:border-white/[0.16] focus:outline-none"
+            className="w-full rounded-lg border border-white/[0.08] bg-[#090907] px-3 py-2.5 text-[11px] uppercase text-white placeholder:text-white/40 focus:border-white/[0.16] focus:outline-none"
           />
           <label
             htmlFor="cart-license-terms"
@@ -131,14 +131,14 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
               type="checkbox"
               checked={termsAccepted}
               onChange={(e) => setTermsAccepted(e.target.checked)}
-              className="mt-0.5 size-4 shrink-0 accent-[#E7D7BE]"
+              className="mt-0.5 size-4 shrink-0 accent-white"
             />
             <span className="min-w-0">
-              <span className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">
+              <span className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-white/80">
                 <FileText size={10} aria-hidden="true" />
                 License terms
               </span>
-              <span className="mt-1 block text-[9px] leading-relaxed text-[#9B9282]">
+              <span className="mt-1 block text-[9px] leading-relaxed text-white/40">
                 I understand each beat is delivered digitally under the selected license tier, and exclusive availability is verified again at checkout.
               </span>
             </span>
@@ -152,14 +152,14 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
             <ShoppingCart size={13} />
             Checkout
           </Button>
-          <p className="text-[9px] text-[#9B9282] text-center font-mono">
+          <p className="text-[9px] text-white/40 text-center font-mono">
             Secure checkout via Stripe
           </p>
         </div>
       )}
     >
       {items.length === 0 ? (
-        <div className="text-center py-16 text-[#9B9282] text-[11px]">Cart empty</div>
+        <div className="text-center py-16 text-white/40 text-[11px]">Cart empty</div>
       ) : (
         <ul className="space-y-2">
           {items.map((i) => (
@@ -167,20 +167,20 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
               key={i.id}
               className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.05]"
             >
-              <div className="relative w-10 h-10 rounded bg-[#090907] border border-[#2B2821] overflow-hidden shrink-0">
+              <div className="relative w-10 h-10 rounded bg-[#090907] border border-white/10 overflow-hidden shrink-0">
                 {i.track.cover_url
                   ? <CoverImage src={i.track.cover_url} sizes="40px" className="object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={14} /></div>}
+                  : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={14} /></div>}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-medium text-[#F7EBDD] truncate">{i.track.title}</p>
-                <p className="text-[9px] font-mono text-[#B4AA99] uppercase tracking-wider mt-0.5">
+                <p className="text-[11px] font-medium text-white truncate">{i.track.title}</p>
+                <p className="text-[9px] font-mono text-white/60 uppercase tracking-wider mt-0.5">
                   {i.license.name} · ${i.license.price_usd.toLocaleString()}
                 </p>
               </div>
               <button
                 onClick={() => removeItem(i.id)}
-                className="tap flex size-9 shrink-0 items-center justify-center rounded-full text-[#B4AA99] transition-colors hover:bg-white/[0.06] hover:text-red-400"
+                className="tap flex size-9 shrink-0 items-center justify-center rounded-full text-white/60 transition-colors hover:bg-white/[0.06] hover:text-red-400"
                 aria-label={`Remove ${i.track.title} from cart`}
               >
                 <X size={13} />
@@ -206,7 +206,7 @@ export function FloatingCartButton() {
   return (
     <button
       onClick={() => setIsOpen(true)}
-      className={`fixed bottom-[7rem] sm:bottom-[8rem] right-4 sm:right-6 z-[70] flex items-center gap-2 px-4 py-2.5 rounded-full bg-[#E7D7BE] hover:bg-[#F3E6D1] text-black shadow-lg shadow-black/40 transition-all ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+      className={`fixed bottom-[7rem] sm:bottom-[8rem] right-4 sm:right-6 z-[70] flex items-center gap-2 px-4 py-2.5 rounded-full bg-white hover:bg-white text-black shadow-lg shadow-black/40 transition-all ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
     >
       <ShoppingCart size={14} />
       <span className="text-[11px] font-bold uppercase tracking-wider">

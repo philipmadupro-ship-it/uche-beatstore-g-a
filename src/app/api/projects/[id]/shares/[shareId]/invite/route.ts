@@ -154,24 +154,24 @@ function renderInviteHtml(opts: {
     ? `<p style="font-size:11px;color:#7a6d54;margin:8px 0 0;">Link expires ${new Date(opts.expiresAt).toLocaleDateString()}</p>`
     : '';
   const downloadsLine = opts.allowDownloads
-    ? '<span style="color:#E7D7BE">· Downloads enabled</span>'
-    : '<span style="color:#B4AA99">· Downloads off</span>';
+    ? '<span style="color:#FFFFFF">· Downloads enabled</span>'
+    : '<span style="color:#AAAAAA">· Downloads off</span>';
 
   return `
-  <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#090907;color:#F7EBDD;padding:40px 24px;">
-    <table style="max-width:520px;margin:0 auto;background:#171511;border:1px solid #2B2821;border-radius:16px;overflow:hidden;">
+  <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#090907;color:#FFFFFF;padding:40px 24px;">
+    <table style="max-width:520px;margin:0 auto;background:#111111;border:1px solid #222222;border-radius:16px;overflow:hidden;">
       <tr><td style="padding:32px;">
-        <p style="font-size:11px;color:#E7D7BE;text-transform:uppercase;letter-spacing:0.25em;margin:0 0 12px;">You've been invited</p>
+        <p style="font-size:11px;color:#FFFFFF;text-transform:uppercase;letter-spacing:0.25em;margin:0 0 12px;">You've been invited</p>
         <h1 style="font-size:22px;font-weight:600;margin:0 0 6px;color:#fff;">${safeProject}</h1>
-        <p style="font-size:13px;color:#D0C3AF;margin:0 0 18px;">
-          Role: <strong style="color:#F3E6D1;">${roleBadge}</strong> ${downloadsLine}
+        <p style="font-size:13px;color:#CCCCCC;margin:0 0 18px;">
+          Role: <strong style="color:#FFFFFF;">${roleBadge}</strong> ${downloadsLine}
         </p>
-        ${safeMessage ? `<div style="font-size:14px;line-height:1.6;color:#ccc;background:#090907;border-left:2px solid #C9BCA8;padding:14px 18px;border-radius:6px;margin:0 0 24px;">${safeMessage}</div>` : ''}
-        <a href="${opts.shareUrl}" style="display:inline-block;background:#E7D7BE;color:#fff;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;font-size:12px;">Open project</a>
+        ${safeMessage ? `<div style="font-size:14px;line-height:1.6;color:#ccc;background:#090907;border-left:2px solid #CCCCCC;padding:14px 18px;border-radius:6px;margin:0 0 24px;">${safeMessage}</div>` : ''}
+        <a href="${opts.shareUrl}" style="display:inline-block;background:#FFFFFF;color:#fff;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:700;text-transform:uppercase;letter-spacing:0.15em;font-size:12px;">Open project</a>
         ${expiresLine}
-        <p style="font-size:11px;color:#837B6D;margin:28px 0 0;">Or paste this link: <a href="${opts.shareUrl}" style="color:#E7D7BE;text-decoration:none;">${opts.shareUrl}</a></p>
+        <p style="font-size:11px;color:#777777;margin:28px 0 0;">Or paste this link: <a href="${opts.shareUrl}" style="color:#FFFFFF;text-decoration:none;">${opts.shareUrl}</a></p>
       </td></tr>
     </table>
-    <p style="text-align:center;font-size:10px;color:#837B6D;text-transform:uppercase;letter-spacing:0.3em;margin-top:24px;">U2C Beatstore</p>
+    <p style="text-align:center;font-size:10px;color:#777777;text-transform:uppercase;letter-spacing:0.3em;margin-top:24px;">U2C Beatstore</p>
   </div>`;
 }

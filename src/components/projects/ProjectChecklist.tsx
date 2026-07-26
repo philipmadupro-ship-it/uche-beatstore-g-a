@@ -62,25 +62,25 @@ export function ProjectChecklist({ projectId, items, onChanged }: Props) {
   const pct = items.length > 0 ? Math.round((done / items.length) * 100) : 0;
 
   return (
-    <div className="rounded-xl border border-[#2B2821] bg-[#171511] p-4">
+    <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <ClipboardList size={13} className="text-[#D0C3AF]" />
-          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">Checklist</span>
+          <ClipboardList size={13} className="text-white/80" />
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/80">Checklist</span>
           {items.length > 0 && (
-            <span className="text-[9px] font-mono text-[#6E685B]">{done}/{items.length}</span>
+            <span className="text-[9px] font-mono text-white/30">{done}/{items.length}</span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          {saving && <Loader2 size={11} className="animate-spin text-[#837B6D]" />}
+          {saving && <Loader2 size={11} className="animate-spin text-white/40" />}
           {/* Progress pill */}
           {items.length > 0 && (
-            <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full ${pct === 100 ? 'bg-[#6DC6A4]/15 text-[#6DC6A4]' : 'bg-[#211F1A] text-[#9B9282]'}`}>
+            <span className={`text-[9px] font-mono px-2 py-0.5 rounded-full ${pct === 100 ? 'bg-[#6DC6A4]/15 text-[#6DC6A4]' : 'bg-white/[0.05] text-white/40'}`}>
               {pct}%
             </span>
           )}
           <button onClick={() => setAdding((v) => !v)}
-            className="w-6 h-6 flex items-center justify-center rounded-full bg-[#211F1A] text-[#B4AA99] hover:text-[#F7EBDD] hover:bg-[#342F27] transition-colors">
+            className="w-6 h-6 flex items-center justify-center rounded-full bg-white/[0.05] text-white/60 hover:text-white hover:bg-white/10 transition-colors">
             <Plus size={12} />
           </button>
         </div>
@@ -88,13 +88,13 @@ export function ProjectChecklist({ projectId, items, onChanged }: Props) {
 
       {/* Progress bar */}
       {items.length > 0 && (
-        <div className="h-1 rounded-full bg-[#211F1A] mb-3 overflow-hidden">
+        <div className="h-1 rounded-full bg-white/[0.05] mb-3 overflow-hidden">
           <div className="h-full rounded-full bg-[#6DC6A4] transition-[width] duration-500" style={{ width: `${pct}%` }} />
         </div>
       )}
 
       {items.length === 0 && !adding && (
-        <p className="text-[10px] text-[#837B6D] leading-relaxed">
+        <p className="text-[10px] text-white/40 leading-relaxed">
           Track your production milestones — cover art, mix, mastering, upload, promotion…
         </p>
       )}
@@ -107,10 +107,10 @@ export function ProjectChecklist({ projectId, items, onChanged }: Props) {
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') addItem(); if (e.key === 'Escape') { setAdding(false); setDraft(''); } }}
             placeholder="Checklist item…"
-            className="flex-1 bg-[#11100D] border border-[#2B2821] rounded-md px-3 py-1.5 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
+            className="flex-1 bg-white/[0.02] border border-white/10 rounded-md px-3 py-1.5 text-[12px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20"
           />
           <button onClick={addItem} disabled={!draft.trim()}
-            className="px-3 py-1.5 rounded-md bg-[#E7D7BE] text-black text-[11px] font-bold hover:bg-[#F3E6D1] disabled:opacity-40">Add</button>
+            className="px-3 py-1.5 rounded-md bg-white text-black text-[11px] font-bold hover:bg-white disabled:opacity-40">Add</button>
         </div>
       )}
 
@@ -119,13 +119,13 @@ export function ProjectChecklist({ projectId, items, onChanged }: Props) {
           <div key={it.id} className="flex items-center gap-2.5 py-1 group">
             <button onClick={() => toggle(it.id)}
               className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                it.done ? 'bg-[#6DC6A4] border-[#6DC6A4]' : 'border-[#3B372F] hover:border-[#E7D7BE]/50'
+                it.done ? 'bg-[#6DC6A4] border-[#6DC6A4]' : 'border-white/20 hover:border-white/'
               }`}>
               {it.done && <Check size={10} className="text-black" />}
             </button>
-            <span className={`text-[12px] flex-1 ${it.done ? 'line-through text-[#837B6D]' : 'text-[#F7EBDD]'}`}>{it.label}</span>
+            <span className={`text-[12px] flex-1 ${it.done ? 'line-through text-white/40' : 'text-white'}`}>{it.label}</span>
             <button onClick={() => remove(it.id)}
-              className="opacity-0 group-hover:opacity-100 text-[#9B9282] hover:text-red-400 transition-all">
+              className="opacity-0 group-hover:opacity-100 text-white/40 hover:text-red-400 transition-all">
               <Trash2 size={11} />
             </button>
           </div>

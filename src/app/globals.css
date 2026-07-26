@@ -181,20 +181,20 @@
   --text-secondary: var(--dr-bone-200);
   --text-tertiary: var(--dr-beige-400);
   /* Readable floor for SMALL content text. The faded tertiary tints
-   * (#6E685B…#B4AA99) are part of the mood but fail WCAG AA on the dark
+   * (#555555…#AAAAAA) are part of the mood but fail WCAG AA on the dark
    * bg (1.5–3.8:1); use this (~5:1 on #090907) anywhere a user must read
    * the value, while leaving purely-decorative fades alone. */
-  --text-readable: #B4AA99;
+  --text-readable: #AAAAAA;
   /* Accent — champagne beige + two adjacents (lighter for hover/active,
    * dimmer for pressed/borders). */
   --accent: var(--brand-primary);
   --accent-light: var(--brand-primary-hover);
   --accent-dim: var(--brand-primary-active);
   --accent-tint: #2F2C25;
-  --star: #D6BE7A;
+  --star: #FFFFFF;
   /* Muted hint/placeholder/icon text — the canonical value for the dozens of
-   * ad-hoc `#9B9282` usages. Slightly above the decorative tertiary fades. */
-  --text-muted: #9B9282;
+   * ad-hoc `#777777` usages. Slightly above the decorative tertiary fades. */
+  --text-muted: #777777;
   --border: var(--border-default);
   --border-hover: var(--border-strong);
   /* Error states — previously bespoke per component (Field used #8d3a2f /
@@ -404,7 +404,7 @@ body {
 /* Keyboard users need a consistent indicator across the hand-rolled store
    controls. Component-specific rings can still override this baseline. */
 :where(a, button, input, textarea, select, summary):focus-visible {
-  outline: 2px solid var(--focus-ring, #D4BFA0);
+  outline: 2px solid var(--focus-ring, #FFFFFF);
   outline-offset: 3px;
 }
 
@@ -661,9 +661,9 @@ html {
 .skeleton-shimmer {
   background: linear-gradient(
     90deg,
-    #1A1813 25%,
+    #0E0E0E 25%,
     #2F2B23 50%,
-    #1A1813 75%
+    #0E0E0E 75%
   );
   background-size: 200% 100%;
   animation: skeletonShimmer 1.6s ease-in-out infinite;
@@ -703,12 +703,12 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2B2821;
+  background: #222222;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3B372F;
+  background: #333333;
 }
 
 /* Wavesurfer overrides */
@@ -731,7 +731,7 @@ input[type=range] {
 
 input[type=range]::-webkit-slider-runnable-track {
   height: 2px;
-  background: #2B2821;
+  background: #222222;
   border-radius: 1px;
 }
 
@@ -740,7 +740,7 @@ input[type=range]::-webkit-slider-thumb {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #F7EBDD;
+  background: #FFFFFF;
   margin-top: -4px;
   cursor: pointer;
 }

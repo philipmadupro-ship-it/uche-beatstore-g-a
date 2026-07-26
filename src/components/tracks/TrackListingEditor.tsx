@@ -334,27 +334,27 @@ export function TrackListingEditor({ track, onSaved }: Props) {
   return (
     <div className="mb-10">
       <div className="flex items-center gap-2 mb-3">
-        <Globe size={11} className={storeListed ? 'text-[#7F77DD]' : 'text-[#9B9282]'} />
-        <p className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">Storefront Publishing Hub</p>
+        <Globe size={11} className={storeListed ? 'text-[#7F77DD]' : 'text-white/40'} />
+        <p className="text-[10px] font-mono uppercase tracking-wider text-white/40">Storefront Publishing Hub</p>
       </div>
 
-      <div className="bg-[#171511] border border-[#2B2821] rounded-2xl shadow-xl relative overflow-hidden">
+      <div className="bg-white/[0.04] border border-white/10 rounded-2xl shadow-xl relative overflow-hidden">
         {storeListed && !exclusiveSold && (
           <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[#7F77DD] to-transparent" />
         )}
 
         {/* ── Header: status + publish/relist ── */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-[#2B2821]">
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-white/10">
           <div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[#F7EBDD]">Beatstore Status</h3>
-            <p className="text-[9px] font-mono text-[#9B9282] uppercase tracking-widest mt-0.5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-white">Beatstore Status</h3>
+            <p className="text-[9px] font-mono text-white/40 uppercase tracking-widest mt-0.5">
               {exclusiveSold ? '◆ Exclusive Sold' : storeListed ? '✓ Live on Storefront' : '○ Draft Mode (Offline)'}
             </p>
           </div>
           <div className="flex items-center gap-3">
             {storeListed && !exclusiveSold && (
               <a href={`/store/${track.id}`} target="_blank" rel="noopener noreferrer"
-                className="text-[9px] font-mono uppercase tracking-widest text-[#B4AA99] hover:text-[#F7EBDD] underline underline-offset-2 transition-colors">
+                className="text-[9px] font-mono uppercase tracking-widest text-white/60 hover:text-white underline underline-offset-2 transition-colors">
                 View live ↗
               </a>
             )}
@@ -370,7 +370,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
             ) : (
               <>
                 <span className={`text-[10px] font-mono uppercase tracking-widest px-2.5 py-1 rounded-full font-bold border ${
-                  storeListed ? 'text-[#AFA9EC] bg-[#1a1833] border-[#534AB7]' : 'text-[#9B9282] bg-[#11100D] border-[#211F1A]'
+                  storeListed ? 'text-[#AFA9EC] bg-[#1a1833] border-[#534AB7]' : 'text-white/40 bg-white/[0.02] border-white/10'
                 }`}>
                   {storeListed ? 'Published' : 'Draft'}
                 </span>
@@ -379,7 +379,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
                   disabled={saving === 'store_listed'}
                   title={!storeListed && !canPublish ? 'Set a price before publishing' : undefined}
                   className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ${
-                    storeListed ? 'bg-[#7F77DD]' : !canPublish ? 'bg-[#2B2821] opacity-60' : 'bg-[#2B2821]'
+                    storeListed ? 'bg-[#7F77DD]' : !canPublish ? 'bg-white/20 opacity-60' : 'bg-white/20'
                   }`}
                 >
                   <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
@@ -393,9 +393,9 @@ export function TrackListingEditor({ track, onSaved }: Props) {
 
         {/* ── Readiness checklist ── */}
         {!exclusiveSold && (
-          <div className="px-5 py-3 border-b border-[#2B2821] bg-[#11100D]/40">
+          <div className="px-5 py-3 border-b border-white/10 bg-white/[0.02]/40">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
+              <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40">
                 Listing readiness · {readyCount}/{checks.length}
               </span>
               {!canPublish && (
@@ -414,7 +414,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
                       ? 'text-[#6DC6A4] bg-[#6DC6A4]/8 border-[#6DC6A4]/25'
                       : c.required
                         ? 'text-amber-500 bg-amber-500/8 border-amber-500/25'
-                        : 'text-[#9B9282] bg-transparent border-[#2B2821]',
+                        : 'text-white/40 bg-transparent border-white/10',
                   )}
                 >
                   {c.ok ? <Check size={9} /> : <X size={9} />}
@@ -425,31 +425,31 @@ export function TrackListingEditor({ track, onSaved }: Props) {
 
             {/* Schedule a drop — only while in draft */}
             {!storeListed && (
-              <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-[#211F1A]">
-                <Calendar size={11} className="text-[#B4AA99]" />
+              <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-white/10">
+                <Calendar size={11} className="text-white/60" />
                 {scheduledAt ? (
                   <>
                     <span className="text-[10px] font-mono text-[#AFA9EC]">
                       Scheduled · {new Date(scheduledAt).toLocaleString()}
                     </span>
                     <button onClick={clearSchedule} disabled={saving === 'scheduled_publish_at'}
-                      className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F7EBDD] flex items-center gap-1">
+                      className="text-[9px] font-mono uppercase tracking-wider text-white/60 hover:text-white flex items-center gap-1">
                       <X size={9} /> Clear
                     </button>
                   </>
                 ) : (
                   <>
-                    <span className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">Schedule drop</span>
+                    <span className="text-[9px] font-mono uppercase tracking-wider text-white/40">Schedule drop</span>
                     <input
                       type="datetime-local"
                       value={scheduleInput}
                       onChange={(e) => setScheduleInput(e.target.value)}
-                      className="bg-[#090907] border border-[#2B2821] rounded-md px-2 py-1 text-[10px] text-[#F7EBDD] focus:outline-none focus:border-[#C9BCA8] font-mono"
+                      className="bg-[#090907] border border-white/10 rounded-md px-2 py-1 text-[10px] text-white focus:outline-none focus:border-white/50 font-mono"
                     />
                     <button
                       onClick={scheduleDrop}
                       disabled={!scheduleInput || saving === 'scheduled_publish_at'}
-                      className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded-md bg-[#342F27] border border-[#C9BCA8]/40 text-[#F3E6D1] hover:bg-[#332b1d] transition-colors disabled:opacity-40"
+                      className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded-md bg-white/10 border border-white/ text-white hover:bg-[#332b1d] transition-colors disabled:opacity-40"
                     >
                       Set
                     </button>
@@ -462,17 +462,17 @@ export function TrackListingEditor({ track, onSaved }: Props) {
 
         <div className="p-5 space-y-3">
           {/* ── Pricing & licensing (with resolved-price preview) ── */}
-          <Section id="pricing" title="Pricing & Licensing" icon={<DollarSign size={11} className="text-[#D0C3AF]" />}
+          <Section id="pricing" title="Pricing & Licensing" icon={<DollarSign size={11} className="text-white/80" />}
             summary={priceLabel} open={openSections.has('pricing')} onToggle={() => toggleSection('pricing')}>
-            <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg bg-[#100d09] border border-[#211F1A]">
-              <span className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">Buyers see</span>
-              <span className="text-[12px] font-mono font-bold text-[#F3E6D1]">{priceLabel}</span>
+            <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg bg-[#100d09] border border-white/10">
+              <span className="text-[9px] font-mono uppercase tracking-wider text-white/40">Buyers see</span>
+              <span className="text-[12px] font-mono font-bold text-white">{priceLabel}</span>
               {bundleNote && <span className="text-[9px] font-mono text-[#6DC6A4]">{bundleNote}</span>}
             </div>
 
             {licenseRows.length > 0 ? (
               <div className="space-y-1">
-                <p className="text-[9px] font-mono text-[#6E685B] pb-1">
+                <p className="text-[9px] font-mono text-white/30 pb-1">
                   All tiers enabled by default. Disable to hide from the product page or set a price override.
                 </p>
                 {licenseRows.map((row) => (
@@ -482,9 +482,9 @@ export function TrackListingEditor({ track, onSaved }: Props) {
               </div>
             ) : (
               <div className="space-y-1">
-                <p className="text-[9px] font-mono text-[#6E685B] pb-1">
+                <p className="text-[9px] font-mono text-white/30 pb-1">
                   No license tiers yet.{' '}
-                  <a href="/settings/licenses" className="text-[#D0C3AF] hover:text-[#E7D7BE] underline underline-offset-2 transition-colors">Create tiers in Settings →</a>
+                  <a href="/settings/licenses" className="text-white/80 hover:text-white underline underline-offset-2 transition-colors">Create tiers in Settings →</a>
                   {' '}Until then, set per-track price overrides below.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
@@ -500,7 +500,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
           </Section>
 
           {/* ── Description ── */}
-          <Section id="description" title="Description" icon={<FileText size={11} className="text-[#D0C3AF]" />}
+          <Section id="description" title="Description" icon={<FileText size={11} className="text-white/80" />}
             summary={description.trim() ? `${description.trim().length} chars` : 'Empty'} open={openSections.has('description')} onToggle={() => toggleSection('description')}>
             <div className="flex justify-end mb-1.5">
               <SaveStateChip state={saving === 'description' ? 'saving' : recentlySaved === 'description' ? 'saved' : 'idle'} />
@@ -512,25 +512,25 @@ export function TrackListingEditor({ track, onSaved }: Props) {
               rows={3}
               maxLength={5000}
               placeholder="Describe the vibe, mood, references, usage terms…"
-              className="w-full bg-[#11100D] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] transition-colors resize-none leading-relaxed"
+              className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2.5 text-[12px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 transition-colors resize-none leading-relaxed"
             />
           </Section>
 
           {/* ── Cover Art ── */}
-          <Section id="cover" title="Cover Art" icon={<ImageIcon size={11} className="text-[#D0C3AF]" />}
+          <Section id="cover" title="Cover Art" icon={<ImageIcon size={11} className="text-white/80" />}
             summary={coverUrlInput ? 'Set' : 'Recommended'} open={openSections.has('cover')} onToggle={() => toggleSection('cover')}>
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
               <div onClick={() => fileInputRef.current?.click()}
-                className="w-16 h-16 rounded-lg bg-[#1A1813] border border-[#2B2821] overflow-hidden shrink-0 cursor-pointer hover:border-[#E7D7BE]/40 transition-colors relative group">
+                className="w-16 h-16 rounded-lg bg-[#0E0E0E] border border-white/10 overflow-hidden shrink-0 cursor-pointer hover:border-white/ transition-colors relative group">
                 {coverUrlInput ? (
                   <NextImage src={coverUrlInput} alt="" fill sizes="64px" className="object-cover" />
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-[#6E685B] gap-0.5">
+                  <div className="w-full h-full flex flex-col items-center justify-center text-white/30 gap-0.5">
                     <ImageIcon size={16} /><span className="text-[8px] font-mono uppercase">Upload</span>
                   </div>
                 )}
                 {imageUploading ? (
-                  <div className="absolute inset-0 bg-black/70 flex items-center justify-center"><Loader2 size={14} className="animate-spin text-[#E7D7BE]" /></div>
+                  <div className="absolute inset-0 bg-black/70 flex items-center justify-center"><Loader2 size={14} className="animate-spin text-white" /></div>
                 ) : (
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><Upload size={12} className="text-white" /></div>
                 )}
@@ -538,38 +538,38 @@ export function TrackListingEditor({ track, onSaved }: Props) {
               <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleImageUpload} />
               <div className="flex-1 min-w-0 space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-[#B4AA99]">Cover Art</span>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-white/60">Cover Art</span>
                   {coverUrlInput
                     ? <span className="text-[9px] text-[#6DC6A4] font-mono">✓ Set</span>
                     : <span className="text-[9px] text-amber-500 font-mono flex items-center gap-1"><AlertTriangle size={9} /> Recommended</span>}
                 </div>
                 <input type="url" value={coverUrlInput} onChange={(e) => setCoverUrlInput(e.target.value)}
                   onBlur={(e) => persistIfChanged('cover_url', e.target.value)} placeholder="Paste URL or click thumbnail to upload…"
-                  className="w-full bg-[#090907] border border-[#2B2821] rounded-md px-3 py-1.5 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] transition-colors" />
+                  className="w-full bg-[#090907] border border-white/10 rounded-md px-3 py-1.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 transition-colors" />
               </div>
             </div>
           </Section>
 
           {/* ── BPM & Key ── */}
-          <Section id="meta" title="BPM & Key" icon={<Activity size={11} className="text-[#D0C3AF]" />}
+          <Section id="meta" title="BPM & Key" icon={<Activity size={11} className="text-white/80" />}
             summary={`${bpmInput || '—'} bpm · ${keyInput || '—'} ${scaleInput}`} open={openSections.has('meta')} onToggle={() => toggleSection('meta')}>
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mb-1 block">BPM</label>
+                <label className="text-[9px] font-mono uppercase tracking-wider text-white/40 mb-1 block">BPM</label>
                 <input type="number" value={bpmInput} onChange={(e) => setBpmInput(e.target.value)} onBlur={(e) => persistIfChanged('bpm', e.target.value)}
                   placeholder={track.bpm != null ? String(track.bpm) : '—'}
-                  className="w-full bg-[#090907] border border-[#2B2821] rounded-md px-2.5 py-1.5 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] transition-colors font-mono" />
+                  className="w-full bg-[#090907] border border-white/10 rounded-md px-2.5 py-1.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 transition-colors font-mono" />
               </div>
               <div>
-                <label className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mb-1 block">Key</label>
+                <label className="text-[9px] font-mono uppercase tracking-wider text-white/40 mb-1 block">Key</label>
                 <input type="text" value={keyInput} onChange={(e) => setKeyInput(e.target.value)} onBlur={(e) => persistIfChanged('key', e.target.value)}
                   placeholder={track.key ?? '—'}
-                  className="w-full bg-[#090907] border border-[#2B2821] rounded-md px-2.5 py-1.5 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] transition-colors font-mono uppercase" />
+                  className="w-full bg-[#090907] border border-white/10 rounded-md px-2.5 py-1.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 transition-colors font-mono uppercase" />
               </div>
               <div>
-                <label className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] mb-1 block">Scale</label>
+                <label className="text-[9px] font-mono uppercase tracking-wider text-white/40 mb-1 block">Scale</label>
                 <select value={scaleInput} onChange={(e) => { setScaleInput(e.target.value); persist('scale', e.target.value); }}
-                  className="w-full bg-[#090907] border border-[#2B2821] rounded-md px-2.5 py-1.5 text-[11px] text-[#F7EBDD] focus:outline-none focus:border-[#C9BCA8] transition-colors font-mono">
+                  className="w-full bg-[#090907] border border-white/10 rounded-md px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:border-white/50 transition-colors font-mono">
                   <option value="minor">Minor</option>
                   <option value="major">Major</option>
                 </select>
@@ -578,7 +578,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
           </Section>
 
           {/* ── Merchandising & distribution ── */}
-          <Section id="merch" title="Merchandising & Distribution" icon={<Globe size={11} className="text-[#D0C3AF]" />}
+          <Section id="merch" title="Merchandising & Distribution" icon={<Globe size={11} className="text-white/80" />}
             summary={[featured && 'Pick', voiceTag && 'Tagged', freeDownload && 'Free'].filter(Boolean).join(' · ') || 'How it appears on /store'}
             open={openSections.has('merch')} onToggle={() => toggleSection('merch')}>
             <div className="space-y-3">
@@ -586,21 +586,21 @@ export function TrackListingEditor({ track, onSaved }: Props) {
                 on={freeDownload} onColor="bg-[#6DC6A4]" busy={saving === 'free_download_enabled'}
                 onToggle={async () => { const next = !freeDownload; setFreeDownload(next); await persist('free_download_enabled', next); toast.success(next ? 'Free download enabled.' : 'Free download disabled.'); }} />
               <ToggleRow label="Featured pick" hint="Highlight in the storefront's Picks row (must be published)."
-                on={featured} onColor="bg-[#E7D7BE]" busy={saving === 'store_featured'}
+                on={featured} onColor="bg-white" busy={saving === 'store_featured'}
                 onToggle={async () => { const next = !featured; setFeatured(next); await persist('store_featured', next); toast.success(next ? 'Marked as a featured pick.' : 'Removed from picks.'); }} />
               <ToggleRow label="Voice tag on preview" hint="Overlay your producer tag on the store preview to deter rips. Clean file still delivers on purchase."
                 on={voiceTag} onColor="bg-[#9d95e8]" busy={saving === 'voice_tag_enabled'}
                 onToggle={async () => { const next = !voiceTag; setVoiceTag(next); await persist('voice_tag_enabled', next); toast.success(next ? 'Voice tag enabled on preview.' : 'Voice tag disabled.'); }} />
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-[11px] font-medium text-[#F7EBDD]">Store sort order</p>
-                  <p className="text-[9px] font-mono text-[#9B9282] mt-0.5">Lower shows first. Blank = default (newest).</p>
+                  <p className="text-[11px] font-medium text-white">Store sort order</p>
+                  <p className="text-[9px] font-mono text-white/40 mt-0.5">Lower shows first. Blank = default (newest).</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <input type="number" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)}
                     onBlur={(e) => { if (e.target.value !== (track.store_sort_order != null ? String(track.store_sort_order) : '')) persist('store_sort_order', e.target.value); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} placeholder="—"
-                    className="w-20 bg-[#090907] border border-[#2B2821] rounded-md px-2.5 py-1.5 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] transition-colors font-mono text-center" />
+                    className="w-20 bg-[#090907] border border-white/10 rounded-md px-2.5 py-1.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 transition-colors font-mono text-center" />
                   <SaveStateChip state={saving === 'store_sort_order' ? 'saving' : recentlySaved === 'store_sort_order' ? 'saved' : 'idle'} />
                 </div>
               </div>
@@ -624,13 +624,13 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl bg-[#11100D] border border-[#211F1A] overflow-hidden">
+    <div className="rounded-xl bg-white/[0.02] border border-white/10 overflow-hidden">
       <button onClick={onToggle} className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-white/[0.015] transition-colors" aria-expanded={open} data-section={id}>
         {icon}
-        <span className="text-[10px] font-mono uppercase tracking-wider text-[#B4AA99]">{title}</span>
-        {summary && <span className="text-[9px] font-mono text-[#6E685B] truncate hidden sm:inline">· {summary}</span>}
+        <span className="text-[10px] font-mono uppercase tracking-wider text-white/60">{title}</span>
+        {summary && <span className="text-[9px] font-mono text-white/30 truncate hidden sm:inline">· {summary}</span>}
         <div className="flex-1" />
-        <ChevronDown size={13} className={cn('text-[#9B9282] transition-transform', open && 'rotate-180')} />
+        <ChevronDown size={13} className={cn('text-white/40 transition-transform', open && 'rotate-180')} />
       </button>
       {open && <div className="px-4 pb-4">{children}</div>}
     </div>
@@ -662,7 +662,7 @@ function LicenseTierRow({
         disabled={saving}
         onClick={() => onChange(!row.enabled, priceOverride)}
         className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-150 ${
-          row.enabled ? 'bg-[#7F77DD]' : 'bg-[#2B2821]'
+          row.enabled ? 'bg-[#7F77DD]' : 'bg-white/20'
         }`}
         aria-label={row.enabled ? 'Disable tier' : 'Enable tier'}
       >
@@ -672,30 +672,30 @@ function LicenseTierRow({
       </button>
 
       <div className="flex-1 min-w-0">
-        <span className="text-[11px] font-medium text-[#F7EBDD]">{row.name}</span>
-        <span className="ml-2 text-[9px] font-mono text-[#9B9282]">${row.price_usd} base</span>
+        <span className="text-[11px] font-medium text-white">{row.name}</span>
+        <span className="ml-2 text-[9px] font-mono text-white/40">${row.price_usd} base</span>
         {/* Deliverable hint — what the buyer actually downloads for this tier. */}
-        <span className="ml-1.5 text-[8px] font-mono uppercase tracking-wider text-[#B4AA99]">
+        <span className="ml-1.5 text-[8px] font-mono uppercase tracking-wider text-white/60">
           {row.is_exclusive ? 'WAV + stems' : 'MP3'}
         </span>
         {row.is_exclusive && (
-          <span className="ml-1.5 text-[8px] font-mono uppercase tracking-wider text-[#E7D7BE] bg-[#E7D7BE]/10 px-1 py-0.5 rounded">Excl</span>
+          <span className="ml-1.5 text-[8px] font-mono uppercase tracking-wider text-black bg-white font-semibold shadow-md hover:bg-white/90/10 px-1 py-0.5 rounded">Excl</span>
         )}
       </div>
 
       <div className="relative w-24 shrink-0">
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] text-[#6E685B] pointer-events-none">$</span>
+        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[9px] text-white/30 pointer-events-none">$</span>
         <input
           type="number" min={0} step="0.01" value={priceOverride}
           onChange={(e) => setPriceOverride(e.target.value)}
           onBlur={() => { if (row.enabled || priceOverride !== '') onChange(row.enabled, priceOverride); }}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
           placeholder="Base price"
-          className="w-full bg-[#090907] border border-[#2B2821] rounded-md pl-5 pr-2 py-1 text-[10px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] font-mono transition-colors"
+          className="w-full bg-[#090907] border border-white/10 rounded-md pl-5 pr-2 py-1 text-[10px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 font-mono transition-colors"
         />
       </div>
 
-      {saving ? <Loader2 size={10} className="animate-spin text-[#9B9282] shrink-0" /> : <div className="w-[10px] shrink-0" />}
+      {saving ? <Loader2 size={10} className="animate-spin text-white/40 shrink-0" /> : <div className="w-[10px] shrink-0" />}
     </div>
   );
 }
@@ -714,18 +714,18 @@ function PriceInput({
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <label className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">{label}</label>
+        <label className="text-[9px] font-mono uppercase tracking-wider text-white/40">{label}</label>
         <SaveStateChip state={saving ? 'saving' : saved ? 'saved' : 'idle'} />
       </div>
       <div className="relative">
-        <DollarSign size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6E685B] pointer-events-none" />
+        <DollarSign size={10} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
         <input
           type="number" min={0} step="0.01" value={value}
           onChange={(e) => onChange(e.target.value)}
           onBlur={(e) => onCommit(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
           placeholder={placeholder}
-          className="w-full bg-[#090907] border border-[#2B2821] rounded-md pl-7 pr-2.5 py-1.5 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] transition-colors font-mono"
+          className="w-full bg-[#090907] border border-white/10 rounded-md pl-7 pr-2.5 py-1.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 transition-colors font-mono"
         />
       </div>
     </div>
@@ -745,14 +745,14 @@ function ToggleRow({
   return (
     <div className="flex items-center justify-between gap-4">
       <div className="min-w-0">
-        <p className="text-[11px] font-medium text-[#F7EBDD]">{label}</p>
-        <p className="text-[9px] font-mono text-[#9B9282] mt-0.5 leading-relaxed">{hint}</p>
+        <p className="text-[11px] font-medium text-white">{label}</p>
+        <p className="text-[9px] font-mono text-white/40 mt-0.5 leading-relaxed">{hint}</p>
       </div>
       <button
         onClick={onToggle}
         disabled={busy}
         className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none disabled:opacity-60 ${
-          on ? onColor : 'bg-[#2B2821]'
+          on ? onColor : 'bg-white/20'
         }`}
         aria-pressed={on}
       >
@@ -768,7 +768,7 @@ function SaveStateChip({ state }: { state: 'idle' | 'saving' | 'saved' }) {
   if (state === 'idle') return null;
   if (state === 'saving') {
     return (
-      <span className="text-[8px] font-mono text-[#B4AA99] flex items-center gap-0.5">
+      <span className="text-[8px] font-mono text-white/60 flex items-center gap-0.5">
         <Loader2 size={8} className="animate-spin" /> Saving
       </span>
     );

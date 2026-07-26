@@ -80,7 +80,7 @@ export default function RootLayout({
       </head>
       <body
         suppressHydrationWarning
-        className="font-sans bg-[#090907] text-[#F7EBDD] min-h-screen selection:bg-[#E7D7BE] selection:text-white"
+        className="font-sans bg-[#090907] text-white min-h-screen selection:bg-white selection:text-white"
       >
         <QueryProvider>
           {children}

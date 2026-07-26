@@ -547,7 +547,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   // ── states ──────────────────────────────────────────────────────────
   if (loading) return (
     <div className="min-h-screen bg-[#090907] flex items-center justify-center">
-      <Loader2 size={20} className="animate-spin text-[#837B6D]" />
+      <Loader2 size={20} className="animate-spin text-white/40" />
     </div>
   );
 
@@ -555,22 +555,22 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     <div className="min-h-screen bg-[#090907] flex items-center justify-center p-6">
       <form onSubmit={handleUnlock} className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#171511] border border-[#211F1A] flex items-center justify-center">
-            <Lock size={16} className="text-[#9B9282]" />
+          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center">
+            <Lock size={16} className="text-white/40" />
           </div>
           <h1 className="text-[18px] font-medium text-white mb-1">Password required</h1>
-          <p className="text-[12px] text-[#9B9282]">This shared project is protected</p>
+          <p className="text-[12px] text-white/40">This shared project is protected</p>
         </div>
         <input
           type="password" value={password} onChange={(e) => setPassword(e.target.value)}
           placeholder="Enter password"
-          className="w-full bg-[#171511] border border-[#211F1A] rounded-lg px-4 py-3 text-[13px] text-white placeholder:text-[#837B6D] focus:outline-none focus:border-[#3B372F] mb-3"
+          className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-4 py-3 text-[13px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 mb-3"
           autoFocus
         />
         {passwordError && <p className="text-[11px] text-red-400 mb-3">{passwordError}</p>}
         <button
           type="submit" disabled={unlocking || !password}
-          className="w-full bg-white text-black py-3 rounded-lg text-[12px] font-medium hover:bg-[#F7EBDD] disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+          className="w-full bg-white text-black py-3 rounded-lg text-[12px] font-medium hover:bg-white disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
         >
           {unlocking ? <Loader2 size={13} className="animate-spin" /> : null}
           Unlock
@@ -584,7 +584,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
       <div className="text-center max-w-sm">
         <Shield size={28} className="text-red-400 mx-auto mb-4" />
         <h1 className="text-[18px] font-medium text-white mb-2">Link unavailable</h1>
-        <p className="text-[12px] text-[#9B9282]">{error}</p>
+        <p className="text-[12px] text-white/40">{error}</p>
       </div>
     </div>
   );
@@ -600,7 +600,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] max-w-[90vw] sm:max-w-md px-5 py-3 rounded-full border backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] flex items-center gap-3 animate-in slide-in-from-top-4 fade-in duration-300 ${
             purchaseBanner === 'success'
               ? 'bg-[#0e1f17]/95 border-[#6DC6A4]/30 text-[#9fe5c1]'
-              : 'bg-[#1f1410]/95 border-[#C9BCA8]/30 text-[#F3E6D1]'
+              : 'bg-[#1f1410]/95 border-white/ text-white'
           }`}
         >
           {purchaseBanner === 'success' ? (
@@ -612,7 +612,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
             </>
           ) : (
             <>
-              <XIcon size={14} className="text-[#D0C3AF] shrink-0" />
+              <XIcon size={14} className="text-white/80 shrink-0" />
               <span className="text-[12px] font-medium">Checkout cancelled.</span>
             </>
           )}
@@ -755,14 +755,14 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   return (
     <>
     {purchaseBannerNode}
-    <div className="min-h-screen bg-[#090907] text-[#F7EBDD] flex flex-col">
+    <div className="min-h-screen bg-[#090907] text-white flex flex-col">
       {/* Header */}
-      <header className="px-4 sm:px-8 py-5 border-b border-[#1A1813] flex items-center justify-between gap-3">
+      <header className="px-4 sm:px-8 py-5 border-b border-[#0E0E0E] flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-6 h-6 rounded-[5px] bg-white flex items-center justify-center shrink-0">
             <span className="text-[9px] font-black text-black">AG</span>
           </div>
-          <span className="text-[11px] font-medium tracking-[0.2em] uppercase text-[#D0C3AF] truncate">U2C Beatstore</span>
+          <span className="text-[11px] font-medium tracking-[0.2em] uppercase text-white/80 truncate">U2C Beatstore</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {share && <RoleBadge role={share.role} />}
@@ -773,22 +773,22 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         {/* Project header */}
         {project && (
           <div className="flex items-end gap-4 sm:gap-5">
-            <div className="w-16 h-16 sm:w-24 sm:h-24 bg-[#1A1813] rounded-xl overflow-hidden border border-[#211F1A] shrink-0">
+            <div className="w-16 h-16 sm:w-24 sm:h-24 bg-[#0E0E0E] rounded-xl overflow-hidden border border-white/10 shrink-0">
               {project.cover_url
                 ? <Image src={project.cover_url} alt="" width={96} height={96} className="w-full h-full object-cover" unoptimized />
-                : <div className="w-full h-full flex items-center justify-center text-[#6E685B] text-3xl font-black">{project.name.charAt(0)}</div>
+                : <div className="w-full h-full flex items-center justify-center text-white/30 text-3xl font-black">{project.name.charAt(0)}</div>
               }
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[10px] font-bold text-[#E7D7BE] uppercase tracking-[0.2em] mb-1">Project</p>
+                <p className="text-[10px] font-bold text-white uppercase tracking-[0.2em] mb-1">Project</p>
                 {share?.role === 'editor' && (
                   <button
                     onClick={() => setEditing((e) => !e)}
                     className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-md border transition-colors ${
                       editing
-                        ? 'bg-[#342F27] border-[#C9BCA8] text-[#F3E6D1]'
-                        : 'border-[#211F1A] text-[#D0C3AF] hover:text-white hover:border-[#3B372F]'
+                        ? 'bg-white/10 border-white/50 text-white'
+                        : 'border-white/10 text-white/80 hover:text-white hover:border-white/20'
                     }`}
                   >
                     <Pencil size={10} />
@@ -805,13 +805,13 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                     onChange={(e) => setDescDraft(e.target.value)}
                     placeholder="Project description (what is this, where is it going, what feedback are you after…)"
                     rows={3}
-                    className="w-full bg-[#090907] border border-[#211F1A] rounded-md px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#837B6D] focus:outline-none focus:border-[#C9BCA8] resize-none"
+                    className="w-full bg-[#090907] border border-white/10 rounded-md px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50 resize-none"
                   />
                   <div className="flex items-center gap-2">
                     <button
                       onClick={saveDescription}
                       disabled={savingDesc || descDraft === (project.description ?? '')}
-                      className="flex items-center gap-1.5 bg-[#E7D7BE] hover:bg-[#C9BCA8] disabled:opacity-40 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded transition-colors"
+                      className="flex items-center gap-1.5 bg-white hover:bg-white/80 disabled:opacity-40 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded transition-colors"
                     >
                       {savingDesc ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
                       Save
@@ -819,7 +819,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                     <button
                       onClick={() => { setDescDraft(project.description ?? ''); }}
                       disabled={descDraft === (project.description ?? '')}
-                      className="flex items-center gap-1.5 text-[10px] text-[#D0C3AF] hover:text-white px-3 py-1.5 rounded transition-colors disabled:opacity-40"
+                      className="flex items-center gap-1.5 text-[10px] text-white/80 hover:text-white px-3 py-1.5 rounded transition-colors disabled:opacity-40"
                     >
                       <XIcon size={10} />
                       Reset
@@ -828,7 +828,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                 </div>
               ) : (
                 project.description && (
-                  <p className="text-[12px] text-[#D0C3AF] mt-2 max-w-prose whitespace-pre-wrap">{project.description}</p>
+                  <p className="text-[12px] text-white/80 mt-2 max-w-prose whitespace-pre-wrap">{project.description}</p>
                 )
               )}
             </div>
@@ -837,22 +837,22 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
 
         {/* Player */}
         {activeTrack && (
-          <div className="bg-[#11100D] border border-[#211F1A] rounded-xl p-4 sm:p-6">
+          <div className="bg-white/[0.02] border border-white/10 rounded-xl p-4 sm:p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-[#1A1813] rounded border border-[#211F1A] overflow-hidden shrink-0">
+              <div className="w-10 h-10 bg-[#0E0E0E] rounded border border-white/10 overflow-hidden shrink-0">
                 {activeTrack.cover_url
                   ? <Image src={activeTrack.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized />
-                  : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={14} /></div>
+                  : <div className="w-full h-full flex items-center justify-center text-white/30"><Music size={14} /></div>
                 }
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[14px] font-medium text-white truncate">{activeTrack.title}</p>
-                <p className="text-[10px] font-mono text-[#9B9282] uppercase tracking-wider mt-0.5">
+                <p className="text-[10px] font-mono text-white/40 uppercase tracking-wider mt-0.5">
                   {activeTrack.type}{activeTrack.bpm ? ` · ${activeTrack.bpm} BPM` : ''}{activeTrack.key ? ` · ${activeTrack.key}${activeTrack.scale ? ' ' + activeTrack.scale : ''}` : ''}
                 </p>
               </div>
               {useDawCanvas && (
-                <span className="text-[9px] font-bold text-[#F3E6D1] bg-[#342F27] border border-[#C9BCA8]/40 rounded-full px-2.5 py-1 uppercase tracking-wider">
+                <span className="text-[9px] font-bold text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/ rounded-full px-2.5 py-1 uppercase tracking-wider">
                   DAW mode
                 </span>
               )}
@@ -908,7 +908,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
               {/* Track-level transport stays visible in DAW mode too —
                   PlayerCanvas only owns intra-track play/pause; switching
                   tracks is still the share-page's responsibility. */}
-              <button onClick={prevTrack} className="text-[#9B9282] hover:text-white transition-colors disabled:opacity-30" disabled={activeIndex === 0}>
+              <button onClick={prevTrack} className="text-white/40 hover:text-white transition-colors disabled:opacity-30" disabled={activeIndex === 0}>
                 <SkipBack size={14} fill="currentColor" />
               </button>
               {!useDawCanvas && (
@@ -916,7 +916,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                   {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
                 </button>
               )}
-              <button onClick={nextTrack} className="text-[#9B9282] hover:text-white transition-colors disabled:opacity-30" disabled={activeIndex === tracks.length - 1}>
+              <button onClick={nextTrack} className="text-white/40 hover:text-white transition-colors disabled:opacity-30" disabled={activeIndex === tracks.length - 1}>
                 <SkipForward size={14} fill="currentColor" />
               </button>
 
@@ -924,14 +924,14 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                   player is rendering. DAW mode shows them inside PlayerCanvas. */}
               {!useDawCanvas && (
                 <>
-                  <span className="text-[10px] font-mono text-[#9B9282] tabular-nums">{fmt(currentTime)}</span>
-                  <div className="flex-1 h-1 bg-[#211F1A] rounded-full">
-                    <div className="h-full bg-[#E7D7BE] rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+                  <span className="text-[10px] font-mono text-white/40 tabular-nums">{fmt(currentTime)}</span>
+                  <div className="flex-1 h-1 bg-white/[0.05] rounded-full">
+                    <div className="h-full bg-white rounded-full transition-all" style={{ width: `${progressPct}%` }} />
                   </div>
-                  <span className="text-[10px] font-mono text-[#9B9282] tabular-nums">{fmt(duration)}</span>
+                  <span className="text-[10px] font-mono text-white/40 tabular-nums">{fmt(duration)}</span>
 
-                  <div className="flex items-center gap-2 pl-3 border-l border-[#211F1A]">
-                    <button onClick={() => setMuted((m) => !m)} className="text-[#9B9282] hover:text-white" aria-label={muted ? 'Unmute' : 'Mute'}>
+                  <div className="flex items-center gap-2 pl-3 border-l border-white/10">
+                    <button onClick={() => setMuted((m) => !m)} className="text-white/40 hover:text-white" aria-label={muted ? 'Unmute' : 'Mute'}>
                       {muted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
                     </button>
                     <input
@@ -950,7 +950,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
               {share?.allow_downloads ? (
                 <button
                   onClick={() => downloadTrack(activeTrack)}
-                  className="flex items-center gap-1.5 text-[11px] font-medium text-[#D0C3AF] hover:text-white border border-[#211F1A] hover:border-[#3B372F] px-3 py-2 rounded-md transition-colors"
+                  className="flex items-center gap-1.5 text-[11px] font-medium text-white/80 hover:text-white border border-white/10 hover:border-white/20 px-3 py-2 rounded-md transition-colors"
                 >
                   <Download size={12} />
                   Download
@@ -958,7 +958,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
               ) : (
                 <div
                   title="The sender disabled downloads on this link."
-                  className="flex items-center gap-1.5 text-[11px] font-medium text-[#837B6D] border border-[#161616] px-3 py-2 rounded-md cursor-not-allowed"
+                  className="flex items-center gap-1.5 text-[11px] font-medium text-white/40 border border-[#161616] px-3 py-2 rounded-md cursor-not-allowed"
                 >
                   <Lock size={11} />
                   Downloads off
@@ -971,16 +971,16 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         {/* Tracklist */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-white/40">
               {tracks.length} track{tracks.length !== 1 ? 's' : ''}
             </p>
             {editing && share?.role === 'editor' && (
-              <p className="text-[10px] font-mono uppercase tracking-wider text-[#E7D7BE]">
+              <p className="text-[10px] font-mono uppercase tracking-wider text-white">
                 Reorder mode — use the arrows
               </p>
             )}
           </div>
-          <div className="border border-[#211F1A] rounded-lg divide-y divide-[#24211B]">
+          <div className="border border-white/10 rounded-lg divide-y divide-white/10">
             {tracks.map((t, i) => {
               const active = i === activeIndex;
               const canEdit = editing && share?.role === 'editor';
@@ -991,9 +991,9 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                   onClick={() => { if (!canEdit) selectTrack(i); }}
                   className={`group flex items-center gap-3 px-4 h-14 transition-colors ${
                     canEdit ? 'cursor-default' : 'cursor-pointer'
-                  } ${active ? 'bg-[#11100D]' : 'hover:bg-[#11100D]'} ${isMoving ? 'opacity-60' : ''}`}
+                  } ${active ? 'bg-white/[0.02]' : 'hover:bg-white/[0.02]'} ${isMoving ? 'opacity-60' : ''}`}
                 >
-                  <span className={`text-[11px] font-mono w-5 text-center ${active ? 'text-[#E7D7BE]' : 'text-[#6E685B]'}`}>{i + 1}</span>
+                  <span className={`text-[11px] font-mono w-5 text-center ${active ? 'text-white' : 'text-white/30'}`}>{i + 1}</span>
 
                   {/* Reorder arrows — visible only in editor mode. Stop propagation
                       so clicking them doesn't also fire the row's selectTrack. */}
@@ -1002,7 +1002,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                       <button
                         onClick={(e) => { e.stopPropagation(); moveTrack(t.id, -1); }}
                         disabled={i === 0 || !!reordering}
-                        className="p-0.5 text-[#B4AA99] hover:text-white disabled:opacity-20 disabled:cursor-not-allowed"
+                        className="p-0.5 text-white/60 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed"
                         title="Move up"
                       >
                         <ChevronUp size={12} />
@@ -1010,7 +1010,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                       <button
                         onClick={(e) => { e.stopPropagation(); moveTrack(t.id, 1); }}
                         disabled={i === tracks.length - 1 || !!reordering}
-                        className="p-0.5 text-[#B4AA99] hover:text-white disabled:opacity-20 disabled:cursor-not-allowed"
+                        className="p-0.5 text-white/60 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed"
                         title="Move down"
                       >
                         <ChevronDown size={12} />
@@ -1018,18 +1018,18 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                     </div>
                   )}
 
-                  <div className="w-7 h-7 bg-[#1A1813] rounded border border-[#211F1A] overflow-hidden shrink-0">
+                  <div className="w-7 h-7 bg-[#0E0E0E] rounded border border-white/10 overflow-hidden shrink-0">
                     {t.cover_url
                       ? <Image src={t.cover_url} alt="" width={28} height={28} className="w-full h-full object-cover" unoptimized />
-                      : <div className="w-full h-full flex items-center justify-center text-[#3B372F]"><Music size={11} /></div>
+                      : <div className="w-full h-full flex items-center justify-center text-white/30"><Music size={11} /></div>
                     }
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-[12px] font-medium truncate ${active ? 'text-[#F3E6D1]' : 'text-[#F7EBDD]'}`}>{t.title}</p>
-                    <p className="text-[9px] font-mono text-[#9B9282] mt-0.5">{t.type}{t.bpm ? ` · ${t.bpm}` : ''}</p>
+                    <p className={`text-[12px] font-medium truncate ${active ? 'text-white' : 'text-white'}`}>{t.title}</p>
+                    <p className="text-[9px] font-mono text-white/40 mt-0.5">{t.type}{t.bpm ? ` · ${t.bpm}` : ''}</p>
                   </div>
                   {t.duration_seconds && (
-                    <span className="text-[10px] font-mono text-[#9B9282] tabular-nums">{fmt(t.duration_seconds)}</span>
+                    <span className="text-[10px] font-mono text-white/40 tabular-nums">{fmt(t.duration_seconds)}</span>
                   )}
                 </div>
               );
@@ -1040,14 +1040,14 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         {/* Comments */}
         <section>
           <div className="flex items-center gap-2 mb-4">
-            <MessageSquare size={13} className="text-[#B4AA99]" />
-            <p className="text-[10px] font-bold text-[#D0C3AF] uppercase tracking-[0.2em]">
-              Comments {comments.length > 0 && <span className="text-[#9B9282]">({comments.length})</span>}
+            <MessageSquare size={13} className="text-white/60" />
+            <p className="text-[10px] font-bold text-white/80 uppercase tracking-[0.2em]">
+              Comments {comments.length > 0 && <span className="text-white/40">({comments.length})</span>}
             </p>
           </div>
 
           {comments.length === 0 ? (
-            <p className="text-[11px] text-[#9B9282] mb-4">
+            <p className="text-[11px] text-white/40 mb-4">
               {canComment ? 'No comments yet — be the first.' : 'No comments yet.'}
             </p>
           ) : (
@@ -1060,14 +1060,14 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                 const isRegionPinned = c.region_start != null && c.region_end != null;
                 const canSeek = isRegionPinned && c.track_id === activeTrack?.id;
                 return (
-                  <div key={c.id} className="bg-[#11100D] border border-[#211F1A] rounded-md px-4 py-3">
+                  <div key={c.id} className="bg-white/[0.02] border border-white/10 rounded-md px-4 py-3">
                     <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                      <span className="text-[11px] font-medium text-[#F7EBDD]">{c.author_name}</span>
-                      <span className="text-[9px] font-mono text-[#9B9282]">
+                      <span className="text-[11px] font-medium text-white">{c.author_name}</span>
+                      <span className="text-[9px] font-mono text-white/40">
                         {new Date(c.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                       </span>
                       {c.track_id && (
-                        <span className="text-[9px] font-mono text-[#B4AA99] bg-[#211F1A] rounded px-1.5 py-0.5">
+                        <span className="text-[9px] font-mono text-white/60 bg-white/[0.05] rounded px-1.5 py-0.5">
                           on {tracks.find((t) => t.id === c.track_id)?.title || 'track'}
                         </span>
                       )}
@@ -1086,8 +1086,8 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                           }}
                           className={`text-[9px] font-mono rounded px-1.5 py-0.5 inline-flex items-center gap-1 ${
                             canSeek
-                              ? 'bg-[#342F27] border border-[#C9BCA8]/40 text-[#F3E6D1] hover:bg-[#231f4a] hover:border-[#C9BCA8] cursor-pointer'
-                              : 'bg-[#211F1A] border border-[#211F1A] text-[#B4AA99] cursor-not-allowed'
+                              ? 'bg-white/10 border border-white/ text-white hover:bg-[#231f4a] hover:border-white/50 cursor-pointer'
+                              : 'bg-white/[0.05] border border-white/10 text-white/60 cursor-not-allowed'
                           } transition-colors`}
                           title={canSeek ? 'Jump to this region' : 'Switch to the pinned track to play this region'}
                         >
@@ -1104,19 +1104,19 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           )}
 
           {canComment ? (
-            <div className="bg-[#11100D] border border-[#211F1A] rounded-md p-4 space-y-2">
+            <div className="bg-white/[0.02] border border-white/10 rounded-md p-4 space-y-2">
               <input
                 value={authorName}
                 onChange={(e) => setAuthorName(e.target.value)}
                 placeholder="Your name"
-                className="w-full bg-[#090907] border border-[#211F1A] rounded px-3 py-2 text-[11px] text-white placeholder:text-[#837B6D] focus:outline-none focus:border-[#C9BCA8]"
+                className="w-full bg-[#090907] border border-white/10 rounded px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50"
               />
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder={`Leave feedback${activeTrack ? ` on ${activeTrack.title}` : ''}…`}
                 rows={3}
-                className="w-full bg-[#090907] border border-[#211F1A] rounded px-3 py-2 text-[12px] text-white placeholder:text-[#837B6D] focus:outline-none focus:border-[#C9BCA8] resize-none"
+                className="w-full bg-[#090907] border border-white/10 rounded px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50 resize-none"
               />
               {pinnedRegion && (
                 // Drag-to-create on the waveform sets a region pin for
@@ -1125,23 +1125,23 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                 <button
                   type="button"
                   onClick={() => setPinnedRegion(null)}
-                  className="flex items-center gap-2 w-full bg-[#342F27] border border-[#C9BCA8]/40 rounded px-3 py-1.5 text-[10px] font-mono text-[#F3E6D1] hover:bg-[#231f4a] transition-colors"
+                  className="flex items-center gap-2 w-full bg-white/10 border border-white/ rounded px-3 py-1.5 text-[10px] font-mono text-white hover:bg-[#231f4a] transition-colors"
                   title="Click to unpin this region"
                 >
                   <Play size={9} fill="currentColor" />
                   <span>Pinned to {fmt(pinnedRegion.start)} – {fmt(pinnedRegion.end)}</span>
-                  <span className="text-[#B4AA99] ml-auto">click to clear</span>
+                  <span className="text-white/60 ml-auto">click to clear</span>
                 </button>
               )}
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[9px] text-[#9B9282] min-w-0 truncate">
+                <p className="text-[9px] text-white/40 min-w-0 truncate">
                   {activeTrack ? `Will be pinned to ${activeTrack.title}` : 'Project-level comment'}
                   {pinnedRegion && ` · region ${fmt(pinnedRegion.start)}–${fmt(pinnedRegion.end)}`}
                 </p>
                 <button
                   onClick={submitComment}
                   disabled={posting || !authorName.trim() || !draft.trim()}
-                  className="flex items-center gap-1.5 bg-[#E7D7BE] hover:bg-[#C9BCA8] disabled:opacity-40 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded transition-colors shrink-0"
+                  className="flex items-center gap-1.5 bg-white hover:bg-white/80 disabled:opacity-40 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded transition-colors shrink-0"
                 >
                   {posting ? <Loader2 size={11} className="animate-spin" /> : <Send size={10} />}
                   Post
@@ -1149,7 +1149,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
               </div>
             </div>
           ) : (
-            <div className="bg-[#090907] border border-[#161616] rounded-md px-4 py-3 flex items-center gap-2 text-[#9B9282]">
+            <div className="bg-[#090907] border border-[#161616] rounded-md px-4 py-3 flex items-center gap-2 text-white/40">
               <Eye size={11} />
               <span className="text-[11px]">This link is view-only — the sender didn&apos;t enable comments.</span>
             </div>
@@ -1169,7 +1169,7 @@ function RoleBadge({ role }: { role: ShareInfo['role'] }) {
   } as const;
   const { icon: Icon, label } = map[role];
   return (
-    <span className="flex items-center gap-1.5 text-[10px] font-bold text-[#F3E6D1] bg-[#342F27] border border-[#C9BCA8]/40 rounded-full px-3 py-1.5 uppercase tracking-wider">
+    <span className="flex items-center gap-1.5 text-[10px] font-bold text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/ rounded-full px-3 py-1.5 uppercase tracking-wider">
       <Icon size={10} />
       {label}
     </span>

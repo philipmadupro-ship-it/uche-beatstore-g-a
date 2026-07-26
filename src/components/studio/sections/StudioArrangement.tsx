@@ -336,7 +336,7 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
     // Marker lines — colored vertical bars at each cut point. Painted
     // OVER the ruler so they always read as the dominant edit feature.
     if (duration > 0) {
-      ctx.fillStyle = '#E7D7BE';
+      ctx.fillStyle = '#FFFFFF';
       for (const m of markers) {
         const x = (m / duration) * ribbonWidth;
         ctx.fillRect(x - 0.5, 0, 1.5, height);
@@ -492,15 +492,15 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
   if (!url) return null;
 
   return (
-    <div className="border border-[#1A1813] rounded-lg p-5 bg-[#090907]">
+    <div className="border border-[#0E0E0E] rounded-lg p-5 bg-[#090907]">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
-          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#F7EBDD]">Arrangement</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white">Arrangement</p>
           {/* Save-state indicator — quiet by default, briefly flashes
               "Saved" 1.2s after each persist, lights up red on error.
               Keeps the user honest about whether their work is sticking. */}
           {saveState === 'saving' && (
-            <span className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99]">Saving…</span>
+            <span className="text-[9px] font-mono uppercase tracking-wider text-white/60">Saving…</span>
           )}
           {saveState === 'saved' && (
             <span className="text-[9px] font-mono uppercase tracking-wider text-[#6DC6A4]">Saved</span>
@@ -522,7 +522,7 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
               'flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider px-2.5 py-1.5 rounded-md border transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
               playArranged
                 ? 'bg-[#1a3a2a] border-[#6DC6A4]/50 text-[#8edfa8] hover:bg-[#1f4a36]'
-                : 'bg-[#171511] border-[#211F1A] text-[#B4AA99] hover:text-white hover:border-[#3B372F]',
+                : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20',
             )}
             title={
               markers.length === 0
@@ -537,7 +537,7 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
           <button
             onClick={splitAtPlayhead}
             disabled={duration <= 0}
-            className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider px-2.5 py-1.5 rounded-md bg-[#342F27] border border-[#C9BCA8]/30 text-[#F3E6D1] hover:bg-[#221d4a] hover:border-[#E7D7BE]/50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider px-2.5 py-1.5 rounded-md bg-white/10 border border-white/ text-white hover:bg-[#221d4a] hover:border-white/ disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             title="Split at playhead (S)"
           >
             <Scissors size={11} /> Split
@@ -545,7 +545,7 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
           <button
             onClick={resetAll}
             disabled={markers.length === 0 && effectiveOrder.length === clipsInTime.length}
-            className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider px-2.5 py-1.5 rounded-md bg-[#171511] border border-[#211F1A] text-[#B4AA99] hover:text-white hover:border-[#3B372F] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider px-2.5 py-1.5 rounded-md bg-white/[0.04] border border-white/10 text-white/60 hover:text-white hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             title="Clear all cuts"
           >
             <RotateCcw size={11} /> Reset
@@ -572,10 +572,10 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
       {/* Clip lane — drag-to-reorder list. Empty state shows the hint
           to use Split. */}
       {orderedClips.length <= 1 && markers.length === 0 ? (
-        <div className="text-center py-6 border border-dashed border-[#211F1A] rounded-md">
-          <p className="text-[10px] font-mono uppercase tracking-wider text-[#837B6D]">No cuts yet</p>
-          <p className="text-[10px] text-[#6E685B] mt-1">
-            Move the playhead and hit <span className="text-[#B4AA99]">Split</span> to slice this track.
+        <div className="text-center py-6 border border-dashed border-white/10 rounded-md">
+          <p className="text-[10px] font-mono uppercase tracking-wider text-white/40">No cuts yet</p>
+          <p className="text-[10px] text-white/30 mt-1">
+            Move the playhead and hit <span className="text-white/60">Split</span> to slice this track.
           </p>
         </div>
       ) : (
@@ -629,25 +629,25 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
                 onClick={() => onSeek(clip.sourceStart)}
                 className={cn(
                   'shrink-0 group relative rounded-lg overflow-hidden cursor-grab active:cursor-grabbing',
-                  'bg-gradient-to-br from-[#342F27] to-[#0a0820] border border-[#C9BCA8]/30',
-                  'hover:border-[#E7D7BE]/60 transition-colors',
+                  'bg-gradient-to-br from-white/10 to-[#0A0A0A] border border-white/',
+                  'hover:border-white/ transition-colors',
                 )}
                 style={{ width: widthPx, height: 72 }}
                 title={`Clip ${i + 1}: ${fmt(clip.sourceStart)} → ${fmt(clip.sourceEnd)}`}
               >
                 <ClipWaveform clip={clip} duration={duration} peaks={peaks} />
                 <div className="absolute inset-x-0 top-0 px-2 py-1 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent">
-                  <span className="text-[9px] font-mono uppercase tracking-wider text-[#F3E6D1]">#{i + 1}</span>
+                  <span className="text-[9px] font-mono uppercase tracking-wider text-white">#{i + 1}</span>
                   <button
                     onClick={(e) => { e.stopPropagation(); removeClip(clip.id); }}
-                    className="p-1 rounded text-[#B4AA99] hover:text-red-400 hover:bg-black/40 opacity-0 group-hover:opacity-100 transition-all"
+                    className="p-1 rounded text-white/60 hover:text-red-400 hover:bg-black/40 opacity-0 group-hover:opacity-100 transition-all"
                     title="Remove clip"
                   >
                     <Trash2 size={10} />
                   </button>
                 </div>
                 <div className="absolute inset-x-0 bottom-0 px-2 py-1 bg-gradient-to-t from-black/60 to-transparent">
-                  <span className="text-[9px] font-mono text-[#D0C3AF]">{fmt(len)}</span>
+                  <span className="text-[9px] font-mono text-white/80">{fmt(len)}</span>
                 </div>
                 {/* Right-edge trim handle. Hidden unless this clip has
                     a movable right marker (i.e. it isn't the last in
@@ -662,7 +662,7 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
                     className="absolute top-0 right-0 h-full w-2 cursor-ew-resize group/handle"
                     title={`Trim to ${fmt(rightMarker)}`}
                   >
-                    <div className="absolute right-0 top-0 h-full w-0.5 bg-[#E7D7BE]/60 group-hover/handle:bg-[#F3E6D1] transition-colors" />
+                    <div className="absolute right-0 top-0 h-full w-0.5 bg-white/60 group-hover/handle:bg-white transition-colors" />
                   </div>
                 )}
               </div>
@@ -671,7 +671,7 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
         </div>
       )}
 
-      <p className="text-[9px] text-[#6E685B] mt-3 leading-relaxed">
+      <p className="text-[9px] text-white/30 mt-3 leading-relaxed">
         Drag clips to reorder. Click a clip to seek the source track to its start. Edits persist per-track —
         playback still follows the source for now; rearranged playback lands next round.
       </p>

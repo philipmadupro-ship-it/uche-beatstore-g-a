@@ -50,10 +50,10 @@ export function StudioTransport({
   };
 
   return (
-    <div className="rounded-xl border border-[#1A1813] bg-[#0D0B09] p-3 sm:p-4">
+    <div className="rounded-xl border border-[#0E0E0E] bg-[#0D0B09] p-3 sm:p-4">
       {/* Scrub bar — luxury Slider primitive. Loop region renders as a
           translucent band underneath via absolute overlay. */}
-      <div className="flex items-center gap-3 text-[10px] font-mono text-[#D0C3AF]">
+      <div className="flex items-center gap-3 text-[10px] font-mono text-white/80">
         <span className="tabular-nums">{fmtTime(currentTime)}</span>
         <div className="flex-1 relative">
           {/* Loop region overlay — drawn beneath the slider but on top
@@ -61,7 +61,7 @@ export function StudioTransport({
               z-index ordering. */}
           {loopOn && duration > 0 && loopB > loopA && (
             <div
-              className="absolute top-1/2 -translate-y-1/2 h-2 bg-[#F3E6D1]/15 border border-[#E7D7BE]/40 rounded pointer-events-none z-0"
+              className="absolute top-1/2 -translate-y-1/2 h-2 bg-white/15 border border-white/ rounded pointer-events-none z-0"
               style={{
                 left: `${(loopA / duration) * 100}%`,
                 width: `${((loopB - loopA) / duration) * 100}%`,
@@ -112,8 +112,8 @@ export function StudioTransport({
             onClick={() => setPreservePitch((v) => !v)}
             className={`min-h-[54px] rounded-lg border px-2 py-2 text-[9px] font-mono uppercase tracking-[0.16em] transition-colors ${
               preservePitch
-                ? 'border-[#C9BCA8]/40 bg-[#342F27] text-[#F3E6D1]'
-                : 'border-[#211F1A] bg-[#1A1813] text-[#B4AA99] hover:text-white'
+                ? 'border-white/ bg-white/10 text-white'
+                : 'border-white/10 bg-[#0E0E0E] text-white/60 hover:text-white'
             }`}
           >
             Lock<br />
@@ -123,8 +123,8 @@ export function StudioTransport({
             onClick={toggleLoop}
             className={`flex min-h-[54px] items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[9px] font-mono uppercase tracking-[0.16em] transition-colors ${
               loopOn
-                ? 'border-[#C9BCA8]/40 bg-[#342F27] text-[#F3E6D1]'
-                : 'border-[#211F1A] bg-[#1A1813] text-[#B4AA99] hover:text-white'
+                ? 'border-white/ bg-white/10 text-white'
+                : 'border-white/10 bg-[#0E0E0E] text-white/60 hover:text-white'
             }`}
           >
             <Repeat size={10} /> Loop
@@ -135,7 +135,7 @@ export function StudioTransport({
       <button
         type="button"
         onClick={() => setShowLoopEditor((v) => !v)}
-        className="mt-3 flex w-full items-center justify-between rounded-lg border border-[#17130F] bg-[#090907] px-3 py-2 text-left text-[9px] font-mono uppercase tracking-[0.18em] text-[#837B6D] transition-colors hover:text-[#F3E6D1]"
+        className="mt-3 flex w-full items-center justify-between rounded-lg border border-[#17130F] bg-[#090907] px-3 py-2 text-left text-[9px] font-mono uppercase tracking-[0.18em] text-white/40 transition-colors hover:text-white"
       >
         <span>Loop points {loopOn ? `${fmtTime(loopA)} - ${fmtTime(loopB)}` : 'off'}</span>
         <ChevronDown size={12} className={`transition-transform ${showLoopEditor ? 'rotate-180' : ''}`} />
@@ -144,32 +144,32 @@ export function StudioTransport({
       {showLoopEditor && (
         <div className="mt-2 rounded-lg border border-[#17130F] bg-[#090907] p-3">
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_minmax(0,1fr)_52px_auto] sm:items-center">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">A</span>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-white/40">A</span>
             <Slider
               value={loopA}
               onChange={(v) => setLoopA(Math.min(v, loopB))}
               min={0} max={duration || 0} step={0.01}
-              accent="#F3E6D1" variant="studio"
+              accent='#FFFFFF' variant="studio"
               aria-label="Loop start"
             />
-            <span className="text-right text-[10px] font-mono tabular-nums text-[#D0C3AF]">{fmtTime(loopA)}</span>
+            <span className="text-right text-[10px] font-mono tabular-nums text-white/80">{fmtTime(loopA)}</span>
             <button
               onClick={() => setLoopA(currentTime)}
-              className="rounded-full border border-[#211F1A] px-2 py-1 text-[9px] font-mono uppercase text-[#9B9282] transition-colors hover:text-white"
+              className="rounded-full border border-white/10 px-2 py-1 text-[9px] font-mono uppercase text-white/40 transition-colors hover:text-white"
             >Set A</button>
 
-            <span className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">B</span>
+            <span className="text-[10px] font-mono uppercase tracking-wider text-white/40">B</span>
             <Slider
               value={loopB}
               onChange={(v) => setLoopB(Math.max(v, loopA))}
               min={0} max={duration || 0} step={0.01}
-              accent="#F3E6D1" variant="studio"
+              accent='#FFFFFF' variant="studio"
               aria-label="Loop end"
             />
-            <span className="text-right text-[10px] font-mono tabular-nums text-[#D0C3AF]">{fmtTime(loopB)}</span>
+            <span className="text-right text-[10px] font-mono tabular-nums text-white/80">{fmtTime(loopB)}</span>
             <button
               onClick={() => setLoopB(currentTime)}
-              className="rounded-full border border-[#211F1A] px-2 py-1 text-[9px] font-mono uppercase text-[#9B9282] transition-colors hover:text-white"
+              className="rounded-full border border-white/10 px-2 py-1 text-[9px] font-mono uppercase text-white/40 transition-colors hover:text-white"
             >Set B</button>
           </div>
         </div>
@@ -187,8 +187,8 @@ function ControlCard({ label, value, children }: { label: string; value: string;
   return (
     <div className="rounded-lg border border-[#17130F] bg-[#090907] p-3">
       <div className="flex items-center justify-between mb-2">
-        <label className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">{label}</label>
-        <span className="text-[11px] text-[#F3E6D1] font-mono">{value}</span>
+        <label className="text-[10px] font-mono uppercase tracking-wider text-white/40">{label}</label>
+        <span className="text-[11px] text-white font-mono">{value}</span>
       </div>
       {children}
     </div>

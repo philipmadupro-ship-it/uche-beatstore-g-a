@@ -52,7 +52,7 @@ export function StoreListView({
   const [menuFor, setMenuFor] = useState<string | null>(null);
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-[#171511]">
+    <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.04]">
 
       {/* Header row */}
       <div className="relative hidden md:grid grid-cols-[36px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_32px_32px] gap-4 px-4 md:px-6 py-2.5 border-b border-white/[0.05] text-[9px] font-mono uppercase tracking-[0.18em] text-white/40">
@@ -93,7 +93,7 @@ export function StoreListView({
               }}
               onMouseEnter={() => setHovered(t.id)}
               onMouseLeave={() => setHovered((v) => (v === t.id ? null : v))}
-              className={`relative grid grid-cols-[44px_minmax(0,1fr)_auto_32px] md:grid-cols-[44px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_32px_32px] gap-3 md:gap-4 items-center px-4 md:px-6 py-3 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/40 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
+              className={`relative grid grid-cols-[44px_minmax(0,1fr)_auto_32px] md:grid-cols-[44px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_32px_32px] gap-3 md:gap-4 items-center px-4 md:px-6 py-3 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/30/40 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
               style={isPreview ? { boxShadow: `inset 2px 0 0 ${accentColor}` } : isCur ? { boxShadow: `inset 2px 0 0 ${accentColor}80` } : {}}
             >
               {/* Cover w/ hover-play */}
@@ -104,7 +104,7 @@ export function StoreListView({
               >
                 {t.cover_url
                   ? <CoverImage src={t.cover_url} sizes="36px" className="object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={13} /></div>}
+                  : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={13} /></div>}
                 {(isHov || isCur) && (
                   <span
                     aria-hidden
@@ -122,7 +122,7 @@ export function StoreListView({
               <div className="min-w-0">
                 <p
                   className="truncate text-[14px] font-semibold leading-snug"
-                  style={isCur || isPreview ? { color: accentColor } : { color: '#F7EBDD' }}
+                  style={isCur || isPreview ? { color: accentColor } : { color: '#FFFFFF' }}
                 >
                   {t.title}
                 </p>
@@ -181,7 +181,7 @@ export function StoreListView({
                     data-row-action
                     onClick={(e) => { e.stopPropagation(); onPreview(t); }}
                     aria-label={`Choose a license for ${t.title}${lowestLicensePrice != null ? `, from $${lowestLicensePrice}` : ''}`}
-                    className="flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.08] px-2.5 text-[11px] font-medium text-[#F7EBDD] transition-colors hover:bg-white/[0.04]"
+                    className="flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.08] px-2.5 text-[11px] font-medium text-white transition-colors hover:bg-white/[0.04]"
                   >
                     <ShoppingBag size={11} className="sm:hidden" aria-hidden="true" />
                     {/* Label is hidden below sm and on the widest label ("Choose
@@ -203,7 +203,7 @@ export function StoreListView({
                       className="flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.08] px-2.5 text-[11px] transition-colors hover:bg-white/[0.04] disabled:opacity-30"
                     >
                       <span className="text-white/45">Lease</span>
-                      <span className="font-semibold tabular-nums text-[#F7EBDD]">{lp != null ? `$${lp}` : '—'}</span>
+                      <span className="font-semibold tabular-nums text-white">{lp != null ? `$${lp}` : '—'}</span>
                     </button>
                     <button
                       data-row-action
@@ -247,11 +247,11 @@ export function StoreListView({
                   <div
                     data-row-action
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute right-0 top-9 z-30 w-48 rounded-xl border border-white/[0.08] bg-[#1A1813] py-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
+                    className="absolute right-0 top-9 z-30 w-48 rounded-xl border border-white/[0.08] bg-[#0E0E0E] py-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
                   >
                     <button
                       onClick={() => { onPreview(t); setMenuFor(null); }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F7EBDD] hover:bg-white/[0.04]"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-white hover:bg-white/[0.04]"
                     >
                       <ShoppingBag size={12} className="text-white/60" />
                       Open beat
@@ -259,7 +259,7 @@ export function StoreListView({
                     {!t.free_download_enabled && hasLicenseTiers && (
                       <button
                         onClick={() => { onPreview(t); setMenuFor(null); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F7EBDD] hover:bg-white/[0.04]"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-white hover:bg-white/[0.04]"
                       >
                         <Plus size={12} style={{ color: accentColor }} />
                         Choose license{lowestLicensePrice != null ? ` from $${lowestLicensePrice}` : ''}
@@ -268,7 +268,7 @@ export function StoreListView({
                     {!t.free_download_enabled && !hasLicenseTiers && lp != null && (
                       <button
                         onClick={() => { onAddLease(t); setMenuFor(null); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F7EBDD] hover:bg-white/[0.04]"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-white hover:bg-white/[0.04]"
                       >
                         <Plus size={12} className="text-white/60" />
                         Add lease (${lp})
@@ -277,7 +277,7 @@ export function StoreListView({
                     {!t.free_download_enabled && !hasLicenseTiers && ep != null && (
                       <button
                         onClick={() => { onAddExclusive(t); setMenuFor(null); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F7EBDD] hover:bg-white/[0.04]"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-white hover:bg-white/[0.04]"
                       >
                         <Plus size={12} style={{ color: accentColor }} />
                         Add exclusive (${ep})
@@ -290,7 +290,7 @@ export function StoreListView({
                         catch {/* noop */}
                         setMenuFor(null);
                       }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-[#F7EBDD] hover:bg-white/[0.04]"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-white hover:bg-white/[0.04]"
                     >
                       <Copy size={12} className="text-white/60" />
                       Copy link

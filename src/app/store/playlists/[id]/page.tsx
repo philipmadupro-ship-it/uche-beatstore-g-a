@@ -219,17 +219,17 @@ export default function PlaylistPage({
   if (loading) {
     return (
       <div className="min-h-screen bg-[#090907] flex items-center justify-center">
-        <Loader2 size={24} className="animate-spin text-[#9B9282]" />
+        <Loader2 size={24} className="animate-spin text-white/40" />
       </div>
     );
   }
 
   if (error || !playlist) {
     return (
-      <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-[#9B9282] px-6">
+      <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-white/40 px-6">
         <ListMusic size={36} />
         <p className="text-[14px] text-center">{error || 'Playlist not found.'}</p>
-        <Link href="/store" className="text-[11px] underline hover:text-[#F7EBDD]">
+        <Link href="/store" className="text-[11px] underline hover:text-white">
           Back to store
         </Link>
       </div>
@@ -308,7 +308,7 @@ export default function PlaylistPage({
             project pages for visual consistency. */}
         {playlist.description && (
           <GlassPage.Section eyebrow="About this playlist">
-            <p className="text-[13px] text-[#D0C3AF] leading-relaxed whitespace-pre-line max-w-3xl">
+            <p className="text-[13px] text-white/80 leading-relaxed whitespace-pre-line max-w-3xl">
               {playlist.description}
             </p>
           </GlassPage.Section>
@@ -337,8 +337,8 @@ export default function PlaylistPage({
 
               {tracks.length === 0 ? (
                 <div className="px-6 md:px-10 py-10 text-center">
-                  <Music size={20} className="text-[#9B9282] mx-auto mb-2" />
-                  <p className="text-[12px] text-[#B4AA99]">No tracks listed for sale in this playlist yet.</p>
+                  <Music size={20} className="text-white/40 mx-auto mb-2" />
+                  <p className="text-[12px] text-white/60">No tracks listed for sale in this playlist yet.</p>
                 </div>
               ) : (
                 <ul>
@@ -379,7 +379,7 @@ export default function PlaylistPage({
                           <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-[#090907] border border-white/[0.06] shrink-0">
                             {t.cover_url
                               ? <Image src={t.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized />
-                              : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={14} /></div>}
+                              : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={14} /></div>}
                             {(isHov || isCur) && (
                               <button
                                 onClick={(e) => {
@@ -400,7 +400,7 @@ export default function PlaylistPage({
                           <div className="min-w-0">
                             <p
                               className="text-[14px] truncate flex items-center gap-2"
-                              style={isCur ? { color: accent, fontWeight: 600 } : { color: '#F7EBDD' }}
+                              style={isCur ? { color: accent, fontWeight: 600 } : { color: '#FFFFFF' }}
                             >
                               <span className="truncate">{t.title}</span>
                               {cartHasTrack && (
@@ -463,7 +463,7 @@ export default function PlaylistPage({
                           aria-pressed={wishlisted}
                           title={wishlisted ? 'Remove from favorites' : 'Add to favorites'}
                           className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/[0.06] transition-colors"
-                          style={wishlisted ? { color: '#D6BE7A' } : { color: 'rgba(255,255,255,0.45)' }}
+                          style={wishlisted ? { color: '#FFFFFF' } : { color: 'rgba(255,255,255,0.45)' }}
                         >
                           <Heart size={13} fill={wishlisted ? 'currentColor' : 'none'} />
                         </button>
@@ -478,11 +478,11 @@ export default function PlaylistPage({
                             <MoreHorizontal size={14} />
                           </button>
                           {menuFor === t.id && (
-                            <div className="absolute right-0 top-9 z-30 w-44 rounded-xl bg-[#171511]/95 backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5">
+                            <div className="absolute right-0 top-9 z-30 w-44 rounded-xl bg-white/[0.04]/95 backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5">
                               <button
                                 onClick={() => { addOne(t, 'lease'); setMenuFor(null); }}
                                 disabled={lp == null}
-                                className="flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-white/[0.06] w-full text-left disabled:opacity-40"
+                                className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] w-full text-left disabled:opacity-40"
                               >
                                 <Plus size={12} className="text-white/60" />
                                 Add lease {lp != null ? `($${lp})` : ''}
@@ -490,7 +490,7 @@ export default function PlaylistPage({
                               <button
                                 onClick={() => { addOne(t, 'exclusive'); setMenuFor(null); }}
                                 disabled={ep == null}
-                                className="flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-white/[0.06] w-full text-left disabled:opacity-40"
+                                className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] w-full text-left disabled:opacity-40"
                               >
                                 <Plus size={12} style={{ color: accent }} />
                                 Add exclusive {ep != null ? `($${ep})` : ''}
@@ -501,7 +501,7 @@ export default function PlaylistPage({
                                   try { navigator.clipboard.writeText(t.title); toast.success('Copied'); } catch {/* noop */}
                                   setMenuFor(null);
                                 }}
-                                className="flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-white/[0.06] w-full text-left"
+                                className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] w-full text-left"
                               >
                                 <Copy size={12} className="text-white/60" />
                                 Copy title
@@ -526,7 +526,7 @@ export default function PlaylistPage({
 
       {/* Sticky bulk-action bar (only when selection > 0) */}
       {stickyVisible && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 sm:bottom-28 z-40 bg-[#11100D]/90 border border-white/[0.10] rounded-2xl shadow-[0_16px_60px_rgba(0,0,0,0.7)] backdrop-blur-2xl px-4 py-3 w-[min(620px,calc(100vw-32px))]">
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 sm:bottom-28 z-40 bg-white/[0.02]/90 border border-white/[0.10] rounded-2xl shadow-[0_16px_60px_rgba(0,0,0,0.7)] backdrop-blur-2xl px-4 py-3 w-[min(620px,calc(100vw-32px))]">
           <div className="flex items-center gap-3 flex-wrap">
             <div className="text-[12px] text-white flex items-center gap-2">
               <span className="font-bold tabular-nums">{selected.size}</span>

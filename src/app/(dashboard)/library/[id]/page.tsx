@@ -35,9 +35,9 @@ import { uploadImageFile } from '@/lib/upload/image-upload-client';
 
 const STATUS_OPTIONS: { value: TrackStatus; label: string; color: string }[] = [
   { value: 'maq',         label: 'MAQ',        color: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
-  { value: 'needs_work',  label: 'WIP',        color: 'bg-[#1f1a0a] text-[#D6BE7A] border-[#3a2f1f]' },
+  { value: 'needs_work',  label: 'WIP',        color: 'bg-[#1f1a0a] text-white border-[#3a2f1f]' },
   { value: 'finished',    label: 'Finished',   color: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
-  { value: 'archived',    label: 'Archived',   color: 'bg-[#1A1813] text-[#B4AA99] border-[#2B2821]' },
+  { value: 'archived',    label: 'Archived',   color: 'bg-[#0E0E0E] text-white/60 border-white/10' },
 ];
 
 const TYPE_OPTIONS: { value: TrackType; label: string }[] = [
@@ -264,7 +264,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-full">
-          <Loader2 size={18} className="animate-spin text-[#837B6D]" />
+          <Loader2 size={18} className="animate-spin text-white/40" />
         </div>
       </DashboardLayout>
     );
@@ -274,15 +274,15 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center h-full gap-3">
-          <p className="text-[#9B9282] text-sm">
+          <p className="text-white/40 text-sm">
             {fetchError ? 'Couldn’t load this track' : 'Track not found'}
           </p>
           {fetchError && (
             <>
-              <p className="text-[10px] text-[#837B6D] font-mono max-w-md text-center">{fetchError}</p>
+              <p className="text-[10px] text-white/40 font-mono max-w-md text-center">{fetchError}</p>
               <button
                 onClick={fetchData}
-                className="text-[11px] text-[#E7D7BE] hover:text-[#F3E6D1] font-medium"
+                className="text-[11px] text-white hover:text-white font-medium"
               >
                 Try again
               </button>
@@ -306,13 +306,13 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
               cover image — same affordance as the project detail page. */}
           <div className="lg:sticky lg:top-10 lg:self-start">
             <div
-              className="aspect-square w-full bg-[#171511] rounded-2xl border border-white/[0.05] overflow-hidden group relative cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+              className="aspect-square w-full bg-white/[0.04] rounded-2xl border border-white/[0.05] overflow-hidden group relative cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
               onClick={() => fileInputRef.current?.click()}
             >
               {track.cover_url ? (
                 <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#211F1A] bg-gradient-to-br from-[#161520] to-[#090907]">
+                <div className="w-full h-full flex items-center justify-center text-black bg-gradient-to-br from-[#161520] to-[#090907]">
                   <Music size={64} strokeWidth={1.2} />
                 </div>
               )}
@@ -331,7 +331,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 <select
                   value={track.type}
                   onChange={(e) => patchTrack({ type: e.target.value as TrackType })}
-                  className="shrink-0 bg-transparent text-[9px] sm:text-[10px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.2em] text-[#F3E6D1] border border-[#2B2821] rounded px-2 py-1 hover:border-[#3B372F] focus:outline-none focus:border-[#E7D7BE] cursor-pointer"
+                  className="shrink-0 bg-transparent text-[9px] sm:text-[10px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.2em] text-white border border-white/10 rounded px-2 py-1 hover:border-white/20 focus:outline-none focus:border-white/30 cursor-pointer"
                 >
                   {TYPE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value} className="bg-[#090907]">{opt.label}</option>
@@ -343,7 +343,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                   value={track.instrumental ? 'yes' : 'no'}
                   onChange={(e) => patchTrack({ instrumental: e.target.value === 'yes' })}
                   title="Does this track have vocals?"
-                  className="shrink-0 bg-transparent text-[9px] sm:text-[10px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.2em] text-[#F3E6D1] border border-[#2B2821] rounded px-2 py-1 hover:border-[#3B372F] focus:outline-none focus:border-[#E7D7BE] cursor-pointer"
+                  className="shrink-0 bg-transparent text-[9px] sm:text-[10px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.2em] text-white border border-white/10 rounded px-2 py-1 hover:border-white/20 focus:outline-none focus:border-white/30 cursor-pointer"
                 >
                   <option value="no" className="bg-[#090907]">Has Vocals</option>
                   <option value="yes" className="bg-[#090907]">Instrumental</option>
@@ -355,36 +355,36 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                       key={opt.value}
                       onClick={() => patchTrack({ status: opt.value })}
                       className={`shrink-0 px-2 py-1 rounded text-[8px] sm:text-[9px] font-mono uppercase tracking-[0.16em] sm:tracking-[0.2em] border transition-colors ${
-                        active ? opt.color : 'bg-transparent text-[#837B6D] border-[#2B2821] hover:border-[#3B372F] hover:text-[#B4AA99]'
+                        active ? opt.color : 'bg-transparent text-white/40 border-white/10 hover:border-white/20 hover:text-white/60'
                       }`}
                     >
                       {opt.label}
                     </button>
                   );
                 })}
-                {savingMeta && <Loader2 size={11} className="animate-spin text-[#837B6D]" />}
+                {savingMeta && <Loader2 size={11} className="animate-spin text-white/40" />}
               </div>
               {isEditingTitle ? (
                 <div className="flex items-center gap-2 mb-3">
                   <input
                     autoFocus
-                    className="bg-transparent border-b border-[#3B372F] text-3xl font-medium tracking-tight outline-none text-white flex-1 focus:border-[#E7D7BE]"
+                    className="bg-transparent border-b border-white/20 text-3xl font-medium tracking-tight outline-none text-white flex-1 focus:border-white/30"
                     value={tempTitle}
                     onChange={(e) => setTempTitle(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRename()}
                   />
-                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#1A1813] text-[#E7D7BE]"><Check size={14} /></button>
-                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(track?.title || ''); }} className="p-1.5 rounded hover:bg-[#1A1813] text-[#9B9282]"><X size={14} /></button>
+                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#0E0E0E] text-white"><Check size={14} /></button>
+                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(track?.title || ''); }} className="p-1.5 rounded hover:bg-[#0E0E0E] text-white/40"><X size={14} /></button>
                 </div>
               ) : (
                 <div className="group flex items-center gap-2 mb-2 sm:mb-3">
                   <h1 className="text-[24px] sm:text-3xl font-medium text-white leading-tight sm:leading-none tracking-tight truncate font-heading">{track.title}</h1>
-                  <button onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-[#9B9282] hover:text-white transition-all">
+                  <button onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-white/40 hover:text-white transition-all">
                     <Edit2 size={13} />
                   </button>
                 </div>
               )}
-              <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-[11px] font-mono text-[#9B9282] uppercase tracking-wider overflow-x-auto scrollbar-hide pb-1">
+              <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-[11px] font-mono text-white/40 uppercase tracking-wider overflow-x-auto scrollbar-hide pb-1">
                 <span>{fmtDuration(track.duration_seconds)}</span>
                 <span>·</span>
                 <span>{fmtBpm(track.bpm)}</span>
@@ -411,7 +411,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <button
                 onClick={() => setGlobalTrack(track)}
-                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-black transition-colors hover:bg-[#F7EBDD] sm:gap-2 sm:px-4 sm:text-[12px]"
+                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-black transition-colors hover:bg-white sm:gap-2 sm:px-4 sm:text-[12px]"
               >
                 <PlayGlyph size={13} className="ml-0.5" />
                 Play
@@ -420,14 +420,14 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 onClick={handleReanalyze}
                 disabled={reanalyzing || !track.audio_url}
                 title={track.audio_url ? 'Re-extract BPM, key and loudness' : 'Upload source audio before analyzing'}
-                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-[#E7D7BE] px-3 text-[11px] font-medium text-[#090907] transition-colors hover:bg-[#E2CDA8] disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-[12px]"
+                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-[#090907] transition-colors hover:bg-[#E2CDA8] disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-[12px]"
               >
                 {reanalyzing ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}
                 {reanalyzing ? 'Analyzing…' : 'Analyze'}
               </button>
               <button
                 onClick={() => setShareOpen(true)}
-                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-[#211F1A] bg-[#171511] px-3 text-[11px] font-medium text-[#F7EBDD] transition-colors hover:border-[#3B372F] sm:gap-2 sm:px-4 sm:text-[12px]"
+                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-[11px] font-medium text-white transition-colors hover:border-white/20 sm:gap-2 sm:px-4 sm:text-[12px]"
               >
                 <Share2 size={12} />
                 Share
@@ -435,7 +435,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
               <button
                 onClick={() => router.push(`/studio?track=${track.id}`)}
                 title="Open this track in the studio (loop / pitch / stems / record)"
-                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[12px] font-medium transition-colors bg-[#171511] border border-[#211F1A] text-[#F3E6D1] hover:border-[#C9BCA8]/40 hover:bg-[#342F27]"
+                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[12px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/ hover:bg-white/10"
               >
                 <Sliders size={12} />
                 Studio
@@ -444,7 +444,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 <a
                   href={audioSrc(track.audio_url)}
                   download={`${track.title || 'track'}.wav`}
-                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[12px] font-medium transition-colors bg-[#171511] border border-[#211F1A] text-[#F7EBDD] hover:border-[#3B372F]"
+                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[12px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/20"
                 >
                   <Download size={12} />
                   Download
@@ -464,7 +464,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 references, hooks, mix decisions; autosaves on blur. Includes a
                 topline recorder for singing melody ideas straight over the beat. */}
             <div className="mb-8">
-              <p className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-2">Notes</p>
+              <p className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-2">Notes</p>
               <textarea
                 defaultValue={track.notes || ''}
                 onBlur={(e) => {
@@ -472,7 +472,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                   if (v !== (track.notes || '')) patchTrack({ notes: v || null });
                 }}
                 placeholder="Session notes, references, hook ideas, mix decisions…"
-                className="w-full min-h-[80px] bg-[#11100D] border border-[#211F1A] rounded-lg px-4 py-3 text-[13px] text-[#F7EBDD] placeholder:text-[#837B6D] focus:outline-none focus:border-[#3B372F] resize-y leading-relaxed"
+                className="w-full min-h-[80px] bg-white/[0.02] border border-white/10 rounded-lg px-4 py-3 text-[13px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 resize-y leading-relaxed"
               />
               <div className="mt-2">
                 <ToplineRecorder trackId={track.id} />
@@ -528,7 +528,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
 
         {/* Tags */}
         <div className="mb-10">
-          <p className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282] mb-3">Tags &amp; genre</p>
+          <p className="text-[10px] font-mono uppercase tracking-wider text-white/40 mb-3">Tags &amp; genre</p>
           <TagPicker
             trackId={track.id}
             features={{

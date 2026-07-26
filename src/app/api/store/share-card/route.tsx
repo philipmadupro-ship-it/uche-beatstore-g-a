@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
   let title = 'Untitled Track';
   let producer = 'U2C Beatstore';
   let cover: string | null = null;
-  let accent = '#E7D7BE';
+  let accent = '#FFFFFF';
   let preferredStyle: string | null = null;
 
   if (trackId && isSupabaseConfigured()) {
@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
 
 function OgCard({ title, producer, cover, accent }: RenderProps) {
   return (
-    <div style={{ width: 1200, height: 630, display: 'flex', position: 'relative', overflow: 'hidden', background: '#090907', color: '#F7EBDD', fontFamily: 'sans-serif' }}>
+    <div style={{ width: 1200, height: 630, display: 'flex', position: 'relative', overflow: 'hidden', background: '#090907', color: '#FFFFFF', fontFamily: 'sans-serif' }}>
       {cover && (
         <div style={{ position: 'absolute', inset: -80, backgroundImage: `url(${cover})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: 'blur(70px)', opacity: 0.4 }} />
       )}
@@ -101,7 +101,7 @@ function OgCard({ title, producer, cover, accent }: RenderProps) {
           <div style={{ display: 'flex', marginTop: 30, fontSize: 26, color: 'rgba(255,255,255,0.72)' }}>prod. <span style={{ color: accent, fontWeight: 700, marginLeft: 8 }}>{producer}</span></div>
           <div style={{ display: 'flex', marginTop: 50, fontSize: 16, letterSpacing: 5, textTransform: 'uppercase', color: 'rgba(255,255,255,0.42)' }}>U2C Beatstore</div>
         </div>
-        <div style={{ display: 'flex', width: 430, height: 430, borderRadius: 28, overflow: 'hidden', background: '#171511', border: '2px solid rgba(255,255,255,0.08)', boxShadow: '0 30px 90px rgba(0,0,0,0.55)' }}>
+        <div style={{ display: 'flex', width: 430, height: 430, borderRadius: 28, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', border: '2px solid rgba(255,255,255,0.08)', boxShadow: '0 30px 90px rgba(0,0,0,0.55)' }}>
           {cover
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={cover} alt="" width={430} height={430} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -135,14 +135,14 @@ function renderCard(props: RenderProps): React.ReactElement {
 
 function Minimal({ title, producer, cover, accent, eyebrow }: RenderProps) {
   return (
-    <div style={{ width: 1080, height: 1920, display: 'flex', flexDirection: 'column', background: '#090907', color: '#F7EBDD', position: 'relative', fontFamily: 'sans-serif' }}>
+    <div style={{ width: 1080, height: 1920, display: 'flex', flexDirection: 'column', background: '#090907', color: '#FFFFFF', position: 'relative', fontFamily: 'sans-serif' }}>
       {cover && (
         <div style={{ position: 'absolute', inset: 0, backgroundImage: `url(${cover})`, backgroundSize: 'cover', backgroundPosition: 'center', opacity: 0.35, filter: 'blur(60px)', transform: 'scale(1.15)' }} />
       )}
       <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, ${accent}40 0%, rgba(10,9,7,0.92) 50%, #090907 100%)` }} />
       <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', flex: 1, padding: '120px 80px 200px', textAlign: 'center' }}>
         <div style={{ fontSize: 28, letterSpacing: 8, textTransform: 'uppercase', color: accent, marginBottom: 60, fontWeight: 600 }}>{eyebrow}</div>
-        <div style={{ display: 'flex', width: 600, height: 600, borderRadius: 40, overflow: 'hidden', background: '#171511', boxShadow: '0 60px 120px rgba(0,0,0,0.6)', marginBottom: 80, border: '4px solid rgba(255,255,255,0.06)' }}>
+        <div style={{ display: 'flex', width: 600, height: 600, borderRadius: 40, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', boxShadow: '0 60px 120px rgba(0,0,0,0.6)', marginBottom: 80, border: '4px solid rgba(255,255,255,0.06)' }}>
           {cover
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={cover} alt="" width={600} height={600} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -162,7 +162,7 @@ function Minimal({ title, producer, cover, accent, eyebrow }: RenderProps) {
 
 function Magazine({ title, producer, cover, accent, eyebrow }: RenderProps) {
   return (
-    <div style={{ width: 1080, height: 1920, display: 'flex', background: '#090907', color: '#F7EBDD', position: 'relative', fontFamily: 'sans-serif', overflow: 'hidden' }}>
+    <div style={{ width: 1080, height: 1920, display: 'flex', background: '#090907', color: '#FFFFFF', position: 'relative', fontFamily: 'sans-serif', overflow: 'hidden' }}>
       {cover && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={cover} alt="" style={{ position: 'absolute', right: -120, top: 200, width: 1100, height: 1100, objectFit: 'cover', borderRadius: 30, boxShadow: '-40px 60px 120px rgba(0,0,0,0.7)', transform: 'rotate(-2deg)' }} />
@@ -251,7 +251,7 @@ function BrandStrip() {
 
 function PlaceholderCover() {
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #342F27, #090907)', color: '#9B9282', fontSize: 96 }}>
+    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #222222, #090907)', color: 'rgba(255,255,255,0.4)', fontSize: 96 }}>
       ♫
     </div>
   );

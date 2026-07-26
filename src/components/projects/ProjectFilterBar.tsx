@@ -131,21 +131,21 @@ export function ProjectFilterBar({
         {STATUS_PILLS.map((s) => (
           <button key={s.value} onClick={() => set({ status: s.value })}
             className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-              value.status === s.value ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]'
+              value.status === s.value ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
             }`}>{s.label}</button>
         ))}
       </div>
 
       {([['content', CONTENT_BUCKET_OPTIONS], ['project type', PROJECT_TYPE_OPTIONS], ['genre', TAG_TAXONOMY.genre], ['mood', TAG_TAXONOMY.mood]] as [string, readonly string[]][]).map(([label, opts]) => (
         <div key={label}>
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">{label}</p>
+          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/50 mb-2">{label}</p>
           <div className="flex flex-wrap gap-1.5">
             {opts.map((tag) => {
               const active = value.tags.has(tag);
               return (
                 <button key={tag} onClick={() => toggleTag(tag)}
                   className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                    active ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]'
+                    active ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
                   }`}>{tag}</button>
               );
             })}
@@ -155,7 +155,7 @@ export function ProjectFilterBar({
 
       {activeCount > 0 && (
         <button onClick={() => onChange({ ...value, search: '', status: 'all', folder: 'all', tags: new Set() })}
-          className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F7EBDD] transition-colors">
+          className="flex items-center gap-1 text-[10px] font-mono uppercase tracking-wider text-white/60 hover:text-white transition-colors">
           <X size={11} /> Clear all
         </button>
       )}
@@ -176,7 +176,7 @@ export function ProjectFilterBar({
                 onChange={(e) => setEditName(e.target.value)}
                 onBlur={() => renameFolder(f.id)}
                 onKeyDown={(e) => { if (e.key === 'Enter') renameFolder(f.id); if (e.key === 'Escape') setEditingId(null); }}
-                className="h-10 w-full rounded-xl border border-[#7F77DD]/50 bg-[#171511] px-3 text-[12px] text-[#F7EBDD] focus:outline-none"
+                className="h-10 w-full rounded-xl border border-[#7F77DD]/50 bg-white/[0.04] px-3 text-[12px] text-white focus:outline-none"
               />
             ) : (
               <FolderContainerCard
@@ -187,8 +187,8 @@ export function ProjectFilterBar({
                 onClick={() => { set({ folder: f.id }); setFolderMenuOpen(false); setFolderDrawerOpen(false); }}
                 actions={manage ? (
                   <>
-                    <button onClick={() => { setEditingId(f.id); setEditName(f.name); }} className="w-7 h-7 rounded-full bg-black/45 flex items-center justify-center text-[#D0C3AF] hover:text-[#F7EBDD]" aria-label="Rename folder"><Pencil size={11} /></button>
-                    <button onClick={() => deleteFolder(f)} className="w-7 h-7 rounded-full bg-black/45 flex items-center justify-center text-[#D0C3AF] hover:text-red-400" aria-label="Delete folder"><Trash2 size={11} /></button>
+                    <button onClick={() => { setEditingId(f.id); setEditName(f.name); }} className="w-7 h-7 rounded-full bg-black/45 flex items-center justify-center text-white/60 hover:text-white" aria-label="Rename folder"><Pencil size={11} /></button>
+                    <button onClick={() => deleteFolder(f)} className="w-7 h-7 rounded-full bg-black/45 flex items-center justify-center text-white/60 hover:text-red-400" aria-label="Delete folder"><Trash2 size={11} /></button>
                   </>
                 ) : undefined}
               />
@@ -197,19 +197,19 @@ export function ProjectFilterBar({
         ))}
       </div>
 
-      <div className="flex items-center gap-2 border-t border-[#211F1A] pt-3">
+      <div className="flex items-center gap-2 border-t border-white/10 pt-3">
         <input
           value={newFolder}
           onChange={(e) => setNewFolder(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') createFolder(); }}
           placeholder="New folder"
-          className="min-h-10 flex-1 rounded-full border border-[#2B2821] bg-[#11100D] px-3 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
+          className="min-h-10 flex-1 rounded-full border border-white/10 bg-white/[0.02] px-3 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
         />
-        <button onClick={createFolder} disabled={!newFolder.trim() || busy} className="grid size-10 shrink-0 place-items-center rounded-full border border-[#2B2821] bg-[#171511] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F] disabled:opacity-40" aria-label="Create folder">
+        <button onClick={createFolder} disabled={!newFolder.trim() || busy} className="grid size-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-white/60 hover:text-white hover:border-white/20 disabled:opacity-40" aria-label="Create folder">
           {busy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
         </button>
         {folders.length > 0 && (
-          <button onClick={() => setManage((v) => !v)} className={`grid size-10 shrink-0 place-items-center rounded-full transition-colors ${manage ? 'bg-[#342F27] text-[#F3E6D1]' : 'text-[#9B9282] hover:text-[#D0C3AF]'}`} aria-label="Manage folders" title="Manage folders">
+          <button onClick={() => setManage((v) => !v)} className={`grid size-10 shrink-0 place-items-center rounded-full transition-colors ${manage ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`} aria-label="Manage folders" title="Manage folders">
             {manage ? <Check size={12} /> : <Pencil size={12} />}
           </button>
         )}
@@ -226,8 +226,8 @@ export function ProjectFilterBar({
             onClick={() => isMobile ? setFolderDrawerOpen(true) : setFolderMenuOpen((v) => !v)}
             className={`flex min-h-10 items-center gap-2 rounded-full border px-3.5 py-2 text-[11px] font-medium transition-colors ${
               folderMenuOpen || folderDrawerOpen || value.folder !== 'all'
-                ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/40'
-                : 'bg-[#171511] border-[#2B2821] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F]'
+                ? 'bg-white text-black border-white'
+                : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
             }`}
           >
             <Folder size={12} /> {selectedFolderLabel}
@@ -235,25 +235,25 @@ export function ProjectFilterBar({
           {folderMenuOpen && (
             <>
               <div className="fixed inset-0 z-30" onClick={() => setFolderMenuOpen(false)} />
-              <div className="absolute left-0 top-full z-40 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-[#2B2821] bg-[#0E0C09] p-3 shadow-2xl">
+              <div className="absolute left-0 top-full z-40 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#0E0C09] p-3 shadow-2xl">
                 {folderPanel}
               </div>
             </>
           )}
         </div>
         <div className="relative flex-1 min-w-[160px] max-w-sm">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B] pointer-events-none" />
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
           <input
             value={value.search}
             onChange={(e) => set({ search: e.target.value })}
             placeholder="Search projects + tags…"
-            className="w-full bg-[#11100D] border border-[#2B2821] rounded-full py-2 pl-9 pr-3 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
+            className="w-full bg-white/[0.02] border border-white/10 rounded-full py-2 pl-9 pr-3 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
           />
         </div>
         <button
           onClick={() => isMobile ? setMobileFilters(true) : setOpen((v) => !v)}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[11px] font-medium border transition-colors min-h-10 ${
-            open || mobileFilters || activeCount > 0 ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/40' : 'bg-[#171511] border-[#2B2821] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F]'
+            open || mobileFilters || activeCount > 0 ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
           }`}
         >
           <SlidersHorizontal size={12} /> Filters{activeCount > 0 ? ` · ${activeCount}` : ''}
@@ -264,12 +264,12 @@ export function ProjectFilterBar({
           options={SORTS.map((s) => ({ value: s.value, label: s.label }))}
           aria-label="Sort projects"
         />
-        <span className="text-[10px] font-mono text-[#6E685B] ml-auto hidden sm:inline">{resultCount} shown</span>
+        <span className="text-[10px] font-mono text-white/40 ml-auto hidden sm:inline">{resultCount} shown</span>
       </div>
 
       {/* Desktop (lg+) collapsible; below lg the bottom sheet takes over. */}
       {open && (
-        <div className="mt-3 hidden rounded-xl border border-[#2B2821] bg-[#11100D] p-3 lg:block">
+        <div className="mt-3 hidden rounded-xl border border-white/10 bg-white/[0.02] p-3 lg:block">
           {filterPanel}
         </div>
       )}

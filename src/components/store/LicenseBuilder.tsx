@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { errorMessage } from '@/lib/errors';
+import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -193,7 +194,7 @@ export function LicenseBuilder() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-[#9B9282]">
+      <div className="flex items-center justify-center py-12 text-white/40">
         <Loader2 size={18} className="animate-spin" />
       </div>
     );
@@ -202,11 +203,11 @@ export function LicenseBuilder() {
   return (
     <div className="space-y-3">
       {/* Explainer */}
-      <div className="rounded-xl border border-[#2B2821] bg-[#11100D] p-4 flex gap-3">
-        <AlertCircle size={13} className="text-[#D0C3AF] shrink-0 mt-0.5" />
-        <div className="text-[11px] text-[#B4AA99] leading-relaxed space-y-1">
+      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 flex gap-3">
+        <AlertCircle size={13} className="text-white/80 shrink-0 mt-0.5" />
+        <div className="text-[11px] text-white/60 leading-relaxed space-y-1">
           <p>
-            Create up to <strong className="text-[#D0C3AF]">4 license tiers</strong> that appear as cards on every product page.
+            Create up to <strong className="text-white/80">4 license tiers</strong> that appear as cards on every product page.
             Per-track price overrides (set in the library) take precedence over these global tier prices.
           </p>
         </div>
@@ -222,7 +223,7 @@ export function LicenseBuilder() {
           <div
             key={l.id}
             className={`rounded-2xl border transition-all ${
-              isExpanded ? 'border-[#3B372F] bg-[#171511]' : 'border-[#2B2821] bg-[#171511]/60'
+              isExpanded ? 'border-white/20 bg-white/[0.04]' : 'border-white/10 bg-white/[0.04]/60'
             }`}
           >
             {/* Row header */}
@@ -232,14 +233,14 @@ export function LicenseBuilder() {
                 <button
                   onClick={() => moveUp(idx)}
                   disabled={idx === 0}
-                  className="w-5 h-4 flex items-center justify-center text-[#9B9282] hover:text-[#D0C3AF] disabled:opacity-20 transition-colors"
+                  className="w-5 h-4 flex items-center justify-center text-white/40 hover:text-white/80 disabled:opacity-20 transition-colors"
                 >
                   <ChevronUp size={11} />
                 </button>
                 <button
                   onClick={() => moveDown(idx)}
                   disabled={idx === licenses.length - 1}
-                  className="w-5 h-4 flex items-center justify-center text-[#9B9282] hover:text-[#D0C3AF] disabled:opacity-20 transition-colors"
+                  className="w-5 h-4 flex items-center justify-center text-white/40 hover:text-white/80 disabled:opacity-20 transition-colors"
                 >
                   <ChevronDown size={11} />
                 </button>
@@ -247,15 +248,15 @@ export function LicenseBuilder() {
 
               {/* Name + price summary */}
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold text-[#F7EBDD] truncate">
+                <p className="text-[13px] font-semibold text-white truncate">
                   {draft.name || 'Untitled'}
                   {draft.is_exclusive && (
-                    <span className="ml-2 text-[9px] font-mono uppercase tracking-wider text-[#E7D7BE] bg-[#E7D7BE]/10 px-1.5 py-0.5 rounded-full border border-[#E7D7BE]/20">
+                    <span className="ml-2 text-[9px] font-mono uppercase tracking-wider text-black bg-white font-semibold shadow-md hover:bg-white/90/10 px-1.5 py-0.5 rounded-full border border-white/">
                       Exclusive
                     </span>
                   )}
                 </p>
-                <p className="text-[10px] font-mono text-[#9B9282] mt-0.5">
+                <p className="text-[10px] font-mono text-white/40 mt-0.5">
                   {draft.is_free ? 'Free' : `$${Number(draft.price_usd).toLocaleString()}`}
                   {' · '}
                   {(draft.file_types ?? []).join(', ')}
@@ -270,7 +271,7 @@ export function LicenseBuilder() {
 
               <button
                 onClick={() => setExpandedId(isExpanded ? null : l.id)}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-[#9B9282] hover:text-white hover:bg-white/[0.04] transition-colors"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white/40 hover:text-white hover:bg-white/[0.04] transition-colors"
               >
                 {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </button>
@@ -278,7 +279,7 @@ export function LicenseBuilder() {
 
             {/* Expanded editor */}
             {isExpanded && (
-              <div className="px-4 pb-5 space-y-5 border-t border-[#2B2821] pt-4">
+              <div className="px-4 pb-5 space-y-5 border-t border-white/10 pt-4">
                 {/* Name + price row */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -295,10 +296,10 @@ export function LicenseBuilder() {
                   <div>
                     <label className="license-label">
                       Price (USD)
-                      <span className="ml-2 text-[#9B9282]">— 0 = free</span>
+                      <span className="ml-2 text-white/40">— 0 = free</span>
                     </label>
                     <div className="relative">
-                      <DollarSign size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9B9282] pointer-events-none" />
+                      <DollarSign size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
                       <input
                         type="number"
                         min={0}
@@ -337,7 +338,7 @@ export function LicenseBuilder() {
                           className={`px-3 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all border ${
                             on
                               ? 'bg-[#1a1833] border-[#534AB7] text-[#AFA9EC]'
-                              : 'bg-transparent border-[#2B2821] text-[#9B9282] hover:border-[#3B372F] hover:text-[#D0C3AF]'
+                              : 'bg-transparent border-white/10 text-white/40 hover:border-white/20 hover:text-white/80'
                           }`}
                         >
                           {on && <Check size={8} className="inline mr-1" />}
@@ -406,7 +407,7 @@ export function LicenseBuilder() {
                           className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-left transition-all border ${
                             on
                               ? 'bg-[#1a1833] border-[#534AB7] text-[#AFA9EC]'
-                              : 'bg-[#11100D] border-[#2B2821] text-[#9B9282] hover:border-[#3B372F] hover:text-[#D0C3AF]'
+                              : 'bg-white/[0.02] border-white/10 text-white/40 hover:border-white/20 hover:text-white/80'
                           }`}
                         >
                           <Icon size={11} className="shrink-0" />
@@ -427,7 +428,7 @@ export function LicenseBuilder() {
                       }
                     }}
                     disabled={deleting === l.id}
-                    className="flex items-center gap-1.5 text-[11px] text-[#9B9282] hover:text-red-400 transition-colors"
+                    className="flex items-center gap-1.5 text-[11px] text-white/40 hover:text-red-400 transition-colors"
                   >
                     {deleting === l.id ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
                     Delete
@@ -435,7 +436,7 @@ export function LicenseBuilder() {
                   <button
                     onClick={() => saveLicense(l)}
                     disabled={!isDirty || saving[l.id]}
-                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#E7D7BE] hover:bg-[#F3E6D1] disabled:opacity-40 text-black text-[11px] font-bold uppercase tracking-wider transition-all"
+                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-white disabled:opacity-40 text-black text-[11px] font-bold uppercase tracking-wider transition-all"
                   >
                     {saving[l.id] ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
                     Save
@@ -449,17 +450,17 @@ export function LicenseBuilder() {
 
       {/* Add license button */}
       {licenses.length < 4 ? (
-        <button
+        <LiquidGlassButton
           onClick={createLicense}
           disabled={creating}
-          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-dashed border-[#3B372F] text-[11px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#D0C3AF] hover:border-[#D0C3AF]/30 transition-all disabled:opacity-40"
+          className="w-full !py-3 !rounded-2xl"
         >
-          {creating ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+          {creating ? <Loader2 size={13} className="animate-spin mr-1.5" /> : <Plus size={13} className="mr-1.5" />}
           Add License Tier
-          <span className="text-[#9B9282]">({4 - licenses.length} remaining)</span>
-        </button>
+          <span className="text-white/40 ml-1.5">({4 - licenses.length} remaining)</span>
+        </LiquidGlassButton>
       ) : (
-        <p className="text-center text-[10px] font-mono text-[#9B9282] py-2">
+        <p className="text-center text-[10px] font-mono text-white/40 py-2">
           Maximum 4 license tiers reached.
         </p>
       )}
@@ -472,23 +473,23 @@ export function LicenseBuilder() {
           font-family: ui-monospace, monospace;
           text-transform: uppercase;
           letter-spacing: 0.15em;
-          color: #9B9282;
+          color: #777777;
           margin-bottom: 6px;
         }
         .license-input {
           width: 100%;
-          background: #11100D;
-          border: 1px solid #2B2821;
+          background: #0D0D0D;
+          border: 1px solid #222222;
           border-radius: 8px;
           padding: 8px 12px;
           font-size: 12px;
-          color: #F7EBDD;
+          color: #FFFFFF;
           outline: none;
           transition: border-color 0.15s;
           appearance: none;
         }
-        .license-input::placeholder { color: #9B9282; }
-        .license-input:focus { border-color: #C9BCA8; }
+        .license-input::placeholder { color: #777777; }
+        .license-input:focus { border-color: #CCCCCC; }
       `}</style>
     </div>
   );

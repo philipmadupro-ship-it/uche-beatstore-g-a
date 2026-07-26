@@ -57,11 +57,11 @@ export function LibraryAlbumView({ tracks, currentTrackId, isPlaying, onPlayTrac
                     <h1 className="text-[32px] md:text-[48px] font-bold text-white font-heading leading-tight mb-3">
                         Your Library
                     </h1>
-                    <div className="flex items-center gap-3 text-[13px] font-mono text-[#9B9282] uppercase tracking-wider">
-                        <span className="text-[#E7D7BE]">{typeLabel}</span>
-                        <div className="w-1 h-1 rounded-full bg-[#3B372F]" />
+                    <div className="flex items-center gap-3 text-[13px] font-mono text-white/40 uppercase tracking-wider">
+                        <span className="text-white">{typeLabel}</span>
+                        <div className="w-1 h-1 rounded-full bg-white/20" />
                         <span>{tracks.length} tracks</span>
-                        <div className="w-1 h-1 rounded-full bg-[#3B372F]" />
+                        <div className="w-1 h-1 rounded-full bg-white/20" />
                         <span>{new Date().getFullYear()}</span>
                     </div>
                 </div>
@@ -73,11 +73,11 @@ export function LibraryAlbumView({ tracks, currentTrackId, isPlaying, onPlayTrac
                             onClick={() => onClickDetails(track)}
                             className="group flex items-center justify-between p-3 rounded-2xl hover:bg-white/[0.04] transition-colors cursor-pointer border border-transparent hover:border-white/[0.04]"
                         >
-                            <p className={`text-[15px] font-bold truncate pr-4 ${currentTrackId === track.id ? 'text-[#E7D7BE]' : 'text-[#F7EBDD]'}`}>
+                            <p className={`text-[15px] font-bold truncate pr-4 ${currentTrackId === track.id ? 'text-white' : 'text-white'}`}>
                                 {track.title || 'Untitled Track'}
                             </p>
                             
-                            <div className="flex items-center gap-3 shrink-0 text-[#9B9282] group-hover:text-[#D0C3AF] transition-colors">
+                            <div className="flex items-center gap-3 shrink-0 text-white/40 group-hover:text-white/80 transition-colors">
                                 <div 
                                     className="p-1 rounded-full hover:bg-white/[0.1] transition-colors opacity-0 group-hover:opacity-100"
                                     onClick={(e) => {

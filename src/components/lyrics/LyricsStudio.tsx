@@ -332,20 +332,20 @@ export function LyricsStudio({ trackId }: Props) {
 
   /* ─────── UI ─────── */
   return (
-    <div className="border border-[#1A1813] rounded-2xl bg-[#11100D] overflow-hidden">
+    <div className="border border-[#0E0E0E] rounded-2xl bg-white/[0.02] overflow-hidden">
       {/* toolbar — quiet header: title, live count, autosave state, version/history */}
       <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 min-h-10 sm:h-11 py-2 sm:py-0 bg-transparent">
-        <Music2 size={12} className="text-[#F3E6D1]" />
-        <span className="text-[11px] font-mono uppercase tracking-wider text-[#D0C3AF]">Lyrics</span>
-        <span className="text-[10px] font-mono text-[#6E685B]">·</span>
-        <span className="text-[10px] font-mono text-[#9B9282]">
+        <Music2 size={12} className="text-white" />
+        <span className="text-[11px] font-mono uppercase tracking-wider text-white/80">Lyrics</span>
+        <span className="text-[10px] font-mono text-white/30">·</span>
+        <span className="text-[10px] font-mono text-white/40">
           {stats.words}w · {stats.syllables} syl
         </span>
         <div className="flex-1" />
         <SaveBadge status={status} error={error} />
         <button
           onClick={saveSnapshot}
-          className="text-[0px] sm:text-[10px] font-mono uppercase tracking-wider p-1.5 sm:px-2 sm:py-1 rounded-md text-[#B4AA99] hover:text-[#F7EBDD] hover:bg-white/[0.03] flex items-center gap-1 transition-colors"
+          className="text-[0px] sm:text-[10px] font-mono uppercase tracking-wider p-1.5 sm:px-2 sm:py-1 rounded-md text-white/60 hover:text-white hover:bg-white/[0.03] flex items-center gap-1 transition-colors"
           title="Save a version snapshot"
           aria-label="Save a version snapshot"
         >
@@ -355,8 +355,8 @@ export function LyricsStudio({ trackId }: Props) {
           onClick={() => setShowHistory((v) => !v)}
           className={`text-[10px] font-mono uppercase tracking-wider p-1.5 sm:px-2 sm:py-1 rounded-md flex items-center gap-1 transition-colors ${
             showHistory
-              ? 'bg-[#342F27] text-[#F3E6D1]'
-              : 'text-[#B4AA99] hover:text-[#F7EBDD] hover:bg-white/[0.03]'
+              ? 'bg-white/10 text-white'
+              : 'text-white/60 hover:text-white hover:bg-white/[0.03]'
           }`}
           aria-label="Toggle lyrics version history"
         >
@@ -367,12 +367,12 @@ export function LyricsStudio({ trackId }: Props) {
       {/* Section quick-insert — keeps structure light + secondary. Click drops
           a header at the caret. */}
       <div className="flex items-center gap-1 px-3 sm:px-5 pb-2 sm:pb-2.5 overflow-x-auto no-scrollbar">
-        <span className="hidden sm:inline text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] shrink-0">Section</span>
+        <span className="hidden sm:inline text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 shrink-0">Section</span>
         {QUICK_SECTIONS.map((s) => (
           <button
             key={s}
             onClick={() => insertSection(s)}
-            className="shrink-0 text-[8px] sm:text-[9px] font-mono uppercase tracking-wider px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-[#B4AA99] hover:text-[#F3E6D1] hover:bg-[#342F27] transition-colors"
+            className="shrink-0 text-[8px] sm:text-[9px] font-mono uppercase tracking-wider px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-white/60 hover:text-white hover:bg-white/10 transition-colors"
           >
             + {s}
           </button>
@@ -392,7 +392,7 @@ export function LyricsStudio({ trackId }: Props) {
                   className="text-right pr-2 text-[9px] sm:text-[10px] font-mono leading-[24px] sm:leading-[28px]"
                 >
                   {stats.sections[i]
-                    ? <span className="text-[#C9BCA8]">§</span>
+                    ? <span className="text-white/80">§</span>
                     : <span className="text-[#332c20]">{n || ''}</span>}
                 </div>
               ))}
@@ -411,24 +411,24 @@ Drop a section like [Verse] or [Hook] from the bar above.
 Click any word to find rhymes, synonyms, definitions.
 Everything autosaves.`}
               spellCheck
-              className="w-full h-full bg-transparent text-[13px] sm:text-[15px] leading-[24px] sm:leading-[28px] text-[#F7EBDD] placeholder:text-[#6E685B] pl-1 pr-4 sm:pr-5 py-3 sm:py-4 resize-none focus:outline-none font-mono"
+              className="w-full h-full bg-transparent text-[13px] sm:text-[15px] leading-[24px] sm:leading-[28px] text-white placeholder:text-white/30 pl-1 pr-4 sm:pr-5 py-3 sm:py-4 resize-none focus:outline-none font-mono"
             />
           </div>
         </div>
 
         {/* word tools — secondary sidebar, separated by a faint rule */}
-        <div className="flex flex-col border-t lg:border-t-0 lg:border-l border-[#1A1813]">
-          <div className="px-3 py-2 sm:py-3 border-b border-[#1A1813]">
+        <div className="flex flex-col border-t lg:border-t-0 lg:border-l border-[#0E0E0E]">
+          <div className="px-3 py-2 sm:py-3 border-b border-[#0E0E0E]">
             <div className="flex items-center gap-2 mb-2">
-              <Search size={11} className="text-[#837B6D]" />
+              <Search size={11} className="text-white/40" />
               <input
                 value={lookupWord}
                 onChange={(e) => setLookupWord(e.target.value.trim().toLowerCase())}
                 placeholder="word"
-                className="flex-1 bg-transparent text-[12px] text-[#F7EBDD] placeholder:text-[#837B6D] focus:outline-none border-b border-[#211F1A] focus:border-[#3B372F] py-1"
+                className="flex-1 bg-transparent text-[12px] text-white placeholder:text-white/40 focus:outline-none border-b border-white/10 focus:border-white/20 py-1"
               />
               {lookupWord && (
-                <button onClick={() => setLookupWord('')} className="text-[#9B9282] hover:text-white">
+                <button onClick={() => setLookupWord('')} className="text-white/40 hover:text-white">
                   <X size={10} />
                 </button>
               )}
@@ -441,8 +441,8 @@ Everything autosaves.`}
                   onClick={() => setLookupKind(k)}
                   className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border transition-colors ${
                     lookupKind === k
-                      ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/40'
-                      : 'border-[#211F1A] text-[#B4AA99] hover:text-[#D0C3AF]'
+                      ? 'bg-white/10 text-white border-white/'
+                      : 'border-white/10 text-white/60 hover:text-white/80'
                   }`}
                 >
                   {k.replace('-', ' ')}
@@ -455,10 +455,10 @@ Everything autosaves.`}
             {/* Tool results */}
             <div className="px-3 py-2">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[9px] font-mono uppercase tracking-wider text-[#837B6D] flex items-center gap-1.5">
+                <p className="text-[9px] font-mono uppercase tracking-wider text-white/40 flex items-center gap-1.5">
                   <Sparkles size={9} /> {lookupKind.replace('-', ' ')}
                   {sortedHits.length > 0 && (
-                    <span className="text-[#B4AA99]">· {visibleHits.length}/{sortedHits.length}</span>
+                    <span className="text-white/60">· {visibleHits.length}/{sortedHits.length}</span>
                   )}
                 </p>
               </div>
@@ -470,8 +470,8 @@ Everything autosaves.`}
                     onClick={() => setSylFilter(null)}
                     className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
                       sylFilter == null
-                        ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/40'
-                        : 'border-[#211F1A] text-[#B4AA99] hover:text-[#D0C3AF]'
+                        ? 'bg-white/10 text-white border-white/'
+                        : 'border-white/10 text-white/60 hover:text-white/80'
                     }`}
                   >
                     all
@@ -483,22 +483,22 @@ Everything autosaves.`}
                       title={`${count} ${n}-syllable result${count === 1 ? '' : 's'}`}
                       className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
                         sylFilter === n
-                          ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/40'
-                          : 'border-[#211F1A] text-[#B4AA99] hover:text-[#D0C3AF]'
+                          ? 'bg-white/10 text-white border-white/'
+                          : 'border-white/10 text-white/60 hover:text-white/80'
                       }`}
                     >
-                      {n} syl <span className="text-[#837B6D]">·{count}</span>
+                      {n} syl <span className="text-white/40">·{count}</span>
                     </button>
                   ))}
                 </div>
               )}
 
               {hitsLoading ? (
-                <Loader2 size={12} className="animate-spin text-[#837B6D]" />
+                <Loader2 size={12} className="animate-spin text-white/40" />
               ) : !lookupWord ? (
-                <p className="text-[10px] text-[#837B6D] italic">Click a word in the editor or type one above.</p>
+                <p className="text-[10px] text-white/40 italic">Click a word in the editor or type one above.</p>
               ) : visibleHits.length === 0 ? (
-                <p className="text-[10px] text-[#9B9282]">
+                <p className="text-[10px] text-white/40">
                   {sylFilter != null ? `No ${sylFilter}-syllable results.` : 'No results.'}
                 </p>
               ) : (
@@ -511,10 +511,10 @@ Everything autosaves.`}
                           key={h.word + (h.score ?? '')}
                           onClick={() => replaceWordAtCaret(h.word)}
                           title={`${syl} syl${h.score ? ` · score ${h.score}` : ''}`}
-                          className="text-[10px] px-2 py-0.5 rounded-md border border-[#211F1A] bg-[#171511] text-[#F7EBDD] hover:bg-[#342F27] hover:border-[#C9BCA8]/40 hover:text-[#F3E6D1] transition-colors"
+                          className="text-[10px] px-2 py-0.5 rounded-md border border-white/10 bg-white/[0.04] text-white hover:bg-white/10 hover:border-white/ hover:text-white transition-colors"
                         >
                           {h.word}
-                          <span className="ml-1 text-[#837B6D]">·{syl}</span>
+                          <span className="ml-1 text-white/40">·{syl}</span>
                         </button>
                       );
                     })}
@@ -522,7 +522,7 @@ Everything autosaves.`}
                   {visibleHits.length > resultLimit && (
                     <button
                       onClick={() => setResultLimit((n) => n + 40)}
-                      className="mt-2 text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F3E6D1] border border-[#211F1A] hover:border-[#C9BCA8]/40 rounded px-2 py-1"
+                      className="mt-2 text-[9px] font-mono uppercase tracking-wider text-white/60 hover:text-white border border-white/10 hover:border-white/ rounded px-2 py-1"
                     >
                       Show more · {visibleHits.length - resultLimit} hidden
                     </button>
@@ -532,28 +532,28 @@ Everything autosaves.`}
             </div>
 
             {/* Definition */}
-            <div className="px-3 py-2 border-t border-[#1A1813]">
-              <p className="text-[9px] font-mono uppercase tracking-wider text-[#837B6D] mb-2 flex items-center gap-1.5">
+            <div className="px-3 py-2 border-t border-[#0E0E0E]">
+              <p className="text-[9px] font-mono uppercase tracking-wider text-white/40 mb-2 flex items-center gap-1.5">
                 <BookOpen size={9} /> definition
               </p>
               {defLoading ? (
-                <Loader2 size={12} className="animate-spin text-[#837B6D]" />
+                <Loader2 size={12} className="animate-spin text-white/40" />
               ) : !lookupWord ? (
-                <p className="text-[10px] text-[#837B6D] italic">—</p>
+                <p className="text-[10px] text-white/40 italic">—</p>
               ) : !defEntries || defEntries.length === 0 ? (
-                <p className="text-[10px] text-[#9B9282]">No definition found.</p>
+                <p className="text-[10px] text-white/40">No definition found.</p>
               ) : (
                 <div className="space-y-2">
                   {defEntries.slice(0, 1).map((e, i) => (
                     <div key={i}>
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[11px] text-[#F7EBDD]">{e.word}</span>
+                        <span className="text-[11px] text-white">{e.word}</span>
                         {e.phonetic && (
-                          <span className="text-[10px] font-mono text-[#B4AA99]">{e.phonetic}</span>
+                          <span className="text-[10px] font-mono text-white/60">{e.phonetic}</span>
                         )}
                         {e.audio && (
                           <button
-                            className="text-[#B4AA99] hover:text-[#F3E6D1]"
+                            className="text-white/60 hover:text-white"
                             onClick={() => new Audio(e.audio!).play().catch(() => {})}
                             title="Pronounce"
                           >
@@ -563,25 +563,25 @@ Everything autosaves.`}
                       </div>
                       {e.meanings.slice(0, 2).map((m, j) => (
                         <div key={j} className="mb-1">
-                          <p className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] mb-0.5">
+                          <p className="text-[9px] font-mono uppercase tracking-wider text-white/60 mb-0.5">
                             {m.partOfSpeech}
                           </p>
                           {m.definitions.slice(0, 2).map((d, k) => (
-                            <p key={k} className="text-[10px] text-[#D0C3AF] mb-1 leading-snug">
+                            <p key={k} className="text-[10px] text-white/80 mb-1 leading-snug">
                               {d.definition}
                               {d.example && (
-                                <span className="block text-[#9B9282] italic">“{d.example}”</span>
+                                <span className="block text-white/40 italic">“{d.example}”</span>
                               )}
                             </p>
                           ))}
                           {m.synonyms.length > 0 && (
-                            <p className="text-[9px] text-[#837B6D]">
-                              <span className="text-[#B4AA99] mr-1">syn:</span>
+                            <p className="text-[9px] text-white/40">
+                              <span className="text-white/60 mr-1">syn:</span>
                               {m.synonyms.slice(0, 6).map((s) => (
                                 <button
                                   key={s}
                                   onClick={() => replaceWordAtCaret(s)}
-                                  className="text-[#D0C3AF] hover:text-[#F3E6D1] mr-1"
+                                  className="text-white/80 hover:text-white mr-1"
                                 >
                                   {s}
                                 </button>
@@ -601,18 +601,18 @@ Everything autosaves.`}
 
       {/* History */}
       {showHistory && (
-        <div className="border-t border-[#1A1813] bg-[#090907]">
-          <div className="flex items-center justify-between px-4 h-9 border-b border-[#1A1813]">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-[#D0C3AF]">
+        <div className="border-t border-[#0E0E0E] bg-[#090907]">
+          <div className="flex items-center justify-between px-4 h-9 border-b border-[#0E0E0E]">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-white/80">
               Version history · {history.length}
             </span>
-            <button onClick={() => setShowHistory(false)} className="text-[#9B9282] hover:text-white">
+            <button onClick={() => setShowHistory(false)} className="text-white/40 hover:text-white">
               <X size={11} />
             </button>
           </div>
           <div className="max-h-[200px] overflow-y-auto">
             {history.length === 0 ? (
-              <p className="text-[10px] text-[#9B9282] px-4 py-3">No prior versions yet.</p>
+              <p className="text-[10px] text-white/40 px-4 py-3">No prior versions yet.</p>
             ) : (
               history.map((h, i) => {
                 const isPreview = historyPreview === h;
@@ -620,20 +620,20 @@ Everything autosaves.`}
                   <div
                     key={i}
                     className={`px-4 py-2 border-b border-[#24211B] last:border-b-0 flex items-start gap-3 ${
-                      isPreview ? 'bg-[#11100D]' : ''
+                      isPreview ? 'bg-white/[0.02]' : ''
                     }`}
                   >
-                    <Hash size={9} className="text-[#6E685B] mt-0.5" />
+                    <Hash size={9} className="text-white/30 mt-0.5" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-mono text-[#D0C3AF]">
+                      <p className="text-[10px] font-mono text-white/80">
                         {new Date(h.at).toLocaleString()}
                       </p>
-                      <p className="text-[10px] text-[#9B9282] truncate font-mono">
+                      <p className="text-[10px] text-white/40 truncate font-mono">
                         {h.content.split('\n').slice(0, 1).join(' ')}
-                        <span className="text-[#837B6D]"> · {h.content.length} chars</span>
+                        <span className="text-white/40"> · {h.content.length} chars</span>
                       </p>
                       {isPreview && (
-                        <pre className="mt-2 text-[10px] text-[#D0C3AF] whitespace-pre-wrap font-mono max-h-[120px] overflow-y-auto bg-[#090907] border border-[#211F1A] rounded p-2">
+                        <pre className="mt-2 text-[10px] text-white/80 whitespace-pre-wrap font-mono max-h-[120px] overflow-y-auto bg-[#090907] border border-white/10 rounded p-2">
                           {h.content}
                         </pre>
                       )}
@@ -641,13 +641,13 @@ Everything autosaves.`}
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={() => setHistoryPreview(isPreview ? null : h)}
-                        className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border border-[#211F1A] text-[#D0C3AF] hover:text-white hover:border-[#3B372F]"
+                        className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border border-white/10 text-white/80 hover:text-white hover:border-white/20"
                       >
                         {isPreview ? 'Hide' : 'Preview'}
                       </button>
                       <button
                         onClick={() => restoreEntry(h)}
-                        className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border border-[#211F1A] text-[#F3E6D1] hover:bg-[#342F27] hover:border-[#C9BCA8]/40 flex items-center gap-1"
+                        className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border border-white/10 text-white hover:bg-white/10 hover:border-white/ flex items-center gap-1"
                       >
                         <RefreshCw size={9} /> Restore
                       </button>
@@ -666,7 +666,7 @@ Everything autosaves.`}
 function SaveBadge({ status, error }: { status: string; error: string | null }) {
   if (status === 'saving') {
     return (
-      <span className="text-[10px] font-mono text-[#D0C3AF] flex items-center gap-1">
+      <span className="text-[10px] font-mono text-white/80 flex items-center gap-1">
         <Loader2 size={9} className="animate-spin" /> saving
       </span>
     );
@@ -681,5 +681,5 @@ function SaveBadge({ status, error }: { status: string; error: string | null }) 
       </span>
     );
   }
-  return <span className="text-[10px] font-mono text-[#6E685B]">·</span>;
+  return <span className="text-[10px] font-mono text-white/30">·</span>;
 }

@@ -41,17 +41,17 @@ export function BatchActionBar({ count, noun, onClear, actions, busy }: Props) {
       <div className="flex items-center gap-2 px-3 py-2 rounded-full backdrop-blur-2xl bg-[#090907]/90 border border-white/[0.08] shadow-[0_10px_40px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.04)_inset] overflow-x-auto scrollbar-hide">
         <button
           onClick={onClear}
-          className="flex items-center justify-center w-7 h-7 shrink-0 rounded-full text-[#B4AA99] hover:text-white hover:bg-white/[0.06] transition-colors"
+          className="flex items-center justify-center w-7 h-7 shrink-0 rounded-full text-white/60 hover:text-white hover:bg-white/[0.06] transition-colors"
           aria-label="Clear selection"
         >
           <X size={13} />
         </button>
-        <span className="text-[11px] font-mono uppercase tracking-wider text-[#D0C3AF] px-2 shrink-0 tabular-nums">
+        <span className="text-[11px] font-mono uppercase tracking-wider text-white/80 px-2 shrink-0 tabular-nums">
           {count} {label}
         </span>
         <div className="w-px h-5 bg-white/[0.08] mx-1 shrink-0" />
         {busy ? (
-          <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-[#D0C3AF] shrink-0">
+          <div className="flex items-center gap-2 px-3 py-1.5 text-[11px] text-white/80 shrink-0">
             <Loader2 size={11} className="animate-spin" />
             Working…
           </div>
@@ -64,8 +64,8 @@ export function BatchActionBar({ count, noun, onClear, actions, busy }: Props) {
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0',
                 a.intent === 'danger'   && 'bg-red-500/10 text-red-300 border border-red-500/20 hover:bg-red-500/15 hover:border-red-500/40',
-                a.intent === 'primary'  && 'bg-[#E7D7BE] text-white hover:bg-[#C9BCA8]',
-                (!a.intent || a.intent === 'default') && 'bg-white/[0.04] text-[#F7EBDD] border border-white/[0.06] hover:bg-white/[0.08] hover:border-white/[0.12]',
+                a.intent === 'primary'  && 'bg-white text-black font-semibold shadow-md hover:bg-white/90 hover:bg-white/80',
+                (!a.intent || a.intent === 'default') && 'bg-white/[0.04] text-white border border-white/[0.06] hover:bg-white/[0.08] hover:border-white/[0.12]',
               )}
             >
               {a.loading ? <Loader2 size={11} className="animate-spin" /> : a.icon}

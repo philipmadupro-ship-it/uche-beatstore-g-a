@@ -101,7 +101,7 @@ export default function OfflinePage() {
                   className="grid grid-cols-[40px_1fr_88px_40px] items-center gap-4 border-b border-[var(--border)] px-4 py-3 transition-colors last:border-b-0 hover:bg-[var(--bg-hover)] sm:grid-cols-[40px_1fr_120px_120px_60px]"
                 >
                   <div className="flex size-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg-page)]">
-                    <Music2 size={12} className="text-[#F3E6D1]" />
+                    <Music2 size={12} className="text-white" />
                   </div>
                   <p className="truncate text-[12px] text-[var(--text-primary)]">{m.title || m.id}</p>
                   <p className="font-mono text-[10px] text-[var(--text-readable)]">{formatMB(m.size)}</p>

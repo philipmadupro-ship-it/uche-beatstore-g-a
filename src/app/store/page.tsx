@@ -116,8 +116,8 @@ function StoreTrustRail({ accentColor }: { accentColor: string }) {
               <Icon size={13} />
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-[11px] font-semibold text-[#F7EBDD]">{label}</span>
-              <span className="block truncate text-[9px] font-mono uppercase tracking-[0.16em] text-[#9B9282]">{detail}</span>
+              <span className="block truncate text-[11px] font-semibold text-white">{label}</span>
+              <span className="block truncate text-[9px] font-mono uppercase tracking-[0.16em] text-white/40">{detail}</span>
             </span>
           </div>
         ))}
@@ -182,7 +182,7 @@ function StoreSalesSpotlight({
                 {track.cover_url ? (
                   <CoverImage src={track.cover_url} alt="" sizes="104px" priority className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]" />
                 ) : (
-                  <div className="grid h-full w-full place-items-center bg-[#171511] text-[#9B9282]">
+                  <div className="grid h-full w-full place-items-center bg-white/[0.04] text-white/40">
                     <Music size={28} />
                   </div>
                 )}
@@ -190,20 +190,20 @@ function StoreSalesSpotlight({
               </button>
               <div className="min-w-0">
                 <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[9px] font-mono uppercase tracking-[0.18em] text-[#9B9282]">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[9px] font-mono uppercase tracking-[0.18em] text-white/40">
                     <Sparkles size={10} style={{ color: accentColor }} />
                     Daily pick
                   </span>
                   {trackPrice != null && (
-                    <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[9px] font-mono uppercase tracking-[0.18em] text-[#D0C3AF]">
+                    <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[9px] font-mono uppercase tracking-[0.18em] text-white/80">
                       from {money(trackPrice)}
                     </span>
                   )}
                 </div>
-                <h2 className="truncate text-[18px] font-bold leading-tight text-[#F7EBDD] sm:text-[24px]">
+                <h2 className="truncate text-[18px] font-bold leading-tight text-white sm:text-[24px]">
                   {track.title}
                 </h2>
-                <p className="mt-1.5 max-w-xl truncate text-[9px] font-mono uppercase tracking-[0.16em] text-[#9B9282]">
+                <p className="mt-1.5 max-w-xl truncate text-[9px] font-mono uppercase tracking-[0.16em] text-white/40">
                   {[track.type, track.bpm ? `${track.bpm} BPM` : null, track.key ? `${track.key}${track.scale === 'minor' ? 'm' : ''}` : null].filter(Boolean).join(' · ')}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -219,7 +219,7 @@ function StoreSalesSpotlight({
                   <button
                     type="button"
                     onClick={() => onPreview(track)}
-                    className="tap inline-flex min-h-10 items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.04] px-3.5 text-[10px] font-mono uppercase tracking-wider text-[#D0C3AF] transition-colors hover:border-white/[0.18] hover:text-[#F7EBDD]"
+                    className="tap inline-flex min-h-10 items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.04] px-3.5 text-[10px] font-mono uppercase tracking-wider text-white/80 transition-colors hover:border-white/[0.18] hover:text-white"
                   >
                     {licenseCount > 0 ? 'Choose license' : 'Open beat'}
                     <ArrowRight size={12} />
@@ -237,17 +237,17 @@ function StoreSalesSpotlight({
                 {projectCover ? (
                   <CoverImage src={projectCover} alt="" sizes="96px" className="h-full w-full object-cover" />
                 ) : (
-                  <div className="grid h-full w-full place-items-center text-[#9B9282]">
+                  <div className="grid h-full w-full place-items-center text-white/40">
                     <Music size={22} />
                   </div>
                 )}
               </Link>
               <div className="flex min-w-0 flex-1 flex-col">
-                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#9B9282]">Bundle</p>
-                <Link href={`/store/projects/${project.id}`} className="mt-1 line-clamp-2 text-[18px] font-bold leading-tight text-[#F7EBDD] hover:text-[#D0C3AF]">
+                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/40">Bundle</p>
+                <Link href={`/store/projects/${project.id}`} className="mt-1 line-clamp-2 text-[18px] font-bold leading-tight text-white hover:text-white/80">
                   {project.name}
                 </Link>
-                <p className="mt-1 text-[9px] font-mono uppercase tracking-[0.16em] text-[#9B9282]">
+                <p className="mt-1 text-[9px] font-mono uppercase tracking-[0.16em] text-white/40">
                   {project.tracks?.length ?? 0} tracks{projectPrice != null && projectPrice > 0 ? ` · ${money(projectPrice)}` : ''}
                 </p>
                 <button
@@ -946,7 +946,7 @@ function StorePage() {
   }
 
   const accentColor = normalizeThemeColor(creator?.accent_color);
-  const textColor = creator?.text_color_primary || '#F7EBDD';
+  const textColor = creator?.text_color_primary || '#FFFFFF';
   const fontFamily = FONT_FAMILY_MAP[creator?.font_style ?? 'default'] ?? FONT_FAMILY_MAP.default;
 
   return (
@@ -1101,8 +1101,8 @@ function StorePage() {
           <button
             onClick={() => setSidebarOpen((o) => !o)}
             className={`tap lg:hidden flex min-h-11 items-center gap-1.5 rounded-full border px-4 py-2 text-[10px] font-mono uppercase tracking-wider transition-colors ${sidebarOpen || hasActiveFilters
-                ? 'border-[#E7D7BE]/40 text-[#E7D7BE] bg-[#E7D7BE]/5'
-                : 'border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD]'
+                ? 'border-white/ text-black bg-white font-semibold shadow-md hover:bg-white/90/5'
+                : 'border-white/10 text-white/60 hover:text-white'
               }`}
           >
             <SlidersHorizontal size={11} />
@@ -1117,7 +1117,7 @@ function StorePage() {
 
           {/* Search */}
           <div className="relative order-2 min-w-0 basis-full sm:order-none sm:basis-auto sm:flex-1 sm:min-w-[160px] sm:max-w-sm">
-            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#B4AA99]" />
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60" />
             <input
               role="combobox"
               type="text"
@@ -1160,16 +1160,16 @@ function StorePage() {
                 }
                 if (e.key === 'Escape') setSearchFocused(false);
               }}
-              className="w-full min-h-11 bg-[#171511] border border-[#2B2821] rounded-full py-2 pl-8 pr-3 text-[12px] text-[#F7EBDD] placeholder:text-[#B4AA99] focus:outline-none focus:border-[#3B372F]"
+              className="w-full min-h-11 bg-white/[0.04] border border-white/10 rounded-full py-2 pl-8 pr-3 text-[12px] text-white placeholder:text-white/60 focus:outline-none focus:border-white/20"
             />
             {showSearchSuggestions && (
               <div
                 id="store-search-suggestions"
                 role="listbox"
-                className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 overflow-hidden rounded-xl border border-white/[0.08] bg-[#11100D]/[0.98] shadow-[0_18px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02]/[0.98] shadow-[0_18px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl"
               >
                 <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
-                  <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
+                  <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-white/40">
                     {search.trim() ? 'Suggestions' : 'Recent searches'}
                   </span>
                   {recentSearches.length > 0 && !search.trim() && (
@@ -1177,7 +1177,7 @@ function StorePage() {
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={clearRecentSearches}
-                      className="text-[8px] font-mono uppercase tracking-[0.16em] text-[#B4AA99] transition-colors hover:text-[#F7EBDD]"
+                      className="text-[8px] font-mono uppercase tracking-[0.16em] text-white/60 transition-colors hover:text-white"
                     >
                       Clear
                     </button>
@@ -1203,9 +1203,9 @@ function StorePage() {
                         {suggestion.kind === 'recent' ? <Clock3 size={12} /> : <Search size={12} />}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12px] font-medium text-[#F7EBDD]">{suggestion.label}</span>
+                        <span className="block truncate text-[12px] font-medium text-white">{suggestion.label}</span>
                         {suggestion.hint && (
-                          <span className="block truncate text-[8px] font-mono uppercase tracking-[0.18em] text-[#9B9282]">
+                          <span className="block truncate text-[8px] font-mono uppercase tracking-[0.18em] text-white/40">
                             {suggestion.hint}
                           </span>
                         )}
@@ -1223,7 +1223,7 @@ function StorePage() {
                 <button
                   key={f}
                   onClick={() => setTypeFilter(f)}
-                  className={`px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider rounded-full transition-colors whitespace-nowrap ${typeFilter === f ? 'text-[#F7EBDD] border border-[#E7D7BE]/40 bg-[#E7D7BE]/10' : 'bg-transparent text-[#9B9282] hover:text-[#D0C3AF]'
+                  className={`px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider rounded-full transition-colors whitespace-nowrap ${typeFilter === f ? 'text-white border border-white/ bg-white/10' : 'bg-transparent text-white/40 hover:text-white/80'
                     }`}
                 >
                   {f}
@@ -1234,12 +1234,12 @@ function StorePage() {
           <div className="hidden flex-1 sm:block" />
 
           {/* Grid / List toggle */}
-          <div className="flex items-center gap-0.5 bg-[#171511] border border-[#2B2821] rounded-md p-0.5">
+          <div className="flex items-center gap-0.5 bg-white/[0.04] border border-white/10 rounded-md p-0.5">
             <button
               onClick={() => changeViewMode('grid')}
               aria-label="Grid view"
               aria-pressed={viewMode === 'grid'}
-              className={`tap grid size-11 place-items-center rounded transition-colors ${viewMode === 'grid' ? 'bg-[#3B372F] text-[#F7EBDD]' : 'text-[#9B9282] hover:text-[#D0C3AF]'}`}
+              className={`tap grid size-11 place-items-center rounded transition-colors ${viewMode === 'grid' ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white/80'}`}
             >
               <LayoutGrid size={13} />
             </button>
@@ -1247,7 +1247,7 @@ function StorePage() {
               onClick={() => changeViewMode('list')}
               aria-label="List view"
               aria-pressed={viewMode === 'list'}
-              className={`tap grid size-11 place-items-center rounded transition-colors ${viewMode === 'list' ? 'bg-[#3B372F] text-[#F7EBDD]' : 'text-[#9B9282] hover:text-[#D0C3AF]'}`}
+              className={`tap grid size-11 place-items-center rounded transition-colors ${viewMode === 'list' ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white/80'}`}
             >
               <List size={13} />
             </button>
@@ -1265,7 +1265,7 @@ function StorePage() {
             className="tap hidden sm:flex w-9 h-9 items-center justify-center rounded-full transition-colors"
             style={djActive
               ? { backgroundColor: accentColor, color: '#090907' }
-              : { color: '#B4AA99' }}
+              : { color: 'rgba(255,255,255,0.6)' }}
           >
             <Disc3 size={15} className={djActive ? 'animate-[spin_3s_linear_infinite]' : ''} />
           </button>
@@ -1275,7 +1275,7 @@ function StorePage() {
             onClick={handleCopyLink}
             title="Copy store link"
             aria-label="Copy store link"
-            className="tap hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-[#B4AA99] hover:text-[#F7EBDD] transition-colors"
+            className="tap hidden sm:flex w-9 h-9 items-center justify-center rounded-full text-white/60 hover:text-white transition-colors"
           >
             <Link2 size={15} />
           </button>
@@ -1367,12 +1367,12 @@ function StorePage() {
               </div>
             )
           ) : filtered.length === 0 ? (
-            <div className="px-4 py-24 text-center sm:py-32 border border-dashed border-[#2B2821] rounded-lg">
-              <Music size={28} className="text-[#9B9282] mx-auto mb-3" />
-              <p className="text-sm text-[#F7EBDD] mb-1">
+            <div className="px-4 py-24 text-center sm:py-32 border border-dashed border-white/10 rounded-lg">
+              <Music size={28} className="text-white/40 mx-auto mb-3" />
+              <p className="text-sm text-white mb-1">
                 {tracks.length === 0 ? 'No beats in the store yet' : 'No beats match your filters'}
               </p>
-              <p className="mx-auto max-w-md text-[11px] text-[#9B9282]">
+              <p className="mx-auto max-w-md text-[11px] text-white/40">
                 {tracks.length === 0 ? 'Check back soon.' : 'Try adjusting or resetting filters.'}
               </p>
               {tracks.length > 0 && emptyStateSuggestions.length > 0 && (
@@ -1382,7 +1382,7 @@ function StorePage() {
                       key={`${suggestion.kind}-${suggestion.value}`}
                       type="button"
                       onClick={() => applyEmptyStateSuggestion(suggestion)}
-                      className="tap min-h-10 rounded-full border border-[#2B2821] bg-[#171511] px-3 text-[9px] font-mono uppercase tracking-[0.16em] text-[#D0C3AF] transition-colors hover:border-[#D4BFA0]/40 hover:text-[#F7EBDD] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907]"
+                      className="tap min-h-10 rounded-full border border-white/10 bg-white/[0.04] px-3 text-[9px] font-mono uppercase tracking-[0.16em] text-white/80 transition-colors hover:border-[#FFFFFF]/40 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                     >
                       Browse {suggestion.label}
                     </button>
@@ -1390,7 +1390,7 @@ function StorePage() {
                 </div>
               )}
               {hasActiveFilters && (
-                <button onClick={resetFilters} className="tap mt-5 min-h-10 px-3 text-[10px] font-mono uppercase tracking-wider text-[#E7D7BE] hover:text-white transition-colors">
+                <button onClick={resetFilters} className="tap mt-5 min-h-10 px-3 text-[10px] font-mono uppercase tracking-wider text-white hover:text-white transition-colors">
                   Reset filters
                 </button>
               )}
@@ -1479,7 +1479,7 @@ function StorePage() {
                     type="button"
                     onClick={loadMoreTracks}
                     disabled={loadingMore}
-                    className="tap inline-flex min-h-11 items-center justify-center rounded-full border border-[#2B2821] bg-[#14110D] px-6 text-[10px] font-mono uppercase tracking-[0.2em] text-[#E7D7BE] transition-colors hover:border-[#D4BFA0]/40 hover:text-white disabled:cursor-wait disabled:opacity-60"
+                    className="tap inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-[#14110D] px-6 text-[10px] font-mono uppercase tracking-[0.2em] text-white transition-colors hover:border-[#FFFFFF]/40 hover:text-white disabled:cursor-wait disabled:opacity-60"
                   >
                     {loadingMore ? 'Loading beats...' : 'Load more beats'}
                   </button>
@@ -1508,21 +1508,21 @@ function StorePage() {
       <StoreTrustRail accentColor={accentColor} />
 
       {/* ── Store footer ─────────────────────────────────────────── */}
-      <div className="border-t border-[#2B2821] mt-4 py-6 px-4 md:px-12">
+      <div className="border-t border-white/10 mt-4 py-6 px-4 md:px-12">
         <div className="max-w-[1400px] mx-auto flex flex-wrap items-center justify-between gap-4">
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
             © {new Date().getFullYear()} {creator?.display_name || 'Beat Store'}
           </p>
           <div className="flex flex-wrap items-center gap-4">
             <Link
               href={isSignedIn ? '/store/account/me' : '/store/account'}
-              className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
+              className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 hover:text-white/80 transition-colors"
             >
               Buyer account
             </Link>
             <Link
               href="/store/orders"
-              className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
+              className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 hover:text-white/80 transition-colors"
             >
               Order history / Re-download
             </Link>

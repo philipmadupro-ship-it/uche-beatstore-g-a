@@ -96,19 +96,19 @@ export function ProjectDetailHeader(props: Props) {
   const [tagsOpen, setTagsOpen] = useState(false);
 
   return (
-    <div className={`flex gap-4 sm:gap-7 mb-6 sm:mb-10 ${hideCover ? '' : 'pb-6 sm:pb-8 border-b border-[#1A1813]'}`}>
+    <div className={`flex gap-4 sm:gap-7 mb-6 sm:mb-10 ${hideCover ? '' : 'pb-6 sm:pb-8 border-b border-[#0E0E0E]'}`}>
       {/* Cover — clickable to swap art. Hidden when the parent page is
           rendering a side-by-side layout with the cover in its own
           column. */}
       {!hideCover && (
         <div
-          className="w-[160px] h-[160px] bg-[#171511] rounded-lg border border-[#211F1A] overflow-hidden shrink-0 group relative cursor-pointer"
+          className="w-[160px] h-[160px] bg-white/[0.04] rounded-lg border border-white/10 overflow-hidden shrink-0 group relative cursor-pointer"
           onClick={() => fileInputRef.current?.click()}
         >
           {project?.cover_url ? (
             <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-5xl font-light text-[#211F1A]">
+            <div className="w-full h-full flex items-center justify-center text-5xl font-light text-black">
               {project?.name?.[0] || 'P'}
             </div>
           )}
@@ -123,18 +123,18 @@ export function ProjectDetailHeader(props: Props) {
       <div className="flex-1 flex flex-col justify-between py-0.5 sm:py-1 min-w-0">
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-2 overflow-x-auto scrollbar-hide">
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">Project</p>
-            <div className="flex items-center gap-1 rounded-full bg-[#11100D] p-1">
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/50">Project</p>
+            <div className="flex items-center gap-1 rounded-full bg-white/[0.02] p-1">
               {STATUSES.map((s) => (
                 <button
                   key={s}
                   onClick={() => onSetStatus(s)}
                   className={`text-[8px] sm:text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full border transition-colors ${
                     (project?.status || 'in_progress') === s
-                      ? s === 'in_progress' ? 'text-[#D6BE7A] border-[#3a2f10] bg-[#1a1505]'
-                        : s === 'final' ? 'text-[#8ecf9f] border-[#0a3a1a] bg-[#0a1f0f]'
-                        : 'text-[#B4AA99] border-[#3B372F] bg-[#1A1813]'
-                      : 'text-[#837B6D] border-[#211F1A] hover:text-[#D0C3AF] hover:border-[#3B372F]'
+                      ? s === 'in_progress' ? 'text-white border-white/30 bg-white/10'
+                        : s === 'final' ? 'text-white border-white/30 bg-white/10'
+                        : 'text-white/80 border-white/20 bg-white/10'
+                      : 'text-white/40 border-white/10 hover:text-white hover:border-white/20'
                   }`}
                 >
                   {s.replace('_', ' ')}
@@ -147,18 +147,18 @@ export function ProjectDetailHeader(props: Props) {
             <div className="flex items-center gap-2 mb-3">
               <input
                 autoFocus
-                className="bg-transparent border-b-2 border-[#E7D7BE]/40 text-2xl sm:text-4xl font-black tracking-tight outline-none text-white flex-1 focus:border-[#E7D7BE] uppercase"
+                className="bg-transparent border-b-2 border-white/40 text-2xl sm:text-4xl font-black tracking-tight outline-none text-white flex-1 focus:border-white uppercase"
                 value={tempTitle}
                 onChange={(e) => setTempTitle(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') onTitleSave(); if (e.key === 'Escape') onTitleEditCancel(); }}
               />
-              <button onClick={onTitleSave} className="p-1.5 rounded-lg bg-[#E7D7BE]/10 hover:bg-[#E7D7BE]/20 text-[#E7D7BE] transition-colors"><Check size={14} /></button>
-              <button onClick={onTitleEditCancel} className="p-1.5 rounded-lg hover:bg-[#1A1813] text-[#9B9282] transition-colors"><X size={14} /></button>
+              <button onClick={onTitleSave} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"><Check size={14} /></button>
+              <button onClick={onTitleEditCancel} className="p-1.5 rounded-lg hover:bg-white/10 text-white/50 transition-colors"><X size={14} /></button>
             </div>
           ) : (
             <div className="group flex items-center gap-2 mb-3">
               <h1 className="text-2xl sm:text-4xl font-black text-white leading-none tracking-tight truncate uppercase">{project?.name}</h1>
-              <button onClick={onTitleEditStart} className="opacity-0 group-hover:opacity-100 p-1.5 text-[#837B6D] hover:text-[#E7D7BE] transition-all rounded-lg hover:bg-white/[0.04]">
+              <button onClick={onTitleEditStart} className="opacity-0 group-hover:opacity-100 p-1.5 text-white/40 hover:text-white transition-all rounded-lg hover:bg-white/[0.04]">
                 <Edit2 size={12} />
               </button>
             </div>
@@ -166,11 +166,11 @@ export function ProjectDetailHeader(props: Props) {
 
           {/* Stats row */}
           <div className="flex items-center gap-1.5 flex-wrap mb-1">
-            <span className="rounded-full bg-[#11100D] px-2 py-1 text-[9px] sm:text-[10px] font-mono text-[#B4AA99] tabular-nums">
+            <span className="rounded-full bg-white/[0.02] px-2 py-1 text-[9px] sm:text-[10px] font-mono text-white/60 tabular-nums">
               {trackCount} track{trackCount !== 1 ? 's' : ''}
             </span>
             {totalDuration > 0 && (
-              <span className="rounded-full bg-[#11100D] px-2 py-1 text-[9px] sm:text-[10px] font-mono text-[#B4AA99]">
+              <span className="rounded-full bg-white/[0.02] px-2 py-1 text-[9px] sm:text-[10px] font-mono text-white/60">
                 {fmtDuration(totalDuration)}
               </span>
             )}
@@ -183,7 +183,7 @@ export function ProjectDetailHeader(props: Props) {
                 <button
                   onClick={() => setTagsOpen((v) => !v)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium border transition-all ${
-                    tagsOpen ? 'bg-[#342F27] border-[#C9BCA8]/40 text-[#F3E6D1]' : 'border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#3B372F]'
+                    tagsOpen ? 'bg-white/20 border-white/40 text-white' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'
                   }`}
                 >
                   <Tag size={11} /> Tags
@@ -206,7 +206,7 @@ export function ProjectDetailHeader(props: Props) {
           <button
             onClick={onPlay}
             disabled={playDisabled}
-            className="grid size-9 place-items-center rounded-full bg-white text-black hover:bg-[#F7EBDD] active:scale-[0.98] disabled:opacity-30 transition-all sm:inline-flex sm:size-auto sm:gap-2 sm:px-4 sm:py-2 sm:text-[12px] sm:font-medium"
+            className="grid size-9 place-items-center rounded-full bg-white text-black hover:bg-white/90 active:scale-[0.98] disabled:opacity-30 transition-all sm:inline-flex sm:size-auto sm:gap-2 sm:px-4 sm:py-2 sm:text-[12px] sm:font-medium"
             title="Play project"
           >
             <Play size={12} fill="currentColor" className="ml-0.5" />
@@ -215,21 +215,21 @@ export function ProjectDetailHeader(props: Props) {
           <button
             onClick={onShare}
             disabled={shareDisabled}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-white/[0.08] bg-white/[0.04] text-[#F7EBDD] text-[11px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] disabled:opacity-30 transition-all sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[12px]"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-white/[0.08] bg-white/[0.04] text-white text-[11px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] disabled:opacity-30 transition-all sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[12px]"
           >
             <Share2 size={12} />
             Share
           </button>
           <button
             onClick={onAddFromLibrary}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-white/[0.06] bg-transparent text-[#D0C3AF] text-[11px] font-medium hover:text-[#F7EBDD] hover:border-white/[0.1] transition-all sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[12px]"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-white/[0.06] bg-transparent text-white/60 text-[11px] font-medium hover:text-white hover:border-white/[0.1] transition-all sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[12px]"
           >
             <Library size={12} />
             Library
           </button>
           <button
             onClick={onToggleUpload}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-white/[0.06] bg-transparent text-[#D0C3AF] text-[11px] font-medium hover:text-[#F7EBDD] hover:border-white/[0.1] transition-all sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[12px]"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-white/[0.06] bg-transparent text-white/60 text-[11px] font-medium hover:text-white hover:border-white/[0.1] transition-all sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[12px]"
           >
             <Plus size={12} />
             Upload

@@ -99,7 +99,7 @@ export function BeatPreviewDrawer({
         </button>
       ) : (
         <div className="w-full rounded-xl border border-white/[0.06] bg-white/[0.03] py-3 text-center">
-          <p className="text-[11px] text-[#9B9282]">Not available for purchase</p>
+          <p className="text-[11px] text-white/40">Not available for purchase</p>
         </div>
       )}
     </div>
@@ -183,10 +183,10 @@ export function BeatPreviewDrawer({
               accent={accentColor}
             />
             <div className="flex justify-between mt-1.5">
-              <span className="text-[9px] font-mono text-[#9B9282] tabular-nums">
+              <span className="text-[9px] font-mono text-white/40 tabular-nums">
                 {isCurrent ? fmt(currentSec) : '0:00'}
               </span>
-              <span className="text-[9px] font-mono text-[#9B9282] tabular-nums">
+              <span className="text-[9px] font-mono text-white/40 tabular-nums">
                 {dur ? fmt(dur) : '—'}
               </span>
             </div>
@@ -195,9 +195,9 @@ export function BeatPreviewDrawer({
           {/* ── License selector — keep the buying decision adjacent to preview ── */}
           <div className="px-5 py-4 border-b border-white/[0.05]">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">License</p>
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40">License</p>
               {selectedTier && !track.free_download_enabled && (
-                <p className="text-[11px] font-semibold tabular-nums text-[#F7EBDD]">
+                <p className="text-[11px] font-semibold tabular-nums text-white">
                   {selectedTier.is_free ? 'Free' : `$${Number(selectedTier.price_usd).toLocaleString()}`}
                 </p>
               )}
@@ -214,7 +214,7 @@ export function BeatPreviewDrawer({
 
           {/* ── Studio specs ── */}
           <div className="px-5 py-4 border-b border-white/[0.05]">
-            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-3">Studio specs</p>
+            <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">Studio specs</p>
             <div className="grid grid-cols-2 gap-2">
               {[
                 { label: 'Tempo', value: track.bpm ? `${track.bpm} BPM` : '—' },
@@ -226,7 +226,7 @@ export function BeatPreviewDrawer({
               ].map(({ label, value }) => (
                 <div key={label} className="flex flex-col gap-1 rounded-xl border border-white/[0.06] px-3 py-3">
                   <span className="text-[9px] font-mono uppercase tracking-[0.18em] text-white/35">{label}</span>
-                  <span className={`text-[11px] font-semibold ${label === 'Stems' && track.stems_status === 'done' ? 'text-[#6DC6A4]' : 'text-[#F7EBDD]'}`}>{value}</span>
+                  <span className={`text-[11px] font-semibold ${label === 'Stems' && track.stems_status === 'done' ? 'text-[#6DC6A4]' : 'text-white'}`}>{value}</span>
                 </div>
               ))}
             </div>
@@ -235,7 +235,7 @@ export function BeatPreviewDrawer({
           {/* ── Similar beats ── */}
           {similar.length > 0 && (
             <div className="px-5 py-4 border-b border-white/[0.05]">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-3">Similar beats</p>
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">Similar beats</p>
               <div className="space-y-1.5">
                 {similar.map((s) => (
                   <button
@@ -246,15 +246,15 @@ export function BeatPreviewDrawer({
                     <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-[#090907]">
                       {s.cover_url
                         ? <CoverImage src={s.cover_url} sizes="32px" className="object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={12} /></div>}
+                        : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={12} /></div>}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="truncate text-[11px] font-medium text-[#F7EBDD] transition-colors group-hover:text-[#E7D7BE]">{s.title}</p>
-                      <p className="text-[9px] font-mono text-[#9B9282] uppercase">
+                      <p className="truncate text-[11px] font-medium text-white transition-colors group-hover:text-white">{s.title}</p>
+                      <p className="text-[9px] font-mono text-white/40 uppercase">
                         {s.bpm ? `${s.bpm} BPM` : ''}{s.key ? ` · ${s.key}` : ''}
                       </p>
                     </div>
-                    <ChevronRight size={12} className="text-[#9B9282] group-hover:text-[#B4AA99] shrink-0 transition-colors" />
+                    <ChevronRight size={12} className="text-white/40 group-hover:text-white/60 shrink-0 transition-colors" />
                   </button>
                 ))}
               </div>
@@ -265,7 +265,7 @@ export function BeatPreviewDrawer({
             {/* Open full page — bottom of scrollable area, very visible */}
             <Link
               href={`/store/${track.id}`}
-              className="mt-6 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/[0.08] text-[11px] font-medium text-[#B4AA99] transition-colors hover:border-white/[0.16] hover:text-[#F7EBDD]"
+              className="mt-6 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-white/[0.08] text-[11px] font-medium text-white/60 transition-colors hover:border-white/[0.16] hover:text-white"
             >
               <ExternalLink size={12} />
               View full beat page

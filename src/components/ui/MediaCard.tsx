@@ -63,16 +63,16 @@ export function MediaCard({
   const coverBlock = (
     <div
       className={cn(
-        'relative mb-2.5 aspect-square overflow-hidden rounded-xl border bg-[#11100D] transition-all duration-200 group-hover:-translate-y-0.5 sm:rounded-2xl',
-        selected ? 'border-[#E7D7BE]/60' : 'border-[#211F1A] group-hover:border-[#3B372F]',
+        'relative mb-2.5 aspect-square overflow-hidden rounded-xl border bg-white/[0.02] transition-all duration-200 group-hover:-translate-y-0.5 sm:rounded-2xl',
+        selected ? 'border-white/' : 'border-white/10 group-hover:border-white/20',
       )}
     >
       {coverUrl ? (
         <img loading="lazy" src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />
       ) : covers.length >= 2 ? (
-        <div className="absolute inset-0 grid grid-cols-2 gap-px bg-[#211F1A]">
+        <div className="absolute inset-0 grid grid-cols-2 gap-px bg-white/[0.05]">
           {covers.slice(0, 4).map((url, i) => (
-            <div key={`${url}-${i}`} className="overflow-hidden bg-[#171511]">
+            <div key={`${url}-${i}`} className="overflow-hidden bg-white/[0.04]">
               <img loading="lazy" src={url} alt="" className="h-full w-full object-cover" />
             </div>
           ))}
@@ -92,7 +92,7 @@ export function MediaCard({
         <button
           onClick={onTogglePin}
           disabled={pinBusy}
-          className="absolute left-2 top-2 z-20 grid size-6 place-items-center rounded-full bg-[#E7D7BE] text-black shadow-sm tap"
+          className="absolute left-2 top-2 z-20 grid size-6 place-items-center rounded-full bg-white text-black shadow-sm tap"
           title="Unpin"
         >
           <Pin size={10} fill="currentColor" />
@@ -107,7 +107,7 @@ export function MediaCard({
         <div
           className={cn(
             'absolute right-2 top-2 grid size-6 place-items-center rounded-md border backdrop-blur-md',
-            selected ? 'border-[#F3E6D1] bg-[#E7D7BE]' : 'border-white/20 bg-black/50',
+            selected ? 'border-white/30 bg-white' : 'border-white/20 bg-black/50',
           )}
         >
           {selected && <Check size={12} className="text-black" strokeWidth={3} />}
@@ -123,13 +123,13 @@ export function MediaCard({
       <h3
         className={cn(
           'truncate text-[13px] font-bold leading-tight transition-colors sm:text-[15px]',
-          selected ? 'text-white' : 'text-[#F7EBDD] group-hover:text-white',
+          selected ? 'text-white' : 'text-white group-hover:text-white',
         )}
       >
         {title}
       </h3>
       {meta && (
-        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-meta text-[#837B6D]">
+        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-meta text-white/40">
           {meta}
         </div>
       )}

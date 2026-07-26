@@ -26,13 +26,13 @@ interface ListContainerProps {
 
 export function ListContainer({ children, header, className }: ListContainerProps) {
   return (
-    <div className={cn('overflow-hidden rounded-2xl border border-[#211F1A] bg-[#171511]/70', className)}>
+    <div className={cn('overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]/70', className)}>
       {header && (
-        <div className="hidden border-b border-[#211F1A] bg-[#11100D] px-4 py-2.5 md:flex md:items-center md:gap-3">
+        <div className="hidden border-b border-white/10 bg-white/[0.02] px-4 py-2.5 md:flex md:items-center md:gap-3">
           {header}
         </div>
       )}
-      <div className="divide-y divide-[#211F1A]">{children}</div>
+      <div className="divide-y divide-white/10">{children}</div>
     </div>
   );
 }
@@ -87,7 +87,7 @@ export function ListRow({
 
   const rowClass = cn(
     'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors sm:px-4',
-    active ? 'bg-[#1A1813]' : 'hover:bg-[#1A1813]/60',
+    active ? 'bg-[#0E0E0E]' : 'hover:bg-[#0E0E0E]/60',
     className,
   );
 

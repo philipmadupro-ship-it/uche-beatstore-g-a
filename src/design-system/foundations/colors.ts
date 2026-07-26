@@ -31,9 +31,9 @@ export const deRocheWavePalette = {
 export const accentStudies = {
   original: {
     name: 'Original champagne accent',
-    brandPrimary: '#E7D7BE',
-    brandPrimaryHover: '#F3E6D1',
-    brandPrimaryActive: '#C9BCA8',
+    brandPrimary: '#FFFFFF',
+    brandPrimaryHover: '#FFFFFF',
+    brandPrimaryActive: 'rgba(255,255,255,0.8)',
     brandOnPrimary: deRochePrimitives.black900,
   },
   luxuryBeige: {

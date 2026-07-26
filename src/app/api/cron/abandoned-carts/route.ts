@@ -123,7 +123,7 @@ export async function GET(req: NextRequest) {
           html: emailShell(isSecond ? 'Still want these?' : 'Still interested?',
             `${emailHeading(isSecond ? 'Your cart expires soon' : 'Your cart is waiting')}
              ${itemTable}
-             <p style="color:#F7EBDD;font-size:14px;font-weight:bold;margin:0 0 16px">Total: $${Number(cart.total_usd).toFixed(2)}</p>
+             <p style="color:#FFFFFF;font-size:14px;font-weight:bold;margin:0 0 16px">Total: $${Number(cart.total_usd).toFixed(2)}</p>
              ${discountBlock}
              ${emailButton('Complete your purchase', checkoutUrl)}`,
           ),

@@ -30,7 +30,7 @@ export function StoreLayoutClient({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen">
       <a
         href="#store-main-content"
-        className="fixed left-4 top-4 z-[100] -translate-y-24 rounded-md bg-[#E7D7BE] px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#090907] transition-transform focus:translate-y-0"
+        className="fixed left-4 top-4 z-[100] -translate-y-24 rounded-md bg-white px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-[#090907] transition-transform focus:translate-y-0"
       >
         Skip to main content
       </a>

@@ -72,7 +72,7 @@ export function ContactTasks({ contactId }: { contactId: string }) {
 
   return (
     <section>
-      <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] mb-3 flex items-center gap-2">
+      <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 mb-3 flex items-center gap-2">
         <CalendarClock size={11} /> Follow-ups{open.length > 0 ? ` · ${open.length}` : ''}
       </h2>
 
@@ -81,18 +81,18 @@ export function ContactTasks({ contactId }: { contactId: string }) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Follow up about…"
-          className="flex-1 min-w-[160px] bg-white/[0.02] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
+          className="flex-1 min-w-[160px] bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/30"
         />
         <input
           type="date"
           value={due}
           onChange={(e) => setDue(e.target.value)}
-          className="bg-white/[0.02] border border-[#2B2821] rounded-lg px-2.5 py-2 text-[12px] text-[#D0C3AF] focus:outline-none focus:border-[#3B372F] [color-scheme:dark]"
+          className="bg-white/[0.02] border border-white/10 rounded-lg px-2.5 py-2 text-[12px] text-white/80 focus:outline-none focus:border-white/30 [color-scheme:dark]"
         />
         <button
           type="submit"
           disabled={!title.trim() || saving}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.05] border border-white/[0.08] text-[11px] font-mono uppercase tracking-wider text-[#D0C3AF] hover:text-[#F7EBDD] disabled:opacity-40 transition-colors"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.05] border border-white/[0.08] text-[11px] font-mono uppercase tracking-wider text-white/80 hover:text-white disabled:opacity-40 transition-colors"
         >
           {saving ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
           Add
@@ -100,9 +100,9 @@ export function ContactTasks({ contactId }: { contactId: string }) {
       </form>
 
       {loading ? (
-        <div className="flex items-center justify-center py-6"><Loader2 size={14} className="animate-spin text-[#6E685B]" /></div>
+        <div className="flex items-center justify-center py-6"><Loader2 size={14} className="animate-spin text-white/40" /></div>
       ) : tasks.length === 0 ? (
-        <p className="text-[11px] text-[#9B9282] py-2">No follow-ups scheduled.</p>
+        <p className="text-[11px] text-white/40 py-2">No follow-ups scheduled.</p>
       ) : (
         <ul className="space-y-1.5">
           {[...open, ...done].map((task) => {
@@ -115,12 +115,12 @@ export function ContactTasks({ contactId }: { contactId: string }) {
                   onClick={() => toggle(task)}
                   aria-label={isDone ? 'Mark not done' : 'Mark done'}
                   className={`shrink-0 w-4 h-4 rounded-[5px] border flex items-center justify-center transition-colors ${
-                    isDone ? 'bg-[#6DC6A4] border-[#6DC6A4]' : 'border-[#3B372F] hover:border-[#B4AA99]'
+                    isDone ? 'bg-[#6DC6A4] border-[#6DC6A4]' : 'border-white/20 hover:border-white/40'
                   }`}
                 >
                   {isDone && <Check size={11} className="text-black" strokeWidth={3} />}
                 </button>
-                <span className={`flex-1 text-[12px] leading-snug ${isDone ? 'text-[#9B9282] line-through' : 'text-[#F7EBDD]'}`}>
+                <span className={`flex-1 text-[12px] leading-snug ${isDone ? 'text-white/40 line-through' : 'text-white'}`}>
                   {task.title}
                 </span>
                 {!isDone && task.due_at && (
@@ -134,7 +134,7 @@ export function ContactTasks({ contactId }: { contactId: string }) {
                 <button
                   onClick={() => remove(task)}
                   aria-label="Delete task"
-                  className="shrink-0 text-[#6E685B] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all p-0.5"
+                  className="shrink-0 text-white/40 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all p-0.5"
                 >
                   <Trash2 size={12} />
                 </button>

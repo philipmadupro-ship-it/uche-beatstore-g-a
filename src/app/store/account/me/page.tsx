@@ -104,7 +104,7 @@ export default function BuyerMePage() {
   if (!authChecked) {
     return (
       <div className="min-h-screen bg-[#090907] flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-[#9B9282]" />
+        <Loader2 size={20} className="animate-spin text-white/40" />
       </div>
     );
   }
@@ -112,14 +112,14 @@ export default function BuyerMePage() {
   if (isError || (data && !data.email)) {
     const msg = (error as Error)?.message || 'Could not load your account.';
     return (
-      <div className="min-h-screen bg-[#090907] text-[#F7EBDD] flex items-center justify-center px-4">
+      <div className="min-h-screen bg-[#090907] text-white flex items-center justify-center px-4">
         <div className="max-w-sm text-center">
           <AlertCircle size={28} className="text-red-400 mx-auto mb-3" />
-          <p className="text-[14px] font-medium text-[#F7EBDD] mb-1">Couldn&apos;t open your account</p>
-          <p className="text-[11px] text-[#D0C3AF] mb-5">{msg}</p>
+          <p className="text-[14px] font-medium text-white mb-1">Couldn&apos;t open your account</p>
+          <p className="text-[11px] text-white/80 mb-5">{msg}</p>
           <Link
             href="/store/account"
-            className="inline-block text-[10px] font-mono uppercase tracking-wider px-4 py-2 rounded-md bg-[#E7D7BE] text-black hover:bg-[#F3E6D1] transition-colors"
+            className="inline-block text-[10px] font-mono uppercase tracking-wider px-4 py-2 rounded-md bg-white text-black hover:bg-white transition-colors"
           >
             Sign in again
           </Link>
@@ -131,7 +131,7 @@ export default function BuyerMePage() {
   if (isLoading || !data) {
     return (
       <div className="min-h-screen bg-[#090907] flex items-center justify-center">
-        <Loader2 size={20} className="animate-spin text-[#9B9282]" />
+        <Loader2 size={20} className="animate-spin text-white/40" />
       </div>
     );
   }
@@ -143,12 +143,12 @@ export default function BuyerMePage() {
   const isEmpty = purchaseCount === 0;
 
   return (
-    <div className="min-h-screen bg-[#090907] text-[#F7EBDD]">
+    <div className="min-h-screen bg-[#090907] text-white">
       <div className="max-w-[760px] mx-auto px-4 py-10 md:py-14">
         <div className="flex items-center justify-between mb-8">
           <Link
             href="/store"
-            className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] hover:text-[#F7EBDD] transition-colors"
+            className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 hover:text-white transition-colors"
           >
             <ArrowLeft size={12} />
             Back to store
@@ -156,44 +156,44 @@ export default function BuyerMePage() {
           <button
             type="button"
             onClick={handleSignOut}
-            className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] hover:text-[#F7EBDD] transition-colors"
+            className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 hover:text-white transition-colors"
           >
             <LogOut size={12} />
             Sign out
           </button>
         </div>
 
-        <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-[#D0C3AF] mb-2">My account</p>
+        <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-white/80 mb-2">My account</p>
         <h1 className="text-[28px] sm:text-[36px] font-bold text-white leading-none tracking-tight font-heading">
           Your purchases
         </h1>
-        <p className="mt-2 text-[12px] text-[#B4AA99]">
-          Signed in as <span className="text-[#F7EBDD]">{data.email}</span>.
+        <p className="mt-2 text-[12px] text-white/60">
+          Signed in as <span className="text-white">{data.email}</span>.
         </p>
 
         {!isEmpty && (
           <div className="grid grid-cols-2 gap-3 mt-6">
-            <div className="rounded-xl border border-[#2B2821] bg-[#171511] px-4 py-3">
-              <p className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">Purchases</p>
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+              <p className="text-[9px] font-mono uppercase tracking-wider text-white/40">Purchases</p>
               <p className="text-[20px] font-bold text-white tabular-nums mt-1">{purchaseCount}</p>
             </div>
-            <div className="rounded-xl border border-[#2B2821] bg-[#171511] px-4 py-3">
-              <p className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">Total spent</p>
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+              <p className="text-[9px] font-mono uppercase tracking-wider text-white/40">Total spent</p>
               <p className="text-[20px] font-bold text-white tabular-nums mt-1">{fmtMoney(totalSpent)}</p>
             </div>
           </div>
         )}
 
         {isEmpty ? (
-          <div className="mt-10 rounded-2xl border border-[#2B2821] bg-[#171511] px-6 py-16 text-center">
-            <Music size={28} className="text-[#9B9282] mx-auto mb-3" />
-            <p className="text-[14px] text-[#F7EBDD] font-medium mb-1">No purchases yet</p>
-            <p className="text-[12px] text-[#B4AA99] max-w-md mx-auto mb-5">
+          <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-16 text-center">
+            <Music size={28} className="text-white/40 mx-auto mb-3" />
+            <p className="text-[14px] text-white font-medium mb-1">No purchases yet</p>
+            <p className="text-[12px] text-white/60 max-w-md mx-auto mb-5">
               Once you license a beat or buy a project bundle, it&apos;ll show up here.
             </p>
             <Link
               href="/store"
-              className="inline-block text-[10px] font-mono uppercase tracking-wider px-4 py-2 rounded-md bg-[#E7D7BE] text-black hover:bg-[#F3E6D1] transition-colors"
+              className="inline-block text-[10px] font-mono uppercase tracking-wider px-4 py-2 rounded-md bg-white text-black hover:bg-white transition-colors"
             >
               Browse beats
             </Link>
@@ -202,28 +202,28 @@ export default function BuyerMePage() {
           <>
             {data.project_bundles.length > 0 && (
               <section className="mt-10">
-                <h2 className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF] mb-3 flex items-center gap-2">
+                <h2 className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/80 mb-3 flex items-center gap-2">
                   <Layers size={11} />
                   Project bundles ({data.project_bundles.length})
                 </h2>
                 <ul className="space-y-2">
                   {data.project_bundles.map((b) => (
-                    <li key={b.id} className="flex items-center gap-3 rounded-xl border border-[#2B2821] bg-[#171511] px-3 py-3">
-                      <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-[#090907] border border-[#2B2821] shrink-0">
+                    <li key={b.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3">
+                      <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-[#090907] border border-white/10 shrink-0">
                         {b.project.cover_url
                           ? <CoverImage src={b.project.cover_url} alt="" className="object-cover" sizes="48px" />
-                          : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Layers size={14} /></div>}
+                          : <div className="w-full h-full flex items-center justify-center text-white/40"><Layers size={14} /></div>}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium text-[#F7EBDD] truncate">{b.project.name}</p>
-                        <p className="text-[10px] font-mono text-[#9B9282] mt-0.5">
+                        <p className="text-[13px] font-medium text-white truncate">{b.project.name}</p>
+                        <p className="text-[10px] font-mono text-white/40 mt-0.5">
                           {fmtDate(b.created_at)} · {fmtMoney(b.amount_usd)}
                         </p>
                       </div>
                       {b.download_url && (
                         <a
                           href={b.download_url}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider bg-[#E7D7BE] text-black hover:bg-[#F3E6D1] transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white text-black hover:bg-white transition-colors"
                         >
                           <Download size={11} />
                           Open
@@ -237,20 +237,20 @@ export default function BuyerMePage() {
 
             {data.track_licenses.length > 0 && (
               <section className="mt-10">
-                <h2 className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF] mb-3 flex items-center gap-2">
+                <h2 className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/80 mb-3 flex items-center gap-2">
                   <Music size={11} />
                   Track licenses ({data.track_licenses.length})
                 </h2>
                 <ul className="space-y-2">
                   {data.track_licenses.map((r) => (
-                    <li key={r.id} className="rounded-xl border border-[#2B2821] bg-[#171511] px-4 py-3">
+                    <li key={r.id} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-medium text-[#F7EBDD] truncate">
+                          <p className="text-[12px] font-medium text-white truncate">
                             {r.items.map((i) => i.title).filter(Boolean).join(' · ')
                               || `${r.items.length} track${r.items.length === 1 ? '' : 's'}`}
                           </p>
-                          <p className="text-[10px] font-mono text-[#9B9282] mt-0.5">
+                          <p className="text-[10px] font-mono text-white/40 mt-0.5">
                             {fmtDate(r.created_at)} · {fmtMoney(r.amount_usd)}
                             {r.items[0]?.license_type ? ` · ${r.items[0].license_type}` : ''}
                             {r.status ? ` · ${r.status}` : ''}
@@ -259,7 +259,7 @@ export default function BuyerMePage() {
                         {r.download_url && (
                           <a
                             href={r.download_url}
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white/[0.06] border border-white/[0.10] text-[#F7EBDD] hover:bg-white/[0.12] transition-colors"
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white/[0.06] border border-white/[0.10] text-white hover:bg-white/[0.12] transition-colors"
                           >
                             <Download size={11} />
                             Open
@@ -272,12 +272,12 @@ export default function BuyerMePage() {
               </section>
             )}
 
-            <section className="mt-10 rounded-2xl border border-[#2B2821] bg-[#171511] px-5 py-5">
+            <section className="mt-10 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-5">
               <div className="flex items-start gap-3">
-                <CreditCard size={16} className="text-[#D0C3AF] mt-0.5 shrink-0" />
+                <CreditCard size={16} className="text-white/80 mt-0.5 shrink-0" />
                 <div className="flex-1">
-                  <p className="text-[12px] font-medium text-[#F7EBDD]">Invoices &amp; payment methods</p>
-                  <p className="text-[11px] text-[#B4AA99] mt-1 leading-relaxed">
+                  <p className="text-[12px] font-medium text-white">Invoices &amp; payment methods</p>
+                  <p className="text-[11px] text-white/60 mt-1 leading-relaxed">
                     Manage your Stripe-side payment details, download invoices, or update billing email.
                   </p>
                 </div>
@@ -285,7 +285,7 @@ export default function BuyerMePage() {
                   href={`https://billing.stripe.com/p/login/start?email=${encodeURIComponent(userEmail ?? data.email)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider border border-[#3B372F] text-[#F7EBDD] hover:border-[#9B9282] hover:bg-white/[0.04] transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider border border-white/20 text-white hover:border-white/40 hover:bg-white/[0.04] transition-colors"
                 >
                   <ExternalLink size={11} />
                   Open portal
@@ -297,10 +297,10 @@ export default function BuyerMePage() {
 
         <SessionLibrary />
 
-        <footer className="mt-10 pt-6 border-t border-[#211F1A]">
-          <p className="text-[10px] font-mono text-[#9B9282] leading-relaxed">
+        <footer className="mt-10 pt-6 border-t border-white/10">
+          <p className="text-[10px] font-mono text-white/40 leading-relaxed">
             You&apos;re signed in with a persistent session — no link expiry.{' '}
-            <button onClick={handleSignOut} className="text-[#B4AA99] hover:text-[#F7EBDD] underline underline-offset-2">
+            <button onClick={handleSignOut} className="text-white/60 hover:text-white underline underline-offset-2">
               Sign out
             </button>{' '}
             any time.
@@ -363,8 +363,8 @@ function SessionLibrary() {
 
   if (isLoading) {
     return (
-      <section className="mt-10 pt-6 border-t border-[#211F1A]">
-        <Loader2 size={16} className="animate-spin text-[#9B9282]" />
+      <section className="mt-10 pt-6 border-t border-white/10">
+        <Loader2 size={16} className="animate-spin text-white/40" />
       </section>
     );
   }
@@ -373,11 +373,11 @@ function SessionLibrary() {
   const recentHistory = data.history.slice(0, 12);
 
   return (
-    <section className="mt-10 pt-8 border-t border-[#211F1A]">
-      <h2 className="text-[16px] font-medium text-[#F7EBDD] mb-5">My library</h2>
+    <section className="mt-10 pt-8 border-t border-white/10">
+      <h2 className="text-[16px] font-medium text-white mb-5">My library</h2>
 
-      <div className="rounded-2xl border border-[#2B2821] bg-[#171511] px-5 py-4 mb-5">
-        <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF] mb-3">
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 mb-5">
+        <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-white/80 mb-3">
           <History size={11} />
           Recently played
         </p>
@@ -397,9 +397,9 @@ function SessionLibrary() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-[#2B2821] bg-[#171511] px-5 py-4 mb-5">
-        <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF] mb-3">
-          <Heart size={11} className="text-[#D6BE7A]" fill="currentColor" />
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 mb-5">
+        <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-white/80 mb-3">
+          <Heart size={11} className="text-white" fill="currentColor" />
           Favorites ({data.favorites.length})
         </p>
         {data.favorites.length === 0 ? (
@@ -415,8 +415,8 @@ function SessionLibrary() {
         )}
       </div>
 
-      <div className="rounded-2xl border border-[#2B2821] bg-[#171511] px-5 py-4">
-        <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF] mb-3">
+      <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4">
+        <p className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-[0.25em] text-white/80 mb-3">
           <ListMusic size={11} />
           My playlists ({data.playlists.length})
         </p>
@@ -428,13 +428,13 @@ function SessionLibrary() {
             placeholder="New playlist name"
             maxLength={80}
             onKeyDown={(e) => { if (e.key === 'Enter' && newPlaylistName.trim()) createMut.mutate(newPlaylistName.trim()); }}
-            className="flex-1 bg-[#090907] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F]"
+            className="flex-1 bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
           />
           <button
             type="button"
             onClick={() => createMut.mutate(newPlaylistName.trim())}
             disabled={!newPlaylistName.trim() || createMut.isPending}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-[#E7D7BE] text-black text-[11px] font-bold uppercase tracking-wider hover:bg-[#F3E6D1] transition-colors disabled:opacity-40"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-white text-black text-[11px] font-bold uppercase tracking-wider hover:bg-white transition-colors disabled:opacity-40"
           >
             {createMut.isPending ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
             Create
@@ -445,11 +445,11 @@ function SessionLibrary() {
         ) : (
           <ul className="space-y-1.5">
             {data.playlists.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.03] border border-[#2B2821]">
-                <ListMusic size={12} className="text-[#9B9282]" />
+              <li key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/10">
+                <ListMusic size={12} className="text-white/40" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-medium text-[#F7EBDD] truncate">{p.name}</p>
-                  <p className="text-[10px] font-mono text-[#9B9282]">
+                  <p className="text-[12px] font-medium text-white truncate">{p.name}</p>
+                  <p className="text-[10px] font-mono text-white/40">
                     {p.track_ids.length} tracks · {buyerTrackTitles(p.tracks)} · updated {new Date(p.updated_at).toLocaleDateString()}
                   </p>
                 </div>
@@ -459,7 +459,7 @@ function SessionLibrary() {
                     if (confirm(`Delete playlist "${p.name}"?`)) deleteMut.mutate(p.id);
                   }}
                   title="Delete"
-                  className="w-7 h-7 rounded-md border border-[#2B2821] flex items-center justify-center text-[#9B9282] hover:text-red-400 hover:border-red-900/40 transition-colors"
+                  className="w-7 h-7 rounded-md border border-white/10 flex items-center justify-center text-white/40 hover:text-red-400 hover:border-red-900/40 transition-colors"
                 >
                   <Trash2 size={11} />
                 </button>

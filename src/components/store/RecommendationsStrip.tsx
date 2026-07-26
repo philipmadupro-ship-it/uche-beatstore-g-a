@@ -45,10 +45,10 @@ export function RecommendationsStrip<T extends MinTrack>({
   return (
     <section className={`${compact ? 'mt-7' : 'mt-12'} max-w-[1400px] mx-auto px-4 md:px-8`}>
       <div className={`flex items-baseline justify-between ${compact ? 'mb-2' : 'mb-3'}`}>
-        <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF]">
+        <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/80">
           {label}
         </p>
-        <p className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] tabular-nums">
+        <p className="text-[9px] font-mono uppercase tracking-wider text-white/40 tabular-nums">
           {display.length} {display.length === 1 ? 'pick' : 'picks'}
         </p>
       </div>
@@ -64,14 +64,14 @@ export function RecommendationsStrip<T extends MinTrack>({
               key={t.id}
               type="button"
               onClick={() => onPreview(t)}
-              className={`${compact ? 'w-[104px] sm:w-[118px] rounded-lg' : 'w-[140px] sm:w-[160px] rounded-xl'} group shrink-0 text-left border border-[#2B2821] bg-[#171511] hover:border-[#3B372F] transition-colors overflow-hidden flex flex-col`}
+              className={`${compact ? 'w-[104px] sm:w-[118px] rounded-lg' : 'w-[140px] sm:w-[160px] rounded-xl'} group shrink-0 text-left border border-white/10 bg-white/[0.04] hover:border-white/20 transition-colors overflow-hidden flex flex-col`}
             >
               {/* Cover */}
               <div className="relative aspect-square bg-[#090907] overflow-hidden">
                 {t.cover_url ? (
                   <CoverImage src={t.cover_url} alt="" sizes="160px" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[#9B9282] bg-gradient-to-br from-[#2B2821] to-[#090907]">
+                  <div className="w-full h-full flex items-center justify-center text-white/40 bg-gradient-to-br from-white/10 to-[#090907]">
                     <Music size={18} />
                   </div>
                 )}
@@ -94,13 +94,13 @@ export function RecommendationsStrip<T extends MinTrack>({
 
               {/* Body */}
               <div className={`${compact ? 'p-2 gap-0.5' : 'p-2.5 gap-1'} flex flex-col min-w-0`}>
-                <p className={`${compact ? 'text-[11px]' : 'text-[12px]'} font-medium truncate ${isCurrent ? '' : 'text-[#F7EBDD]'}`}
+                <p className={`${compact ? 'text-[11px]' : 'text-[12px]'} font-medium truncate ${isCurrent ? '' : 'text-white'}`}
                   style={isCurrent ? { color: accentColor } : {}}
                 >
                   {t.title}
                 </p>
                 <div className="flex items-center justify-between gap-2">
-                  <span className={`${compact ? 'text-[8px]' : 'text-[9px]'} font-mono uppercase tracking-wider text-[#9B9282] truncate`}>
+                  <span className={`${compact ? 'text-[8px]' : 'text-[9px]'} font-mono uppercase tracking-wider text-white/40 truncate`}>
                     {t.type}{t.bpm ? ` · ${t.bpm}` : ''}
                   </span>
                   {free ? (
@@ -108,11 +108,11 @@ export function RecommendationsStrip<T extends MinTrack>({
                       Free
                     </span>
                   ) : lease != null ? (
-                    <span className={`${compact ? 'text-[9px]' : 'text-[11px]'} font-mono font-bold text-[#F7EBDD] tabular-nums`}>
+                    <span className={`${compact ? 'text-[9px]' : 'text-[11px]'} font-mono font-bold text-white tabular-nums`}>
                       ${lease}
                     </span>
                   ) : (
-                    <span className="text-[10px] font-mono text-[#9B9282]">—</span>
+                    <span className="text-[10px] font-mono text-white/40">—</span>
                   )}
                 </div>
               </div>

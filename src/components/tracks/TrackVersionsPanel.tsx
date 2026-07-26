@@ -113,29 +113,29 @@ export function TrackVersionsPanel({
   };
 
   return (
-    <div className="border-b border-[#2B2821]">
+    <div className="border-b border-white/10">
       <button
         onClick={() => setOpen(!open)}
         className="w-full flex items-center justify-between px-8 py-4 hover:bg-[#101010] transition-colors"
       >
         <div className="flex items-center gap-2">
-          <HistoryIcon size={11} className="text-[#B4AA99]" />
-          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#D0C3AF]">Version history</h3>
+          <HistoryIcon size={11} className="text-white/60" />
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Version history</h3>
           {versions && versions.length > 0 && (
-            <span className="text-[9px] font-mono text-[#837B6D]">{versions.length}</span>
+            <span className="text-[9px] font-mono text-white/40">{versions.length}</span>
           )}
         </div>
-        {open ? <ChevronDown size={14} className="text-[#837B6D]" /> : <ChevronRight size={14} className="text-[#837B6D]" />}
+        {open ? <ChevronDown size={14} className="text-white/40" /> : <ChevronRight size={14} className="text-white/40" />}
       </button>
 
       {open && (
         <div className="px-4 pb-4">
           {loading ? (
             <div className="flex items-center justify-center py-6">
-              <Loader2 size={14} className="animate-spin text-[#837B6D]" />
+              <Loader2 size={14} className="animate-spin text-white/40" />
             </div>
           ) : !versions || versions.length === 0 ? (
-            <p className="text-[11px] text-[#9B9282] px-4 py-4 leading-relaxed">
+            <p className="text-[11px] text-white/40 px-4 py-4 leading-relaxed">
               No prior versions. When you replace this track&rsquo;s audio, the previous file is archived here.
             </p>
           ) : (
@@ -143,15 +143,15 @@ export function TrackVersionsPanel({
               {versions.map((v) => (
                 <div
                   key={v.id}
-                  className="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#1A1813] border border-transparent hover:border-[#2B2821] transition-all"
+                  className="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#0E0E0E] border border-transparent hover:border-white/10 transition-all"
                 >
-                  <div className="w-7 h-7 rounded-md bg-[#342F27] border border-[#C9BCA8]/30 flex items-center justify-center shrink-0">
-                    <span className="text-[9px] font-black text-[#F3E6D1]">v{v.version_number}</span>
+                  <div className="w-7 h-7 rounded-md bg-white/10 border border-white/ flex items-center justify-center shrink-0">
+                    <span className="text-[9px] font-black text-white">v{v.version_number}</span>
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] text-[#F7EBDD] truncate font-medium">{v.version_label}</p>
-                    <p className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider mt-0.5">
+                    <p className="text-[11px] text-white truncate font-medium">{v.version_label}</p>
+                    <p className="text-[9px] font-mono text-white/40 uppercase tracking-wider mt-0.5">
                       {new Date(v.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       {v.bpm ? ` · ${v.bpm} BPM` : ''}
                       {v.key ? ` · ${v.key}${v.scale ? ' ' + v.scale : ''}` : ''}
@@ -161,7 +161,7 @@ export function TrackVersionsPanel({
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => handleDownload(v)}
-                      className="p-1.5 rounded text-[#B4AA99] hover:text-[#F7EBDD] hover:bg-[#211F1A]"
+                      className="p-1.5 rounded text-white/60 hover:text-white hover:bg-white/[0.05]"
                       title="Download this version"
                     >
                       <Download size={11} />
@@ -169,7 +169,7 @@ export function TrackVersionsPanel({
                     <button
                       onClick={() => handleRevert(v)}
                       disabled={revertingId === v.id}
-                      className="p-1.5 rounded text-[#B4AA99] hover:text-[#E7D7BE] hover:bg-[#211F1A] disabled:opacity-50"
+                      className="p-1.5 rounded text-white/60 hover:text-white hover:bg-white/[0.05] disabled:opacity-50"
                       title="Make this version live"
                     >
                       {revertingId === v.id ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}

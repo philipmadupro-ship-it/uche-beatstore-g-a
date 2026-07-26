@@ -78,8 +78,8 @@ export async function POST(req: NextRequest) {
         to: normalizedEmail,
         subject: 'Your download link',
         html: `
-          <div style="font-family:sans-serif;background:#090907;color:#F7EBDD;padding:40px;border-radius:20px;max-width:560px">
-            <h1 style="text-transform:uppercase;letter-spacing:0.3em;font-size:13px;color:#E7D7BE;margin:0 0 20px">
+          <div style="font-family:sans-serif;background:#090907;color:#FFFFFF;padding:40px;border-radius:20px;max-width:560px">
+            <h1 style="text-transform:uppercase;letter-spacing:0.3em;font-size:13px;color:#FFFFFF;margin:0 0 20px">
               Re-sent: your files
             </h1>
             <p style="font-size:15px;line-height:1.7">
@@ -87,11 +87,11 @@ export async function POST(req: NextRequest) {
             </p>
             <div style="margin-top:36px">
               <a href="${downloadUrl}"
-                 style="background:#F7EBDD;color:#090907;padding:16px 32px;text-decoration:none;border-radius:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.2em;font-size:12px;display:inline-block">
+                 style="background:#FFFFFF;color:#090907;padding:16px 32px;text-decoration:none;border-radius:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.2em;font-size:12px;display:inline-block">
                 Download your files
               </a>
             </div>
-            <p style="margin-top:48px;font-size:10px;color:#837B6D;text-transform:uppercase;letter-spacing:0.5em">
+            <p style="margin-top:48px;font-size:10px;color:#777777;text-transform:uppercase;letter-spacing:0.5em">
               Questions? Reply to this email.
             </p>
           </div>
@@ -124,8 +124,8 @@ export async function POST(req: NextRequest) {
         to: normalizedEmail,
         subject: 'Your project bundle access link',
         html: `
-          <div style="font-family:sans-serif;background:#090907;color:#F7EBDD;padding:40px;border-radius:20px;max-width:560px">
-            <h1 style="text-transform:uppercase;letter-spacing:0.3em;font-size:13px;color:#E7D7BE;margin:0 0 20px">
+          <div style="font-family:sans-serif;background:#090907;color:#FFFFFF;padding:40px;border-radius:20px;max-width:560px">
+            <h1 style="text-transform:uppercase;letter-spacing:0.3em;font-size:13px;color:#FFFFFF;margin:0 0 20px">
               Re-sent: your bundle
             </h1>
             <p style="font-size:15px;line-height:1.7">
@@ -133,11 +133,11 @@ export async function POST(req: NextRequest) {
             </p>
             <div style="margin-top:36px">
               <a href="${accessUrl}"
-                 style="background:#F7EBDD;color:#090907;padding:16px 32px;text-decoration:none;border-radius:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.2em;font-size:12px;display:inline-block">
+                 style="background:#FFFFFF;color:#090907;padding:16px 32px;text-decoration:none;border-radius:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.2em;font-size:12px;display:inline-block">
                 Access your bundle
               </a>
             </div>
-            <p style="margin-top:48px;font-size:10px;color:#837B6D;text-transform:uppercase;letter-spacing:0.5em">
+            <p style="margin-top:48px;font-size:10px;color:#777777;text-transform:uppercase;letter-spacing:0.5em">
               Questions? Reply to this email.
             </p>
           </div>

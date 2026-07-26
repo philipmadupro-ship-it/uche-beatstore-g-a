@@ -53,10 +53,10 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="relative bg-[#171511] border border-[#2B2821] rounded-2xl w-full max-w-sm p-6 shadow-2xl"
+        className="relative bg-white/[0.04] border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <button onClick={onClose} className="absolute top-4 right-4 text-[#9B9282] hover:text-[#D0C3AF] transition-colors">
+        <button onClick={onClose} className="absolute top-4 right-4 text-white/40 hover:text-white/80 transition-colors">
           <X size={16} />
         </button>
 
@@ -72,20 +72,20 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
             />
           )}
           <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-1">Free download</p>
-            <p className="text-[14px] font-semibold text-[#F7EBDD] truncate max-w-[200px]">{track.title}</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-1">Free download</p>
+            <p className="text-[14px] font-semibold text-white truncate max-w-[200px]">{track.title}</p>
           </div>
         </div>
 
         {success ? (
           <div className="py-8 text-center">
             <CheckCircle2 size={32} className="text-[#6DC6A4] mx-auto mb-3" />
-            <p className="text-[14px] font-semibold text-[#F7EBDD] mb-1">Download started!</p>
-            <p className="text-[11px] text-[#9B9282]">Check your downloads folder.</p>
+            <p className="text-[14px] font-semibold text-white mb-1">Download started!</p>
+            <p className="text-[11px] text-white/40">Check your downloads folder.</p>
           </div>
         ) : (
           <>
-            <p className="text-[11px] text-[#B4AA99] mb-4 leading-relaxed">
+            <p className="text-[11px] text-white/60 mb-4 leading-relaxed">
               Enter your email to get the download. We&apos;ll occasionally send new releases — no spam.
             </p>
 
@@ -95,7 +95,7 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Your name (optional)"
-                className="w-full bg-[#11100D] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] transition-colors"
+                className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2.5 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 transition-colors"
               />
               <input
                 type="email"
@@ -103,7 +103,7 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com *"
                 required
-                className="w-full bg-[#11100D] border border-[#2B2821] rounded-lg px-3 py-2.5 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] transition-colors"
+                className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2.5 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 transition-colors"
               />
               {error && (
                 <p className="text-[11px] text-red-400 bg-red-400/5 border border-red-400/20 rounded px-3 py-2">{error}</p>

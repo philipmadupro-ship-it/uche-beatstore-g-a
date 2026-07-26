@@ -43,7 +43,7 @@ interface MatchResult {
 const MAX_RECORD_SECS = 30;
 
 export function BeatMatchModal({
-  accentColor = '#E7D7BE',
+  accentColor = '#FFFFFF',
 }: { accentColor?: string }) {
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<'idle' | 'analyzing' | 'done' | 'error'>('idle');
@@ -162,7 +162,7 @@ export function BeatMatchModal({
         type="button"
         onClick={() => setOpen(true)}
         title="Find beats that match your vocal"
-        className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-white/[0.10] text-[#F7EBDD] text-[11px] font-mono uppercase tracking-[0.18em] hover:bg-white/[0.04] transition-colors"
+        className="flex items-center gap-1.5 px-3 py-2 rounded-full border border-white/[0.10] text-white text-[11px] font-mono uppercase tracking-[0.18em] hover:bg-white/[0.04] transition-colors"
         style={{ boxShadow: `0 0 0 1px ${accentColor}33` }}
       >
         <Wand2 size={11} style={{ color: accentColor }} />
@@ -175,7 +175,7 @@ export function BeatMatchModal({
           onClick={() => setOpen(false)}
         >
           <div
-            className="relative bg-[#171511] border border-white/[0.10] rounded-2xl p-5 max-w-md w-full max-h-[90vh] overflow-auto"
+            className="relative bg-white/[0.04] border border-white/[0.10] rounded-2xl p-5 max-w-md w-full max-h-[90vh] overflow-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -191,7 +191,7 @@ export function BeatMatchModal({
               <Wand2 size={11} style={{ color: accentColor }} />
               Beat match
             </p>
-            <h3 className="text-[16px] font-semibold text-[#F7EBDD] pr-8">
+            <h3 className="text-[16px] font-semibold text-white pr-8">
               Drop a vocal — find beats that fit
             </h3>
             <p className="mt-1.5 text-[12px] text-white/55 leading-relaxed">
@@ -215,13 +215,13 @@ export function BeatMatchModal({
                     <button
                       type="button"
                       onClick={startRecording}
-                      className="flex flex-col items-center justify-center gap-1.5 py-5 rounded-xl bg-white/[0.04] border border-white/[0.10] text-[#F7EBDD] hover:bg-white/[0.08] transition-colors"
+                      className="flex flex-col items-center justify-center gap-1.5 py-5 rounded-xl bg-white/[0.04] border border-white/[0.10] text-white hover:bg-white/[0.08] transition-colors"
                     >
                       <Mic size={18} style={{ color: accentColor }} />
                       <span className="text-[11px] font-mono uppercase tracking-wider">Record</span>
                       <span className="text-[9px] text-white/45 font-mono">30s max</span>
                     </button>
-                    <label className="flex flex-col items-center justify-center gap-1.5 py-5 rounded-xl bg-white/[0.04] border border-white/[0.10] text-[#F7EBDD] hover:bg-white/[0.08] transition-colors cursor-pointer">
+                    <label className="flex flex-col items-center justify-center gap-1.5 py-5 rounded-xl bg-white/[0.04] border border-white/[0.10] text-white hover:bg-white/[0.08] transition-colors cursor-pointer">
                       <Upload size={18} style={{ color: accentColor }} />
                       <span className="text-[11px] font-mono uppercase tracking-wider">Upload</span>
                       <span className="text-[9px] text-white/45 font-mono">MP3 / WAV / M4A</span>
@@ -253,7 +253,7 @@ export function BeatMatchModal({
                 </p>
                 <ul className="space-y-2">
                   {result.matches.map((m) => (
-                    <li key={m.track.id} className="rounded-xl bg-white/[0.03] border border-[#2B2821] p-3 flex items-center gap-3">
+                    <li key={m.track.id} className="rounded-xl bg-white/[0.03] border border-white/10 p-3 flex items-center gap-3">
                       <div className="w-12 h-12 rounded-md overflow-hidden bg-[#090907] border border-white/[0.08] shrink-0">
                         {m.track.cover_url
                           // eslint-disable-next-line @next/next/no-img-element
@@ -261,7 +261,7 @@ export function BeatMatchModal({
                           : <div className="w-full h-full flex items-center justify-center text-white/30"><Music size={14} /></div>}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium text-[#F7EBDD] truncate">{m.track.title}</p>
+                        <p className="text-[13px] font-medium text-white truncate">{m.track.title}</p>
                         <p className="text-[10px] font-mono text-white/45 truncate">
                           {m.reasons.join(' · ')}
                         </p>

@@ -31,22 +31,22 @@ export function StudioTrackPicker({
   const activeTrack = activeId ? tracks.find((t) => t.id === activeId) : null;
 
   return (
-    <aside className="flex max-h-[360px] flex-col overflow-hidden rounded-2xl border border-[#1A1813] bg-[#090907] lg:h-[calc(100vh-220px)] lg:max-h-none">
-      <div className="p-3 border-b border-[#1A1813]">
+    <aside className="flex max-h-[360px] flex-col overflow-hidden rounded-2xl border border-[#0E0E0E] bg-[#090907] lg:h-[calc(100vh-220px)] lg:max-h-none">
+      <div className="p-3 border-b border-[#0E0E0E]">
         <div className="relative">
-          <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#6E685B]" />
+          <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search tracks"
-            className="w-full bg-[#090907] border border-[#211F1A] rounded-md py-1.5 pl-7 pr-2 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]"
+            className="w-full bg-[#090907] border border-white/10 rounded-md py-1.5 pl-7 pr-2 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20"
           />
         </div>
       </div>
       <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center py-20">
-            <Loader2 size={14} className="animate-spin text-[#837B6D]" />
+            <Loader2 size={14} className="animate-spin text-white/40" />
           </div>
         ) : search.trim().length === 0 ? (
           // Empty-by-default: studio is for *focus*, not browsing. The
@@ -57,55 +57,55 @@ export function StudioTrackPicker({
           <div className="px-3 py-8 text-center">
             {activeTrack ? (
               <>
-                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] mb-3">Now loaded</p>
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 mb-3">Now loaded</p>
                 <button
                   onClick={() => onPick(activeTrack.id)}
-                  className="mb-4 flex w-full items-center gap-3 rounded-xl border border-[#C9BCA8]/20 bg-[#342F27] px-3 py-2 text-left"
+                  className="mb-4 flex w-full items-center gap-3 rounded-xl border border-white/ bg-white/10 px-3 py-2 text-left"
                 >
                   <TrackThumb track={activeTrack} active />
                   <div className="min-w-0 flex-1">
                     <p className="text-[11px] text-white truncate">
                       {activeTrack.title}
                     </p>
-                    <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wider text-[#B4AA99]">
+                    <p className="mt-0.5 text-[9px] font-mono uppercase tracking-wider text-white/60">
                       {activeTrack.bpm ? `${activeTrack.bpm} BPM` : '-- BPM'} · {activeTrack.key || '--'}
                     </p>
                   </div>
                 </button>
-                <p className="text-[10px] leading-relaxed text-[#837B6D]">Type to swap tracks.</p>
+                <p className="text-[10px] leading-relaxed text-white/40">Type to swap tracks.</p>
               </>
             ) : (
               <>
-                <div className="w-10 h-10 mx-auto mb-3 rounded-lg bg-[#171511] border border-[#211F1A] flex items-center justify-center">
-                  <Search size={14} className="text-[#6E685B]" />
+                <div className="w-10 h-10 mx-auto mb-3 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-center">
+                  <Search size={14} className="text-white/30" />
                 </div>
-                <p className="text-[11px] text-[#B4AA99] mb-1">Search to load a track</p>
-                <p className="text-[10px] leading-relaxed text-[#6E685B]">Search or send from Library.</p>
+                <p className="text-[11px] text-white/60 mb-1">Search to load a track</p>
+                <p className="text-[10px] leading-relaxed text-white/30">Search or send from Library.</p>
               </>
             )}
           </div>
         ) : tracks.length === 0 ? (
-          <p className="text-center text-[11px] text-[#9B9282] py-12">No matches</p>
+          <p className="text-center text-[11px] text-white/40 py-12">No matches</p>
         ) : (
           tracks.map((t) => (
             <button
               key={t.id}
               onClick={() => onPick(t.id)}
               className={`flex w-full items-center gap-3 border-b border-[#17130F] px-3 py-2.5 text-left transition-colors last:border-b-0 ${
-                activeId === t.id ? 'bg-[#342F27]' : 'hover:bg-[#11100D]'
+                activeId === t.id ? 'bg-white/10' : 'hover:bg-white/[0.02]'
               }`}
             >
               <TrackThumb track={t} active={activeId === t.id} />
               <div className="min-w-0 flex-1">
-                <p className={`text-[11px] truncate ${activeId === t.id ? 'text-white' : 'text-[#F7EBDD]'}`}>
+                <p className={`text-[11px] truncate ${activeId === t.id ? 'text-white' : 'text-white'}`}>
                   {t.title}
                 </p>
-                <p className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider">
+                <p className="text-[9px] font-mono text-white/40 uppercase tracking-wider">
                   {t.bpm ? `${t.bpm} BPM` : '— BPM'} · {t.key || '—'}
                 </p>
               </div>
               {t.stems_status === 'done' && (
-                <span className="text-[8px] font-mono uppercase tracking-wider text-[#F3E6D1] bg-[#342F27] border border-[#C9BCA8]/40 rounded px-1.5 py-0.5">
+                <span className="text-[8px] font-mono uppercase tracking-wider text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/ rounded px-1.5 py-0.5">
                   Stems
                 </span>
               )}
@@ -127,15 +127,15 @@ function TrackThumb({ track, active = false }: { track: Track; active?: boolean 
         src={cover}
         alt=""
         className={`h-9 w-9 shrink-0 rounded-lg border object-cover ${
-          active ? 'border-[#C9BCA8]/40' : 'border-[#211F1A]'
+          active ? 'border-white/' : 'border-white/10'
         }`}
       />
     );
   }
 
   return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#211F1A] bg-[#1A1813]">
-      <Music2 size={12} className={active ? 'text-[#F3E6D1]' : 'text-[#9B9282]'} />
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#0E0E0E]">
+      <Music2 size={12} className={active ? 'text-white' : 'text-white/40'} />
     </div>
   );
 }

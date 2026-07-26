@@ -45,7 +45,7 @@ export function StarRating({ trackId, initialRating, onChange }: StarRatingProps
           <Star
             size={14}
             className={`
-              ${(hover || rating) >= star ? 'fill-[#D6BE7A] text-[#D6BE7A]' : 'fill-[#3B372F] text-[#3B372F]'}
+              ${(hover || rating) >= star ? 'fill-white text-white' : 'fill-white/20 text-white/30'}
               transition-colors duration-200
             `}
           />
@@ -53,7 +53,7 @@ export function StarRating({ trackId, initialRating, onChange }: StarRatingProps
       ))}
       
       {rating > 0 && (
-        <span className="text-[10px] font-bold text-[#D0C3AF] ml-1 opacity-0 group-hover/stars:opacity-100 transition-opacity whitespace-nowrap">
+        <span className="text-[10px] font-bold text-white/80 ml-1 opacity-0 group-hover/stars:opacity-100 transition-opacity whitespace-nowrap">
           {rating}/5
         </span>
       )}

@@ -117,13 +117,13 @@ export function BeatComments({
     <section className="mt-16">
       <div className="flex items-center gap-2 mb-4">
         <MessageCircle size={14} className="text-white/40" />
-        <h2 className="text-[14px] font-medium text-[#F7EBDD]">
+        <h2 className="text-[14px] font-medium text-white">
           Comments {comments.length > 0 && <span className="text-white/40 font-mono">({comments.length})</span>}
         </h2>
       </div>
 
       {/* Composer */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#171511]/70 backdrop-blur-xl p-4 mb-6">
+      <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04]/70 backdrop-blur-xl p-4 mb-6">
         <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-2 mb-2">
           <input
             type="text"
@@ -131,7 +131,7 @@ export function BeatComments({
             onChange={(e) => setAuthorName(e.target.value)}
             placeholder="Your name"
             maxLength={60}
-            className="bg-[#090907] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F]"
+            className="bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
           />
           <div className="flex items-center gap-2">
             <button
@@ -143,7 +143,7 @@ export function BeatComments({
                 const n = Number(next);
                 if (Number.isFinite(n) && n >= 0) setTsOverride(Math.floor(n));
               }}
-              className="shrink-0 px-2.5 py-1.5 rounded-md text-[11px] font-mono tabular-nums border border-[#3B372F] text-[#D0C3AF] hover:text-white transition-colors"
+              className="shrink-0 px-2.5 py-1.5 rounded-md text-[11px] font-mono tabular-nums border border-white/20 text-white/80 hover:text-white transition-colors"
             >
               @{fmtTs(effectiveTs)}
             </button>
@@ -154,7 +154,7 @@ export function BeatComments({
               placeholder={`Say something at ${fmtTs(effectiveTs)}…`}
               maxLength={500}
               onKeyDown={(e) => { if (e.key === 'Enter' && canPost) post.mutate(); }}
-              className="flex-1 bg-[#090907] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F]"
+              className="flex-1 bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
             />
             <button
               type="button"
@@ -197,7 +197,7 @@ export function BeatComments({
               </button>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 text-[11px]">
-                  <span className="font-semibold text-[#F7EBDD] truncate">{c.author_name}</span>
+                  <span className="font-semibold text-white truncate">{c.author_name}</span>
                   <span className="text-white/30">·</span>
                   <span className="text-white/40 font-mono">{fmtRelative(c.created_at)}</span>
                   {c.is_pinned && (

@@ -46,10 +46,10 @@ export function QueueDrawer({ onClose }: QueueDrawerProps) {
       contentClassName="p-0 custom-scrollbar"
     >
       {queue.length > 0 && (
-        <div className="flex justify-end border-b border-[#1A1813] px-5 py-3">
+        <div className="flex justify-end border-b border-[#0E0E0E] px-5 py-3">
           <button
             onClick={clearQueue}
-            className="tap flex items-center gap-1 rounded border border-[#2B2821] px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-[#B4AA99] hover:border-red-900/40 hover:text-red-400"
+            className="tap flex items-center gap-1 rounded border border-white/10 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-white/60 hover:border-red-900/40 hover:text-red-400"
             title="Clear queue"
           >
             <Trash2 size={10} /> Clear
@@ -119,7 +119,7 @@ export function QueueDrawer({ onClose }: QueueDrawerProps) {
                     className={`relative transition-opacity ${isDraggingThis ? 'opacity-40' : ''}`}
                   >
                     {isDropTarget && (
-                      <div className="absolute -top-px left-2 right-2 h-0.5 bg-[#E7D7BE]/60 rounded-full z-10 pointer-events-none" />
+                      <div className="absolute -top-px left-2 right-2 h-0.5 bg-white/60 rounded-full z-10 pointer-events-none" />
                     )}
                     <Row
                       track={t}
@@ -154,7 +154,7 @@ export function QueueDrawer({ onClose }: QueueDrawerProps) {
         )}
 
         {!currentTrack && queue.length === 0 && history.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-[#837B6D] text-center px-10">
+          <div className="flex flex-col items-center justify-center py-16 text-white/40 text-center px-10">
             <Music size={36} className="mb-5 opacity-20" />
             <p className="text-[10px] font-bold uppercase tracking-[0.3em]">Queue is currently empty</p>
             <p className="text-[9px] uppercase tracking-widest mt-2 leading-relaxed">
@@ -167,8 +167,8 @@ export function QueueDrawer({ onClose }: QueueDrawerProps) {
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #2B2821; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #3B372F; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #222222; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #333333; }
       `}</style>
     </Modal>
   );
@@ -188,16 +188,16 @@ function Section({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="px-3 py-3 border-b border-[#1A1813] last:border-b-0">
+    <div className="px-3 py-3 border-b border-[#0E0E0E] last:border-b-0">
       <div className="flex items-center gap-2 px-2 mb-2">
         {icon}
-        <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-[#B4AA99]">{title}</h3>
+        <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-white/60">{title}</h3>
         {count !== undefined && (
-          <span className="text-[9px] font-mono text-[#837B6D]">{count}</span>
+          <span className="text-[9px] font-mono text-white/40">{count}</span>
         )}
       </div>
       {empty ? (
-        <p className="text-[10px] text-[#9B9282] px-3 py-4 leading-relaxed">{empty}</p>
+        <p className="text-[10px] text-white/40 px-3 py-4 leading-relaxed">{empty}</p>
       ) : (
         <div className="space-y-1">{children}</div>
       )}
@@ -229,29 +229,29 @@ function Row({
       onClick={onPlay}
       className={`group flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${
         isCurrent
-          ? 'bg-[#342F27] border-[#C9BCA8]/40 shadow-lg shadow-[#E7D7BE]/10'
+          ? 'bg-white/10 border-white/ shadow-lg shadow-white/10'
           : muted
             ? 'bg-transparent border-transparent hover:bg-[#101010] opacity-70 hover:opacity-100'
-            : 'bg-transparent border-transparent hover:bg-[#1A1813] hover:border-[#2B2821]'
+            : 'bg-transparent border-transparent hover:bg-[#0E0E0E] hover:border-white/10'
       }`}
     >
       {dragHandle && (
-        <GripVertical size={12} className="text-[#6E685B] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing" />
+        <GripVertical size={12} className="text-white/30 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing" />
       )}
-      <div className="w-9 h-9 bg-[#1A1813] rounded-lg overflow-hidden shrink-0 border border-[#2B2821] relative">
+      <div className="w-9 h-9 bg-[#0E0E0E] rounded-lg overflow-hidden shrink-0 border border-white/10 relative">
         {track.cover_url ? (
           <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-[#3B372F]">
+          <div className="w-full h-full flex items-center justify-center text-white/30">
             <Music size={14} />
           </div>
         )}
         {isCurrent && isPlaying && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
             <div className="flex gap-0.5 items-end h-3">
-              <div className="w-0.5 bg-[#E7D7BE] animate-bounce h-2" style={{ animationDelay: '0ms' }} />
-              <div className="w-0.5 bg-[#E7D7BE] animate-bounce h-3" style={{ animationDelay: '150ms' }} />
-              <div className="w-0.5 bg-[#E7D7BE] animate-bounce h-1.5" style={{ animationDelay: '300ms' }} />
+              <div className="w-0.5 bg-white animate-bounce h-2" style={{ animationDelay: '0ms' }} />
+              <div className="w-0.5 bg-white animate-bounce h-3" style={{ animationDelay: '150ms' }} />
+              <div className="w-0.5 bg-white animate-bounce h-1.5" style={{ animationDelay: '300ms' }} />
             </div>
           </div>
         )}
@@ -259,14 +259,14 @@ function Row({
 
       <div className="flex-1 min-w-0">
         <h4 className={`text-[12px] font-medium truncate tracking-tight ${
-          isCurrent ? 'text-[#F3E6D1]' : muted ? 'text-[#D0C3AF]' : 'text-[#F7EBDD]'
+          isCurrent ? 'text-white' : muted ? 'text-white/80' : 'text-white'
         }`}>
           {track.title}
         </h4>
         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-          <span className="text-[9px] text-[#837B6D] uppercase font-mono tracking-widest">{track.type}</span>
+          <span className="text-[9px] text-white/40 uppercase font-mono tracking-widest">{track.type}</span>
           {track.bpm && (
-            <span className="text-[9px] font-mono text-[#6E685B] tabular-nums">{track.bpm} bpm</span>
+            <span className="text-[9px] font-mono text-white/30 tabular-nums">{track.bpm} bpm</span>
           )}
           {track.key && (
             <span className={`text-[8px] font-mono font-bold px-1 py-px rounded uppercase leading-none ${
@@ -278,7 +278,7 @@ function Row({
             </span>
           )}
           {durationSeconds > 0 && (
-            <span className="text-[9px] font-mono text-[#3B372F] tabular-nums ml-auto">
+            <span className="text-[9px] font-mono text-white/30 tabular-nums ml-auto">
               {Math.floor(durationSeconds / 60)}:{String(Math.floor(durationSeconds % 60)).padStart(2, '0')}
             </span>
           )}
@@ -287,14 +287,14 @@ function Row({
 
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
         {!isCurrent && (
-          <span className="text-[#9B9282] p-1">
+          <span className="text-white/40 p-1">
             <Play size={11} fill="currentColor" />
           </span>
         )}
         {onRemove && (
           <button
             onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            className="text-[#9B9282] hover:text-red-400 p-1 rounded"
+            className="text-white/40 hover:text-red-400 p-1 rounded"
             title="Remove from queue"
           >
             <Minus size={12} />

@@ -21,7 +21,7 @@ export interface ChannelState {
 export type ChannelKey = StemKey | 'master' | 'pads';
 
 export const STEM_COLORS: Record<ChannelKey, string> = {
-  vocals: 'bg-[#E7D7BE]',
+  vocals: 'bg-white',
   drums:  'bg-[#E26D5C]',
   bass:   'bg-[#E2C16D]',
   other:  'bg-[#6DC6A4]',
@@ -53,16 +53,16 @@ interface MixerProps {
  */
 export function StudioMixer({ useStems, stemsLoading, channels, setChannel }: MixerProps) {
   return (
-    <div className="rounded-2xl border border-[#1A1813] bg-[#090907] p-3 sm:p-4">
+    <div className="rounded-2xl border border-[#0E0E0E] bg-[#090907] p-3 sm:p-4">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sliders size={12} className="text-[#F3E6D1]" />
-          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-[#F7EBDD]">
+          <Sliders size={12} className="text-white" />
+          <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white">
             {useStems ? 'Stem rack' : 'EQ rack'}
           </p>
         </div>
         {stemsLoading && (
-          <p className="text-[10px] text-[#9B9282] flex items-center gap-2">
+          <p className="text-[10px] text-white/40 flex items-center gap-2">
             <Loader2 size={10} className="animate-spin" /> Loading stems…
           </p>
         )}
@@ -101,11 +101,11 @@ interface ChannelStripProps {
 
 function ChannelStrip({ name, color, state, onChange }: ChannelStripProps) {
   return (
-    <div className="rounded-xl border border-[#1A1813] bg-[#0D0B09] p-3">
+    <div className="rounded-xl border border-[#0E0E0E] bg-[#0D0B09] p-3">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${color}`} />
-          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#F7EBDD]">{name}</span>
+          <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-white">{name}</span>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -113,15 +113,15 @@ function ChannelStrip({ name, color, state, onChange }: ChannelStripProps) {
             className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
               state.muted
                 ? 'bg-red-950/40 border-red-900/50 text-red-300'
-                : 'bg-[#1A1813] border-[#211F1A] text-[#B4AA99] hover:text-[#F7EBDD]'
+                : 'bg-[#0E0E0E] border-white/10 text-white/60 hover:text-white'
             }`}
           >M</button>
           <button
             onClick={() => onChange({ solo: !state.solo })}
             className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
               state.solo
-                ? 'bg-[#342F27] border-[#C9BCA8]/40 text-[#F3E6D1]'
-                : 'bg-[#1A1813] border-[#211F1A] text-[#B4AA99] hover:text-[#F7EBDD]'
+                ? 'bg-white/10 border-white/ text-white'
+                : 'bg-[#0E0E0E] border-white/10 text-white/60 hover:text-white'
             }`}
           >S</button>
         </div>
@@ -131,11 +131,11 @@ function ChannelStrip({ name, color, state, onChange }: ChannelStripProps) {
         {/* Volume */}
         <div className="min-w-0">
           <div className="mb-1 flex items-center justify-between">
-            <span className="flex items-center gap-1 text-[8px] font-mono uppercase text-[#9B9282]">
-              {state.muted ? <VolumeX size={10} className="text-red-400" /> : <Volume2 size={10} className="text-[#837B6D]" />}
+            <span className="flex items-center gap-1 text-[8px] font-mono uppercase text-white/40">
+              {state.muted ? <VolumeX size={10} className="text-red-400" /> : <Volume2 size={10} className="text-white/40" />}
               Level
             </span>
-            <span className="text-[8px] font-mono text-[#D0C3AF]">{Math.round(state.volume * 100)}</span>
+            <span className="text-[8px] font-mono text-white/80">{Math.round(state.volume * 100)}</span>
           </div>
           <Slider
             value={state.volume}
@@ -153,8 +153,8 @@ function ChannelStrip({ name, color, state, onChange }: ChannelStripProps) {
         {/* Pan */}
         <div className="min-w-0">
           <div className="mb-1 flex items-center justify-between">
-            <span className="text-[8px] font-mono uppercase text-[#9B9282]">Pan</span>
-            <span className="text-[8px] font-mono text-[#D0C3AF]">
+            <span className="text-[8px] font-mono uppercase text-white/40">Pan</span>
+            <span className="text-[8px] font-mono text-white/80">
               {state.pan === 0 ? 'C' : state.pan < 0 ? `L${Math.round(-state.pan * 100)}` : `R${Math.round(state.pan * 100)}`}
             </span>
           </div>
@@ -164,7 +164,7 @@ function ChannelStrip({ name, color, state, onChange }: ChannelStripProps) {
             min={-1}
             max={1}
             step={0.01}
-            accent="#F3E6D1"
+            accent='#FFFFFF'
             showTooltip
             variant="studio" bipolar
             formatTooltip={(v) => v === 0 ? 'C' : v < 0 ? `L${Math.round(-v * 100)}` : `R${Math.round(v * 100)}`}
@@ -180,7 +180,7 @@ function ChannelStrip({ name, color, state, onChange }: ChannelStripProps) {
           on top of the numeric value the slider already shows. */}
       <div className="mb-3 rounded-lg border border-[#17130F] bg-[#090907] p-2">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-[8px] font-mono uppercase tracking-[0.18em] text-[#9B9282]">EQ</span>
+          <span className="text-[8px] font-mono uppercase tracking-[0.18em] text-white/40">EQ</span>
           <span className="text-[8px] font-mono uppercase tracking-[0.14em] text-[#4F473B]">Lo · Mid · Hi</span>
         </div>
         <EqCurve low={state.eqLow} mid={state.eqMid} high={state.eqHigh} height={36} />
@@ -188,10 +188,10 @@ function ChannelStrip({ name, color, state, onChange }: ChannelStripProps) {
           {(['eqLow', 'eqMid', 'eqHigh'] as const).map((k, i) => (
             <div key={k}>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[8px] font-mono text-[#9B9282] uppercase">
+                <span className="text-[8px] font-mono text-white/40 uppercase">
                   {['Lo', 'Mid', 'Hi'][i]}
                 </span>
-                <span className="text-[8px] font-mono text-[#D0C3AF]">
+                <span className="text-[8px] font-mono text-white/80">
                   {state[k] > 0 ? '+' : ''}{state[k].toFixed(1)}
                 </span>
               </div>
@@ -209,16 +209,16 @@ function ChannelStrip({ name, color, state, onChange }: ChannelStripProps) {
       <div className="grid grid-cols-2 gap-2">
         <div>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[8px] font-mono text-[#9B9282] uppercase">Reverb</span>
-            <span className="text-[8px] font-mono text-[#F3E6D1]">{Math.round(state.reverb * 100)}</span>
+            <span className="text-[8px] font-mono text-white/40 uppercase">Reverb</span>
+            <span className="text-[8px] font-mono text-white">{Math.round(state.reverb * 100)}</span>
           </div>
           <Slider value={state.reverb} onChange={(v) => onChange({ reverb: v })}
             min={0} max={1} step={0.01} variant="studio" aria-label="Reverb send" />
         </div>
         <div>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[8px] font-mono text-[#9B9282] uppercase">Delay</span>
-            <span className="text-[8px] font-mono text-[#F3E6D1]">{Math.round(state.delay * 100)}</span>
+            <span className="text-[8px] font-mono text-white/40 uppercase">Delay</span>
+            <span className="text-[8px] font-mono text-white">{Math.round(state.delay * 100)}</span>
           </div>
           <Slider value={state.delay} onChange={(v) => onChange({ delay: v })}
             min={0} max={1} step={0.01} variant="studio" aria-label="Delay send" />

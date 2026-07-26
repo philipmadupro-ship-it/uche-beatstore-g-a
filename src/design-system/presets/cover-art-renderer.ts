@@ -22,7 +22,7 @@ const colorVariations = {
     surface: deRochePrimitives.charcoal800,
     text: deRochePrimitives.chalk150,
     secondaryText: deRochePrimitives.sand350,
-    accent: '#E7D7BE',
+    accent: '#FFFFFF',
     wave: '#3C78A8',
     paper: deRochePrimitives.paper100,
     ink: deRochePrimitives.black900,

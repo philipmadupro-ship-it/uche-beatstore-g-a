@@ -122,7 +122,7 @@ export function ProjectOptionsMenu({
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((v) => !v); setNameDraft(project.name); setRenaming(false); }}
           aria-label="Project options"
-          className="w-7 h-7 rounded-full flex items-center justify-center bg-black/40 backdrop-blur-sm text-[#D0C3AF] hover:text-white hover:bg-black/60 transition-colors"
+          className="w-7 h-7 rounded-full flex items-center justify-center bg-black/40 backdrop-blur-sm text-white/60 hover:text-white hover:bg-black/60 transition-colors"
         >
           {busy && !open ? <Loader2 size={13} className="animate-spin" /> : <MoreHorizontal size={14} />}
         </button>
@@ -132,7 +132,7 @@ export function ProjectOptionsMenu({
             <div className="fixed inset-0 z-40" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(false); }} />
             <div
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              className={`absolute top-full mt-1 ${align === 'right' ? 'right-0' : 'left-0'} z-50 w-52 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-[#2B2821] rounded-xl shadow-2xl overflow-hidden py-1`}
+              className={`absolute top-full mt-1 ${align === 'right' ? 'right-0' : 'left-0'} z-50 w-52 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1`}
             >
               {renaming ? (
                 <div className="p-2">
@@ -140,16 +140,16 @@ export function ProjectOptionsMenu({
                     autoFocus value={nameDraft}
                     onChange={(e) => setNameDraft(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') submitRename(); if (e.key === 'Escape') setRenaming(false); }}
-                    className="w-full bg-[#171511] border border-[#2B2821] rounded-md px-2.5 py-2 text-[12px] text-[#F7EBDD] focus:outline-none focus:border-[#3B372F]"
+                    className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2.5 py-2 text-[12px] text-white focus:outline-none focus:border-white/20"
                   />
                   <div className="flex justify-end gap-1.5 mt-2">
-                    <button onClick={() => setRenaming(false)} className="px-2 py-1 text-[10px] font-mono uppercase text-[#B4AA99] hover:text-[#F7EBDD]">Cancel</button>
-                    <button onClick={submitRename} className="px-2.5 py-1 text-[10px] font-mono uppercase rounded bg-[#E7D7BE] text-black hover:bg-[#F3E6D1]">Save</button>
+                    <button onClick={() => setRenaming(false)} className="px-2 py-1 text-[10px] font-mono uppercase text-white/60 hover:text-white">Cancel</button>
+                    <button onClick={submitRename} className="px-2.5 py-1 text-[10px] font-mono uppercase rounded bg-white text-black hover:bg-white/90">Save</button>
                   </div>
                 </div>
               ) : (
                 <>
-                  <MenuItem icon={<Pin size={13} className={isPinned ? 'text-[#E7D7BE]' : ''} />} label={isPinned ? 'Unpin' : 'Pin to top'}
+                  <MenuItem icon={<Pin size={13} className={isPinned ? 'text-white font-bold' : ''} />} label={isPinned ? 'Unpin' : 'Pin to top'}
                     busy={busy === 'pin'}
                     onClick={async () => { await patch({ pinned: !isPinned }, 'pin'); setOpen(false); toast.success(isPinned ? 'Unpinned' : 'Pinned to top'); }} />
                   <MenuItem icon={<ImageIcon size={13} />} label="Change cover" busy={busy === 'cover'} onClick={() => fileRef.current?.click()} />
@@ -174,8 +174,8 @@ export function ProjectOptionsMenu({
                     }} />
                   <MenuItem icon={<LayoutTemplate size={13} />} label="Apply template" onClick={() => { setShowTemplate(true); setOpen(false); }} />
 
-                  <div className="my-1 border-t border-[#211F1A]" />
-                  <p className="px-3 pt-1 pb-1 text-[8px] font-mono uppercase tracking-[0.2em] text-[#6E685B]">Status</p>
+                  <div className="my-1 border-t border-white/10" />
+                  <p className="px-3 pt-1 pb-1 text-[8px] font-mono uppercase tracking-[0.2em] text-white/40">Status</p>
                   {STATUSES.map((s) => (
                     <MenuItem
                       key={s.value}
@@ -221,7 +221,7 @@ function MenuItem({
       onClick={onClick}
       disabled={busy}
       className={`w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium transition-colors disabled:opacity-50 ${
-        danger ? 'text-red-400 hover:bg-red-500/10' : 'text-[#F7EBDD] hover:bg-[#1A1813]'
+        danger ? 'text-red-400 hover:bg-red-500/10' : 'text-white hover:bg-white/10'
       }`}
     >
       <span className="shrink-0">{busy ? <Loader2 size={13} className="animate-spin" /> : icon}</span>

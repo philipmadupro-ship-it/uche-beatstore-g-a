@@ -49,8 +49,8 @@ interface Target {
 }
 
 const STATUS_STYLES: Record<Target['status'], string> = {
-  sent: 'text-[#D0C3AF] bg-white/[0.04] border-white/[0.08]',
-  opened: 'text-[#E7D7BE] bg-[#E7D7BE]/10 border-[#E7D7BE]/20',
+  sent: 'text-white/80 bg-white/[0.04] border-white/[0.08]',
+  opened: 'text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border-white/20',
   interested: 'text-[#9d95e8] bg-[#9d95e8]/10 border-[#9d95e8]/25',
   negotiating: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
   placed: 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/20',
@@ -187,7 +187,7 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center py-40">
-          <Loader2 size={18} className="animate-spin text-[#837B6D]" />
+          <Loader2 size={18} className="animate-spin text-white/40" />
         </div>
       </DashboardLayout>
     );
@@ -202,7 +202,7 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
             title="Campaign unavailable"
             description={error ?? 'Not found.'}
             action={
-              <Link href="/campaigns" className="text-[12px] text-[#D0C3AF] underline underline-offset-2 hover:text-[#F7EBDD]">
+              <Link href="/campaigns" className="text-[12px] text-white/60 underline underline-offset-2 hover:text-white">
                 Back to campaigns
               </Link>
             }
@@ -218,7 +218,7 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
       <PageContainer className="max-w-[1100px] pb-32">
         <Link
           href="/campaigns"
-          className="mb-4 inline-flex items-center gap-1.5 text-micro text-[#9B9282] transition-colors hover:text-[#F7EBDD]"
+          className="mb-4 inline-flex items-center gap-1.5 text-micro text-white/50 transition-colors hover:text-white"
         >
           <ArrowLeft size={11} />
           Campaigns
@@ -269,11 +269,11 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
           <FunnelStat label="Pending" value={funnel.pending} />
           <FunnelStat label="Placed" value={funnel.placed} tone="good" />
           <FunnelStat label="Pass" value={funnel.pass} tone="bad" />
-          <div className="col-span-2 flex items-center gap-2 rounded-xl border border-[#2B2821] bg-[#171511] px-4 py-3 sm:col-span-1">
-            <TrendingUp size={13} className="text-[#E7D7BE]" />
+          <div className="col-span-2 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 sm:col-span-1">
+            <TrendingUp size={13} className="text-white" />
             <div>
-              <p className="text-[9px] font-mono uppercase tracking-[0.15em] text-[#9B9282]">Placement</p>
-              <p className="text-[18px] font-medium tabular-nums leading-tight text-[#F7EBDD]">{funnel.rate}%</p>
+              <p className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/50">Placement</p>
+              <p className="text-[18px] font-medium tabular-nums leading-tight text-white">{funnel.rate}%</p>
             </div>
           </div>
         </div>
@@ -293,25 +293,25 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
           />
         ) : (
           <section className="space-y-3">
-            <div className="rounded-2xl border border-[#2B2821] bg-[#11100D] p-2.5">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-2.5">
               <div className="flex flex-col gap-2 md:flex-row md:items-center">
                 <div className="relative min-w-0 flex-1">
-                  <Search size={12} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" />
+                  <Search size={12} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                   <input
                     value={targetSearch}
                     onChange={(e) => setTargetSearch(e.target.value)}
                     placeholder="Search contacts in this campaign…"
-                    className="w-full rounded-full border border-[#2B2821] bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-[#F7EBDD] transition-colors placeholder:text-[#6E685B] focus:border-[#C9BCA8] focus:outline-none"
+                    className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-white transition-colors placeholder:text-white/40 focus:border-white/60 focus:outline-none"
                   />
                 </div>
-                <div className="flex overflow-x-auto rounded-full border border-[#2B2821] bg-[#090907] p-1">
+                <div className="flex overflow-x-auto rounded-full border border-white/10 bg-[#090907] p-1">
                   {TARGET_FILTERS.map((f) => (
                     <button
                       key={f}
                       type="button"
                       onClick={() => setTargetFilter(f)}
                       className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
-                        targetFilter === f ? 'bg-[#342F27] text-[#F3E6D1]' : 'text-[#B4AA99] hover:text-[#F7EBDD]'
+                        targetFilter === f ? 'bg-white/15 text-white font-bold' : 'text-white/60 hover:text-white'
                       }`}
                     >
                       {f}
@@ -320,7 +320,7 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
                 </div>
               </div>
               <div className="mt-2 flex items-center justify-between px-1">
-                <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#6E685B]">
+                <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/40">
                   {visibleTargets.length} shown
                   {visibleTargets.length !== targets.length && ` · ${targets.length} total`}
                 </p>
@@ -328,7 +328,7 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
                   <button
                     type="button"
                     onClick={() => { setTargetSearch(''); setTargetFilter('All'); }}
-                    className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#B4AA99] transition-colors hover:text-[#F7EBDD]"
+                    className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/60 transition-colors hover:text-white"
                   >
                     Clear
                   </button>
@@ -354,7 +354,7 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
                     key={t.id}
                     href={t.contact ? `/contacts/${t.contact.id}` : undefined}
                     media={
-                      <div className="grid size-9 place-items-center rounded-full bg-[#342F27] text-[12px] font-bold text-[#F3E6D1]">
+                      <div className="grid size-9 place-items-center rounded-full bg-white/15 text-[12px] font-bold text-white">
                         {(t.contact?.name ?? '?').charAt(0).toUpperCase()}
                       </div>
                     }
@@ -369,7 +369,7 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
                     }
                     columns={
                       t.nudge_count > 0 ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-mono text-[#9B9282]">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-mono text-white/50">
                           <Mail size={10} /> {t.nudge_count} nudge{t.nudge_count === 1 ? '' : 's'}
                         </span>
                       ) : undefined
@@ -383,7 +383,7 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
                           type="button"
                           onClick={() => removeTarget(t)}
                           disabled={removing === t.contact_id}
-                          className="tap grid size-7 place-items-center rounded-full text-[#6E685B] transition-colors hover:bg-white/[0.04] hover:text-red-400 disabled:opacity-40"
+                          className="tap grid size-7 place-items-center rounded-full text-white/40 transition-colors hover:bg-white/[0.04] hover:text-red-400 disabled:opacity-40"
                           title="Remove from campaign"
                           aria-label={`Remove ${t.contact?.name ?? 'contact'} from campaign`}
                         >
@@ -421,10 +421,10 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
 }
 
 function FunnelStat({ label, value, tone = 'default' }: { label: string; value: number; tone?: 'default' | 'good' | 'bad' }) {
-  const color = tone === 'good' ? 'text-[#6DC6A4]' : tone === 'bad' ? 'text-[#e88a8a]' : 'text-[#F7EBDD]';
+  const color = tone === 'good' ? 'text-[#6DC6A4]' : tone === 'bad' ? 'text-[#e88a8a]' : 'text-white/80';
   return (
-    <div className="rounded-xl border border-[#2B2821] bg-[#171511] px-4 py-3">
-      <p className="text-[9px] font-mono uppercase tracking-[0.15em] text-[#9B9282]">{label}</p>
+    <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+      <p className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/50">{label}</p>
       <p className={`text-[18px] font-medium tabular-nums leading-tight ${color}`}>{value}</p>
     </div>
   );
@@ -502,22 +502,22 @@ function AddContactsModal({
     >
       <div className="space-y-3">
         <div className="relative">
-          <Search size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" />
+          <Search size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name or email…"
             autoFocus
-            className="w-full rounded-full border border-[#2B2821] bg-[#11100D] py-2 pl-9 pr-3 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:border-[#3B372F] focus:outline-none"
+            className="w-full rounded-full border border-white/10 bg-white/[0.02] py-2 pl-9 pr-3 text-[12px] text-white placeholder:text-white/40 focus:border-white/20 focus:outline-none"
           />
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 size={15} className="animate-spin text-[#837B6D]" />
+            <Loader2 size={15} className="animate-spin text-white/40" />
           </div>
         ) : visible.length === 0 ? (
-          <p className="py-10 text-center text-[11px] text-[#9B9282]">
+          <p className="py-10 text-center text-[11px] text-white/50">
             {contacts.length === 0 ? 'No contacts in your CRM yet.' : 'No matches (already-added contacts are hidden).'}
           </p>
         ) : (
@@ -530,24 +530,24 @@ function AddContactsModal({
                   type="button"
                   onClick={() => toggle(c.id)}
                   className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                    sel ? 'border-[#E7D7BE]/50 bg-[#342F27]/50' : 'border-transparent hover:bg-[#1A1813]'
+                    sel ? 'border-white/50 bg-white/15 font-bold' : 'border-transparent hover:bg-white/[0.04]'
                   }`}
                 >
-                  <div className={`grid size-5 shrink-0 place-items-center rounded border ${sel ? 'border-[#F3E6D1] bg-[#E7D7BE]' : 'border-[#3B372F]'}`}>
+                  <div className={`grid size-5 shrink-0 place-items-center rounded border ${sel ? 'border-white bg-white' : 'border-white/20'}`}>
                     {sel && <Check size={11} className="text-black" strokeWidth={3} />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] font-medium text-[#F7EBDD]">{c.name}</p>
-                    <p className="truncate text-[10px] text-[#9B9282]">{c.email ?? 'no email'}</p>
+                    <p className="truncate text-[12px] font-medium text-white">{c.name}</p>
+                    <p className="truncate text-[10px] text-white/50">{c.email ?? 'no email'}</p>
                   </div>
-                  {c.role && <span className="shrink-0 text-[9px] font-mono uppercase tracking-wider text-[#6E685B]">{c.role}</span>}
+                  {c.role && <span className="shrink-0 text-[9px] font-mono uppercase tracking-wider text-white/40">{c.role}</span>}
                 </button>
               );
             })}
           </div>
         )}
 
-        <div className="flex items-center justify-end gap-2 border-t border-[#211F1A] pt-3">
+        <div className="flex items-center justify-end gap-2 border-t border-white/10 pt-3">
           <Button type="button" onClick={onClose} variant="secondary" size="sm">Cancel</Button>
           <Button
             type="button"

@@ -23,8 +23,8 @@ interface TrackGridCardProps {
 }
 
 const TYPE_COLOR: Record<string, string> = {
-  beat: 'text-[#D0C3AF]',
-  instrumental: 'text-[#F3E6D1]',
+  beat: 'text-white/80',
+  instrumental: 'text-white',
   song: 'text-[#8ecf9f]',
   remix: 'text-[#eca9a9]',
 };
@@ -67,7 +67,7 @@ export function TrackGridCard({
 
   return (
     <div
-      className={`group relative flex flex-col cursor-pointer ${selected ? 'ring-2 ring-[#E7D7BE]/60 rounded-xl' : ''}`}
+      className={`group relative flex flex-col cursor-pointer ${selected ? 'ring-2 ring-white/30/60 rounded-xl' : ''}`}
       onClick={handleCardClick}
       draggable
       onDragStart={(e) => {
@@ -78,10 +78,10 @@ export function TrackGridCard({
       {/* Cover art */}
       <div className={`relative aspect-square rounded-xl overflow-hidden border transition-all duration-200 mb-2.5 ${
         isCurrent
-          ? 'border-[#E7D7BE]/40 shadow-lg shadow-[#E7D7BE]/10'
+          ? 'border-white/ shadow-lg shadow-white/10'
           : selected
-            ? 'border-[#E7D7BE]/50'
-            : 'border-[#211F1A] group-hover:border-[#3B372F]'
+            ? 'border-white/'
+            : 'border-white/10 group-hover:border-white/20'
       }`}>
         {track.cover_url ? (
           <CoverImage
@@ -90,8 +90,8 @@ export function TrackGridCard({
             className="object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907] flex items-center justify-center">
-            <Music size={28} className="text-[#3B372F]" />
+          <div className="w-full h-full bg-gradient-to-br from-white/10 to-[#090907] flex items-center justify-center">
+            <Music size={28} className="text-white/30" />
           </div>
         )}
 
@@ -99,10 +99,10 @@ export function TrackGridCard({
         {isActive && (
           <div className="absolute inset-0 bg-black/30 flex items-end justify-center pb-3">
             <div className="flex gap-0.5 items-end h-5">
-              <div className="w-1 bg-[#E7D7BE] rounded-full animate-pulse" style={{ height: '60%' }} />
-              <div className="w-1 bg-[#E7D7BE] rounded-full animate-pulse" style={{ height: '100%', animationDelay: '120ms' }} />
-              <div className="w-1 bg-[#E7D7BE] rounded-full animate-pulse" style={{ height: '40%', animationDelay: '240ms' }} />
-              <div className="w-1 bg-[#E7D7BE] rounded-full animate-pulse" style={{ height: '80%', animationDelay: '60ms' }} />
+              <div className="w-1 bg-white rounded-full animate-pulse" style={{ height: '60%' }} />
+              <div className="w-1 bg-white rounded-full animate-pulse" style={{ height: '100%', animationDelay: '120ms' }} />
+              <div className="w-1 bg-white rounded-full animate-pulse" style={{ height: '40%', animationDelay: '240ms' }} />
+              <div className="w-1 bg-white rounded-full animate-pulse" style={{ height: '80%', animationDelay: '60ms' }} />
             </div>
           </div>
         )}
@@ -128,7 +128,7 @@ export function TrackGridCard({
         {/* Selection checkbox */}
         {selectable && (
           <div className={`absolute top-2 right-2 w-6 h-6 rounded-md flex items-center justify-center backdrop-blur-md border transition-colors ${
-            selected ? 'bg-[#E7D7BE] border-[#F3E6D1]' : 'bg-black/50 border-white/20'
+            selected ? 'bg-white border-white/30' : 'bg-black/50 border-white/20'
           }`}>
             {selected && <span className="text-black text-[10px] font-bold leading-none">✓</span>}
           </div>
@@ -137,7 +137,7 @@ export function TrackGridCard({
         {/* BPM + Key badges — bottom left on hover */}
         <div className="absolute bottom-2 left-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {track.bpm && (
-            <span className="text-[8px] font-mono font-bold bg-black/70 backdrop-blur-sm text-[#F3E6D1] px-1.5 py-0.5 rounded tabular-nums">
+            <span className="text-[8px] font-mono font-bold bg-black/70 backdrop-blur-sm text-white px-1.5 py-0.5 rounded tabular-nums">
               {track.bpm}
             </span>
           )}
@@ -178,30 +178,30 @@ export function TrackGridCard({
                   {onClickDetails && (
                     <button
                       onClick={() => { close(); onClickDetails(track); }}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
+                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E]"
                     >
-                      <Info size={12} className="text-[#E7D7BE]" /> View details
+                      <Info size={12} className="text-white" /> View details
                     </button>
                   )}
                   {onShare && (
                     <button
                       onClick={() => { close(); onShare(track); }}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
+                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E]"
                     >
-                      <Share2 size={12} className="text-[#E7D7BE]" /> Share track
+                      <Share2 size={12} className="text-white" /> Share track
                     </button>
                   )}
                   {onRemoveFromContext && (
                     <button
                       onClick={() => { close(); onRemoveFromContext(track); }}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
+                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E]"
                     >
-                      <MinusCircle size={12} className="text-[#D0C3AF]" /> {removeLabel}
+                      <MinusCircle size={12} className="text-white/80" /> {removeLabel}
                     </button>
                   )}
                   {onDelete && (
                     <>
-                      <div className="my-1 border-t border-[#211F1A]" />
+                      <div className="my-1 border-t border-white/10" />
                       <button
                         onClick={() => { close(); onDelete(track); }}
                         className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-red-400 hover:bg-red-950/30"
@@ -220,12 +220,12 @@ export function TrackGridCard({
       {/* Meta below art */}
       <div className="px-0.5">
         <h4 className={`text-[13px] font-semibold truncate leading-tight mb-1 transition-colors ${
-          isCurrent ? 'text-[#F3E6D1]' : 'text-[#F7EBDD] group-hover:text-white'
+          isCurrent ? 'text-white' : 'text-white group-hover:text-white'
         }`}>
           {track.title}
         </h4>
         <div className="flex items-center justify-between gap-2">
-          <span className={`text-[9px] font-mono uppercase tracking-wider ${TYPE_COLOR[track.type] || 'text-[#B4AA99]'}`}>
+          <span className={`text-[9px] font-mono uppercase tracking-wider ${TYPE_COLOR[track.type] || 'text-white/60'}`}>
             {track.type}
           </span>
           {/* Star rating inline */}
@@ -234,9 +234,9 @@ export function TrackGridCard({
               <button key={star} onClick={(e) => handleRating(e, star)} className="p-0.5">
                 <Star
                   size={9}
-                  fill={track.rating && track.rating >= star ? '#D6BE7A' : 'none'}
+                  fill={track.rating && track.rating >= star ? '#FFFFFF' : 'none'}
                   strokeWidth={1.5}
-                  className={track.rating && track.rating >= star ? 'text-[#D6BE7A]' : 'text-[#3B372F] hover:text-[#D6BE7A] transition-colors'}
+                  className={track.rating && track.rating >= star ? 'text-white' : 'text-white/30 hover:text-white transition-colors'}
                 />
               </button>
             ))}

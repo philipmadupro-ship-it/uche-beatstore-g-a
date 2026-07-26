@@ -42,21 +42,21 @@ export function FollowUpsPanel() {
   if (!loaded || due.length === 0) return null;
 
   return (
-    <div className="mb-5 rounded-xl border border-[#2B2821] bg-[#171511] overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-[#211F1A]">
-        <CalendarClock size={12} className="text-[#E8C86A]" />
-        <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">
+    <div className="mb-5 rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/10">
+        <CalendarClock size={12} className="text-amber-400" />
+        <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/80">
           {due.length} follow-up{due.length === 1 ? '' : 's'} due
         </span>
       </div>
-      <ul className="divide-y divide-[#211F1A] max-h-[180px] overflow-y-auto">
+      <ul className="divide-y divide-white/10 max-h-[180px] overflow-y-auto">
         {due.map((t) => {
           const meta = DUE_META[categorizeDue(t.due_at)];
           return (
             <li key={t.id}>
               <Link
                 href={`/contacts/${t.contact_id}`}
-                className="flex items-center gap-3 px-4 py-2.5 hover:bg-[#1A1813] transition-colors group"
+                className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/10 transition-colors group"
               >
                 <span
                   className="shrink-0 text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded"
@@ -64,9 +64,9 @@ export function FollowUpsPanel() {
                 >
                   {dueLabel(t.due_at)}
                 </span>
-                <span className="text-[12px] text-[#F7EBDD] truncate flex-1">{t.title}</span>
-                <span className="text-[11px] text-[#B4AA99] shrink-0 hidden sm:inline">{t.contact_name}</span>
-                <ChevronRight size={12} className="text-[#6E685B] group-hover:text-[#B4AA99] shrink-0 transition-colors" />
+                <span className="text-[12px] text-white truncate flex-1">{t.title}</span>
+                <span className="text-[11px] text-white/60 shrink-0 hidden sm:inline">{t.contact_name}</span>
+                <ChevronRight size={12} className="text-white/40 group-hover:text-white/80 shrink-0 transition-colors" />
               </Link>
             </li>
           );

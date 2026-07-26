@@ -94,15 +94,15 @@ export async function POST(req: NextRequest) {
         to: projectAccess.buyer_email,
         subject: `Your project "${proj.name}" is ready (resend)`,
         html: `
-          <div style="font-family: sans-serif; background: #090907; color: #F7EBDD; padding: 40px; border-radius: 20px; max-width: 560px;">
-            <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #E7D7BE; margin: 0 0 20px;">
+          <div style="font-family: sans-serif; background: #090907; color: #FFFFFF; padding: 40px; border-radius: 20px; max-width: 560px;">
+            <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #FFFFFF; margin: 0 0 20px;">
               Project delivery — resent
             </h1>
-            <p style="font-size: 15px; line-height: 1.7; color: #F7EBDD;">
+            <p style="font-size: 15px; line-height: 1.7; color: #FFFFFF;">
               Here's your access link to <strong>${proj.name}</strong> again. The producer re-sent this from their dashboard.
             </p>
             <div style="margin-top: 36px;">
-              <a href="${accessUrl}" style="background: #F7EBDD; color: #090907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">
+              <a href="${accessUrl}" style="background: #FFFFFF; color: #090907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">
                 Access your project
               </a>
             </div>
@@ -129,15 +129,15 @@ export async function POST(req: NextRequest) {
       to: licensePurchase.buyer_email,
       subject: `Your license is ready (resend)`,
       html: `
-        <div style="font-family: sans-serif; background: #090907; color: #F7EBDD; padding: 40px; border-radius: 20px; max-width: 560px;">
-          <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #E7D7BE; margin: 0 0 20px;">
+        <div style="font-family: sans-serif; background: #090907; color: #FFFFFF; padding: 40px; border-radius: 20px; max-width: 560px;">
+          <h1 style="text-transform: uppercase; letter-spacing: 0.3em; font-size: 13px; color: #FFFFFF; margin: 0 0 20px;">
             License delivery — resent
           </h1>
-          <p style="font-size: 15px; line-height: 1.7; color: #F7EBDD;">
+          <p style="font-size: 15px; line-height: 1.7; color: #FFFFFF;">
             Here's your download link again. The producer re-sent this from their dashboard.
           </p>
           <div style="margin-top: 36px;">
-            <a href="${downloadUrl}" style="background: #F7EBDD; color: #090907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">
+            <a href="${downloadUrl}" style="background: #FFFFFF; color: #090907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">
               Download your files
             </a>
           </div>

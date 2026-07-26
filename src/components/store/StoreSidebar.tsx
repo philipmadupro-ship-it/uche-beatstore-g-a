@@ -36,21 +36,21 @@ function FacetSection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border-t border-[#211F1A] first:border-t-0 pt-3 first:pt-0">
+    <div className="border-t border-white/10 first:border-t-0 pt-3 first:pt-0">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="tap group mb-2 flex min-h-11 w-full items-center justify-between rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907]"
+        className="tap group mb-2 flex min-h-11 w-full items-center justify-between rounded-lg text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
         aria-expanded={open}
       >
-        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF] group-hover:text-[#F7EBDD] transition-colors">
+        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/80 group-hover:text-white transition-colors">
           {title}
           {count != null && count > 0 && (
-            <span className="ml-1.5 text-[#9B9282]">({count})</span>
+            <span className="ml-1.5 text-white/40">({count})</span>
           )}
         </span>
         <ChevronDown
           size={11}
-          className={`text-[#9B9282] transition-transform duration-200 ${open ? '' : '-rotate-90'}`}
+          className={`text-white/40 transition-transform duration-200 ${open ? '' : '-rotate-90'}`}
         />
       </button>
       {open && <div>{children}</div>}
@@ -67,7 +67,7 @@ function ShowMoreList({ items, max = 6 }: { items: React.ReactNode[]; max?: numb
       {visible}
       <button
         onClick={() => setExpanded((e) => !e)}
-        className="tap mt-1.5 min-h-11 self-start rounded-md px-2 text-[9px] font-mono uppercase tracking-wider text-[#9B9282] transition-colors hover:text-[#E7D7BE] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907]"
+        className="tap mt-1.5 min-h-11 self-start rounded-md px-2 text-[9px] font-mono uppercase tracking-wider text-white/40 transition-colors hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
       >
         {expanded ? '− Show less' : `+ Show all ${items.length}`}
       </button>
@@ -86,9 +86,9 @@ function PillButton({
   return (
     <button
       onClick={onClick}
-      className={`tap min-h-11 whitespace-nowrap rounded-full border px-3 py-2 font-mono text-[10px] uppercase tracking-wider transition-[background-color,border-color,color,opacity] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907] ${active
-        ? 'text-black border-[#E7D7BE]'
-        : 'bg-transparent text-[#B4AA99] border-[#2B2821] hover:border-[#E7D7BE]/30 hover:text-[#D0C3AF]'
+      className={`tap min-h-11 whitespace-nowrap rounded-full border px-3 py-2 font-mono text-[10px] uppercase tracking-wider transition-[background-color,border-color,color,opacity] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black ${active
+        ? 'text-black border-white/30'
+        : 'bg-transparent text-white/60 border-white/10 hover:border-white/ hover:text-white/80'
       }`}
       style={active ? { backgroundColor: accentColor, borderColor: accentColor } : {}}
     >
@@ -189,14 +189,14 @@ export function StoreSidebar(props: Props) {
   const content = (
     <div className="flex flex-col gap-5 p-5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99]">
+        <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">
           <Sliders size={11} />
           Refine
-          <span className="text-[#9B9282] tabular-nums">· {totalResults}</span>
+          <span className="text-white/40 tabular-nums">· {totalResults}</span>
         </div>
         <button
           onClick={onClose}
-          className="tap grid size-11 place-items-center rounded-full text-[#9B9282] transition-colors hover:bg-[#171511] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907] lg:hidden"
+          className="tap grid size-11 place-items-center rounded-full text-white/40 transition-colors hover:bg-white/[0.04] hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black lg:hidden"
           aria-label="Close filters"
         >
           <X size={14} />
@@ -214,8 +214,8 @@ export function StoreSidebar(props: Props) {
       </FacetSection>
 
       {hasActiveFilters && (
-        <div className="rounded-lg border border-[#E7D7BE]/15 bg-[#E7D7BE]/[0.04] p-2.5">
-          <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF] mb-1.5">
+        <div className="rounded-lg border border-white/ bg-white/[0.04] p-2.5">
+          <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-white/80 mb-1.5">
             Applied
           </p>
           <div className="flex flex-wrap gap-1">
@@ -256,7 +256,7 @@ export function StoreSidebar(props: Props) {
           </div>
           <button
             onClick={onReset}
-            className="mt-2 flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-[#D0C3AF] hover:text-[#E7D7BE] transition-colors"
+            className="mt-2 flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-white/80 hover:text-white transition-colors"
           >
             <RotateCcw size={9} /> Clear all
           </button>
@@ -340,17 +340,17 @@ export function StoreSidebar(props: Props) {
       {bpmRange.min < bpmRange.max && (
         <FacetSection title="BPM range" count={bpmRangeActive ? 1 : 0}>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[8px] font-mono text-[#9B9282]">range</span>
+            <span className="text-[8px] font-mono text-white/40">range</span>
             <span
               className="text-[11px] font-mono font-bold tabular-nums"
-              style={{ color: bpmRangeActive ? accentColor : '#9B9282' }}
+              style={{ color: bpmRangeActive ? accentColor : 'rgba(255,255,255,0.4)' }}
             >
               {effectiveMin}–{effectiveMax}
             </span>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-[8px] font-mono text-[#9B9282] w-5 text-right shrink-0">min</span>
+              <span className="text-[8px] font-mono text-white/40 w-5 text-right shrink-0">min</span>
               <input
                 type="range"
                 aria-label="Minimum BPM"
@@ -364,7 +364,7 @@ export function StoreSidebar(props: Props) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[8px] font-mono text-[#9B9282] w-5 text-right shrink-0">max</span>
+              <span className="text-[8px] font-mono text-white/40 w-5 text-right shrink-0">max</span>
               <input
                 type="range"
                 aria-label="Maximum BPM"
@@ -384,17 +384,17 @@ export function StoreSidebar(props: Props) {
       {priceRange.min < priceRange.max && (
         <FacetSection title="Price (lease)" count={priceRangeActive ? 1 : 0} defaultOpen={false}>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[8px] font-mono text-[#9B9282]">range</span>
+            <span className="text-[8px] font-mono text-white/40">range</span>
             <span
               className="text-[11px] font-mono font-bold tabular-nums"
-              style={{ color: priceRangeActive ? accentColor : '#9B9282' }}
+              style={{ color: priceRangeActive ? accentColor : 'rgba(255,255,255,0.4)' }}
             >
               ${effectivePriceMin}–${effectivePriceMax}
             </span>
           </div>
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <span className="text-[8px] font-mono text-[#9B9282] w-5 text-right shrink-0">min</span>
+              <span className="text-[8px] font-mono text-white/40 w-5 text-right shrink-0">min</span>
               <input
                 type="range"
                 aria-label="Minimum lease price"
@@ -408,7 +408,7 @@ export function StoreSidebar(props: Props) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-[8px] font-mono text-[#9B9282] w-5 text-right shrink-0">max</span>
+              <span className="text-[8px] font-mono text-white/40 w-5 text-right shrink-0">max</span>
               <input
                 type="range"
                 aria-label="Maximum lease price"
@@ -438,14 +438,14 @@ export function StoreSidebar(props: Props) {
         onClick={() => setFreeOnly(!freeOnly)}
         className={`tap flex min-h-11 items-center justify-between rounded-lg border px-3 py-2.5 transition-all ${freeOnly
             ? 'bg-[#0e1f17]/60 border-[#6DC6A4]/30 text-[#6DC6A4]'
-            : 'bg-transparent border-[#2B2821] text-[#B4AA99] hover:border-[#3B372F]'
+            : 'bg-transparent border-white/10 text-white/60 hover:border-white/20'
           }`}
       >
         <div className="flex items-center gap-2">
           <Download size={11} />
           <span className="text-[10px] font-mono uppercase tracking-wider">Free only</span>
         </div>
-        <span className={`text-[8px] font-mono uppercase ${freeOnly ? 'text-[#6DC6A4]' : 'text-[#9B9282]'}`}>
+        <span className={`text-[8px] font-mono uppercase ${freeOnly ? 'text-[#6DC6A4]' : 'text-white/40'}`}>
           {freeOnly ? 'ON' : 'OFF'}
         </span>
       </button>
@@ -453,15 +453,15 @@ export function StoreSidebar(props: Props) {
       <button
         onClick={() => setFavoritesOnly(!favoritesOnly)}
         className={`tap flex min-h-11 items-center justify-between rounded-lg border px-3 py-2.5 transition-all ${favoritesOnly
-            ? 'border-[#D6BE7A]/40 text-[#D6BE7A] bg-[#D6BE7A]/[0.08]'
-            : 'bg-transparent border-[#2B2821] text-[#B4AA99] hover:border-[#3B372F]'
+            ? 'border-white/ text-black bg-white font-semibold shadow-md hover:bg-white/90/[0.08]'
+            : 'bg-transparent border-white/10 text-white/60 hover:border-white/20'
           }`}
       >
         <div className="flex items-center gap-2">
           <Heart size={11} fill={favoritesOnly ? 'currentColor' : 'none'} />
           <span className="text-[10px] font-mono uppercase tracking-wider">Favorites only</span>
         </div>
-        <span className={`text-[8px] font-mono uppercase tabular-nums ${favoritesOnly ? 'text-[#D6BE7A]' : 'text-[#9B9282]'}`}>
+        <span className={`text-[8px] font-mono uppercase tabular-nums ${favoritesOnly ? 'text-white' : 'text-white/40'}`}>
           {favoritesCount}
         </span>
       </button>
@@ -472,14 +472,14 @@ export function StoreSidebar(props: Props) {
         style={
           newThisWeek
             ? { borderColor: `${accentColor}66`, color: accentColor, backgroundColor: `${accentColor}14` }
-            : { borderColor: '#2B2821', color: '#B4AA99' }
+            : { borderColor: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)' }
         }
       >
         <div className="flex items-center gap-2">
           <Sparkles size={11} />
           <span className="text-[10px] font-mono uppercase tracking-wider">New this week</span>
         </div>
-        <span className="text-[8px] font-mono uppercase" style={{ color: newThisWeek ? accentColor : '#9B9282' }}>
+        <span className="text-[8px] font-mono uppercase" style={{ color: newThisWeek ? accentColor : 'rgba(255,255,255,0.4)' }}>
           {newThisWeek ? 'ON' : 'OFF'}
         </span>
       </button>
@@ -487,7 +487,7 @@ export function StoreSidebar(props: Props) {
       <button
         onClick={onReset}
         disabled={!hasActiveFilters}
-        className="tap flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-[#2B2821] px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-[#B4AA99] transition-all hover:border-[#E7D7BE]/40 hover:text-[#E7D7BE] disabled:cursor-not-allowed disabled:opacity-30"
+        className="tap flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-white/60 transition-all hover:border-white/ hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
       >
         <RotateCcw size={10} />
         Reset filters
@@ -503,15 +503,15 @@ export function StoreSidebar(props: Props) {
           onClick={onClose}
         />
       )}
-      <div className={`lg:hidden fixed left-0 right-0 bottom-0 z-50 bg-[#11100D] border-t border-[#2B2821] rounded-t-2xl shadow-[0_-8px_40px_rgba(0,0,0,0.6)] overflow-y-auto max-h-[75vh] transition-transform duration-300 ${open ? 'translate-y-0' : 'translate-y-full'}`}>
+      <div className={`lg:hidden fixed left-0 right-0 bottom-0 z-50 bg-white/[0.02] border-t border-white/10 rounded-t-2xl shadow-[0_-8px_40px_rgba(0,0,0,0.6)] overflow-y-auto max-h-[75vh] transition-transform duration-300 ${open ? 'translate-y-0' : 'translate-y-full'}`}>
         <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full bg-[#3B372F]" />
+          <div className="w-10 h-1 rounded-full bg-white/20" />
         </div>
         {content}
       </div>
 
       <div className="hidden lg:block w-56 shrink-0 sticky top-[57px] max-h-[calc(100vh-57px)] overflow-y-auto">
-        <div className="bg-[#11100D] border border-[#2B2821] rounded-2xl overflow-hidden">
+        <div className="bg-white/[0.02] border border-white/10 rounded-2xl overflow-hidden">
           {content}
         </div>
       </div>
@@ -521,18 +521,18 @@ export function StoreSidebar(props: Props) {
 
 export function BeatCardSkeleton() {
   return (
-    <div className="rounded-2xl border border-[#2B2821] bg-[#171511] overflow-hidden flex flex-col">
-      <div className="w-full aspect-square bg-[#211F1A] animate-pulse" />
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] overflow-hidden flex flex-col">
+      <div className="w-full aspect-square bg-white/[0.05] animate-pulse" />
       <div className="p-4 flex flex-col gap-3">
-        <div className="h-3.5 bg-[#2B2821] rounded animate-pulse w-3/4" />
+        <div className="h-3.5 bg-white/20 rounded animate-pulse w-3/4" />
         <div className="flex gap-1">
-          <div className="h-4 w-12 bg-[#211F1A] rounded animate-pulse" />
-          <div className="h-4 w-10 bg-[#211F1A] rounded animate-pulse" />
+          <div className="h-4 w-12 bg-white/[0.05] rounded animate-pulse" />
+          <div className="h-4 w-10 bg-white/[0.05] rounded animate-pulse" />
         </div>
-        <div className="h-9 bg-[#211F1A] rounded animate-pulse mt-1" />
+        <div className="h-9 bg-white/[0.05] rounded animate-pulse mt-1" />
         <div className="mt-auto pt-2 flex gap-2">
-          <div className="flex-1 h-10 bg-[#211F1A] rounded animate-pulse" />
-          <div className="flex-1 h-10 bg-[#2B2821] rounded animate-pulse" />
+          <div className="flex-1 h-10 bg-white/[0.05] rounded animate-pulse" />
+          <div className="flex-1 h-10 bg-white/20 rounded animate-pulse" />
         </div>
       </div>
     </div>
@@ -541,17 +541,17 @@ export function BeatCardSkeleton() {
 
 export function BeatListRowSkeleton() {
   return (
-    <div className="rounded-xl border border-[#211F1A] bg-[#171511]">
+    <div className="rounded-xl border border-white/10 bg-white/[0.04]">
       <div className="flex items-center gap-3 px-3 py-2.5">
-        <div className="w-7 h-7 rounded-full bg-[#211F1A] animate-pulse shrink-0" />
-        <div className="w-10 h-10 rounded-lg bg-[#211F1A] animate-pulse shrink-0" />
+        <div className="w-7 h-7 rounded-full bg-white/[0.05] animate-pulse shrink-0" />
+        <div className="w-10 h-10 rounded-lg bg-white/[0.05] animate-pulse shrink-0" />
         <div className="flex-1 min-w-0 space-y-1.5">
-          <div className="h-3 bg-[#2B2821] rounded animate-pulse w-2/3" />
-          <div className="h-2.5 bg-[#211F1A] rounded animate-pulse w-1/3" />
+          <div className="h-3 bg-white/20 rounded animate-pulse w-2/3" />
+          <div className="h-2.5 bg-white/[0.05] rounded animate-pulse w-1/3" />
         </div>
         <div className="hidden md:flex gap-2 shrink-0">
-          <div className="h-8 w-14 bg-[#211F1A] rounded animate-pulse" />
-          <div className="h-8 w-14 bg-[#2B2821] rounded animate-pulse" />
+          <div className="h-8 w-14 bg-white/[0.05] rounded animate-pulse" />
+          <div className="h-8 w-14 bg-white/20 rounded animate-pulse" />
         </div>
       </div>
     </div>

@@ -34,7 +34,7 @@ export function ContactsPagination({
   return (
     <div className="flex items-center justify-between gap-4 px-1 py-3 flex-wrap">
       <div className="flex items-center gap-3">
-        <span className="text-[11px] font-mono text-[#9B9282] tabular-nums">
+        <span className="text-[11px] font-mono text-white/40 tabular-nums">
           Showing {from}–{to} of {total.toLocaleString()}
         </span>
         <Dropdown
@@ -52,19 +52,19 @@ export function ContactsPagination({
         <button
           onClick={() => onPage(page - 1)}
           disabled={page <= 1}
-          className="h-8 px-2 rounded-md flex items-center gap-1 text-[11px] text-[#D0C3AF] hover:text-[#F7EBDD] hover:bg-[#211F1A] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="h-8 px-2 rounded-md flex items-center gap-1 text-[11px] text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronLeft size={14} /> Prev
         </button>
         {nums.map((n, i) =>
           n === '…' ? (
-            <span key={`gap-${i}`} className="px-1.5 text-[11px] text-[#6E685B]">…</span>
+            <span key={`gap-${i}`} className="px-1.5 text-[11px] text-white/40">…</span>
           ) : (
             <button
               key={n}
               onClick={() => onPage(n)}
               className={`h-8 min-w-8 px-2 rounded-md text-[11px] font-medium tabular-nums transition-colors ${
-                n === page ? 'bg-[var(--accent)] text-black' : 'text-[#D0C3AF] hover:text-[#F7EBDD] hover:bg-[#211F1A]'
+                n === page ? 'bg-white text-black font-bold' : 'text-white/80 hover:text-white hover:bg-white/10'
               }`}
             >
               {n}
@@ -74,7 +74,7 @@ export function ContactsPagination({
         <button
           onClick={() => onPage(page + 1)}
           disabled={page >= pages}
-          className="h-8 px-2 rounded-md flex items-center gap-1 text-[11px] text-[#D0C3AF] hover:text-[#F7EBDD] hover:bg-[#211F1A] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="h-8 px-2 rounded-md flex items-center gap-1 text-[11px] text-white/80 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           Next <ChevronRight size={14} />
         </button>

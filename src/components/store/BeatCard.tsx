@@ -61,7 +61,7 @@ export function BeatCard({
       tabIndex={0}
       onClick={onPreview}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(); } }}
-      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-[#171511] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E7D7BE]/50 ${
+      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-white/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30/50 ${
         isActive ? '' : 'border-white/[0.06] hover:border-white/[0.12]'
       }`}
       style={{
@@ -137,7 +137,7 @@ export function BeatCard({
              here; it lives in the action strip below. ── */}
         <div className="absolute bottom-0 inset-x-0 p-3">
           <p
-            className="truncate text-[14px] font-semibold leading-snug text-[#F7EBDD]"
+            className="truncate text-[14px] font-semibold leading-snug text-white"
             style={isActive ? { color: accentColor } : {}}
           >
             {track.title}
@@ -169,7 +169,7 @@ export function BeatCard({
         ) : hasLicenseTiers ? (
           <button
             onClick={stop(onPreview)}
-            className="tap flex min-h-11 w-full items-center justify-center gap-1.5 text-[11px] font-medium text-[#F7EBDD] transition-colors hover:bg-white/[0.03]"
+            className="tap flex min-h-11 w-full items-center justify-center gap-1.5 text-[11px] font-medium text-white transition-colors hover:bg-white/[0.03]"
           >
             Choose license
             {fromPrice != null && (
@@ -184,7 +184,7 @@ export function BeatCard({
               className="tap flex flex-1 items-center justify-center gap-1.5 text-[11px] transition-colors hover:bg-white/[0.03] disabled:cursor-not-allowed disabled:opacity-25"
             >
               <span className="text-white/45">Lease</span>
-              <span className="font-semibold tabular-nums text-[#F7EBDD]">
+              <span className="font-semibold tabular-nums text-white">
                 {priceLease != null ? `$${priceLease}` : '—'}
               </span>
             </button>

@@ -61,7 +61,7 @@ export function ProductListRow({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={coverUrl} alt="" className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-[#6E685B]">
+        <div className="flex h-full w-full items-center justify-center text-white/30">
           {coverFallback ?? <Music size={17} aria-hidden="true" />}
         </div>
       )}
@@ -71,11 +71,11 @@ export function ProductListRow({
 
   const titleContent = (
     <>
-      {eyebrow && <div className="mb-1 flex min-h-4 items-center gap-2 text-[9px] font-mono uppercase tracking-[0.18em] text-[#837B6D]">{eyebrow}</div>}
-      <h3 className="truncate text-[15px] font-bold leading-tight text-[#F7EBDD] transition-colors group-hover:text-[#fff7ea] sm:text-[16px]">
+      {eyebrow && <div className="mb-1 flex min-h-4 items-center gap-2 text-[9px] font-mono uppercase tracking-[0.18em] text-white/40">{eyebrow}</div>}
+      <h3 className="truncate text-[15px] font-bold leading-tight text-white transition-colors group-hover:text-[#fff7ea] sm:text-[16px]">
         {title}
       </h3>
-      {meta && <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-mono text-[#9B9282]">{meta}</div>}
+      {meta && <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-mono text-white/40">{meta}</div>}
     </>
   );
 
@@ -173,7 +173,7 @@ export function FolderContainerCard({
       <button type="button" onClick={onClick} className="block w-[112px] text-left sm:w-[124px]">
         <div className={cn(
           'relative mb-2 aspect-square overflow-hidden rounded-[20px] bg-[#202020] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-transform group-hover:-translate-y-0.5',
-          active && 'ring-2 ring-[#F7EBDD]/80',
+          active && 'ring-2 ring-white/30/80',
         )}>
           {visibleCovers.length > 0 ? (
             <div className={cn(
@@ -200,8 +200,8 @@ export function FolderContainerCard({
             </div>
           )}
         </div>
-        <p className="truncate text-[12px] font-bold text-[#F7EBDD] sm:text-[13px]">{label}</p>
-        {count != null && <p className="mt-0.5 text-[10px] text-[#837B6D]">{count} item{count === 1 ? '' : 's'}</p>}
+        <p className="truncate text-[12px] font-bold text-white sm:text-[13px]">{label}</p>
+        {count != null && <p className="mt-0.5 text-[10px] text-white/40">{count} item{count === 1 ? '' : 's'}</p>}
       </button>
       {actions && <div className="absolute right-2 top-2 flex items-center gap-1">{actions}</div>}
     </div>

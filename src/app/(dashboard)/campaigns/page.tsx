@@ -124,25 +124,25 @@ export default function CampaignsPage() {
               <CampaignMetric label="Need targets" value={campaignSummary.empty} icon={<Plus size={13} />} tone="warm" />
             </div>
 
-            <div className="mb-5 rounded-2xl border border-[#2B2821] bg-[#11100D] p-2.5">
+            <div className="mb-5 rounded-2xl border border-white/10 bg-white/[0.02] p-2.5">
               <div className="flex flex-col gap-2 md:flex-row md:items-center">
                 <div className="relative min-w-0 flex-1">
-                  <Search size={12} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" />
+                  <Search size={12} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search campaigns…"
-                    className="w-full rounded-full border border-[#2B2821] bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-[#F7EBDD] transition-colors placeholder:text-[#6E685B] focus:border-[#C9BCA8] focus:outline-none"
+                    className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-white transition-colors placeholder:text-white/40 focus:border-white/60 focus:outline-none"
                   />
                 </div>
-                <div className="flex overflow-x-auto rounded-full border border-[#2B2821] bg-[#090907] p-1">
+                <div className="flex overflow-x-auto rounded-full border border-white/10 bg-[#090907] p-1">
                   {CAMPAIGN_FILTERS.map((f) => (
                     <button
                       key={f}
                       type="button"
                       onClick={() => setFilter(f)}
                       className={`shrink-0 rounded-full px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
-                        filter === f ? 'bg-[#342F27] text-[#F3E6D1]' : 'text-[#B4AA99] hover:text-[#F7EBDD]'
+                        filter === f ? 'bg-white/15 text-white font-bold' : 'text-white/60 hover:text-white'
                       }`}
                     >
                       {f}
@@ -151,7 +151,7 @@ export default function CampaignsPage() {
                 </div>
               </div>
               <div className="mt-2 flex items-center justify-between px-1">
-                <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#6E685B]">
+                <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/30">
                   {visibleCampaigns.length} shown
                   {visibleCampaigns.length !== campaigns.length && ` · ${campaigns.length} total`}
                 </p>
@@ -159,7 +159,7 @@ export default function CampaignsPage() {
                   <button
                     type="button"
                     onClick={() => { setSearch(''); setFilter('All'); }}
-                    className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#B4AA99] transition-colors hover:text-[#F7EBDD]"
+                    className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/60 transition-colors hover:text-white"
                   >
                     Clear
                   </button>
@@ -171,7 +171,7 @@ export default function CampaignsPage() {
 
         {/* Body */}
         {loading ? (
-          <div className="flex items-center justify-center py-32 text-[#B4AA99]">
+          <div className="flex items-center justify-center py-32 text-white/60">
             <Loader2 size={18} className="animate-spin" />
           </div>
         ) : campaigns.length === 0 ? (
@@ -234,10 +234,10 @@ function CampaignMetric({
   icon: React.ReactNode;
   tone?: 'default' | 'good' | 'warm';
 }) {
-  const toneClass = tone === 'good' ? 'text-[#6DC6A4]' : tone === 'warm' ? 'text-[#E7D7BE]' : 'text-[#F7EBDD]';
+  const toneClass = tone === 'good' ? 'text-[#6DC6A4]' : tone === 'warm' ? 'text-white' : 'text-white/80';
   return (
-    <div className="rounded-xl border border-[#2B2821] bg-[#171511] px-4 py-3">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[#9B9282]">
+    <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
+      <div className="mb-1.5 flex items-center gap-1.5 text-white/50">
         {icon}
         <p className="text-[9px] font-mono uppercase tracking-[0.18em]">{label}</p>
       </div>
@@ -252,26 +252,26 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
   return (
     <Link
       href={`/campaigns/${campaign.id}`}
-      className="group block rounded-2xl border border-[#2B2821] bg-[#171511] p-4 transition-colors hover:border-[#3B372F] sm:p-5"
+      className="group block rounded-2xl border border-white/10 bg-white/[0.04] p-4 transition-colors hover:border-white/20 sm:p-5"
       title={`Open ${campaign.name}`}
     >
       <div className="flex items-start justify-between gap-3 mb-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] mb-1">
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 mb-1">
             {new Date(campaign.created_at).toLocaleDateString()}
           </p>
           <h3 className="truncate text-[15px] font-semibold text-white">{campaign.name}</h3>
           {campaign.description && (
-            <p className="text-[12px] text-[#D0C3AF] mt-1 line-clamp-2 leading-relaxed">
+            <p className="text-[12px] text-white/70 mt-1 line-clamp-2 leading-relaxed">
               {campaign.description}
             </p>
           )}
         </div>
-        <ChevronRight size={14} className="text-[#6E685B] shrink-0 group-hover:text-[#F7EBDD] transition-colors mt-1" />
+        <ChevronRight size={14} className="text-white/40 shrink-0 group-hover:text-white transition-colors mt-1" />
       </div>
 
       {/* Funnel mini-stats */}
-      <div className="grid grid-cols-4 gap-2 rounded-xl border border-[#211F1A] bg-[#11100D] p-2">
+      <div className="grid grid-cols-4 gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-2">
         <Stat label="Total" value={total} tone="default" />
         <Stat label="Pending" value={pending} tone="default" />
         <Stat label="Placed" value={placed} tone="good" />
@@ -279,13 +279,13 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
       </div>
 
       {total > 0 && (
-        <div className="flex items-center gap-1.5 mt-3 text-[10px] font-mono text-[#B4AA99]">
+        <div className="flex items-center gap-1.5 mt-3 text-[10px] font-mono text-white/60">
           <TrendingUp size={10} />
           {placementRate}% placement rate
         </div>
       )}
       {campaign.nudge_after_days != null && (
-        <div className="flex items-center gap-1.5 mt-1.5 text-[10px] font-mono text-[#B4AA99]">
+        <div className="flex items-center gap-1.5 mt-1.5 text-[10px] font-mono text-white/60">
           <Mail size={10} />
           Nudge after {campaign.nudge_after_days}d
         </div>
@@ -296,10 +296,10 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
 
 function Stat({ label, value, tone }: { label: string; value: number; tone: 'default' | 'good' | 'bad' }) {
   const color =
-    tone === 'good' ? 'text-[#6DC6A4]' : tone === 'bad' ? 'text-[#e88a8a]' : 'text-[#F7EBDD]';
+    tone === 'good' ? 'text-[#6DC6A4]' : tone === 'bad' ? 'text-[#e88a8a]' : 'text-white/80';
   return (
     <div>
-      <p className="text-[9px] font-mono uppercase tracking-[0.15em] text-[#9B9282]">{label}</p>
+      <p className="text-[9px] font-mono uppercase tracking-[0.15em] text-white/50">{label}</p>
       <p className={`text-[18px] font-medium tabular-nums leading-tight mt-0.5 ${color}`}>{value}</p>
     </div>
   );

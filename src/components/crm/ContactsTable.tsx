@@ -40,12 +40,12 @@ interface Props {
   onRowDrop: (c: Contact, e: React.DragEvent) => void;
 }
 
-const LEAD_TINTS: Record<string, string> = { hot: '#E8896A', warm: '#E7D7BE', cold: '#7d92b0', new: '#B4AA99' };
+const LEAD_TINTS: Record<string, string> = { hot: '#E8896A', warm: 'rgba(255,255,255,0.9)', cold: '#7d92b0', new: 'rgba(255,255,255,0.5)' };
 
 function SortHeader({ label, col, active, dir, onSort, className }: { label: string; col: ContactSortMode; active: boolean; dir: SortDir; onSort: (c: ContactSortMode) => void; className?: string }) {
   return (
-    <th className={`text-left font-mono uppercase tracking-wider text-[10px] text-[#B4AA99] font-normal ${className ?? ''}`}>
-      <button onClick={() => onSort(col)} className="inline-flex items-center gap-1 hover:text-[#D0C3AF] transition-colors">
+    <th className={`text-left font-mono uppercase tracking-wider text-[10px] text-white/60 font-normal ${className ?? ''}`}>
+      <button onClick={() => onSort(col)} className="inline-flex items-center gap-1 hover:text-white/90 transition-colors">
         {label}
         {active && (dir === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
       </button>
@@ -61,19 +61,19 @@ export function ContactsTable(p: Props) {
       {/* ── Desktop: the full data table (lg+, where 920px fits) ──────── */}
       <div className="hidden lg:block border border-[var(--border)] rounded-xl overflow-hidden overflow-x-auto bg-[var(--bg-card)]">
         <table className="w-full min-w-[920px] border-collapse">
-          <thead className="sticky top-0 z-10 bg-[#11100D]">
+          <thead className="sticky top-0 z-10 bg-[#0a0907]">
             <tr className="border-b border-[var(--border)] h-9">
               <th className="w-10 px-3">
                 <input type="checkbox" checked={p.allPageSelected} onChange={p.onToggleSelectPage} aria-label="Select page" className="accent-[var(--accent)] cursor-pointer" />
               </th>
               <SortHeader label="Contact" col="name" active={p.sortMode === 'name'} dir={p.sortDir} onSort={p.onSort} className="px-2" />
-              <th className="text-left font-mono uppercase tracking-wider text-[10px] text-[#B4AA99] font-normal px-2 hidden md:table-cell">Role</th>
-              <th className="text-left font-mono uppercase tracking-wider text-[10px] text-[#B4AA99] font-normal px-2 w-[150px]">Stage</th>
+              <th className="text-left font-mono uppercase tracking-wider text-[10px] text-white/60 font-normal px-2 hidden md:table-cell">Role</th>
+              <th className="text-left font-mono uppercase tracking-wider text-[10px] text-white/60 font-normal px-2 w-[150px]">Stage</th>
               <SortHeader label="Last Sent" col="lastSent" active={p.sortMode === 'lastSent'} dir={p.sortDir} onSort={p.onSort} className="px-2 w-[130px] hidden sm:table-cell" />
-              <th className="text-left font-mono uppercase tracking-wider text-[10px] text-[#B4AA99] font-normal px-2 hidden lg:table-cell">Tags</th>
+              <th className="text-left font-mono uppercase tracking-wider text-[10px] text-white/60 font-normal px-2 hidden lg:table-cell">Tags</th>
               <SortHeader label="Sends" col="sends" active={p.sortMode === 'sends'} dir={p.sortDir} onSort={p.onSort} className="px-2 w-[70px] hidden sm:table-cell" />
               <SortHeader label="Lead" col="lead" active={p.sortMode === 'lead'} dir={p.sortDir} onSort={p.onSort} className="px-2 w-[90px] hidden md:table-cell" />
-              <th className="text-right font-mono uppercase tracking-wider text-[10px] text-[#B4AA99] font-normal px-3 w-[120px]">Actions</th>
+              <th className="text-right font-mono uppercase tracking-wider text-[10px] text-white/60 font-normal px-3 w-[120px]">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -92,8 +92,8 @@ export function ContactsTable(p: Props) {
                   onDragOver={(e) => p.onRowDragOver(c.id, e)}
                   onDragLeave={p.onRowDragLeave}
                   onDrop={(e) => p.onRowDrop(c, e)}
-                  className={`group border-b border-[#1A1813] transition-colors ${
-                    isDrop ? 'ring-2 ring-[var(--accent)]/60 ring-inset bg-[var(--accent-tint)]' : sel ? 'bg-[var(--accent-tint)]/40' : i % 2 ? 'bg-[#100d09]/40 hover:bg-[#211F1A]' : 'hover:bg-[#211F1A]'
+                  className={`group border-b border-[#0E0E0E] transition-colors ${
+                    isDrop ? 'ring-2 ring-[var(--accent)]/60 ring-inset bg-[var(--accent-tint)]' : sel ? 'bg-[var(--accent-tint)]/40' : i % 2 ? 'bg-white/[0.01] hover:bg-white/[0.05]' : 'hover:bg-white/[0.05]'
                   }`}
                 >
                   {/* Checkbox */}
@@ -123,7 +123,7 @@ export function ContactsTable(p: Props) {
 
                   {/* Role / Category */}
                   <td className="px-2 align-middle hidden md:table-cell">
-                    <p className="text-[12px] text-[#D0C3AF] truncate">{c.role || c.label || c.category || '—'}</p>
+                    <p className="text-[12px] text-white/80 truncate">{c.role || c.label || c.category || '—'}</p>
                   </td>
 
                   {/* Stage (editable) */}
@@ -145,18 +145,18 @@ export function ContactsTable(p: Props) {
                   <td className="px-2 align-middle hidden lg:table-cell">
                     <div className="flex items-center gap-1 flex-wrap">
                       {(c.tags ?? []).slice(0, 3).map((t) => (
-                        <span key={t.tag} className="text-[9px] font-mono uppercase tracking-wider text-[#D0C3AF] bg-[#211F1A] border border-[var(--border-hover)] px-1.5 py-0.5 rounded">{t.tag}</span>
+                        <span key={t.tag} className="text-[9px] font-mono uppercase tracking-wider text-white/80 bg-white/10 border border-[var(--border-hover)] px-1.5 py-0.5 rounded">{t.tag}</span>
                       ))}
-                      {(c.tags?.length ?? 0) > 3 && <span className="text-[9px] font-mono text-[#B4AA99]">+{c.tags!.length - 3}</span>}
-                      {(c.tags?.length ?? 0) === 0 && <span className="text-[#3B372F]">—</span>}
+                      {(c.tags?.length ?? 0) > 3 && <span className="text-[9px] font-mono text-white/60">+{c.tags!.length - 3}</span>}
+                      {(c.tags?.length ?? 0) === 0 && <span className="text-white/20">—</span>}
                     </div>
                   </td>
 
                   {/* Sends */}
                   <td className="px-2 align-middle hidden sm:table-cell">
                     {sends > 0 ? (
-                      <span className="text-[11px] font-mono tabular-nums text-[#D0C3AF] bg-[#211F1A] rounded px-1.5 py-0.5">{sends}</span>
-                    ) : <span className="text-[#3B372F]">—</span>}
+                      <span className="text-[11px] font-mono tabular-nums text-white/80 bg-white/10 rounded px-1.5 py-0.5">{sends}</span>
+                    ) : <span className="text-white/20">—</span>}
                   </td>
 
                   {/* Lead score + tier dot */}
@@ -164,8 +164,8 @@ export function ContactsTable(p: Props) {
                     {(() => {
                       const tier = p.leadTierByContact?.get(c.id);
                       const score = p.leadScoreByContact?.get(c.id) ?? 0;
-                      if (!tier || tier === 'new') return <span className="text-[#3B372F]">—</span>;
-                      const clr = LEAD_TINTS[tier] ?? '#B4AA99';
+                      if (!tier || tier === 'new') return <span className="text-white/20">—</span>;
+                      const clr = LEAD_TINTS[tier] ?? 'rgba(255,255,255,0.5)';
                       return (
                         <span className="inline-flex items-center gap-1.5" title={`${tier} lead · score ${score}`}>
                           <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: clr, boxShadow: `0 0 6px ${clr}66` }} />
@@ -185,11 +185,11 @@ export function ContactsTable(p: Props) {
                         </button>
                       )}
                       <button onClick={() => p.onOpenHistory(c)} title={sends > 0 ? `${sends} sends — view history` : 'View history'} aria-label={`History for ${c.name}`}
-                        className="tap w-7 h-7 rounded-md flex items-center justify-center text-[#B4AA99] hover:text-[#F7EBDD] hover:bg-[#211F1A] transition-colors">
+                        className="tap w-7 h-7 rounded-md flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors">
                         <Clock size={13} />
                       </button>
                       <button onClick={() => p.onSend(c)} title={sends > 0 ? 'Beat already sent — send another?' : 'Send beat'}
-                        className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[10px] font-medium border border-[var(--border-hover)] text-[#F3E6D1] hover:bg-[var(--accent-tint)] hover:border-[var(--accent-dim)]/60 transition-colors">
+                        className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[10px] font-medium border border-white/20 text-white hover:bg-white/10 transition-colors">
                         {sends > 0 ? <Mail size={11} /> : <Send size={11} />}
                         {sends > 0 ? 'Again' : 'Send'}
                       </button>
@@ -214,7 +214,7 @@ export function ContactsTable(p: Props) {
           const tier = p.leadTierByContact?.get(c.id);
           const score = p.leadScoreByContact?.get(c.id) ?? 0;
           const showLead = tier && tier !== 'new';
-          const leadClr = showLead ? (LEAD_TINTS[tier] ?? '#B4AA99') : '#B4AA99';
+          const leadClr = showLead ? (LEAD_TINTS[tier] ?? 'rgba(255,255,255,0.5)') : 'rgba(255,255,255,0.5)';
           const tags = c.tags ?? [];
 
           return (
@@ -272,9 +272,9 @@ export function ContactsTable(p: Props) {
               {tags.length > 0 && (
                 <div className="flex items-center gap-1 flex-wrap mt-2.5">
                   {tags.slice(0, 4).map((t) => (
-                    <span key={t.tag} className="text-[9px] font-mono uppercase tracking-wider text-[#D0C3AF] bg-[#211F1A] border border-[var(--border-hover)] px-1.5 py-0.5 rounded">{t.tag}</span>
+                    <span key={t.tag} className="text-[9px] font-mono uppercase tracking-wider text-white/80 bg-white/10 border border-[var(--border-hover)] px-1.5 py-0.5 rounded">{t.tag}</span>
                   ))}
-                  {tags.length > 4 && <span className="text-[9px] font-mono text-[#B4AA99]">+{tags.length - 4}</span>}
+                  {tags.length > 4 && <span className="text-[9px] font-mono text-white/60">+{tags.length - 4}</span>}
                 </div>
               )}
 
@@ -292,14 +292,14 @@ export function ContactsTable(p: Props) {
                 <button
                   onClick={() => p.onOpenHistory(c)}
                   aria-label={`History for ${c.name}`}
-                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-medium text-[#D0C3AF] bg-white/[0.03] border border-[var(--border)] active:scale-[0.98] transition-transform"
+                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-medium text-white/80 bg-white/[0.03] border border-[var(--border)] hover:bg-white/[0.08] active:scale-[0.98] transition-transform"
                 >
                   <Clock size={14} /> History
                 </button>
                 <button
                   onClick={() => p.onSend(c)}
                   aria-label={sends > 0 ? `Send another beat to ${c.name}` : `Send beat to ${c.name}`}
-                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-bold text-[#F3E6D1] bg-[var(--accent-tint)] border border-[var(--accent-dim)]/50 active:scale-[0.98] transition-transform"
+                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-bold text-black bg-white font-semibold shadow-md hover:bg-white/90/15 border border-white/30 hover:bg-white/25 active:scale-[0.98] transition-transform shadow-sm"
                 >
                   {sends > 0 ? <Mail size={14} /> : <Send size={14} />}
                   {sends > 0 ? 'Again' : 'Send'}

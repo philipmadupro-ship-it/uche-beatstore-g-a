@@ -67,21 +67,21 @@ export function BulkEditPanel({ mode, ids, onClose, onDone, tagsEndpoint = '/api
               const m = STAGE_META[s];
               return (
                 <button key={s} disabled={busy} onClick={() => applyStage(s)}
-                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-[#1A1813] transition-colors disabled:opacity-50 text-left">
+                  className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50 text-left">
                   <span className={`w-2 h-2 rounded-full ${m.dot}`} />
                   <span className={`text-[13px] font-medium ${m.text}`}>{m.label}</span>
                 </button>
               );
             })}
-            {busy && <div className="flex justify-center py-2"><Loader2 size={14} className="animate-spin text-[#9B9282]" /></div>}
+            {busy && <div className="flex justify-center py-2"><Loader2 size={14} className="animate-spin text-white/40" /></div>}
           </div>
         ) : (
           <div className="p-4 space-y-3">
             <div className="flex flex-wrap gap-1.5">
               {tags.map((t) => (
-                <span key={t} className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] bg-[#342F27] border border-[#C9BCA8]/40 text-[#F3E6D1]">
+                <span key={t} className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] bg-white/10 border border-white/30 text-white">
                   {t}
-                  <button onClick={() => setTags((p) => p.filter((x) => x !== t))} className="text-[#B4AA99] hover:text-red-400">×</button>
+                  <button onClick={() => setTags((p) => p.filter((x) => x !== t))} className="text-white/60 hover:text-red-400">×</button>
                 </span>
               ))}
             </div>

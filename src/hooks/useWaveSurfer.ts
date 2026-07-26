@@ -196,9 +196,9 @@ export function useWaveSurfer({
   peaksUrl,
   // Frosted, clearly-visible unplayed bars (warm off-white at low alpha) so
   // the played/unplayed split reads at a glance on the glass panel — the old
-  // near-black #3B372F vanished against the pill. Played stays the warm accent.
+  // near-black #333333 vanished against the pill. Played stays the warm accent.
   waveColor = 'rgba(232,220,200,0.20)',
-  progressColor = '#E7D7BE',
+  progressColor = '#FFFFFF',
   cursorColor = 'transparent',
   // Thin, rounded, slightly-spaced bars = the modern "liquid" waveform look.
   barWidth = 2,

@@ -62,10 +62,10 @@ interface Offer {
 }
 
 const OFFER_STATUS_STYLES: Record<Offer['status'], string> = {
-  pending: 'text-[#E7D7BE] bg-[#E7D7BE]/10 border-[#E7D7BE]/20',
+  pending: 'text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border-white/',
   accepted: 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/20',
   countered: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-  declined: 'text-[#D0C3AF] bg-white/[0.04] border-white/[0.06]',
+  declined: 'text-white/80 bg-white/[0.04] border-white/[0.06]',
 };
 
 function fmtDate(iso: string): string {
@@ -80,10 +80,10 @@ function fmtMoney(n: number | null): string {
 
 const STATUS_STYLES: Record<Sale['status'], string> = {
   paid: 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/20',
-  refunded: 'text-[#D0C3AF] bg-white/[0.04] border-white/[0.06]',
+  refunded: 'text-white/80 bg-white/[0.04] border-white/[0.06]',
   disputed: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
   failed: 'text-red-400 bg-red-500/10 border-red-500/20',
-  expired: 'text-[#D0C3AF] bg-white/[0.04] border-white/[0.06]',
+  expired: 'text-white/80 bg-white/[0.04] border-white/[0.06]',
 };
 
 export default function SalesPage() {
@@ -260,18 +260,18 @@ export default function SalesPage() {
           <div className="mb-4">
             <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2">
               <KpiCard label="All time" value={fmtMoney(totals.revenue_usd)} icon={<DollarSign size={13} />} accent="#6DC6A4" />
-              <KpiCard label="Last 30d" value={fmtMoney(kpis.rev30)} icon={<TrendingUp size={13} />} accent="#E7D7BE" />
-              <KpiCard label="Orders" value={String(totals.count)} icon={<ShoppingBag size={13} />} accent="#D0C3AF" />
+              <KpiCard label="Last 30d" value={fmtMoney(kpis.rev30)} icon={<TrendingUp size={13} />} accent='#FFFFFF' />
+              <KpiCard label="Orders" value={String(totals.count)} icon={<ShoppingBag size={13} />} accent='rgba(255,255,255,0.8)' />
               <KpiCard label="Avg sale" value={totals.count > 0 ? fmtMoney(kpis.avgSale) : '—'} icon={<Tag size={13} />} accent="#9d95e8" />
-              <KpiCard label="Last 90d" value={fmtMoney(kpis.rev90)} icon={<TrendingUp size={13} />} accent="#E7D7BE" className={statsExpanded ? '' : 'hidden sm:block'} />
-              <KpiCard label="Last 7d" value={fmtMoney(kpis.rev7)} icon={<ArrowUpRight size={13} />} accent="#D6BE7A" className={statsExpanded ? '' : 'hidden sm:block'} />
+              <KpiCard label="Last 90d" value={fmtMoney(kpis.rev90)} icon={<TrendingUp size={13} />} accent='#FFFFFF' className={statsExpanded ? '' : 'hidden sm:block'} />
+              <KpiCard label="Last 7d" value={fmtMoney(kpis.rev7)} icon={<ArrowUpRight size={13} />} accent='#FFFFFF' className={statsExpanded ? '' : 'hidden sm:block'} />
               <KpiCard label="Leases" value={String(kpis.leases)} icon={<Tag size={13} />} accent="#9d95e8" className={statsExpanded ? '' : 'hidden sm:block'} />
               <KpiCard label="Exclusives" value={String(kpis.exclusives)} icon={<Crown size={13} />} accent="#e8a06a" className={statsExpanded ? '' : 'hidden sm:block'} />
             </div>
             <button
               type="button"
               onClick={() => setStatsExpanded((v) => !v)}
-              className="mt-2 w-full rounded-full border border-[#2B2821] bg-[#171511] py-1.5 text-micro text-[#B4AA99] transition-colors hover:text-[#F7EBDD] sm:hidden"
+              className="mt-2 w-full rounded-full border border-white/10 bg-white/[0.04] py-1.5 text-micro text-white/60 transition-colors hover:text-white sm:hidden"
             >
               {statsExpanded ? 'Fewer stats' : 'More stats'}
             </button>
@@ -282,8 +282,8 @@ export default function SalesPage() {
         {sales.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-5">
             {/* Revenue chart */}
-            <div className="sm:col-span-2 rounded-2xl border border-[#2B2821] bg-[#171511] px-5 py-4">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-3">Revenue · last 30 days</p>
+            <div className="sm:col-span-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">Revenue · last 30 days</p>
               <svg viewBox={`0 0 400 52`} className="w-full" preserveAspectRatio="none" style={{ height: 52 }}>
                 <defs>
                   <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
@@ -307,24 +307,24 @@ export default function SalesPage() {
                   strokeLinecap="round"
                 />
               </svg>
-              <p className="text-[9px] font-mono text-[#6E685B] mt-2">
+              <p className="text-[9px] font-mono text-white/30 mt-2">
                 {sparkline.vals.filter(Boolean).length} days with sales
               </p>
             </div>
             {/* Top track */}
-            <div className="rounded-2xl border border-[#2B2821] bg-[#171511] px-5 py-4 flex flex-col justify-between">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-3">Top seller</p>
+            <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 flex flex-col justify-between">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">Top seller</p>
               {kpis.topTrack ? (
                 <>
                   <div className="flex items-center gap-2 mt-1">
-                    <Crown size={16} className="text-[#D6BE7A] shrink-0" />
-                    <p className="text-[13px] font-semibold text-[#F7EBDD] truncate leading-snug">{kpis.topTrack.label}</p>
+                    <Crown size={16} className="text-white shrink-0" />
+                    <p className="text-[13px] font-semibold text-white truncate leading-snug">{kpis.topTrack.label}</p>
                   </div>
                   <p className="text-[20px] font-bold text-white tabular-nums mt-2">{fmtMoney(kpis.topTrack.rev)}</p>
-                  <p className="text-[9px] font-mono text-[#9B9282]">from track licenses</p>
+                  <p className="text-[9px] font-mono text-white/40">from track licenses</p>
                 </>
               ) : (
-                <p className="text-[12px] text-[#9B9282]">No track sales yet</p>
+                <p className="text-[12px] text-white/40">No track sales yet</p>
               )}
             </div>
           </div>
@@ -336,19 +336,19 @@ export default function SalesPage() {
             type="button"
             onClick={() => setView('sales')}
             className={`px-4 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider border transition-colors ${
-              view === 'sales' ? 'bg-white text-black border-white' : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#3B372F]'
+              view === 'sales' ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
             }`}
           >Sales</button>
           <button
             type="button"
             onClick={() => setView('offers')}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider border transition-colors ${
-              view === 'offers' ? 'bg-white text-black border-white' : 'bg-[#171511] border-[#2B2821] text-[#B4AA99] hover:text-[#F7EBDD] hover:border-[#3B372F]'
+              view === 'offers' ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
             }`}
           >
             Offers
             {pendingOffers > 0 && (
-              <span className={`w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center leading-none ${view === 'offers' ? 'bg-black text-white' : 'bg-[#E7D7BE] text-black'}`}>{pendingOffers}</span>
+              <span className={`w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center leading-none ${view === 'offers' ? 'bg-black text-white' : 'bg-white text-black'}`}>{pendingOffers}</span>
             )}
           </button>
         </div>
@@ -356,20 +356,20 @@ export default function SalesPage() {
         {view === 'sales' && (
         <>
         {/* Filters */}
-        <div className="mb-4 rounded-2xl border border-[#2B2821] bg-[#11100D] p-2.5">
+        <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.02] p-2.5">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
             <div className="relative min-w-0 flex-1">
-              <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B]" />
+              <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search buyer, item, session…"
-                className="w-full rounded-full border border-[#2B2821] bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-[#F7EBDD] transition-colors placeholder:text-[#6E685B] focus:border-[#C9BCA8] focus:outline-none"
+                className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-white transition-colors placeholder:text-white/30 focus:border-white/50 focus:outline-none"
               />
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1 lg:pb-0">
-              <div className="flex shrink-0 rounded-full border border-[#2B2821] bg-[#090907] p-1">
+              <div className="flex shrink-0 rounded-full border border-white/10 bg-[#090907] p-1">
                 {FILTERS.map((f) => (
                   <button
                     key={f}
@@ -377,15 +377,15 @@ export default function SalesPage() {
                     onClick={() => setFilter(f)}
                     className={`rounded-full px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
                       filter === f
-                        ? 'bg-[#342F27] text-[#F3E6D1]'
-                        : 'text-[#B4AA99] hover:text-[#F7EBDD]'
+                        ? 'bg-white/10 text-white'
+                        : 'text-white/60 hover:text-white'
                     }`}
                   >
                     {f}
                   </button>
                 ))}
               </div>
-              <div className="flex shrink-0 rounded-full border border-[#2B2821] bg-[#090907] p-1">
+              <div className="flex shrink-0 rounded-full border border-white/10 bg-[#090907] p-1">
                 {STATUS_FILTERS.map((f) => (
                   <button
                     key={f}
@@ -393,8 +393,8 @@ export default function SalesPage() {
                     onClick={() => setStatusFilter(f)}
                     className={`rounded-full px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider transition-colors ${
                       statusFilter === f
-                        ? 'bg-[#342F27] text-[#F3E6D1]'
-                        : 'text-[#B4AA99] hover:text-[#F7EBDD]'
+                        ? 'bg-white/10 text-white'
+                        : 'text-white/60 hover:text-white'
                     }`}
                   >
                     {f}
@@ -404,7 +404,7 @@ export default function SalesPage() {
             </div>
           </div>
           <div className="mt-2 flex items-center justify-between gap-3 px-1">
-            <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#6E685B]">
+            <p className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/30">
               {visibleSales.length} shown
               {visibleSales.length !== sales.length && ` · ${sales.length} total`}
             </p>
@@ -412,7 +412,7 @@ export default function SalesPage() {
               <button
                 type="button"
                 onClick={() => { setFilter('All'); setStatusFilter('Any status'); setSearch(''); }}
-                className="text-[10px] font-mono uppercase tracking-[0.16em] text-[#B4AA99] transition-colors hover:text-[#F7EBDD]"
+                className="text-[10px] font-mono uppercase tracking-[0.16em] text-white/60 transition-colors hover:text-white"
               >
                 Clear
               </button>
@@ -428,7 +428,7 @@ export default function SalesPage() {
             <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
             <div>
               <p className="text-[12px] text-red-300 font-medium">Could not load sales</p>
-              <p className="text-[10px] text-[#D0C3AF] mt-1 font-mono">{error}</p>
+              <p className="text-[10px] text-white/80 mt-1 font-mono">{error}</p>
             </div>
           </div>
         ) : visibleSales.length === 0 ? (
@@ -450,9 +450,9 @@ export default function SalesPage() {
             className="border-dashed py-16"
           />
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-[#2B2821] bg-[#171511]">
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
             {/* Header row (desktop only) */}
-            <div className="hidden md:grid grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-5 py-3 border-b border-[#211F1A] text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
+            <div className="hidden md:grid grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-5 py-3 border-b border-white/10 text-[9px] font-mono uppercase tracking-[0.2em] text-white/40">
               <span>Date</span>
               <span>Type</span>
               <span>Item</span>
@@ -467,23 +467,23 @@ export default function SalesPage() {
               ))}
             </div>
             {pageCount > 1 && (
-              <div className="flex items-center justify-between border-t border-[#211F1A] px-5 py-3">
+              <div className="flex items-center justify-between border-t border-white/10 px-5 py-3">
                 <button
                   type="button"
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0}
-                  className="rounded-full border border-[#2B2821] bg-[#11100D] px-3 py-1.5 text-micro text-[#B4AA99] transition-colors hover:text-[#F7EBDD] disabled:opacity-30"
+                  className="rounded-full border border-white/10 bg-white/[0.02] px-3 py-1.5 text-micro text-white/60 transition-colors hover:text-white disabled:opacity-30"
                 >
                   Previous
                 </button>
-                <span className="text-[10px] font-mono text-[#6E685B] tabular-nums">
+                <span className="text-[10px] font-mono text-white/30 tabular-nums">
                   {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, visibleSales.length)} of {visibleSales.length}
                 </span>
                 <button
                   type="button"
                   onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
                   disabled={page >= pageCount - 1}
-                  className="rounded-full border border-[#2B2821] bg-[#11100D] px-3 py-1.5 text-micro text-[#B4AA99] transition-colors hover:text-[#F7EBDD] disabled:opacity-30"
+                  className="rounded-full border border-white/10 bg-white/[0.02] px-3 py-1.5 text-micro text-white/60 transition-colors hover:text-white disabled:opacity-30"
                 >
                   Next
                 </button>
@@ -551,50 +551,50 @@ function OfferRow({ offer, onStatusChange }: { offer: Offer; onStatusChange: (id
   const isPending = offer.status === 'pending';
 
   return (
-    <div className="rounded-2xl border border-[#2B2821] bg-[#171511] px-4 sm:px-5 py-4">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 sm:px-5 py-4">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <Tag size={12} className="text-[#E7D7BE] shrink-0" />
-            <p className="text-[13px] font-semibold text-[#F7EBDD] truncate">{offer.track_title || 'Untitled'}</p>
+            <Tag size={12} className="text-white shrink-0" />
+            <p className="text-[13px] font-semibold text-white truncate">{offer.track_title || 'Untitled'}</p>
             <span className={`inline-flex items-center px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider border shrink-0 ${OFFER_STATUS_STYLES[offer.status]}`}>{offer.status}</span>
           </div>
-          <p className="text-[11px] text-[#D0C3AF] truncate" title={offer.buyer_email}>{offer.buyer_email} · {fmtDate(offer.created_at)}</p>
-          {offer.message && <p className="text-[11px] text-[#B4AA99] mt-1.5 italic">“{offer.message}”</p>}
+          <p className="text-[11px] text-white/80 truncate" title={offer.buyer_email}>{offer.buyer_email} · {fmtDate(offer.created_at)}</p>
+          {offer.message && <p className="text-[11px] text-white/60 mt-1.5 italic">“{offer.message}”</p>}
         </div>
         <div className="text-right shrink-0">
-          <p className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">Offer</p>
+          <p className="text-[9px] font-mono uppercase tracking-wider text-white/40">Offer</p>
           <p className="text-[22px] font-bold text-white tabular-nums leading-none">{fmtMoney(offer.offered_price_usd)}</p>
         </div>
       </div>
 
       {isPending && (
-        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-[#211F1A] flex-wrap">
+        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/10 flex-wrap">
           <button onClick={() => respond('accept')} disabled={!!busy}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#6DC6A4]/15 border border-[#6DC6A4]/30 text-[#6DC6A4] hover:bg-[#6DC6A4]/25 transition-colors disabled:opacity-40">
             {busy === 'accept' ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}Accept
           </button>
           {!counterOpen ? (
             <button onClick={() => setCounterOpen(true)} disabled={!!busy}
-              className="px-3 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-wider border border-[#3B372F] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#6E685B] transition-colors disabled:opacity-40">
+              className="px-3 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-wider border border-white/20 text-white/80 hover:text-white hover:border-white/30 transition-colors disabled:opacity-40">
               Counter
             </button>
           ) : (
             <div className="flex items-center gap-1.5">
               <div className="relative">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#B4AA99] text-[12px]">$</span>
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60 text-[12px]">$</span>
                 <input type="number" min="1" value={counterPrice} onChange={(e) => setCounterPrice(e.target.value)} placeholder="price" autoFocus
-                  className="w-24 bg-[#090907] border border-[#2B2821] rounded-full pl-6 pr-2 py-1.5 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] tabular-nums" />
+                  className="w-24 bg-[#090907] border border-white/10 rounded-full pl-6 pr-2 py-1.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 tabular-nums" />
               </div>
               <button onClick={() => respond('counter')} disabled={!!busy}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#E7D7BE] text-black hover:bg-[#F3E6D1] transition-colors disabled:opacity-40">
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white text-black hover:bg-white transition-colors disabled:opacity-40">
                 {busy === 'counter' ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}Send
               </button>
-              <button onClick={() => { setCounterOpen(false); setCounterPrice(''); }} className="text-[#9B9282] hover:text-[#F7EBDD]"><X size={13} /></button>
+              <button onClick={() => { setCounterOpen(false); setCounterPrice(''); }} className="text-white/40 hover:text-white"><X size={13} /></button>
             </div>
           )}
           <button onClick={() => respond('decline')} disabled={!!busy}
-            className="ml-auto px-3 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-wider border border-[#2B2821] text-[#9B9282] hover:text-red-300 hover:border-red-900/40 transition-colors disabled:opacity-40">
+            className="ml-auto px-3 py-1.5 rounded-full text-[10px] font-medium uppercase tracking-wider border border-white/10 text-white/40 hover:text-red-300 hover:border-red-900/40 transition-colors disabled:opacity-40">
             {busy === 'decline' ? <Loader2 size={11} className="animate-spin" /> : 'Decline'}
           </button>
         </div>
@@ -603,12 +603,12 @@ function OfferRow({ offer, onStatusChange }: { offer: Offer; onStatusChange: (id
   );
 }
 
-function KpiCard({ label, value, icon, accent = '#D0C3AF', className = '' }: { label: string; value: string; icon: React.ReactNode; accent?: string; className?: string }) {
+function KpiCard({ label, value, icon, accent = 'rgba(255,255,255,0.8)', className = '' }: { label: string; value: string; icon: React.ReactNode; accent?: string; className?: string }) {
   return (
     <Card className={`rounded-xl px-4 py-3 ${className}`}>
       <div className="flex items-center gap-1.5 mb-1.5" style={{ color: accent }}>
         {icon}
-        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">{label}</span>
+        <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40">{label}</span>
       </div>
       <p className="text-[20px] font-bold text-white tabular-nums leading-none">{value}</p>
     </Card>
@@ -696,7 +696,7 @@ function SaleRow({ sale }: { sale: Sale }) {
         type="button"
         onClick={handleResend}
         disabled={resending || sale.status !== 'paid'}
-        className="tap text-[#6E685B] hover:text-[#F7EBDD] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="tap text-white/30 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         title={sale.status !== 'paid' ? `Cannot resend (${sale.status})` : `Resend delivery email to ${sale.buyer_email}`}
         aria-label="Resend delivery email"
       >
@@ -707,7 +707,7 @@ function SaleRow({ sale }: { sale: Sale }) {
           href={stripeUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="tap text-[#6E685B] hover:text-[#F7EBDD] transition-colors"
+          className="tap text-white/30 hover:text-white transition-colors"
           title="Open in Stripe Dashboard"
         >
           <ExternalLink size={12} />
@@ -719,27 +719,27 @@ function SaleRow({ sale }: { sale: Sale }) {
   return (
     <>
       {/* Desktop: table grid row */}
-      <div className="hidden rounded-xl bg-[#11100D]/70 md:grid md:grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-3.5 py-3 transition-colors hover:bg-[#1A1813]">
-        <span className="text-[11px] font-mono text-[#D0C3AF] tabular-nums">{fmtDate(sale.created_at)}</span>
+      <div className="hidden rounded-xl bg-white/[0.02]/70 md:grid md:grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-3.5 py-3 transition-colors hover:bg-[#0E0E0E]">
+        <span className="text-[11px] font-mono text-white/80 tabular-nums">{fmtDate(sale.created_at)}</span>
 
-        <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-[#B4AA99]">
-          <Icon size={11} className="text-[#9B9282]" />
+        <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-white/60">
+          <Icon size={11} className="text-white/40" />
           {sale.kind}
         </span>
 
         <div className="min-w-0">
-          <p className="text-[12px] text-[#F7EBDD] truncate flex items-center gap-2">
+          <p className="text-[12px] text-white truncate flex items-center gap-2">
             <span className="truncate">{sale.item_label}</span>
             {stemsBadges}
           </p>
           {sale.license_type && (
-            <p className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider mt-0.5">
+            <p className="text-[9px] font-mono text-white/40 uppercase tracking-wider mt-0.5">
               {sale.license_type}
             </p>
           )}
         </div>
 
-        <span className="text-[11px] text-[#D0C3AF] truncate" title={sale.buyer_email}>
+        <span className="text-[11px] text-white/80 truncate" title={sale.buyer_email}>
           {sale.buyer_email}
         </span>
 
@@ -755,26 +755,26 @@ function SaleRow({ sale }: { sale: Sale }) {
       </div>
 
       {/* Mobile: stacked card — item + amount lead, metadata quiet below */}
-      <div className="flex flex-col gap-2 rounded-xl border border-[#211F1A] bg-[#11100D] px-3.5 py-3.5 md:hidden">
+      <div className="flex flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.02] px-3.5 py-3.5 md:hidden">
         <div className="flex items-start justify-between gap-3">
-          <p className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-[#F7EBDD] line-clamp-2">{sale.item_label}</p>
+          <p className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-white line-clamp-2">{sale.item_label}</p>
           <span className="shrink-0 text-[14px] font-mono font-bold text-white tabular-nums">{fmtMoney(sale.amount_usd)}</span>
         </div>
         <p className="truncate text-meta" title={sale.buyer_email}>
           {sale.buyer_email}
-          <span className="text-[#3B372F]"> · </span>
+          <span className="text-white/30"> · </span>
           <span className="font-mono tabular-nums">{fmtDate(sale.created_at)}</span>
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <span className={`inline-flex items-center px-2 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider border ${STATUS_STYLES[sale.status]}`}>
             {sale.status}
           </span>
-          <span className="inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">
+          <span className="inline-flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider text-white/40">
             <Icon size={10} />
             {sale.kind}{sale.license_type ? ` · ${sale.license_type}` : ''}
           </span>
           {stemsBadges}
-          <span className="ml-auto flex min-h-8 items-center gap-2.5 rounded-full border border-[#211F1A] bg-[#090907] px-2.5">{actions}</span>
+          <span className="ml-auto flex min-h-8 items-center gap-2.5 rounded-full border border-white/10 bg-[#090907] px-2.5">{actions}</span>
         </div>
       </div>
     </>

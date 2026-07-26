@@ -154,9 +154,9 @@ export async function POST(req: NextRequest) {
             subject: `New offer on "${trackTitle}" — ${priceLabel}`,
             html: emailShell('New offer',
               `${emailHeading(`${priceLabel} for "${trackTitle}"`)}
-               <p style="color:#D0C3AF;font-size:13px;margin:0 0 16px">From <strong style="color:#F7EBDD">${escapeHtml(buyer_email)}</strong></p>
-               ${message ? `<blockquote style="border-left:2px solid #3B372F;padding-left:12px;margin:0 0 16px;color:#D0C3AF;font-size:13px">${escapeHtml(message)}</blockquote>` : ''}
-               <p style="color:#B4AA99;font-size:12px;margin:0">Reply to this email to negotiate directly with the buyer.</p>`,
+               <p style="color:#CCCCCC;font-size:13px;margin:0 0 16px">From <strong style="color:#FFFFFF">${escapeHtml(buyer_email)}</strong></p>
+               ${message ? `<blockquote style="border-left:2px solid #333333;padding-left:12px;margin:0 0 16px;color:#CCCCCC;font-size:13px">${escapeHtml(message)}</blockquote>` : ''}
+               <p style="color:#AAAAAA;font-size:12px;margin:0">Reply to this email to negotiate directly with the buyer.</p>`,
             ),
           });
         }

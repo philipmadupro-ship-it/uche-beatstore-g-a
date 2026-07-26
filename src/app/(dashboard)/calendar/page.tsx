@@ -172,11 +172,11 @@ export default function CalendarPage() {
             the lg breakpoint so the month grid stays large on tablets
             (the side panel slides under it instead of squeezing both). */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 mb-32 min-h-0">
-          <Card className="relative flex flex-col overflow-hidden bg-gradient-to-br from-[#171511] to-[#090907]">
+          <Card className="relative flex flex-col overflow-hidden bg-gradient-to-br from-[#111111] to-[#090907]">
             {/* Day headers — slightly larger and warmer than before. */}
-            <div className="grid grid-cols-7 border-b border-[#2B2821] bg-[#090907]/60 backdrop-blur-sm">
+            <div className="grid grid-cols-7 border-b border-white/10 bg-[#090907]/60 backdrop-blur-sm">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                <div key={d} className="py-3 text-center text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99]">{d}</div>
+                <div key={d} className="py-3 text-center text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">{d}</div>
               ))}
             </div>
 
@@ -193,11 +193,11 @@ export default function CalendarPage() {
                   <div
                     key={i}
                     onClick={() => setSelectedDay(day.fullDate)}
-                    className={`border-r border-b border-[#2B2821] p-2 transition-all relative group min-h-[90px] cursor-pointer ${
+                    className={`border-r border-b border-white/10 p-2 transition-all relative group min-h-[90px] cursor-pointer ${
                       !day.isCurrentMonth ? 'bg-[#08070a]' : ''
                     } ${
                       isSelected
-                        ? 'bg-gradient-to-br from-[#342F27]/80 to-[#211F1A]/40 ring-1 ring-[#C9BCA8]/60 ring-inset z-10'
+                        ? 'bg-gradient-to-br from-white/10/80 to-[#161616]/40 ring-1 ring-white/30 ring-inset z-10'
                         : 'hover:bg-white/[0.02]'
                     }`}
                   >
@@ -206,12 +206,12 @@ export default function CalendarPage() {
                         eye to "now" without shouting. */}
                     <div className="flex items-center gap-1.5">
                       {isToday ? (
-                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#E7D7BE] text-black text-[10px] font-bold tabular-nums">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white text-black text-[10px] font-bold tabular-nums">
                           {day.date}
                         </span>
                       ) : (
                         <span className={`text-[11px] font-mono tabular-nums ${
-                          day.isCurrentMonth ? 'text-[#D0C3AF]' : 'text-[#6E685B]'
+                          day.isCurrentMonth ? 'text-white/80' : 'text-white/30'
                         }`}>
                           {day.date}
                         </span>
@@ -223,7 +223,7 @@ export default function CalendarPage() {
                         <div
                           key={ev.id}
                           className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-white/[0.04] hover:bg-white/[0.08] transition-colors cursor-pointer border border-white/[0.04] truncate"
-                          style={{ color: ev.color || '#F3E6D1' }}
+                          style={{ color: ev.color || '#FFFFFF' }}
                           title={ev.notes || ev.title}
                         >
                           {eventIcon(ev.type)}
@@ -236,7 +236,7 @@ export default function CalendarPage() {
                         empty cells don't carry pixel noise. */}
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowAddModal(true); }}
-                      className="tap absolute bottom-1.5 right-1.5 flex size-6 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-[#B4AA99] opacity-0 transition-opacity hover:border-[#C9BCA8]/40 hover:text-[#F3E6D1] group-hover:opacity-100"
+                      className="tap absolute bottom-1.5 right-1.5 flex size-6 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-white/60 opacity-0 transition-opacity hover:border-white/ hover:text-white group-hover:opacity-100"
                       aria-label={`Add event on ${day.fullDate.toLocaleDateString()}`}
                     >
                       <Plus size={10} aria-hidden="true" />
@@ -248,7 +248,7 @@ export default function CalendarPage() {
 
             {loading && (
               <div className="absolute inset-0 bg-[#090907]/70 backdrop-blur-sm flex items-center justify-center z-20">
-                <Loader2 size={18} className="animate-spin text-[#6E685B]" />
+                <Loader2 size={18} className="animate-spin text-white/30" />
               </div>
             )}
           </Card>
@@ -287,10 +287,10 @@ const KIND_ICON: Record<ActivityItem['kind'], typeof Upload> = {
 };
 
 const KIND_COLOR: Record<ActivityItem['kind'], string> = {
-  upload: 'text-[#F3E6D1]',
-  version: 'text-[#D0C3AF]',
+  upload: 'text-white',
+  version: 'text-white/80',
   comment: 'text-[#8ecf9f]',
-  send: 'text-[#D6BE7A]',
+  send: 'text-white',
   rating: 'text-[#eca9a9]',
 };
 
@@ -317,20 +317,20 @@ function ActivityPanel({
     : day.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 
   return (
-    <Card className="relative flex flex-col overflow-hidden bg-gradient-to-b from-[#161410]/85 via-[#0e0d0a]/85 to-[#090907]/95">
+    <Card className="relative flex flex-col overflow-hidden bg-gradient-to-b from-[#161410]/85 via-[#070707]/85 to-[#090907]/95">
       {/* Warm radial wash — same lit-from-corner pattern the drawer
           header + share modal use. Pinned in the top-left. */}
       <div
         className="absolute -top-12 -left-12 w-32 h-32 rounded-full pointer-events-none opacity-25"
-        style={{ background: 'radial-gradient(circle, #E7D7BE 0%, transparent 70%)' }}
+        style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%)' }}
       />
       <header className="relative z-10 px-5 py-4 border-b border-white/[0.04]">
         <div className="flex items-center gap-2 mb-1.5">
-          <ActivityIcon size={11} className="text-[#F3E6D1]" />
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">Activity</p>
+          <ActivityIcon size={11} className="text-white" />
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">Activity</p>
         </div>
         <h3 className="text-[15px] font-medium text-white tracking-tight">{heading}</h3>
-        <p className="text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] mt-1">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-white/60 mt-1">
           {items.length} action{items.length === 1 ? '' : 's'} on this day
         </p>
       </header>
@@ -338,7 +338,7 @@ function ActivityPanel({
       <div className="relative z-10 flex-1 overflow-y-auto custom-scrollbar">
         {loading ? (
           <div className="flex items-center justify-center py-10">
-            <Loader2 size={14} className="animate-spin text-[#6E685B]" />
+            <Loader2 size={14} className="animate-spin text-white/40" />
           </div>
         ) : items.length === 0 ? (
           <p className="px-5 py-10 text-center text-[11px] leading-relaxed text-[var(--text-readable)]">
@@ -357,13 +357,13 @@ function ActivityPanel({
                     <Icon size={12} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[11px] text-[#F7EBDD] leading-snug">{it.title}</p>
-                    <p className="text-[9px] font-mono text-[#B4AA99] uppercase tracking-wider mt-0.5">
+                    <p className="text-[11px] text-white leading-snug">{it.title}</p>
+                    <p className="text-[9px] font-mono text-white/60 uppercase tracking-wider mt-0.5">
                       {time}
                       {it.subject_kind && ` · ${it.subject_kind}`}
                     </p>
                   </div>
-                  {href && <ArrowRight size={10} className="text-[#6E685B] shrink-0" />}
+                  {href && <ArrowRight size={10} className="text-white/40 shrink-0" />}
                 </>
               );
               return (

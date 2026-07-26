@@ -107,7 +107,7 @@ export function ShareWaveformVinyl({
           {cover ? (
             <NextImage src={cover} alt="" fill sizes={size === 'compact' ? '192px' : '288px'} unoptimized className="object-cover" />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907] flex items-center justify-center text-[#D0C3AF]">
+            <div className="w-full h-full bg-gradient-to-br from-white/10 to-[#090907] flex items-center justify-center text-white/80">
               <Music size={32} />
             </div>
           )}
@@ -140,7 +140,7 @@ export function ShareWaveformVinyl({
           quick meta line. */}
       <div className="text-center w-full mb-4 px-4">
         {caption && (
-          <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF] mb-1">
+          <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/80 mb-1">
             {caption}
           </p>
         )}
@@ -148,7 +148,7 @@ export function ShareWaveformVinyl({
           {track.title}
         </h3>
         {(track.bpm || track.key) && (
-          <p className="text-[10px] font-mono text-[#B4AA99] uppercase tracking-widest mt-1">
+          <p className="text-[10px] font-mono text-white/60 uppercase tracking-widest mt-1">
             {track.bpm ? `${track.bpm} bpm` : ''}
             {track.bpm && track.key ? ' · ' : ''}
             {track.key ? `${track.key}${track.scale ? ' ' + track.scale : ''}` : ''}
@@ -159,7 +159,7 @@ export function ShareWaveformVinyl({
       {/* Waveform visual — if parent waveRef is supplied, we let the parent's
           WaveSurfer handle layout/rendering directly to prevent audio collisions.
           Otherwise fall back to the standalone WavePlayer component. */}
-      <div className="w-full max-w-2xl bg-[#11100D]/30 rounded-lg p-2 border border-white/[0.02]">
+      <div className="w-full max-w-2xl bg-white/[0.02]/30 rounded-lg p-2 border border-white/[0.02]">
         {waveRef ? (
           <div ref={waveRef} className="w-full" style={{ minHeight: 48 }} />
         ) : (

@@ -23,6 +23,7 @@ import { ContactsPagination } from '@/components/crm/ContactsPagination';
 import { ContactsTableSkeleton, type ActivityTone } from '@/components/crm/contacts-shared';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
+import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 
 const categoryFilters: ContactCategoryFilter[] = ['all', 'buyers', 'rappers', 'producers', 'a&r', 'friends', 'nudge'];
 const statusFilters: ContactStatusFilter[] = ['all', 'active', 'engaged', 'cold'];
@@ -335,15 +336,17 @@ export function ContactsView({
             <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-md p-0.5">
               {(['network', 'activity'] as const).map((t) => (
                 <button key={t} onClick={() => setActiveTab(t)}
-                  className={`px-3 py-1.5 text-[11px] font-medium rounded capitalize transition-colors ${activeTab === t ? 'bg-[#342F27] text-white' : 'text-[#B4AA99] hover:text-[#F7EBDD]'}`}>
+                  className={`px-3 py-1.5 text-[11px] font-medium rounded capitalize transition-colors ${activeTab === t ? 'bg-white/20 text-white font-semibold' : 'text-white/60 hover:text-white'}`}>
                   {t}
                 </button>
               ))}
             </div>
-            <button onClick={() => setShowImportModal(true)}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-[var(--border)] bg-[var(--bg-card)] text-[#F7EBDD] hover:border-[var(--border-hover)] text-[11px] font-medium transition-colors">
-              <Upload size={13} /> Import
-            </button>
+            <div>
+              <button onClick={() => setShowImportModal(true)}
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-[var(--border)] bg-[var(--bg-card)] text-white hover:border-[var(--border-hover)] text-[11px] font-medium transition-colors">
+                <Upload size={13} /> Import
+              </button>
+            </div>
           </div>
         }
       />
@@ -377,26 +380,26 @@ export function ContactsView({
               <ContactsTableSkeleton rows={10} />
             </div>
           ) : filtered.length === 0 ? (
-            <div className="text-center py-24 border border-dashed border-[var(--border)] rounded-xl bg-[var(--bg-card)]">
-              <Users size={26} className="text-[#6E685B] mx-auto mb-4" />
+            <div className="py-24 text-center">
+              <Users size={26} className="text-white/40 mx-auto mb-4" />
               {fetchError ? (
                 <>
-                  <p className="text-sm text-[#F7EBDD] mb-1">Couldn&apos;t load contacts</p>
-                  <p className="text-[11px] text-[#9B9282] mb-5 font-mono">{fetchError}</p>
-                  <button onClick={refetch} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-white text-black text-[12px] font-medium hover:bg-[#F7EBDD] transition-colors">Try again</button>
+                  <p className="text-sm text-white mb-1">Couldn&apos;t load contacts</p>
+                  <p className="text-[11px] text-white/40 mb-5 font-mono">{fetchError}</p>
+                  <LiquidGlassButton onClick={refetch}>Try again</LiquidGlassButton>
                 </>
               ) : isFiltered ? (
                 <>
-                  <p className="text-sm text-[#F7EBDD] mb-1">No matches</p>
-                  <p className="text-[11px] text-[#9B9282] mb-5">{contacts.length} contact{contacts.length === 1 ? '' : 's'} total — try widening your filters.</p>
+                  <p className="text-sm text-white mb-1">No matches</p>
+                  <p className="text-[11px] text-white/40 mb-5">{contacts.length} contact{contacts.length === 1 ? '' : 's'} total — try widening your filters.</p>
                   <button onClick={() => { setSearchQuery(''); setCategoryFilter('all'); setStatusFilter('all'); setTagFilter(new Set()); setActiveSegmentId(null); }}
-                    className="text-[#D0C3AF] hover:text-[#F7EBDD] text-[11px] underline underline-offset-2">Clear filters</button>
+                    className="text-white/80 hover:text-white text-[11px] underline underline-offset-2">Clear filters</button>
                 </>
               ) : (
                 <>
-                  <p className="text-sm text-[#F7EBDD] mb-1">No contacts yet</p>
-                  <p className="text-[11px] text-[#9B9282] mb-5">Add your first contact or import a CSV.</p>
-                  <button onClick={() => setShowAddModal(true)} className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-white text-black text-[12px] font-medium hover:bg-[#F7EBDD] transition-colors">Add contact</button>
+                  <p className="text-sm text-white mb-1">No contacts yet</p>
+                  <p className="text-[11px] text-white/40 mb-5">Add your first contact or import a CSV.</p>
+                  <LiquidGlassButton onClick={() => setShowAddModal(true)}>Add contact</LiquidGlassButton>
                 </>
               )}
             </div>
@@ -542,9 +545,9 @@ export function ContactsView({
 
       {/* "Select all N filtered" affordance — shown when a partial page selection exists. */}
       {selectedIds.size > 0 && selectedIds.size < filtered.length && (
-        <div className="fixed bottom-44 left-1/2 -translate-x-1/2 z-40">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[40]">
           <button onClick={selectAllFiltered}
-            className="text-[10px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-full bg-[#11100D] border border-[var(--border-hover)] text-[#D0C3AF] hover:text-[#F7EBDD] shadow-lg transition-colors">
+            className="text-[10px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-full bg-white/[0.02] border border-white/20 text-white/80 hover:text-white shadow-lg transition-colors">
             Select all {filtered.length} filtered
           </button>
         </div>

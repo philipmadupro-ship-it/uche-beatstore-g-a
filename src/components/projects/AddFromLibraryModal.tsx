@@ -181,72 +181,72 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
-      <div className="bg-[#11100D] border border-[#211F1A] rounded-2xl w-full max-w-3xl max-h-[88vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white/[0.02] border border-white/10 rounded-2xl w-full max-w-3xl max-h-[88vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 h-14 border-b border-[#1A1813] shrink-0">
+        <div className="flex items-center justify-between px-6 h-14 border-b border-[#0E0E0E] shrink-0">
           <div>
             <h2 className="text-[14px] font-semibold text-white">{title}</h2>
-            <p className="text-[10px] font-mono text-[#9B9282] uppercase tracking-widest mt-0.5">
+            <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest mt-0.5">
               {selected.size > 0 ? `${selected.size} selected · ` : ''}{filtered.length} track{filtered.length !== 1 ? 's' : ''}
             </p>
           </div>
-          <button onClick={onClose} className="text-[#9B9282] hover:text-white p-1 transition-colors"><X size={16} /></button>
+          <button onClick={onClose} className="text-white/40 hover:text-white p-1 transition-colors"><X size={16} /></button>
         </div>
 
         {/* Search + filter toggle */}
-        <div className="px-5 py-3 border-b border-[#1A1813] space-y-2.5 shrink-0">
+        <div className="px-5 py-3 border-b border-[#0E0E0E] space-y-2.5 shrink-0">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#837B6D] pointer-events-none" />
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
               <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search tracks…"
-                className="w-full bg-[#11100D] border border-[#211F1A] rounded-lg pl-8 pr-3 py-2 text-[13px] text-[#F7EBDD] placeholder:text-[#837B6D] focus:outline-none focus:border-[#3B372F]" />
+                className="w-full bg-white/[0.02] border border-white/10 rounded-lg pl-8 pr-3 py-2 text-[13px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20" />
             </div>
             <button onClick={() => setShowFilters((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium border transition-colors shrink-0 ${showFilters || activeCount > 0 ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8]/40' : 'bg-[#171511] border-[#2B2821] text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F]'}`}>
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium border transition-colors shrink-0 ${showFilters || activeCount > 0 ? 'bg-white/10 text-white border-white/' : 'bg-white/[0.04] border-white/10 text-white/80 hover:text-white hover:border-white/20'}`}>
               <SlidersHorizontal size={12} />
               Filters{activeCount > 0 ? ` · ${activeCount}` : ''}
               <ChevronDown size={11} className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
             </button>
-            {activeCount > 0 && <button onClick={clearFilters} className="text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#F7EBDD] transition-colors px-1 shrink-0">Clear</button>}
+            {activeCount > 0 && <button onClick={clearFilters} className="text-[10px] font-mono uppercase tracking-wider text-white/60 hover:text-white transition-colors px-1 shrink-0">Clear</button>}
           </div>
 
           {showFilters && (
             <div className="space-y-3 pt-1">
               {/* Type */}
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] w-10 shrink-0">Type</span>
+                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 w-10 shrink-0">Type</span>
                 {TYPE_OPTIONS.map((t) => (
                   <button key={t} onClick={() => setTypeFilter(t)}
-                    className={`px-2.5 py-1 rounded-full text-[10px] font-medium border capitalize transition-all ${typeFilter === t ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'bg-transparent border-[#2B2821] text-[#B4AA99] hover:border-[#3B372F] hover:text-[#D0C3AF]'}`}>
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-medium border capitalize transition-all ${typeFilter === t ? 'bg-white text-black border-white/30' : 'bg-transparent border-white/10 text-white/60 hover:border-white/20 hover:text-white/80'}`}>
                     {t}
                   </button>
                 ))}
               </div>
               {/* BPM + Key */}
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] w-10 shrink-0">BPM</span>
+                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 w-10 shrink-0">BPM</span>
                 <input type="number" value={bpmMin} onChange={(e) => setBpmMin(e.target.value)} placeholder="Min"
-                  className="w-20 bg-[#11100D] border border-[#2B2821] rounded-md px-2.5 py-1 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] font-mono" />
-                <span className="text-[#6E685B]">—</span>
+                  className="w-20 bg-white/[0.02] border border-white/10 rounded-md px-2.5 py-1 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 font-mono" />
+                <span className="text-white/30">—</span>
                 <input type="number" value={bpmMax} onChange={(e) => setBpmMax(e.target.value)} placeholder="Max"
-                  className="w-20 bg-[#11100D] border border-[#2B2821] rounded-md px-2.5 py-1 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F] font-mono" />
-                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] ml-2">Key</span>
+                  className="w-20 bg-white/[0.02] border border-white/10 rounded-md px-2.5 py-1 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 font-mono" />
+                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 ml-2">Key</span>
                 <select value={keyFilter} onChange={(e) => setKeyFilter(e.target.value)}
-                  className="bg-[#11100D] border border-[#2B2821] rounded-md px-2 py-1 text-[11px] text-[#F7EBDD] focus:outline-none focus:border-[#3B372F] font-mono cursor-pointer">
+                  className="bg-white/[0.02] border border-white/10 rounded-md px-2 py-1 text-[11px] text-white focus:outline-none focus:border-white/20 font-mono cursor-pointer">
                   <option value="">Any key</option>
                   {KEY_OPTIONS.map((k) => <option key={k} value={k} className="bg-[#090907]">{k}</option>)}
                 </select>
               </div>
               {/* Tags */}
               <div className="flex items-start gap-2">
-                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] w-10 shrink-0 mt-1">Tags</span>
+                <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 w-10 shrink-0 mt-1">Tags</span>
                 <div className="flex items-center gap-1 flex-wrap">
                   {[...TAG_TAXONOMY.genre.slice(0, 8), ...TAG_TAXONOMY.mood.slice(0, 5)].map((tag) => {
                     const on = selectedTags.has(tag);
                     return (
                       <button key={tag} onClick={() => toggleTag(tag)}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'bg-transparent border-[#2B2821] text-[#B4AA99] hover:border-[#3B372F] hover:text-[#D0C3AF]'}`}>
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-white text-black border-white/30' : 'bg-transparent border-white/10 text-white/60 hover:border-white/20 hover:text-white/80'}`}>
                         {tag}
                       </button>
                     );
@@ -260,14 +260,14 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
         {/* Track list */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center py-20"><Loader2 size={18} className="animate-spin text-[#837B6D]" /></div>
+            <div className="flex items-center justify-center py-20"><Loader2 size={18} className="animate-spin text-white/40" /></div>
           ) : error ? (
             <div className="text-center py-12 text-[12px] text-red-400">{error}</div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16">
-              <Music size={20} className="mx-auto text-[#3B372F] mb-3" />
-              <p className="text-[11px] text-[#9B9282]">No tracks match</p>
-              {activeCount > 0 && <button onClick={clearFilters} className="mt-2 text-[10px] text-[#D0C3AF] hover:text-[#F7EBDD] underline underline-offset-2">Clear filters</button>}
+              <Music size={20} className="mx-auto text-white/30 mb-3" />
+              <p className="text-[11px] text-white/40">No tracks match</p>
+              {activeCount > 0 && <button onClick={clearFilters} className="mt-2 text-[10px] text-white/80 hover:text-white underline underline-offset-2">Clear filters</button>}
             </div>
           ) : (
             <ul>
@@ -277,26 +277,26 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
                 return (
                   <li key={t.id}>
                     <button type="button" disabled={isExcluded} onClick={() => toggle(t.id)}
-                      className={`w-full flex items-center gap-3 px-5 py-3 border-b border-[#11100D]/60 text-left transition-colors ${isExcluded ? 'opacity-35 cursor-not-allowed' : isSel ? 'bg-[#211F1A]' : 'hover:bg-[#171511]'}`}>
-                      <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors ${isSel ? 'bg-[#E7D7BE] border-[#E7D7BE]' : 'border-[#3B372F]'}`}>
+                      className={`w-full flex items-center gap-3 px-5 py-3 border-b border-white/ text-left transition-colors ${isExcluded ? 'opacity-35 cursor-not-allowed' : isSel ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}>
+                      <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors ${isSel ? 'bg-white border-white/30' : 'border-white/20'}`}>
                         {isSel && <Check size={11} className="text-black" />}
                       </div>
-                      <div className="w-10 h-10 rounded-lg bg-[#171511] border border-[#211F1A] flex items-center justify-center shrink-0 overflow-hidden">
-                        {t.cover_url ? <Image src={t.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized /> : <Music size={14} className="text-[#6E685B]" />}
+                      <div className="w-10 h-10 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-center shrink-0 overflow-hidden">
+                        {t.cover_url ? <Image src={t.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized /> : <Music size={14} className="text-white/30" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium text-[#F7EBDD] truncate">{t.title}</p>
+                        <p className="text-[13px] font-medium text-white truncate">{t.title}</p>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                          <span className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">{t.type}</span>
+                          <span className="text-[9px] font-mono uppercase tracking-wider text-white/40">{t.type}</span>
                           {(t.track_tags ?? []).slice(0, 2).map((tt) => (
-                            <span key={tt.tag} className="text-[8px] font-mono uppercase tracking-wider text-[#D0C3AF] bg-[#211F1A] border border-[#3B372F] px-1 py-0.5 rounded">{tt.tag}</span>
+                            <span key={tt.tag} className="text-[8px] font-mono uppercase tracking-wider text-white/80 bg-white/[0.05] border border-white/20 px-1 py-0.5 rounded">{tt.tag}</span>
                           ))}
-                          {isExcluded && <span className="text-[8px] font-mono text-[#837B6D]">already added</span>}
+                          {isExcluded && <span className="text-[8px] font-mono text-white/40">already added</span>}
                         </div>
                       </div>
-                      <span className="text-[10px] font-mono text-[#9B9282] tabular-nums shrink-0 w-16 text-right">{fmtBpm(t.bpm)}</span>
-                      <span className="text-[10px] font-mono text-[#9B9282] w-14 text-right shrink-0">{fmtKey(t.key, t.scale)}</span>
-                      <span className="text-[10px] font-mono text-[#6E685B] w-12 text-right shrink-0">{fmtDuration(t.duration_seconds)}</span>
+                      <span className="text-[10px] font-mono text-white/40 tabular-nums shrink-0 w-16 text-right">{fmtBpm(t.bpm)}</span>
+                      <span className="text-[10px] font-mono text-white/40 w-14 text-right shrink-0">{fmtKey(t.key, t.scale)}</span>
+                      <span className="text-[10px] font-mono text-white/30 w-12 text-right shrink-0">{fmtDuration(t.duration_seconds)}</span>
                     </button>
                   </li>
                 );
@@ -307,7 +307,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
                     type="button"
                     onClick={loadMore}
                     disabled={loadingMore}
-                    className="w-full rounded-lg border border-[#2B2821] bg-[#171511] px-4 py-2.5 text-[10px] font-mono uppercase tracking-[0.18em] text-[#D0C3AF] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD] disabled:cursor-wait disabled:opacity-60"
+                    className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2.5 text-[10px] font-mono uppercase tracking-[0.18em] text-white/80 transition-colors hover:border-white/20 hover:text-white disabled:cursor-wait disabled:opacity-60"
                   >
                     {loadingMore ? 'Loading tracks...' : 'Load more tracks'}
                   </button>
@@ -318,15 +318,15 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
         </div>
 
         {/* Footer */}
-        <div className="px-5 h-14 border-t border-[#1A1813] flex items-center justify-between shrink-0">
+        <div className="px-5 h-14 border-t border-[#0E0E0E] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <p className="text-[10px] text-[#9B9282] font-mono uppercase tracking-widest">
+            <p className="text-[10px] text-white/40 font-mono uppercase tracking-widest">
               {selected.size > 0 ? `${selected.size} selected` : 'Select tracks'}
             </p>
             {nonExcluded.length > 0 && (
               <>
-                <span className="text-[#211F1A]">·</span>
-                <button onClick={toggleAll} className="text-[10px] font-mono uppercase tracking-wider text-[#E7D7BE] hover:text-[#F3E6D1] transition-colors">
+                <span className="text-black">·</span>
+                <button onClick={toggleAll} className="text-[10px] font-mono uppercase tracking-wider text-white hover:text-white transition-colors">
                   {allSel ? 'Deselect all' : `Select all (${nonExcluded.length})`}
                 </button>
               </>
@@ -334,9 +334,9 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
           </div>
           <div className="flex items-center gap-2">
             {error && <p className="text-[10px] text-red-400 mr-2 max-w-[200px] truncate">{error}</p>}
-            <button onClick={onClose} className="text-[12px] text-[#D0C3AF] hover:text-white px-3 py-1.5 rounded-lg transition-colors">Cancel</button>
+            <button onClick={onClose} className="text-[12px] text-white/80 hover:text-white px-3 py-1.5 rounded-lg transition-colors">Cancel</button>
             <button onClick={submit} disabled={selected.size === 0 || submitting}
-              className="flex items-center gap-2 bg-[#E7D7BE] hover:bg-[#F3E6D1] disabled:opacity-40 text-black px-5 py-2 rounded-lg text-[12px] font-semibold transition-colors">
+              className="flex items-center gap-2 bg-white hover:bg-white disabled:opacity-40 text-black px-5 py-2 rounded-lg text-[12px] font-semibold transition-colors">
               {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
               Add {selected.size > 0 ? `${selected.size} track${selected.size !== 1 ? 's' : ''}` : ''}
             </button>

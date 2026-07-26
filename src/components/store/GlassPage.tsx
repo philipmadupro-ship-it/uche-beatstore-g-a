@@ -31,7 +31,7 @@ import { slugify } from '@/lib/slug';
 interface GlassPageProps {
   /** Backdrop image — blurred, low-opacity behind the whole card. */
   coverUrl?: string | null;
-  /** Accent hex (e.g. '#E7D7BE') used for gradient tint + active states. */
+  /** Accent hex (e.g. '#FFFFFF') used for gradient tint + active states. */
   accentColor: string;
   /** Card body — typically TabNav + Hero + Sections. */
   children: ReactNode;
@@ -46,7 +46,7 @@ export function GlassPage({
   maxWidth = 'max-w-5xl',
 }: GlassPageProps) {
   return (
-    <div className="min-h-screen bg-[#090907] text-[#F7EBDD] px-4 md:px-6 pt-8 md:pt-12 pb-24">
+    <div className="min-h-screen bg-[#090907] text-white px-4 md:px-6 pt-8 md:pt-12 pb-24">
       {coverUrl && (
         <>
           <div
@@ -64,7 +64,7 @@ export function GlassPage({
         </>
       )}
       <div className={`${maxWidth} mx-auto`}>
-        <div className="rounded-[28px] border border-white/[0.08] bg-[#171511]/70 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.55)] overflow-hidden">
+        <div className="rounded-[28px] border border-white/[0.08] bg-white/[0.04]/70 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.55)] overflow-hidden">
           {children}
         </div>
       </div>
@@ -172,7 +172,7 @@ function Hero({
           {coverImage ? (
             <img src={coverImage} alt={title} className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#342F27] to-[#090907] text-[#9B9282]">
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/10 to-[#090907] text-white/40">
               {coverFallback}
             </div>
           )}

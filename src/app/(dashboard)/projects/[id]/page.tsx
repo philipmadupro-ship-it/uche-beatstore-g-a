@@ -346,7 +346,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-full">
-          <Loader2 size={18} className="animate-spin text-[#837B6D]" />
+          <Loader2 size={18} className="animate-spin text-white/40" />
         </div>
       </DashboardLayout>
     );
@@ -365,7 +365,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
               visual anchor on the project page. */}
           <div className="lg:sticky lg:top-10 lg:self-start">
             <div
-              className="mx-auto aspect-square w-full max-w-[270px] sm:max-w-[360px] lg:max-w-none bg-[#171511] rounded-[24px] sm:rounded-[28px] lg:rounded-2xl border border-white/[0.05] overflow-hidden group relative cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+              className="mx-auto aspect-square w-full max-w-[270px] sm:max-w-[360px] lg:max-w-none bg-white/[0.04] rounded-[24px] sm:rounded-[28px] lg:rounded-2xl border border-white/[0.05] overflow-hidden group relative cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
               onClick={() => fileInputRef.current?.click()}
             >
               {project?.cover_url ? (
@@ -490,8 +490,8 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                 underneath the active track work so it reads like admin,
                 not the main project surface. */}
             {project && (
-              <details className="mt-6 rounded-2xl border border-[#2B2821] bg-[#11100D]/70 p-3">
-                <summary className="cursor-pointer list-none text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99]">
+              <details className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02]/70 p-3">
+                <summary className="cursor-pointer list-none text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">
                   Checklist {project.checklist?.length ? `· ${project.checklist.filter((item) => item.done).length}/${project.checklist.length}` : ''}
                 </summary>
                 <div className="mt-3">
@@ -506,9 +506,9 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
 
             {/* Storefront — moved below creation controls so commerce does
                 not compete with the primary project workspace on mobile. */}
-            <div className="mt-6 rounded-2xl border border-[#2B2821] bg-[#171511]/80 p-4 sm:p-5">
+            <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04]/80 p-4 sm:p-5">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">
                   Storefront
                 </p>
                 <button
@@ -517,8 +517,8 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                   disabled={togglingStoreFeatured}
                   className={`rounded-full border px-3 py-1.5 text-[10px] font-medium transition-all disabled:opacity-40 ${
                     project?.store_featured
-                      ? 'border-[#E7D7BE]/40 bg-[#E7D7BE]/15 text-[#E7D7BE]'
-                      : 'border-[#2B2821] text-[#B4AA99] hover:border-[#3B372F] hover:text-[#F7EBDD]'
+                      ? 'border-white/40 bg-white/15 text-white'
+                      : 'border-white/10 text-white/60 hover:border-white/20 hover:text-white'
                   }`}
                 >
                   {togglingStoreFeatured ? 'Saving...' : project?.store_featured ? 'In store' : 'List in store'}
@@ -526,7 +526,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_180px]">
                 <div>
-                  <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] block mb-1.5">
+                  <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 block mb-1.5">
                     Description
                   </label>
                   <textarea
@@ -535,15 +535,15 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                     rows={3}
                     maxLength={10000}
                     placeholder="Describe this project..."
-                    className="w-full bg-[#11100D] border border-[#2B2821] rounded-lg px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] transition-colors resize-none leading-relaxed"
+                    className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 transition-colors resize-none leading-relaxed"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] block mb-1.5">
+                  <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 block mb-1.5">
                     Price (USD)
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-[#9B9282]">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-white/50">$</span>
                     <input
                       type="number"
                       min="0"
@@ -551,10 +551,10 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                       value={priceUsd}
                       onChange={(e) => setPriceUsd(e.target.value)}
                       placeholder="0.00"
-                      className="w-full bg-[#11100D] border border-[#2B2821] rounded-lg pl-7 pr-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8] transition-colors"
+                      className="w-full bg-white/[0.02] border border-white/10 rounded-lg pl-7 pr-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 transition-colors"
                     />
                   </div>
-                  <p className="text-[9px] font-mono text-[#6E685B] mt-1.5">
+                  <p className="text-[9px] font-mono text-white/40 mt-1.5">
                     Leave blank to hide from store.
                   </p>
                 </div>
@@ -564,7 +564,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                   type="button"
                   onClick={saveStorefront}
                   disabled={savingStorefront}
-                  className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#E7D7BE] hover:bg-[#F3E6D1] disabled:opacity-60 text-black text-[11px] font-semibold transition-all"
+                  className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white hover:bg-white/90 disabled:opacity-60 text-black text-[11px] font-semibold transition-all"
                 >
                   {savingStorefront ? <Loader2 size={12} className="animate-spin" /> : null}
                   {savingStorefront ? 'Saving...' : 'Save storefront'}
@@ -583,7 +583,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           15s; that's good enough until we wire Supabase Realtime. */}
       {project && (
         <PageContainer className="pt-0 pb-12">
-          <div className="rounded-2xl border border-[#2B2821]/70 bg-[#11100D]/55 p-3 sm:p-4">
+          <div className="rounded-2xl border border-white/ bg-white/[0.02]/55 p-3 sm:p-4">
             <ProjectCommentsPanel
               projectId={params.id as string}
               tracks={tracks.map((t) => ({ id: t.id, title: t.title }))}

@@ -18,6 +18,7 @@ import { ProjectFilterBar } from '@/components/projects/ProjectFilterBar';
 import { ProjectOptionsMenu } from '@/components/projects/ProjectOptionsMenu';
 import { CreateProjectModal } from '@/components/layout/CreateProjectModal';
 import { MediaCard } from '@/components/ui/MediaCard';
+import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import {
   filterAndSortProjects,
   DEFAULT_PROJECT_FILTERS,
@@ -182,13 +183,12 @@ export default function ProjectsPage() {
           description="Active production — tracks you're still working on, with stems, versions, and references."
           meta={`${filtered.length} project${filtered.length !== 1 ? 's' : ''}`}
           actions={(
-            <button
+            <LiquidGlassButton
               onClick={() => setCreateOpen(true)}
-              className="flex items-center gap-2 bg-white text-black px-4 py-2.5 rounded-full text-[12px] font-medium hover:bg-[#F7EBDD] active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all min-h-[44px]"
             >
-              <Plus size={14} />
+              <Plus size={13} />
               New project
-            </button>
+            </LiquidGlassButton>
           )}
         />
 
@@ -203,21 +203,21 @@ export default function ProjectsPage() {
 
         {loading ? (
           <div className="flex items-center justify-center py-32">
-            <Loader2 size={18} className="animate-spin text-[#837B6D]" />
+            <Loader2 size={18} className="animate-spin text-white/40" />
           </div>
         ) : fetchError ? (
           // Fetch errored — surface the real reason + retry button so the
           // user isn't staring at the "No projects yet" copy thinking
           // their data is gone.
           <div className="text-center py-32">
-            <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-[#171511] border border-[#211F1A] flex items-center justify-center">
-              <Layers size={22} className="text-[#D6BE7A]" />
+            <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center">
+              <Layers size={22} className="text-white" />
             </div>
-            <p className="text-sm text-[#F7EBDD] mb-1">Couldn’t load projects</p>
-            <p className="text-[11px] text-[#9B9282] mb-6 font-mono">{fetchError}</p>
+            <p className="text-sm text-white mb-1">Couldn’t load projects</p>
+            <p className="text-[11px] text-white/60 mb-6 font-mono">{fetchError}</p>
             <button
               onClick={fetchProjects}
-              className="inline-flex items-center gap-2 bg-[#171511] border border-[#211F1A] text-[#F7EBDD] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#3B372F] transition-colors"
+              className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 transition-colors"
             >
               Try again
             </button>
@@ -229,33 +229,32 @@ export default function ProjectsPage() {
           (() => {
             return (
               <div className="text-center py-32">
-                <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-[#171511] border border-[#211F1A] flex items-center justify-center">
-                  <Layers size={22} className="text-[#6E685B]" />
+                <div className="w-14 h-14 mx-auto mb-5 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center">
+                  <Layers size={22} className="text-white/40" />
                 </div>
                 {isFiltered ? (
                   <>
-                    <p className="text-sm text-[#F7EBDD] mb-1">No matches</p>
-                    <p className="text-[11px] text-[#9B9282] mb-6">
+                    <p className="text-sm text-white mb-1">No matches</p>
+                    <p className="text-[11px] text-white/60 mb-6">
                       {projects.length} project{projects.length !== 1 ? 's' : ''} hidden by the current filter or search.
                     </p>
                     <button
                       onClick={() => setFilters({ ...DEFAULT_PROJECT_FILTERS, tags: new Set() })}
-                      className="inline-flex items-center gap-2 bg-[#171511] border border-[#211F1A] text-[#F7EBDD] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#3B372F] transition-colors"
+                      className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 transition-colors"
                     >
                       Clear filters
                     </button>
                   </>
                 ) : (
                   <>
-                    <p className="text-sm text-[#F7EBDD] mb-1">No projects yet</p>
-                    <p className="text-[11px] text-[#9B9282] mb-6">Create a project to group references, stems and versions</p>
-                    <button
+                    <p className="text-sm text-white mb-1">No projects yet</p>
+                    <p className="text-[11px] text-white/60 mb-6">Create a project to group references, stems and versions</p>
+                    <LiquidGlassButton
                       onClick={() => setCreateOpen(true)}
-                      className="inline-flex items-center gap-2 bg-[#171511] border border-[#211F1A] text-[#F7EBDD] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#3B372F] disabled:opacity-40 transition-colors"
                     >
                       <Plus size={12} />
                       Create first project
-                    </button>
+                    </LiquidGlassButton>
                   </>
                 )}
               </div>
@@ -267,17 +266,17 @@ export default function ProjectsPage() {
               when not searching/filtering and there are genuine recents. */}
           {!isFiltered && recentProjects.length > 0 && (
             <div className="mb-6">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#6E685B] mb-3 flex items-center gap-2">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3 flex items-center gap-2">
                 <Clock size={10} /> Recently opened
               </p>
               <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
                 {recentProjects.map((p) => (
                   <Link key={p.id} href={`/projects/${p.id}`} onClick={() => trackRecentOpen(p.id)}
-                    className="shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#2B2821] bg-[#171511] hover:border-[#3B372F] hover:bg-[#211F1A] transition-colors min-w-[180px] max-w-[240px]">
+                    className="shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.05] transition-colors min-w-[180px] max-w-[240px]">
                     <div className="w-8 h-8 rounded-md overflow-hidden bg-[#090907] shrink-0">
-                      {p.cover_url || p.preview_covers?.[0] ? <img src={p.cover_url ?? p.preview_covers?.[0]} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={12} /></div>}
+                      {p.cover_url || p.preview_covers?.[0] ? <img src={p.cover_url ?? p.preview_covers?.[0]} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={12} /></div>}
                     </div>
-                    <span className="text-[11px] font-medium text-[#F7EBDD] truncate">{p.name}</span>
+                    <span className="text-[11px] font-medium text-white truncate">{p.name}</span>
                   </Link>
                 ))}
               </div>
@@ -309,13 +308,13 @@ export default function ProjectsPage() {
                       <span>{project.track_count || 0} track{project.track_count === 1 ? '' : 's'}</span>
                       {relativeTime && (
                         <>
-                          <span className="text-[#3B372F]">·</span>
+                          <span className="text-white/20">·</span>
                           <span className="inline-flex items-center gap-1"><Clock size={8} /> {relativeTime}</span>
                         </>
                       )}
                       {(project.tags?.length ?? 0) > 0 && (
                         <>
-                          <span className="text-[#3B372F]">·</span>
+                          <span className="text-white/20">·</span>
                           <span className="truncate">{project.tags!.slice(0, 2).map((t) => t.tag).join(' / ')}</span>
                         </>
                       )}

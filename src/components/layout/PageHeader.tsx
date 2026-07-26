@@ -36,20 +36,20 @@ export function PageHeader({ eyebrow, title, description, actions, meta, childre
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div className="min-w-0">
           {eyebrow && (
-            <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-[#D0C3AF] mb-2">{eyebrow}</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-white/60 mb-2">{eyebrow}</p>
           )}
           <h1 className="text-[28px] sm:text-[34px] md:text-[40px] font-bold tracking-tight text-white leading-[1.05] font-heading">
             {title}
           </h1>
           {description && (
-            <p className="text-[12px] text-[#D0C3AF] max-w-xl mt-2 leading-relaxed">{description}</p>
+            <p className="text-[12px] text-white/70 max-w-xl mt-2 leading-relaxed">{description}</p>
           )}
         </div>
 
         {(meta || actions) && (
           <div className="flex items-center gap-3 sm:gap-4 shrink-0">
             {meta && (
-              <span className="text-[11px] font-mono text-[#8a7a5c] uppercase tracking-wider whitespace-nowrap">{meta}</span>
+              <span className="text-[11px] font-mono text-white/50 uppercase tracking-wider whitespace-nowrap">{meta}</span>
             )}
             {actions}
           </div>

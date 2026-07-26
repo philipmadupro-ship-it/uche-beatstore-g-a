@@ -53,17 +53,17 @@ export function UploadsTray() {
 
   return (
     <div className="fixed bottom-24 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)]">
-      <div className="bg-[#090907] border border-[#211F1A] rounded-lg shadow-2xl overflow-hidden">
+      <div className="bg-[#090907] border border-white/10 rounded-lg shadow-2xl overflow-hidden">
         <button
           onClick={() => setExpanded((x) => !x)}
-          className="tap w-full flex min-h-11 items-center gap-2 px-3 border-b border-[#1A1813] hover:bg-[#171511] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907]"
+          className="tap w-full flex min-h-11 items-center gap-2 px-3 border-b border-[#0E0E0E] hover:bg-white/[0.04] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse uploads tray' : 'Expand uploads tray'}
         >
-          <Upload size={12} className="text-[#F3E6D1]" />
+          <Upload size={12} className="text-white" />
           <span className="text-[11px] font-medium text-white">
             Uploads
-            <span className="text-[#9B9282] font-normal ml-1.5">
+            <span className="text-white/40 font-normal ml-1.5">
               {active > 0 && `${active} running`}
               {active > 0 && (errored > 0 || done > 0) && ' · '}
               {errored > 0 && <span className="text-red-400">{errored} failed</span>}
@@ -73,9 +73,9 @@ export function UploadsTray() {
           </span>
           <div className="flex-1" />
           {expanded ? (
-            <ChevronDown size={12} className="text-[#9B9282]" />
+            <ChevronDown size={12} className="text-white/40" />
           ) : (
-            <ChevronUp size={12} className="text-[#9B9282]" />
+            <ChevronUp size={12} className="text-white/40" />
           )}
         </button>
 
@@ -111,11 +111,11 @@ function UploadRow({ u }: { u: UploadItem }) {
     <div className="px-3 py-2.5 border-b border-[#24211B] last:border-b-0">
       {/* row 1: name + actions */}
       <div className="flex items-center gap-2 mb-1.5">
-        <FileAudio size={11} className="text-[#837B6D] shrink-0" />
-        <span className="text-[11px] text-[#F7EBDD] truncate flex-1" title={u.fileName}>
+        <FileAudio size={11} className="text-white/40 shrink-0" />
+        <span className="text-[11px] text-white truncate flex-1" title={u.fileName}>
           {u.fileName}
         </span>
-        <span className="text-[9px] font-mono text-[#9B9282] shrink-0">
+        <span className="text-[9px] font-mono text-white/40 shrink-0">
           {formatBytes(u.fileSize)}
         </span>
         <RowActions
@@ -137,7 +137,7 @@ function UploadRow({ u }: { u: UploadItem }) {
       </div>
 
       {/* row 2: progress bar */}
-      <div className="h-1 bg-[#1A1813] rounded-full overflow-hidden mb-1.5">
+      <div className="h-1 bg-[#0E0E0E] rounded-full overflow-hidden mb-1.5">
         <div
           className={`h-full transition-all duration-200 ${
             u.status === 'success'
@@ -145,8 +145,8 @@ function UploadRow({ u }: { u: UploadItem }) {
               : u.status === 'error' || u.status === 'interrupted'
               ? 'bg-red-500'
               : u.status === 'paused'
-              ? 'bg-[#D0C3AF]'
-              : 'bg-gradient-to-r from-[#E7D7BE] to-[#C9BCA8]'
+              ? 'bg-white/80'
+              : 'bg-gradient-to-r from-[#FFFFFF] to-[#CCCCCC]'
           }`}
           style={{ width: `${pct}%` }}
         />
@@ -158,13 +158,13 @@ function UploadRow({ u }: { u: UploadItem }) {
         <div className="flex-1" />
         {isActive && (
           <>
-            <span className="text-[#B4AA99]">{formatSpeed(u.speedBps)}</span>
-            <span className="text-[#6E685B]">·</span>
-            <span className="text-[#B4AA99]">ETA {formatEta(u.etaSec)}</span>
+            <span className="text-white/60">{formatSpeed(u.speedBps)}</span>
+            <span className="text-white/30">·</span>
+            <span className="text-white/60">ETA {formatEta(u.etaSec)}</span>
           </>
         )}
         {u.status === 'paused' && (
-          <span className="text-[#B4AA99]">{Math.round(pct)}% · paused</span>
+          <span className="text-white/60">{Math.round(pct)}% · paused</span>
         )}
       </div>
 
@@ -187,19 +187,19 @@ function UploadRow({ u }: { u: UploadItem }) {
 function StatusBadge({ u, pct }: { u: UploadItem; pct: number }) {
   switch (u.status) {
     case 'queued':
-      return <span className="text-[#B4AA99]">queued</span>;
+      return <span className="text-white/60">queued</span>;
     case 'preparing':
       return (
-        <span className="text-[#F3E6D1] flex items-center gap-1">
+        <span className="text-white flex items-center gap-1">
           <Loader2 size={9} className="animate-spin" /> preparing
         </span>
       );
     case 'uploading':
       return (
-        <span className="text-[#F3E6D1]">
+        <span className="text-white">
           {Math.round(pct)}%
           {u.totalParts > 0 && (
-            <span className="text-[#837B6D] ml-1">
+            <span className="text-white/40 ml-1">
               · {u.completedPartNumbers.size}/{u.totalParts}
             </span>
           )}
@@ -207,7 +207,7 @@ function StatusBadge({ u, pct }: { u: UploadItem; pct: number }) {
       );
     case 'finalizing':
       return (
-        <span className="text-[#F3E6D1] flex items-center gap-1">
+        <span className="text-white flex items-center gap-1">
           <Loader2 size={9} className="animate-spin" /> finalizing · analyzing
         </span>
       );
@@ -226,7 +226,7 @@ function StatusBadge({ u, pct }: { u: UploadItem; pct: number }) {
     case 'interrupted':
       return <span className="text-[#E2C16D]">interrupted</span>;
     case 'paused':
-      return <span className="text-[#D0C3AF]">paused</span>;
+      return <span className="text-white/80">paused</span>;
     default:
       return null;
   }
@@ -243,7 +243,7 @@ function RowActions({
   onRemove: () => void;
   onPickResume: () => void;
 }) {
-  const btn = 'tap grid size-8 sm:size-7 place-items-center rounded text-[#B4AA99] hover:text-white hover:bg-[#211F1A] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[#090907]';
+  const btn = 'tap grid size-8 sm:size-7 place-items-center rounded text-white/60 hover:text-white hover:bg-white/[0.05] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black';
   return (
     <div className="flex items-center gap-0.5 shrink-0">
       {isActive && (

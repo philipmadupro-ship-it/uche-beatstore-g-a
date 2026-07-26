@@ -45,10 +45,10 @@ interface Notification {
 
 function notifIcon(kind: string) {
   if (kind === 'purchase') return <ShoppingBag size={13} className="text-[#6DC6A4]" />;
-  if (kind === 'refund') return <RotateCcw size={13} className="text-[#D6BE7A]" />;
+  if (kind === 'refund') return <RotateCcw size={13} className="text-white" />;
   if (kind === 'dispute') return <AlertTriangle size={13} className="text-red-400" />;
-  if (kind === 'buyer_offer') return <Tag size={13} className="text-[#E7D7BE]" />;
-  return <Bell size={13} className="text-[#D0C3AF]" />;
+  if (kind === 'buyer_offer') return <Tag size={13} className="text-white" />;
+  return <Bell size={13} className="text-white/60" />;
 }
 
 function timeAgo(iso: string) {
@@ -221,13 +221,13 @@ export function TopBar() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 bg-[#090907]/95 backdrop-blur-md border-b border-[#211F1A] z-30">
+      <header className="fixed top-0 left-0 right-0 bg-[#090907]/95 backdrop-blur-md border-b border-white/10 z-30">
         {/* ── Row 1: brand · hubs · utilities ─────────────────────── */}
         <div className="h-14 flex items-center px-4 md:px-6 gap-3 md:gap-5">
           {/* Mobile hamburger */}
           <button
             onClick={() => setMobileOpen(true)}
-            className="tap md:hidden w-9 h-9 rounded-md flex items-center justify-center text-[#D0C3AF] hover:text-white hover:bg-white/[0.04] transition-colors"
+            className="tap md:hidden w-9 h-9 rounded-md flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
             aria-label="Open navigation menu"
           >
             <Menu size={18} />
@@ -235,10 +235,10 @@ export function TopBar() {
 
           {/* Brand */}
           <Link href="/library" className="flex items-center gap-2.5 group shrink-0">
-            <div className="w-6 h-6 rounded-[6px] bg-[#F7EBDD] flex items-center justify-center">
+            <div className="w-6 h-6 rounded-[6px] bg-white flex items-center justify-center">
               <span className="text-[10px] font-black text-black tracking-tighter">U2C</span>
             </div>
-            <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-[#F7EBDD] group-hover:text-white hidden lg:inline">
+            <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-white/90 group-hover:text-white hidden lg:inline">
               u2c beatstore
             </span>
           </Link>
@@ -256,8 +256,8 @@ export function TopBar() {
                   className={cn(
                     'flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-medium tracking-tight transition-colors',
                     active
-                      ? 'bg-[#1A1813] text-white'
-                      : 'text-[#B4AA99] hover:text-[#F7EBDD] hover:bg-[#101010]',
+                      ? 'bg-[#0E0E0E] text-white'
+                      : 'text-white/60 hover:text-white hover:bg-[#101010]',
                   )}
                 >
                   <Icon size={15} strokeWidth={1.75} />
@@ -273,18 +273,18 @@ export function TopBar() {
           {/* Search (⌘K) — desktop */}
           <button
             onClick={() => openPalette(true)}
-            className="hidden md:flex items-center gap-2 w-48 lg:w-56 bg-[#171511] border border-[#211F1A] rounded-md py-1.5 px-3 text-[11px] text-[#B4AA99] hover:border-[#3B372F] hover:text-[#D0C3AF] transition-colors shrink-0"
+            className="hidden md:flex items-center gap-2 w-48 lg:w-56 bg-white/[0.04] border border-white/10 rounded-md py-1.5 px-3 text-[11px] text-white/60 hover:border-white/20 hover:text-white transition-colors shrink-0"
             title="Search (⌘K)"
           >
             <Search size={12} />
             <span className="flex-1 text-left">Search</span>
-            <kbd className="text-[9px] font-mono border border-[#211F1A] rounded px-1 py-0.5">⌘K</kbd>
+            <kbd className="text-[9px] font-mono border border-white/10 rounded px-1 py-0.5">⌘K</kbd>
           </button>
 
           {/* Search icon — mobile (opens ⌘K palette) */}
           <button
             onClick={() => openPalette(true)}
-            className="tap md:hidden w-9 h-9 rounded-full flex items-center justify-center text-[#D0C3AF] hover:text-white hover:bg-white/[0.04] transition-colors"
+            className="tap md:hidden w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
             aria-label="Search"
           >
             <Search size={16} />
@@ -296,7 +296,7 @@ export function TopBar() {
             target="_blank"
             rel="noopener noreferrer"
             title="View public storefront"
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#E7D7BE] hover:bg-[#1A1813] border border-transparent hover:border-[#2B2821] transition-all shrink-0"
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider text-white/60 hover:text-white hover:bg-[#0E0E0E] border border-transparent hover:border-white/10 transition-all shrink-0"
           >
             <Store size={11} />
             <span>Store</span>
@@ -307,7 +307,7 @@ export function TopBar() {
           <div className="relative shrink-0" ref={notifRef}>
             <button
               onClick={openNotifs}
-              className="tap w-9 h-9 rounded-full flex items-center justify-center text-[#D0C3AF] hover:text-white hover:bg-white/[0.04] transition-colors relative"
+              className="tap w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors relative"
               aria-label="Notifications"
               title="Notifications"
             >
@@ -320,12 +320,12 @@ export function TopBar() {
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-[#2B2821] rounded-2xl shadow-2xl z-50 overflow-hidden">
-                <div className="px-4 py-3 border-b border-[#211F1A] flex items-center justify-between">
-                  <span className="text-[11px] font-mono uppercase tracking-wider text-[#D0C3AF]">Notifications</span>
+              <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+                  <span className="text-[11px] font-mono uppercase tracking-wider text-white">Notifications</span>
                   <button
                     onClick={() => setActivityOpen(true)}
-                    className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] hover:text-[#D0C3AF] transition-colors"
+                    className="text-[9px] font-mono uppercase tracking-wider text-white/50 hover:text-white transition-colors"
                   >
                     Activity log →
                   </button>
@@ -335,38 +335,38 @@ export function TopBar() {
                     <Link
                       href="/store-editor"
                       onClick={() => setNotifOpen(false)}
-                      className="flex items-start gap-3 border-b border-[#211F1A]/60 px-4 py-3 transition-colors hover:bg-white/[0.03]"
+                      className="flex items-start gap-3 border-b border-white/ px-4 py-3 transition-colors hover:bg-white/[0.03]"
                     >
-                      <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border border-[#3B372F] bg-[#211F1A]">
-                        <AlertTriangle size={13} className="text-[#D6BE7A]" />
+                      <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/[0.05]">
+                        <AlertTriangle size={13} className="text-white" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[12px] font-medium leading-tight text-[#F7EBDD]">
+                        <p className="text-[12px] font-medium leading-tight text-white">
                           {attention} beat{attention === 1 ? '' : 's'} need attention
                         </p>
-                        <p className="mt-0.5 text-[10px] leading-snug text-[#8a7a5c]">
+                        <p className="mt-0.5 text-[10px] leading-snug text-white/60">
                           Listed without a cover, price, or BPM and key
                         </p>
                       </div>
                     </Link>
                   )}
                   {notifs.length === 0 && attention === 0 ? (
-                    <div className="px-4 py-8 text-center text-[11px] text-[#B4AA99]">
+                    <div className="px-4 py-8 text-center text-[11px] text-white/50">
                       No notifications yet
                     </div>
                   ) : (
                     notifs.map((n) => (
                       <div
                         key={n.id}
-                        className={`flex items-start gap-3 px-4 py-3 border-b border-[#211F1A]/60 last:border-0 transition-colors ${n.read ? 'opacity-60' : 'bg-[#171511]/40'}`}
+                        className={`flex items-start gap-3 px-4 py-3 border-b border-white/ last:border-0 transition-colors ${n.read ? 'opacity-60' : 'bg-white/[0.04]/40'}`}
                       >
-                        <div className="w-6 h-6 rounded-lg bg-[#211F1A] border border-[#3B372F] flex items-center justify-center shrink-0 mt-0.5">
+                        <div className="w-6 h-6 rounded-lg bg-white/[0.05] border border-white/20 flex items-center justify-center shrink-0 mt-0.5">
                           {notifIcon(n.kind)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-medium text-[#F7EBDD] leading-tight">{n.title}</p>
-                          {n.body && <p className="text-[10px] text-[#8a7a5c] mt-0.5 leading-snug">{n.body}</p>}
-                          <p className="text-[9px] font-mono text-[#B4AA99] mt-1">{timeAgo(n.created_at)}</p>
+                          <p className="text-[12px] font-medium text-white leading-tight">{n.title}</p>
+                          {n.body && <p className="text-[10px] text-white/60 mt-0.5 leading-snug">{n.body}</p>}
+                          <p className="text-[9px] font-mono text-white/40 mt-1">{timeAgo(n.created_at)}</p>
                         </div>
                         {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shrink-0 mt-1.5" />}
                       </div>
@@ -386,8 +386,8 @@ export function TopBar() {
             className={cn(
               'tap hidden md:flex w-9 h-9 rounded-full items-center justify-center transition-colors shrink-0',
               isItemActive('/settings', pathname)
-                ? 'bg-[#1A1813] text-white'
-                : 'text-[#D0C3AF] hover:text-white hover:bg-white/[0.04]',
+                ? 'bg-[#0E0E0E] text-white'
+                : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
             )}
           >
             <Settings size={15} />
@@ -402,18 +402,18 @@ export function TopBar() {
             className={cn(
               'tap flex items-center justify-center shrink-0 w-8 h-8 rounded-full transition-colors',
               isItemActive('/profile', pathname)
-                ? 'bg-[#E7D7BE]/20 border border-[#E7D7BE]/40'
-                : 'bg-[#211F1A] border border-[#3B372F] hover:border-[#E7D7BE]/30',
+                ? 'bg-white/20 border border-white/40'
+                : 'bg-white/[0.05] border border-white/20 hover:border-white/30',
             )}
           >
-            <User size={13} className={isItemActive('/profile', pathname) ? 'text-[#E7D7BE]' : 'text-[#D0C3AF]'} />
+            <User size={13} className={isItemActive('/profile', pathname) ? 'text-white' : 'text-white/60'} />
           </Link>
         </div>
 
         {/* ── Row 2: sub-tabs of the active hub ───────────────────── */}
-        <div className="h-11 flex items-center gap-1 px-3 md:px-6 border-t border-[#211F1A]/60 overflow-x-auto no-scrollbar">
+        <div className="h-11 flex items-center gap-1 px-3 md:px-6 border-t border-white/ overflow-x-auto no-scrollbar">
           {/* On mobile, show which hub you're in (since hub buttons are in the drawer) */}
-          <span className="md:hidden flex items-center gap-1.5 pr-2 mr-1 border-r border-[#211F1A] text-[10px] font-mono uppercase tracking-[0.15em] text-[#B4AA99] shrink-0">
+          <span className="md:hidden flex items-center gap-1.5 pr-2 mr-1 border-r border-white/10 text-[10px] font-mono uppercase tracking-[0.15em] text-white/60 shrink-0">
             <group.icon size={12} />
             {group.label}
           </span>
@@ -428,8 +428,8 @@ export function TopBar() {
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium tracking-tight transition-colors shrink-0 whitespace-nowrap',
                   active
-                    ? 'text-[#E7D7BE] bg-[#1A1813]'
-                    : 'text-[#8a7a5c] hover:text-[#F7EBDD] hover:bg-[#101010]',
+                    ? 'text-white bg-[#0E0E0E]'
+                    : 'text-white/60 hover:text-white hover:bg-[#101010]',
                 )}
               >
                 <Icon size={13} strokeWidth={1.75} />
@@ -457,12 +457,12 @@ export function TopBar() {
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
-              <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-[#F7EBDD]">
+              <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-white">
                 U2C Beatstore
               </span>
               <button
                 onClick={() => setMobileOpen(false)}
-                className="tap w-9 h-9 rounded-full flex items-center justify-center text-[#D0C3AF] hover:text-white hover:bg-white/[0.04] transition-colors"
+                className="tap w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
                 aria-label="Close menu"
               >
                 <X size={16} />
@@ -471,7 +471,7 @@ export function TopBar() {
             <nav className="flex-1 px-3 py-4 overflow-y-auto">
               {ALL_GROUPS.map((g) => (
                 <div key={g.key} className="mb-4 last:mb-0">
-                  <p className="px-3 mb-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282] flex items-center gap-1.5">
+                  <p className="px-3 mb-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-white/50 flex items-center gap-1.5">
                     <g.icon size={11} />
                     {g.label}
                   </p>
@@ -488,8 +488,8 @@ export function TopBar() {
                           className={cn(
                             'flex items-center gap-3 px-3 py-2.5 rounded-md text-[13px] transition-colors',
                             active
-                              ? 'bg-[#1A1813] text-white'
-                              : 'text-[#D0C3AF] hover:text-white hover:bg-white/[0.04]',
+                              ? 'bg-[#0E0E0E] text-white'
+                              : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
                           )}
                         >
                           <Icon size={15} strokeWidth={1.75} />

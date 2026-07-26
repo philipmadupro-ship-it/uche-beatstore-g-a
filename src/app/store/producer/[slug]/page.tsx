@@ -155,24 +155,24 @@ export default function ProducerPage({
   if (loading) {
     return (
       <div className="min-h-screen bg-[#090907] flex items-center justify-center">
-        <Loader2 size={24} className="animate-spin text-[#9B9282]" />
+        <Loader2 size={24} className="animate-spin text-white/40" />
       </div>
     );
   }
 
   if (notFound || !creator) {
     return (
-      <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-[#9B9282]">
+      <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-white/40">
         <Music size={36} />
         <p className="text-[14px]">Producer not found.</p>
-        <Link href="/store" className="text-[12px] underline hover:text-[#F7EBDD]">← Back to store</Link>
+        <Link href="/store" className="text-[12px] underline hover:text-white">← Back to store</Link>
       </div>
     );
   }
 
   return (
     <div
-      className="store-ui min-h-screen bg-[#090907] text-[#F7EBDD]"
+      className="store-ui min-h-screen bg-[#090907] text-white"
       style={{ fontFamily }}
     >
       {/* ── Hero ── */}
@@ -188,14 +188,14 @@ export default function ProducerPage({
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#090907]/60 to-[#090907]" />
           </div>
         ) : (
-          <div className="h-[140px] md:h-[200px] w-full bg-gradient-to-b from-[#171511] to-[#090907]" />
+          <div className="h-[140px] md:h-[200px] w-full bg-gradient-to-b from-[#111111] to-[#090907]" />
         )}
 
         {/* Back link */}
         <div className="absolute top-4 left-4 md:left-8">
           <Link
             href="/store"
-            className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#D0C3AF] transition-colors"
+            className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-white/40 hover:text-white/80 transition-colors"
           >
             <ArrowLeft size={11} />
             Store
@@ -206,8 +206,8 @@ export default function ProducerPage({
         <div className="max-w-6xl mx-auto px-4 md:px-10 -mt-12 md:-mt-20 relative z-10">
           <div className="flex flex-col md:flex-row md:items-end gap-4 md:gap-6">
             {/* Avatar placeholder */}
-            <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl bg-[#171511] border border-[#2B2821] flex items-center justify-center shadow-lg shrink-0">
-              <Music size={32} className="text-[#9B9282]" />
+            <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center shadow-lg shrink-0">
+              <Music size={32} className="text-white/40" />
             </div>
 
             <div className="flex-1 min-w-0">
@@ -215,7 +215,7 @@ export default function ProducerPage({
                 {creator.display_name || 'Producer'}
               </h1>
               {creator.credits && (
-                <p className="text-[12px] text-[#B4AA99] mt-1">{creator.credits}</p>
+                <p className="text-[12px] text-white/60 mt-1">{creator.credits}</p>
               )}
             </div>
 
@@ -224,8 +224,8 @@ export default function ProducerPage({
                 onClick={handleFollow}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all border ${
                   isFollowing
-                    ? 'bg-transparent border-[#9B9282] text-[#9B9282] hover:border-[#F7EBDD] hover:text-[#F7EBDD]'
-                    : 'bg-[#E7D7BE] border-[#E7D7BE] text-black hover:bg-[#F3E6D1]'
+                    ? 'bg-transparent border-white/40 text-white/40 hover:border-white/30 hover:text-white'
+                    : 'bg-white border-white/30 text-black hover:bg-white'
                 }`}
               >
                 {isFollowing ? <Heart size={12} fill="currentColor" /> : <UserPlus size={12} />}
@@ -243,56 +243,56 @@ export default function ProducerPage({
           {/* Left sidebar: Bio + social */}
           <div className="flex flex-col gap-5 md:sticky md:top-24">
             {creator.bio && (
-              <div className="rounded-xl border border-[#2B2821] bg-[#171511] p-4">
-                <p className="text-[9px] font-mono uppercase tracking-widest text-[#9B9282] mb-2">Bio</p>
-                <p className="text-[12px] text-[#D0C3AF] leading-relaxed">{creator.bio}</p>
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+                <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-2">Bio</p>
+                <p className="text-[12px] text-white/80 leading-relaxed">{creator.bio}</p>
               </div>
             )}
 
             {/* Social links */}
-            <div className="rounded-xl border border-[#2B2821] bg-[#171511] p-4 space-y-2">
-              <p className="text-[9px] font-mono uppercase tracking-widest text-[#9B9282] mb-2">Links</p>
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 space-y-2">
+              <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-2">Links</p>
               {creator.instagram_handle && (
-                <a href={`https://instagram.com/${creator.instagram_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-[#B4AA99] hover:text-[#F7EBDD] transition-colors">
+                <a href={`https://instagram.com/${creator.instagram_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors">
                   <AtSign size={12} /> {creator.instagram_handle}
                 </a>
               )}
               {creator.twitter_handle && (
-                <a href={`https://twitter.com/${creator.twitter_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-[#B4AA99] hover:text-[#F7EBDD] transition-colors">
+                <a href={`https://twitter.com/${creator.twitter_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors">
                   <Link2 size={12} /> {creator.twitter_handle}
                 </a>
               )}
               {creator.spotify_url && (
-                <a href={creator.spotify_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-[#B4AA99] hover:text-[#F7EBDD] transition-colors">
+                <a href={creator.spotify_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors">
                   <Music size={12} /> Spotify
                 </a>
               )}
               {creator.soundcloud_url && (
-                <a href={creator.soundcloud_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-[#B4AA99] hover:text-[#F7EBDD] transition-colors">
+                <a href={creator.soundcloud_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors">
                   <Music2 size={12} /> SoundCloud
                 </a>
               )}
               {creator.website_url && (
-                <a href={creator.website_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-[#B4AA99] hover:text-[#F7EBDD] transition-colors">
+                <a href={creator.website_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors">
                   <Globe size={12} /> Website
                 </a>
               )}
               {creator.contact_email && (
-                <a href={`mailto:${creator.contact_email}`} className="flex items-center gap-2 text-[11px] text-[#B4AA99] hover:text-[#F7EBDD] transition-colors">
+                <a href={`mailto:${creator.contact_email}`} className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors">
                   <Mail size={12} /> {creator.contact_email}
                 </a>
               )}
             </div>
 
             {/* Stats */}
-            <div className="rounded-xl border border-[#2B2821] bg-[#171511] p-4 grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 grid grid-cols-2 gap-3">
               <div>
                 <p className="text-[18px] font-bold text-white">{tracks.length}</p>
-                <p className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">Tracks</p>
+                <p className="text-[9px] font-mono uppercase tracking-wider text-white/40">Tracks</p>
               </div>
               <div>
                 <p className="text-[18px] font-bold text-white">{playlists.length + projects.length}</p>
-                <p className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">Collections</p>
+                <p className="text-[9px] font-mono uppercase tracking-wider text-white/40">Collections</p>
               </div>
             </div>
           </div>
@@ -302,7 +302,7 @@ export default function ProducerPage({
             {/* Tracks */}
             {tracks.length > 0 && (
               <section>
-                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#9B9282] mb-4">
+                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-4">
                   All Tracks
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -322,7 +322,7 @@ export default function ProducerPage({
             {/* Featured playlists */}
             {playlists.length > 0 && (
               <section>
-                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#9B9282] mb-4">
+                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-4">
                   Playlists
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -330,19 +330,19 @@ export default function ProducerPage({
                     <Link
                       key={pl.id}
                       href={`/store/playlists/${pl.id}`}
-                      className="group flex flex-col rounded-xl border border-[#2B2821] bg-[#171511] overflow-hidden hover:border-[#3B372F] transition-all"
+                      className="group flex flex-col rounded-xl border border-white/10 bg-white/[0.04] overflow-hidden hover:border-white/20 transition-all"
                     >
                       <div className="relative w-full aspect-square bg-[#090907]">
                         {pl.cover_url ? (
                           <img src={pl.cover_url} alt={pl.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[#9B9282]">
+                          <div className="w-full h-full flex items-center justify-center text-white/40">
                             <Music size={20} />
                           </div>
                         )}
                       </div>
                       <div className="p-2.5">
-                        <p className="text-[11px] font-medium text-[#F7EBDD] truncate">{pl.name}</p>
+                        <p className="text-[11px] font-medium text-white truncate">{pl.name}</p>
                       </div>
                     </Link>
                   ))}
@@ -353,7 +353,7 @@ export default function ProducerPage({
             {/* Featured projects */}
             {projects.length > 0 && (
               <section>
-                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-[#9B9282] mb-4">
+                <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/40 mb-4">
                   Projects
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -361,21 +361,21 @@ export default function ProducerPage({
                     <Link
                       key={proj.id}
                       href={`/store/projects/${proj.id}`}
-                      className="group flex flex-col rounded-xl border border-[#2B2821] bg-[#171511] overflow-hidden hover:border-[#3B372F] transition-all"
+                      className="group flex flex-col rounded-xl border border-white/10 bg-white/[0.04] overflow-hidden hover:border-white/20 transition-all"
                     >
                       <div className="relative w-full aspect-square bg-[#090907]">
                         {proj.cover_url ? (
                           <img src={proj.cover_url} alt={proj.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[#9B9282]">
+                          <div className="w-full h-full flex items-center justify-center text-white/40">
                             <Music size={20} />
                           </div>
                         )}
                       </div>
                       <div className="p-2.5">
-                        <p className="text-[11px] font-medium text-[#F7EBDD] truncate">{proj.name}</p>
+                        <p className="text-[11px] font-medium text-white truncate">{proj.name}</p>
                         {proj.price_usd != null && Number(proj.price_usd) > 0 && (
-                          <p className="text-[9px] font-mono text-[#9B9282] mt-0.5">${Number(proj.price_usd)} bundle</p>
+                          <p className="text-[9px] font-mono text-white/40 mt-0.5">${Number(proj.price_usd)} bundle</p>
                         )}
                       </div>
                     </Link>
@@ -385,7 +385,7 @@ export default function ProducerPage({
             )}
 
             {tracks.length === 0 && playlists.length === 0 && projects.length === 0 && (
-              <div className="text-center py-16 text-[#9B9282] text-[12px]">
+              <div className="text-center py-16 text-white/40 text-[12px]">
                 No public releases yet.
               </div>
             )}
@@ -412,7 +412,7 @@ function TrackCard({
   return (
     <Link
       href={`/store/${track.id}`}
-      className="group flex flex-col rounded-xl border border-[#2B2821] bg-[#171511] overflow-hidden hover:border-[#3B372F] transition-all"
+      className="group flex flex-col rounded-xl border border-white/10 bg-white/[0.04] overflow-hidden hover:border-white/20 transition-all"
     >
       <div className="relative w-full aspect-square bg-[#090907]">
         {track.cover_url ? (
@@ -422,7 +422,7 @@ function TrackCard({
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-[#9B9282]">
+          <div className="w-full h-full flex items-center justify-center text-white/40">
             <Music size={20} />
           </div>
         )}
@@ -447,13 +447,13 @@ function TrackCard({
         )}
       </div>
       <div className="p-2.5">
-        <p className="text-[11px] font-medium text-[#F7EBDD] truncate">{track.title}</p>
+        <p className="text-[11px] font-medium text-white truncate">{track.title}</p>
         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-          <span className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider">
+          <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider">
             {TYPE_LABELS[track.type] ?? track.type}
           </span>
           {track.bpm && (
-            <span className="text-[9px] font-mono text-[#9B9282]">· {track.bpm} BPM</span>
+            <span className="text-[9px] font-mono text-white/40">· {track.bpm} BPM</span>
           )}
         </div>
       </div>

@@ -181,13 +181,13 @@ export function ShareTrackDetailsDrawer({
         onClick={onClose}
       />
 
-      <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[440px] bg-[#0c0c0c] border-l border-[#2B2821] z-50 flex flex-col shadow-[0_0_60px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-300">
+      <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[440px] bg-[#0c0c0c] border-l border-white/10 z-50 flex flex-col shadow-[0_0_60px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-300">
 
         {/* Header */}
-        <div className="px-6 py-5 border-b border-[#2B2821] flex items-center justify-between bg-[#0e0c09]">
+        <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between bg-[#0e0c09]">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF] bg-[#2B2821] px-2 py-0.5 rounded">
+              <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/80 bg-white/20 px-2 py-0.5 rounded">
                 {track.type}
               </span>
               {track.key && (
@@ -211,7 +211,7 @@ export function ShareTrackDetailsDrawer({
           </div>
           <button
             onClick={onClose}
-            className="text-[#B4AA99] hover:text-[#F7EBDD] p-2 hover:bg-white/[0.03] rounded-lg transition-colors border border-white/[0.03] ml-3 shrink-0"
+            className="text-white/60 hover:text-white p-2 hover:bg-white/[0.03] rounded-lg transition-colors border border-white/[0.03] ml-3 shrink-0"
           >
             <X size={16} />
           </button>
@@ -221,11 +221,11 @@ export function ShareTrackDetailsDrawer({
         <div className="flex-1 overflow-y-auto p-6 space-y-7 custom-scrollbar">
 
           {/* Cover */}
-          <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-[#171511] border border-[#2B2821] group shadow-2xl">
+          <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-white/[0.04] border border-white/10 group shadow-2xl">
             {cover ? (
               <NextImage src={cover} alt="" fill sizes="440px" unoptimized className="object-cover transition-transform duration-500 group-hover:scale-105" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
+              <div className="w-full h-full flex items-center justify-center text-white/30">
                 <Music size={64} />
               </div>
             )}
@@ -244,7 +244,7 @@ export function ShareTrackDetailsDrawer({
           </div>
 
           {/* Inline player */}
-          <div className="bg-[#171511] border border-[#2B2821] rounded-2xl p-4 space-y-3">
+          <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
               <button
                 onClick={handlePlayToggle}
@@ -257,7 +257,7 @@ export function ShareTrackDetailsDrawer({
                 )}
               </button>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-mono text-[#D0C3AF] uppercase tracking-wider">
+                <p className="text-[10px] font-mono text-white/80 uppercase tracking-wider">
                   {isActive ? (isCurrentPlaying ? 'Now playing' : 'Paused') : 'Preview'}
                 </p>
                 <p className="text-[12px] font-medium text-white truncate mt-0.5">{track.title}</p>
@@ -266,14 +266,14 @@ export function ShareTrackDetailsDrawer({
             <div className="space-y-1">
               <div
                 onClick={handleSeek}
-                className={`h-1.5 rounded-full relative cursor-pointer ${isActive ? 'bg-[#2B2821]' : 'bg-[#2B2821]/40'}`}
+                className={`h-1.5 rounded-full relative cursor-pointer ${isActive ? 'bg-white/20' : 'bg-white/'}`}
               >
                 <div
-                  className="h-full bg-[#E7D7BE] rounded-full transition-all"
+                  className="h-full bg-white rounded-full transition-all"
                   style={{ width: `${isActive ? progressPct : 0}%` }}
                 />
               </div>
-              <div className="flex justify-between text-[10px] font-mono text-[#9B9282] tabular-nums">
+              <div className="flex justify-between text-[10px] font-mono text-white/40 tabular-nums">
                 <span>{isActive ? fmt(currentTime) : '0:00'}</span>
                 <span>{isActive && duration > 0 ? fmt(duration) : fmt(track.duration_seconds || 0)}</span>
               </div>
@@ -297,8 +297,8 @@ export function ShareTrackDetailsDrawer({
           {/* Description */}
           {track.description && (
             <div className="space-y-2">
-              <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF]">Description</p>
-              <p className="text-[12px] text-[#F7EBDD]/80 leading-relaxed bg-[#171511]/30 border border-white/[0.02] p-3.5 rounded-xl whitespace-pre-wrap">
+              <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/80">Description</p>
+              <p className="text-[12px] text-white/80 leading-relaxed bg-white/[0.04]/30 border border-white/[0.02] p-3.5 rounded-xl whitespace-pre-wrap">
                 {track.description}
               </p>
             </div>
@@ -308,7 +308,7 @@ export function ShareTrackDetailsDrawer({
           {shareToken && hasPricing ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#D0C3AF]">Purchase License</p>
+                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/80">Purchase License</p>
                 {discount != null && (
                   <span className="flex items-center gap-1 text-[9px] font-mono font-bold text-[#6DC6A4] bg-[#0e1f17] border border-[#6DC6A4]/20 px-2 py-0.5 rounded-full">
                     <Tag size={8} />
@@ -343,7 +343,7 @@ export function ShareTrackDetailsDrawer({
             </div>
           ) : (
             shareToken && (
-              <div className="bg-[#171511]/20 border border-white/[0.02] rounded-xl p-4 flex gap-3 text-[#B4AA99]">
+              <div className="bg-white/[0.04]/20 border border-white/[0.02] rounded-xl p-4 flex gap-3 text-white/60">
                 <Info size={14} className="shrink-0 mt-0.5" />
                 <p className="text-[11px] leading-relaxed">
                   Preview only. No prices set for this track yet.
@@ -363,8 +363,8 @@ export function ShareTrackDetailsDrawer({
 
 function StatCell({ label, value, accent }: { label: string; value: string; accent?: 'minor' | 'major' }) {
   return (
-    <div className="bg-[#171511]/50 border border-[#2B2821]/60 rounded-xl p-3 text-center">
-      <p className="text-[8px] font-mono uppercase tracking-widest text-[#9B9282]">{label}</p>
+    <div className="bg-white/[0.04]/50 border border-white/ rounded-xl p-3 text-center">
+      <p className="text-[8px] font-mono uppercase tracking-widest text-white/40">{label}</p>
       <p className={`text-[13px] font-bold mt-1 font-mono ${
         accent === 'minor' ? 'text-[#9d95e8]' :
         accent === 'major' ? 'text-[#c8a47a]' :
@@ -394,11 +394,11 @@ function LicenseCard({
   return (
     <div className={`rounded-xl border p-4 space-y-3 relative overflow-hidden ${
       isExclusive
-        ? 'border-[#E7D7BE]/20 bg-gradient-to-br from-[#1a160d] to-[#11100D]'
-        : 'border-[#2B2821] bg-[#171511]'
+        ? 'border-white/ bg-gradient-to-br from-[#0E0E0E] to-transparent'
+        : 'border-white/10 bg-white/[0.04]'
     }`}>
       {badge && !isExclusive && (
-        <span className="absolute top-3 right-3 text-[8px] font-mono uppercase tracking-[0.15em] text-[#D0C3AF] bg-[#2B2821] border border-[#3B372F] px-2 py-0.5 rounded-full">
+        <span className="absolute top-3 right-3 text-[8px] font-mono uppercase tracking-[0.15em] text-white/80 bg-white/20 border border-white/20 px-2 py-0.5 rounded-full">
           {badge}
         </span>
       )}
@@ -406,13 +406,13 @@ function LicenseCard({
       {/* Price row */}
       <div className="flex items-end gap-3">
         <div>
-          <p className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99] mb-0.5">{label}</p>
+          <p className="text-[9px] font-mono uppercase tracking-wider text-white/60 mb-0.5">{label}</p>
           <div className="flex items-baseline gap-2">
-            <span className={`text-2xl font-mono font-bold ${isExclusive ? 'text-[#E7D7BE]' : 'text-white'}`}>
+            <span className={`text-2xl font-mono font-bold ${isExclusive ? 'text-white' : 'text-white'}`}>
               ${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </span>
             {originalPrice && (
-              <span className="text-[12px] font-mono text-[#6E685B] line-through tabular-nums">
+              <span className="text-[12px] font-mono text-white/30 line-through tabular-nums">
                 ${Math.round(originalPrice).toLocaleString()}
               </span>
             )}
@@ -430,11 +430,11 @@ function LicenseCard({
         {features.map((f) => (
           <li key={f.label} className="flex items-center gap-2 text-[10px]">
             {f.included ? (
-              <CheckCircle size={10} className={`shrink-0 ${isExclusive ? 'text-[#E7D7BE]' : 'text-[#8ecf9f]'}`} />
+              <CheckCircle size={10} className={`shrink-0 ${isExclusive ? 'text-white' : 'text-[#8ecf9f]'}`} />
             ) : (
-              <XCircle size={10} className="shrink-0 text-[#3B372F]" />
+              <XCircle size={10} className="shrink-0 text-white/30" />
             )}
-            <span className={f.included ? 'text-[#D0C3AF]' : 'text-[#3B372F]'}>{f.label}</span>
+            <span className={f.included ? 'text-white/80' : 'text-white/30'}>{f.label}</span>
           </li>
         ))}
       </ul>
@@ -445,8 +445,8 @@ function LicenseCard({
           onClick={onBuy}
           className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors ${
             isExclusive
-              ? 'bg-[#E7D7BE] text-black hover:bg-[#F3E6D1]'
-              : 'bg-white/[0.05] border border-white/[0.10] hover:bg-white/[0.10] text-[#F7EBDD]'
+              ? 'bg-white text-black hover:bg-white'
+              : 'bg-white/[0.05] border border-white/[0.10] hover:bg-white/[0.10] text-white'
           }`}
         >
           <ShoppingCart size={11} />

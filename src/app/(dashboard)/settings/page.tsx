@@ -155,7 +155,7 @@ export default function SettingsPage() {
               className="group block"
             >
               <Card interactive className="flex items-center gap-5 p-6">
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-[var(--border-hover)] bg-[#211F1A] transition-colors group-hover:border-[var(--accent)]/30">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-[var(--border-hover)] bg-white/[0.05] transition-colors group-hover:border-[var(--accent)]/30">
                   <User size={20} className="text-[var(--text-readable)]" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -163,7 +163,7 @@ export default function SettingsPage() {
                   <h2 className="text-[14px] font-semibold text-[var(--text-primary)]">Creator Profile</h2>
                   <p className="mt-0.5 text-[11px] text-[var(--text-readable)]">Bio, hero image, licensing tiers, social links, and license agreement.</p>
                 </div>
-                <ArrowRight size={16} className="shrink-0 text-[#9B9282] transition-colors group-hover:text-[var(--text-primary)]" />
+                <ArrowRight size={16} className="shrink-0 text-white/40 transition-colors group-hover:text-[var(--text-primary)]" />
               </Card>
             </Link>
           </section>
@@ -175,7 +175,7 @@ export default function SettingsPage() {
               className="group block"
             >
               <Card interactive className="flex items-center gap-5 p-6">
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-[var(--border-hover)] bg-[#211F1A] transition-colors group-hover:border-[var(--accent)]/30">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-xl border border-[var(--border-hover)] bg-white/[0.05] transition-colors group-hover:border-[var(--accent)]/30">
                   <FileText size={20} className="text-[var(--text-readable)]" />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -183,7 +183,7 @@ export default function SettingsPage() {
                   <h2 className="text-[14px] font-semibold text-[var(--text-primary)]">License Builder</h2>
                   <p className="mt-0.5 text-[11px] text-[var(--text-readable)]">Create up to 4 license tiers with custom pricing, rights, and file delivery.</p>
                 </div>
-                <ArrowRight size={16} className="shrink-0 text-[#9B9282] transition-colors group-hover:text-[var(--text-primary)]" />
+                <ArrowRight size={16} className="shrink-0 text-white/40 transition-colors group-hover:text-[var(--text-primary)]" />
               </Card>
             </Link>
           </section>
@@ -191,11 +191,11 @@ export default function SettingsPage() {
           {/* Team */}
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <Shield size={14} className="text-[#9B9282]" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#F7EBDD]">Team members</h2>
+              <Shield size={14} className="text-white/40" />
+              <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Team members</h2>
             </div>
             {loading ? (
-              <div className="py-12 flex justify-center"><Loader2 size={16} className="animate-spin text-[#837B6D]" /></div>
+              <div className="py-12 flex justify-center"><Loader2 size={16} className="animate-spin text-white/40" /></div>
             ) : team.length === 0 ? (
               <EmptyState
                 title="No team members yet"
@@ -203,19 +203,19 @@ export default function SettingsPage() {
                 className="py-10"
               />
             ) : (
-              <Card className="divide-y divide-[#24211B] overflow-hidden">
+              <Card className="divide-y divide-white/10 overflow-hidden">
                 {team.map((m) => (
-                  <div key={m.user_id} className="flex items-center justify-between px-4 py-3 bg-[#171511]/50">
+                  <div key={m.user_id} className="flex items-center justify-between px-4 py-3 bg-white/[0.04]/50">
                     <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full bg-[#1A1813] border border-[#211F1A] flex items-center justify-center text-[10px] font-medium text-[#D0C3AF]">
+                      <div className="w-7 h-7 rounded-full bg-[#0E0E0E] border border-white/10 flex items-center justify-center text-[10px] font-medium text-white/80">
                         {m.name?.[0] || m.email[0]}
                       </div>
                       <div>
-                        <p className="text-[12px] font-medium text-[#F7EBDD]">{m.name || m.email}</p>
-                        {m.name && <p className="text-[10px] font-mono text-[#9B9282]">{m.email}</p>}
+                        <p className="text-[12px] font-medium text-white">{m.name || m.email}</p>
+                        {m.name && <p className="text-[10px] font-mono text-white/40">{m.email}</p>}
                       </div>
                     </div>
-                    <span className={`text-[10px] font-mono uppercase tracking-wider ${m.role === 'owner' ? 'text-[#F3E6D1]' : 'text-[#9B9282]'}`}>
+                    <span className={`text-[10px] font-mono uppercase tracking-wider ${m.role === 'owner' ? 'text-white' : 'text-white/40'}`}>
                       {m.role}
                     </span>
                   </div>
@@ -227,8 +227,8 @@ export default function SettingsPage() {
           {/* Invite */}
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <UserPlus size={14} className="text-[#9B9282]" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#F7EBDD]">Invite collaborator</h2>
+              <UserPlus size={14} className="text-white/40" />
+              <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Invite collaborator</h2>
             </div>
             <Card>
               <form onSubmit={handleInvite} className="space-y-4 p-6">
@@ -270,10 +270,10 @@ export default function SettingsPage() {
           {/* Preferences */}
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <SettingsIcon size={14} className="text-[#9B9282]" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#F7EBDD]">Preferences</h2>
+              <SettingsIcon size={14} className="text-white/40" />
+              <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Preferences</h2>
             </div>
-            <Card className="divide-y divide-[#24211B] overflow-hidden">
+            <Card className="divide-y divide-white/10 overflow-hidden">
               <ToggleRow
                 title="Lossless exports"
                 description="Prefer WAV/AIFF for shared links"
@@ -292,11 +292,11 @@ export default function SettingsPage() {
           {/* Buyer privacy — GDPR/CCPA erasure */}
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <Shield size={14} className="text-[#9B9282]" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#F7EBDD]">Buyer privacy</h2>
+              <Shield size={14} className="text-white/40" />
+              <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Buyer privacy</h2>
             </div>
             <Card className="p-6">
-              <p className="text-[13px] text-[#9B9282] mb-4 max-w-prose">
+              <p className="text-[13px] text-white/40 mb-4 max-w-prose">
                 Honour a buyer&apos;s data-deletion request. Their email and Stripe details are
                 permanently anonymised across every purchase record; sale amounts and dates are
                 kept for your accounting.
@@ -330,15 +330,15 @@ function ToggleRow({ title, description, on, onToggle }: { title: string; descri
       type="button"
       role="switch"
       aria-checked={on}
-      className="flex w-full cursor-pointer items-center justify-between bg-[#171511]/50 px-6 py-4 text-left transition-colors hover:bg-[#171511] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/45 focus-visible:ring-inset"
+      className="flex w-full cursor-pointer items-center justify-between bg-white/[0.04]/50 px-6 py-4 text-left transition-colors hover:bg-white/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/45 focus-visible:ring-inset"
       onClick={() => onToggle(!on)}
     >
       <div>
-        <p className="text-[12px] font-medium text-[#F7EBDD]">{title}</p>
+        <p className="text-[12px] font-medium text-white">{title}</p>
         <p className="mt-0.5 text-[10px] text-[var(--text-readable)]">{description}</p>
       </div>
-      <div className={`w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-[#E7D7BE]' : 'bg-[#211F1A] border border-[#3B372F]'}`}>
-        <div className={`w-3.5 h-3.5 rounded-full absolute top-[3px] transition-all ${on ? 'right-[3px] bg-white' : 'left-[3px] bg-[#9B9282]'}`} />
+      <div className={`w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-white' : 'bg-white/[0.05] border border-white/20'}`}>
+        <div className={`w-3.5 h-3.5 rounded-full absolute top-[3px] transition-all ${on ? 'right-[3px] bg-white' : 'left-[3px] bg-white/40'}`} />
       </div>
     </button>
   );

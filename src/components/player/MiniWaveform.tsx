@@ -117,7 +117,7 @@ export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive, onPlay 
       onKeyDown={handleKeyDown}
       tabIndex={isActive ? 0 : undefined}
       style={{ height }}
-      className={`relative w-full overflow-hidden rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-[#E7D7BE]/70 ${isActive ? 'cursor-col-resize' : onPlay ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`relative w-full overflow-hidden rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-white/30/70 ${isActive ? 'cursor-col-resize' : onPlay ? 'cursor-pointer' : 'cursor-default'}`}
       role={isActive ? 'slider' : undefined}
       aria-label={isActive ? `Seek ${currentTrack?.title ?? 'current track'}` : undefined}
       aria-valuenow={isActive ? Math.round(progress * 100) : undefined}
@@ -163,7 +163,7 @@ export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive, onPlay 
               // on dark cards; played bars glow in the warm accent. Idle cards
               // sit a touch dimmer so the active track stands out.
               className={`transition-[fill] duration-150 ${
-                isPlayed ? 'fill-[#E7D7BE]' : isActive ? 'fill-[#F7EBDD]/30' : 'fill-[#F7EBDD]/15'
+                isPlayed ? 'fill-[#FFFFFF]' : isActive ? 'fill-[#FFFFFF]/30' : 'fill-[#FFFFFF]/15'
               }`}
               style={isPlayed || bar.isTransient ? { filter: `drop-shadow(0 0 ${bar.isTransient ? 2.4 : 1.5}px rgba(231,215,190,0.45))` } : undefined}
             />

@@ -29,9 +29,9 @@ export function BuyerLibraryTile({
     <Link
       href={href}
       aria-label={track ? `Open ${title}` : 'Browse available beats'}
-      className="group flex min-h-[72px] gap-2 rounded-lg border border-[#2B2821] bg-white/[0.03] p-2 transition-colors hover:border-[#3B372F] hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+      className="group flex min-h-[72px] gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-2 transition-colors hover:border-white/20 hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
     >
-      <span className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-md border border-[#2B2821] bg-[#090907] text-[#9B9282]">
+      <span className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-md border border-white/10 bg-[#090907] text-white/40">
         {track?.cover_url ? (
           <CoverImage
             src={track.cover_url}
@@ -44,7 +44,7 @@ export function BuyerLibraryTile({
         )}
       </span>
       <span className="min-w-0 flex-1 py-0.5">
-        <span className="block truncate text-[11px] font-medium text-[#F7EBDD] group-hover:text-white">
+        <span className="block truncate text-[11px] font-medium text-white group-hover:text-white">
           {title}
         </span>
         <span className="mt-0.5 block truncate text-[9px] font-mono text-white/45">

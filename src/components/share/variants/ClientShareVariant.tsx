@@ -273,14 +273,14 @@ export function ClientShareVariant({
   };
 
   return (
-    <div className="min-h-screen bg-[#090907] text-[#F7EBDD]">
+    <div className="min-h-screen bg-[#090907] text-white">
 
       {/* ── Sticky post-hero header ── */}
       <div className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
         headerVisible ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
       }`}>
-        <div className="bg-[#090907]/95 backdrop-blur-xl border-b border-[#2B2821] px-4 md:px-8 h-13 flex items-center gap-4">
-          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#F7EBDD] flex-1 truncate">{displayName}</span>
+        <div className="bg-[#090907]/95 backdrop-blur-xl border-b border-white/10 px-4 md:px-8 h-13 flex items-center gap-4">
+          <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-white flex-1 truncate">{displayName}</span>
           {discount && (
             <span className="hidden sm:flex items-center gap-1 text-[9px] font-mono font-bold text-[#6DC6A4] bg-[#0e1f17] border border-[#6DC6A4]/25 px-2.5 py-1 rounded-full uppercase tracking-wider">
               <Tag size={9} />
@@ -290,20 +290,20 @@ export function ClientShareVariant({
           {shareToken && (
             <button
               onClick={() => setCartOpen(true)}
-              className="relative flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#171511] border border-[#3B372F] hover:border-[#E7D7BE]/40 transition-colors"
+              className="relative flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/20 hover:border-white/ transition-colors"
             >
-              <ShoppingCart size={13} className="text-[#E7D7BE]" />
+              <ShoppingCart size={13} className="text-white" />
               {cartCount > 0 ? (
                 <>
-                  <span className="text-[11px] font-mono font-bold text-[#F3E6D1] tabular-nums">
+                  <span className="text-[11px] font-mono font-bold text-white tabular-nums">
                     ${cartTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </span>
-                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#E7D7BE] text-black text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white text-black text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
                     {cartCount}
                   </span>
                 </>
               ) : (
-                <span className="text-[9px] text-[#B4AA99] font-mono">Cart</span>
+                <span className="text-[9px] text-white/60 font-mono">Cart</span>
               )}
             </button>
           )}
@@ -336,7 +336,7 @@ export function ClientShareVariant({
         {heroImage ? (
           <NextImage src={heroImage} alt="" fill priority unoptimized className="object-cover" />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-[#342F27] via-[#171511] to-[#090907]" />
+          <div className="w-full h-full bg-gradient-to-br from-white/10 via-white/[0.04] to-[#090907]" />
         )}
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/50 to-[#090907]" />
 
@@ -354,11 +354,11 @@ export function ClientShareVariant({
             onClick={() => setCartOpen(true)}
             className="absolute top-6 left-6 relative flex items-center gap-2 px-3.5 py-2 rounded-full bg-black/40 backdrop-blur-sm border border-white/[0.12] hover:border-white/25 transition-colors"
           >
-            <ShoppingCart size={13} className="text-[#E7D7BE]" />
+            <ShoppingCart size={13} className="text-white" />
             {cartCount > 0 ? (
               <>
-                <span className="text-[11px] font-mono font-bold text-[#F3E6D1]">${cartTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-[#E7D7BE] text-black text-[8px] font-bold rounded-full flex items-center justify-center">
+                <span className="text-[11px] font-mono font-bold text-white">${cartTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white text-black text-[8px] font-bold rounded-full flex items-center justify-center">
                   {cartCount}
                 </span>
               </>
@@ -369,14 +369,14 @@ export function ClientShareVariant({
         )}
 
         <div className="absolute inset-x-0 bottom-0 px-6 md:px-12 pb-10 md:pb-14">
-          <p className="text-[9px] font-mono uppercase tracking-[0.35em] text-[#D0C3AF] mb-2">
+          <p className="text-[9px] font-mono uppercase tracking-[0.35em] text-white/80 mb-2">
             {tracks.length} {tracks.length === 1 ? 'track' : 'tracks'} · Curated selection
           </p>
           <h1 className="text-4xl md:text-6xl font-medium tracking-tight text-white leading-[1.05] max-w-3xl">
             {displayName}
           </h1>
           {project.description && (
-            <p className="mt-3 text-[13px] md:text-[14px] text-[#F7EBDD]/70 max-w-xl leading-relaxed">
+            <p className="mt-3 text-[13px] md:text-[14px] text-white/70 max-w-xl leading-relaxed">
               {project.description}
             </p>
           )}
@@ -388,8 +388,8 @@ export function ClientShareVariant({
         {/* ── Bio ── */}
         {hasBio && (
           <section className="mb-14 max-w-2xl">
-            <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#D0C3AF] mb-3">About</p>
-            <p className="text-[15px] text-[#F7EBDD]/85 leading-[1.75] whitespace-pre-wrap">
+            <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/80 mb-3">About</p>
+            <p className="text-[15px] text-white/85 leading-[1.75] whitespace-pre-wrap">
               {creator!.bio}
             </p>
           </section>
@@ -398,7 +398,7 @@ export function ClientShareVariant({
         {/* ── Track list ── */}
         <section className="mb-14">
           <div className="flex items-center justify-between mb-4">
-            <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#D0C3AF]">
+            <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/80">
               Tracks · {tracks.length}
             </p>
             {discount && (
@@ -408,17 +408,17 @@ export function ClientShareVariant({
             )}
           </div>
 
-          <div className="rounded-2xl border border-[#2B2821] overflow-hidden divide-y divide-[#2B2821]">
+          <div className="rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/10">
             {/* Table header */}
             <div className="hidden md:grid grid-cols-[2fr_80px_80px_1fr] gap-4 px-5 py-2.5 bg-[#0e0c09]">
-              <span className="text-[9px] font-mono uppercase tracking-widest text-[#6E685B]">Track</span>
-              <span className="text-[9px] font-mono uppercase tracking-widest text-[#6E685B] text-center">BPM</span>
-              <span className="text-[9px] font-mono uppercase tracking-widest text-[#6E685B] text-center">Time</span>
-              <span className="text-[9px] font-mono uppercase tracking-widest text-[#6E685B] text-right">License</span>
+              <span className="text-[9px] font-mono uppercase tracking-widest text-white/30">Track</span>
+              <span className="text-[9px] font-mono uppercase tracking-widest text-white/30 text-center">BPM</span>
+              <span className="text-[9px] font-mono uppercase tracking-widest text-white/30 text-center">Time</span>
+              <span className="text-[9px] font-mono uppercase tracking-widest text-white/30 text-right">License</span>
             </div>
 
             {tracks.length === 0 ? (
-              <div className="px-5 py-12 text-center text-[12px] text-[#B4AA99]">
+              <div className="px-5 py-12 text-center text-[12px] text-white/60">
                 No tracks in this selection yet.
               </div>
             ) : (
@@ -435,19 +435,19 @@ export function ClientShareVariant({
                   <div
                     key={t.id}
                     className={`group flex md:grid md:grid-cols-[2fr_80px_80px_1fr] items-center gap-3 md:gap-4 px-4 md:px-5 py-3.5 transition-colors ${
-                      isCurrent ? 'bg-[#171511]' : 'hover:bg-[#0e0c09]'
+                      isCurrent ? 'bg-white/[0.04]' : 'hover:bg-[#0e0c09]'
                     }`}
                   >
                     {/* Cover + play */}
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <button
                         onClick={() => onPlay(t)}
-                        className="relative w-11 h-11 rounded-lg overflow-hidden bg-[#171511] border border-[#2B2821] shrink-0 focus:outline-none"
+                        className="relative w-11 h-11 rounded-lg overflow-hidden bg-white/[0.04] border border-white/10 shrink-0 focus:outline-none"
                       >
                         {t.cover_url ? (
                           <NextImage src={t.cover_url} alt="" fill sizes="44px" unoptimized className="object-cover" />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
+                          <div className="w-full h-full flex items-center justify-center text-white/30">
                             <Music size={16} />
                           </div>
                         )}
@@ -462,9 +462,9 @@ export function ClientShareVariant({
                         </div>
                         {isCurrent && isPlaying && (
                           <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-0.5 items-end h-2">
-                            <span className="w-0.5 bg-[#E7D7BE] animate-[pulse_0.6s_ease-in-out_infinite]" style={{ height: '40%' }} />
-                            <span className="w-0.5 bg-[#E7D7BE] animate-[pulse_0.8s_ease-in-out_infinite]" style={{ height: '100%' }} />
-                            <span className="w-0.5 bg-[#E7D7BE] animate-[pulse_0.7s_ease-in-out_infinite]" style={{ height: '60%' }} />
+                            <span className="w-0.5 bg-white animate-[pulse_0.6s_ease-in-out_infinite]" style={{ height: '40%' }} />
+                            <span className="w-0.5 bg-white animate-[pulse_0.8s_ease-in-out_infinite]" style={{ height: '100%' }} />
+                            <span className="w-0.5 bg-white animate-[pulse_0.7s_ease-in-out_infinite]" style={{ height: '60%' }} />
                           </div>
                         )}
                       </button>
@@ -474,11 +474,11 @@ export function ClientShareVariant({
                         className="min-w-0 text-left flex-1"
                       >
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-[9px] font-mono text-[#6E685B] tabular-nums ${isCurrent ? 'text-[#E7D7BE]' : ''}`}>
+                          <span className={`text-[9px] font-mono text-white/30 tabular-nums ${isCurrent ? 'text-white' : ''}`}>
                             {String(i + 1).padStart(2, '0')}
                           </span>
                           <p className={`text-[14px] font-medium truncate transition-colors ${
-                            isCurrent ? 'text-[#E7D7BE]' : 'text-white group-hover:text-[#F3E6D1]'
+                            isCurrent ? 'text-white' : 'text-white group-hover:text-white'
                           }`}>
                             {t.title}
                           </p>
@@ -489,7 +489,7 @@ export function ClientShareVariant({
                           )}
                         </div>
                         <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider">{t.type}</span>
+                          <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider">{t.type}</span>
                           {t.key && <KeyBadge keyName={t.key} scale={t.scale} />}
                         </div>
                       </button>
@@ -499,17 +499,17 @@ export function ClientShareVariant({
                     <div className="hidden md:flex flex-col items-center">
                       {t.bpm ? (
                         <>
-                          <span className="text-[13px] font-mono font-bold text-[#F7EBDD] tabular-nums">{t.bpm}</span>
-                          <span className="text-[8px] font-mono text-[#6E685B] uppercase tracking-wider">bpm</span>
+                          <span className="text-[13px] font-mono font-bold text-white tabular-nums">{t.bpm}</span>
+                          <span className="text-[8px] font-mono text-white/30 uppercase tracking-wider">bpm</span>
                         </>
                       ) : (
-                        <span className="text-[#6E685B] font-mono">—</span>
+                        <span className="text-white/30 font-mono">—</span>
                       )}
                     </div>
 
                     {/* Duration */}
                     <div className="hidden md:flex items-center justify-center">
-                      <span className="text-[11px] font-mono text-[#9B9282] tabular-nums">
+                      <span className="text-[11px] font-mono text-white/40 tabular-nums">
                         {t.duration_seconds ? fmt(t.duration_seconds) : '—'}
                       </span>
                     </div>
@@ -524,7 +524,7 @@ export function ClientShareVariant({
                           if (price == null) return (
                             <button
                               onClick={() => setSelectedTrackForDetails(t)}
-                              className="text-[#6E685B] group-hover:text-[#F7EBDD] transition-colors p-1"
+                              className="text-white/30 group-hover:text-white transition-colors p-1"
                             >
                               <ChevronRight size={14} />
                             </button>
@@ -535,20 +535,20 @@ export function ClientShareVariant({
                               onClick={() => handleAddToCart(t)}
                               className={`flex flex-col items-center px-2.5 py-1.5 rounded-lg border transition-colors ${
                                 isExcl
-                                  ? 'bg-[#E7D7BE]/[0.07] border-[#E7D7BE]/20 hover:border-[#E7D7BE]/50 hover:bg-[#E7D7BE]/10'
-                                  : 'bg-[#171511] border-[#3B372F] hover:border-[#E7D7BE]/40 hover:bg-[#211F1A]'
+                                  ? 'bg-white/[0.07] border-white/ hover:border-white/ hover:bg-white/10'
+                                  : 'bg-white/[0.04] border-white/20 hover:border-white/ hover:bg-white/[0.05]'
                               }`}
                             >
-                              <span className={`text-[8px] font-mono uppercase tracking-wider ${isExcl ? 'text-[#D0C3AF]' : 'text-[#B4AA99]'}`}>
+                              <span className={`text-[8px] font-mono uppercase tracking-wider ${isExcl ? 'text-white/80' : 'text-white/60'}`}>
                                 {selTier?.name ?? 'Add'}
                               </span>
                               <span className="flex items-center gap-1 leading-none">
                                 {origPrice && (
-                                  <span className="text-[8px] font-mono text-[#6E685B] line-through tabular-nums">
+                                  <span className="text-[8px] font-mono text-white/30 line-through tabular-nums">
                                     ${Math.round(origPrice)}
                                   </span>
                                 )}
-                                <span className={`text-[11px] font-mono font-bold tabular-nums ${isExcl ? 'text-[#E7D7BE]' : 'text-[#F3E6D1]'}`}>
+                                <span className={`text-[11px] font-mono font-bold tabular-nums ${isExcl ? 'text-white' : 'text-white'}`}>
                                   ${Math.round(price)}
                                 </span>
                               </span>
@@ -558,7 +558,7 @@ export function ClientShareVariant({
                       ) : (
                         <button
                           onClick={() => setSelectedTrackForDetails(t)}
-                          className="text-[#6E685B] group-hover:text-[#F7EBDD] transition-colors p-1"
+                          className="text-white/30 group-hover:text-white transition-colors p-1"
                         >
                           <ChevronRight size={14} />
                         </button>
@@ -574,7 +574,7 @@ export function ClientShareVariant({
         {/* ── License tiers ── */}
         {hasLicenseSection && (
           <section className="mb-14">
-            <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#D0C3AF] mb-4">
+            <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/80 mb-4">
               License tiers
             </p>
             <LicenseSelector
@@ -583,7 +583,7 @@ export function ClientShareVariant({
               onSelect={setSelectedLicenseId}
             />
             {creator?.license_notes && (
-              <p className="text-[12px] text-[#D0C3AF] mt-4 leading-relaxed">
+              <p className="text-[12px] text-white/80 mt-4 leading-relaxed">
                 {creator.license_notes}
               </p>
             )}
@@ -593,11 +593,11 @@ export function ClientShareVariant({
         {/* ── Credits ── */}
         {hasCredits && (
           <section className="mb-14 max-w-2xl">
-            <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#D0C3AF] mb-3 flex items-center gap-2">
+            <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/80 mb-3 flex items-center gap-2">
               <Mic2 size={11} />
               Selected credits
             </p>
-            <p className="text-[13px] text-[#F7EBDD]/80 leading-[1.9] whitespace-pre-wrap font-mono">
+            <p className="text-[13px] text-white/80 leading-[1.9] whitespace-pre-wrap font-mono">
               {creator!.credits}
             </p>
           </section>
@@ -606,7 +606,7 @@ export function ClientShareVariant({
         {/* ── Contact + socials ── */}
         {hasContact && (
           <section className="mb-8">
-            <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-[#D0C3AF] mb-3">Get in touch</p>
+            <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/80 mb-3">Get in touch</p>
             <div className="flex flex-wrap gap-2">
               {creator?.contact_email && (
                 <SocialPill href={`mailto:${creator.contact_email}`} icon={<Mail size={12} />} label={creator.contact_email} />
@@ -641,25 +641,25 @@ export function ClientShareVariant({
 
       {/* ── Sticky Now-Playing bar ── */}
       {playingTrack && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#2B2821] bg-[#11100D]/95 backdrop-blur-xl">
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-white/[0.02]/95 backdrop-blur-xl">
           {/* Seek bar — full-width clickable strip at the very top of the bar */}
           <div
             onClick={handleSeekClick}
-            className="h-1 bg-[#2B2821] cursor-pointer hover:h-1.5 transition-all relative"
+            className="h-1 bg-white/20 cursor-pointer hover:h-1.5 transition-all relative"
           >
             <div
-              className="h-full bg-[#E7D7BE] transition-all"
+              className="h-full bg-white transition-all"
               style={{ width: `${progressPct}%` }}
             />
           </div>
 
           <div className="max-w-5xl mx-auto px-4 md:px-8 py-3 flex items-center gap-4">
             {/* Cover */}
-            <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-[#171511] border border-[#2B2821] shrink-0">
+            <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-white/[0.04] border border-white/10 shrink-0">
               {playingTrack.cover_url ? (
                 <NextImage src={playingTrack.cover_url} alt="" fill sizes="36px" unoptimized className="object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#6E685B]">
+                <div className="w-full h-full flex items-center justify-center text-white/30">
                   <Music size={12} />
                 </div>
               )}
@@ -669,11 +669,11 @@ export function ClientShareVariant({
             <div className="flex-1 min-w-0">
               <p className="text-[12px] font-medium text-white truncate">{playingTrack.title}</p>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[9px] font-mono text-[#9B9282] tabular-nums">
+                <span className="text-[9px] font-mono text-white/40 tabular-nums">
                   {fmt(currentTime)}
                 </span>
-                <span className="text-[9px] font-mono text-[#6E685B]">/</span>
-                <span className="text-[9px] font-mono text-[#9B9282] tabular-nums">
+                <span className="text-[9px] font-mono text-white/30">/</span>
+                <span className="text-[9px] font-mono text-white/40 tabular-nums">
                   {duration > 0 ? fmt(duration) : fmt(playingTrack.duration_seconds || 0)}
                 </span>
               </div>
@@ -684,7 +684,7 @@ export function ClientShareVariant({
               <button
                 onClick={handlePrev}
                 disabled={playingIdx <= 0}
-                className="-m-1 flex size-10 items-center justify-center text-[#B4AA99] transition-colors hover:text-white disabled:opacity-30"
+                className="-m-1 flex size-10 items-center justify-center text-white/60 transition-colors hover:text-white disabled:opacity-30"
               >
                 <SkipBack size={14} fill="currentColor" />
               </button>
@@ -697,7 +697,7 @@ export function ClientShareVariant({
               <button
                 onClick={handleNext}
                 disabled={playingIdx >= tracks.length - 1}
-                className="-m-1 flex size-10 items-center justify-center text-[#B4AA99] transition-colors hover:text-white disabled:opacity-30"
+                className="-m-1 flex size-10 items-center justify-center text-white/60 transition-colors hover:text-white disabled:opacity-30"
               >
                 <SkipForward size={14} fill="currentColor" />
               </button>
@@ -707,11 +707,11 @@ export function ClientShareVariant({
             {shareToken && (
               <button
                 onClick={() => setCartOpen(true)}
-                className="relative -m-0.5 flex size-10 shrink-0 items-center justify-center text-[#B4AA99] transition-colors hover:text-[#E7D7BE]"
+                className="relative -m-0.5 flex size-10 shrink-0 items-center justify-center text-white/60 transition-colors hover:text-white"
               >
                 <ShoppingCart size={15} />
                 {cartCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#E7D7BE] text-black text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-white text-black text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
                     {cartCount}
                   </span>
                 )}
@@ -755,11 +755,11 @@ function SocialPill({ href, icon, label }: { href: string; icon: React.ReactNode
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-[12px] text-[#F7EBDD] hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors"
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-[12px] text-white hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors"
     >
       {icon}
       <span className="truncate max-w-[200px]">{label}</span>
-      <ExternalLink size={10} className="text-[#B4AA99]" />
+      <ExternalLink size={10} className="text-white/60" />
     </a>
   );
 }

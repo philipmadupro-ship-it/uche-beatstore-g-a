@@ -33,12 +33,12 @@ export function ProjectTagPicker({ projectId }: { projectId: string }) {
   ];
 
   return (
-    <div className="space-y-5 p-4 bg-[#1A1813] border border-[#2B2821] rounded-2xl w-full max-w-sm shadow-2xl">
-      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-[#837B6D]">Project tags</h3>
+    <div className="space-y-5 p-4 bg-[#0E0E0E] border border-white/10 rounded-2xl w-full max-w-sm shadow-2xl">
+      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Project tags</h3>
 
       {groups.map(([category, options]) => (
         <div key={category} className="space-y-2">
-          <label className="text-[9px] font-bold uppercase tracking-widest text-[#837B6D] ml-1">{category}</label>
+          <label className="text-[9px] font-bold uppercase tracking-widest text-white/40 ml-1">{category}</label>
           <div className="flex flex-wrap gap-1.5">
             {options.map((tag) => {
               const active = tags.includes(tag);
@@ -48,8 +48,8 @@ export function ProjectTagPicker({ projectId }: { projectId: string }) {
                   onClick={() => handleToggle(tag, category === 'project type' ? 'project_type' : category)}
                   className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 border ${
                     active
-                      ? 'bg-[#342F27] text-[#F3E6D1] border-[#C9BCA8] shadow-lg shadow-[#E7D7BE]/5'
-                      : 'bg-transparent text-[#837B6D] border-[#3B372F] hover:border-[#837B6D] hover:text-[#D0C3AF]'
+                      ? 'bg-white/10 text-white border-white/50 shadow-lg shadow-white/10'
+                      : 'bg-transparent text-white/40 border-white/20 hover:border-white/30 hover:text-white/80'
                   }`}
                 >
                   {tag}
@@ -60,16 +60,16 @@ export function ProjectTagPicker({ projectId }: { projectId: string }) {
         </div>
       ))}
 
-      <form onSubmit={handleAddCustom} className="pt-4 border-t border-[#2B2821]">
+      <form onSubmit={handleAddCustom} className="pt-4 border-t border-white/10">
         <div className="relative group">
           <input
             type="text"
             value={customTag}
             onChange={(e) => setCustomTag(e.target.value)}
             placeholder="ADD CUSTOM TAG..."
-            className="w-full bg-[#090907] border border-[#2B2821] rounded-xl py-3 pl-10 pr-4 text-[10px] font-bold uppercase tracking-widest text-[#F7EBDD] placeholder-[#3B372F] focus:outline-none focus:border-[#E7D7BE] transition-all"
+            className="w-full bg-[#090907] border border-white/10 rounded-xl py-3 pl-10 pr-4 text-[10px] font-bold uppercase tracking-widest text-white placeholder-white/30 focus:outline-none focus:border-white/30 transition-all"
           />
-          <Plus size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3B372F] group-focus-within:text-[#E7D7BE] transition-colors" />
+          <Plus size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-white transition-colors" />
         </div>
       </form>
     </div>

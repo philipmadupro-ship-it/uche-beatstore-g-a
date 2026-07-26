@@ -301,7 +301,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-full">
-          <Loader2 size={18} className="animate-spin text-[#837B6D]" />
+          <Loader2 size={18} className="animate-spin text-white/40" />
         </div>
       </DashboardLayout>
     );
@@ -311,30 +311,30 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
     <DashboardLayout>
       <PageContainer>
         <div className="mb-4 lg:hidden">
-          <p className="mb-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">Playlist</p>
+          <p className="mb-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-white/50">Playlist</p>
           {isEditingTitle ? (
             <div className="flex items-center gap-2">
               <input
                 autoFocus
-                className="min-w-0 flex-1 border-b border-[#3B372F] bg-transparent text-2xl font-medium text-white outline-none focus:border-[#E7D7BE]"
+                className="min-w-0 flex-1 border-b border-white/20 bg-transparent text-2xl font-medium text-white outline-none focus:border-white"
                 value={tempTitle}
                 onChange={(e) => setTempTitle(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleRename()}
               />
-              <button type="button" aria-label="Save playlist title" onClick={handleRename} className="grid h-10 w-10 place-items-center rounded-md text-[#E7D7BE] hover:bg-[#1A1813]"><Check size={15} /></button>
-              <button type="button" aria-label="Cancel title edit" onClick={() => { setIsEditingTitle(false); setTempTitle(playlist?.name || ''); }} className="grid h-10 w-10 place-items-center rounded-md text-[#9B9282] hover:bg-[#1A1813]"><X size={15} /></button>
+              <button type="button" aria-label="Save playlist title" onClick={handleRename} className="grid h-10 w-10 place-items-center rounded-md text-white hover:bg-[#0E0E0E]"><Check size={15} /></button>
+              <button type="button" aria-label="Cancel title edit" onClick={() => { setIsEditingTitle(false); setTempTitle(playlist?.name || ''); }} className="grid h-10 w-10 place-items-center rounded-md text-white/50 hover:bg-[#0E0E0E]"><X size={15} /></button>
             </div>
           ) : (
             <div className="flex items-start gap-2">
               <h1 className="min-w-0 flex-1 break-words font-heading text-2xl font-medium leading-tight text-white">{playlist?.name}</h1>
-              <button type="button" aria-label="Edit playlist title" onClick={() => setIsEditingTitle(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-[#9B9282] hover:bg-[#1A1813] hover:text-white">
+              <button type="button" aria-label="Edit playlist title" onClick={() => setIsEditingTitle(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-white/50 hover:bg-[#0E0E0E] hover:text-white">
                 <Edit2 size={14} />
               </button>
             </div>
           )}
-          <div className="mt-2 flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">
+          <div className="mt-2 flex items-center gap-2 text-[10px] font-mono uppercase tracking-wider text-white/50">
             <span>{tracks.length} track{tracks.length !== 1 ? 's' : ''}</span>
-            <span className="text-[#3B372F]">·</span>
+            <span className="text-white/30">·</span>
             <span>{fmtDuration(totalDuration)}</span>
           </div>
         </div>
@@ -345,7 +345,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
         <div className="grid grid-cols-1 gap-5 sm:gap-8 lg:grid-cols-[minmax(280px,360px)_1fr] lg:gap-10">
           <div className="mx-auto w-full max-w-[240px] sm:max-w-none lg:sticky lg:top-10 lg:self-start">
             <div
-              className="group relative aspect-square w-full cursor-pointer overflow-hidden rounded-xl border border-white/[0.05] bg-[#171511] shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:rounded-2xl"
+              className="group relative aspect-square w-full cursor-pointer overflow-hidden rounded-xl border border-white/[0.05] bg-white/[0.04] shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:rounded-2xl"
               onClick={() => fileInputRef.current?.click()}
             >
               {playlist?.cover_url ? (
@@ -366,28 +366,28 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
             <div className="mb-4 flex flex-col gap-3 pb-2 sm:mb-8 sm:gap-4 sm:border-b sm:border-white/[0.04] sm:pb-8">
             <div className="min-w-0">
               <div className="hidden lg:block">
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#9B9282] mb-2">Playlist</p>
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/50 mb-2">Playlist</p>
               {isEditingTitle ? (
                 <div className="flex items-center gap-2 mb-3">
                   <input
                     autoFocus
-                    className="bg-transparent border-b border-[#3B372F] text-3xl font-medium tracking-tight outline-none text-white flex-1 focus:border-[#E7D7BE]"
+                    className="bg-transparent border-b border-white/20 text-3xl font-medium tracking-tight outline-none text-white flex-1 focus:border-white"
                     value={tempTitle}
                     onChange={(e) => setTempTitle(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRename()}
                   />
-                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#1A1813] text-[#E7D7BE]"><Check size={14} /></button>
-                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(playlist?.name || ''); }} className="p-1.5 rounded hover:bg-[#1A1813] text-[#9B9282]"><X size={14} /></button>
+                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#0E0E0E] text-white"><Check size={14} /></button>
+                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(playlist?.name || ''); }} className="p-1.5 rounded hover:bg-[#0E0E0E] text-white/50"><X size={14} /></button>
                 </div>
               ) : (
                 <div className="group flex items-center gap-2 mb-3">
                   <h1 className="text-3xl font-medium text-white leading-none tracking-tight truncate font-heading">{playlist?.name}</h1>
-                  <button onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-[#9B9282] hover:text-white transition-all">
+                  <button onClick={() => setIsEditingTitle(true)} className="opacity-0 group-hover:opacity-100 p-1.5 text-white/50 hover:text-white transition-all">
                     <Edit2 size={13} />
                   </button>
                 </div>
               )}
-              <div className="flex items-center gap-3 text-[11px] font-mono text-[#9B9282] uppercase tracking-wider">
+              <div className="flex items-center gap-3 text-[11px] font-mono text-white/50 uppercase tracking-wider">
                 <span>{tracks.length} track{tracks.length !== 1 ? 's' : ''}</span>
                 <span>·</span>
                 <span>{fmtDuration(totalDuration)}</span>
@@ -410,9 +410,9 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                     rows={4}
                     maxLength={2000}
                     placeholder="What's this playlist about? Late-night drives, gospel chops, etc."
-                    className="w-full bg-[#090907] border border-[#3B372F] rounded-lg px-3 py-2.5 text-[15px] font-light leading-[1.7] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#E7D7BE] resize-none"
+                    className="w-full bg-[#090907] border border-white/20 rounded-lg px-3 py-2.5 text-[15px] font-light leading-[1.7] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 resize-none"
                   />
-                  <p className="mt-1 text-[9px] font-mono text-[#6E685B]">
+                  <p className="mt-1 text-[9px] font-mono text-white/40">
                     {tempDescription.length}/2000 · ⌘/Ctrl+Enter to save
                   </p>
                 </div>
@@ -422,11 +422,11 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                   className="group mt-2 block w-full text-left sm:mt-4"
                 >
                   {playlist?.description ? (
-                    <p className="text-[15px] text-[#D0C3AF] leading-[1.7] whitespace-pre-line group-hover:text-[#F7EBDD] transition-colors font-light tracking-wide">
+                    <p className="text-[15px] text-white/60 leading-[1.7] whitespace-pre-line group-hover:text-white transition-colors font-light tracking-wide">
                       {playlist.description}
                     </p>
                   ) : (
-                    <p className="text-[14px] text-[#6E685B] italic group-hover:text-[#9B9282] transition-colors">
+                    <p className="text-[14px] text-white/40 italic group-hover:text-white/50 transition-colors">
                       + Add a description
                     </p>
                   )}
@@ -435,15 +435,15 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
 
               {/* Featured in Store toggle — owner only, persists via PATCH */}
               <div className="mt-3 flex items-center gap-2">
-                <span className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">Featured in Store</span>
+                <span className="text-[10px] font-mono uppercase tracking-wider text-white/50">Featured in Store</span>
                 <button
                   onClick={toggleStoreFeatured}
-                  className={`relative inline-flex w-9 h-5 rounded-full transition-colors ${playlist?.store_featured ? 'bg-[#E7D7BE]' : 'bg-[#2B2821] border border-[#3B372F]'}`}
+                  className={`relative inline-flex w-9 h-5 rounded-full transition-colors ${playlist?.store_featured ? 'bg-white' : 'bg-white/20 border border-white/20'}`}
                   aria-pressed={!!playlist?.store_featured}
                   title="Toggle visibility on the public /store page"
                 >
                   <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${playlist?.store_featured ? 'translate-x-4' : ''}`}
+                    className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-black shadow-sm transition-transform ${playlist?.store_featured ? 'translate-x-4' : ''}`}
                   />
                 </button>
               </div>
@@ -453,7 +453,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               <button
                 onClick={handlePlayAll}
                 disabled={!tracks.length}
-                className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-md text-[12px] font-medium hover:bg-[#F7EBDD] disabled:opacity-30 transition-colors"
+                className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-md text-[12px] font-medium hover:bg-white/90 disabled:opacity-30 transition-colors"
               >
                 <Play size={12} fill="currentColor" className="ml-0.5" />
                 Play
@@ -461,14 +461,14 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               <button
                 onClick={() => setShowShareModal(true)}
                 disabled={!tracks.length}
-                className="flex items-center gap-2 bg-[#171511] border border-[#211F1A] text-[#F7EBDD] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#3B372F] disabled:opacity-30 transition-colors"
+                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 disabled:opacity-30 transition-colors"
               >
                 <Share2 size={12} />
                 Share
               </button>
               <button
                 onClick={openAddTracks}
-                className="flex items-center gap-2 bg-[#171511] border border-[#211F1A] text-[#F7EBDD] px-4 py-2 rounded-md text-[12px] font-medium hover:border-[#3B372F] transition-colors"
+                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 transition-colors"
               >
                 <Plus size={12} />
                 Add tracks
@@ -477,7 +477,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                 type="button"
                 onClick={() => setShowUpload((value) => !value)}
                 aria-expanded={showUpload}
-                className="flex items-center gap-2 rounded-md border border-[#211F1A] bg-[#171511] px-4 py-2 text-[12px] font-medium text-[#F7EBDD] transition-colors hover:border-[#3B372F]"
+                className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-4 py-2 text-[12px] font-medium text-white transition-colors hover:border-white/20"
               >
                 <UploadCloud size={12} />
                 Upload
@@ -495,7 +495,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
             {/* end meta panel — track list follows inside the right column */}
 
         {showUpload && (
-          <div className="mb-5 rounded-xl border border-[#211F1A] bg-[#11100D] p-3 sm:mb-8 sm:p-4">
+          <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.02] p-3 sm:mb-8 sm:p-4">
             <DropZone
               playlistId={params.id}
               onUploadSuccess={() => {
@@ -511,9 +511,9 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
           {tracks.length > 0 && (
             <div className="space-y-2 py-2 sm:border-b sm:border-[#24211B] sm:px-4 sm:py-3">
               <div className="relative max-w-xs">
-                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#6E685B] pointer-events-none" />
+                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
                 <input value={trackSearch} onChange={(e) => setTrackSearch(e.target.value)} placeholder="Search tracks or tags…"
-                  className="w-full bg-[#171511] border border-[#211F1A] rounded-md py-1.5 pl-8 pr-3 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#3B372F]" />
+                  className="w-full bg-white/[0.04] border border-white/10 rounded-md py-1.5 pl-8 pr-3 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20" />
               </div>
               <button
                 type="button"
@@ -526,8 +526,8 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                 aria-pressed={selectMode}
                 className={`inline-flex min-h-8 items-center gap-2 rounded-md border px-3 text-[10px] font-mono uppercase tracking-[0.14em] transition-colors ${
                   selectMode
-                    ? 'border-[#E7D7BE]/45 bg-[#E7D7BE]/14 text-[#E7D7BE]'
-                    : 'border-[#211F1A] bg-[#171511] text-[#B4AA99] hover:border-[#3B372F] hover:text-[#F7EBDD]'
+                    ? 'border-white/40 bg-white/15 text-white font-bold'
+                    : 'border-white/10 bg-white/[0.04] text-white/60 hover:border-white/20 hover:text-white'
                 }`}
               >
                 <CheckSquare size={12} />
@@ -535,7 +535,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               </button>
               {availableTags.length > 0 && (
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <Tag size={10} className="text-[#6E685B] shrink-0" />
+                  <Tag size={10} className="text-white/40 shrink-0" />
                   {availableTags.map((tag) => {
                     const on = selectedTags.has(tag);
                     return (
@@ -545,17 +545,17 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                         else n.add(tag);
                         return n;
                       })}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-[#E7D7BE] text-black border-[#E7D7BE]' : 'bg-transparent border-[#2B2821] text-[#B4AA99] hover:text-[#D0C3AF] hover:border-[#3B372F]'}`}>
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-white text-black border-white' : 'bg-transparent border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}>
                         {tag}
                       </button>
                     );
                   })}
-                  {selectedTags.size > 0 && <button onClick={() => setSelectedTags(new Set())} className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282] hover:text-[#F7EBDD] ml-1 flex items-center gap-1"><X size={9} /> Clear</button>}
+                  {selectedTags.size > 0 && <button onClick={() => setSelectedTags(new Set())} className="text-[9px] font-mono uppercase tracking-wider text-white/50 hover:text-white ml-1 flex items-center gap-1"><X size={9} /> Clear</button>}
                 </div>
               )}
             </div>
           )}
-          <div className="hidden h-9 grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px] items-center gap-4 border-b border-[#24211B] px-4 text-[10px] font-mono uppercase tracking-wider text-[#6E685B] sm:grid md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_110px_32px] lg:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_100px_110px_32px]">
+          <div className="hidden h-9 grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px] items-center gap-4 border-b border-[#24211B] px-4 text-[10px] font-mono uppercase tracking-wider text-white/40 sm:grid md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_110px_32px] lg:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_100px_110px_32px]">
             <span className="text-center">#</span>
             <span />
             <span>Title</span>
@@ -569,13 +569,13 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
 
           {!tracks.length ? (
             <div className="py-24 flex flex-col items-center justify-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-[#171511] border border-[#211F1A] flex items-center justify-center">
-                <Music size={16} className="text-[#6E685B]" />
+              <div className="w-10 h-10 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-center">
+                <Music size={16} className="text-white/40" />
               </div>
-              <p className="text-[11px] font-mono uppercase tracking-wider text-[#6E685B]">Empty playlist</p>
+              <p className="text-[11px] font-mono uppercase tracking-wider text-white/40">Empty playlist</p>
               <button
                 onClick={openAddTracks}
-                className="mt-2 flex items-center gap-2 bg-[#171511] border border-[#211F1A] text-[#F7EBDD] px-3 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider hover:border-[#E7D7BE]/50 hover:text-[#E7D7BE] transition-colors"
+                className="mt-2 flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-3 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider hover:border-white/50 hover:text-white font-bold transition-colors"
               >
                 <Plus size={12} /> Add tracks
               </button>

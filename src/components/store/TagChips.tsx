@@ -22,10 +22,10 @@ export function TagChips({ tags, max = 3, accentGenre = false }: Props) {
         return (
           <span
             key={t.tag}
-            className={`px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] border ${
+            className={`px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 border ${
               isGenre && accentGenre
-                ? 'bg-[#E7D7BE]/10 border-[#E7D7BE]/20'
-                : 'bg-[#2B2821] border-[#2B2821]'
+                ? 'bg-white/10 border-white/'
+                : 'bg-white/20 border-white/10'
             }`}
           >
             {t.tag}
@@ -33,7 +33,7 @@ export function TagChips({ tags, max = 3, accentGenre = false }: Props) {
         );
       })}
       {overflow > 0 && (
-        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-[0.2em] text-[#B4AA99] bg-[#211F1A]">
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 bg-white/[0.05]">
           +{overflow}
         </span>
       )}

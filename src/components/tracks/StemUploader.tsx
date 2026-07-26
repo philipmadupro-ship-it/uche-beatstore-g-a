@@ -115,12 +115,12 @@ export function StemUploader({ trackId, initial, onChange }: Props) {
   useEffect(() => { loadFiles(); }, [loadFiles]);
 
   return (
-    <div className="rounded-xl border border-[#2B2821] bg-[#171511] p-5">
+    <div className="rounded-xl border border-white/10 bg-white/[0.04] p-5">
       <div className="flex items-center gap-2 mb-1">
-        <AudioLines size={11} className="text-[#D0C3AF]" />
-        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-[#D0C3AF]">Stems</p>
+        <AudioLines size={11} className="text-white/80" />
+        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/80">Stems</p>
       </div>
-      <p className="text-[10px] text-[#B4AA99] mb-4 leading-relaxed">
+      <p className="text-[10px] text-white/60 mb-4 leading-relaxed">
         Attach exported stems. Recipients with a producer/engineer share can download them.
       </p>
 
@@ -140,9 +140,9 @@ export function StemUploader({ trackId, initial, onChange }: Props) {
       </div>
 
       {/* Additional stems — arbitrary, labeled, repeatable */}
-      <div className="mt-5 pt-4 border-t border-[#2B2821]">
+      <div className="mt-5 pt-4 border-t border-white/10">
         <div className="flex items-center justify-between mb-2.5">
-          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#9B9282]">
+          <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40">
             Additional stems{files.length > 0 ? ` · ${files.length}` : ''}
           </p>
         </div>
@@ -194,12 +194,12 @@ function StemSlot({
       onDrop={(e) => { e.preventDefault(); setDrag(false); handleFiles(e.dataTransfer.files); }}
       aria-describedby={error ? `${inputId}-error` : undefined}
       className={cn(
-        'tap group relative w-full min-h-14 px-3 py-3 rounded-lg border text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#E7D7BE]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#171511]',
+        'tap group relative w-full min-h-14 px-3 py-3 rounded-lg border text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30/40 focus-visible:ring-offset-2 focus-visible:ring-offset-black',
         drag
-          ? 'border-[#C9BCA8] bg-[#342F27]'
+          ? 'border-white/50 bg-white/10'
           : url
-            ? 'border-[#2B2821] bg-[#211F1A] hover:border-[#3B372F]'
-            : 'border-dashed border-[#2B2821] bg-[#11100D] hover:border-[#3B372F] hover:bg-[#171511]',
+            ? 'border-white/10 bg-white/[0.05] hover:border-white/20'
+            : 'border-dashed border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]',
       )}
     >
       <div className="flex items-center gap-2">
@@ -207,8 +207,8 @@ function StemSlot({
           {pending ? <Loader2 size={12} className="animate-spin" /> : url ? <Check size={12} /> : error ? <X size={12} className="text-red-400" /> : <Upload size={12} />}
         </div>
         <div className="min-w-0 flex-1">
-          <p className={cn('text-[11px] font-medium uppercase tracking-wider', url ? color : 'text-[#D0C3AF]')}>{label}</p>
-          <p id={error ? `${inputId}-error` : undefined} className="text-[9px] text-[#B4AA99] truncate font-mono">
+          <p className={cn('text-[11px] font-medium uppercase tracking-wider', url ? color : 'text-white/80')}>{label}</p>
+          <p id={error ? `${inputId}-error` : undefined} className="text-[9px] text-white/60 truncate font-mono">
             {pending ? 'Uploading…' : url ? 'Loaded — click to replace' : error ? error : 'Drop or click'}
           </p>
         </div>
@@ -233,16 +233,16 @@ function ExtraStemRow({ trackId, file, onRemoved }: { trackId: string; file: Ste
     }
   };
   return (
-    <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-[#2B2821] bg-[#211F1A]">
+    <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-white/10 bg-white/[0.05]">
       <Check size={12} className="text-[#6DC6A4] shrink-0" />
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-medium text-[#F7EBDD] truncate">{file.label}</p>
-        <p className="text-[9px] font-mono uppercase tracking-wider text-[#B4AA99]">{file.category}</p>
+        <p className="text-[11px] font-medium text-white truncate">{file.label}</p>
+        <p className="text-[9px] font-mono uppercase tracking-wider text-white/60">{file.category}</p>
       </div>
       <button
         onClick={remove}
         disabled={removing}
-        className="tap grid size-11 shrink-0 place-items-center rounded-full text-[#9B9282] transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
+        className="tap grid size-11 shrink-0 place-items-center rounded-full text-white/40 transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
         aria-label="Remove stem"
       >
         {removing ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
@@ -284,7 +284,7 @@ function AddStemRow({ trackId, onAdded }: { trackId: string; onAdded: () => void
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <div className="min-w-[150px] flex-1">
-        <label htmlFor={labelId} className="mb-1 block text-[8px] font-mono uppercase tracking-[0.18em] text-[#9B9282]">
+        <label htmlFor={labelId} className="mb-1 block text-[8px] font-mono uppercase tracking-[0.18em] text-white/40">
           Stem label
         </label>
         <input
@@ -294,11 +294,11 @@ function AddStemRow({ trackId, onAdded }: { trackId: string; onAdded: () => void
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Lead, 808, Adlibs…"
           autoComplete="off"
-          className="min-h-11 w-full rounded-md border border-[#2B2821] bg-[#11100D] px-2.5 py-2 text-[11px] text-[#F7EBDD] transition-colors placeholder:text-[#6E685B] focus:outline-none focus:border-[#C9BCA8]"
+          className="min-h-11 w-full rounded-md border border-white/10 bg-white/[0.02] px-2.5 py-2 text-[11px] text-white transition-colors placeholder:text-white/30 focus:outline-none focus:border-white/50"
         />
       </div>
       <div>
-        <label htmlFor={categoryId} className="mb-1 block text-[8px] font-mono uppercase tracking-[0.18em] text-[#9B9282]">
+        <label htmlFor={categoryId} className="mb-1 block text-[8px] font-mono uppercase tracking-[0.18em] text-white/40">
           Category
         </label>
         <select
@@ -306,7 +306,7 @@ function AddStemRow({ trackId, onAdded }: { trackId: string; onAdded: () => void
           name="stem-category"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="min-h-11 rounded-md border border-[#2B2821] bg-[#11100D] px-2 py-2 font-mono text-[11px] text-[#F7EBDD] transition-colors focus:outline-none focus:border-[#C9BCA8]"
+          className="min-h-11 rounded-md border border-white/10 bg-white/[0.02] px-2 py-2 font-mono text-[11px] text-white transition-colors focus:outline-none focus:border-white/50"
         >
           {CATEGORIES.map((c) => <option key={c.value} value={c.value} className="bg-[#090907]">{c.label}</option>)}
         </select>
@@ -321,7 +321,7 @@ function AddStemRow({ trackId, onAdded }: { trackId: string; onAdded: () => void
       <button
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
-        className="tap mt-4 flex min-h-11 items-center gap-1.5 rounded-md border border-[#C9BCA8]/40 bg-[#342F27] px-3 py-2 text-[11px] font-medium text-[#F3E6D1] transition-colors hover:bg-[#332b1d] disabled:opacity-50"
+        className="tap mt-4 flex min-h-11 items-center gap-1.5 rounded-md border border-white/ bg-white/10 px-3 py-2 text-[11px] font-medium text-white transition-colors hover:bg-[#332b1d] disabled:opacity-50"
       >
         {uploading ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
         Add stem

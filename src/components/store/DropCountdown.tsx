@@ -85,7 +85,7 @@ export function DropCountdown({ accentColor }: { accentColor: string }) {
   return (
     <div className="max-w-[1600px] mx-auto px-4 md:px-8 pt-6">
       <div
-        className="relative rounded-2xl border border-white/[0.08] bg-[#171511]/70 backdrop-blur-xl overflow-hidden p-4 md:p-5"
+        className="relative rounded-2xl border border-white/[0.08] bg-white/[0.04]/70 backdrop-blur-xl overflow-hidden p-4 md:p-5"
         style={{ boxShadow: `0 0 0 1px ${accentColor}1a` }}
       >
         {next.cover_url && (
@@ -101,7 +101,7 @@ export function DropCountdown({ accentColor }: { accentColor: string }) {
             <div className="w-14 h-14 rounded-lg overflow-hidden bg-[#090907] border border-white/[0.08] shrink-0">
               {next.cover_url
                 ? <img src={next.cover_url} alt="" className="w-full h-full object-cover" />
-                : <div className="w-full h-full bg-gradient-to-br from-[#342F27] to-[#090907]" />}
+                : <div className="w-full h-full bg-gradient-to-br from-white/10 to-[#090907]" />}
             </div>
             <div className="min-w-0">
               <p className="text-[9px] font-mono uppercase tracking-[0.3em]" style={{ color: accentColor }}>
@@ -137,7 +137,7 @@ export function DropCountdown({ accentColor }: { accentColor: string }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
-                  className="bg-[#090907] border border-[#2B2821] rounded-full px-3 py-2 text-[12px] text-[#F7EBDD] placeholder:text-[#9B9282] focus:outline-none focus:border-[#3B372F] min-w-0 w-44 md:w-56"
+                  className="bg-[#090907] border border-white/10 rounded-full px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 min-w-0 w-44 md:w-56"
                 />
                 <button
                   type="button"

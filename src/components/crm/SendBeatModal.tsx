@@ -11,10 +11,11 @@ import { toast } from '@/hooks/useToast';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { Modal } from '@/components/ui/Modal';
 import { buildBeatSendEmail, defaultSubject } from '@/lib/email/beat-send-template';
+import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 
 // Simple avatar color from name — used in preview recipient chip.
 const PREVIEW_PALETTES = [
-  { bg: 'bg-[#342F27]', text: 'text-[#F3E6D1]' },
+  { bg: 'bg-white/10', text: 'text-white' },
   { bg: 'bg-[#1a1833]', text: 'text-[#AFA9EC]' },
   { bg: 'bg-[#0d2318]', text: 'text-[#6DC6A4]' },
   { bg: 'bg-[#2a1810]', text: 'text-[#e8a86a]' },
@@ -503,7 +504,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
 
         {/* Recipients — chips + an "add email" input so you can send to people
             not yet in the CRM. New emails are find-or-created as contacts on send. */}
-        <div className="px-8 py-3 border-b border-[#2B2821] bg-[#090907]/40 flex flex-wrap items-center gap-1.5">
+        <div className="px-8 py-3 border-b border-white/10 bg-[#090907]/40 flex flex-wrap items-center gap-1.5">
           {recipients.map((r) => {
             const isAdhoc = r.id.startsWith('adhoc:');
             return (
@@ -513,15 +514,15 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                   isAdhoc
                     ? 'bg-[#1a1833] border-[#534AB7]/40 text-[#AFA9EC]'
                     : r.email
-                      ? 'bg-[#342F27] border-[#C9BCA8]/40 text-[#F3E6D1]'
-                      : 'bg-[#211F1A] border-[#2B2821] text-yellow-500/70'
+                      ? 'bg-white/10 border-white/20 text-white'
+                      : 'bg-white/[0.05] border-white/10 text-yellow-500/70'
                 }`}
                 title={r.email || 'No email on file'}
               >
                 {isAdhoc ? r.email : r.name}
                 {isAdhoc && <span className="text-[7px] opacity-70">NEW</span>}
                 {!isAdhoc && !r.email && <span className="text-[8px]">⚠</span>}
-                <button onClick={() => removeRecipient(r.id)} className="text-[#B4AA99] hover:text-red-400 -mr-0.5" title="Remove from this send">
+                <button onClick={() => removeRecipient(r.id)} className="text-white/60 hover:text-red-400 -mr-0.5" title="Remove from this send">
                   <X size={10} />
                 </button>
               </span>
@@ -535,7 +536,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               onChange={(e) => setAdhocEmail(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAdhocEmail(); } }}
               placeholder={recipients.length ? 'Add email…' : 'Type an email to send…'}
-              className="w-40 bg-[#11100D] border border-[#2B2821] rounded px-2.5 py-1 text-[11px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none focus:border-[#534AB7]/60"
+              className="w-40 bg-white/[0.02] border border-white/10 rounded px-2.5 py-1 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-[#534AB7]/60"
             />
             {adhocEmail.trim() && (
               <button onClick={addAdhocEmail} className="text-[10px] font-mono uppercase tracking-wider text-[#AFA9EC] hover:text-white px-1.5 py-1 rounded transition-colors">
@@ -546,8 +547,8 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
         </div>
 
         {/* Mode + tab segmented controls */}
-        <div className="px-8 py-3 border-b border-[#2B2821] flex items-center gap-4 bg-[#090907]/40">
-          <div className="flex items-center gap-1 bg-[#090907] border border-[#211F1A] rounded-md p-0.5">
+        <div className="px-8 py-3 border-b border-white/10 flex items-center gap-4 bg-[#090907]/40">
+          <div className="flex items-center gap-1 bg-[#090907] border border-white/10 rounded-md p-0.5">
             <SegBtn active={mode === 'tracks'} onClick={() => setMode('tracks')} icon={<Music size={11} />}>
               Tracks
             </SegBtn>
@@ -556,7 +557,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
             </SegBtn>
           </div>
 
-          <div className="flex items-center gap-1 bg-[#090907] border border-[#211F1A] rounded-md p-0.5 ml-auto">
+          <div className="flex items-center gap-1 bg-[#090907] border border-white/10 rounded-md p-0.5 ml-auto">
             <SegBtn active={tab === 'compose'} onClick={() => setTab('compose')} icon={<Pencil size={11} />}>
               Compose
             </SegBtn>
@@ -568,14 +569,14 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
 
         <div className="flex flex-1 min-h-0">
           {/* Left — source selection */}
-          <div className="w-5/12 border-r border-[#2B2821] flex flex-col">
-            <div className="px-6 pt-4 pb-3 border-b border-[#2B2821] space-y-2">
+          <div className="w-5/12 border-r border-white/10 flex flex-col">
+            <div className="px-6 pt-4 pb-3 border-b border-white/10 space-y-2">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#837B6D]" size={12} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={12} />
                 <input
                   type="text"
                   placeholder={mode === 'tracks' ? 'Search tracks…' : 'Search projects…'}
-                  className="w-full bg-[#090907] border border-[#211F1A] rounded-md py-2 pl-9 pr-3 text-[11px] text-[#F7EBDD] placeholder:text-[#837B6D] focus:outline-none focus:border-[#E7D7BE]/40"
+                  className="w-full bg-[#090907] border border-white/10 rounded-md py-2 pl-9 pr-3 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -585,8 +586,8 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               {mode === 'tracks' && (
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1.5">
-                    <div className="flex items-center gap-1 bg-[#090907] border border-[#211F1A] rounded-md px-2 py-1 flex-1 min-w-0">
-                      <TagIcon size={9} className="text-[#9B9282] shrink-0" />
+                    <div className="flex items-center gap-1 bg-[#090907] border border-white/10 rounded-md px-2 py-1 flex-1 min-w-0">
+                      <TagIcon size={9} className="text-white/60 shrink-0" />
                       <Dropdown
                         value={tagFilter || 'none'}
                         onChange={(val) => setTagFilter(val === 'none' ? '' : val)}
@@ -595,8 +596,8 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                         className="bg-transparent border-none text-[10px] text-[#bbb] p-0 hover:bg-transparent hover:border-none focus:ring-0 w-full flex-1 h-6"
                       />
                     </div>
-                    <div className="flex items-center gap-1 bg-[#090907] border border-[#211F1A] rounded-md px-2 py-1 flex-1 min-w-0">
-                      <Layers size={9} className="text-[#9B9282] shrink-0" />
+                    <div className="flex items-center gap-1 bg-[#090907] border border-white/10 rounded-md px-2 py-1 flex-1 min-w-0">
+                      <Layers size={9} className="text-white/60 shrink-0" />
                       <Dropdown
                         value={projectScopeId || 'none'}
                         onChange={(val) => setProjectScopeId(val === 'none' ? '' : val)}
@@ -607,11 +608,11 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                   </div>
                   {/* Sort row */}
                   <div className="flex items-center gap-1">
-                    <ArrowUpDown size={9} className="text-[#837B6D] shrink-0" />
-                    <span className="text-[9px] font-mono text-[#837B6D] uppercase tracking-wider mr-1">Sort:</span>
+                    <ArrowUpDown size={9} className="text-white/50 shrink-0" />
+                    <span className="text-[9px] font-mono text-white/50 uppercase tracking-wider mr-1">Sort:</span>
                     {(['default', 'rating', 'bpm', 'energy'] as const).map((s) => (
                       <button key={s} onClick={() => setTrackSort(s)}
-                        className={`px-2 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider transition-colors capitalize ${trackSort === s ? 'bg-[#342F27] text-[#F3E6D1]' : 'text-[#9B9282] hover:text-[#D0C3AF]'}`}>
+                        className={`px-2 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider transition-colors capitalize ${trackSort === s ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white'}`}>
                         {s === 'default' ? 'Default' : s === 'rating' ? '⭐ Rating' : s === 'bpm' ? 'BPM' : '⚡ Energy'}
                       </button>
                     ))}
@@ -677,10 +678,10 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               )}
 
               {loading ? (
-                <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#837B6D]" size={16} /></div>
+                <div className="flex justify-center py-10"><Loader2 className="animate-spin text-white/40" size={16} /></div>
               ) : mode === 'tracks' ? (
                 filteredTracks.length === 0 ? (
-                  <p className="text-[10px] text-[#9B9282] text-center py-6">
+                  <p className="text-[10px] text-white/40 text-center py-6">
                     {tagFilter || projectScopeId || searchQuery
                       ? 'No tracks match the current filters.'
                       : 'No tracks yet.'}
@@ -698,35 +699,35 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                         onClick={() => toggleTrack(track.id)}
                         className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-colors ${
                           selected
-                            ? 'bg-[#342F27] border-[#C9BCA8]/40'
+                            ? 'bg-white/10 border-white/20'
                             : sentBefore
-                              ? 'bg-[#1f1a10]/60 border-[#2B2821] hover:bg-[#2A2010] hover:border-[#3a3010]'
-                              : 'bg-transparent border-transparent hover:bg-[#171511] hover:border-[#2B2821]'
+                              ? 'bg-[#1f1a10]/60 border-white/10 hover:bg-[#2A2010] hover:border-[#3a3010]'
+                              : 'bg-transparent border-transparent hover:bg-white/[0.04] hover:border-white/10'
                         }`}
                       >
                         {/* Checkbox */}
                         <div className={`w-5 h-5 mt-0.5 rounded flex items-center justify-center border shrink-0 transition-colors ${
-                          selected ? 'bg-[#E7D7BE] border-[#E7D7BE]' : 'border-[#3B372F]'
+                          selected ? 'bg-white/20 border-white/40 text-white' : 'border-white/20'
                         }`}>
-                          {selected && <Check size={11} className="text-black" />}
+                          {selected && <Check size={11} className="text-white" />}
                         </div>
                         {/* Cover */}
-                        <div className="w-9 h-9 bg-[#1A1813] rounded-lg border border-[#211F1A] overflow-hidden shrink-0">
+                        <div className="w-9 h-9 bg-[#0E0E0E] rounded-lg border border-white/10 overflow-hidden shrink-0">
                           {hasCover
                             ? <img loading="lazy" src={track.cover_url!} alt="" className="w-full h-full object-cover" />
-                            : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={12} /></div>}
+                            : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={12} /></div>}
                         </div>
                         {/* Title + meta */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 min-w-0">
-                            <p className={`text-[12px] font-medium truncate ${selected ? 'text-[#F3E6D1]' : 'text-[#F7EBDD]'}`}>{track.title}</p>
+                            <p className={`text-[12px] font-medium truncate ${selected ? 'text-white' : 'text-white/90'}`}>{track.title}</p>
                             {sentBefore && (
-                              <span className="shrink-0 text-[8px] font-mono uppercase tracking-wider text-[#D6BE7A] bg-[#D6BE7A]/10 border border-[#D6BE7A]/25 px-1.5 py-0.5 rounded" title="Already sent to this contact">
+                              <span className="shrink-0 text-[8px] font-mono uppercase tracking-wider text-white/80 bg-white/10 border border-white/20 px-1.5 py-0.5 rounded" title="Already sent to this contact">
                                 Sent before
                               </span>
                             )}
                           </div>
-                          <p className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider">
+                          <p className="text-[9px] font-mono text-white/60 uppercase tracking-wider">
                             {track.type}{track.bpm ? ` · ${track.bpm} bpm` : ''}{track.key ? ` · ${track.key}${track.scale === 'minor' ? 'm' : ''}` : ''}
                           </p>
                           {/* Quality signals */}
@@ -735,21 +736,21 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                             {rating > 0 && (
                               <span className="flex items-center gap-0.5">
                                 {[1,2,3,4,5].map((s) => (
-                                  <Star key={s} size={9} fill={s <= rating ? '#D6BE7A' : 'none'} strokeWidth={1.5} className={s <= rating ? 'text-[#D6BE7A]' : 'text-[#3B372F]'} />
+                                  <Star key={s} size={9} fill={s <= rating ? '#FFFFFF' : 'none'} strokeWidth={1.5} className={s <= rating ? 'text-white' : 'text-white/30'} />
                                 ))}
                               </span>
                             )}
                             {/* Energy bar */}
                             {energy != null && (
                               <span className="flex items-center gap-1">
-                                <Zap size={9} className="text-[#837B6D]" />
-                                <div className="w-10 h-1 bg-[#211F1A] rounded-full overflow-hidden">
-                                  <div className="h-full rounded-full bg-gradient-to-r from-[#B4AA99] to-[#E7D7BE]" style={{ width: `${energy}%` }} />
+                                <Zap size={9} className="text-white/50" />
+                                <div className="w-10 h-1 bg-white/[0.05] rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full bg-gradient-to-r from-white/40 to-white" style={{ width: `${energy}%` }} />
                                 </div>
-                                <span className="text-[8px] font-mono text-[#837B6D]">{energy}%</span>
+                                <span className="text-[8px] font-mono text-white/50">{energy}%</span>
                               </span>
                             )}
-                            {!hasCover && <span className="text-[8px] font-mono text-[#6E685B]">no cover</span>}
+                            {!hasCover && <span className="text-[8px] font-mono text-white/40">no cover</span>}
                           </div>
                         </div>
                       </div>
@@ -765,23 +766,23 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                       onClick={() => setSelectedProjectId(selected ? null : project.id)}
                       className={`flex items-center gap-3 px-3 py-2.5 rounded-md border cursor-pointer transition-colors ${
                         selected
-                          ? 'bg-[#342F27] border-[#C9BCA8]/40 text-[#F3E6D1]'
-                          : 'bg-transparent border-transparent hover:bg-[#101010] text-[#D0C3AF] hover:text-[#F7EBDD]'
+                          ? 'bg-white/10 border-white/20 text-white'
+                          : 'bg-transparent border-transparent hover:bg-[#101010] text-white/80 hover:text-white'
                       }`}
                     >
                       <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                        selected ? 'bg-[#E7D7BE]' : 'bg-[#211F1A]'
+                        selected ? 'bg-white/20 border border-white/40' : 'bg-white/[0.05]'
                       }`}>
                         {selected && <Check size={11} className="text-white" />}
                       </div>
-                      <div className="w-7 h-7 bg-[#1A1813] rounded border border-[#211F1A] overflow-hidden shrink-0">
+                      <div className="w-7 h-7 bg-[#0E0E0E] rounded border border-white/10 overflow-hidden shrink-0">
                         {project.cover_url
                           ? <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
-                          : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Disc3 size={11} /></div>}
+                          : <div className="w-full h-full flex items-center justify-center text-white/40"><Disc3 size={11} /></div>}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-[12px] font-medium truncate">{project.name}</p>
-                        <p className="text-[9px] font-mono text-[#9B9282] uppercase tracking-wider">
+                        <p className="text-[9px] font-mono text-white/60 uppercase tracking-wider">
                           {project.track_count != null ? `${project.track_count} tracks` : 'project'}
                         </p>
                       </div>
@@ -798,51 +799,51 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               <div className="flex flex-col flex-1 min-h-0 px-7 py-6 gap-5 overflow-y-auto custom-scrollbar">
                 {/* Summary */}
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-[#B4AA99] mb-2">Sending</p>
-                  <div className="bg-[#1A1813] border border-[#2B2821] rounded-xl p-3 flex items-center gap-3">
-                    <div className="w-10 h-10 bg-[#211F1A] rounded-lg overflow-hidden shrink-0 border border-[#3B372F]">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-2">Sending</p>
+                  <div className="bg-[#0E0E0E] border border-white/10 rounded-xl p-3 flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/[0.05] rounded-lg overflow-hidden shrink-0 border border-white/20">
                       {summary.cover
                         ? <img loading="lazy" src={summary.cover} alt="" className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center text-[#6E685B]"><Music size={14} /></div>}
+                        : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={14} /></div>}
                     </div>
                     <div className="min-w-0">
                       <p className="text-[12px] font-medium text-white truncate">{summary.title}</p>
-                      <p className="text-[10px] font-mono text-[#9B9282]">{summary.countLabel}</p>
+                      <p className="text-[10px] font-mono text-white/60">{summary.countLabel}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Templates bar */}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#837B6D]">Templates</span>
+                  <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/50">Templates</span>
                   {templates.slice(0, 4).map((t) => (
                     <button key={t.id} onClick={() => applyTemplate(t)}
-                      className="px-2 py-1 rounded-md bg-[#1A1813] border border-[#2B2821] text-[10px] text-[#D0C3AF] hover:text-[#F3E6D1] hover:border-[#3B372F] truncate max-w-[90px] transition-colors" title={t.name}>
+                      className="px-2 py-1 rounded-md bg-[#0E0E0E] border border-white/10 text-[10px] text-white/80 hover:text-white hover:border-white/20 truncate max-w-[90px] transition-colors" title={t.name}>
                       {t.name}
                     </button>
                   ))}
                   {templates.length > 4 && (
                     <button onClick={() => setShowTemplates((v) => !v)}
-                      className="px-2 py-1 rounded-md bg-[#1A1813] border border-[#2B2821] text-[10px] text-[#9B9282] hover:text-[#D0C3AF]">
+                      className="px-2 py-1 rounded-md bg-[#0E0E0E] border border-white/10 text-[10px] text-white/60 hover:text-white/80">
                       +{templates.length - 4}
                     </button>
                   )}
                   <button onClick={saveTemplate} title="Save current as template"
-                    className="ml-auto flex items-center gap-1 px-2 py-1 rounded-md border border-dashed border-[#3B372F] text-[10px] text-[#9B9282] hover:text-[var(--accent)] hover:border-[var(--accent-dim)]/40 transition-colors shrink-0">
+                    className="ml-auto flex items-center gap-1 px-2 py-1 rounded-md border border-dashed border-white/20 text-[10px] text-white/60 hover:text-white hover:border-white/40 transition-colors shrink-0">
                     <BookmarkPlus size={11} /> Save
                   </button>
                 </div>
 
                 {/* Full template list (expanded) */}
                 {showTemplates && templates.length > 0 && (
-                  <div className="rounded-xl border border-[#2B2821] bg-[#090907] p-2 space-y-1">
+                  <div className="rounded-xl border border-white/10 bg-[#090907] p-2 space-y-1">
                     {templates.map((t) => (
                       <div key={t.id} className="flex items-center gap-2 group">
-                        <button onClick={() => applyTemplate(t)} className="flex-1 text-left px-2.5 py-1.5 rounded-lg hover:bg-[#171511] transition-colors">
-                          <p className="text-[12px] font-medium text-[#F7EBDD]">{t.name}</p>
-                          {t.subject && <p className="text-[10px] text-[#9B9282] truncate">{t.subject}</p>}
+                        <button onClick={() => applyTemplate(t)} className="flex-1 text-left px-2.5 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors">
+                          <p className="text-[12px] font-medium text-white">{t.name}</p>
+                          {t.subject && <p className="text-[10px] text-white/60 truncate">{t.subject}</p>}
                         </button>
-                        <button onClick={() => deleteTemplate(t.id)} className="p-1 text-[#6E685B] hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <button onClick={() => deleteTemplate(t.id)} className="p-1 text-white/40 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                           <Trash2 size={11} />
                         </button>
                       </div>
@@ -852,30 +853,30 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
 
                 {/* Subject + message stacked */}
                 <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2 bg-[#1A1813] border border-[#2B2821] rounded-xl px-3.5 py-2 focus-within:border-[#E7D7BE]/40 transition-colors">
-                    <Mail size={11} className="text-[#837B6D] shrink-0" />
+                  <div className="flex items-center gap-2 bg-[#0E0E0E] border border-white/10 rounded-xl px-3.5 py-2 focus-within:border-white/40 transition-colors">
+                    <Mail size={11} className="text-white/50 shrink-0" />
                     <input
                       type="text"
                       placeholder={resolvedSubject}
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
-                      className="flex-1 bg-transparent text-[12px] text-[#F7EBDD] placeholder:text-[#6E685B] focus:outline-none min-w-0"
+                      className="flex-1 bg-transparent text-[12px] text-white placeholder:text-white/40 focus:outline-none min-w-0"
                     />
                   </div>
-                  <div className="relative bg-[#1A1813] border border-[#2B2821] rounded-xl focus-within:border-[#E7D7BE]/40 transition-colors">
-                    <MessageSquare size={11} className="absolute left-3.5 top-3.5 text-[#837B6D] pointer-events-none" />
+                  <div className="relative bg-[#0E0E0E] border border-white/10 rounded-xl focus-within:border-white/40 transition-colors">
+                    <MessageSquare size={11} className="absolute left-3.5 top-3.5 text-white/50 pointer-events-none" />
                     <textarea
                       placeholder={`Hey ${(recipients[0]?.name || '').split(' ')[0] || 'there'}, here's some new work…`}
-                      className="w-full min-h-[110px] bg-transparent pl-9 pr-4 pt-3 pb-3 text-[12px] text-[#F7EBDD] placeholder:text-[#837B6D] focus:outline-none resize-none leading-relaxed"
+                      className="w-full min-h-[110px] bg-transparent pl-9 pr-4 pt-3 pb-3 text-[12px] text-white placeholder:text-white/50 focus:outline-none resize-none leading-relaxed"
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                     />
                     {message.length > 0 && (
-                      <span className="absolute bottom-2 right-3 text-[9px] font-mono text-[#6E685B]">{message.length}</span>
+                      <span className="absolute bottom-2 right-3 text-[9px] font-mono text-white/40">{message.length}</span>
                     )}
                   </div>
                   {recipients.length > 1 && (
-                    <p className="text-[9px] text-[#837B6D] font-mono">
+                    <p className="text-[9px] text-white/50 font-mono">
                       Tip: Same message for all recipients — use first names in your text.
                     </p>
                   )}
@@ -885,8 +886,8 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 <div className="grid grid-cols-2 gap-2">
                   {mode === 'project' && (
                     <div className="col-span-2">
-                      <p className="text-[10px] text-[#B4AA99] uppercase tracking-wider mb-1.5">Role</p>
-                      <div className="flex gap-1 bg-[#1A1813] border border-[#2B2821] rounded-md p-0.5">
+                      <p className="text-[10px] text-white/70 uppercase tracking-wider mb-1.5">Role</p>
+                      <div className="flex gap-1 bg-[#0E0E0E] border border-white/10 rounded-md p-0.5">
                         <SegBtn active={role === 'viewer'} onClick={() => setRole('viewer')} icon={<Eye size={10} />}>Viewer</SegBtn>
                         <SegBtn active={role === 'commenter'} onClick={() => setRole('commenter')} icon={<MessageSquare size={10} />}>Commenter</SegBtn>
                       </div>
@@ -905,12 +906,12 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                     <input
                       type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                       placeholder="Password" autoComplete="new-password"
-                      className="col-span-2 bg-[#1A1813] border border-[#2B2821] rounded-md px-3 py-2 text-[11px] text-white placeholder:text-[#837B6D] focus:outline-none focus:border-[#E7D7BE]/40"
+                      className="col-span-2 bg-[#0E0E0E] border border-white/10 rounded-md px-3 py-2 text-[11px] text-white placeholder:text-white/50 focus:outline-none focus:border-white/40"
                     />
                   )}
-                  <div className="col-span-2 flex items-center gap-2 bg-[#1A1813] border border-[#2B2821] rounded-md px-3 py-2">
-                    <Calendar size={11} className="text-[#B4AA99] shrink-0" />
-                    <span className="text-[10px] text-[#D0C3AF] uppercase tracking-wider">Expires</span>
+                  <div className="col-span-2 flex items-center gap-2 bg-[#0E0E0E] border border-white/10 rounded-md px-3 py-2">
+                    <Calendar size={11} className="text-white/70 shrink-0" />
+                    <span className="text-[10px] text-white/80 uppercase tracking-wider">Expires</span>
                     <Dropdown
                       value={String(expiresDays)}
                       onChange={(val) => setExpiresDays(Number(val))}
@@ -921,13 +922,13 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                         { value: '90', label: '90 days' },
                         { value: '0', label: 'Never' }
                       ]}
-                      className="ml-auto bg-transparent border-none text-[11px] text-[#F7EBDD] p-0 hover:bg-transparent hover:border-none focus:ring-0 focus:ring-offset-0 h-6 shrink-0"
+                      className="ml-auto bg-transparent border-none text-[11px] text-white p-0 hover:bg-transparent hover:border-none focus:ring-0 focus:ring-offset-0 h-6 shrink-0"
                     />
                   </div>
                   {campaigns.length > 0 && (
-                    <div className="col-span-2 flex items-center gap-2 bg-[#1A1813] border border-[#2B2821] rounded-md px-3 py-2">
-                      <Zap size={11} className="text-[#B4AA99] shrink-0" />
-                      <span className="text-[10px] text-[#D0C3AF] uppercase tracking-wider">Campaign</span>
+                    <div className="col-span-2 flex items-center gap-2 bg-[#0E0E0E] border border-white/10 rounded-md px-3 py-2">
+                      <Zap size={11} className="text-white/70 shrink-0" />
+                      <span className="text-[10px] text-white/80 uppercase tracking-wider">Campaign</span>
                       <Dropdown
                         value={campaignId}
                         onChange={setCampaignId}
@@ -936,7 +937,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                           ...campaigns.map((c) => ({ value: c.id, label: c.name })),
                         ]}
                         aria-label="Attach to campaign"
-                        className="ml-auto bg-transparent border-none text-[11px] text-[#F7EBDD] p-0 hover:bg-transparent hover:border-none focus:ring-0 focus:ring-offset-0 h-6 shrink-0"
+                        className="ml-auto bg-transparent border-none text-[11px] text-white p-0 hover:bg-transparent hover:border-none focus:ring-0 focus:ring-offset-0 h-6 shrink-0"
                       />
                     </div>
                   )}
@@ -946,9 +947,9 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
                 {/* Recipient selector — appears when sending to multiple */}
                 {recipients.length > 1 && (
-                  <div className="sticky top-0 z-10 px-4 py-2 border-b border-[#2B2821] bg-[#11100D] flex items-center gap-2">
+                  <div className="sticky top-0 z-10 px-4 py-2 border-b border-white/10 bg-white/[0.02] flex items-center gap-2">
                     <button disabled={validPreviewIdx === 0} onClick={() => setPreviewIdx((i) => Math.max(0, i - 1))}
-                      className="w-7 h-7 rounded flex items-center justify-center text-[#9B9282] hover:text-[#F7EBDD] disabled:opacity-30 transition-colors">
+                      className="w-7 h-7 rounded flex items-center justify-center text-white/60 hover:text-white disabled:opacity-30 transition-colors">
                       <ChevronLeft size={14} />
                     </button>
                     <div className="flex-1 flex items-center justify-center gap-2">
@@ -958,48 +959,48 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                         return <div className={`w-8 h-8 rounded-full ${p.bg} flex items-center justify-center text-[12px] font-bold ${p.text} shrink-0`}>{previewContact.name[0]?.toUpperCase()}</div>;
                       })()}
                       <div className="text-left">
-                        <p className="text-[12px] font-semibold text-[#F7EBDD]">{previewContact?.name}</p>
-                        <p className="text-[10px] text-[#9B9282]">{previewContact?.email ?? 'no email'}</p>
+                        <p className="text-[12px] font-semibold text-white">{previewContact?.name}</p>
+                        <p className="text-[10px] text-white/60">{previewContact?.email ?? 'no email'}</p>
                       </div>
                     </div>
                     <button disabled={validPreviewIdx >= recipients.length - 1} onClick={() => setPreviewIdx((i) => Math.min(recipients.length - 1, i + 1))}
-                      className="w-7 h-7 rounded flex items-center justify-center text-[#9B9282] hover:text-[#F7EBDD] disabled:opacity-30 transition-colors">
+                      className="w-7 h-7 rounded flex items-center justify-center text-white/60 hover:text-white disabled:opacity-30 transition-colors">
                       <ChevronRight size={14} />
                     </button>
-                    <span className="text-[10px] font-mono text-[#6E685B] w-14 text-right">{validPreviewIdx + 1} / {recipients.length}</span>
+                    <span className="text-[10px] font-mono text-white/40 w-14 text-right">{validPreviewIdx + 1} / {recipients.length}</span>
                   </div>
                 )}
 
                 <div className="p-4">
                   {/* Email client frame */}
-                  <div className="rounded-xl overflow-hidden border border-[#3B372F] bg-[#171511] shadow-xl">
+                  <div className="rounded-xl overflow-hidden border border-white/20 bg-white/[0.04] shadow-xl">
                     {/* Header: From / To / Subject */}
-                    <div className="px-4 py-3 border-b border-[#2B2821] space-y-1.5">
+                    <div className="px-4 py-3 border-b border-white/10 space-y-1.5">
                       <div className="flex items-center gap-2.5">
-                        <span className="text-[9px] font-mono text-[#6E685B] w-9 shrink-0 uppercase tracking-wider">From</span>
-                        <span className="text-[11px] text-[#B4AA99]">U2C Beatstore &lt;beats@uche.co&gt;</span>
+                        <span className="text-[9px] font-mono text-white/40 w-9 shrink-0 uppercase tracking-wider">From</span>
+                        <span className="text-[11px] text-white/70">U2C Beatstore &lt;beats@uche.co&gt;</span>
                       </div>
                       <div className="flex items-center gap-2.5">
-                        <span className="text-[9px] font-mono text-[#6E685B] w-9 shrink-0 uppercase tracking-wider">To</span>
+                        <span className="text-[9px] font-mono text-white/40 w-9 shrink-0 uppercase tracking-wider">To</span>
                         <div className="flex items-center gap-1.5">
                           {previewContact && (() => {
                             const p = previewPalette(previewContact.name);
                             return <div className={`w-5 h-5 rounded-full ${p.bg} flex items-center justify-center text-[9px] font-bold ${p.text} shrink-0`}>{previewContact.name[0]?.toUpperCase()}</div>;
                           })()}
-                          <span className="text-[11px] font-medium text-[#D0C3AF]">
+                          <span className="text-[11px] font-medium text-white/80">
                             {previewRecipient}{previewContact?.email ? ` <${previewContact.email}>` : ''}
                           </span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2.5">
-                        <span className="text-[9px] font-mono text-[#6E685B] w-9 shrink-0 uppercase tracking-wider">Subj</span>
-                        <span className="text-[12px] font-semibold text-[#F7EBDD] truncate">{resolvedSubject}</span>
+                        <span className="text-[9px] font-mono text-white/40 w-9 shrink-0 uppercase tracking-wider">Subj</span>
+                        <span className="text-[12px] font-semibold text-white truncate">{resolvedSubject}</span>
                       </div>
                     </div>
                     {/* Email body */}
                     <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
                   </div>
-                  <p className="text-[9px] font-mono text-[#6E685B] text-center mt-3 uppercase tracking-wider">
+                  <p className="text-[9px] font-mono text-white/40 text-center mt-3 uppercase tracking-wider">
                     {recipients.length > 1
                       ? `Showing personalised preview for ${previewRecipient.split(' ')[0]} · ${recipients.length} total recipients`
                       : `Exactly what ${previewRecipient.split(' ')[0]} will receive`}
@@ -1008,16 +1009,16 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               </div>
             )}
 
-            <div className="px-7 py-4 border-t border-[#2B2821] bg-[#090907] flex items-center gap-3">
+            <div className="px-7 py-4 border-t border-white/10 bg-[#090907] flex items-center gap-3">
               {recipientsWithoutEmail.length > 0 && (
                 <span className="text-[10px] font-mono uppercase tracking-wider text-yellow-500/80 mr-auto">
                   ⚠ {recipientsWithoutEmail.length} no email · will skip
                 </span>
               )}
-              <button
+              <LiquidGlassButton
                 disabled={sending || !summary.valid || recipientsWithEmail === 0}
                 onClick={handleSend}
-                className="ml-auto bg-[#E7D7BE] hover:bg-[#C9BCA8] disabled:bg-[#211F1A] disabled:text-[#837B6D] text-white py-2.5 px-6 rounded-md text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 transition-colors"
+                active
               >
                 {sending ? (
                   <><Loader2 size={12} className="animate-spin" /> Sending…</>
@@ -1029,7 +1030,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                       : `${recipientsWithEmail} contact${recipientsWithEmail === 1 ? '' : 's'}`}
                   </>
                 )}
-              </button>
+              </LiquidGlassButton>
             </div>
           </div>
         </div>
@@ -1037,7 +1038,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
         <style jsx>{`
           .custom-scrollbar::-webkit-scrollbar { width: 4px; }
           .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-          .custom-scrollbar::-webkit-scrollbar-thumb { background: #2B2821; border-radius: 10px; }
+          .custom-scrollbar::-webkit-scrollbar-thumb { background: #222222; border-radius: 10px; }
         `}</style>
     </Modal>
   );
@@ -1051,8 +1052,8 @@ function SegBtn({ active, onClick, icon, children }: {
       onClick={onClick}
       className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-bold uppercase tracking-wider transition-colors ${
         active
-          ? 'bg-[#342F27] text-[#F3E6D1]'
-          : 'text-[#B4AA99] hover:text-white'
+          ? 'bg-white/15 text-white shadow-sm'
+          : 'text-white/60 hover:text-white'
       }`}
     >
       {icon}{children}
@@ -1067,13 +1068,13 @@ function ToggleRow({ icon, label, active, onToggle }: {
     <button
       onClick={onToggle}
       className={`flex items-center justify-between px-3 py-2 rounded-md border transition-colors ${
-        active ? 'bg-[#342F27] border-[#C9BCA8]/40 text-[#F3E6D1]' : 'bg-[#1A1813] border-[#2B2821] text-[#D0C3AF] hover:border-[#3B372F]'
+        active ? 'bg-white/15 border-white/30 text-white shadow-sm' : 'bg-white/[0.03] border-white/10 text-white/70 hover:border-white/20'
       }`}
     >
       <span className="flex items-center gap-2 text-[10px] uppercase tracking-wider">
         {icon}{label}
       </span>
-      <span className={`text-[9px] font-mono uppercase tracking-wider ${active ? 'text-[#F3E6D1]' : 'text-[#9B9282]'}`}>
+      <span className={`text-[9px] font-mono uppercase tracking-wider ${active ? 'text-white' : 'text-white/50'}`}>
         {active ? 'ON' : 'OFF'}
       </span>
     </button>

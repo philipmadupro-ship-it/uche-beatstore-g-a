@@ -26,7 +26,7 @@ export default function LicensesSettingsPage() {
           actions={
           <button
             onClick={() => router.push('/settings')}
-            className="inline-flex h-9 items-center gap-2 rounded-full border border-[#2B2821] bg-[#171511] px-3 text-[11px] font-medium text-[#D0C3AF] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD]"
+            className="inline-flex h-9 items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 text-[11px] font-medium text-white/80 transition-colors hover:border-white/20 hover:text-white"
           >
             <ArrowLeft size={14} />
             Settings
@@ -35,10 +35,10 @@ export default function LicensesSettingsPage() {
         />
 
         {/* Redirect notice */}
-        <div className="rounded-xl border border-[#E7D7BE]/20 bg-[#E7D7BE]/5 p-4 mb-6 flex items-start gap-3">
-          <ExternalLink size={13} className="text-[#E7D7BE] shrink-0 mt-0.5" />
-          <div className="text-[11px] text-[#D0C3AF] leading-relaxed">
-            <p className="font-medium text-[#E7D7BE] mb-1">This section has moved</p>
+        <div className="rounded-xl border border-white/ bg-white/5 p-4 mb-6 flex items-start gap-3">
+          <ExternalLink size={13} className="text-white shrink-0 mt-0.5" />
+          <div className="text-[11px] text-white/80 leading-relaxed">
+            <p className="font-medium text-white mb-1">This section has moved</p>
             <p>
               License tiers are now managed in the{' '}
               <button

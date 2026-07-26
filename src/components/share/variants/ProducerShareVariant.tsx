@@ -115,7 +115,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
   const visibleTracks = trackListExpanded ? tracks : tracks.slice(0, 6);
 
   return (
-    <div className="min-h-screen bg-[#090907] text-[#F7EBDD] font-sans flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-[#090907] text-white font-sans flex flex-col relative overflow-hidden">
       {/* Ambient glow */}
       <div
         className="absolute w-[900px] h-[900px] rounded-full pointer-events-none opacity-[0.025] blur-[180px]"
@@ -126,14 +126,14 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
 
         {/* Header */}
         <div className="mb-10">
-          <p className="text-[9px] font-mono uppercase tracking-[0.35em] text-[#B4AA99] mb-1">
+          <p className="text-[9px] font-mono uppercase tracking-[0.35em] text-white/60 mb-1">
             Producer pack · {tracks.length} loop{tracks.length !== 1 ? 's' : ''}
           </p>
           <h1 className="text-3xl md:text-4xl font-bold uppercase tracking-tight text-white leading-none">
             {displayName}
           </h1>
           {creator?.bio && (
-            <p className="mt-3 text-[12px] text-[#D0C3AF] max-w-lg leading-relaxed">{creator.bio}</p>
+            <p className="mt-3 text-[12px] text-white/80 max-w-lg leading-relaxed">{creator.bio}</p>
           )}
         </div>
 
@@ -160,17 +160,17 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                     <button
                       onClick={handlePrev}
                       disabled={!playingId || tracks.findIndex((t) => t.id === playingId) <= 0}
-                      className="w-9 h-9 rounded-full border border-[#2B2821] bg-[#171511] flex items-center justify-center text-[#B4AA99] hover:text-white disabled:opacity-30 transition-colors"
+                      className="w-9 h-9 rounded-full border border-white/10 bg-white/[0.04] flex items-center justify-center text-white/60 hover:text-white disabled:opacity-30 transition-colors"
                     >
                       <SkipBack size={14} fill="currentColor" />
                     </button>
-                    <span className="text-[10px] font-mono text-[#9B9282]">
+                    <span className="text-[10px] font-mono text-white/40">
                       {tracks.findIndex((t) => t.id === playingId) + 1} / {tracks.length}
                     </span>
                     <button
                       onClick={handleNext}
                       disabled={!playingId || tracks.findIndex((t) => t.id === playingId) >= tracks.length - 1}
-                      className="w-9 h-9 rounded-full border border-[#2B2821] bg-[#171511] flex items-center justify-center text-[#B4AA99] hover:text-white disabled:opacity-30 transition-colors"
+                      className="w-9 h-9 rounded-full border border-white/10 bg-white/[0.04] flex items-center justify-center text-white/60 hover:text-white disabled:opacity-30 transition-colors"
                     >
                       <SkipForward size={14} fill="currentColor" />
                     </button>
@@ -185,17 +185,17 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                 <button
                   onClick={handleCopyBpm}
                   disabled={!currentTrack.bpm}
-                  className="relative group bg-[#171511] border border-[#2B2821] hover:border-[#3B372F] rounded-2xl p-5 text-left transition-colors disabled:pointer-events-none"
+                  className="relative group bg-white/[0.04] border border-white/10 hover:border-white/20 rounded-2xl p-5 text-left transition-colors disabled:pointer-events-none"
                 >
-                  <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#B4AA99] mb-1">BPM</p>
+                  <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/60 mb-1">BPM</p>
                   <p className="text-[48px] font-mono font-bold text-white leading-none tabular-nums">
                     {currentTrack.bpm ?? '—'}
                   </p>
-                  <p className="text-[9px] font-mono text-[#6E685B] mt-2 uppercase tracking-wider">
+                  <p className="text-[9px] font-mono text-white/30 mt-2 uppercase tracking-wider">
                     {currentTrack.bpm ? 'Click to copy' : 'Not analyzed'}
                   </p>
                   <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {bpmCopied ? <Check size={12} className="text-[#6DC6A4]" /> : <Copy size={12} className="text-[#9B9282]" />}
+                    {bpmCopied ? <Check size={12} className="text-[#6DC6A4]" /> : <Copy size={12} className="text-white/40" />}
                   </div>
                 </button>
 
@@ -208,7 +208,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                       : 'bg-[#1a1610]/50 border-[#3d3020]/40 hover:border-[#5a4a2a]/60'
                   }`}
                 >
-                  <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#B4AA99] mb-1">
+                  <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/60 mb-1">
                     Key · Scale
                   </p>
                   <p className={`text-[48px] font-mono font-bold leading-none ${
@@ -222,7 +222,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                     {currentTrack.scale ?? 'major'}
                   </p>
                   <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {keyCopied ? <Check size={12} className="text-[#6DC6A4]" /> : <Copy size={12} className="text-[#9B9282]" />}
+                    {keyCopied ? <Check size={12} className="text-[#6DC6A4]" /> : <Copy size={12} className="text-white/40" />}
                   </div>
                 </button>
               </div>
@@ -230,8 +230,8 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
 
             {/* Compatible keys — circle-of-fifths strip */}
             {compatibleKeys.length > 0 && (
-              <div className="bg-[#0e0c09] border border-[#2B2821] rounded-xl p-4">
-                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#B4AA99] mb-3">
+              <div className="bg-[#0e0c09] border border-white/10 rounded-xl p-4">
+                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/60 mb-3">
                   Compatible keys (circle of 5ths)
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -248,12 +248,12 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                               ? 'text-[#9d95e8] bg-[#1a1833] border-[#534AB7]/60'
                               : 'text-[#c8a47a] bg-[#1f1a10] border-[#5a4a2a]/60'
                             : isCompat
-                              ? 'text-[#F7EBDD]/70 bg-[#171511] border-[#3B372F]'
-                              : 'text-[#3B372F] bg-transparent border-[#211F1A]'
+                              ? 'text-white/70 bg-white/[0.04] border-white/20'
+                              : 'text-white/30 bg-transparent border-white/10'
                         }`}>
                           {k}
                         </span>
-                        <span className={`text-[8px] font-mono ${isCompat || isCurrent ? 'text-[#6E685B]' : 'text-[#2B2821]'}`}>
+                        <span className={`text-[8px] font-mono ${isCompat || isCurrent ? 'text-white/30' : 'text-white/20'}`}>
                           {RELATIVE_MINORS[k]?.replace('m', '') ?? ''}m
                         </span>
                       </div>
@@ -265,11 +265,11 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
 
             {/* Description / producer notes */}
             {(currentTrack?.description || project.description) && (
-              <div className="bg-[#0e0c09] border border-[#2B2821] rounded-xl p-4 space-y-1">
-                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#B4AA99]">
+              <div className="bg-[#0e0c09] border border-white/10 rounded-xl p-4 space-y-1">
+                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/60">
                   Notes from the producer
                 </p>
-                <p className="text-[12px] text-[#D0C3AF] leading-relaxed whitespace-pre-wrap">
+                <p className="text-[12px] text-white/80 leading-relaxed whitespace-pre-wrap">
                   {currentTrack?.description || project.description}
                 </p>
               </div>
@@ -278,13 +278,13 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
 
           {/* ── Right: track directory ── */}
           <div className="flex flex-col gap-4">
-            <div className="bg-[#0e0c09] border border-[#2B2821] rounded-2xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-[#2B2821] flex items-center justify-between">
-                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-[#B4AA99]">
+            <div className="bg-[#0e0c09] border border-white/10 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+                <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/60">
                   Pack · {tracks.length}
                 </p>
               </div>
-              <div className="divide-y divide-[#0e0c09]">
+              <div className="divide-y divide-white/10">
                 {visibleTracks.map((t, i) => {
                   const active = playingId === t.id;
                   const tIsMinor = t.scale === 'minor';
@@ -292,11 +292,11 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                     <button
                       key={t.id}
                       onClick={() => onPlay(t)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-[#171511] transition-colors text-left group ${
-                        active ? 'bg-[#171511]' : ''
+                      className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-white/[0.04] transition-colors text-left group ${
+                        active ? 'bg-white/[0.04]' : ''
                       }`}
                     >
-                      <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-[#090907] border border-[#2B2821] shrink-0">
+                      <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-[#090907] border border-white/10 shrink-0">
                         {t.cover_url ? (
                           <Image
                             src={t.cover_url}
@@ -307,28 +307,28 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                             unoptimized
                           />
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[#3B372F]">
+                          <div className="w-full h-full flex items-center justify-center text-white/30">
                             <Music size={12} />
                           </div>
                         )}
                         {active && (
                           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                             {isPlaying ? (
-                              <Pause size={10} fill="currentColor" className="text-[#E7D7BE]" />
+                              <Pause size={10} fill="currentColor" className="text-white" />
                             ) : (
-                              <Play size={10} fill="currentColor" className="text-[#E7D7BE] ml-0.5" />
+                              <Play size={10} fill="currentColor" className="text-white ml-0.5" />
                             )}
                           </div>
                         )}
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <p className={`text-[12px] font-medium truncate ${active ? 'text-[#E7D7BE]' : 'text-white/85 group-hover:text-white'}`}>
+                        <p className={`text-[12px] font-medium truncate ${active ? 'text-white' : 'text-white/85 group-hover:text-white'}`}>
                           {t.title}
                         </p>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           {t.bpm && (
-                            <span className="text-[9px] font-mono text-[#9B9282]">{t.bpm} bpm</span>
+                            <span className="text-[9px] font-mono text-white/40">{t.bpm} bpm</span>
                           )}
                           {t.key && (
                             <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded uppercase tracking-wider leading-none ${
@@ -340,12 +340,12 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                             </span>
                           )}
                           {t.duration_seconds && (
-                            <span className="text-[9px] font-mono text-[#6E685B]">{fmt(t.duration_seconds)}</span>
+                            <span className="text-[9px] font-mono text-white/30">{fmt(t.duration_seconds)}</span>
                           )}
                         </div>
                       </div>
 
-                      <span className="text-[10px] font-mono text-[#3B372F] tabular-nums shrink-0">
+                      <span className="text-[10px] font-mono text-white/30 tabular-nums shrink-0">
                         {String(i + 1).padStart(2, '0')}
                       </span>
                     </button>
@@ -356,7 +356,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
               {tracks.length > 6 && (
                 <button
                   onClick={() => setTrackListExpanded((v) => !v)}
-                  className="w-full flex items-center justify-center gap-2 py-3 text-[10px] font-mono text-[#B4AA99] hover:text-[#F7EBDD] border-t border-[#2B2821] transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-3 text-[10px] font-mono text-white/60 hover:text-white border-t border-white/10 transition-colors"
                 >
                   {trackListExpanded ? (
                     <><ChevronUp size={12} /> Show less</>

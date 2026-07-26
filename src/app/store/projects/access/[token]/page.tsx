@@ -7,7 +7,7 @@
  * Apple Vision Pro music-app aesthetic (glassmorphism card, top tab
  * nav, integrated cover panel, track rows with tag chip + heart +
  * actions menu). Keeps the project's antigravity palette — warm
- * dark glass on `#090907`, accent `#E7D7BE`.
+ * dark glass on `#090907`, accent `#FFFFFF`.
  *
  * The 24-byte hex token in the URL is the access code; the email's
  * link is the secret.
@@ -128,14 +128,14 @@ function RowMenu({
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-9 z-30 w-44 rounded-xl bg-[#171511]/95 backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5"
+      className="absolute right-0 top-9 z-30 w-44 rounded-xl bg-white/[0.04]/95 backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5"
     >
       {track.wav_url && (
         <a
           href={track.wav_url}
           download
           onClick={onClose}
-          className="flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-white/[0.06] transition-colors"
+          className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] transition-colors"
         >
           <Download size={12} style={{ color: accent }} />
           Download WAV
@@ -146,7 +146,7 @@ function RowMenu({
           href={track.audio_url}
           download
           onClick={onClose}
-          className="flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-white/[0.06] transition-colors"
+          className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] transition-colors"
         >
           <Download size={12} className="text-white/60" />
           Download MP3
@@ -155,7 +155,7 @@ function RowMenu({
       <div className="my-1 mx-2 border-t border-white/[0.06]" />
       <button
         onClick={() => { onCopy(); onClose(); }}
-        className="flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-white/[0.06] transition-colors w-full text-left"
+        className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] transition-colors w-full text-left"
       >
         <Copy size={12} className="text-white/60" />
         Copy track title
@@ -246,20 +246,20 @@ export default function ProjectAccessPage({
   if (loading) {
     return (
       <div className="min-h-screen bg-[#090907] flex items-center justify-center">
-        <Loader2 size={24} className="animate-spin text-[#9B9282]" />
+        <Loader2 size={24} className="animate-spin text-white/40" />
       </div>
     );
   }
 
   if (invalid || !project) {
     return (
-      <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-[#9B9282] px-6">
+      <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-white/40 px-6">
         <Lock size={36} />
         <p className="text-[14px] text-center max-w-sm">
           This access link is invalid or has expired. Check the email it came from for the latest code.
         </p>
         {creator?.contact_email && (
-          <a href={`mailto:${creator.contact_email}`} className="text-[11px] underline hover:text-[#F7EBDD]">
+          <a href={`mailto:${creator.contact_email}`} className="text-[11px] underline hover:text-white">
             Contact the producer
           </a>
         )}
@@ -334,7 +334,7 @@ export default function ProjectAccessPage({
 
         {project.description && (
           <GlassPage.Section eyebrow="About this project">
-            <p className="text-[13px] text-[#D0C3AF] leading-relaxed whitespace-pre-line max-w-3xl">
+            <p className="text-[13px] text-white/80 leading-relaxed whitespace-pre-line max-w-3xl">
               {project.description}
             </p>
           </GlassPage.Section>
@@ -415,8 +415,8 @@ function TrackList({
   if (tracks.length === 0) {
     return (
       <div className="px-6 md:px-10 py-10 text-center">
-        <Music size={20} className="text-[#9B9282] mx-auto mb-2" />
-        <p className="text-[12px] text-[#B4AA99]">No tracks in this project yet.</p>
+        <Music size={20} className="text-white/40 mx-auto mb-2" />
+        <p className="text-[12px] text-white/60">No tracks in this project yet.</p>
       </div>
     );
   }
@@ -446,7 +446,7 @@ function TrackList({
               <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-[#090907] border border-white/[0.06] shrink-0">
                 {t.cover_url
                   ? <Image src={t.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized />
-                  : <div className="w-full h-full flex items-center justify-center text-[#9B9282]"><Music size={14} /></div>}
+                  : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={14} /></div>}
                 {(isHov || isCur) && (
                   <button
                     onClick={(e) => {
@@ -469,7 +469,7 @@ function TrackList({
               <div className="min-w-0">
                 <p
                   className="text-[14px] truncate"
-                  style={isCur ? { color: accent, fontWeight: 600 } : { color: '#F7EBDD' }}
+                  style={isCur ? { color: accent, fontWeight: 600 } : { color: '#FFFFFF' }}
                 >
                   {t.title}
                 </p>
@@ -500,7 +500,7 @@ function TrackList({
                 aria-pressed={wishlisted}
                 title={wishlisted ? 'Remove from favorites' : 'Add to favorites'}
                 className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-white/[0.06] transition-colors"
-                style={wishlisted ? { color: '#D6BE7A' } : { color: 'rgba(255,255,255,0.45)' }}
+                style={wishlisted ? { color: '#FFFFFF' } : { color: 'rgba(255,255,255,0.45)' }}
               >
                 <Heart size={13} fill={wishlisted ? 'currentColor' : 'none'} />
               </button>

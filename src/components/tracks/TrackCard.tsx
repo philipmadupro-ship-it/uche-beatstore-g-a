@@ -192,9 +192,9 @@ export function TrackCard({
       }}
       className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-lg px-2.5 py-2 transition-colors cursor-pointer md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_70px_112px_32px] md:gap-4 md:px-3 ${
         isCurrent
-          ? 'bg-white/[0.06] shadow-[inset_2px_0_0_#E7D7BE]'
+          ? 'bg-white/[0.06] shadow-[inset_2px_0_0_#FFFFFF]'
           : selected
-            ? 'bg-[#E7D7BE]/[0.08]'
+            ? 'bg-white/[0.08]'
             : 'hover:bg-white/[0.04]'
       }`}
     >
@@ -205,12 +205,12 @@ export function TrackCard({
         onClick={(e) => { if (onMoveUp || onMoveDown || selectable) e.stopPropagation(); }}
       >
         {(onMoveUp !== undefined || onMoveDown !== undefined) && moveControls === 'cell' ? (
-          <div className="flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-lg border border-[#211F1A] bg-[#090907]/80">
+          <div className="flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-lg border border-white/10 bg-[#090907]/80">
             <button
               type="button"
               disabled={isFirstInOrder}
               onClick={(e) => { e.stopPropagation(); onMoveUp?.(); }}
-              className={`p-0.5 rounded transition-colors ${isFirstInOrder ? 'text-[#2B2821] cursor-default' : 'text-[#9B9282] hover:text-[#E7D7BE] hover:bg-[#2B2821]'}`}
+              className={`p-0.5 rounded transition-colors ${isFirstInOrder ? 'text-white/20 cursor-default' : 'text-white/40 hover:text-white hover:bg-white/20'}`}
               aria-label="Move up"
             >
               <ChevronUp size={11} />
@@ -219,7 +219,7 @@ export function TrackCard({
               type="button"
               disabled={isLastInOrder}
               onClick={(e) => { e.stopPropagation(); onMoveDown?.(); }}
-              className={`p-0.5 rounded transition-colors ${isLastInOrder ? 'text-[#2B2821] cursor-default' : 'text-[#9B9282] hover:text-[#E7D7BE] hover:bg-[#2B2821]'}`}
+              className={`p-0.5 rounded transition-colors ${isLastInOrder ? 'text-white/20 cursor-default' : 'text-white/40 hover:text-white hover:bg-white/20'}`}
               aria-label="Move down"
             >
               <ChevronDown size={11} />
@@ -230,7 +230,7 @@ export function TrackCard({
             type="button"
             onClick={(e) => { e.stopPropagation(); onSelectChange?.(track, !selected); }}
             className={`h-10 w-10 rounded-lg flex items-center justify-center transition-colors ${
-            selected ? 'bg-[#E7D7BE] border border-[#F3E6D1] text-black' : 'border border-[#3B372F]/70 bg-[#090907]/70 text-[#6E685B] hover:border-[#837B6D] hover:text-[#D0C3AF]'
+            selected ? 'bg-white border border-white/30 text-black' : 'border border-white/ bg-[#090907]/70 text-white/30 hover:border-white/30 hover:text-white/80'
           }`}
             aria-pressed={selected}
             aria-label={selected ? 'Deselect track' : 'Select track'}
@@ -247,7 +247,7 @@ export function TrackCard({
             {track.cover_url ? (
               <CoverImage src={track.cover_url} sizes="40px" className="object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-[#6E685B]">
+              <div className="flex h-full w-full items-center justify-center text-white/30">
                 <Music size={13} />
               </div>
             )}
@@ -260,7 +260,7 @@ export function TrackCard({
 
       {/* Title + core metadata */}
       <div className="relative z-10 min-w-0">
-        <h4 className={`truncate text-[14px] font-semibold leading-tight ${isCurrent ? 'text-[#E7D7BE]' : 'text-[#F7EBDD]'}`}>
+        <h4 className={`truncate text-[14px] font-semibold leading-tight ${isCurrent ? 'text-white' : 'text-white'}`}>
           {track.title}
         </h4>
         <p className="mt-1 truncate text-[9px] font-mono uppercase tracking-[0.14em] text-white/40">
@@ -324,8 +324,8 @@ export function TrackCard({
           onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
           className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
             menuOpen
-              ? 'border-[#3B372F] bg-[#211F1A] text-[#F7EBDD]'
-              : 'border-transparent text-[#8B8273] hover:bg-white/[0.06] hover:text-[#F7EBDD]'
+              ? 'border-white/20 bg-white/[0.05] text-white'
+              : 'border-transparent text-[#8B8273] hover:bg-white/[0.06] hover:text-white'
           }`}
           aria-label="Track actions"
           aria-expanded={menuOpen}
@@ -334,14 +334,14 @@ export function TrackCard({
         </button>
         {menuOpen && (
           <div
-            className="absolute right-0 top-full z-[80] mt-1 w-52 bg-[#090907] border border-[#2B2821] rounded-lg shadow-2xl py-1 animate-in fade-in slide-in-from-top-1"
+            className="absolute right-0 top-full z-[80] mt-1 w-52 bg-[#090907] border border-white/10 rounded-lg shadow-2xl py-1 animate-in fade-in slide-in-from-top-1"
           >
             {onClickDetails && (
               <button
                 onClick={() => { setMenuOpen(false); onClickDetails(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E]"
               >
-                <Info size={12} className="text-[#E7D7BE]" /> View details
+                <Info size={12} className="text-white" /> View details
               </button>
             )}
             {(onMoveUp || onMoveDown) && moveControls === 'menu' && (
@@ -349,32 +349,32 @@ export function TrackCard({
                 <button
                   onClick={() => { setMenuOpen(false); onMoveUp?.(); }}
                   disabled={isFirstInOrder}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813] disabled:opacity-40 disabled:hover:bg-transparent"
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E] disabled:opacity-40 disabled:hover:bg-transparent"
                 >
-                  <ChevronUp size={12} className="text-[#E7D7BE]" /> Move up
+                  <ChevronUp size={12} className="text-white" /> Move up
                 </button>
                 <button
                   onClick={() => { setMenuOpen(false); onMoveDown?.(); }}
                   disabled={isLastInOrder}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813] disabled:opacity-40 disabled:hover:bg-transparent"
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E] disabled:opacity-40 disabled:hover:bg-transparent"
                 >
-                  <ChevronDown size={12} className="text-[#E7D7BE]" /> Move down
+                  <ChevronDown size={12} className="text-white" /> Move down
                 </button>
               </>
             )}
             {onShare && (
               <button
                 onClick={() => { setMenuOpen(false); onShare(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E]"
               >
-                <Share2 size={12} className="text-[#E7D7BE]" /> Share track
+                <Share2 size={12} className="text-white" /> Share track
               </button>
             )}
             
             {isCached ? (
               <button
                 onClick={(e) => { setMenuOpen(false); handleRemoveSync(e); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-amber-500 hover:bg-[#1A1813]"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-amber-500 hover:bg-[#0E0E0E]"
               >
                 <MinusCircle size={12} className="text-amber-500 shrink-0" /> Remove offline cache
               </button>
@@ -382,16 +382,16 @@ export function TrackCard({
               <button
                 onClick={(e) => { handleSync(e); }}
                 disabled={syncProgress !== null}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813] disabled:opacity-50"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E] disabled:opacity-50"
               >
                 {syncProgress !== null ? (
                   <>
-                    <Loader2 size={12} className="animate-spin text-[#E7D7BE] shrink-0" />
+                    <Loader2 size={12} className="animate-spin text-white shrink-0" />
                     <span>Syncing ({Math.round(syncProgress * 100)}%)</span>
                   </>
                 ) : (
                   <>
-                    <Download size={12} className="text-[#E7D7BE] shrink-0" />
+                    <Download size={12} className="text-white shrink-0" />
                     <span>Sync to device</span>
                   </>
                 )}
@@ -400,14 +400,14 @@ export function TrackCard({
             {onRemoveFromContext && (
               <button
                 onClick={() => { setMenuOpen(false); onRemoveFromContext(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-[#F7EBDD] hover:bg-[#1A1813]"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E]"
               >
-                <MinusCircle size={12} className="text-[#D0C3AF]" /> {removeLabel}
+                <MinusCircle size={12} className="text-white/80" /> {removeLabel}
               </button>
             )}
             {onDelete && (
               <>
-                <div className="my-1 border-t border-[#211F1A]" />
+                <div className="my-1 border-t border-white/10" />
                 <button
                   onClick={() => { setMenuOpen(false); onDelete(track); }}
                   className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-red-400 hover:bg-red-950/30"

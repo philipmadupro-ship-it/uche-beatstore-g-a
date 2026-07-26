@@ -44,21 +44,21 @@ export default function UpdatePasswordPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#090907] p-4 text-[#F7EBDD]">
-      <div className="w-full max-w-sm space-y-6 bg-[#1A1813] p-8 rounded-lg border border-[#2B2821]">
+    <div className="flex min-h-screen items-center justify-center bg-[#090907] p-4 text-white">
+      <div className="w-full max-w-sm space-y-6 bg-[#0E0E0E] p-8 rounded-lg border border-white/10">
         <div className="text-center">
-          <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-[#E7D7BE]/10 border border-[#E7D7BE]/20 flex items-center justify-center">
-            <Lock className="w-5 h-5 text-[#E7D7BE]" />
+          <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-white/10 border border-white/ flex items-center justify-center">
+            <Lock className="w-5 h-5 text-white" />
           </div>
           <h1 className="text-xl font-bold tracking-tight uppercase">Set New Password</h1>
-          <p className="mt-2 text-sm text-[#D0C3AF]">
+          <p className="mt-2 text-sm text-white/80">
             Enter your new password below.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="new-password" className="block text-xs font-medium uppercase text-[#837B6D] mb-1">
+            <label htmlFor="new-password" className="block text-xs font-medium uppercase text-white/40 mb-1">
               New Password
             </label>
             <div className="relative">
@@ -70,14 +70,14 @@ export default function UpdatePasswordPage() {
                 disabled={isLoading}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[#090907] border border-[#2B2821] px-3 py-2 pr-10 text-[#F7EBDD] placeholder-[#837B6D] focus:outline-none focus:border-[#E7D7BE] rounded disabled:opacity-50 transition-colors"
+                className="w-full bg-[#090907] border border-white/10 px-3 py-2 pr-10 text-white placeholder-white/30 focus:outline-none focus:border-white/30 rounded disabled:opacity-50 transition-colors"
                 placeholder="••••••••"
               />
               <button
                 type="button"
                 tabIndex={-1}
                 disabled={isLoading}
-                className="absolute inset-y-0 right-0 flex items-center pr-3 text-[#837B6D] hover:text-[#D0C3AF] disabled:opacity-50 focus:outline-none"
+                className="absolute inset-y-0 right-0 flex items-center pr-3 text-white/40 hover:text-white/80 disabled:opacity-50 focus:outline-none"
                 onClick={() => setShowPassword(!showPassword)}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
@@ -85,12 +85,12 @@ export default function UpdatePasswordPage() {
               </button>
             </div>
             {password.length > 0 && password.length < 6 && (
-              <p className="mt-1 text-xs text-[#D0C3AF]">Must be at least 6 characters</p>
+              <p className="mt-1 text-xs text-white/80">Must be at least 6 characters</p>
             )}
           </div>
 
           <div>
-            <label htmlFor="confirm-new-password" className="block text-xs font-medium uppercase text-[#837B6D] mb-1">
+            <label htmlFor="confirm-new-password" className="block text-xs font-medium uppercase text-white/40 mb-1">
               Confirm Password
             </label>
             <input
@@ -102,8 +102,8 @@ export default function UpdatePasswordPage() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className={`w-full bg-[#090907] border ${
-                confirmPassword && confirmPassword !== password ? 'border-red-500/50' : 'border-[#2B2821]'
-              } px-3 py-2 text-[#F7EBDD] placeholder-[#837B6D] focus:outline-none focus:border-[#E7D7BE] rounded disabled:opacity-50 transition-colors`}
+                confirmPassword && confirmPassword !== password ? 'border-red-500/50' : 'border-white/10'
+              } px-3 py-2 text-white placeholder-white/30 focus:outline-none focus:border-white/30 rounded disabled:opacity-50 transition-colors`}
               placeholder="••••••••"
             />
             {confirmPassword && confirmPassword !== password && (
@@ -127,7 +127,7 @@ export default function UpdatePasswordPage() {
           <button
             type="submit"
             disabled={isLoading || password.length < 6 || password !== confirmPassword}
-            className="w-full flex justify-center py-3 px-4 border border-[#C9BCA8] rounded text-sm font-medium text-white bg-[#E7D7BE] hover:bg-[#C9BCA8] focus:outline-none focus:ring-2 focus:ring-[#E7D7BE] focus:ring-offset-2 focus:ring-offset-[#1A1813] disabled:opacity-50 transition-all uppercase tracking-widest"
+            className="w-full flex justify-center py-3 px-4 border border-white/50 rounded text-sm font-medium text-black bg-white font-semibold shadow-md hover:bg-white/90 hover:bg-white/80 focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50 transition-all uppercase tracking-widest"
           >
             {isLoading ? 'Updating…' : 'Update Password'}
           </button>
