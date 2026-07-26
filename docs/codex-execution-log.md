@@ -5441,3 +5441,49 @@
 - The file's 10-size type scale (7 through 13px plus display sizes) was not collapsed this pass for the reason above; a future pass should read the whole file section by section, the way pass 4/4b did for the library page, before attempting that reduction.
 - The file's 25 hardcoded hex colours were not consolidated, matching the same deliberate deferral noted on every prior surface.
 - This closes the last item in `docs/design-direction.md`'s named surface order except the final modals/empty-states sweep across the whole app.
+
+## 2026-07-26 - New-Apps Sweep: De Roche System Vs. Quiet Luxury Direction
+
+### Skills Used
+
+- `.codex/skills/beatstor-product-orchestrator`: audited existing infrastructure before acting, per the standing "inspect before implementing" discipline.
+- `.codex/skills/quiet-luxury-ui`: assessed whether the pasted De Roche brief conflicts with the active quiet-luxury lane.
+
+### Area Inspected
+
+- `src/design-system/` (foundations, themes, presets - tokens, `de-roche-night.ts`, `de-roche-archive.ts`, player/cover-art presets, all with test coverage)
+- `src/app/dev/design-system/page.tsx` + `src/design-system/dev-access.ts` (the protected dev lab)
+- `src/app/(dashboard)/cover-art/page.tsx` + `src/components/cover-art/CoverArtStudioClient.tsx` (1446 lines)
+- Nav wiring (`Sidebar.tsx`, `TopBar.tsx`) to confirm which of these routes are actually live/linked
+
+### Changes Made
+
+- None to code. This pass was an audit in response to the product owner pasting a separate, much larger creative-direction document ("Beatstor — De Roche Dark Luxury Art Direction") built by an earlier session, asking to "sweep against all the new apps."
+
+### Problems Discovered
+
+- The De Roche brief (16 stone/earth colour primitives, spectral audio-reactive waveform-on-cover player, a 6-system cover-art generator, two full themes) is fully coded and unit-tested under `src/design-system/`, but grep confirmed zero production imports of it outside its own folder and the two routes below - the migration step the brief itself calls for ("refactor components to use tokens") was never executed.
+- `/dev/design-system` is correctly gated (`canAccessDesignSystemLab` returns `notFound()` outside dev/staging) and never reachable in production - compliant with the brief's own requirement.
+- `/cover-art` IS live and linked in the real dashboard nav. Loaded it in the browser: the wizard renders correctly, and its own UI already measures disciplined (3 text sizes, 0 off-palette purple, uses the same accent as the rest of the app) despite importing from `@/design-system` once for its rendering engine.
+- `accentStudies.original.brandPrimary` inside the design-system is literally `#E7D7BE` - confirming whoever built this correctly captured the app's actual live accent as "Study A" rather than assuming it should be replaced, before the work was set aside.
+- Net conclusion: there is no live visual conflict today between the De Roche direction and the quiet-luxury lane, because the former was never wired into any shipped page. The conflict is only a decision about future direction, not a bug to fix.
+
+### Problems Fixed
+
+- None required - this was a research/audit pass, not an implementation pass.
+
+### Tests Performed
+
+- Browser: loaded `/cover-art` live; confirmed the wizard (Project -> source-kind -> track list -> Export) renders without error and matches the app's existing visual language.
+- Static grep audit of import graphs for `src/design-system/*` across `src/app` and `src/components`.
+
+### Decision Recorded (Product Owner)
+
+- Asked the product owner directly, since this is a creative-direction fork, not an implementation detail: archive the De Roche multi-colour system entirely, cherry-pick just the cover-art generator, or pause for a side-by-side review.
+- **Decision: cherry-pick the cover-art generator only.** `/cover-art` continues to exist and to (partially) use `@/design-system` for its own rendering engine. The 16-colour De Roche stone/earth palette and the audio-reactive spectral cover-waveform player concept (brief sections 2-3, 9-14) are NOT to be adopted anywhere else in the product. Quiet-luxury (`docs/design-direction.md`) remains the only active direction for every other surface.
+
+### Remaining Concerns
+
+- `src/design-system/foundations/`, `themes/`, and the player-preset files remain in the repository as unused-outside-cover-art infrastructure. They are not being deleted (they have real test coverage and may inform a future cover-art expansion) but should not be treated as the product's active design direction by a future session that hasn't read this entry.
+- The pasted brief's competitor-research section (section 24-25, "Prod by Jack") was not actioned - it explicitly requires a URL the product owner has not yet supplied, and is out of scope for a visual-direction decision regardless.
+- Returning to the quiet-luxury plan: the one item remaining per `docs/design-direction.md`'s surface order is the final modals/empty-states sweep across the app.
