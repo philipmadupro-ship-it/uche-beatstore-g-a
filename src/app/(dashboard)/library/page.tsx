@@ -838,16 +838,16 @@ export default function LibraryPage() {
                   : `${tracks.length} track${tracks.length !== 1 ? 's' : ''}${totalDurationLabel ? ` · ${totalDurationLabel}` : ''}`}
               </p>
               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                <button onClick={playAll} disabled={!filtered.length} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-6 sm:py-2.5 rounded-full bg-white text-black text-[10px] sm:text-[12px] font-bold hover:bg-[#F7EBDD] active:scale-[0.98] disabled:opacity-40 transition-all">
+                <button onClick={playAll} disabled={!filtered.length} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-6 sm:py-2.5 rounded-full bg-white text-black text-[10px] sm:text-[11px] font-bold hover:bg-[#F7EBDD] active:scale-[0.98] disabled:opacity-40 transition-all">
                   <PlayGlyph size={12} className="ml-0.5 sm:size-[14px]" />
                   Play all
                 </button>
-                <button onClick={shuffleAll} disabled={!filtered.length} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full bg-white/[0.06] border border-white/[0.10] backdrop-blur-md hover:bg-white/[0.12] hover:border-white/[0.18] text-[#F7EBDD] text-[10px] sm:text-[12px] font-medium disabled:opacity-40 transition-colors">
+                <button onClick={shuffleAll} disabled={!filtered.length} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full bg-white/[0.06] border border-white/[0.10] backdrop-blur-md hover:bg-white/[0.12] hover:border-white/[0.18] text-[#F7EBDD] text-[10px] sm:text-[11px] font-medium disabled:opacity-40 transition-colors">
                   <Shuffle size={11} className="sm:size-3" />
                   Shuffle
                 </button>
                 {stale.length > 0 && (
-                  <button onClick={runBulkAnalyze} disabled={!!bulkAnalyzing} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full bg-white/[0.06] border border-white/[0.10] backdrop-blur-md hover:bg-white/[0.12] hover:border-white/[0.18] text-[#F7EBDD] text-[10px] sm:text-[12px] font-medium disabled:opacity-40 transition-colors">
+                  <button onClick={runBulkAnalyze} disabled={!!bulkAnalyzing} className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2.5 rounded-full bg-white/[0.06] border border-white/[0.10] backdrop-blur-md hover:bg-white/[0.12] hover:border-white/[0.18] text-[#F7EBDD] text-[10px] sm:text-[11px] font-medium disabled:opacity-40 transition-colors">
                     {bulkAnalyzing ? <><Loader2 size={11} className="animate-spin" /><span>{bulkAnalyzing.done}/{bulkAnalyzing.total}</span></> : <><Sparkles size={11} /><span>Analyze {stale.length}</span></>}
                   </button>
                 )}
@@ -899,7 +899,7 @@ export default function LibraryPage() {
                       onClick={() => handleNewRelease(mode)}
                       className="w-full flex flex-col items-start px-4 py-3 text-left hover:bg-[#211F1A] transition-colors border-b border-[#211F1A] last:border-0"
                     >
-                      <span className="text-[12px] font-medium text-[#F7EBDD]">{label}</span>
+                      <span className="text-[11px] font-medium text-[#F7EBDD]">{label}</span>
                       <span className="text-[9px] font-mono text-[#9B9282] mt-0.5">{sub}</span>
                     </button>
                   ))}
@@ -957,7 +957,7 @@ export default function LibraryPage() {
                     : <span style={{ color: accent }}>{icon}</span>}
                 </div>
                 <div className="flex-1 min-w-0 px-3 py-3.5">
-                  <p className="text-[12px] font-bold text-[#F7EBDD] truncate leading-tight">{label}</p>
+                  <p className="text-[11px] font-bold text-[#F7EBDD] truncate leading-tight">{label}</p>
                   <p className="text-[9px] font-mono text-[#9B9282] mt-0.5 truncate">{sub}</p>
                 </div>
                 {/* Hover play dot */}
@@ -1073,7 +1073,7 @@ export default function LibraryPage() {
             <button
               key={value}
               onClick={() => { setOfflineOnly(false); setTypeFilter(value); }}
-              className={`shrink-0 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[10px] sm:text-[12px] font-medium transition-colors ${
+              className={`shrink-0 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[10px] sm:text-[11px] font-medium transition-colors ${
                 typeFilter === value && !offlineOnly
                   ? 'bg-white text-black'
                   : 'bg-white/[0.04] border border-white/[0.06] text-[#D0C3AF] hover:text-white hover:bg-white/[0.08]'
@@ -1086,7 +1086,7 @@ export default function LibraryPage() {
               setOfflineOnly(true);
               refreshOfflineList();
             }}
-            className={`shrink-0 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[10px] sm:text-[12px] font-medium capitalize transition-colors flex items-center gap-1.5 ${
+            className={`shrink-0 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[10px] sm:text-[11px] font-medium capitalize transition-colors flex items-center gap-1.5 ${
               offlineOnly
                 ? 'bg-[#E7D7BE] text-black border border-[#E7D7BE]/40'
                 : 'bg-white/[0.04] border border-white/[0.06] text-[#D0C3AF] hover:text-white hover:bg-white/[0.08]'
@@ -1113,13 +1113,13 @@ export default function LibraryPage() {
               placeholder="Search tracks"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-white/[0.03] border border-white/[0.06] rounded-full pl-8 pr-3 py-2 text-[12px] text-[#F7EBDD] placeholder-[#837B6D] focus:outline-none focus:border-white/[0.12] transition-colors"
+              className="w-full bg-white/[0.03] border border-white/[0.06] rounded-full pl-8 pr-3 py-2 text-[11px] text-[#F7EBDD] placeholder-[#837B6D] focus:outline-none focus:border-white/[0.12] transition-colors"
             />
           </div>
           <div className="flex items-center gap-2 ml-auto">
             <button
               onClick={() => setShowFilters((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-medium transition-colors ${
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-medium transition-colors ${
                 showFilters || hasActiveFilters(filters)
                   ? 'bg-[#342F27] border border-[#C9BCA8]/40 text-[#F3E6D1]'
                   : 'bg-white/[0.04] border border-white/[0.06] text-[#D0C3AF] hover:text-[#F7EBDD] hover:bg-white/[0.08]'
@@ -1413,7 +1413,7 @@ export default function LibraryPage() {
               type="button"
               onClick={loadMoreTracks}
               disabled={loadingMoreTracks}
-              className="rounded-full border border-[#2B2821] bg-[#171511] px-5 py-2.5 text-[10px] font-mono uppercase tracking-[0.18em] text-[#D0C3AF] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD] disabled:cursor-wait disabled:opacity-60"
+              className="rounded-full border border-[#2B2821] bg-[#171511] px-5 py-2.5 text-[9px] font-mono uppercase tracking-[0.18em] text-[#D0C3AF] transition-colors hover:border-[#3B372F] hover:text-[#F7EBDD] disabled:cursor-wait disabled:opacity-60"
             >
               {loadingMoreTracks ? 'Loading tracks...' : 'Load more tracks'}
             </button>
@@ -1499,7 +1499,7 @@ export default function LibraryPage() {
       {bulkEditOpen && selectedIds.size > 0 && (
         <div className="fixed bottom-44 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-2 fade-in duration-200">
           <div className="bg-[#171511] border border-[#2B2821] rounded-2xl p-4 w-72 space-y-3">
-            <p className="text-[10px] font-mono uppercase tracking-wider text-[#9B9282]">
+            <p className="text-[9px] font-mono uppercase tracking-wider text-[#9B9282]">
               Edit {selectedIds.size} track{selectedIds.size === 1 ? '' : 's'}
             </p>
             {/* Batch status */}
@@ -1549,7 +1549,7 @@ export default function LibraryPage() {
                     await fetchTracks();
                     toast.success(`${val ? 'Listed' : 'Unlisted'} ${ids.length} track${ids.length === 1 ? '' : 's'}`);
                   }}
-                  className="flex-1 px-3 py-1.5 rounded-lg border border-[#2B2821] bg-[#090907] text-[10px] font-medium text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F] transition-all disabled:opacity-40"
+                  className="flex-1 px-3 py-1.5 rounded-lg border border-[#2B2821] bg-[#090907] text-[11px] font-medium text-[#D0C3AF] hover:text-[#F7EBDD] hover:border-[#3B372F] transition-all disabled:opacity-40"
                 >{label}</button>
               ))}
             </div>
@@ -1870,11 +1870,11 @@ function PackBuilderModal({
                 <span className="tabular-nums line-through">${leaseSum.toLocaleString()}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[12px] font-medium text-[#F7EBDD]">Pack price</span>
+                <span className="text-[11px] font-medium text-[#F7EBDD]">Pack price</span>
                 <span className="text-[22px] font-bold text-white tabular-nums">${computed.toLocaleString()}</span>
               </div>
               {savings > 0 && (
-                <p className="text-[10px] font-mono text-[#6DC6A4]">Buyer saves ${savings.toLocaleString()}</p>
+                <p className="text-[9px] font-mono text-[#6DC6A4]">Buyer saves ${savings.toLocaleString()}</p>
               )}
             </div>
           </>
@@ -1888,14 +1888,14 @@ function PackBuilderModal({
                 className="w-full bg-[#171511] border border-[#2B2821] rounded-lg pl-7 pr-3 py-2.5 text-[13px] text-[#F7EBDD] focus:outline-none focus:border-[#3B372F] tabular-nums"
               />
             </div>
-            <p className="text-[10px] text-[#9B9282] mb-5">No lease prices on these beats yet — set the pack price directly.</p>
+            <p className="text-[11px] text-[#9B9282] mb-5">No lease prices on these beats yet — set the pack price directly.</p>
           </>
         )}
 
         <button
           onClick={() => onCreate(name, price, coverUrl)}
           disabled={!valid || busy}
-          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[12px] font-bold uppercase tracking-wider bg-[#E7D7BE] text-black hover:bg-[#F3E6D1] transition-colors disabled:opacity-40"
+          className="w-full flex items-center justify-center gap-2 rounded-xl py-3 text-[11px] font-bold uppercase tracking-wider bg-[#E7D7BE] text-black hover:bg-[#F3E6D1] transition-colors disabled:opacity-40"
         >
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Package size={13} />}
           Create &amp; list pack

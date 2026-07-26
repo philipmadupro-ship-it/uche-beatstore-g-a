@@ -5578,3 +5578,43 @@
 
 - Two further crowding candidates on this page were deliberately NOT touched, because both would change interaction or remove information rather than restyle: (1) the home filter-chip row (13 chips plus two dividers, the densest band on the page) - collapsing it behind a toggle is an interaction change; (2) the four quick-action tiles (Your Store / Projects / Sales / Analytics), which duplicate destinations already in the TopBar nav but also carry live stats (listed count, gross revenue, plays) that would be lost on removal. Both need the product owner's call.
 - The relocated attention row is fetched once on mount; it does not poll. If a producer fixes a listing in another tab the nav count will be stale until navigation. Acceptable for a low-frequency signal, noted rather than solved.
+
+## 2026-07-26 - Library Type-Scale Collapse (The Deferred Pass, Done Properly)
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: executed the type-scale reduction that passes 4 and 4b explicitly deferred, using the read-in-context method those passes said it required.
+- `.codex/skills/antigravity-testing-release`: typecheck, focused lint, full suite, production build, live render check.
+
+### Area Inspected
+
+- `src/app/(dashboard)/library/page.tsx` - every `text-[10px]` and `text-[12px]` occurrence enumerated and classified individually (19 and 11 occurrences respectively) before any replacement.
+
+### Changes Made
+
+- Established one role per size: 9px mono metadata / 10px chips and the mobile half of responsive button pairs / 11px body and buttons / 13px large body / 16-18px headings / 22-46px display.
+- The five intentional `text-[10px] sm:text-[12px]` responsive button pairs kept their mobile step but their desktop half moved 12 -> 11, aligning primary buttons with the body scale.
+- Six standalone 12px occurrences (quick-action labels, search input, filter toggle, pack-price label, pack submit button) -> 11px.
+- Three mono-uppercase labels sitting at 10px -> the 9px metadata scale where every other mono label on the page already lives.
+- Two standalone 10px body-copy/button occurrences -> 11px.
+- Chip vocabulary (Browse/All toggle, smart-playlist chips, status chips, and the `9 sm:10` filter-chip pairs) deliberately left at 10px - that IS the chip size, and flattening it into 9 or 11 would erase the chip/body distinction rather than reduce noise.
+- 16 replacements applied, 0 misses; `text-[12px]` no longer exists in the file.
+
+### Problems Discovered
+
+- The blanket-regex risk that justified deferring this twice was real but tractable: enumeration showed exactly 5 responsive pairs that a naive `12->11` regex would have half-broken, and 3 mono labels a naive `10->11` would have moved the wrong direction (up into body instead of down into metadata).
+
+### Problems Fixed
+
+- Distinct sizes 11 -> 10, and - the actual point - every remaining size now has exactly one job. Verified rendering live at desktop width.
+
+### Tests Performed
+
+- Browser: reloaded `/library` authenticated; hero action row and chips render correctly at the collapsed scale.
+- `npx tsc --noEmit` - passed. `npx eslint` - 0 errors, same 2 pre-existing warnings.
+- `npm test` - passed, 100 files and 538 tests. `npm run build` - passed, 55 pages.
+
+### Remaining Concerns
+
+- `store-editor/page.tsx` (3223 lines, 10 sizes) still carries the equivalent deferred collapse and needs the same enumerate-and-classify treatment.
+- Production deploy from the earlier main push verified healthy this session (`/api/health` all green, store 200, `/library` correctly auth-gating).
