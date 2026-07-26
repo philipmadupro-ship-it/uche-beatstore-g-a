@@ -190,28 +190,14 @@ export function TrackCard({
           cover_url: track.cover_url ?? null,
         });
       }}
-      className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-[14px] border px-2.5 py-2 transition-all cursor-pointer md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_70px_112px_32px] md:gap-4 md:px-3 ${
+      className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-lg px-2.5 py-2 transition-colors cursor-pointer md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_70px_112px_32px] md:gap-4 md:px-3 ${
         isCurrent
-          ? 'border-transparent bg-[#1F1B14]/92 shadow-[inset_2px_0_0_#E7D7BE]'
+          ? 'bg-white/[0.06] shadow-[inset_2px_0_0_#E7D7BE]'
           : selected
-            ? 'border-[#E7D7BE]/30 bg-[#1A1813]/82'
-            : 'border-transparent bg-[#15130F]/74 hover:bg-[#1A1813]/82'
+            ? 'bg-[#E7D7BE]/[0.08]'
+            : 'hover:bg-white/[0.04]'
       }`}
     >
-      {track.cover_url && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-0 blur-2xl saturate-125 transition-opacity duration-500 group-hover:opacity-[0.16]"
-          style={{
-            backgroundImage: `url(${track.cover_url})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            transform: 'scale(1.16)',
-          }}
-        />
-      )}
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#090907]/24 via-transparent to-[#090907]/34" />
-
       {/* Cover/play cell — mirrors the Store list row. In select or store
           order mode this cell becomes the control, keeping actions left. */}
       <div
@@ -255,7 +241,7 @@ export function TrackCard({
           <button
             type="button"
             onClick={handlePlay}
-            className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-white/[0.045] bg-[#090907] text-white shadow-[0_8px_18px_rgba(0,0,0,0.24)]"
+            className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#090907] text-white"
             aria-label={isActive ? 'Pause track' : 'Play track'}
           >
             {track.cover_url ? (
@@ -274,10 +260,10 @@ export function TrackCard({
 
       {/* Title + core metadata */}
       <div className="relative z-10 min-w-0">
-        <h4 className={`truncate text-[14px] font-semibold leading-tight sm:text-[15px] ${isCurrent ? 'text-[#E7D7BE]' : 'text-[#F7EBDD]'}`}>
+        <h4 className={`truncate text-[14px] font-semibold leading-tight ${isCurrent ? 'text-[#E7D7BE]' : 'text-[#F7EBDD]'}`}>
           {track.title}
         </h4>
-        <p className="mt-1 truncate text-[10px] font-mono uppercase tracking-[0.12em] text-white/42">
+        <p className="mt-1 truncate text-[9px] font-mono uppercase tracking-[0.14em] text-white/40">
           {[
             track.bpm ? `${track.bpm} BPM` : null,
             track.key ? `${track.key}${track.scale === 'minor' ? 'm' : ''}` : null,
@@ -291,25 +277,17 @@ export function TrackCard({
         {genreMoodTags.slice(0, 2).map((tt) => (
           <span
             key={`${tt.category}-${tt.tag}`}
-            className={`truncate text-[11px] font-medium ${tt.category === 'genre' ? 'text-[#E7D7BE]' : 'text-white/55'}`}
+            className="truncate text-[11px] text-white/50"
           >
             #{tt.tag}
           </span>
         ))}
-        {genreMoodTags.length === 0 && (
-          <span className="text-[10px] font-mono text-white/35">—</span>
-        )}
-        {track.rating != null && Number(track.rating) > 0 && (
-          <span className="ml-auto shrink-0 text-[11px] font-mono text-[#D6BE7A]">
-            ★ {Number(track.rating).toFixed(1)}
-          </span>
-        )}
       </div>
 
       {/* Time / added */}
       <div className="relative z-10 hidden text-right md:block">
-        <p className="text-[11px] font-mono tabular-nums text-white/45">{durationLabel}</p>
-        <p className="mt-0.5 text-[8px] font-mono uppercase tracking-[0.14em] text-white/25">{uploadDate}</p>
+        <p className="text-[11px] font-mono tabular-nums text-white/60">{durationLabel}</p>
+        <p className="mt-0.5 text-[9px] font-mono uppercase tracking-[0.14em] text-white/30">{uploadDate}</p>
       </div>
 
       {/* Rating stars */}
@@ -319,16 +297,16 @@ export function TrackCard({
             <button key={star} onClick={(e) => handleRating(e, star)} className="cursor-pointer p-0.5">
               <Star
                 size={11}
-                fill={track.rating && track.rating >= star ? '#D6BE7A' : 'none'}
+                fill={track.rating && track.rating >= star ? '#c8a84b' : 'none'}
                 strokeWidth={1.5}
-                className={track.rating && track.rating >= star ? 'text-[#D6BE7A]' : 'text-[#6E685B] hover:text-[#D6BE7A] transition-colors'}
+                className={track.rating && track.rating >= star ? 'text-[#c8a84b]' : 'text-white/20 transition-colors hover:text-[#c8a84b]'}
               />
             </button>
           ))}
         </div>
         <div className="flex min-w-[42px] justify-end">
           {isCached && (
-            <span className="rounded border border-[#534AB7] bg-[#1a1833] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[#AFA9EC]">
+            <span className="rounded border border-white/[0.14] px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-white/55">
               Offline
             </span>
           )}
@@ -408,12 +386,12 @@ export function TrackCard({
               >
                 {syncProgress !== null ? (
                   <>
-                    <Loader2 size={12} className="animate-spin text-[#7F77DD] shrink-0" />
+                    <Loader2 size={12} className="animate-spin text-[#E7D7BE] shrink-0" />
                     <span>Syncing ({Math.round(syncProgress * 100)}%)</span>
                   </>
                 ) : (
                   <>
-                    <Download size={12} className="text-[#7F77DD] shrink-0" />
+                    <Download size={12} className="text-[#E7D7BE] shrink-0" />
                     <span>Sync to device</span>
                   </>
                 )}

@@ -111,6 +111,9 @@ export default function LibraryPage() {
   }, [tracks]);
 
   const [sortMode, setSortMode] = useState<SortMode>('recent');
+  // Launches the DropZone's file picker from the hero "Upload beat" button —
+  // the button used to just scroll to a drop panel at the bottom of the page.
+  const uploadOpenRef = useRef<(() => void) | null>(null);
   // Batch-select state for delete. Same UX as the playlists page —
   // a "Select" toggle near the bulk-analyze button activates select
   // mode, then TrackCards expose checkboxes via the `selectable` prop.
@@ -861,7 +864,7 @@ export default function LibraryPage() {
 
         {/* ── Quick actions ──────────────────────────────────────── */}
         <div className="flex items-center gap-2 mb-5 flex-wrap">
-          <button onClick={() => window.scrollTo({ top: 9999, behavior: 'smooth' })} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/[0.06] border border-white/[0.10] backdrop-blur-md hover:bg-white/[0.12] hover:border-white/[0.18] text-[11px] font-medium text-[#F7EBDD] transition-colors">
+          <button onClick={() => { if (uploadOpenRef.current) uploadOpenRef.current(); else window.scrollTo({ top: 9999, behavior: 'smooth' }); }} className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white/[0.06] border border-white/[0.10] backdrop-blur-md hover:bg-white/[0.12] hover:border-white/[0.18] text-[11px] font-medium text-[#F7EBDD] transition-colors">
             <Upload size={13} />Upload beat
           </button>
 
@@ -1051,9 +1054,11 @@ export default function LibraryPage() {
               ))}
             </div>
 
-            {/* Upload zone */}
+            {/* Upload — no permanent drop panel here; the hero "Upload beat"
+                button opens the picker, and this hidden zone appears only
+                while files are analysing/uploading so progress stays visible. */}
             <div className="pt-4">
-              <DropZone onUploadSuccess={fetchTracks} />
+              <DropZone onUploadSuccess={fetchTracks} openRef={uploadOpenRef} variant="hidden" />
             </div>
           </div>
         )}
@@ -1210,7 +1215,7 @@ export default function LibraryPage() {
 
         {/* Upload */}
         <div className="mb-8">
-          <DropZone onUploadSuccess={fetchTracks} />
+          <DropZone onUploadSuccess={fetchTracks} openRef={uploadOpenRef} />
         </div>
 
         {loading ? (
@@ -1619,7 +1624,7 @@ function MiniTrackCard({
 }) {
   return (
     <div
-      className="group relative shrink-0 w-[130px] sm:w-[150px] cursor-pointer"
+      className="group relative shrink-0 w-[112px] sm:w-[132px] cursor-pointer"
       onClick={onOpen}
     >
       {/* Cover art + overlays */}
@@ -1663,7 +1668,7 @@ function MiniTrackCard({
 // ── MiniPlaylistCard ─────────────────────────────────────────────
 function MiniPlaylistCard({ playlist }: { playlist: HomePlaylist }) {
   return (
-    <Link href={`/playlists/${playlist.id}`} className="group relative shrink-0 w-[130px] sm:w-[150px] cursor-pointer block">
+    <Link href={`/playlists/${playlist.id}`} className="group relative shrink-0 w-[112px] sm:w-[132px] cursor-pointer block">
       <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#171511] border border-[#2B2821] group-hover:border-[#3B372F] mb-2 transition-all">
         {playlist.cover_url
           // eslint-disable-next-line @next/next/no-img-element
@@ -1684,7 +1689,7 @@ function MiniPlaylistCard({ playlist }: { playlist: HomePlaylist }) {
 // ── MiniProjectCard ──────────────────────────────────────────────
 function MiniProjectCard({ project }: { project: HomeProject }) {
   return (
-    <Link href={`/projects/${project.id}`} className="group relative shrink-0 w-[130px] sm:w-[150px] cursor-pointer block">
+    <Link href={`/projects/${project.id}`} className="group relative shrink-0 w-[112px] sm:w-[132px] cursor-pointer block">
       <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#171511] border border-[#2B2821] group-hover:border-[#3B372F] mb-2 transition-all">
         {project.cover_url
           // eslint-disable-next-line @next/next/no-img-element

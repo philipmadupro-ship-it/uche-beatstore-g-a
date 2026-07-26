@@ -17,6 +17,13 @@ interface DropZoneProps {
   playlistId?: string;
   onUploadSuccess?: () => void;
   defaultType?: TrackType;
+  /** Surfaces react-dropzone's open() so an external button (e.g. the
+   *  library hero's "Upload beat") can launch the file picker directly. */
+  openRef?: React.MutableRefObject<(() => void) | null>;
+  /** 'hidden' renders nothing until files are picked, then shows the normal
+   *  progress cards — lets a page offer upload through a single button
+   *  without a permanent drop panel taking vertical space. */
+  variant?: 'full' | 'hidden';
 }
 
 const TYPE_PICKER: { value: TrackType; label: string }[] = [
@@ -59,7 +66,7 @@ interface FileCard {
   scale?: string | null;
 }
 
-export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumental' }: DropZoneProps) {
+export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumental', openRef, variant = 'full' }: DropZoneProps) {
   const enqueue = useUploadManager((s) => s.enqueue);
   const [selectedType, setSelectedType] = useState<TrackType>(() => readUploadTypeDraft(defaultType));
   const [cards, setCards] = useState<FileCard[]>([]);
@@ -154,7 +161,7 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
     }, 4000);
   }, [enqueue, playlistId, onUploadSuccess, safeSetCards, selectedType]);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: {
       'audio/mpeg': ['.mp3'], 'audio/mp3': ['.mp3'],
@@ -168,14 +175,22 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
     maxSize: 500 * 1024 * 1024,
   });
 
+  useEffect(() => {
+    if (!openRef) return;
+    openRef.current = open;
+    return () => { openRef.current = null; };
+  }, [openRef, open]);
+
   const analyzing = cards.some((c) => c.analyzing);
   const uploadableCards = cards.filter((c) => !c.rejected);
   const rejectedCards = cards.filter((c) => c.rejected);
   const allQueued = uploadableCards.length > 0 && uploadableCards.every((c) => c.queued);
   const allDone = uploadableCards.length > 0 && uploadableCards.every((c) => c.done);
 
+  const collapsed = variant === 'hidden' && cards.length === 0;
+
   return (
-    <div className="space-y-3">
+    <div className={collapsed ? 'hidden' : 'space-y-3'}>
       {/* Type picker */}
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] font-mono uppercase tracking-widest text-[#837B6D] mr-1">Upload as</span>

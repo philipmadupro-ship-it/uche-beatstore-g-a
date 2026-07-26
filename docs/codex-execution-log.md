@@ -5618,3 +5618,46 @@
 
 - `store-editor/page.tsx` (3223 lines, 10 sizes) still carries the equivalent deferred collapse and needs the same enumerate-and-classify treatment.
 - Production deploy from the earlier main push verified healthy this session (`/api/health` all green, store 200, `/library` correctly auth-gating).
+
+## 2026-07-26 - Spotify-Style Track Rows, Real Upload Button, Smaller Shelves
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`: looked at the rendered rows in the browser FIRST (per the owner's "look at the browser"), diagnosed against the screenshot, then edited.
+- `.codex/skills/producer-dashboard` / `.codex/skills/upload-and-file-management`: turned the hero "Upload beat" button into a real upload entry point instead of a scroll shortcut, preserving drag-drop and progress UI.
+- `.codex/skills/antigravity-testing-release`: typecheck, focused lint, full suite, production build, live verification of every change.
+
+### Area Inspected
+
+- `src/components/tracks/TrackCard.tsx` (the library/project/playlist track row)
+- `src/components/upload/DropZone.tsx`
+- `src/app/(dashboard)/library/page.tsx`
+
+### Changes Made
+
+- **Rating shown once.** The row displayed the rating twice - a numeric "star 4.0" badge in the tags column AND five interactive stars two columns later. Removed the numeric badge; the interactive stars (the actual rating control) are the single representation, now on the documented star-gold token `#c8a84b` with near-silent empty stars.
+- **Flat Spotify-style rows.** Each row was a floating translucent card (border + fill + 14px off-vocabulary radius) that painted a blurred copy of its own cover on hover plus a gradient overlay - a GPU blur per row on a long scrolling list. Rows are now flat: transparent at rest, quiet fill on hover, slightly stronger fill + accent inset for the current track. Cover thumb shadow dropped.
+- **Calmer columns.** Tags: muted single colour (accent removed - accent means action/active). Meta line joined the 9px mono metadata scale. Duration is now the time column's primary (white/60) over a readable 9px date.
+- **Off-palette purple, occurrences 5 and 6.** The "Offline" badge (`#534AB7`/`#AFA9EC`) became a neutral outline chip, and the sync menu's loader/download icons (`#7F77DD`) moved to the accent.
+- **Real upload button.** The hero "Upload beat" button just scrolled to a drop panel at the page bottom. `DropZone` now exposes react-dropzone's `open()` via an `openRef` prop plus a `hidden` variant that renders nothing until files are picked (then shows the normal progress cards). Sections view: permanent drop panel removed per the owner's request, hidden variant mounted so the button opens the file picker and progress still displays. All-tracks view keeps its visible zone, wired to the same button.
+- **Shelf cards one step smaller** (130/150px -> 112/132px) across Mini track/playlist/project cards, per the owner's request.
+
+### Problems Discovered
+
+- The "Upload beat" button was decorative navigation: removing the bottom drop panel without giving the button a real file-picker action would have broken upload entirely in sections mode. This is why the ask ("delete the duplicate") required a small behaviour addition (an `open()` bridge) rather than a pure deletion.
+- The per-row hover cover blur meant up to 50 simultaneous blur layers on a full page of rows - the same scrolling-container blur cost removed from StoreListView in pass 1, hiding at the row level.
+
+### Problems Fixed
+
+- Verified live: numeric rating badges gone, rows flat, one star cluster per row, drop panel absent in sections view, shelf cards at 112px, and the hidden DropZone mounts (input in DOM) so the hero button opens the picker.
+
+### Tests Performed
+
+- Browser: before/after screenshots of the all-tracks list; DOM checks for the drop panel's absence and the new shelf width; sections and all-tracks modes both exercised.
+- `npx tsc --noEmit` - passed. `npx eslint` on all three files - 0 errors, 2 pre-existing warnings.
+- `npm test` - passed, 100 files and 538 tests. `npm run build` - passed, 55 pages.
+
+### Remaining Concerns
+
+- The owner asked for the same track-row treatment on the store editor's listing manager; its rows are a separate inline implementation in `store-editor/page.tsx` and are the explicit next pass.
+- The native file-picker dialog cannot be exercised by the headless browser check; the `open()` wiring is type-checked and the input is confirmed present in the DOM, but a human click on "Upload beat" is the final confirmation.
