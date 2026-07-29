@@ -54,7 +54,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 function Section({ icon, title, subtitle, children }: { icon: React.ReactNode; title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <section className="bg-white/[0.04] border border-white/10 rounded-2xl p-5 sm:p-7 md:p-8 shadow-xl">
+    <section className="bg-white/[0.04] border border-white/10 rounded-2xl p-5 sm:p-7 md:p-8 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
       <div className="flex items-center gap-3 mb-6 border-b border-white/10 pb-4">
         <span className="text-white/80">{icon}</span>
         <div>
@@ -388,7 +388,7 @@ export default function ProfilePage() {
             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
             onClick={() => setShowPreview(false)}
           />
-          <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-white/[0.02] border-l border-white/10 z-50 flex flex-col shadow-2xl animate-in slide-in-from-right duration-300 overflow-hidden">
+          <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-white/[0.02] border-l border-white/10 z-50 flex flex-col shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] animate-in slide-in-from-right duration-300 overflow-hidden">
 
             {/* Preview header */}
             <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-white/[0.04] shrink-0">
@@ -424,7 +424,7 @@ export default function ProfilePage() {
               {/* Hero card */}
               <div className="relative rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#111111] via-[#0c0c0c] to-[#0c0c0c] p-6 text-center">
                 {profile.hero_image_url ? (
-                  <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white/30 mx-auto shadow-xl">
+                  <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white/30 mx-auto">
                     <img loading="lazy" src={profile.hero_image_url} alt="" className="w-full h-full object-cover" />
                   </div>
                 ) : (
@@ -459,7 +459,7 @@ export default function ProfilePage() {
                     </div>
                     <div className="bg-white/[0.04]/50 border border-white/10 p-4 rounded-xl text-center">
                       <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-white/40 font-bold block">Exclusive</span>
-                      <p className="text-xl font-mono text-[#7F77DD] font-bold mt-1">
+                      <p className="text-xl font-mono text-[#c8a47a] font-bold mt-1">
                         {profile.license_exclusive_price_usd ? `$${profile.license_exclusive_price_usd}` : '—'}
                       </p>
                       <span className="text-[8px] text-white/40 block mt-0.5">Full ownership</span>
@@ -478,7 +478,7 @@ export default function ProfilePage() {
                       <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-2 font-bold">Credits</p>
                       <div className="flex flex-wrap gap-1.5">
                         {profile.credits.split('\n').filter(Boolean).map((c, i) => (
-                          <span key={i} className="px-2.5 py-1 bg-[#1a1833]/30 border border-[#534AB7]/30 text-[#AFA9EC] text-[9px] font-mono rounded-full font-bold">{c}</span>
+                          <span key={i} className="px-2.5 py-1 bg-[#1f1a10]/30 border border-[#3d3020]/30 text-[#c8a47a] text-[9px] font-mono rounded-full font-bold">{c}</span>
                         ))}
                       </div>
                     </div>

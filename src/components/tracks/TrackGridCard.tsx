@@ -114,7 +114,7 @@ export function TrackGridCard({
           }`}>
             <button
               onClick={handlePlay}
-              className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-2xl"
+              className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
             >
               {isActive ? (
                 <PauseGlyph size={20} />
@@ -144,7 +144,7 @@ export function TrackGridCard({
           {track.key && (
             <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded backdrop-blur-sm ${
               isMinor
-                ? 'text-[#9d95e8] bg-[#1a1833]/80 border border-[#534AB7]/40'
+                ? 'text-[#c8a47a] bg-[#1f1a10]/80 border border-[#3d3020]/40'
                 : 'text-[#c8a47a] bg-[#1f1a10]/80 border border-[#3d3020]/50'
             }`}>
               {track.key}{isMinor ? 'm' : ''}

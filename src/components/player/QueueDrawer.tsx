@@ -271,7 +271,7 @@ function Row({
           {track.key && (
             <span className={`text-[8px] font-mono font-bold px-1 py-px rounded uppercase leading-none ${
               track.scale === 'minor'
-                ? 'text-[#9d95e8] bg-[#1a1833]/50'
+                ? 'text-[#c8a47a] bg-[#1f1a10]/50'
                 : 'text-[#c8a47a] bg-[#1f1a10]/50'
             }`}>
               {track.key}{track.scale === 'minor' ? 'm' : ''}

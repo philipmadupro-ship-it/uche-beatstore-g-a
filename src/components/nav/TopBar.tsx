@@ -320,7 +320,7 @@ export function TopBar() {
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-white/10 rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] z-50 overflow-hidden">
                 <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
                   <span className="text-[11px] font-mono uppercase tracking-wider text-white">Notifications</span>
                   <button

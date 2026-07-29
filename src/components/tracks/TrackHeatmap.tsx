@@ -107,14 +107,14 @@ export function TrackHeatmap({ trackId, durationSeconds }: TrackHeatmapProps) {
   }
 
   return (
-    <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+    <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-6 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] relative overflow-hidden">
       {/* Abstract background subtle pattern */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#7F77DD]/[0.02] to-transparent pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#c8a47a]/[0.02] to-transparent pointer-events-none" />
 
       <div className="flex items-center justify-between mb-4 relative z-10">
         <div>
           <h4 className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 flex items-center gap-1.5">
-            <TrendingUp size={11} className="text-[#7F77DD]" />
+            <TrendingUp size={11} className="text-[#c8a47a]" />
             Audience Heatmap Analytics
           </h4>
           <p className="text-[10px] text-white/40 mt-0.5 font-bold uppercase tracking-widest">
@@ -153,14 +153,14 @@ export function TrackHeatmap({ trackId, durationSeconds }: TrackHeatmapProps) {
                   <div
                     className={`w-full h-full rounded-sm transition-all duration-300 ${
                       isHot
-                        ? 'bg-[#7F77DD] shadow-[0_0_8px_rgba(127,119,221,0.5)]'
+                        ? 'bg-[#c8a47a] shadow-[0_0_8px_rgba(127,119,221,0.5)]'
                         : val > 0
-                          ? 'bg-gradient-to-t from-[#7F77DD]/40 to-[#7F77DD]/80 hover:from-[#7F77DD]/60 hover:to-[#7F77DD]'
+                          ? 'bg-gradient-to-t from-[#c8a47a]/40 to-[#c8a47a]/80 hover:from-[#c8a47a]/60 hover:to-[#c8a47a]'
                           : 'bg-white/20'
                     }`}
                   />
                   {/* Tooltip on hover */}
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block bg-black border border-white/20 text-white px-2 py-1 rounded text-[8px] font-mono whitespace-nowrap pointer-events-none z-50 shadow-xl">
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block bg-black border border-white/20 text-white px-2 py-1 rounded text-[8px] font-mono whitespace-nowrap pointer-events-none z-50 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
                     {val} playhead logs
                   </div>
                 </div>
@@ -177,7 +177,7 @@ export function TrackHeatmap({ trackId, durationSeconds }: TrackHeatmapProps) {
               </div>
               <div className="text-right">
                 <span className="text-white/40 font-mono uppercase tracking-wider text-[9px] block">Peak Density Count</span>
-                <span className="text-[#7F77DD] font-bold font-mono tracking-tight mt-0.5 block">{hotSpotInfo.pings} coordinates</span>
+                <span className="text-[#c8a47a] font-bold font-mono tracking-tight mt-0.5 block">{hotSpotInfo.pings} coordinates</span>
               </div>
             </div>
           )}

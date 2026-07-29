@@ -44,7 +44,7 @@ const FORMAT_META: Record<string, { icon: React.ReactNode; accent: string; bg: s
   mp3:      { icon: <Music size={12} />,  accent: 'text-white', bg: 'bg-white/10',      border: 'border-white/' },
   'wav-main': { icon: <Disc3 size={12} />, accent: 'text-white', bg: 'bg-white/20',      border: 'border-white/' },
   wav:      { icon: <Disc3 size={12} />,  accent: 'text-white', bg: 'bg-white/20',      border: 'border-white/' },
-  vocals:   { icon: <Waves size={12} />,  accent: 'text-[#9d95e8]', bg: 'bg-[#1a1833]/60',   border: 'border-[#534AB7]/20' },
+  vocals:   { icon: <Waves size={12} />,  accent: 'text-[#c8a47a]', bg: 'bg-[#1f1a10]/60',   border: 'border-[#3d3020]/20' },
   drums:    { icon: <Waves size={12} />,  accent: 'text-[#e87a5a]', bg: 'bg-[#1f1010]/60',   border: 'border-[#8B3A2A]/20' },
   bass:     { icon: <Waves size={12} />,  accent: 'text-[#8ecf9f]', bg: 'bg-[#0d1f14]/60',   border: 'border-[#3A7A50]/20' },
   other:    { icon: <Waves size={12} />,  accent: 'text-white', bg: 'bg-white/',   border: 'border-white/' },
@@ -325,7 +325,7 @@ function DownloadPortal() {
                   {/* Stems section */}
                   {stems.length > 0 && (
                     <div>
-                      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#534AB7]/80 mb-2 flex items-center gap-1.5">
+                      <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-[#3d3020]/80 mb-2 flex items-center gap-1.5">
                         <Waves size={9} />
                         Stems
                       </p>

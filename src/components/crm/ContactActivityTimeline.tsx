@@ -31,7 +31,7 @@ const KIND_META: Record<ActivityKind, { icon: React.ComponentType<{ size?: numbe
   beat_sent:    { icon: Send,                tint: 'rgba(255,255,255,0.7)', ring: 'rgba(255,255,255,0.25)' },
   email_opened: { icon: MailOpen,            tint: '#6DC6A4', ring: 'rgba(109,198,164,0.25)' },
   link_clicked: { icon: MousePointerClick,   tint: '#6DC6A4', ring: 'rgba(109,198,164,0.25)' },
-  track_played: { icon: Play,                tint: '#9d95e8', ring: 'rgba(157,149,232,0.25)' },
+  track_played: { icon: Play,                tint: '#c8a47a', ring: 'rgba(200,164,122,0.25)' },
   purchase:     { icon: ShoppingBag,         tint: 'rgba(255,255,255,0.9)', ring: 'rgba(255,255,255,0.30)' },
   note:         { icon: StickyNote,          tint: 'rgba(255,255,255,0.8)', ring: 'rgba(255,255,255,0.20)' },
   stage_change: { icon: GitBranch,           tint: 'rgba(255,255,255,0.8)', ring: 'rgba(255,255,255,0.20)' },

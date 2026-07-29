@@ -53,7 +53,7 @@ export function UploadsTray() {
 
   return (
     <div className="fixed bottom-24 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)]">
-      <div className="bg-[#090907] border border-white/10 rounded-lg shadow-2xl overflow-hidden">
+      <div className="bg-[#090907] border border-white/10 rounded-lg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden">
         <button
           onClick={() => setExpanded((x) => !x)}
           className="tap w-full flex min-h-11 items-center gap-2 px-3 border-b border-[#0E0E0E] hover:bg-white/[0.04] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black"

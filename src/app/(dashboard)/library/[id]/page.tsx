@@ -34,7 +34,7 @@ import { uploadImageFile } from '@/lib/upload/image-upload-client';
 // audio-decode worker chain doesn't break client/SSR bundling.
 
 const STATUS_OPTIONS: { value: TrackStatus; label: string; color: string }[] = [
-  { value: 'maq',         label: 'MAQ',        color: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
+  { value: 'maq',         label: 'MAQ',        color: 'bg-[#1f1a10] text-[#c8a47a] border-[#3d3020]/40' },
   { value: 'needs_work',  label: 'WIP',        color: 'bg-[#1f1a0a] text-white border-[#3a2f1f]' },
   { value: 'finished',    label: 'Finished',   color: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
   { value: 'archived',    label: 'Archived',   color: 'bg-[#0E0E0E] text-white/60 border-white/10' },

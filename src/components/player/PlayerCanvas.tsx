@@ -243,10 +243,10 @@ export function PlayerCanvas({
                     }}
                   >
                     {/* Glowing Dot Pin */}
-                    <div className="w-2.5 h-2.5 rounded-full bg-[#7F77DD] border border-white/20 shadow-[0_0_8px_#7F77DD] hover:scale-125 transition-transform" />
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#c8a47a] border border-white/20 shadow-[0_0_8px_#c8a47a] hover:scale-125 transition-transform" />
                     
                     {/* Premium Floating Tooltip */}
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 hidden group-hover/pin:block w-48 p-2.5 rounded-md border border-white/ bg-white/[0.02]/95 backdrop-blur-md shadow-xl text-left pointer-events-none z-50">
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 hidden group-hover/pin:block w-48 p-2.5 rounded-md border border-white/ bg-white/[0.02]/95 backdrop-blur-md shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] text-left pointer-events-none z-50">
                       <p className="text-[9px] font-bold text-white truncate">{c.author_name}</p>
                       <p className="text-[10px] text-[#bbb] mt-0.5 line-clamp-3 leading-snug">{c.body}</p>
                       <p className="text-[8px] font-mono text-white/40 mt-1">{fmt(Number(c.region_start))}</p>
@@ -328,7 +328,7 @@ export function PlayerCanvas({
               onClick={() => setShowComposer((v) => !v)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-wider transition-colors ${
                 showComposer
-                  ? 'bg-[#7F77DD]/20 border-[#7F77DD] text-[#AFA9EC]'
+                  ? 'bg-[#c8a47a]/20 border-[#c8a47a] text-[#c8a47a]'
                   : 'border-white/10 text-white/80 hover:text-white hover:border-white/50'
               }`}
               title="Add comment at current timestamp"
@@ -425,7 +425,7 @@ export function PlayerCanvas({
             onChange={(e) => setComposerText(e.target.value)}
             placeholder="Type your feedback here..."
             rows={2}
-            className="w-full bg-[#090907] border border-white/10 rounded px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-[#7F77DD] resize-none"
+            className="w-full bg-[#090907] border border-white/10 rounded px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-[#c8a47a] resize-none"
           />
           
           <div className="flex items-center justify-between gap-3">

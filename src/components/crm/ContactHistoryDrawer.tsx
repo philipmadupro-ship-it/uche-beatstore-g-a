@@ -218,7 +218,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
                             className="fixed inset-0 z-[80]"
                             onClick={() => setOpenStatusId(null)}
                           />
-                          <div className="absolute top-full left-0 mt-1 z-[81] bg-[#090907] border border-white/20 rounded-md shadow-2xl py-1 min-w-[140px]">
+                          <div className="absolute top-full left-0 mt-1 z-[81] bg-[#090907] border border-white/20 rounded-md shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] py-1 min-w-[140px]">
                             {STATUS_OPTIONS.map((opt) => {
                               const cfg = statusConfig(opt);
                               const OptIcon = cfg.icon;

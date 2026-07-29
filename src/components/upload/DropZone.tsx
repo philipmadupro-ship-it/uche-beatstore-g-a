@@ -274,7 +274,7 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
                       {!card.analyzing && card.key && (
                         <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${
                           card.scale === 'minor'
-                            ? 'text-[#9d95e8] bg-[#1a1833]/50 border border-[#534AB7]/25'
+                            ? 'text-[#c8a47a] bg-[#1f1a10]/50 border border-[#3d3020]/25'
                             : 'text-[#c8a47a] bg-[#1f1a10]/50 border border-[#3d3020]/30'
                         }`}>
                           {card.key}{card.scale === 'minor' ? 'm' : ''}

@@ -89,7 +89,7 @@ export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
     <div className="max-w-4xl mx-auto p-8 lg:p-16 space-y-12">
       {/* Header */}
       <div className="flex flex-col md:flex-row items-center md:items-end gap-8 border-b border-white/10 pb-12">
-        <div className="relative w-48 h-48 bg-[#0E0E0E] rounded-sm shadow-2xl flex items-center justify-center text-white/30 overflow-hidden">
+        <div className="relative w-48 h-48 bg-[#0E0E0E] rounded-sm shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] flex items-center justify-center text-white/30 overflow-hidden">
           {activeTrack?.cover_url ? (
             <NextImage src={activeTrack.cover_url} alt="" fill sizes="192px" unoptimized className="object-cover" />
           ) : (

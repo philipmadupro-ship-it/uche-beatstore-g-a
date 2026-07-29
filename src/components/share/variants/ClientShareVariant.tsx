@@ -142,7 +142,7 @@ function KeyBadge({ keyName, scale }: { keyName?: string | null; scale?: string 
   return (
     <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
       isMinor
-        ? 'text-[#9d95e8] bg-[#1a1833]/60 border border-[#534AB7]/30'
+        ? 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/30'
         : 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/40'
     }`}>
       {keyName}{isMinor ? 'm' : ''}

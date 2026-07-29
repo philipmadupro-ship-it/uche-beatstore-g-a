@@ -9,7 +9,7 @@ const CHROMATIC_KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#', 'G#', 'D#', 'A
 
 // Status options including MAQ — ordered by workflow stage
 const STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
-  { value: 'maq',        label: 'MAQ',      color: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
+  { value: 'maq',        label: 'MAQ',      color: 'bg-[#1f1a10] text-[#c8a47a] border-[#3d3020]/40' },
   { value: 'needs_work', label: 'WIP',      color: 'bg-[#1f1a0a] text-white border-[#3a2f1f]'   },
   { value: 'finished',   label: 'Finished', color: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]'   },
   { value: 'archived',   label: 'Archived', color: 'bg-[#0E0E0E] text-white/60 border-white/10'    },
@@ -212,7 +212,7 @@ export function FilterBar({ filters, onChange, embedded = false }: FilterBarProp
                     <button key={s} onClick={() => set({ scale: s })}
                       className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors capitalize ${
                         filters.scale === s
-                          ? s === 'minor' ? 'bg-[#1a1833] border border-[#534AB7]/40 text-[#9d95e8]'
+                          ? s === 'minor' ? 'bg-[#1f1a10] border border-[#3d3020]/40 text-[#c8a47a]'
                             : s === 'major' ? 'bg-[#1f1a10] border border-[#3d3020]/60 text-[#c8a47a]'
                             : 'bg-white text-black'
                           : 'bg-white/[0.04] border border-white/10 text-white/60 hover:text-white/80'

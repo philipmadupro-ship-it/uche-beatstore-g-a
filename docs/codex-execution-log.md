@@ -5813,3 +5813,45 @@ reversed — every other surface-6 reduction on PlayerBar stands: pill radius, s
 shadow, no gradient sheen, flat play button and cover, 20px flat Now Playing modal, and
 the gold (not purple) key badges. Verified after revert: 0 gradient layers in the pill,
 0 purple hex occurrences, tsc + eslint clean.
+
+---
+
+## Pass: App-wide consistency sweep — one accent, one shadow (closes surfaces 1–3 re-sweep)
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui` against `docs/design-direction.md` principles 3 ("One accent … kill decorative multi-accent usage") and 4 ("max one border OR one shadow per element"), plus principle 7 ("one anatomy per pattern") — the goal this pass was *consistency*, not another local restyle.
+- `.codex/skills/antigravity-testing-release`: full gate + live computed-style assertions on three routes.
+
+### Area Inspected
+
+Whole `src/**/*.tsx` tree, targeting the two violation classes that earlier per-surface passes had left behind in un-swept files: the purple palette and `shadow-2xl`/`shadow-xl`.
+
+### Changes Made
+
+- **Purple eliminated as a decorative colour, app-wide (26 files).** The `#9d95e8`/`#7F77DD`/`#AFA9EC`/`#534AB7`/`#b39ddb` family plus its `#1a1833`/`#1a1033`/`#1a1230` backing tints were mapped onto the warm tokens majors already used (`#c8a47a` / `#1f1a10` / `#3d3020`). Covered: share variants (all four) and `ShareTrackDetailsDrawer`, `LicenseBuilder`, CRM (`BeatLog`, `contacts-shared`, `SendBeatModal`, `ContactActivityTimeline`), library + `library/[id]` MAQ status chips, `campaigns/[id]` "interested" status, `store/download` stem accents, profile's exclusive price, and 8 tracks/library/nav/player components.
+- **`shadow-2xl` / `shadow-xl` eliminated app-wide (26 files).** Coloured glow shadows (`shadow-2xl shadow-white/10`) and gloss on circular buttons/avatars were deleted outright; floating panels and modals kept exactly one soft cast shadow. Also removed a `hover:shadow-xl` state on the library quick-action tiles.
+
+### Problems Discovered
+
+- The per-surface passes earlier in this initiative each fixed purple *locally*, which meant the same minor-key-badge and status-chip patterns kept resurfacing in files the current surface didn't cover — this is the same class of regression `CLAUDE.md` warns about for un-extracted logic. A tree-wide sweep was the only way to actually close it.
+- **Two purple usages are legitimate features, not decoration**: `ACCENT_PRESETS` in `store-editor/page.tsx` and the swatch row in `profile/page.tsx` are the producer's storefront accent-colour picker. These were explicitly protected during the sweep (stashed behind placeholders before the colour mapping ran, restored after) and verified still functional afterwards.
+
+### Problems Fixed
+
+- Verified live via computed styles, not source diff:
+  - `/store` — 921 elements scanned, **0** purple-family computed colours.
+  - `/library` — 870 elements scanned, **0** purple; the MAQ chip now computes to neutral white/60.
+  - `/profile` — the accent picker still renders **all 6** swatches including `rgb(127,119,221)`, confirming the protected feature survived.
+- `grep` confirms purple hex now appears in exactly two places tree-wide: the two picker arrays.
+
+### Tests Performed
+
+- `npx tsc --noEmit` — clean. `npx eslint .` — 0 errors (96 pre-existing warnings).
+- `npm test` — 538/538 across 100 files. `npm run build` — green, 55 pages.
+- Live computed-style assertions on `/store`, `/library`, `/profile` as listed above.
+
+### Remaining Concerns
+
+- Colour and shadow are now consistent tree-wide, but the doc's stricter per-surface definition of done ("count the text styles; ≤ 4 visible at once") has only been applied to `library/page.tsx`. `store-editor/page.tsx` (3200+ lines) remains the largest un-collapsed type scale.
+- `docs/design-direction.md` surfaces 1–6 are now all passed at least once; what's left is depth, not coverage.

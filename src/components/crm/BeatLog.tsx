@@ -22,7 +22,7 @@ const STATUS_CONFIG: Record<string, { icon: typeof Mail; dot: string; text: stri
 
 // Fallback tags for contacts without tags
 const TAG_PELLETS = [
-  { bg: 'bg-[#1a1230]', text: 'text-[#9d95e8]', border: 'border-[#534AB7]/30' },
+  { bg: 'bg-[#1f1a10]', text: 'text-[#c8a47a]', border: 'border-[#3d3020]/30' },
   { bg: 'bg-[#0a1f0f]', text: 'text-[#6DC6A4]', border: 'border-[#1f5a4a]/40' },
   { bg: 'bg-[#1f1a0a]', text: 'text-amber-400', border: 'border-[#3a2f1f]/60' },
   { bg: 'bg-[#1f0f0a]', text: 'text-[#e87a6a]', border: 'border-[#6a2a1f]/40' },

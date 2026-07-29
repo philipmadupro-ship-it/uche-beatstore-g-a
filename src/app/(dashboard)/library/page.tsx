@@ -951,7 +951,7 @@ export default function LibraryPage() {
                 cover: tracks.filter((t) => t.cover_url)[3]?.cover_url ?? null,
               },
             ] as const).map(({ href, label, sub, icon, accent, cover }) => (
-              <Link key={href} href={href} className="group relative flex items-center gap-0 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-[#1e1a14] overflow-hidden transition-all hover:border-white/20 hover:shadow-xl">
+              <Link key={href} href={href} className="group relative flex items-center gap-0 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-[#1e1a14] overflow-hidden transition-all hover:border-white/20">
                 {/* Square cover — left quarter of the card */}
                 <div className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 flex items-center justify-center overflow-hidden" style={{ backgroundColor: `${accent}18` }}>
                   {cover
@@ -1012,7 +1012,7 @@ export default function LibraryPage() {
               <div className="w-px h-4 bg-white/20 mx-1 shrink-0" />
               {/* State chips */}
               {[
-                { v: 'maq', l: 'MAQ', cls: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
+                { v: 'maq', l: 'MAQ', cls: 'bg-[#1f1a10] text-[#c8a47a] border-[#3d3020]/40' },
                 { v: 'needs_work', l: 'WIP', cls: 'bg-[#1f1a0a] text-white border-[#3a2f1f]' },
                 { v: 'finished', l: 'Finished', cls: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
               ].map(({ v, l, cls }) => (
@@ -1532,7 +1532,7 @@ export default function LibraryPage() {
               <p className="text-[9px] font-mono uppercase tracking-wider text-white/30 mb-1.5">Set status</p>
               <div className="flex flex-wrap gap-1.5">
                 {[
-                  { v: 'maq', l: 'MAQ', cls: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' },
+                  { v: 'maq', l: 'MAQ', cls: 'bg-[#1f1a10] text-[#c8a47a] border-[#3d3020]/40' },
                   { v: 'needs_work', l: 'WIP', cls: 'bg-[#1f1a0a] text-white border-[#3a2f1f]' },
                   { v: 'finished', l: 'Finished', cls: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
                   { v: 'archived', l: 'Archived', cls: 'bg-[#0E0E0E] text-white/60 border-white/10' },
@@ -1656,7 +1656,7 @@ function MiniTrackCard({
         {/* State badge */}
         {track.status && track.status !== 'archived' && (
           <span className={`absolute top-1.5 left-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
-            track.status === 'maq'        ? 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40' :
+            track.status === 'maq'        ? 'bg-[#1f1a10] text-[#c8a47a] border-[#3d3020]/40' :
             track.status === 'finished'   ? 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]'   :
             track.status === 'needs_work' ? 'bg-[#1f1a0a] text-white border-[#3a2f1f]'   : ''
           }`}>

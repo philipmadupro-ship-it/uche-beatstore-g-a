@@ -57,7 +57,7 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
       <div
         className="absolute w-[600px] h-[600px] rounded-full pointer-events-none opacity-[0.04] blur-[120px]"
         style={{
-          background: 'radial-gradient(circle, #7F77DD 0%, transparent 70%)',
+          background: 'radial-gradient(circle, #FFFFFF 0%, transparent 70%)',
           top: '50%',
           left: '50%',
           transform: 'translate(-50%, -50%)'

@@ -193,7 +193,7 @@ export function ShareTrackDetailsDrawer({
               {track.key && (
                 <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded uppercase tracking-wider ${
                   isMinor
-                    ? 'text-[#9d95e8] bg-[#1a1833]/60 border border-[#534AB7]/30'
+                    ? 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/30'
                     : 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/40'
                 }`}>
                   {track.key}{isMinor ? 'm' : ''}
@@ -221,7 +221,7 @@ export function ShareTrackDetailsDrawer({
         <div className="flex-1 overflow-y-auto p-6 space-y-7 custom-scrollbar">
 
           {/* Cover */}
-          <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-white/[0.04] border border-white/10 group shadow-2xl">
+          <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-white/[0.04] border border-white/10 group shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
             {cover ? (
               <NextImage src={cover} alt="" fill sizes="440px" unoptimized className="object-cover transition-transform duration-500 group-hover:scale-105" />
             ) : (
@@ -232,7 +232,7 @@ export function ShareTrackDetailsDrawer({
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={handlePlayToggle}
-                className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform shadow-2xl"
+                className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
               >
                 {isCurrentPlaying ? (
                   <Pause size={22} fill="currentColor" />
@@ -366,7 +366,7 @@ function StatCell({ label, value, accent }: { label: string; value: string; acce
     <div className="bg-white/[0.04]/50 border border-white/ rounded-xl p-3 text-center">
       <p className="text-[8px] font-mono uppercase tracking-widest text-white/40">{label}</p>
       <p className={`text-[13px] font-bold mt-1 font-mono ${
-        accent === 'minor' ? 'text-[#9d95e8]' :
+        accent === 'minor' ? 'text-[#c8a47a]' :
         accent === 'major' ? 'text-[#c8a47a]' :
         'text-white'
       }`}>

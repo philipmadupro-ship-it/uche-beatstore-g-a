@@ -55,7 +55,7 @@ export function DrawerStemOverlay({ open, status, progress, data, onClose }: Pro
         </div>
 
         {status === 'processing' ? (
-          <div className="bg-[#0E0E0E] border border-white/10 rounded-[3rem] p-32 flex flex-col items-center justify-center gap-8 shadow-2xl">
+          <div className="bg-[#0E0E0E] border border-white/10 rounded-[3rem] p-32 flex flex-col items-center justify-center gap-8 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
             <div className="relative">
               <div className="w-24 h-24 border-4 border-white/ border-t-white rounded-full animate-spin" />
               <Scissors className="absolute inset-0 m-auto text-white animate-pulse" size={32} />

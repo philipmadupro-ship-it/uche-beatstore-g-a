@@ -334,13 +334,13 @@ export function TrackListingEditor({ track, onSaved }: Props) {
   return (
     <div className="mb-10">
       <div className="flex items-center gap-2 mb-3">
-        <Globe size={11} className={storeListed ? 'text-[#7F77DD]' : 'text-white/40'} />
+        <Globe size={11} className={storeListed ? 'text-[#c8a47a]' : 'text-white/40'} />
         <p className="text-[10px] font-mono uppercase tracking-wider text-white/40">Storefront Publishing Hub</p>
       </div>
 
-      <div className="bg-white/[0.04] border border-white/10 rounded-2xl shadow-xl relative overflow-hidden">
+      <div className="bg-white/[0.04] border border-white/10 rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] relative overflow-hidden">
         {storeListed && !exclusiveSold && (
-          <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[#7F77DD] to-transparent" />
+          <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[#c8a47a] to-transparent" />
         )}
 
         {/* ── Header: status + publish/relist ── */}
@@ -362,7 +362,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
               <button
                 onClick={relist}
                 disabled={saving === 'relist'}
-                className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest px-3 py-1.5 rounded-full font-bold border border-[#534AB7] bg-[#1a1833] text-[#AFA9EC] hover:bg-[#221d3d] transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest px-3 py-1.5 rounded-full font-bold border border-[#3d3020] bg-[#1f1a10] text-[#c8a47a] hover:bg-[#221d3d] transition-colors disabled:opacity-50"
               >
                 {saving === 'relist' ? <Loader2 size={11} className="animate-spin" /> : <RotateCcw size={11} />}
                 Re-list
@@ -370,7 +370,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
             ) : (
               <>
                 <span className={`text-[10px] font-mono uppercase tracking-widest px-2.5 py-1 rounded-full font-bold border ${
-                  storeListed ? 'text-[#AFA9EC] bg-[#1a1833] border-[#534AB7]' : 'text-white/40 bg-white/[0.02] border-white/10'
+                  storeListed ? 'text-[#c8a47a] bg-[#1f1a10] border-[#3d3020]' : 'text-white/40 bg-white/[0.02] border-white/10'
                 }`}>
                   {storeListed ? 'Published' : 'Draft'}
                 </span>
@@ -379,7 +379,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
                   disabled={saving === 'store_listed'}
                   title={!storeListed && !canPublish ? 'Set a price before publishing' : undefined}
                   className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none ${
-                    storeListed ? 'bg-[#7F77DD]' : !canPublish ? 'bg-white/20 opacity-60' : 'bg-white/20'
+                    storeListed ? 'bg-[#c8a47a]' : !canPublish ? 'bg-white/20 opacity-60' : 'bg-white/20'
                   }`}
                 >
                   <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
@@ -429,7 +429,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
                 <Calendar size={11} className="text-white/60" />
                 {scheduledAt ? (
                   <>
-                    <span className="text-[10px] font-mono text-[#AFA9EC]">
+                    <span className="text-[10px] font-mono text-[#c8a47a]">
                       Scheduled · {new Date(scheduledAt).toLocaleString()}
                     </span>
                     <button onClick={clearSchedule} disabled={saving === 'scheduled_publish_at'}
@@ -589,7 +589,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
                 on={featured} onColor="bg-white" busy={saving === 'store_featured'}
                 onToggle={async () => { const next = !featured; setFeatured(next); await persist('store_featured', next); toast.success(next ? 'Marked as a featured pick.' : 'Removed from picks.'); }} />
               <ToggleRow label="Voice tag on preview" hint="Overlay your producer tag on the store preview to deter rips. Clean file still delivers on purchase."
-                on={voiceTag} onColor="bg-[#9d95e8]" busy={saving === 'voice_tag_enabled'}
+                on={voiceTag} onColor="bg-[#c8a47a]" busy={saving === 'voice_tag_enabled'}
                 onToggle={async () => { const next = !voiceTag; setVoiceTag(next); await persist('voice_tag_enabled', next); toast.success(next ? 'Voice tag enabled on preview.' : 'Voice tag disabled.'); }} />
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -662,7 +662,7 @@ function LicenseTierRow({
         disabled={saving}
         onClick={() => onChange(!row.enabled, priceOverride)}
         className={`relative inline-flex h-4 w-7 shrink-0 cursor-pointer rounded-full border border-transparent transition-colors duration-150 ${
-          row.enabled ? 'bg-[#7F77DD]' : 'bg-white/20'
+          row.enabled ? 'bg-[#c8a47a]' : 'bg-white/20'
         }`}
         aria-label={row.enabled ? 'Disable tier' : 'Enable tier'}
       >

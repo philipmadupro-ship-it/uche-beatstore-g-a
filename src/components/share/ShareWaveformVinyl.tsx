@@ -127,7 +127,7 @@ export function ShareWaveformVinyl({
               spinning ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'
             }`}
           >
-            <div className="w-14 h-14 rounded-full bg-black/60 backdrop-blur-sm border border-white/20 flex items-center justify-center shadow-2xl">
+            <div className="w-14 h-14 rounded-full bg-black/60 backdrop-blur-sm border border-white/20 flex items-center justify-center">
               {spinning
                 ? <Pause size={20} className="text-white" fill="currentColor" />
                 : <Play size={20} className="text-white ml-0.5" fill="currentColor" />}

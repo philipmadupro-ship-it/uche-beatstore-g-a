@@ -458,7 +458,7 @@ function VerticalShareContent({
         {!isPlaying && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div
-              className="w-20 h-20 rounded-full flex items-center justify-center text-black shadow-2xl"
+              className="w-20 h-20 rounded-full flex items-center justify-center text-black shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
               style={{ backgroundColor: accent }}
             >
               <Play size={32} fill="currentColor" className="ml-1" />

@@ -120,7 +120,7 @@ export function StemPlayer({ vocalsUrl, drumsUrl, bassUrl, otherUrl }: StemPlaye
         <button 
           onClick={() => setIsPlaying(!isPlaying)}
           disabled={loading}
-          className="w-12 h-12 rounded-full bg-white text-black font-semibold shadow-md hover:bg-white/90 flex items-center justify-center hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-white/10"
+          className="w-12 h-12 rounded-full bg-white text-black font-semibold shadow-md hover:bg-white/90 flex items-center justify-center hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? <Loader2 size={20} className="animate-spin" /> : (isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-1" />)}
         </button>

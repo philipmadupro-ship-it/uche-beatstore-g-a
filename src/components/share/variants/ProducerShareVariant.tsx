@@ -119,7 +119,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
       {/* Ambient glow */}
       <div
         className="absolute w-[900px] h-[900px] rounded-full pointer-events-none opacity-[0.025] blur-[180px]"
-        style={{ background: 'radial-gradient(circle, #7F77DD 0%, transparent 70%)', top: '-20%', left: '-15%' }}
+        style={{ background: 'radial-gradient(circle, #FFFFFF 0%, transparent 70%)', top: '-20%', left: '-15%' }}
       />
 
       <div className="max-w-5xl mx-auto w-full px-5 md:px-10 pt-12 pb-32 z-10">
@@ -204,7 +204,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                   disabled={!currentTrack.key}
                   className={`relative group border rounded-2xl p-5 text-left transition-colors disabled:pointer-events-none ${
                     isMinor
-                      ? 'bg-[#1a1833]/50 border-[#534AB7]/30 hover:border-[#534AB7]/60'
+                      ? 'bg-[#1f1a10]/50 border-[#3d3020]/30 hover:border-[#3d3020]/60'
                       : 'bg-[#1a1610]/50 border-[#3d3020]/40 hover:border-[#5a4a2a]/60'
                   }`}
                 >
@@ -212,12 +212,12 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                     Key · Scale
                   </p>
                   <p className={`text-[48px] font-mono font-bold leading-none ${
-                    isMinor ? 'text-[#9d95e8]' : 'text-[#c8a47a]'
+                    isMinor ? 'text-[#c8a47a]' : 'text-[#c8a47a]'
                   }`}>
                     {currentTrack.key ?? '—'}
                   </p>
                   <p className={`text-[11px] font-mono mt-1 uppercase tracking-wider ${
-                    isMinor ? 'text-[#534AB7]/70' : 'text-[#3d3020]/80'
+                    isMinor ? 'text-[#3d3020]/70' : 'text-[#3d3020]/80'
                   }`}>
                     {currentTrack.scale ?? 'major'}
                   </p>
@@ -245,7 +245,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                         <span className={`text-[10px] font-mono font-bold px-2 py-1 rounded-lg border transition-colors ${
                           isCurrent
                             ? isMinor
-                              ? 'text-[#9d95e8] bg-[#1a1833] border-[#534AB7]/60'
+                              ? 'text-[#c8a47a] bg-[#1f1a10] border-[#3d3020]/60'
                               : 'text-[#c8a47a] bg-[#1f1a10] border-[#5a4a2a]/60'
                             : isCompat
                               ? 'text-white/70 bg-white/[0.04] border-white/20'
@@ -333,7 +333,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                           {t.key && (
                             <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded uppercase tracking-wider leading-none ${
                               tIsMinor
-                                ? 'text-[#9d95e8] bg-[#1a1833]/50'
+                                ? 'text-[#c8a47a] bg-[#1f1a10]/50'
                                 : 'text-[#c8a47a] bg-[#1f1a10]/50'
                             }`}>
                               {t.key}{tIsMinor ? 'm' : ''}

@@ -102,7 +102,7 @@ export function ContactStageCell({
 // ── Avatar ────────────────────────────────────────────────────────────────
 const AVATAR_PALETTES = [
   { bg: 'bg-white/10', text: 'text-white', border: 'border-white/20' },
-  { bg: 'bg-[#1a1833]', text: 'text-[#AFA9EC]', border: 'border-[#534AB7]/40' },
+  { bg: 'bg-[#1f1a10]', text: 'text-[#c8a47a]', border: 'border-[#3d3020]/40' },
   { bg: 'bg-[#0d2318]', text: 'text-[#6DC6A4]', border: 'border-[#6DC6A4]/30' },
   { bg: 'bg-[#2a1810]', text: 'text-[#e8a86a]', border: 'border-[#e8a86a]/30' },
   { bg: 'bg-[#1a0d2e]', text: 'text-[#c89de8]', border: 'border-[#c89de8]/30' },

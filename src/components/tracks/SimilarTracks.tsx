@@ -236,7 +236,7 @@ export function SimilarTracks({ trackId, onPick }: Props) {
                   </p>
                   {(harmonicHit || tempoHit) && (
                     <div className="flex items-center gap-1 mt-1">
-                      {harmonicHit && <span className="text-[8px] font-mono uppercase tracking-wider text-[#9d95e8] bg-[#1a1833]/60 px-1 py-0.5 rounded">key</span>}
+                      {harmonicHit && <span className="text-[8px] font-mono uppercase tracking-wider text-[#c8a47a] bg-[#1f1a10]/60 px-1 py-0.5 rounded">key</span>}
                       {tempoHit && <span className="text-[8px] font-mono uppercase tracking-wider text-black bg-white font-semibold shadow-md hover:bg-white/90/10 px-1 py-0.5 rounded">tempo</span>}
                     </div>
                   )}

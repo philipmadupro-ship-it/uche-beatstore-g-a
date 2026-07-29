@@ -53,7 +53,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
       <div
         className="absolute w-[800px] h-[800px] rounded-full pointer-events-none opacity-[0.03] blur-[150px]"
         style={{
-          background: 'radial-gradient(circle, #7F77DD 0%, transparent 70%)',
+          background: 'radial-gradient(circle, #FFFFFF 0%, transparent 70%)',
           top: '-20%',
           right: '-10%'
         }}
@@ -99,7 +99,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
                 {currentTrack.key && (
                   <span className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg ${
                     currentTrack.scale === 'minor'
-                      ? 'text-[#9d95e8] bg-[#1a1833]/60 border border-[#534AB7]/30'
+                      ? 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/30'
                       : 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/40'
                   }`}>
                     {currentTrack.key}{currentTrack.scale === 'minor' ? 'm' : ''}
@@ -129,7 +129,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
         <div className="flex flex-col gap-8">
 
           {/* Interactive Writers Notepad — lyric sheet style */}
-          <div className="bg-[#0e0c09] border border-white/10 rounded-2xl shadow-xl flex-1 flex flex-col overflow-hidden">
+          <div className="bg-[#0e0c09] border border-white/10 rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] flex-1 flex flex-col overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-white/[0.04]">
               <div className="flex items-center gap-2 text-white/80">
                 <Edit3 size={12} />
@@ -184,7 +184,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
 
           {/* Projects Track List (if multiple tracks) */}
           {tracks.length > 1 && (
-            <div className="bg-white/[0.04]/30 border border-white/10 rounded-2xl p-5 shadow-xl">
+            <div className="bg-white/[0.04]/30 border border-white/10 rounded-2xl p-5 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
               <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/60 mb-3">Workspace Tracks</p>
               <div className="space-y-1 max-h-40 overflow-y-auto">
                 {tracks.map((t, i) => {

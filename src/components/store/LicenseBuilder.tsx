@@ -337,7 +337,7 @@ export function LicenseBuilder() {
                           onClick={() => patchFileType(l.id, ft, !on)}
                           className={`px-3 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider transition-all border ${
                             on
-                              ? 'bg-[#1a1833] border-[#534AB7] text-[#AFA9EC]'
+                              ? 'bg-[#1f1a10] border-[#3d3020] text-[#c8a47a]'
                               : 'bg-transparent border-white/10 text-white/40 hover:border-white/20 hover:text-white/80'
                           }`}
                         >
@@ -406,7 +406,7 @@ export function LicenseBuilder() {
                           onClick={() => patch(l.id, field, !on)}
                           className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-left transition-all border ${
                             on
-                              ? 'bg-[#1a1833] border-[#534AB7] text-[#AFA9EC]'
+                              ? 'bg-[#1f1a10] border-[#3d3020] text-[#c8a47a]'
                               : 'bg-white/[0.02] border-white/10 text-white/40 hover:border-white/20 hover:text-white/80'
                           }`}
                         >

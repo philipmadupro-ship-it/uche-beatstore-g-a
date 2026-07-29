@@ -12,7 +12,7 @@ const TYPE_OPTIONS: { value: TrackType; label: string }[] = [
 ];
 
 const STATUS_OPTIONS: { value: TrackStatus; label: string; active: string; dot: string }[] = [
-  { value: 'maq',        label: 'MAQ',        active: 'bg-[#1a1033] text-[#b39ddb] border-[#534AB7]/40', dot: 'bg-[#b39ddb]' },
+  { value: 'maq',        label: 'MAQ',        active: 'bg-[#1f1a10] text-[#c8a47a] border-[#3d3020]/40', dot: 'bg-[#c8a47a]' },
   { value: 'needs_work', label: 'WIP',        active: 'bg-[#1f1a0a] text-white border-[#3a2f1f]',   dot: 'bg-white' },
   { value: 'finished',   label: 'Finished',   active: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]',   dot: 'bg-[#8ecf9f]' },
   { value: 'archived',   label: 'Archived',   active: 'bg-[#0E0E0E] text-white/60 border-white/10',   dot: 'bg-white/40' },
@@ -168,7 +168,7 @@ export function TrackMetadataEditor({ track, onPatch, onRatingChange }: Props) {
                     className={`flex-1 py-1.5 rounded-md text-[9px] font-mono font-bold uppercase tracking-wide border transition-all ${
                       active
                         ? isMinor
-                          ? 'bg-[#1a1833] border-[#534AB7]/50 text-[#9d95e8]'
+                          ? 'bg-[#1f1a10] border-[#3d3020]/50 text-[#c8a47a]'
                           : 'bg-[#1f1a10] border-[#3d3020]/60 text-[#c8a47a]'
                         : 'bg-[#090907] border-white/10 text-white/40 hover:border-white/20 hover:text-white/60'
                     }`}
@@ -195,7 +195,7 @@ export function TrackMetadataEditor({ track, onPatch, onRatingChange }: Props) {
                 className={`px-3 py-1.5 text-[9px] font-mono uppercase tracking-wider transition-colors ${
                   active
                     ? s.value === 'minor'
-                      ? 'bg-[#1a1833] text-[#9d95e8]'
+                      ? 'bg-[#1f1a10] text-[#c8a47a]'
                       : 'bg-[#1f1a10] text-[#c8a47a]'
                     : 'bg-transparent text-white/40 hover:text-white/60'
                 }`}

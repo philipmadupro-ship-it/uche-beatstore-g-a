@@ -189,7 +189,7 @@ export function Sidebar() {
           )}
           {/* Results dropdown */}
           {searchQuery && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-[#0e0c09] border border-white/10 rounded-lg overflow-hidden z-50 shadow-xl">
+            <div className="absolute top-full left-0 right-0 mt-1 bg-[#0e0c09] border border-white/10 rounded-lg overflow-hidden z-50 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
               {searchLoading ? (
                 <div className="px-3 py-3 text-[10px] font-mono text-white/40 text-center">Searching…</div>
               ) : searchResults.length === 0 ? (
@@ -214,7 +214,7 @@ export function Sidebar() {
                             <span className="text-[9px] font-mono text-white/50 uppercase">{t.type}</span>
                             {t.key && (
                               <span className={`text-[8px] font-mono font-bold px-1 rounded ${
-                                t.scale === 'minor' ? 'text-[#9d95e8]' : 'text-[#c8a47a]'
+                                t.scale === 'minor' ? 'text-[#c8a47a]' : 'text-[#c8a47a]'
                               }`}>
                                 {t.key}{t.scale === 'minor' ? 'm' : ''}
                               </span>

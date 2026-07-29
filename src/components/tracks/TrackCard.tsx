@@ -334,7 +334,7 @@ export function TrackCard({
         </button>
         {menuOpen && (
           <div
-            className="absolute right-0 top-full z-[80] mt-1 w-52 bg-[#090907] border border-white/10 rounded-lg shadow-2xl py-1 animate-in fade-in slide-in-from-top-1"
+            className="absolute right-0 top-full z-[80] mt-1 w-52 bg-[#090907] border border-white/10 rounded-lg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] py-1 animate-in fade-in slide-in-from-top-1"
           >
             {onClickDetails && (
               <button

@@ -32,7 +32,7 @@ export function CalendarView() {
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
 
   return (
-    <div className="bg-[#0E0E0E] border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
+    <div className="bg-[#0E0E0E] border border-white/10 rounded-3xl overflow-hidden shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
       {/* Header */}
       <div className="p-8 border-b border-white/10 flex items-center justify-between">
         <div>

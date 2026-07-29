@@ -35,7 +35,7 @@ export function LibraryMetadataGrid({ track }: Props) {
     {
       label: 'Key',
       value: fmtKey(track.key, track.scale),
-      accent: isMinor ? 'text-[#9d95e8]' : 'text-[#c8a47a]',
+      accent: isMinor ? 'text-[#c8a47a]' : 'text-[#c8a47a]',
       large: true,
     },
     {
@@ -78,7 +78,7 @@ export function LibraryMetadataGrid({ track }: Props) {
           {cell.label === 'Key' && track.key && (
             <span className={`mt-2 inline-block text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded ${
               isMinor
-                ? 'text-[#9d95e8] bg-[#1a1833]/60 border border-[#534AB7]/25'
+                ? 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/25'
                 : 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/30'
             }`}>
               {isMinor ? 'Minor' : 'Major'}

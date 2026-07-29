@@ -53,7 +53,7 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="relative bg-white/[0.04] border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-2xl"
+        className="relative bg-white/[0.04] border border-white/10 rounded-2xl w-full max-w-sm p-6 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
         onClick={(e) => e.stopPropagation()}
       >
         <button onClick={onClose} className="absolute top-4 right-4 text-white/40 hover:text-white/80 transition-colors">

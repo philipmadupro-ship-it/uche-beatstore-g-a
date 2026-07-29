@@ -16,7 +16,7 @@ import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 // Simple avatar color from name — used in preview recipient chip.
 const PREVIEW_PALETTES = [
   { bg: 'bg-white/10', text: 'text-white' },
-  { bg: 'bg-[#1a1833]', text: 'text-[#AFA9EC]' },
+  { bg: 'bg-[#1f1a10]', text: 'text-[#c8a47a]' },
   { bg: 'bg-[#0d2318]', text: 'text-[#6DC6A4]' },
   { bg: 'bg-[#2a1810]', text: 'text-[#e8a86a]' },
 ];
@@ -512,7 +512,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 key={r.id}
                 className={`flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded border ${
                   isAdhoc
-                    ? 'bg-[#1a1833] border-[#534AB7]/40 text-[#AFA9EC]'
+                    ? 'bg-[#1f1a10] border-[#3d3020]/40 text-[#c8a47a]'
                     : r.email
                       ? 'bg-white/10 border-white/20 text-white'
                       : 'bg-white/[0.05] border-white/10 text-yellow-500/70'
@@ -536,10 +536,10 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               onChange={(e) => setAdhocEmail(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAdhocEmail(); } }}
               placeholder={recipients.length ? 'Add email…' : 'Type an email to send…'}
-              className="w-40 bg-white/[0.02] border border-white/10 rounded px-2.5 py-1 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-[#534AB7]/60"
+              className="w-40 bg-white/[0.02] border border-white/10 rounded px-2.5 py-1 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-[#3d3020]/60"
             />
             {adhocEmail.trim() && (
-              <button onClick={addAdhocEmail} className="text-[10px] font-mono uppercase tracking-wider text-[#AFA9EC] hover:text-white px-1.5 py-1 rounded transition-colors">
+              <button onClick={addAdhocEmail} className="text-[10px] font-mono uppercase tracking-wider text-[#c8a47a] hover:text-white px-1.5 py-1 rounded transition-colors">
                 + Add
               </button>
             )}
@@ -624,10 +624,10 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
             <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 custom-scrollbar">
               {/* Similar Beats AI Suggestions Strip */}
               {mode === 'tracks' && baselineTrack && suggestedTracks.length > 0 && (
-                <div className="mb-4 p-3 rounded-lg border border-[#7F77DD]/25 bg-[#100e1f]/90 backdrop-blur-md space-y-2 animate-in fade-in duration-300">
+                <div className="mb-4 p-3 rounded-lg border border-[#c8a47a]/25 bg-[#100e1f]/90 backdrop-blur-md space-y-2 animate-in fade-in duration-300">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-[#AFA9EC]">
-                      <Sparkles size={11} className="animate-pulse text-[#7F77DD]" />
+                    <div className="flex items-center gap-1.5 text-[#c8a47a]">
+                      <Sparkles size={11} className="animate-pulse text-[#c8a47a]" />
                       <span className="text-[9px] font-bold uppercase tracking-widest font-akira">
                         AI SUGGESTIONS FOR {baselineTrack.title.toUpperCase()}
                       </span>
@@ -638,7 +638,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                         setSelectedTrackIds((prev) => Array.from(new Set([...prev, ...idsToSelect])));
                         toast.success(`Selected ${suggestedTracks.length} similar beats!`);
                       }}
-                      className="text-[8px] font-panchang font-bold uppercase tracking-wider text-[#AFA9EC] hover:text-white px-2 py-0.5 border border-[#7F77DD]/35 hover:border-[#7F77DD] rounded transition-colors"
+                      className="text-[8px] font-panchang font-bold uppercase tracking-wider text-[#c8a47a] hover:text-white px-2 py-0.5 border border-[#c8a47a]/35 hover:border-[#c8a47a] rounded transition-colors"
                     >
                       SELECT ALL
                     </button>
@@ -653,7 +653,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                           onClick={() => toggleTrack(t.id)}
                           className={`flex items-center gap-2 px-2.5 py-1.5 rounded border shrink-0 cursor-pointer transition-all ${
                             selected
-                              ? 'bg-[#7F77DD]/20 border-[#7F77DD] text-[#AFA9EC]'
+                              ? 'bg-[#c8a47a]/20 border-[#c8a47a] text-[#c8a47a]'
                               : 'bg-white/[0.02] border-white/[0.06] text-[#888] hover:text-[#e8e8e8] hover:bg-white/[0.04]'
                           }`}
                         >
@@ -973,7 +973,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
 
                 <div className="p-4">
                   {/* Email client frame */}
-                  <div className="rounded-xl overflow-hidden border border-white/20 bg-white/[0.04] shadow-xl">
+                  <div className="rounded-xl overflow-hidden border border-white/20 bg-white/[0.04] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
                     {/* Header: From / To / Subject */}
                     <div className="px-4 py-3 border-b border-white/10 space-y-1.5">
                       <div className="flex items-center gap-2.5">
