@@ -9,6 +9,7 @@ import {
 import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';
 import { MarqueeText } from './MarqueeText';
 import { SimpleAudioEngine } from './SimpleAudioEngine';
+import { MiniWaveform } from './MiniWaveform';
 import { CoverWaveform } from './CoverWaveform';
 import { QueueDrawer } from './QueueDrawer';
 import { useState, useRef, useEffect, useSyncExternalStore } from 'react';
@@ -229,45 +230,26 @@ export function PlayerBar() {
             </div>
           </div>
 
-          {/* Progress + times — hidden below md (phone pill is cover +
-              transport only). A slim scrubber rather than a waveform: the
-              pill is chrome, and the waveform's detail belongs to the Now
-              Playing panel where there's room to read it. Same seek + keyboard
-              affordances as the panel's scrubber. Audio plays via the headless
-              SimpleAudioEngine; this is purely the visual + seek. */}
+          {/* Waveform + times — hidden below md (phone pill is cover +
+              transport only). The bars are MiniWaveform (pure SVG, peaks
+              when available else a synthetic shape — never the WaveSurfer
+              decode that used to crash playback). Audio plays via the
+              headless SimpleAudioEngine; this is purely the visual + seek. */}
           <div className="hidden md:flex items-center gap-2.5 min-w-0">
             <span className="text-[10px] font-mono text-[#c8b89a] tabular-nums w-9 text-right shrink-0">
               {formatTime(currentSeconds)}
             </span>
-            <div
-              role="slider"
-              tabIndex={0}
-              aria-label={`Seek ${currentTrack.title || 'current track'}`}
-              aria-valuenow={Math.round(progress * 100)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuetext={`${formatTime(currentSeconds)} elapsed of ${formatTime(totalSeconds)}`}
-              onKeyDown={handleSeekKeyDown}
-              onClick={(e) => {
-                if (totalSeconds <= 0 || !streamStatus.canSeek) return;
-                const r = e.currentTarget.getBoundingClientRect();
-                seekTo(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)));
-              }}
-              className={cn(
-                'group/pillseek relative w-[210px] h-8 flex items-center',
-                streamStatus.canSeek ? 'cursor-pointer' : 'cursor-not-allowed opacity-70',
-              )}
-            >
-              <div className="w-full h-[4px] rounded-full bg-white/[0.13] overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-white transition-[width] duration-150 ease-linear"
-                  style={{ width: `${Math.min(100, Math.max(0, progress * 100))}%` }}
+            <div className="w-[210px] h-8 flex items-center px-1.5 rounded-xl bg-black/15 shadow-[inset_0_1px_2px_rgba(0,0,0,0.25)]">
+              {currentTrack.audio_url ? (
+                <MiniWaveform
+                  trackId={currentTrack.id}
+                  peaksUrl={currentTrack.peaks_url}
+                  height={26}
+                  isActive
                 />
-              </div>
-              <div
-                className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white opacity-0 group-hover/pillseek:opacity-100 transition-opacity"
-                style={{ left: `${Math.min(100, Math.max(0, progress * 100))}%` }}
-              />
+              ) : (
+                <div className="w-full h-[2px] bg-white/10 rounded" />
+              )}
             </div>
             <span className="text-[10px] font-mono text-white/40 tabular-nums w-9 shrink-0">
               {formatTime(totalSeconds)}

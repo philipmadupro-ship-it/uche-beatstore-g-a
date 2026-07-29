@@ -5789,7 +5789,7 @@
 - `EmptyState` (surface 6's third item) was inspected and needed no changes — it carries no shadow/gradient/off-radius decoration.
 - Still-unswept `shadow-2xl`/gradient instances remain in store + share components (`CartDrawer`, `FreeDownloadModal`, `ShareModal`, share variants, `GlassPage`, `VisionLibraryView`, `ProductList`). Those belong to surfaces 1–3, which were passed earlier under a narrower definition of done; a consistency re-sweep would close them out.
 
-### Follow-up (same surface): waveform removed from the pill player
+### Follow-up (same surface): waveform removed from the pill player — REVERTED
 
 Owner instruction mid-pass: no waveform on the pill player (the earlier "keep waveform"
 referred to the Now Playing panel, which is untouched).
@@ -5806,3 +5806,10 @@ referred to the Now Playing panel, which is untouched).
   glyphs), scrubber present at 210px with `aria-valuetext` "0:10 elapsed of 3:05" and the
   fill advancing during playback. tsc clean, eslint clean on the file, 538/538 tests,
   build green (55 pages).
+
+**Reverted on owner instruction.** The owner prefers the waveform on the pill bar; it is
+restored (`MiniWaveform`, 72 bars confirmed rendering live). Only the waveform swap was
+reversed — every other surface-6 reduction on PlayerBar stands: pill radius, single cast
+shadow, no gradient sheen, flat play button and cover, 20px flat Now Playing modal, and
+the gold (not purple) key badges. Verified after revert: 0 gradient layers in the pill,
+0 purple hex occurrences, tsc + eslint clean.
