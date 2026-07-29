@@ -9,8 +9,8 @@ import {
 import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';
 import { MarqueeText } from './MarqueeText';
 import { SimpleAudioEngine } from './SimpleAudioEngine';
+import { SpectralWaveform } from './SpectralWaveform';
 import { MiniWaveform } from './MiniWaveform';
-import { CoverWaveform } from './CoverWaveform';
 import { QueueDrawer } from './QueueDrawer';
 import { useState, useRef, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
@@ -18,7 +18,6 @@ import { cn } from '@/lib/utils';
 import { extractCoverColor } from '@/lib/audio/cover-color';
 import { canFetchReadableAudio, cdnAudioSrc } from '@/lib/audio/cdn';
 import { CoverImage } from '@/components/ui/CoverImage';
-import { keyboardSeekFraction } from '@/lib/audio/seek-accessibility';
 import { getPlayerStreamStatus } from '@/lib/audio/player-status';
 
 const subscribeToClientSnapshot = () => () => undefined;
@@ -155,13 +154,6 @@ export function PlayerBar() {
   const handlePrimaryPlay = () => {
     if (!streamStatus.canAttemptPlayback) return;
     togglePlay();
-  };
-  const handleSeekKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!streamStatus.canSeek) return;
-    const nextFraction = keyboardSeekFraction(e.key, progress, totalSeconds);
-    if (nextFraction == null) return;
-    e.preventDefault();
-    seekTo(nextFraction);
   };
 
   return (
@@ -403,7 +395,7 @@ export function PlayerBar() {
             <div className="flex items-center justify-between pb-1">
               <button
                 onClick={() => setNowPlayingOpen(false)}
-                className="w-9 h-9 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-white/80 hover:text-white transition-colors"
+                className="grid h-8 w-8 place-items-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white"
                 aria-label="Close"
               >
                 <ChevronDown size={18} />
@@ -413,33 +405,40 @@ export function PlayerBar() {
               </div>
               <button
                 onClick={() => { setNowPlayingOpen(false); setQueueOpen(true); }}
-                className="w-9 h-9 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center text-white/80 hover:text-white transition-colors"
+                className="grid h-8 w-8 place-items-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white"
                 aria-label="Queue"
               >
                 <ListMusic size={15} />
               </button>
             </div>
 
-            {/* Square cover art — De Roche cover-waveform hero. It observes
-                the global player and real peaks_url data; it never creates a
-                second audio engine. */}
+            {/* Cover art — clean and unobstructed. The waveform used to be
+                painted over this image; artwork and waveform are two different
+                jobs (one sells the beat, one lets you read it), so they're now
+                separate elements. */}
             <div className="flex items-center justify-center pt-5 pb-1">
-              <CoverWaveform
-                trackId={currentTrack.id}
-                title={currentTrack.title || 'Untitled'}
-                coverUrl={currentTrack.cover_url}
-                ambientColor={displayAmbient}
-                peaksUrl={currentTrack.peaks_url}
-                progress={progress}
-                state={streamStatus.coverState}
-                onSeek={(fraction) => {
-                  if (totalSeconds <= 0 || !streamStatus.canSeek) return;
-                  seekTo(fraction);
-                }}
-                onRetry={playbackError && streamStatus.canAttemptPlayback ? togglePlay : undefined}
-                statusDetail={streamStatus.detail}
-                className="w-full"
-              />
+              <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.04]">
+                {currentTrack.cover_url ? (
+                  <CoverImage
+                    src={currentTrack.cover_url}
+                    alt=""
+                    sizes="400px"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-white/25">
+                    <Music size={44} />
+                  </div>
+                )}
+                {playbackError && streamStatus.canAttemptPlayback && (
+                  <button
+                    onClick={togglePlay}
+                    className="absolute inset-x-3 bottom-3 rounded-lg border border-white/15 bg-black/70 px-3 py-2 text-[10px] font-mono uppercase tracking-[0.18em] text-white backdrop-blur-sm"
+                  >
+                    Retry playback
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Track info */}
@@ -461,83 +460,85 @@ export function PlayerBar() {
                 )}
               </div>
 
-              {/* Progress — a straight, Spotify-style scrubber. Click anywhere
-                  on the track to seek; a thumb appears on hover. */}
-              <div className="mt-6">
-                <div
-                  role="slider"
-                  tabIndex={0}
-                  aria-label={`Seek ${currentTrack.title || 'current track'}`}
-                  aria-valuenow={Math.round(progress * 100)}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuetext={`${formatTime(currentSeconds)} elapsed of ${formatTime(totalSeconds)}`}
-                  onKeyDown={handleSeekKeyDown}
-                  onClick={(e) => {
-                    if (totalSeconds <= 0 || !streamStatus.canSeek) return;
-                    const r = e.currentTarget.getBoundingClientRect();
-                    seekTo(Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)));
-                  }}
-                  className={cn(
-                    'group/seek relative h-4 flex items-center',
-                    streamStatus.canSeek ? 'cursor-pointer' : 'cursor-not-allowed opacity-70',
-                  )}
-                >
-                  <div className="w-full h-[5px] rounded-full bg-white/[0.13] overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-white group-hover/seek:bg-white transition-[width,background-color] duration-150 ease-linear"
-                      style={{ width: `${Math.min(100, Math.max(0, progress * 100))}%` }}
-                    />
-                  </div>
-                  <div
-                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-white shadow-[0_1px_5px_rgba(0,0,0,0.55)] opacity-0 group-hover/seek:opacity-100 transition-opacity"
-                    style={{ left: `${Math.min(100, Math.max(0, progress * 100))}%` }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] font-mono text-white/40 tabular-nums mt-1.5">
+              {/* Spectral waveform — its own lane, coloured by real low/mid/high
+                  band energy. Doubles as the scrubber (click, drag, keyboard). */}
+              <div className="mt-5">
+                <SpectralWaveform
+                  trackId={currentTrack.id}
+                  audioUrl={currentTrack.audio_url}
+                  peaksUrl={currentTrack.peaks_url}
+                  progress={progress}
+                  isPlaying={isPlaying}
+                  canSeek={streamStatus.canSeek && totalSeconds > 0}
+                  onSeek={(fraction) => seekTo(fraction)}
+                  label={currentTrack.title || 'current track'}
+                  durationSeconds={totalSeconds}
+                />
+                <div className="flex justify-between text-[10px] font-mono text-white/40 tabular-nums mt-1">
                   <span>{formatTime(currentSeconds)}</span>
                   <span>{formatTime(totalSeconds)}</span>
                 </div>
               </div>
 
-              {/* Transport */}
-              <div className="flex items-center justify-center gap-6 mt-6 mb-4">
+              {/* Transport — translucent glass fills, one step smaller than
+                  before. The play button stays the only solid element so it
+                  remains the single obvious action. Tap targets stay >= 40px
+                  via padding even though the visual discs are smaller. */}
+              <div className="flex items-center justify-center gap-5 mt-5 mb-4">
                 <button
                   onClick={toggleShuffle}
-                  className={cn('w-10 h-10 flex items-center justify-center rounded-full transition-colors', shuffle ? 'text-white' : 'text-white/60 hover:text-white')}
+                  className={cn(
+                    'grid h-9 w-9 place-items-center rounded-full border transition-colors',
+                    shuffle
+                      ? 'border-white/20 bg-white/[0.12] text-white'
+                      : 'border-white/[0.08] bg-white/[0.04] text-white/55 hover:text-white hover:bg-white/[0.08]',
+                  )}
                   aria-label={shuffle ? 'Turn shuffle off' : 'Turn shuffle on'}
                   aria-pressed={shuffle}
                 >
-                  <Shuffle size={18} />
+                  <Shuffle size={15} />
                 </button>
-                <button onClick={prev} className="w-10 h-10 flex items-center justify-center rounded-full text-[#cdbf9f] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Previous track">
-                  <PrevGlyph size={26} />
+                <button
+                  onClick={prev}
+                  className="grid h-9 w-9 place-items-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white/75 transition-colors hover:bg-white/[0.08] hover:text-white active:scale-90"
+                  aria-label="Previous track"
+                >
+                  <PrevGlyph size={19} />
                 </button>
                 <button
                   onClick={handlePrimaryPlay}
                   disabled={!streamStatus.canAttemptPlayback}
                   className={cn(
-                    'w-[3.75rem] h-[3.75rem] rounded-full flex items-center justify-center text-[#090907] bg-white active:scale-95 transition-all duration-150 shadow-[0_10px_30px_-8px_rgba(231,215,190,0.55)]',
-                    streamStatus.canAttemptPlayback ? 'hover:bg-[#E2CDA8] hover:scale-[1.05]' : 'cursor-not-allowed opacity-55',
+                    'grid h-[3.25rem] w-[3.25rem] place-items-center rounded-full bg-white text-[#090907] transition-transform duration-150 active:scale-95',
+                    streamStatus.canAttemptPlayback ? 'hover:scale-[1.04]' : 'cursor-not-allowed opacity-55',
                   )}
                   aria-label={isPlaying ? 'Pause' : 'Play'}
                   title={streamStatus.detail ?? streamStatus.title}
                 >
-                  {isPlaying ? <PauseGlyph size={25} /> : <PlayGlyph size={25} className="ml-1" />}
+                  {isPlaying ? <PauseGlyph size={22} /> : <PlayGlyph size={22} className="ml-0.5" />}
                 </button>
-                <button onClick={next} className="w-10 h-10 flex items-center justify-center rounded-full text-[#cdbf9f] hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Next track">
-                  <NextGlyph size={26} />
+                <button
+                  onClick={next}
+                  className="grid h-9 w-9 place-items-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white/75 transition-colors hover:bg-white/[0.08] hover:text-white active:scale-90"
+                  aria-label="Next track"
+                >
+                  <NextGlyph size={19} />
                 </button>
                 <button
                   onClick={cycleRepeat}
-                  className={cn('relative w-10 h-10 flex items-center justify-center rounded-full transition-colors', repeat !== 'off' ? 'text-white' : 'text-white/60 hover:text-white')}
+                  className={cn(
+                    'relative grid h-9 w-9 place-items-center rounded-full border transition-colors',
+                    repeat !== 'off'
+                      ? 'border-white/20 bg-white/[0.12] text-white'
+                      : 'border-white/[0.08] bg-white/[0.04] text-white/55 hover:text-white hover:bg-white/[0.08]',
+                  )}
                   aria-label={
                     repeat === 'off' ? 'Turn repeat all on' :
                     repeat === 'all' ? 'Switch to repeat one' : 'Turn repeat off'
                   }
                   aria-pressed={repeat !== 'off'}
                 >
-                  <Repeat size={18} />
+                  <Repeat size={15} />
                   {repeat === 'one' && <span className="absolute -top-0.5 -right-0.5 text-[9px] font-bold leading-none">1</span>}
                 </button>
               </div>

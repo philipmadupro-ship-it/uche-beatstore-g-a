@@ -5970,3 +5970,89 @@ Surfaced both as an explicit choice rather than guessed:
   issue.
 - The stray 14px shared track title (`TrackCard`/`StoreListView`) remains, as it is applied
   consistently across every list surface and changing it is a product decision.
+
+---
+
+## Chapter: Beat preview player — spectral waveform revamp
+
+### Skills Used
+
+- Research first (owner asked for it): DAW/Rekordbox/Audition spectral-colouring conventions,
+  plus GitHub prior art (wavesurfer.js spectrogram, waveform-playlist, waveform-visualizer).
+- `.codex/skills/quiet-luxury-ui` for the control restyle; CLAUDE.md rule 4 (pure-logic
+  extract + Vitest) for the colour mapping.
+
+### Area Inspected
+
+`src/components/player/PlayerBar.tsx` (Now Playing card), `CoverWaveform.tsx`,
+`src/lib/audio/visual-peaks.ts`, the peaks pipeline, `src/lib/audio/cdn.ts`, `/api/audio`.
+
+### Problems Discovered
+
+- **The existing "DAW waveform" was not spectral at all.** `buildDawWaveformBars` assigned a
+  frequency band per bar via `index % 5` — a positional cycle with zero relationship to the
+  audio. It *looked* like frequency information while carrying none.
+- **The peaks pipeline stores amplitude only** (`{version, peaks[], duration, length}`), so
+  there was no frequency data anywhere to colour from. Real spectral colour required new
+  analysis, not a new renderer.
+- **Analysis initially fell back to amplitude on the live store.** Root cause was not a bug:
+  `canFetchReadableAudio` deliberately returns false for `.r2.dev` because the public bucket
+  sends no CORS headers — `<audio>` can *play* those bytes but `fetch()` cannot *read* them.
+
+### Changes Made
+
+- **`src/lib/audio/spectral-peaks.ts` (new, pure).** `buildSpectralBars` turns per-slice
+  low/mid/high energy into coloured bars; `buildAmplitudeBars` is the honest fallback;
+  `resampleSeries` fits any peaks resolution to the lane's bar count. Design decisions worth
+  keeping: bands are normalised *independently* (highs carry far less energy, so a global
+  normalise renders hats black and everything reads red), height uses *raw* loudness (so a
+  quiet intro stays short), and weights run through a `CONTRAST_EXPONENT` power curve.
+- **`src/hooks/useSpectralPeaks.ts` (new).** Fetches once, decodes mono at 22.05 kHz, renders
+  three parallel `OfflineAudioContext` passes through lowpass 250 Hz / bandpass 1.4 kHz /
+  highpass 4 kHz, reduces each to per-slice RMS. Session-cached per track at 512 slices;
+  failures recorded so a doomed decode is never retried; stale results discarded if the user
+  skips tracks mid-analysis.
+- **`resolveAnalysisUrl`** routes analysis through the same-origin `/api/audio` proxy when the
+  direct URL isn't fetch-readable — exactly what CLAUDE.md reserves that proxy for
+  ("surfaces that still decode audio"). Playback is untouched and still streams direct from
+  R2/CDN; this is one cached fetch per track, only while the preview is open.
+- **`src/components/player/SpectralWaveform.tsx` (new).** The waveform is now its own lane,
+  no longer painted over the cover. Doubles as the scrubber: click, pointer-drag (listeners
+  on `window` so the gesture survives leaving the lane), and keyboard via the shared, already-
+  tested `keyboardSeekFraction` helper rather than a second local implementation. Spotify-style
+  dot rides the playhead and grows while dragging. Played audio is dimmed rather than
+  recoloured so spectral information stays readable across the whole lane.
+- **Now Playing card rebuilt.** Cover art is clean and unobstructed; transport controls are one
+  step smaller with translucent glass fills (play button stays the only solid element, so it
+  remains the single obvious action); top-bar buttons matched.
+
+### Problems Fixed
+
+- Verified live on `/store` with a real preview: **96 bars, 79 distinct colours** (was 1 flat
+  fallback colour), legend in the `ready` state, and a musically sensible distribution for a
+  trap beat — 54 bass-dominant warm bars vs 38 mid-dominant green.
+- **Caught and fixed a real quality flaw mid-pass:** the first working version rendered muddy
+  grey-green because per-band normalisation leaves most slices with similar relative levels,
+  so a plain weighted average lands on the midpoint of the three colours. Added the
+  `CONTRAST_EXPONENT` power curve (2.6) — colour spread went from visually flat to 111 channel
+  distance. Pinned with a regression test.
+
+### Tests Performed
+
+- 22 new unit tests on the pure mapping (dominance, per-band normalisation, raw-loudness
+  height, NaN/Infinity, negative magnitudes, all-silent, colour separation, resampling).
+- `npx tsc --noEmit` clean · `npx eslint .` 0 errors · `npm test` **560/560** (was 538) ·
+  `npm run build` green.
+- Live: playback + preview opened on `/store`; bar count, distinct colours, colour spread,
+  band distribution, legend state and slider ARIA all asserted from computed styles.
+
+### Remaining Concerns
+
+- **`CoverWaveform.tsx` is now unused** by the card but still in the tree; it was left in place
+  rather than deleted in the same pass as the revamp. Worth removing once the new lane has
+  been used in anger.
+- Spectral analysis needs *readable* bytes. Where it can't get them it degrades honestly to
+  "Amplitude only" rather than faking bands. Setting `NEXT_PUBLIC_R2_CDN_URL` to a
+  CORS-enabled custom domain would let analysis skip the proxy entirely.
+- Analysis is client-side and per-session. If this becomes central to the buying flow, the
+  three band series belong in the peaks sidecar generated at upload time.
