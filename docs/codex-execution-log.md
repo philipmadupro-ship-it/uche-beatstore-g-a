@@ -5788,3 +5788,21 @@
 
 - `EmptyState` (surface 6's third item) was inspected and needed no changes — it carries no shadow/gradient/off-radius decoration.
 - Still-unswept `shadow-2xl`/gradient instances remain in store + share components (`CartDrawer`, `FreeDownloadModal`, `ShareModal`, share variants, `GlassPage`, `VisionLibraryView`, `ProductList`). Those belong to surfaces 1–3, which were passed earlier under a narrower definition of done; a consistency re-sweep would close them out.
+
+### Follow-up (same surface): waveform removed from the pill player
+
+Owner instruction mid-pass: no waveform on the pill player (the earlier "keep waveform"
+referred to the Now Playing panel, which is untouched).
+
+- Replaced `MiniWaveform` in the bottom pill with the same slim Spotify-style scrubber the
+  Now Playing panel already uses — click-to-seek, `role="slider"`, full ARIA
+  (`aria-valuenow`/`valuemin`/`valuemax`/`valuetext`), `tabIndex=0`, and the shared
+  `handleSeekKeyDown` handler, so keyboard seek and screen-reader output are unchanged.
+- Dropped the waveform container's inset shadow along with it, and removed the now-unused
+  `MiniWaveform` import.
+- Rationale consistent with principle 1: the pill is chrome; waveform detail belongs to the
+  panel where there's room to actually read it.
+- Verified live: 0 multi-bar SVGs remain in the pill (max 1 `<rect>` per SVG = plain icon
+  glyphs), scrubber present at 210px with `aria-valuetext` "0:10 elapsed of 3:05" and the
+  fill advancing during playback. tsc clean, eslint clean on the file, 538/538 tests,
+  build green (55 pages).
