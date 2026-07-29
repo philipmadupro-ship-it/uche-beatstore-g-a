@@ -6,7 +6,7 @@ import {
   ExternalLink, Music, ChevronRight, ShoppingBag, Play, Pause, X,
 } from 'lucide-react';
 import { LicenseSelector } from '@/components/store/LicenseSelector';
-import { ProgressBar } from '@/components/player/ProgressBar';
+import { SpectralWaveform } from '@/components/player/SpectralWaveform';
 import { Drawer } from '@/components/ui/Drawer';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -175,12 +175,23 @@ export function BeatPreviewDrawer({
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {/* ── Simple progress line + time ── */}
+          {/* ── Spectral waveform + time ──
+              The buyer's actual audition surface, so it gets the same
+              DAW-style low/mid/high colouring as the Now Playing card rather
+              than a flat progress line: you can see where the 808 and the hats
+              sit before committing to a licence. Interaction is unchanged —
+              seeking on the current track, starting playback on any other. */}
           <div className="px-5 pt-4 pb-3 border-b border-white/[0.05]">
-            <ProgressBar
+            <SpectralWaveform
+              trackId={track.id}
+              audioUrl={track.audio_url}
+              peaksUrl={track.peaks_url}
               progress={isCurrent ? progress : 0}
+              isPlaying={isCurrent && isPlaying}
+              canSeek={dur > 0}
               onSeek={(f) => { if (isCurrent) seekTo(f); else onPlay(); }}
-              accent={accentColor}
+              label={track.title}
+              durationSeconds={dur}
             />
             <div className="flex justify-between mt-1.5">
               <span className="text-[9px] font-mono text-white/40 tabular-nums">

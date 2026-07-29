@@ -6083,3 +6083,33 @@ Spawned a separate task for the newly-orphaned `--wave-*` design tokens and
 `src/lib/audio/artwork-safety.ts` — those are design-system decisions rather than cleanup, and
 the 5-band `--wave-*` scale contains a purple (`#695FAD`) that shouldn't be re-adopted after the
 accent work.
+
+### Follow-up: spectral lane extended to both preview drawers
+
+The revamp initially landed only on the Now Playing card, which is the *producer's* surface.
+The owner asked for the preview drawers too — correctly, since those are where auditioning
+actually happens.
+
+- **`src/components/store/BeatPreviewDrawer.tsx`** — the buyer's audition surface on `/store`.
+  Replaced the flat `ProgressBar` line with `SpectralWaveform`. Interaction semantics preserved
+  exactly: seeking when the drawer's track is the current one, starting playback when it isn't
+  (`canSeek` stays true whenever a duration exists so the lane is always interactive, and the
+  `onSeek` callback routes play-vs-seek as before).
+- **`src/components/share/ShareTrackDetailsDrawer.tsx`** — what a recipient sees from a DM'd
+  link. Same swap. This drawer's `onSeek` contract is in *seconds*, not a fraction, so the lane's
+  fraction is converted at the call site. Added `peaks_url` to the file's local `Track` interface
+  and introduced `effectiveDuration` (live engine duration, falling back to stored metadata) so
+  the lane is seekable immediately rather than only after playback begins. Removed the
+  now-superseded `handleSeek`.
+- Fixed another instance of the broken `bg-white/` class (opacity modifier missing) that the old
+  progress line carried.
+
+All three preview surfaces — Now Playing card, store drawer, share drawer — now render the same
+component, so a buyer, a recipient and the producer all read the same waveform.
+
+Verified live on `/store` by opening a beat card: 96 bars, **87 distinct colours**, colour spread
+111, 54 bass-dominant vs 38 mid-dominant, legend in the `ready` state, `aria-valuetext`
+"0:00 elapsed of 3:05". tsc clean, eslint clean on both files, 560/560 tests, build green.
+
+The share drawer could not be exercised live (needs a valid share token), so it is covered by
+types + build + the fact that it renders the identical component with a converted callback.

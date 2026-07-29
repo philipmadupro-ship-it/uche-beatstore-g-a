@@ -1,6 +1,7 @@
 'use client';
 
 import NextImage from 'next/image';
+import { SpectralWaveform } from '@/components/player/SpectralWaveform';
 import { X, Play, Pause, Music, ShoppingCart, Info, CheckCircle, XCircle, Tag } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
 import type { Track as CartTrack } from '@/lib/types';
@@ -18,6 +19,7 @@ interface Track {
   title: string;
   type: string;
   audio_url: string;
+  peaks_url?: string | null;
   cover_url?: string | null;
   duration_seconds?: number | null;
   bpm?: number | null;
@@ -144,14 +146,11 @@ export function ShareTrackDetailsDrawer({
   const isMinor = track.scale === 'minor';
   const inCart = cartItems.some((i) => i.track.id === track.id);
 
-  const handlePlayToggle = () => onPlay(track);
+  // Live duration once the engine reports it; stored metadata before that,
+  // so the lane is seekable immediately rather than only after playback starts.
+  const effectiveDuration = duration > 0 ? duration : (track.duration_seconds || 0);
 
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isActive || duration <= 0) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    onSeek(pct * duration);
-  };
+  const handlePlayToggle = () => onPlay(track);
 
   const handleBuy = (licenseType: 'lease' | 'exclusive') => {
     if (!shareToken) return;
@@ -263,19 +262,29 @@ export function ShareTrackDetailsDrawer({
                 <p className="text-[12px] font-medium text-white truncate mt-0.5">{track.title}</p>
               </div>
             </div>
+            {/* Spectral waveform — same DAW-style low/mid/high colouring as the
+                store preview and Now Playing card, so a recipient auditioning a
+                beat sees the same thing a buyer does. Replaces a flat 1.5px
+                progress line. onSeek converts the lane's fraction back into the
+                seconds this drawer's callback expects. */}
             <div className="space-y-1">
-              <div
-                onClick={handleSeek}
-                className={`h-1.5 rounded-full relative cursor-pointer ${isActive ? 'bg-white/20' : 'bg-white/'}`}
-              >
-                <div
-                  className="h-full bg-white rounded-full transition-all"
-                  style={{ width: `${isActive ? progressPct : 0}%` }}
-                />
-              </div>
+              <SpectralWaveform
+                trackId={track.id}
+                audioUrl={track.audio_url}
+                peaksUrl={track.peaks_url}
+                progress={isActive ? progressPct / 100 : 0}
+                isPlaying={isCurrentPlaying}
+                canSeek={effectiveDuration > 0}
+                onSeek={(f) => {
+                  if (!isActive) { onPlay(track); return; }
+                  onSeek(f * effectiveDuration);
+                }}
+                label={track.title}
+                durationSeconds={effectiveDuration}
+              />
               <div className="flex justify-between text-[10px] font-mono text-white/40 tabular-nums">
                 <span>{isActive ? fmt(currentTime) : '0:00'}</span>
-                <span>{isActive && duration > 0 ? fmt(duration) : fmt(track.duration_seconds || 0)}</span>
+                <span>{fmt(effectiveDuration)}</span>
               </div>
             </div>
           </div>
