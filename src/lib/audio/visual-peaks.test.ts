@@ -30,8 +30,8 @@ describe('visual waveform peaks', () => {
 
     expect(bars.filter((bar) => bar.isBeat).map((bar) => bar.index)).toEqual([0, 4, 8, 12, 16]);
     expect(bars.filter((bar) => bar.isDownbeat).map((bar) => bar.index)).toEqual([0, 16]);
-    expect(bars[0]).toMatchObject({ band: 'low', isBeat: true, isDownbeat: true });
-    expect(bars[4]).toMatchObject({ band: 'high', isBeat: true, isDownbeat: false });
+    expect(bars[0]).toMatchObject({ isBeat: true, isDownbeat: true });
+    expect(bars[4]).toMatchObject({ isBeat: true, isDownbeat: false });
   });
 
   it('flags local peak spikes as transients', () => {

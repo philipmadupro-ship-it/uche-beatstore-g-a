@@ -6056,3 +6056,30 @@ Surfaced both as an explicit choice rather than guessed:
   CORS-enabled custom domain would let analysis skip the proxy entirely.
 - Analysis is client-side and per-session. If this becomes central to the buying flow, the
   three band series belong in the peaks sidecar generated at upload time.
+
+### Follow-up: fake spectral concept removed from the codebase
+
+Cleanup after the revamp, so the misleading abstraction can't be resurrected:
+
+- **Deleted `src/components/player/CoverWaveform.tsx`.** Orphaned once the preview card stopped
+  painting the waveform over the artwork. Confirmed no remaining importers first (the only
+  `CoverWaveform` string hits left were the unrelated `analyzeCoverWaveform` upload helper and
+  a comment in the new component).
+- **Removed the `band` field from `buildDawWaveformBars` / `DawWaveformBar`.** Traced its
+  readers: exactly one, the component above. With that gone it was dead data whose only purpose
+  was to *look* like frequency information. Two tests asserted on it (`band: 'low'` at index 0,
+  `band: 'high'` at index 4) — those were pinning the `index % 5` behaviour itself, so they were
+  updated rather than kept.
+- **Documented what the function actually does.** `isBeat`/`isDownbeat` stay positional and that
+  is correct — a 1/4 and 1/16 ruler is how a DAW draws its grid — and `isTransient` is genuinely
+  derived from neighbouring peak heights. The docblock now says so explicitly and points at
+  `spectral-peaks.ts` for real frequency colour, so the next reader doesn't re-add a fake band.
+
+Verified live that the pill waveform (which the owner explicitly asked to keep) is unaffected:
+72 bars, 18 beat-grid lines, transient glow intact. tsc clean, eslint 0 errors, 560/560 tests,
+build green.
+
+Spawned a separate task for the newly-orphaned `--wave-*` design tokens and
+`src/lib/audio/artwork-safety.ts` — those are design-system decisions rather than cleanup, and
+the 5-band `--wave-*` scale contains a purple (`#695FAD`) that shouldn't be re-adopted after the
+accent work.

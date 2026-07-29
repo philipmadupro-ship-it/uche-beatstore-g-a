@@ -16,7 +16,6 @@ export interface DawWaveformBar {
   isBeat: boolean;
   isDownbeat: boolean;
   isTransient: boolean;
-  band: 'low' | 'lowMid' | 'mid' | 'highMid' | 'high';
 }
 
 export function seedFromString(value: string): number {
@@ -69,6 +68,19 @@ export function resampleVisualPeaks(peaks: number[], targetCount: number): numbe
   return output.map((value) => VISUAL_PEAK_MIN + (value / max) * (VISUAL_PEAK_MAX - VISUAL_PEAK_MIN));
 }
 
+/**
+ * Beat-grid + transient annotation for the compact pill waveform.
+ *
+ * `isBeat`/`isDownbeat` are positional by design — a 1/4 and 1/16 grid, which
+ * is how a DAW draws its ruler. `isTransient` is derived from actual peak
+ * heights relative to their neighbours.
+ *
+ * This function deliberately carries NO frequency information. It used to
+ * expose a `band` field assigned via `index % 5`, which looked spectral while
+ * being purely positional; it was only ever read by one component and has been
+ * removed. Real spectral colour lives in `spectral-peaks.ts`, driven by actual
+ * band energy.
+ */
 export function buildDawWaveformBars(peaks: number[]): DawWaveformBar[] {
   return peaks.map((height, index) => {
     const previous = peaks[index - 1] ?? height;
@@ -77,23 +89,12 @@ export function buildDawWaveformBars(peaks: number[]): DawWaveformBar[] {
     const isBeat = index % 4 === 0;
     const isDownbeat = index % 16 === 0;
     const isTransient = height >= 0.72 && height >= localAverage * 1.16;
-    const bandIndex = index % 5;
-    const band = bandIndex === 0
-      ? 'low'
-      : bandIndex === 1
-        ? 'lowMid'
-        : bandIndex === 2
-          ? 'mid'
-          : bandIndex === 3
-            ? 'highMid'
-            : 'high';
     return {
       height,
       index,
       isBeat,
       isDownbeat,
       isTransient,
-      band,
     };
   });
 }
