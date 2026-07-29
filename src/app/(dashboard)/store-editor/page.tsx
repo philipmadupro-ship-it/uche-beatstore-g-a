@@ -174,7 +174,7 @@ function Section({
   const panelId = `store-editor-section-${id}`;
 
   return (
-    <section className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.04] sm:rounded-2xl">
+    <section className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
       <button
         type="button"
         onClick={onToggle}
@@ -268,7 +268,7 @@ function LicenseTemplateEditor({
             type="button"
             onClick={() => insertVar(v.key)}
             title={`Insert {{${v.key}}} — sample: ${v.sample}`}
-            className="px-2 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white/[0.04] border border-white/10 text-white/80 hover:text-white hover:border-white/20 transition-colors"
+            className="px-2 py-1 rounded-lg text-[10px] font-mono uppercase tracking-wider bg-white/[0.04] border border-white/10 text-white/80 hover:text-white hover:border-white/20 transition-colors"
           >
             +{v.label}
           </button>
@@ -276,14 +276,14 @@ function LicenseTemplateEditor({
         <button
           type="button"
           onClick={() => onChange(DEFAULT_TEMPLATE_MD)}
-          className="ml-auto px-3 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white/[0.04] border border-white/20 text-white/80 hover:text-white transition-colors"
+          className="ml-auto px-3 py-1 rounded-lg text-[10px] font-mono uppercase tracking-wider bg-white/[0.04] border border-white/20 text-white/80 hover:text-white transition-colors"
         >
           Use default
         </button>
         <button
           type="button"
           onClick={() => setPreview((p) => !p)}
-          className="px-3 py-1 rounded-md text-[10px] font-mono uppercase tracking-wider border transition-colors"
+          className="px-3 py-1 rounded-lg text-[10px] font-mono uppercase tracking-wider border transition-colors"
           style={preview
             ? { backgroundColor: '#FFFFFF', color: '#000', borderColor: 'rgba(255,255,255,0.3)' }
             : { backgroundColor: 'transparent', color: 'rgba(255,255,255,0.8)', borderColor: 'rgba(255,255,255,0.2)' }}
@@ -293,7 +293,7 @@ function LicenseTemplateEditor({
       </div>
 
       {preview ? (
-        <pre className="bg-[#090907] border border-white/10 rounded-lg p-4 text-[12px] text-white leading-relaxed whitespace-pre-wrap font-sans max-h-[480px] overflow-auto">
+        <pre className="bg-[#090907] border border-white/10 rounded-lg p-4 text-[11px] text-white leading-relaxed whitespace-pre-wrap font-sans max-h-[480px] overflow-auto">
           {filledPreview}
         </pre>
       ) : (
@@ -425,7 +425,7 @@ function BackfillPeaksButton({
         type="button"
         onClick={run}
         disabled={busy}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black text-[12px] font-bold uppercase tracking-wider hover:bg-white/90 transition-colors disabled:opacity-50"
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black text-[11px] font-bold uppercase tracking-wider hover:bg-white/90 transition-colors disabled:opacity-50"
       >
         {busy ? <Loader2 size={12} className="animate-spin" /> : <Music size={12} />}
         {busy
@@ -457,7 +457,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-const inputCls = 'w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/40 transition-colors';
+const inputCls = 'w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/40 transition-colors';
 const textareaCls = `${inputCls} resize-none leading-relaxed`;
 
 /* ─── Live preview ───────────────────────────────────────────── */
@@ -611,7 +611,7 @@ function StorePreview({
 
   return (
     <div
-      className="rounded-2xl overflow-hidden border border-white/10 bg-[#090907] text-white"
+      className="rounded-xl overflow-hidden border border-white/10 bg-[#090907] text-white"
       style={{ '--store-accent': accent } as React.CSSProperties}
     >
       {/* Real ArtistBioBlock — mirrors what buyers see */}
@@ -620,7 +620,7 @@ function StorePreview({
       {/* Featured playlists */}
       {featuredPlaylists.length > 0 && (
         <div className="px-4 py-3 border-t border-white/10">
-          <p className="text-[8px] font-mono uppercase tracking-widest text-white/40 mb-2">Featured Playlists</p>
+          <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-2">Featured Playlists</p>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {featuredPlaylists.map((pl) => (
               <div key={pl.id} className="shrink-0 w-14">
@@ -629,7 +629,7 @@ function StorePreview({
                     ? <Image src={pl.cover_url} alt="" width={56} height={56} unoptimized className="w-full h-full object-cover" />
                     : <ListMusic size={14} className="text-white/30" />}
                 </div>
-                <p className="text-[8px] text-white/60 truncate leading-tight">{pl.name}</p>
+                <p className="text-[9px] text-white/60 truncate leading-tight">{pl.name}</p>
               </div>
             ))}
           </div>
@@ -639,7 +639,7 @@ function StorePreview({
       {/* Featured projects */}
       {featuredProjects.length > 0 && (
         <div className="px-4 py-3 border-t border-white/10">
-          <p className="text-[8px] font-mono uppercase tracking-widest text-white/40 mb-2">Featured Projects</p>
+          <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-2">Featured Projects</p>
           <div className="flex gap-2 overflow-x-auto pb-1">
             {featuredProjects.map((pr) => (
               <div key={pr.id} className="shrink-0 w-14">
@@ -648,12 +648,12 @@ function StorePreview({
                     ? <Image src={pr.cover_url} alt="" width={56} height={56} unoptimized className="w-full h-full object-cover" />
                     : <Layers size={14} className="text-white/30" />}
                   {pr.price_usd != null && Number(pr.price_usd) > 0 && (
-                    <span className="absolute bottom-0 left-0 right-0 text-[8px] font-mono font-bold py-0.5 text-center text-black" style={{ backgroundColor: accent }}>
+                    <span className="absolute bottom-0 left-0 right-0 text-[9px] font-mono font-bold py-0.5 text-center text-black" style={{ backgroundColor: accent }}>
                       ${pr.price_usd}
                     </span>
                   )}
                 </div>
-                <p className="text-[8px] text-white/60 truncate leading-tight">{pr.name}</p>
+                <p className="text-[9px] text-white/60 truncate leading-tight">{pr.name}</p>
               </div>
             ))}
           </div>
@@ -662,7 +662,7 @@ function StorePreview({
 
       {/* Real BeatCard components — exactly what buyers see */}
       <div className="px-4 py-4 border-t border-white/10">
-        <p className="text-[8px] font-mono uppercase tracking-widest text-white/40 mb-3">
+        <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-3">
           Beats listed ({tracks.length})
         </p>
         {previewStoreTracks.length > 0 ? (
@@ -691,7 +691,7 @@ function StorePreview({
             {[0, 1].map((i) => (
               <div key={i} className="aspect-square rounded-xl bg-white/[0.04] border border-dashed border-white/10 flex flex-col items-center justify-center gap-2">
                 <Music size={16} className="text-white/30" />
-                <p className="text-[8px] font-mono text-white/30">No beats listed</p>
+                <p className="text-[9px] font-mono text-white/30">No beats listed</p>
               </div>
             ))}
           </div>
@@ -1615,7 +1615,7 @@ export default function StoreEditorPage() {
             <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight text-white leading-none font-heading">
               Store Editor
             </h1>
-            <p className="mt-1.5 max-w-[58ch] text-[12px] leading-relaxed text-white/60">
+            <p className="mt-1.5 max-w-[58ch] text-[11px] leading-relaxed text-white/60">
               Customise your public beatstore — changes go live instantly on save.
             </p>
           </div>
@@ -1652,7 +1652,7 @@ export default function StoreEditorPage() {
 
           {/* ── Left: editor panels ── */}
           <div className={`flex-1 min-w-0 space-y-3 ${previewOpen ? 'hidden lg:block' : ''}`}>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3 sm:p-4">
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 sm:p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/80">Start with Hero</p>
@@ -1681,7 +1681,7 @@ export default function StoreEditorPage() {
                     onClick={() => openSection(item.id)}
                     className="rounded-xl border border-white/10 bg-[#090907] px-3 py-2 text-left transition-colors hover:border-white/20 hover:bg-white/[0.04]"
                   >
-                    <span className="block text-[15px] font-semibold text-white">{item.value}</span>
+                    <span className="block text-[16px] font-semibold text-white">{item.value}</span>
                     <span className="mt-0.5 block truncate text-[9px] font-mono uppercase tracking-[0.16em] text-white/30">{item.label}</span>
                   </button>
                 ))}
@@ -1795,7 +1795,7 @@ export default function StoreEditorPage() {
                       onChange={set('accent_color')}
                       maxLength={7}
                       placeholder="#FFFFFF"
-                      className="w-20 bg-transparent text-[12px] text-white focus:outline-none font-mono"
+                      className="w-20 bg-transparent text-[11px] text-white focus:outline-none font-mono"
                     />
                   </div>
                   <div className="flex gap-1.5 flex-wrap">
@@ -1858,7 +1858,7 @@ export default function StoreEditorPage() {
                       onChange={set('text_color_primary')}
                       maxLength={7}
                       placeholder="#FFFFFF"
-                      className="w-20 bg-transparent text-[12px] text-white focus:outline-none font-mono"
+                      className="w-20 bg-transparent text-[11px] text-white focus:outline-none font-mono"
                     />
                   </div>
                   <button
@@ -1891,7 +1891,7 @@ export default function StoreEditorPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Field label="Instagram Handle">
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-white/40">@</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-white/40">@</span>
                     <input
                       type="text"
                       value={form.instagram_handle}
@@ -1903,7 +1903,7 @@ export default function StoreEditorPage() {
                 </Field>
                 <Field label="Twitter / 𝕏 Handle">
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-white/40">@</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-white/40">@</span>
                     <input
                       type="text"
                       value={form.twitter_handle}
@@ -1984,10 +1984,10 @@ export default function StoreEditorPage() {
                           : <div className="w-full h-full flex items-center justify-center"><ListMusic size={12} className="text-white/30" /></div>}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium text-white truncate">{pl.name}</p>
+                        <p className="text-[11px] font-medium text-white truncate">{pl.name}</p>
                         <p className="text-[10px] font-mono text-white/40">{pl.track_count} track{pl.track_count !== 1 ? 's' : ''}</p>
                       </div>
-                      <span className="hidden shrink-0 rounded border border-[#6DC6A4]/20 bg-[#6DC6A4]/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] sm:inline-flex">
+                      <span className="hidden shrink-0 rounded border border-[#6DC6A4]/20 bg-[#6DC6A4]/10 px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider text-[#6DC6A4] sm:inline-flex">
                         Featured
                       </span>
                       <div className="flex shrink-0 items-center gap-1">
@@ -1996,7 +1996,7 @@ export default function StoreEditorPage() {
                           onClick={() => moveFeaturedPlaylist(idx, -1)}
                           disabled={idx === 0}
                           aria-label={`Move ${pl.name} up`}
-                          className="grid h-9 w-9 place-items-center rounded-md border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
+                          className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
                         >
                           <ArrowUp size={12} />
                         </button>
@@ -2005,7 +2005,7 @@ export default function StoreEditorPage() {
                           onClick={() => moveFeaturedPlaylist(idx, 1)}
                           disabled={idx === featured.length - 1}
                           aria-label={`Move ${pl.name} down`}
-                          className="grid h-9 w-9 place-items-center rounded-md border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
+                          className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
                         >
                           <ArrowDown size={12} />
                         </button>
@@ -2022,7 +2022,7 @@ export default function StoreEditorPage() {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-white/40 text-[12px]">
+                <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-white/40 text-[11px]">
                   No featured playlists yet. Add one below.
                 </div>
               )}
@@ -2039,7 +2039,7 @@ export default function StoreEditorPage() {
                         key={pl.id}
                         className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#090907] border border-white/10 hover:border-white/20 transition-colors"
                       >
-                        <div className="w-8 h-8 rounded-md overflow-hidden bg-white/[0.05] border border-white/20 shrink-0">
+                        <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/[0.05] border border-white/20 shrink-0">
                           {pl.cover_url
                             ? <Image src={pl.cover_url} alt="" width={32} height={32} unoptimized className="w-full h-full object-cover" />
                             : <div className="w-full h-full flex items-center justify-center"><ListMusic size={10} className="text-white/30" /></div>}
@@ -2102,12 +2102,12 @@ export default function StoreEditorPage() {
                           : <div className="w-full h-full flex items-center justify-center"><Layers size={12} className="text-white/30" /></div>}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium text-white truncate">{pr.name}</p>
+                        <p className="text-[11px] font-medium text-white truncate">{pr.name}</p>
                         {pr.price_usd != null && (
                           <p className="text-[10px] font-mono text-white/40">${pr.price_usd}</p>
                         )}
                       </div>
-                      <span className="hidden shrink-0 rounded border border-[#6DC6A4]/20 bg-[#6DC6A4]/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] sm:inline-flex">
+                      <span className="hidden shrink-0 rounded border border-[#6DC6A4]/20 bg-[#6DC6A4]/10 px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider text-[#6DC6A4] sm:inline-flex">
                         Featured
                       </span>
                       <div className="flex shrink-0 items-center gap-1">
@@ -2116,7 +2116,7 @@ export default function StoreEditorPage() {
                           onClick={() => moveFeaturedProject(idx, -1)}
                           disabled={idx === 0}
                           aria-label={`Move ${pr.name} up`}
-                          className="grid h-9 w-9 place-items-center rounded-md border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
+                          className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
                         >
                           <ArrowUp size={12} />
                         </button>
@@ -2125,7 +2125,7 @@ export default function StoreEditorPage() {
                           onClick={() => moveFeaturedProject(idx, 1)}
                           disabled={idx === featuredProjects.length - 1}
                           aria-label={`Move ${pr.name} down`}
-                          className="grid h-9 w-9 place-items-center rounded-md border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
+                          className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
                         >
                           <ArrowDown size={12} />
                         </button>
@@ -2142,7 +2142,7 @@ export default function StoreEditorPage() {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-white/40 text-[12px]">
+                <div className="rounded-xl border border-dashed border-white/10 py-8 text-center text-white/40 text-[11px]">
                   No featured projects yet. Add one below.
                 </div>
               )}
@@ -2158,7 +2158,7 @@ export default function StoreEditorPage() {
                         key={pr.id}
                         className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-[#090907] border border-white/10 hover:border-white/20 transition-colors"
                       >
-                        <div className="w-8 h-8 rounded-md overflow-hidden bg-white/[0.05] border border-white/20 shrink-0">
+                        <div className="w-8 h-8 rounded-lg overflow-hidden bg-white/[0.05] border border-white/20 shrink-0">
                           {pr.cover_url
                             ? <Image src={pr.cover_url} alt="" width={32} height={32} unoptimized className="w-full h-full object-cover" />
                             : <div className="w-full h-full flex items-center justify-center"><Layers size={10} className="text-white/30" /></div>}
@@ -2232,7 +2232,7 @@ export default function StoreEditorPage() {
                           : <div className="flex h-full w-full items-center justify-center text-white/30"><Music size={13} /></div>}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12px] font-medium text-white">{t.title}</p>
+                        <p className="truncate text-[11px] font-medium text-white">{t.title}</p>
                         <p className="truncate text-[9px] font-mono uppercase tracking-wider text-white/40">
                           {[t.type, t.bpm ? `${t.bpm} BPM` : null, t.key].filter(Boolean).join(' · ')}
                         </p>
@@ -2241,7 +2241,7 @@ export default function StoreEditorPage() {
                         type="button"
                         onClick={() => toggleTrackFeatured(t.id, true)}
                         title="Remove from Producer's Picks"
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-white/25 text-white transition-colors hover:bg-white/10"
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/25 text-white transition-colors hover:bg-white/10"
                       >
                         <X size={12} />
                       </button>
@@ -2251,7 +2251,7 @@ export default function StoreEditorPage() {
               ) : (
                 <div className="rounded-xl border border-dashed border-white/10 py-8 text-center">
                   <Star size={18} className="mx-auto mb-2 text-white/30" />
-                  <p className="text-[12px] text-white/40">No producer picks selected yet.</p>
+                  <p className="text-[11px] text-white/40">No producer picks selected yet.</p>
                 </div>
               )}
 
@@ -2281,13 +2281,13 @@ export default function StoreEditorPage() {
                     {availableProducerPicks
                       .map((t) => (
                         <div key={t.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#090907] px-3 py-2">
-                          <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md border border-white/10 bg-white/[0.02]">
+                          <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-white/[0.02]">
                             {t.cover_url
                               ? <Image src={t.cover_url} alt="" width={36} height={36} unoptimized className="h-full w-full object-cover" />
                               : <div className="flex h-full w-full items-center justify-center text-white/30"><Music size={12} /></div>}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-[12px] text-white">{t.title}</p>
+                            <p className="truncate text-[11px] text-white">{t.title}</p>
                             <p className="truncate text-[9px] font-mono uppercase tracking-wider text-white/30">
                               {[t.type, t.bpm ? `${t.bpm} BPM` : null, t.key].filter(Boolean).join(' · ')}
                             </p>
@@ -2296,7 +2296,7 @@ export default function StoreEditorPage() {
                             type="button"
                             onClick={() => toggleTrackFeatured(t.id, false)}
                             disabled={producerPicks.length >= 12}
-                            className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-white/10 text-white/80 transition-colors hover:border-white/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-white/10 text-white/80 transition-colors hover:border-white/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
                             title="Add to Producer's Picks"
                           >
                             <Plus size={12} />
@@ -2356,7 +2356,7 @@ export default function StoreEditorPage() {
                     value={trackSearch}
                     onChange={(e) => setTrackSearch(e.target.value)}
                     placeholder="Search beats…"
-                    className="w-full bg-white/[0.02] border border-white/10 rounded-lg pl-8 pr-3 py-2 text-[12px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/40 transition-colors"
+                    className="w-full bg-white/[0.02] border border-white/10 rounded-lg pl-8 pr-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/40 transition-colors"
                   />
                 </div>
               )}
@@ -2421,7 +2421,7 @@ export default function StoreEditorPage() {
               {(trackSummary?.total ?? allTracks.length) === 0 ? (
                 <div className="rounded-xl border border-dashed border-white/10 py-10 text-center">
                   <Music size={20} className="text-white/30 mx-auto mb-2" />
-                  <p className="text-[12px] text-white/40">No beats in your library yet.</p>
+                  <p className="text-[11px] text-white/40">No beats in your library yet.</p>
                   <Link href="/library" className="mt-2 inline-block text-[10px] font-mono text-white/80 hover:text-white underline underline-offset-2 transition-colors">
                     Upload your first beat →
                   </Link>
@@ -2457,7 +2457,7 @@ export default function StoreEditorPage() {
                           <GripVertical size={13} className="hidden shrink-0 text-white/30 hover:text-white/60 sm:block" />
                         )}
                         {/* Cover art */}
-                        <div className="w-9 h-9 rounded-md overflow-hidden bg-white/[0.05] border border-white/20 shrink-0">
+                        <div className="w-9 h-9 rounded-lg overflow-hidden bg-white/[0.05] border border-white/20 shrink-0">
                           {t.cover_url
                             ? <Image src={t.cover_url} alt="" width={36} height={36} unoptimized className="w-full h-full object-cover" />
                             : <div className="w-full h-full flex items-center justify-center text-white/30"><Music size={12} /></div>}
@@ -2465,7 +2465,7 @@ export default function StoreEditorPage() {
 
                         {/* Info */}
                         <div className="min-w-[120px] flex-1">
-                          <p className={`text-[12px] font-medium truncate ${t.store_listed ? 'text-white' : 'text-white/80'}`}>
+                          <p className={`text-[11px] font-medium truncate ${t.store_listed ? 'text-white' : 'text-white/80'}`}>
                             {t.title}
                           </p>
                           <p className="text-[9px] font-mono text-white/40 uppercase tracking-wider">
@@ -2484,19 +2484,19 @@ export default function StoreEditorPage() {
 
                         {/* Status badge — Live / Draft / Scheduled */}
                         {t.store_listed ? (
-                          <span className="hidden sm:block text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20">
+                          <span className="hidden sm:block text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20">
                             Live
                           </span>
                         ) : t.scheduled_publish_at ? (
                           <span
-                            className="hidden sm:flex items-center gap-1 text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-amber-300 bg-amber-500/10 border border-amber-500/30"
+                            className="hidden sm:flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-amber-300 bg-amber-500/10 border border-amber-500/30"
                             title={`Auto-publishes ${new Date(t.scheduled_publish_at).toLocaleString()}`}
                           >
                             <ChevronRight size={9} className="-mr-0.5" />
                             Scheduled
                           </span>
                         ) : (
-                          <span className="hidden sm:block text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-white/30 bg-white/[0.05] border border-white/10">
+                          <span className="hidden sm:block text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-white/30 bg-white/[0.05] border border-white/10">
                             Draft
                           </span>
                         )}
@@ -2521,7 +2521,7 @@ export default function StoreEditorPage() {
                               title={t.scheduled_publish_at
                                 ? `Edit schedule (${new Date(t.scheduled_publish_at).toLocaleString()})`
                                 : 'Schedule auto-publish'}
-                              className={`w-7 h-7 rounded-md flex items-center justify-center border transition-colors ${
+                              className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-colors ${
                                 t.scheduled_publish_at
                                   ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
                                   : 'bg-white/[0.03] border-white/10 text-white/40 hover:text-amber-300 hover:border-amber-500/30'
@@ -2549,7 +2549,7 @@ export default function StoreEditorPage() {
                                       setScheduleOpenFor(null);
                                     }}
                                     disabled={!scheduleDraft}
-                                    className="flex-1 px-3 py-2 rounded-md bg-white text-black text-[10px] font-bold uppercase tracking-wider hover:bg-white/90 transition-colors disabled:opacity-40"
+                                    className="flex-1 px-3 py-2 rounded-lg bg-white text-black text-[10px] font-bold uppercase tracking-wider hover:bg-white/90 transition-colors disabled:opacity-40"
                                   >
                                     Schedule
                                   </button>
@@ -2559,7 +2559,7 @@ export default function StoreEditorPage() {
                                         await setSchedule(t.id, null);
                                         setScheduleOpenFor(null);
                                       }}
-                                      className="px-3 py-2 rounded-md border border-white/20 text-white/80 text-[10px] font-mono uppercase tracking-wider hover:text-white hover:border-white/40 transition-colors"
+                                      className="px-3 py-2 rounded-lg border border-white/20 text-white/80 text-[10px] font-mono uppercase tracking-wider hover:text-white hover:border-white/40 transition-colors"
                                     >
                                       Clear
                                     </button>
@@ -2581,7 +2581,7 @@ export default function StoreEditorPage() {
                           <button
                             onClick={() => toggleTrackFeatured(t.id, t.store_featured)}
                             title={t.store_featured ? "Unpin from Producer's Picks" : "Pin to Producer's Picks"}
-                            className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center border transition-colors ${
+                            className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center border transition-colors ${
                               t.store_featured
                                 ? 'bg-white/15 border-white/40 text-white'
                                 : 'bg-white/[0.03] border-white/10 text-white/40 hover:text-white hover:border-white/30'
@@ -2599,7 +2599,7 @@ export default function StoreEditorPage() {
                               onClick={() => moveListedTrack(listedIdx, -1)}
                               disabled={listedIdx === 0}
                               aria-label={`Move ${t.title} up`}
-                              className="grid h-9 w-9 place-items-center rounded-md border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
+                              className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
                             >
                               <ArrowUp size={12} />
                             </button>
@@ -2608,7 +2608,7 @@ export default function StoreEditorPage() {
                               onClick={() => moveListedTrack(listedIdx, 1)}
                               disabled={listedIdx === listedIds.length - 1}
                               aria-label={`Move ${t.title} down`}
-                              className="grid h-9 w-9 place-items-center rounded-md border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
+                              className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
                             >
                               <ArrowDown size={12} />
                             </button>
@@ -2627,7 +2627,7 @@ export default function StoreEditorPage() {
                               });
                             }}
                             title="Configure license tiers for this beat"
-                            className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center border transition-colors ${
+                            className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center border transition-colors ${
                               licenseExpandedFor.has(t.id)
                                 ? 'bg-white/10 border-white/30 text-white'
                                 : 'bg-white/[0.03] border-white/10 text-white/40 hover:text-white hover:border-white/20'
@@ -2642,7 +2642,7 @@ export default function StoreEditorPage() {
                           <button
                             onClick={() => toggleFreeDownload(t.id, t.free_download_enabled)}
                             title={t.free_download_enabled ? 'Free download on — click to disable' : 'Enable free download (email-gated)'}
-                            className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center border transition-colors ${
+                            className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center border transition-colors ${
                               t.free_download_enabled
                                 ? 'bg-[#6DC6A4]/15 border-[#6DC6A4]/40 text-[#6DC6A4]'
                                 : 'bg-white/[0.03] border-white/10 text-white/40 hover:text-[#6DC6A4] hover:border-[#6DC6A4]/30'
@@ -2661,7 +2661,7 @@ export default function StoreEditorPage() {
                               toggleTrackTag(t.id, t.voice_tag_enabled);
                             }}
                             title={t.voice_tag_enabled ? 'Voice tag on (preview only)' : 'Add voice tag to preview'}
-                            className={`w-7 h-7 shrink-0 rounded-md flex items-center justify-center border transition-colors ${
+                            className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center border transition-colors ${
                               t.voice_tag_enabled
                                 ? 'bg-white/10 border-white/30 text-white'
                                 : 'bg-white/[0.03] border-white/10 text-white/40 hover:text-white hover:border-white/20'
@@ -2985,7 +2985,7 @@ export default function StoreEditorPage() {
                   type="button"
                   onClick={createPromoCode}
                   disabled={promoCreating}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black text-[12px] font-bold uppercase tracking-wider hover:bg-white/90 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black text-[11px] font-bold uppercase tracking-wider hover:bg-white/90 transition-colors disabled:opacity-50"
                 >
                   {promoCreating ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
                   Create code
@@ -3014,9 +3014,9 @@ export default function StoreEditorPage() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <code className="text-[13px] font-mono font-bold text-white tracking-wide">{c.code}</code>
                             <span className="text-[10px] font-mono text-white/80">{discountLabel}</span>
-                            {expired && <span className="text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-300">Expired</span>}
-                            {capped && <span className="text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300">Used up</span>}
-                            {!c.active && !expired && !capped && <span className="text-[8px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/20 text-white/40">Paused</span>}
+                            {expired && <span className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-300">Expired</span>}
+                            {capped && <span className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300">Used up</span>}
+                            {!c.active && !expired && !capped && <span className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/20 text-white/40">Paused</span>}
                           </div>
                           <p className="text-[10px] font-mono text-white/40 mt-0.5">
                             {c.uses_count} / {c.max_uses ?? '∞'} uses
@@ -3038,7 +3038,7 @@ export default function StoreEditorPage() {
                         <button
                           onClick={() => deletePromoCode(c.code)}
                           title="Delete"
-                          className="w-7 h-7 rounded-md border border-white/10 flex items-center justify-center text-white/40 hover:text-red-400 hover:border-red-900/40 transition-colors"
+                          className="w-7 h-7 rounded-lg border border-white/10 flex items-center justify-center text-white/40 hover:text-red-400 hover:border-red-900/40 transition-colors"
                         >
                           <Trash2 size={11} />
                         </button>
@@ -3047,7 +3047,7 @@ export default function StoreEditorPage() {
                   })}
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-white/10 py-6 text-center text-white/40 text-[12px]">
+                <div className="rounded-xl border border-dashed border-white/10 py-6 text-center text-white/40 text-[11px]">
                   No codes yet — make one above.
                 </div>
               )}
@@ -3080,7 +3080,7 @@ export default function StoreEditorPage() {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white hover:bg-white/90 disabled:opacity-60 text-black text-[12px] font-semibold transition-all"
+                className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white hover:bg-white/90 disabled:opacity-60 text-black text-[11px] font-semibold transition-all"
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                 {saving ? 'Saving…' : 'Save Store'}
@@ -3175,7 +3175,7 @@ function VoiceTagSection({
             <Play size={13} fill="currentColor" className="ml-0.5" />
           </button>
           <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-medium text-white">Voice tag set</p>
+            <p className="text-[11px] font-medium text-white">Voice tag set</p>
             <p className="text-[10px] font-mono text-white/40 truncate">{value.split('/').pop()}</p>
           </div>
           <button
@@ -3196,7 +3196,7 @@ function VoiceTagSection({
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-white/20 text-white/80 hover:text-white hover:border-white/30 transition-all text-[12px] font-medium disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-white/20 text-white/80 hover:text-white hover:border-white/30 transition-all text-[11px] font-medium disabled:opacity-50"
         >
           {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
           {uploading ? 'Uploading…' : 'Upload voice tag (MP3/WAV, <5 MB)'}
@@ -3208,7 +3208,7 @@ function VoiceTagSection({
         <input
           type="number" min={5} max={120} value={interval}
           onChange={(e) => onIntervalChange(e.target.value)}
-          className="w-16 bg-[#090907] border border-white/10 rounded-lg px-2 py-1.5 text-[12px] text-white focus:outline-none focus:border-white/20 tabular-nums"
+          className="w-16 bg-[#090907] border border-white/10 rounded-lg px-2 py-1.5 text-[11px] text-white focus:outline-none focus:border-white/20 tabular-nums"
         />
         <span className="text-[10px] font-mono text-white/40">seconds (saved with the profile)</span>
       </div>

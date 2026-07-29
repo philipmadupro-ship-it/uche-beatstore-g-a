@@ -211,18 +211,18 @@ export function PlayerBar() {
               </div>
             </button>
             <div className="min-w-0 flex-1 md:flex-none md:w-[160px]">
-              <MarqueeText text={currentTrack.title || 'Untitled'} className="text-[12px] font-medium text-white leading-tight" />
+              <MarqueeText text={currentTrack.title || 'Untitled'} className="text-[11px] font-medium text-white leading-tight" />
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 <span className="text-[10px] font-mono text-white/40 uppercase tracking-wider">
                   {streamStatus.metaLabel}
                 </span>
                 {streamStatus.badgeLabel ? (
-                  <span className="inline-flex items-center gap-1 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wider leading-none text-red-200 bg-red-950/50 border border-red-400/20">
+                  <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wider leading-none text-red-200 bg-red-950/50 border border-red-400/20">
                     <AlertTriangle size={9} />
                     {streamStatus.badgeLabel}
                   </span>
                 ) : currentTrack.key && (
-                  <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wider leading-none text-[#c8a47a] bg-[#1f1a10]/70 border border-[#3d3020]/35">
+                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wider leading-none text-[#c8a47a] bg-[#1f1a10]/70 border border-[#3d3020]/35">
                     {currentTrack.key}{currentTrack.scale === 'minor' ? 'm' : ''}
                   </span>
                 )}
@@ -319,7 +319,7 @@ export function PlayerBar() {
             >
               <Repeat size={12} />
               {repeat === 'one' && (
-                <span className="absolute -top-0.5 -right-0.5 text-[7px] font-bold leading-none">1</span>
+                <span className="absolute -top-0.5 -right-0.5 text-[9px] font-bold leading-none">1</span>
               )}
             </button>
             <button
@@ -538,7 +538,7 @@ export function PlayerBar() {
                   aria-pressed={repeat !== 'off'}
                 >
                   <Repeat size={18} />
-                  {repeat === 'one' && <span className="absolute -top-0.5 -right-0.5 text-[7px] font-bold leading-none">1</span>}
+                  {repeat === 'one' && <span className="absolute -top-0.5 -right-0.5 text-[9px] font-bold leading-none">1</span>}
                 </button>
               </div>
 

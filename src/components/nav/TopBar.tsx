@@ -313,7 +313,7 @@ export function TopBar() {
             >
               <Bell size={15} />
               {unread > 0 && (
-                <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-[#6DC6A4] text-black text-[8px] font-black flex items-center justify-center leading-none">
+                <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-[#6DC6A4] text-black text-[9px] font-black flex items-center justify-center leading-none">
                   {unread > 9 ? '9+' : unread}
                 </span>
               )}
@@ -341,7 +341,7 @@ export function TopBar() {
                         <AlertTriangle size={13} className="text-white" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[12px] font-medium leading-tight text-white">
+                        <p className="text-[11px] font-medium leading-tight text-white">
                           {attention} beat{attention === 1 ? '' : 's'} need attention
                         </p>
                         <p className="mt-0.5 text-[10px] leading-snug text-white/60">
@@ -364,7 +364,7 @@ export function TopBar() {
                           {notifIcon(n.kind)}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-medium text-white leading-tight">{n.title}</p>
+                          <p className="text-[11px] font-medium text-white leading-tight">{n.title}</p>
                           {n.body && <p className="text-[10px] text-white/60 mt-0.5 leading-snug">{n.body}</p>}
                           <p className="text-[9px] font-mono text-white/40 mt-1">{timeAgo(n.created_at)}</p>
                         </div>
@@ -426,7 +426,7 @@ export function TopBar() {
                 href={it.href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium tracking-tight transition-colors shrink-0 whitespace-nowrap',
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium tracking-tight transition-colors shrink-0 whitespace-nowrap',
                   active
                     ? 'text-white bg-[#0E0E0E]'
                     : 'text-white/60 hover:text-white hover:bg-[#101010]',

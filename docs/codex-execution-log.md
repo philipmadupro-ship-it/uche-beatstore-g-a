@@ -5855,3 +5855,44 @@ Whole `src/**/*.tsx` tree, targeting the two violation classes that earlier per-
 
 - Colour and shadow are now consistent tree-wide, but the doc's stricter per-surface definition of done ("count the text styles; ≤ 4 visible at once") has only been applied to `library/page.tsx`. `store-editor/page.tsx` (3200+ lines) remains the largest un-collapsed type scale.
 - `docs/design-direction.md` surfaces 1–6 are now all passed at least once; what's left is depth, not coverage.
+
+---
+
+## Pass: Type scale + radii collapse — store-editor and global chrome
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui` against `docs/design-direction.md` principle 2 ("Fewer sizes per screen, target ≤ 4 text styles visible at once") and principle 4's radii vocabulary (8px controls / 12px cards / 20px modals — "nothing else").
+- `.codex/skills/antigravity-testing-release`: full gate, plus computed-style measurement of the *rendered* page rather than the source file.
+
+### Area Inspected
+
+- `src/app/(dashboard)/store-editor/page.tsx` (3219 lines) — the last un-collapsed type scale, flagged as remaining in two prior passes.
+- `src/components/player/PlayerBar.tsx`, `src/components/nav/TopBar.tsx`, `src/components/nav/Sidebar.tsx` — global chrome, pulled in once measurement showed they were contributing off-vocabulary sizes to *every* page.
+
+### Changes Made
+
+- **store-editor type scale: 9 sizes → 7**, collapsed onto the vocabulary `library/page.tsx` already established rather than a new one: `8px→9px` (both were doing the micro-label job), `12px→11px` (near-duplicate; library has no 12px), `15px→16px` (library's stat-value size). Display sizes 28/36px untouched.
+- **store-editor radii: 5 → 3.** `rounded-md` (6px) → `rounded-lg` (8px, the documented control radius, 23 occurrences); `rounded-2xl` (16px) → `rounded-xl` (12px) since all three usages were cards, not modals; dropped a `sm:rounded-2xl` responsive radius step (a size change that communicated nothing).
+- **Global chrome aligned.** PlayerBar 5 sizes → 3 (`7px`/`8px`→`9px`, `12px`→`11px`); TopBar 6 → 4; Sidebar 5 → 3. All now inside the 9/10/11/13 body vocabulary.
+
+### Problems Discovered
+
+- **Collapsing a page file is not sufficient on its own.** After store-editor's own scale was clean, the *rendered* page still measured 9 distinct sizes — the extras were leaking in from persistent chrome (PlayerBar's 8px key badge and 12px marquee title, the nav's 8px/12px tabs). Source-level greps would have reported success here; only measuring computed styles on the live page exposed it. This is why the chrome components were pulled into the pass.
+- Because that chrome renders on every route, the three-file fix improves the type discipline of the whole app, not just this surface.
+
+### Problems Fixed
+
+- Verified live on `/store-editor`: rendered distinct text sizes **9 → 7**, with the body scale now 9/10/11/13 plus a 16px stat value and one 36px display heading.
+- Radii in the source file are now exactly three values: 8px controls, 12px cards, full pills.
+
+### Tests Performed
+
+- `npx tsc --noEmit` — clean. `npx eslint .` — 0 errors, 96 pre-existing warnings.
+- `npm test` — 538/538 across 100 files. `npm run build` — green, 55 pages.
+- Computed-style measurement of the rendered `/store-editor` before and after, on visible elements only.
+
+### Remaining Concerns
+
+- One stray 14px remains on the rendered page, from a shared track-title component (`TrackCard`/`StoreListView` use `text-[14px]` for titles). It's a deliberate title size used consistently across list surfaces, so it was left alone rather than folded into 13px — changing it would touch every list in the app and deserves its own decision.
+- With this, every surface in `docs/design-direction.md` has been passed and the two tree-wide violation classes (multi-accent colour, stacked shadows) plus the type/radii vocabulary are consistent. The initiative's original checklist is complete.
