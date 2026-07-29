@@ -17,7 +17,7 @@ export function PlaylistTagPicker({ playlistId }: { playlistId: string }) {
     setCustomTag('');
   };
   return (
-    <div className="space-y-5 p-4 bg-[#0E0E0E] border border-white/10 rounded-2xl w-full max-w-sm shadow-2xl">
+    <div className="space-y-5 p-4 bg-[#0E0E0E] border border-white/10 rounded-2xl w-full max-w-sm shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
       <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50">Playlist tags</h3>
       {Object.entries(TAG_TAXONOMY).map(([category, options]) => (
         <div key={category} className="space-y-2">

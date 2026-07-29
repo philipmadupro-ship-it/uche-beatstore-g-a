@@ -41,7 +41,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
   return (
     <div
       role={toast.kind === 'error' || toast.kind === 'warning' ? 'alert' : 'status'}
-      className={`pointer-events-auto w-80 bg-[#090907] border ${accent} rounded-lg shadow-2xl backdrop-blur-md animate-in slide-in-from-right-4 fade-in duration-200`}
+      className={`pointer-events-auto w-80 bg-[#14110d] border ${accent} rounded-xl shadow-[0_16px_40px_-8px_rgba(0,0,0,0.6)] animate-in slide-in-from-right-4 fade-in duration-200`}
     >
       <div className="flex items-start gap-3 p-4">
         <Icon size={16} className={`shrink-0 mt-0.5 ${accent.split(' ').pop()}`} />

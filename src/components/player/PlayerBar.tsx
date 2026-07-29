@@ -177,14 +177,14 @@ export function PlayerBar() {
       >
         <div
           className={cn(
-            'pointer-events-auto relative flex items-center gap-2 md:gap-3 pl-2 pr-2 md:pr-3 py-2 rounded-[28px]',
-            // Deep frosted glass: maximal blur + saturation, a very translucent
-            // warm base so the page reads clearly through it, a bright top
-            // edge-light + a faint bottom shade, and a soft far-cast shadow.
-            'backdrop-blur-3xl backdrop-saturate-[1.8] border border-white/[0.10]',
+            'pointer-events-auto relative flex items-center gap-2 md:gap-3 pl-2 pr-2 md:pr-3 py-2 rounded-full',
+            // Frosted glass: blur + a translucent base so the page reads
+            // through it, one hairline edge, one soft cast shadow to lift it
+            // off the page. Previously this stacked four shadow layers plus a
+            // hover swap and a gradient sheen overlay — one signal is enough.
+            'backdrop-blur-2xl border border-white/[0.10]',
             'bg-white/[0.04]/55',
-            'shadow-[0_16px_50px_-8px_rgba(0,0,0,0.6),0_2px_8px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(0,0,0,0.3)]',
-            'transition-shadow duration-300 hover:shadow-[0_22px_60px_-8px_rgba(0,0,0,0.68),0_2px_8px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.14)]',
+            'shadow-[0_16px_50px_-8px_rgba(0,0,0,0.55)]',
             'animate-in slide-in-from-bottom-4 fade-in duration-300',
             // Below md: no min-width, fill the screen edges-minus-padding.
             // md+: anchor to the center column with the original
@@ -192,24 +192,17 @@ export function PlayerBar() {
             'w-full md:w-auto md:min-w-[640px] md:max-w-[920px]',
           )}
         >
-          {/* Glass sheen — a top-down light reflection across the surface,
-              clipped to the pill radius. Pure decoration, no hit-testing. */}
-          <div
-            aria-hidden
-            className="absolute inset-0 rounded-[28px] pointer-events-none bg-gradient-to-b from-white/[0.07] via-transparent to-white/[0.015]"
-          />
-
           {/* Cover + name + meta — left cap of the pill. */}
           <div className="flex items-center gap-2 md:gap-3 pl-1 pr-2 md:pr-3 py-1 min-w-0">
             <button
               onClick={() => setNowPlayingOpen(true)}
-              className="w-10 h-10 md:w-11 md:h-11 bg-white/[0.04] rounded-[13px] overflow-hidden flex-shrink-0 border border-white/[0.08] relative group/cover shadow-[0_2px_10px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] transition-transform duration-200 hover:scale-[1.04] active:scale-95"
+              className="w-10 h-10 md:w-11 md:h-11 bg-white/[0.04] rounded-xl overflow-hidden flex-shrink-0 border border-white/[0.08] relative group/cover transition-transform duration-200 active:scale-95"
               aria-label="Open Now Playing"
             >
               {currentTrack.cover_url ? (
                 <CoverImage src={currentTrack.cover_url} alt="" sizes="44px" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full flex items-center justify-center text-white/30 bg-gradient-to-br from-white/10 to-[#090907]">
+                <div className="w-full h-full flex items-center justify-center text-white/30 bg-white/[0.04]">
                   <Music size={14} />
                 </div>
               )}
@@ -229,11 +222,7 @@ export function PlayerBar() {
                     {streamStatus.badgeLabel}
                   </span>
                 ) : currentTrack.key && (
-                  <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wider leading-none ${
-                    currentTrack.scale === 'minor'
-                      ? 'text-[#9d95e8] bg-[#1a1833]/70 border border-[#534AB7]/25'
-                      : 'text-[#c8a47a] bg-[#1f1a10]/70 border border-[#3d3020]/35'
-                  }`}>
+                  <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wider leading-none text-[#c8a47a] bg-[#1f1a10]/70 border border-[#3d3020]/35">
                     {currentTrack.key}{currentTrack.scale === 'minor' ? 'm' : ''}
                   </span>
                 )}
@@ -277,8 +266,8 @@ export function PlayerBar() {
               onClick={handlePrimaryPlay}
               disabled={!streamStatus.canAttemptPlayback}
               className={cn(
-                'w-10 h-10 rounded-full flex items-center justify-center text-black ml-0.5 mr-0.5 bg-gradient-to-b from-white to-[#ece4d4] active:scale-95 transition-transform duration-150 shadow-[0_3px_12px_rgba(0,0,0,0.35),0_0_0_0.5px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.9)]',
-                streamStatus.canAttemptPlayback ? 'hover:scale-[1.07]' : 'cursor-not-allowed opacity-55',
+                'w-10 h-10 rounded-full flex items-center justify-center text-black ml-0.5 mr-0.5 bg-white active:scale-95 transition-transform duration-150',
+                streamStatus.canAttemptPlayback ? 'hover:scale-[1.05]' : 'cursor-not-allowed opacity-55',
               )}
               aria-label={isPlaying ? 'Pause' : 'Play'}
               title={streamStatus.detail ?? streamStatus.title}
@@ -409,7 +398,7 @@ export function PlayerBar() {
 
           {/* The card — solid, luxury, centered. Holds the whole now-playing
               experience: vinyl, title, waveform, transport, volume. */}
-          <div className="relative z-10 w-full max-w-[400px] max-h-[94vh] overflow-y-auto no-scrollbar rounded-[30px] border border-white/[0.09] bg-gradient-to-b from-[#1b1712] to-[#100d09] shadow-[0_40px_120px_-12px_rgba(0,0,0,0.78),inset_0_1px_0_rgba(255,255,255,0.07)] px-6 pt-5 pb-6">
+          <div className="relative z-10 w-full max-w-[400px] max-h-[94vh] overflow-y-auto no-scrollbar rounded-[20px] border border-white/[0.09] bg-[#14110d] shadow-[0_40px_120px_-12px_rgba(0,0,0,0.78)] px-6 pt-5 pb-6">
             {/* Top bar */}
             <div className="flex items-center justify-between pb-1">
               <button
@@ -466,11 +455,7 @@ export function PlayerBar() {
                   <span className="text-[10px] font-mono text-white/60 tabular-nums">· {currentTrack.bpm} BPM</span>
                 )}
                 {currentTrack.key && (
-                  <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                    currentTrack.scale === 'minor'
-                      ? 'text-[#9d95e8] bg-[#1a1833]/70 border border-[#534AB7]/30'
-                      : 'text-[#c8a47a] bg-[#1f1a10]/70 border border-[#3d3020]/40'
-                  }`}>
+                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded text-[#c8a47a] bg-[#1f1a10]/70 border border-[#3d3020]/40">
                     {currentTrack.key}{currentTrack.scale === 'minor' ? 'm' : ''}
                   </span>
                 )}

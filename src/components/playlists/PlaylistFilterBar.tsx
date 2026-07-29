@@ -119,7 +119,7 @@ export function PlaylistFilterBar({
                 onChange={(e) => setEditName(e.target.value)}
                 onBlur={() => renameFolder(f.id)}
                 onKeyDown={(e) => { if (e.key === 'Enter') renameFolder(f.id); if (e.key === 'Escape') setEditingId(null); }}
-                className="h-10 w-full rounded-xl border border-[#7F77DD]/50 bg-white/[0.04] px-3 text-[12px] text-white focus:outline-none"
+                className="h-10 w-full rounded-xl border border-white/30 bg-white/[0.04] px-3 text-[12px] text-white focus:outline-none"
               />
             ) : (
               <FolderContainerCard
@@ -178,7 +178,7 @@ export function PlaylistFilterBar({
           {folderMenuOpen && (
             <>
               <div className="fixed inset-0 z-30" onClick={() => setFolderMenuOpen(false)} />
-              <div className="absolute left-0 top-full z-40 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#0E0C09] p-3 shadow-2xl">
+              <div className="absolute left-0 top-full z-40 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#0E0C09] p-3 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
                 {folderPanel}
               </div>
             </>

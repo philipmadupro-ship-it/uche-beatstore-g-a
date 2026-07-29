@@ -132,7 +132,7 @@ export function ProjectOptionsMenu({
             <div className="fixed inset-0 z-40" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(false); }} />
             <div
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              className={`absolute top-full mt-1 ${align === 'right' ? 'right-0' : 'left-0'} z-50 w-52 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-white/10 rounded-xl shadow-2xl overflow-hidden py-1`}
+              className={`absolute top-full mt-1 ${align === 'right' ? 'right-0' : 'left-0'} z-50 w-52 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden py-1`}
             >
               {renaming ? (
                 <div className="p-2">

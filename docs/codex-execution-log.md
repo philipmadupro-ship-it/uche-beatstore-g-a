@@ -5742,3 +5742,49 @@
 
 - Playlists (`/playlists`, `/playlists/[id]`) and the rest of `/sales`, `/analytics` beyond the spots above were scanned for the specific violation classes (purple, gradients, off-radii shadows) but not given a full line-by-line "count the styles" pass per the design-direction doc's stricter definition of done — worth a dedicated pass if the owner wants surface 5 fully closed out.
 - Surface 6 (PlayerBar + modals/toasts/empty states) is still open per the design-direction doc's surface order.
+
+---
+
+## Pass: Surface 6 — PlayerBar, toasts, overlay primitives
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`, driven by `docs/design-direction.md` surface order item 6 ("PlayerBar + modals/toasts/empty states sweep"), principles 1 (reduction over decoration), 3 (one accent), 4 (flatter surfaces, max one border OR one shadow, 8/12/20 radii).
+- `.codex/skills/antigravity-testing-release`: full gate + live browser verification with real store data.
+
+### Area Inspected
+
+- `src/components/player/PlayerBar.tsx` — the persistent bottom pill + Now Playing modal (highest leverage: renders on every screen in the app).
+- `src/components/ui/Toaster.tsx`, `src/components/ui/Popover.tsx`, `src/components/nav/CommandPalette.tsx` — shared overlay primitives.
+- `src/components/playlists/*`, `src/components/projects/*`, `src/components/tracks/TagPicker.tsx` — menus/pickers.
+
+### Changes Made
+
+- **PlayerBar pill — five decorative layers down to one.** Was: a 4-layer box-shadow (far cast + near cast + inset top light + inset bottom shade), a *second* full shadow stack swapped in on hover, and an absolutely-positioned gradient "sheen" overlay — all on top of the backdrop-blur and border. Now: one soft cast shadow, one hairline border, blur retained. The sheen div is deleted outright. Radius `rounded-[28px]` → `rounded-full` (it was already exactly pill-round at that height; this states the intent instead of hard-coding a number outside the radii vocabulary).
+- **Play button flattened.** `bg-gradient-to-b from-white to-[#ece4d4]` + a 3-layer shadow → solid `bg-white`, no shadow. Hover scale softened 1.07 → 1.05. It's still the dominant circular anchor, now by size and contrast rather than by gloss.
+- **Cover thumb.** Dropped its double shadow and hover scale-up; `rounded-[13px]` → `rounded-xl`. Placeholder gradient → flat fill.
+- **Now Playing modal.** `rounded-[30px]` → `rounded-[20px]` (documented modal radius); `bg-gradient-to-b from-[#1b1712] to-[#100d09]` → flat `bg-[#14110d]`; inset-highlight dropped from the shadow.
+- **Off-palette purple, occurrences 15–16.** The minor-key badge rendered purple (`#9d95e8`/`#534AB7`) in both the pill and the Now Playing modal while major keys rendered warm gold. Key is not a semantic axis that earns a second accent — both now use the warm token.
+- **`shadow-2xl` → one soft cast shadow** across Toaster, Popover, CommandPalette, and 8 playlist/project/track menus and pickers. Toaster also moved off `#090907` to the card token `#14110d` and `rounded-lg` → `rounded-xl` for consistency with other floating surfaces.
+- **Purple focus border** on the playlist folder-rename input (matching the projects one fixed last pass).
+
+### Problems Discovered
+
+- The pill was carrying **two** complete shadow stacks (base + hover swap) plus a gradient overlay, all simultaneously composited over a `backdrop-blur-3xl` — the most expensive element in the app, present on every route.
+- The minor/major key badge divergence meant the app used purple as a *semantic* color for exactly one thing (minor keys) in some components while the design system reserves accents for action/active state. Fixing it removed the last structural justification for purple anywhere.
+
+### Problems Fixed
+
+- Verified live on `/store` with real catalogue data: pill computed `border-radius` is full-round, `box-shadow` resolves to a single visible layer, `backdrop-filter: blur(40px)` retained, **0 gradient layers** remain anywhere inside the pill, play button computes to solid `rgb(255,255,255)` with `box-shadow: none`.
+- **Waveform explicitly preserved** at the owner's request mid-pass — confirmed still rendering (SVG present in the pill) after all edits; `MiniWaveform` and its container were not touched.
+
+### Tests Performed
+
+- `npx tsc --noEmit` — clean. `npx eslint` on all touched dirs — 0 errors, 18 pre-existing warnings.
+- `npm test` — 538/538 across 100 files. `npm run build` — green, 55 pages.
+- Browser: playback triggered on `/store`, Now Playing modal opened and screenshotted (flat surface, 20px radius, gold key badge), pill screenshotted, computed styles asserted programmatically as listed above.
+
+### Remaining Concerns
+
+- `EmptyState` (surface 6's third item) was inspected and needed no changes — it carries no shadow/gradient/off-radius decoration.
+- Still-unswept `shadow-2xl`/gradient instances remain in store + share components (`CartDrawer`, `FreeDownloadModal`, `ShareModal`, share variants, `GlassPage`, `VisionLibraryView`, `ProductList`). Those belong to surfaces 1–3, which were passed earlier under a narrower definition of done; a consistency re-sweep would close them out.

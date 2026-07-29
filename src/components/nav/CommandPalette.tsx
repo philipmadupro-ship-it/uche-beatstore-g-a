@@ -187,7 +187,7 @@ export function CommandPalette() {
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-full max-w-xl bg-[#090907] border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-200"
+        className="w-full max-w-xl bg-[#090907] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Input */}
