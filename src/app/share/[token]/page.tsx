@@ -546,7 +546,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
     {purchaseBannerNode}
     <div className="min-h-screen bg-[#090907] text-white flex flex-col font-sans">
       {/* Header */}
-      <header className="px-4 sm:px-8 py-5 border-b border-[#0E0E0E] flex items-center justify-between gap-3">
+      <header className="px-4 sm:px-8 py-5 border-b border-[#0D0D0A] flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-6 h-6 rounded-[5px] bg-white flex items-center justify-center shrink-0">
             <span className="text-[9px] font-black text-black">AG</span>
@@ -610,7 +610,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             </div>
 
             {/* Waveform */}
-            <div className="bg-white/[0.02] border border-[#0E0E0E] rounded-lg p-5 mb-4">
+            <div className="bg-white/[0.02] border border-[#0D0D0A] rounded-lg p-5 mb-4">
               <div ref={waveRef} className="w-full" />
               <FallbackAudio
                 refEl={fallbackAudioRef}
@@ -714,7 +714,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
                       <span className={`text-[11px] font-mono ${active ? 'text-white' : 'text-white/30'}`}>{i + 1}</span>
                     )}
                   </div>
-                  <div className="w-8 h-8 bg-[#0E0E0E] rounded border border-white/10 overflow-hidden shrink-0">
+                  <div className="w-8 h-8 bg-[#0D0D0A] rounded border border-white/10 overflow-hidden shrink-0">
                     {track.cover_url
                       ? <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
                       : <div className="w-full h-full flex items-center justify-center text-white/30"><Music size={11} /></div>

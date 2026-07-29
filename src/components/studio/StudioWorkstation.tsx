@@ -613,7 +613,7 @@ export function StudioWorkstation() {
               {/* Session console — track identity + waveform first, with
                   utility controls kept small so the waveform remains the
                   studio's primary work surface. */}
-              <div className="rounded-2xl border border-[#0E0E0E] bg-[#090907] p-3 sm:p-4">
+              <div className="rounded-2xl border border-[#0D0D0A] bg-[#090907] p-3 sm:p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
                   {active.cover_url ? (
@@ -623,7 +623,7 @@ export function StudioWorkstation() {
                       className="h-11 w-11 shrink-0 rounded-lg border border-white/10 object-cover sm:h-12 sm:w-12"
                     />
                   ) : (
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#0E0E0E] sm:h-12 sm:w-12">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#0D0D0A] sm:h-12 sm:w-12">
                       <Music2 size={18} className="text-white/40" />
                     </div>
                   )}
@@ -717,7 +717,7 @@ export function StudioWorkstation() {
                   the document keydown listener below; triggerPad
                   routes through the engine the same way. */}
 
-              <details className="group rounded-2xl border border-[#0E0E0E] bg-[#090907]">
+              <details className="group rounded-2xl border border-[#0D0D0A] bg-[#090907]">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:hidden">
                   <div>
                     <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white">Mix + effects</p>
@@ -730,7 +730,7 @@ export function StudioWorkstation() {
                     <span className="hidden group-open:inline">Close</span>
                   </span>
                 </summary>
-                <div className="grid grid-cols-1 gap-4 border-t border-[#0E0E0E] p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_280px]">
+                <div className="grid grid-cols-1 gap-4 border-t border-[#0D0D0A] p-3 sm:p-4 xl:grid-cols-[minmax(0,1fr)_280px]">
                   <StudioMixer
                     useStems={useStems}
                     stemsLoading={stemsLoading}
@@ -770,7 +770,7 @@ export function StudioWorkstation() {
                   component is self-contained: it fetches and persists via
                   /api/tracks/[id]/lyrics, so we just need to mount it with
                   the active track id. */}
-              <div className="border border-[#0E0E0E] rounded-lg p-5 bg-[#090907]">
+              <div className="border border-[#0D0D0A] rounded-lg p-5 bg-[#090907]">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white">Lyrics</p>

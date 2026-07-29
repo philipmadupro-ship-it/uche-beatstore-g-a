@@ -86,7 +86,7 @@ export function LibraryVersionHistory({ track, versions }: Props) {
           {versions.map((v) => (
             <div
               key={v.id}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-white/[0.02] border border-white/10 hover:border-white/20 hover:bg-[#0E0E0E] transition-colors group"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-white/[0.02] border border-white/10 hover:border-white/20 hover:bg-[#0D0D0A] transition-colors group"
             >
               <span className="text-[10px] font-mono uppercase tracking-widest text-white/80 w-14 text-center bg-[#090907] border border-white/10 rounded py-1 px-1">
                 {v.version_label || `v${v.version_number}`}

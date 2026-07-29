@@ -48,14 +48,14 @@ export function DrawerStemOverlay({ open, status, progress, data, onClose }: Pro
           </div>
           <button
             onClick={onClose}
-            className="bg-[#0E0E0E] border border-white/10 hover:border-red-500/50 hover:text-red-500 p-4 rounded-2xl text-white/40 transition-all transform hover:rotate-90"
+            className="bg-[#0D0D0A] border border-white/10 hover:border-red-500/50 hover:text-red-500 p-4 rounded-2xl text-white/40 transition-all transform hover:rotate-90"
           >
             <X size={28} />
           </button>
         </div>
 
         {status === 'processing' ? (
-          <div className="bg-[#0E0E0E] border border-white/10 rounded-[3rem] p-32 flex flex-col items-center justify-center gap-8 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
+          <div className="bg-[#0D0D0A] border border-white/10 rounded-[3rem] p-32 flex flex-col items-center justify-center gap-8 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
             <div className="relative">
               <div className="w-24 h-24 border-4 border-white/ border-t-white rounded-full animate-spin" />
               <Scissors className="absolute inset-0 m-auto text-white animate-pulse" size={32} />

@@ -203,7 +203,7 @@ export default function ProfilePage() {
             <div className="flex gap-5 items-start">
               <div
                 onClick={() => heroInputRef.current?.click()}
-                className="w-28 h-28 rounded-2xl bg-[#0E0E0E] border border-white/10 overflow-hidden shrink-0 cursor-pointer hover:border-white/ transition-colors group relative"
+                className="w-28 h-28 rounded-2xl bg-[#0D0D0A] border border-white/10 overflow-hidden shrink-0 cursor-pointer hover:border-white/ transition-colors group relative"
               >
                 {profile.hero_image_url ? (
                   <img src={profile.hero_image_url} alt="" className="w-full h-full object-cover" />
@@ -422,7 +422,7 @@ export default function ProfilePage() {
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
               {/* Hero card */}
-              <div className="relative rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#111111] via-[#0c0c0c] to-[#0c0c0c] p-6 text-center">
+              <div className="relative rounded-2xl overflow-hidden border border-white/[0.05] bg-gradient-to-br from-[#0D0D0A] via-[#0c0c0c] to-[#0c0c0c] p-6 text-center">
                 {profile.hero_image_url ? (
                   <div className="w-20 h-20 rounded-full overflow-hidden border-2 border-white/30 mx-auto">
                     <img loading="lazy" src={profile.hero_image_url} alt="" className="w-full h-full object-cover" />

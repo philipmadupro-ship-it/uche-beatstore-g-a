@@ -321,13 +321,13 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                 onChange={(e) => setTempTitle(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleRename()}
               />
-              <button type="button" aria-label="Save playlist title" onClick={handleRename} className="grid h-10 w-10 place-items-center rounded-md text-white hover:bg-[#0E0E0E]"><Check size={15} /></button>
-              <button type="button" aria-label="Cancel title edit" onClick={() => { setIsEditingTitle(false); setTempTitle(playlist?.name || ''); }} className="grid h-10 w-10 place-items-center rounded-md text-white/50 hover:bg-[#0E0E0E]"><X size={15} /></button>
+              <button type="button" aria-label="Save playlist title" onClick={handleRename} className="grid h-10 w-10 place-items-center rounded-md text-white hover:bg-[#0D0D0A]"><Check size={15} /></button>
+              <button type="button" aria-label="Cancel title edit" onClick={() => { setIsEditingTitle(false); setTempTitle(playlist?.name || ''); }} className="grid h-10 w-10 place-items-center rounded-md text-white/50 hover:bg-[#0D0D0A]"><X size={15} /></button>
             </div>
           ) : (
             <div className="flex items-start gap-2">
               <h1 className="min-w-0 flex-1 break-words font-heading text-2xl font-medium leading-tight text-white">{playlist?.name}</h1>
-              <button type="button" aria-label="Edit playlist title" onClick={() => setIsEditingTitle(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-white/50 hover:bg-[#0E0E0E] hover:text-white">
+              <button type="button" aria-label="Edit playlist title" onClick={() => setIsEditingTitle(true)} className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-white/50 hover:bg-[#0D0D0A] hover:text-white">
                 <Edit2 size={14} />
               </button>
             </div>
@@ -376,8 +376,8 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                     onChange={(e) => setTempTitle(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRename()}
                   />
-                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#0E0E0E] text-white"><Check size={14} /></button>
-                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(playlist?.name || ''); }} className="p-1.5 rounded hover:bg-[#0E0E0E] text-white/50"><X size={14} /></button>
+                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#0D0D0A] text-white"><Check size={14} /></button>
+                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(playlist?.name || ''); }} className="p-1.5 rounded hover:bg-[#0D0D0A] text-white/50"><X size={14} /></button>
                 </div>
               ) : (
                 <div className="group flex items-center gap-2 mb-3">

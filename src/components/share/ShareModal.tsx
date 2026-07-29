@@ -79,7 +79,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-8 border-b border-white/10 bg-gradient-to-b from-[#0E0E0E] to-[#090907] flex items-start gap-5">
+        <div className="p-8 border-b border-white/10 bg-gradient-to-b from-[#0D0D0A] to-[#090907] flex items-start gap-5">
           <div className="w-16 h-16 bg-white/[0.05] rounded-xl overflow-hidden shrink-0 border border-white/20">
             {coverUrl ? (
               <Image
@@ -123,14 +123,14 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
                   { value: 'rapper', label: 'Rapper Variant (Vocal Sheet / Lyrics Scroll)' },
                   { value: 'friend', label: 'Friend Variant (Standard Simple Player)' }
                 ]}
-                className="w-full bg-[#0E0E0E] border border-white/10 rounded-lg py-3 px-4 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
+                className="w-full bg-[#0D0D0A] border border-white/10 rounded-lg py-3 px-4 text-xs text-white focus:outline-none focus:border-white/30 transition-colors"
               />
             </div>
 
             {/* Allow Downloads */}
             <label className="flex items-center justify-between cursor-pointer group">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#0E0E0E] border border-white/10 flex items-center justify-center group-hover:border-white/ transition-colors">
+                <div className="w-10 h-10 rounded-xl bg-[#0D0D0A] border border-white/10 flex items-center justify-center group-hover:border-white/ transition-colors">
                   <Download size={16} className="text-white/80" />
                 </div>
                 <div>
@@ -145,7 +145,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
             <div className="space-y-3">
               <label className="flex items-center justify-between cursor-pointer group">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#0E0E0E] border border-white/10 flex items-center justify-center group-hover:border-white/ transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-[#0D0D0A] border border-white/10 flex items-center justify-center group-hover:border-white/ transition-colors">
                     <Lock size={16} className="text-white/80" />
                   </div>
                   <div>
@@ -161,7 +161,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
-                  className="w-full bg-[#0E0E0E] border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/30 transition-colors"
+                  className="w-full bg-[#0D0D0A] border border-white/10 rounded-lg px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-white/30 transition-colors"
                 />
               )}
             </div>
@@ -170,7 +170,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
             <div className="space-y-3">
               <label className="flex items-center justify-between cursor-pointer group">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#0E0E0E] border border-white/10 flex items-center justify-center group-hover:border-white/ transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-[#0D0D0A] border border-white/10 flex items-center justify-center group-hover:border-white/ transition-colors">
                     <Calendar size={16} className="text-white/80" />
                   </div>
                   <div>
@@ -189,7 +189,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
                       className={`flex-1 py-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
                         expiryDays === d
                           ? 'bg-white text-black font-semibold shadow-md hover:bg-white/90 shadow-lg shadow-white/10'
-                          : 'bg-[#0E0E0E] border border-white/10 text-white/80 hover:border-white/'
+                          : 'bg-[#0D0D0A] border border-white/10 text-white/80 hover:border-white/'
                       }`}
                     >
                       {d}d
@@ -228,7 +228,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
               <h3 className="text-lg font-black uppercase text-white tracking-tight">Link Ready</h3>
               <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold mt-2">Anyone with this link can listen</p>
             </div>
-            <div className="bg-[#0E0E0E] border border-white/10 rounded-xl p-4 flex items-center gap-3">
+            <div className="bg-[#0D0D0A] border border-white/10 rounded-xl p-4 flex items-center gap-3">
               <Globe size={16} className="text-white shrink-0" />
               <p className="flex-1 text-xs text-white font-mono truncate">{shareUrl}</p>
               <button
@@ -246,7 +246,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
             </div>
             <button
               onClick={onClose}
-              className="w-full bg-[#0E0E0E] border border-white/10 hover:border-white/20 text-white/80 hover:text-white py-3.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all"
+              className="w-full bg-[#0D0D0A] border border-white/10 hover:border-white/20 text-white/80 hover:text-white py-3.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all"
             >
               Done
             </button>
@@ -260,7 +260,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
           width: 40px;
           height: 22px;
           background: #161616;
-          border: 1px solid #222222;
+          border: 1px solid #1f1a10;
           border-radius: 999px;
           position: relative;
           cursor: pointer;
@@ -275,7 +275,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
           left: 2px;
           width: 16px;
           height: 16px;
-          background: #777777;
+          background: #706B61;
           border-radius: 50%;
           transition: transform 0.25s, background 0.25s;
         }

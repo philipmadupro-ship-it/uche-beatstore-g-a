@@ -249,7 +249,7 @@ export function Sidebar() {
               title={item.description}
               className={`flex items-center gap-3 px-3 py-2 rounded-md text-[11px] transition-colors ${
                 active
-                  ? 'bg-[#0E0E0E] text-white'
+                  ? 'bg-[#0D0D0A] text-white'
                   : 'text-white/60 hover:text-white hover:bg-white/[0.04]'
               }`}
             >
@@ -287,7 +287,7 @@ export function Sidebar() {
                     className={cn(
                       'flex items-center gap-3 px-3 py-1.5 rounded-md text-[11px] transition-colors',
                       active
-                        ? 'bg-[#0E0E0E] text-white'
+                        ? 'bg-[#0D0D0A] text-white'
                         : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
                     )}
                   >

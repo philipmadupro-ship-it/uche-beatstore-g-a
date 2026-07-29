@@ -15,7 +15,7 @@ const STATUS_OPTIONS: { value: TrackStatus; label: string; active: string; dot: 
   { value: 'maq',        label: 'MAQ',        active: 'bg-[#1f1a10] text-[#c8a47a] border-[#3d3020]/40', dot: 'bg-[#c8a47a]' },
   { value: 'needs_work', label: 'WIP',        active: 'bg-[#1f1a0a] text-white border-[#3a2f1f]',   dot: 'bg-white' },
   { value: 'finished',   label: 'Finished',   active: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]',   dot: 'bg-[#8ecf9f]' },
-  { value: 'archived',   label: 'Archived',   active: 'bg-[#0E0E0E] text-white/60 border-white/10',   dot: 'bg-white/40' },
+  { value: 'archived',   label: 'Archived',   active: 'bg-[#0D0D0A] text-white/60 border-white/10',   dot: 'bg-white/40' },
 ];
 
 // All 12 chromatic pitch classes in circle-of-fifths order so adjacent

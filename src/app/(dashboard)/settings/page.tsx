@@ -207,7 +207,7 @@ export default function SettingsPage() {
                 {team.map((m) => (
                   <div key={m.user_id} className="flex items-center justify-between px-4 py-3 bg-white/[0.04]/50">
                     <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full bg-[#0E0E0E] border border-white/10 flex items-center justify-center text-[10px] font-medium text-white/80">
+                      <div className="w-7 h-7 rounded-full bg-[#0D0D0A] border border-white/10 flex items-center justify-center text-[10px] font-medium text-white/80">
                         {m.name?.[0] || m.email[0]}
                       </div>
                       <div>

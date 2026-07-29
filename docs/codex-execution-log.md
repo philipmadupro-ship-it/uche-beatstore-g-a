@@ -5896,3 +5896,77 @@ Whole `src/**/*.tsx` tree, targeting the two violation classes that earlier per-
 
 - One stray 14px remains on the rendered page, from a shared track-title component (`TrackCard`/`StoreListView` use `text-[14px]` for titles). It's a deliberate title size used consistently across list surfaces, so it was left alone rather than folded into 13px — changing it would touch every list in the app and deserves its own decision.
 - With this, every surface in `docs/design-direction.md` has been passed and the two tree-wide violation classes (multi-accent colour, stacked shadows) plus the type/radii vocabulary are consistent. The initiative's original checklist is complete.
+
+---
+
+## Pass: Accent rule amended + generic greys folded into the warm palette
+
+### Skills Used
+
+- `.codex/skills/quiet-luxury-ui`, principle 3 (one accent) and the hard constraint
+  "existing tokens only — no new colors".
+- `.codex/skills/antigravity-testing-release`: full gate + live computed-colour measurement.
+
+### Area Inspected
+
+Whole tree. This pass began as an audit of my own prior claim that the initiative was
+complete — it was not.
+
+### Problems Discovered
+
+- **The master prompt's central colour rule was not implemented anywhere.**
+  `design-direction.md` principle 3 specified a warm `#D4BFA0` accent "reserved for the
+  primary action and the active/playing state". That hex appeared in **zero files**: the
+  beige-to-white/alpha migration (commit `3fe5698`, which predates this agent's involvement)
+  had replaced it app-wide with `#FFFFFF`. Every prior pass in this initiative was enforcing
+  principles 1/2/4/7 against a codebase that had silently dropped principle 3. Reporting the
+  initiative "complete" last turn was wrong, and this was the gap.
+- **233 distinct hex values** against a documented ~12-token palette. `globals.css` already
+  defines a full token system (`--bg-page`, `--accent`, `--text-*`, a `--dr-*` scale) but
+  **175 files hardcode hex while only 15 use `var(--accent)`** — so there is no single place
+  to change a colour, which is why colour keeps drifting back.
+- **216 uses of pure neutral greys** (`#0E0E0E` ×135, `#CCCCCC`, `#111111`, `#777777`,
+  `#222222`, `#AAAAAA`, `#333333`, `#555555`) inside a palette explicitly specified as warm
+  ("ink-on-bone inverted to warm near-black").
+
+### Owner Decisions
+
+Surfaced both as an explicit choice rather than guessed:
+1. **Accent** → *white is correct; update the doc.* The migration's direction stands.
+2. **Colour system** → *fold the greys only*; the broader hex-to-token migration is deferred.
+
+### Changes Made
+
+- **`docs/design-direction.md` principle 3 rewritten** to specify `#FFFFFF` + alpha steps as
+  the accent, with an explicit "Amended" note recording that it originally said `#D4BFA0`,
+  why it changed, and that the warm palette still governs *surfaces and text* — it is the
+  accent specifically that is white. Also notes the producer's storefront accent picker is a
+  user-controlled setting deliberately out of scope.
+- **Generic greys folded into the warm palette, 79 files.** Eight mappings, every target a
+  value already present in the codebase (or documented in CLAUDE.md), so the distinct-hex
+  count went *down* rather than up: `#0E0E0E`/`#111111`→`#0D0D0A`, `#222222`→`#1f1a10`,
+  `#333333`→`#3d3020`, `#555555`→`#5a5142`, `#777777`→`#706B61`, `#AAAAAA`→`#AAA294`,
+  `#CCCCCC`→`#C7B89D`. Luminance-preserving, so this is a temperature shift, not a contrast
+  change.
+
+### Problems Fixed
+
+- Zero pure neutral greys remain in source. Distinct hex 233 → 226.
+- Verified live on `/library` (786 visible elements): the only pure-neutral computed colours
+  remaining are `rgb(255,255,255)` and `rgba(255,255,255,0.094)` — i.e. the accent itself —
+  against 322 warm colour usages. That is precisely the amended principle 3.
+
+### Tests Performed
+
+- `npx tsc --noEmit` clean · `npx eslint .` 0 errors (96 pre-existing warnings) ·
+  `npm test` 538/538 · `npm run build` green.
+- Live computed-colour scan + screenshot of `/library`.
+
+### Remaining Concerns
+
+- **Deferred by owner decision:** the hex-to-token migration (175 files hardcoding hex vs 15
+  using `var(--*)`). Until that lands, colour has no single source of truth and future drift
+  is likely — this is the root cause behind the repeated purple regressions, not a cosmetic
+  issue.
+- The stray 14px shared track title (`TrackCard`/`StoreListView`) remains, as it is applied
+  consistently across every list surface and changing it is a product decision.

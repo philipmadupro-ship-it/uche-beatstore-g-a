@@ -245,8 +245,8 @@ export function SimilarTracks({ trackId, onPick }: Props) {
                   <span className={cn(
                     'text-[10px] font-mono font-bold px-2 py-0.5 rounded-full tabular-nums',
                     pct >= 75 ? 'bg-white/15 text-white ring-1 ring-white/30'
-                      : pct >= 50 ? 'bg-white/[0.04] text-white/80 ring-1 ring-[#333333]'
-                        : 'bg-white/[0.02] text-white/40 ring-1 ring-[#222222]',
+                      : pct >= 50 ? 'bg-white/[0.04] text-white/80 ring-1 ring-[#3d3020]'
+                        : 'bg-white/[0.02] text-white/40 ring-1 ring-[#1f1a10]',
                   )}>
                     {pct}%
                   </span>

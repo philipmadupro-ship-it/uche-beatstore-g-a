@@ -63,7 +63,7 @@ const STATUS_OPTIONS = [
   { value: 'maq',        label: 'MAQ',      color: 'bg-white/[0.04] text-white/70 border-white/15' },
   { value: 'needs_work', label: 'WIP',      color: 'bg-[#1f1a0a] text-white border-[#3a2f1f]'   },
   { value: 'finished',   label: 'Finished', color: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]'   },
-  { value: 'archived',   label: 'Archived', color: 'bg-[#0E0E0E] text-white/60 border-white/10'   },
+  { value: 'archived',   label: 'Archived', color: 'bg-[#0D0D0A] text-white/60 border-white/10'   },
 ];
 
 function fmtDate(iso: string): string {
@@ -500,7 +500,7 @@ export default function AnalyticsPage() {
                   {filteredByTrack.slice(0, 15).map((t, rank) => {
                     const meta = trackMeta.get(t.track_id);
                     return (
-                      <div key={t.track_id} className="flex items-center gap-3 px-5 py-3 hover:bg-[#0E0E0E] transition-colors">
+                      <div key={t.track_id} className="flex items-center gap-3 px-5 py-3 hover:bg-[#0D0D0A] transition-colors">
                         <span className="text-[10px] font-mono text-white/40 tabular-nums w-5 shrink-0">{rank + 1}</span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1.5 gap-2">
@@ -551,7 +551,7 @@ export default function AnalyticsPage() {
                 </div>
                 <div className="divide-y divide-white/10">
                   {byShareLink.slice(0, 20).map((s) => (
-                    <div key={s.token} className="flex items-center gap-3 px-5 py-3 hover:bg-[#0E0E0E] transition-colors">
+                    <div key={s.token} className="flex items-center gap-3 px-5 py-3 hover:bg-[#0D0D0A] transition-colors">
                       <div className="flex-1 min-w-0">
                         <a
                           href={`/share/${s.token}`}

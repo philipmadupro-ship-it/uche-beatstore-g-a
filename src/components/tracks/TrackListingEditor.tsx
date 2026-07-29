@@ -521,7 +521,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
             summary={coverUrlInput ? 'Set' : 'Recommended'} open={openSections.has('cover')} onToggle={() => toggleSection('cover')}>
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
               <div onClick={() => fileInputRef.current?.click()}
-                className="w-16 h-16 rounded-lg bg-[#0E0E0E] border border-white/10 overflow-hidden shrink-0 cursor-pointer hover:border-white/ transition-colors relative group">
+                className="w-16 h-16 rounded-lg bg-[#0D0D0A] border border-white/10 overflow-hidden shrink-0 cursor-pointer hover:border-white/ transition-colors relative group">
                 {coverUrlInput ? (
                   <NextImage src={coverUrlInput} alt="" fill sizes="64px" className="object-cover" />
                 ) : (

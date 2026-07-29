@@ -88,7 +88,7 @@ export function StudioDrumPads({ onTrigger }: Props) {
   }, []);
 
   return (
-    <div className="border border-[#0E0E0E] rounded-lg p-5 bg-[#090907]">
+    <div className="border border-[#0D0D0A] rounded-lg p-5 bg-[#090907]">
       <div className="flex items-center justify-between mb-4">
         <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white">Drum Pads</p>
         <p className="text-[9px] font-mono text-white/40">Keys 1–5 · click to trigger</p>
@@ -110,7 +110,7 @@ export function StudioDrumPads({ onTrigger }: Props) {
                 'aspect-square rounded-xl relative overflow-hidden transition-all duration-100',
                 'border',
                 isEmpty
-                  ? 'border-[#0E0E0E] bg-[#080808] cursor-default'
+                  ? 'border-[#0D0D0A] bg-[#080808] cursor-default'
                   : cn(
                       'border-white/[0.06] bg-gradient-to-br shadow-[0_2px_6px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.04)]',
                       pad.color,

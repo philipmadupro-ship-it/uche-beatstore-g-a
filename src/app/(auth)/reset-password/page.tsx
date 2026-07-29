@@ -36,7 +36,7 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#090907] p-4 text-white">
-      <div className="w-full max-w-sm space-y-6 bg-[#0E0E0E] p-8 rounded-lg border border-white/10">
+      <div className="w-full max-w-sm space-y-6 bg-[#0D0D0A] p-8 rounded-lg border border-white/10">
         <div>
           <Link
             href="/login"

@@ -32,10 +32,10 @@ export function BeatListRow({
     <div
       id={`beat-${track.id}`}
       className={`overflow-hidden rounded-xl border transition-all duration-200 ${isPreview
-          ? 'border-white/ bg-[#0E0E0E]'
+          ? 'border-white/ bg-[#0D0D0A]'
           : isCurrent
-            ? 'border-white/ bg-[#0E0E0E]'
-            : 'border-white/10 bg-white/[0.04] hover:border-white/10 hover:bg-[#0E0E0E]'
+            ? 'border-white/ bg-[#0D0D0A]'
+            : 'border-white/10 bg-white/[0.04] hover:border-white/10 hover:bg-[#0D0D0A]'
         }`}
       style={
         isPreview

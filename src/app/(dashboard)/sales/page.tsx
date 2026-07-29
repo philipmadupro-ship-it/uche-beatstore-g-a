@@ -719,7 +719,7 @@ function SaleRow({ sale }: { sale: Sale }) {
   return (
     <>
       {/* Desktop: table grid row */}
-      <div className="hidden rounded-xl bg-white/[0.02]/70 md:grid md:grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-3.5 py-3 transition-colors hover:bg-[#0E0E0E]">
+      <div className="hidden rounded-xl bg-white/[0.02]/70 md:grid md:grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-3.5 py-3 transition-colors hover:bg-[#0D0D0A]">
         <span className="text-[11px] font-mono text-white/80 tabular-nums">{fmtDate(sale.created_at)}</span>
 
         <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-white/60">

@@ -1535,7 +1535,7 @@ export default function LibraryPage() {
                   { v: 'maq', l: 'MAQ', cls: 'bg-[#1f1a10] text-[#c8a47a] border-[#3d3020]/40' },
                   { v: 'needs_work', l: 'WIP', cls: 'bg-[#1f1a0a] text-white border-[#3a2f1f]' },
                   { v: 'finished', l: 'Finished', cls: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
-                  { v: 'archived', l: 'Archived', cls: 'bg-[#0E0E0E] text-white/60 border-white/10' },
+                  { v: 'archived', l: 'Archived', cls: 'bg-[#0D0D0A] text-white/60 border-white/10' },
                 ].map(({ v, l, cls }) => (
                   <button
                     key={v}

@@ -394,7 +394,7 @@ function LicenseCard({
   return (
     <div className={`rounded-xl border p-4 space-y-3 relative overflow-hidden ${
       isExclusive
-        ? 'border-white/ bg-gradient-to-br from-[#0E0E0E] to-transparent'
+        ? 'border-white/ bg-gradient-to-br from-[#0D0D0A] to-transparent'
         : 'border-white/10 bg-white/[0.04]'
     }`}>
       {badge && !isExclusive && (

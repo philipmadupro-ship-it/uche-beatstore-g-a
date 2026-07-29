@@ -408,10 +408,10 @@ async function runFulfillment(params: {
                 <p style="font-size: 15px; line-height: 1.7;">
                   ${producerName ? `Hi ${producerName}, ` : ''}a buyer just purchased an exclusive license, but the track${titles.length === 1 ? "" : "s"} below ${titles.length === 1 ? "doesn't" : "don't"} have a WAV or finished stems on file yet. Please upload them so the buyer can complete their download.
                 </p>
-                <div style="margin: 24px 0; padding: 16px; background: #111111; border-radius: 12px; border: 1px solid #222222; font-size: 12px; color: #CCCCCC; font-family: monospace; line-height: 1.8;">
+                <div style="margin: 24px 0; padding: 16px; background: #0D0D0A; border-radius: 12px; border: 1px solid #1f1a10; font-size: 12px; color: #C7B89D; font-family: monospace; line-height: 1.8;">
                   ${titles.map((t: string) => `• ${t}`).join('<br/>')}
                 </div>
-                <p style="font-size: 13px; color: #CCCCCC;">
+                <p style="font-size: 13px; color: #C7B89D;">
                   Buyer: ${meta.buyer_email ?? 'unknown'} · Amount: $${((session.amount_total ?? 0) / 100).toFixed(2)}
                 </p>
                 <div style="margin-top: 32px;">
@@ -420,7 +420,7 @@ async function runFulfillment(params: {
                     Upload in Library
                   </a>
                 </div>
-                <p style="margin-top: 32px; font-size: 10px; color: #777777; text-transform: uppercase; letter-spacing: 0.25em;">
+                <p style="margin-top: 32px; font-size: 10px; color: #706B61; text-transform: uppercase; letter-spacing: 0.25em;">
                   This purchase is also flagged in /sales with an "Awaiting stems" badge.
                 </p>
               </div>
@@ -549,7 +549,7 @@ async function runFulfillment(params: {
         : '';
 
       const contractLine = contractPdfUrl
-        ? `<p style="margin-top: 20px; font-size: 12px; color: #CCCCCC;">
+        ? `<p style="margin-top: 20px; font-size: 12px; color: #C7B89D;">
              📜 Your signed-style <a href="${contractPdfUrl}" style="color: #FFFFFF; text-decoration: underline;">license agreement (PDF)</a> is attached to this email.
            </p>`
         : '';
@@ -576,10 +576,10 @@ async function runFulfillment(params: {
             <p style="font-size: 15px; line-height: 1.7; color: #FFFFFF;">
               Thanks for your purchase. Your license${lineItems.length > 1 ? 's are' : ' is'} now active and your files are ready to download.
             </p>
-            <div style="margin: 24px 0; padding: 16px; background: #111111; border-radius: 12px; border: 1px solid #222222; font-size: 12px; color: #CCCCCC; font-family: monospace; line-height: 1.8;">
+            <div style="margin: 24px 0; padding: 16px; background: #0D0D0A; border-radius: 12px; border: 1px solid #1f1a10; font-size: 12px; color: #C7B89D; font-family: monospace; line-height: 1.8;">
               ${itemSummaries.join('<br/>')}
-              <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #222222;">
-                <div style="display:flex;justify-content:space-between;font-size:11px;color:#CCCCCC;">
+              <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid #1f1a10;">
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:#C7B89D;">
                   <span>Subtotal</span><span>${fmt(subtotalCents)}</span>
                 </div>
                 ${promoLine}
@@ -595,7 +595,7 @@ async function runFulfillment(params: {
               </a>
             </div>
             ${contractLine}
-            <p style="margin-top: 48px; font-size: 10px; color: #777777; text-transform: uppercase; letter-spacing: 0.5em;">
+            <p style="margin-top: 48px; font-size: 10px; color: #706B61; text-transform: uppercase; letter-spacing: 0.5em;">
               Questions? Reply to this email or contact support.
             </p>
           </div>
@@ -699,7 +699,7 @@ async function runProjectFulfillment(params: {
                 Access your project
               </a>
             </div>
-            <p style="margin-top: 48px; font-size: 10px; color: #777777; text-transform: uppercase; letter-spacing: 0.5em;">
+            <p style="margin-top: 48px; font-size: 10px; color: #706B61; text-transform: uppercase; letter-spacing: 0.5em;">
               The link above lets you stream and download every track in the project.
             </p>
           </div>

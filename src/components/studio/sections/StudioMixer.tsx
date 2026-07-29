@@ -53,7 +53,7 @@ interface MixerProps {
  */
 export function StudioMixer({ useStems, stemsLoading, channels, setChannel }: MixerProps) {
   return (
-    <div className="rounded-2xl border border-[#0E0E0E] bg-[#090907] p-3 sm:p-4">
+    <div className="rounded-2xl border border-[#0D0D0A] bg-[#090907] p-3 sm:p-4">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sliders size={12} className="text-white" />
@@ -101,7 +101,7 @@ interface ChannelStripProps {
 
 function ChannelStrip({ name, color, state, onChange }: ChannelStripProps) {
   return (
-    <div className="rounded-xl border border-[#0E0E0E] bg-[#0D0B09] p-3">
+    <div className="rounded-xl border border-[#0D0D0A] bg-[#0D0B09] p-3">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${color}`} />
@@ -113,7 +113,7 @@ function ChannelStrip({ name, color, state, onChange }: ChannelStripProps) {
             className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
               state.muted
                 ? 'bg-red-950/40 border-red-900/50 text-red-300'
-                : 'bg-[#0E0E0E] border-white/10 text-white/60 hover:text-white'
+                : 'bg-[#0D0D0A] border-white/10 text-white/60 hover:text-white'
             }`}
           >M</button>
           <button
@@ -121,7 +121,7 @@ function ChannelStrip({ name, color, state, onChange }: ChannelStripProps) {
             className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
               state.solo
                 ? 'bg-white/10 border-white/ text-white'
-                : 'bg-[#0E0E0E] border-white/10 text-white/60 hover:text-white'
+                : 'bg-[#0D0D0A] border-white/10 text-white/60 hover:text-white'
             }`}
           >S</button>
         </div>

@@ -339,7 +339,7 @@ export function TrackCard({
             {onClickDetails && (
               <button
                 onClick={() => { setMenuOpen(false); onClickDetails(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E]"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
               >
                 <Info size={12} className="text-white" /> View details
               </button>
@@ -349,14 +349,14 @@ export function TrackCard({
                 <button
                   onClick={() => { setMenuOpen(false); onMoveUp?.(); }}
                   disabled={isFirstInOrder}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E] disabled:opacity-40 disabled:hover:bg-transparent"
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A] disabled:opacity-40 disabled:hover:bg-transparent"
                 >
                   <ChevronUp size={12} className="text-white" /> Move up
                 </button>
                 <button
                   onClick={() => { setMenuOpen(false); onMoveDown?.(); }}
                   disabled={isLastInOrder}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E] disabled:opacity-40 disabled:hover:bg-transparent"
+                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A] disabled:opacity-40 disabled:hover:bg-transparent"
                 >
                   <ChevronDown size={12} className="text-white" /> Move down
                 </button>
@@ -365,7 +365,7 @@ export function TrackCard({
             {onShare && (
               <button
                 onClick={() => { setMenuOpen(false); onShare(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E]"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
               >
                 <Share2 size={12} className="text-white" /> Share track
               </button>
@@ -374,7 +374,7 @@ export function TrackCard({
             {isCached ? (
               <button
                 onClick={(e) => { setMenuOpen(false); handleRemoveSync(e); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-amber-500 hover:bg-[#0E0E0E]"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-amber-500 hover:bg-[#0D0D0A]"
               >
                 <MinusCircle size={12} className="text-amber-500 shrink-0" /> Remove offline cache
               </button>
@@ -382,7 +382,7 @@ export function TrackCard({
               <button
                 onClick={(e) => { handleSync(e); }}
                 disabled={syncProgress !== null}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E] disabled:opacity-50"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A] disabled:opacity-50"
               >
                 {syncProgress !== null ? (
                   <>
@@ -400,7 +400,7 @@ export function TrackCard({
             {onRemoveFromContext && (
               <button
                 onClick={() => { setMenuOpen(false); onRemoveFromContext(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E]"
+                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
               >
                 <MinusCircle size={12} className="text-white/80" /> {removeLabel}
               </button>

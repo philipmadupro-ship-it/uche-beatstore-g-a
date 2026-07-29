@@ -181,10 +181,10 @@
   --text-secondary: var(--dr-bone-200);
   --text-tertiary: var(--dr-beige-400);
   /* Readable floor for SMALL content text. The faded tertiary tints
-   * (#555555…#AAAAAA) are part of the mood but fail WCAG AA on the dark
+   * (#5a5142…#AAA294) are part of the mood but fail WCAG AA on the dark
    * bg (1.5–3.8:1); use this (~5:1 on #090907) anywhere a user must read
    * the value, while leaving purely-decorative fades alone. */
-  --text-readable: #AAAAAA;
+  --text-readable: #AAA294;
   /* Accent — champagne beige + two adjacents (lighter for hover/active,
    * dimmer for pressed/borders). */
   --accent: var(--brand-primary);
@@ -193,8 +193,8 @@
   --accent-tint: #2F2C25;
   --star: #FFFFFF;
   /* Muted hint/placeholder/icon text — the canonical value for the dozens of
-   * ad-hoc `#777777` usages. Slightly above the decorative tertiary fades. */
-  --text-muted: #777777;
+   * ad-hoc `#706B61` usages. Slightly above the decorative tertiary fades. */
+  --text-muted: #706B61;
   --border: var(--border-default);
   --border-hover: var(--border-strong);
   /* Error states — previously bespoke per component (Field used #8d3a2f /
@@ -661,9 +661,9 @@ html {
 .skeleton-shimmer {
   background: linear-gradient(
     90deg,
-    #0E0E0E 25%,
+    #0D0D0A 25%,
     #2F2B23 50%,
-    #0E0E0E 75%
+    #0D0D0A 75%
   );
   background-size: 200% 100%;
   animation: skeletonShimmer 1.6s ease-in-out infinite;
@@ -703,12 +703,12 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #222222;
+  background: #1f1a10;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #333333;
+  background: #3d3020;
 }
 
 /* Wavesurfer overrides */
@@ -731,7 +731,7 @@ input[type=range] {
 
 input[type=range]::-webkit-slider-runnable-track {
   height: 2px;
-  background: #222222;
+  background: #1f1a10;
   border-radius: 1px;
 }
 

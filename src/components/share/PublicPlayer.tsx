@@ -54,7 +54,7 @@ export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
         <div className="w-full max-w-sm space-y-8 text-center">
-          <div className="mx-auto w-16 h-16 bg-[#0E0E0E] border border-white/10 rounded-2xl flex items-center justify-center text-white">
+          <div className="mx-auto w-16 h-16 bg-[#0D0D0A] border border-white/10 rounded-2xl flex items-center justify-center text-white">
             <Lock size={24} />
           </div>
           
@@ -69,7 +69,7 @@ export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="ENTER PASSCODE..."
-              className="w-full bg-[#0E0E0E] border border-white/10 rounded-xl py-4 px-6 text-center text-xs font-bold uppercase tracking-[0.2em] text-white placeholder-white/30 focus:outline-none focus:border-white/30 transition-all"
+              className="w-full bg-[#0D0D0A] border border-white/10 rounded-xl py-4 px-6 text-center text-xs font-bold uppercase tracking-[0.2em] text-white placeholder-white/30 focus:outline-none focus:border-white/30 transition-all"
               autoFocus
             />
             {error && <p className="text-red-500 text-[10px] font-black uppercase tracking-widest">{error}</p>}
@@ -89,7 +89,7 @@ export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
     <div className="max-w-4xl mx-auto p-8 lg:p-16 space-y-12">
       {/* Header */}
       <div className="flex flex-col md:flex-row items-center md:items-end gap-8 border-b border-white/10 pb-12">
-        <div className="relative w-48 h-48 bg-[#0E0E0E] rounded-sm shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] flex items-center justify-center text-white/30 overflow-hidden">
+        <div className="relative w-48 h-48 bg-[#0D0D0A] rounded-sm shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] flex items-center justify-center text-white/30 overflow-hidden">
           {activeTrack?.cover_url ? (
             <NextImage src={activeTrack.cover_url} alt="" fill sizes="192px" unoptimized className="object-cover" />
           ) : (
@@ -109,7 +109,7 @@ export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
       </div>
 
       {/* Main Track Player */}
-      <div className="bg-[#0E0E0E]/50 border border-white/10 rounded-3xl p-8 space-y-8 backdrop-blur-xl">
+      <div className="bg-[#0D0D0A]/50 border border-white/10 rounded-3xl p-8 space-y-8 backdrop-blur-xl">
         <WavePlayer
           url={activeTrack?.audio_url}
           peaksUrl={activeTrack?.peaks_url ?? null}
@@ -141,7 +141,7 @@ export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
                   flex items-center gap-4 p-4 rounded-2xl border transition-all duration-300
                   ${activeTrack?.id === track.id 
                     ? 'bg-white/10 border-white/50 text-white' 
-                    : 'bg-[#0E0E0E] border-white/10 text-white/80 hover:border-white/30'}
+                    : 'bg-[#0D0D0A] border-white/10 text-white/80 hover:border-white/30'}
                 `}
               >
                 <span className="text-[10px] font-black opacity-30 w-4">{(i + 1).toString().padStart(2, '0')}</span>

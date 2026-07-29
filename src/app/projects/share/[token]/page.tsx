@@ -757,7 +757,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     {purchaseBannerNode}
     <div className="min-h-screen bg-[#090907] text-white flex flex-col">
       {/* Header */}
-      <header className="px-4 sm:px-8 py-5 border-b border-[#0E0E0E] flex items-center justify-between gap-3">
+      <header className="px-4 sm:px-8 py-5 border-b border-[#0D0D0A] flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-6 h-6 rounded-[5px] bg-white flex items-center justify-center shrink-0">
             <span className="text-[9px] font-black text-black">AG</span>
@@ -773,7 +773,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         {/* Project header */}
         {project && (
           <div className="flex items-end gap-4 sm:gap-5">
-            <div className="w-16 h-16 sm:w-24 sm:h-24 bg-[#0E0E0E] rounded-xl overflow-hidden border border-white/10 shrink-0">
+            <div className="w-16 h-16 sm:w-24 sm:h-24 bg-[#0D0D0A] rounded-xl overflow-hidden border border-white/10 shrink-0">
               {project.cover_url
                 ? <Image src={project.cover_url} alt="" width={96} height={96} className="w-full h-full object-cover" unoptimized />
                 : <div className="w-full h-full flex items-center justify-center text-white/30 text-3xl font-black">{project.name.charAt(0)}</div>
@@ -839,7 +839,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         {activeTrack && (
           <div className="bg-white/[0.02] border border-white/10 rounded-xl p-4 sm:p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 bg-[#0E0E0E] rounded border border-white/10 overflow-hidden shrink-0">
+              <div className="w-10 h-10 bg-[#0D0D0A] rounded border border-white/10 overflow-hidden shrink-0">
                 {activeTrack.cover_url
                   ? <Image src={activeTrack.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized />
                   : <div className="w-full h-full flex items-center justify-center text-white/30"><Music size={14} /></div>
@@ -1018,7 +1018,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                     </div>
                   )}
 
-                  <div className="w-7 h-7 bg-[#0E0E0E] rounded border border-white/10 overflow-hidden shrink-0">
+                  <div className="w-7 h-7 bg-[#0D0D0A] rounded border border-white/10 overflow-hidden shrink-0">
                     {t.cover_url
                       ? <Image src={t.cover_url} alt="" width={28} height={28} className="w-full h-full object-cover" unoptimized />
                       : <div className="w-full h-full flex items-center justify-center text-white/30"><Music size={11} /></div>

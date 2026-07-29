@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
                   <div style="margin-top: 28px;">
                     <a href="${url}" style="background: #FFFFFF; color: #090907; padding: 14px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px; display: inline-block;">Listen now</a>
                   </div>
-                  <p style="margin-top: 32px; font-size: 10px; color: #777777;">You're getting this because you subscribed to this drop on the store. No future emails are queued.</p>
+                  <p style="margin-top: 32px; font-size: 10px; color: #706B61;">You're getting this because you subscribed to this drop on the store. No future emails are queued.</p>
                 </div>
               `,
             });

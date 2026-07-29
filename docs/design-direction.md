@@ -19,9 +19,17 @@ every feature, flow, and accessibility affordance exactly as it is.
 2. **Typography carries the luxury.** Fewer sizes per screen (target ≤ 4 text styles visible
    at once). Generous line-height and letter-spacing discipline. Mono-uppercase micro-labels
    ONLY for true metadata (BPM, key, date) — never for headings or buttons.
-3. **One accent.** `#D4BFA0` is reserved for the primary action and the active/playing state.
-   Kill decorative multi-accent usage (`#9d95e8`, `#D6BE7A`, etc. as card tints). Semantic
-   exceptions stay: mint `#6DC6A4` = free, gold `#c8a84b` = rating/wishlist.
+3. **One accent.** `#FFFFFF` (and its alpha steps) is reserved for the primary action and the
+   active/playing state. Kill decorative multi-accent usage (`#9d95e8`, `#7F77DD`, `#D6BE7A`,
+   etc. as card tints). Semantic exceptions stay: mint `#6DC6A4` = free, gold `#c8a84b` =
+   rating/wishlist, warm `#c8a47a` = musical key.
+
+   > **Amended.** This principle originally specified a warm `#D4BFA0` accent. The
+   > beige-to-white/alpha migration replaced it app-wide, and on review that direction was
+   > kept — so the rule now documents what ships. The *warm* palette still governs surfaces
+   > and text (see principle 4); it is the accent specifically that is white. The producer's
+   > storefront accent picker (`ACCENT_PRESETS`, profile swatches) is a separate,
+   > user-controlled setting and is deliberately out of scope for this rule.
 4. **Flatter, calmer surfaces.** Prefer background steps (`#0a0907 → #14110d → #171511`) over
    border+shadow stacking. Max one border OR one shadow per element. Radii vocabulary: 8px
    (controls), 12px (cards), 20px (modals/heroes) — nothing else.

@@ -96,7 +96,7 @@ export function ProjectDetailHeader(props: Props) {
   const [tagsOpen, setTagsOpen] = useState(false);
 
   return (
-    <div className={`flex gap-4 sm:gap-7 mb-6 sm:mb-10 ${hideCover ? '' : 'pb-6 sm:pb-8 border-b border-[#0E0E0E]'}`}>
+    <div className={`flex gap-4 sm:gap-7 mb-6 sm:mb-10 ${hideCover ? '' : 'pb-6 sm:pb-8 border-b border-[#0D0D0A]'}`}>
       {/* Cover — clickable to swap art. Hidden when the parent page is
           rendering a side-by-side layout with the cover in its own
           column. */}

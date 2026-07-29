@@ -86,7 +86,7 @@ export default function InvitePage({ params: paramsPromise }: { params: Promise<
         </div>
 
         {error && !invite ? (
-          <div className="bg-[#0E0E0E] border border-red-500/20 rounded-3xl p-12 text-center shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
+          <div className="bg-[#0D0D0A] border border-red-500/20 rounded-3xl p-12 text-center shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
             <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-8 text-red-500">
                <ShieldCheck size={40} />
             </div>
@@ -95,7 +95,7 @@ export default function InvitePage({ params: paramsPromise }: { params: Promise<
             <button onClick={() => window.location.href = '/login'} className="mt-10 text-[10px] font-black uppercase tracking-[0.3em] text-white hover:text-white transition-colors">Return to Terminal</button>
           </div>
         ) : done ? (
-          <div className="bg-[#0E0E0E] border border-white/ rounded-3xl p-12 text-center shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] animate-in zoom-in-95">
+          <div className="bg-[#0D0D0A] border border-white/ rounded-3xl p-12 text-center shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] animate-in zoom-in-95">
              <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-8 text-white">
                <Mail size={40} />
             </div>
@@ -105,7 +105,7 @@ export default function InvitePage({ params: paramsPromise }: { params: Promise<
             </p>
           </div>
         ) : (
-          <form onSubmit={handleAccept} className="bg-[#0E0E0E] border border-white/10 rounded-[2.5rem] p-12 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] relative overflow-hidden">
+          <form onSubmit={handleAccept} className="bg-[#0D0D0A] border border-white/10 rounded-[2.5rem] p-12 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] relative overflow-hidden">
             <div className="absolute top-0 right-0 p-8 opacity-5">
               <ShieldCheck size={160} className="text-white" />
             </div>

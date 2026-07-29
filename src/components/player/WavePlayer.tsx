@@ -240,7 +240,7 @@ export function WavePlayer({
             }
             setPlaying(!isPlaying);
           }}
-          className="w-8 h-8 rounded-full bg-[#0E0E0E]/80 border border-white/[0.08] flex items-center justify-center text-white hover:border-white/ hover:text-white hover:scale-105 active:scale-95 transition-all shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+          className="w-8 h-8 rounded-full bg-[#0D0D0A]/80 border border-white/[0.08] flex items-center justify-center text-white hover:border-white/ hover:text-white hover:scale-105 active:scale-95 transition-all shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
         >
           {isPlaying ? (
             <PauseGlyph size={14} />

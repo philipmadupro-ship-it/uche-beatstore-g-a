@@ -256,7 +256,7 @@ export function TopBar() {
                   className={cn(
                     'flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-medium tracking-tight transition-colors',
                     active
-                      ? 'bg-[#0E0E0E] text-white'
+                      ? 'bg-[#0D0D0A] text-white'
                       : 'text-white/60 hover:text-white hover:bg-[#101010]',
                   )}
                 >
@@ -296,7 +296,7 @@ export function TopBar() {
             target="_blank"
             rel="noopener noreferrer"
             title="View public storefront"
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider text-white/60 hover:text-white hover:bg-[#0E0E0E] border border-transparent hover:border-white/10 transition-all shrink-0"
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider text-white/60 hover:text-white hover:bg-[#0D0D0A] border border-transparent hover:border-white/10 transition-all shrink-0"
           >
             <Store size={11} />
             <span>Store</span>
@@ -386,7 +386,7 @@ export function TopBar() {
             className={cn(
               'tap hidden md:flex w-9 h-9 rounded-full items-center justify-center transition-colors shrink-0',
               isItemActive('/settings', pathname)
-                ? 'bg-[#0E0E0E] text-white'
+                ? 'bg-[#0D0D0A] text-white'
                 : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
             )}
           >
@@ -428,7 +428,7 @@ export function TopBar() {
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium tracking-tight transition-colors shrink-0 whitespace-nowrap',
                   active
-                    ? 'text-white bg-[#0E0E0E]'
+                    ? 'text-white bg-[#0D0D0A]'
                     : 'text-white/60 hover:text-white hover:bg-[#101010]',
                 )}
               >
@@ -488,7 +488,7 @@ export function TopBar() {
                           className={cn(
                             'flex items-center gap-3 px-3 py-2.5 rounded-md text-[13px] transition-colors',
                             active
-                              ? 'bg-[#0E0E0E] text-white'
+                              ? 'bg-[#0D0D0A] text-white'
                               : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
                           )}
                         >

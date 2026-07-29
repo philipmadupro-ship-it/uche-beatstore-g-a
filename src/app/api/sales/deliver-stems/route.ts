@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
         subject: 'Your stems are ready to download',
         html: emailShell('U2C Beatstore',
           `${emailHeading('Your stems are ready')}
-           <p style="color:#CCCCCC;font-size:13px;margin:0 0 20px">The producer has uploaded the stems for your exclusive purchase. Download them any time from your delivery page.</p>
+           <p style="color:#C7B89D;font-size:13px;margin:0 0 20px">The producer has uploaded the stems for your exclusive purchase. Download them any time from your delivery page.</p>
            ${emailButton('Download stems', downloadUrl)}`,
         ),
       });

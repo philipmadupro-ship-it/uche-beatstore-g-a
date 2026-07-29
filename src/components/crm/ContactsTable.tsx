@@ -92,7 +92,7 @@ export function ContactsTable(p: Props) {
                   onDragOver={(e) => p.onRowDragOver(c.id, e)}
                   onDragLeave={p.onRowDragLeave}
                   onDrop={(e) => p.onRowDrop(c, e)}
-                  className={`group border-b border-[#0E0E0E] transition-colors ${
+                  className={`group border-b border-[#0D0D0A] transition-colors ${
                     isDrop ? 'ring-2 ring-[var(--accent)]/60 ring-inset bg-[var(--accent-tint)]' : sel ? 'bg-[var(--accent-tint)]/40' : i % 2 ? 'bg-white/[0.01] hover:bg-white/[0.05]' : 'hover:bg-white/[0.05]'
                   }`}
                 >

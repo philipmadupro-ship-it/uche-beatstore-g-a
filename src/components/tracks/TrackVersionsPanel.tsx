@@ -143,7 +143,7 @@ export function TrackVersionsPanel({
               {versions.map((v) => (
                 <div
                   key={v.id}
-                  className="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#0E0E0E] border border-transparent hover:border-white/10 transition-all"
+                  className="group flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#0D0D0A] border border-transparent hover:border-white/10 transition-all"
                 >
                   <div className="w-7 h-7 rounded-md bg-white/10 border border-white/ flex items-center justify-center shrink-0">
                     <span className="text-[9px] font-black text-white">v{v.version_number}</span>

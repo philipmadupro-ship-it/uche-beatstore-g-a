@@ -56,7 +56,7 @@ export function UploadsTray() {
       <div className="bg-[#090907] border border-white/10 rounded-lg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden">
         <button
           onClick={() => setExpanded((x) => !x)}
-          className="tap w-full flex min-h-11 items-center gap-2 px-3 border-b border-[#0E0E0E] hover:bg-white/[0.04] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+          className="tap w-full flex min-h-11 items-center gap-2 px-3 border-b border-[#0D0D0A] hover:bg-white/[0.04] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse uploads tray' : 'Expand uploads tray'}
         >
@@ -137,7 +137,7 @@ function UploadRow({ u }: { u: UploadItem }) {
       </div>
 
       {/* row 2: progress bar */}
-      <div className="h-1 bg-[#0E0E0E] rounded-full overflow-hidden mb-1.5">
+      <div className="h-1 bg-[#0D0D0A] rounded-full overflow-hidden mb-1.5">
         <div
           className={`h-full transition-all duration-200 ${
             u.status === 'success'
@@ -146,7 +146,7 @@ function UploadRow({ u }: { u: UploadItem }) {
               ? 'bg-red-500'
               : u.status === 'paused'
               ? 'bg-white/80'
-              : 'bg-gradient-to-r from-[#FFFFFF] to-[#CCCCCC]'
+              : 'bg-gradient-to-r from-[#FFFFFF] to-[#C7B89D]'
           }`}
           style={{ width: `${pct}%` }}
         />

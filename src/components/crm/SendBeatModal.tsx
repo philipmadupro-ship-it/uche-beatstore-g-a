@@ -712,7 +712,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                           {selected && <Check size={11} className="text-white" />}
                         </div>
                         {/* Cover */}
-                        <div className="w-9 h-9 bg-[#0E0E0E] rounded-lg border border-white/10 overflow-hidden shrink-0">
+                        <div className="w-9 h-9 bg-[#0D0D0A] rounded-lg border border-white/10 overflow-hidden shrink-0">
                           {hasCover
                             ? <img loading="lazy" src={track.cover_url!} alt="" className="w-full h-full object-cover" />
                             : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={12} /></div>}
@@ -775,7 +775,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                       }`}>
                         {selected && <Check size={11} className="text-white" />}
                       </div>
-                      <div className="w-7 h-7 bg-[#0E0E0E] rounded border border-white/10 overflow-hidden shrink-0">
+                      <div className="w-7 h-7 bg-[#0D0D0A] rounded border border-white/10 overflow-hidden shrink-0">
                         {project.cover_url
                           ? <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
                           : <div className="w-full h-full flex items-center justify-center text-white/40"><Disc3 size={11} /></div>}
@@ -800,7 +800,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 {/* Summary */}
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-2">Sending</p>
-                  <div className="bg-[#0E0E0E] border border-white/10 rounded-xl p-3 flex items-center gap-3">
+                  <div className="bg-[#0D0D0A] border border-white/10 rounded-xl p-3 flex items-center gap-3">
                     <div className="w-10 h-10 bg-white/[0.05] rounded-lg overflow-hidden shrink-0 border border-white/20">
                       {summary.cover
                         ? <img loading="lazy" src={summary.cover} alt="" className="w-full h-full object-cover" />
@@ -818,13 +818,13 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                   <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/50">Templates</span>
                   {templates.slice(0, 4).map((t) => (
                     <button key={t.id} onClick={() => applyTemplate(t)}
-                      className="px-2 py-1 rounded-md bg-[#0E0E0E] border border-white/10 text-[10px] text-white/80 hover:text-white hover:border-white/20 truncate max-w-[90px] transition-colors" title={t.name}>
+                      className="px-2 py-1 rounded-md bg-[#0D0D0A] border border-white/10 text-[10px] text-white/80 hover:text-white hover:border-white/20 truncate max-w-[90px] transition-colors" title={t.name}>
                       {t.name}
                     </button>
                   ))}
                   {templates.length > 4 && (
                     <button onClick={() => setShowTemplates((v) => !v)}
-                      className="px-2 py-1 rounded-md bg-[#0E0E0E] border border-white/10 text-[10px] text-white/60 hover:text-white/80">
+                      className="px-2 py-1 rounded-md bg-[#0D0D0A] border border-white/10 text-[10px] text-white/60 hover:text-white/80">
                       +{templates.length - 4}
                     </button>
                   )}
@@ -853,7 +853,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
 
                 {/* Subject + message stacked */}
                 <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2 bg-[#0E0E0E] border border-white/10 rounded-xl px-3.5 py-2 focus-within:border-white/40 transition-colors">
+                  <div className="flex items-center gap-2 bg-[#0D0D0A] border border-white/10 rounded-xl px-3.5 py-2 focus-within:border-white/40 transition-colors">
                     <Mail size={11} className="text-white/50 shrink-0" />
                     <input
                       type="text"
@@ -863,7 +863,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                       className="flex-1 bg-transparent text-[12px] text-white placeholder:text-white/40 focus:outline-none min-w-0"
                     />
                   </div>
-                  <div className="relative bg-[#0E0E0E] border border-white/10 rounded-xl focus-within:border-white/40 transition-colors">
+                  <div className="relative bg-[#0D0D0A] border border-white/10 rounded-xl focus-within:border-white/40 transition-colors">
                     <MessageSquare size={11} className="absolute left-3.5 top-3.5 text-white/50 pointer-events-none" />
                     <textarea
                       placeholder={`Hey ${(recipients[0]?.name || '').split(' ')[0] || 'there'}, here's some new work…`}
@@ -887,7 +887,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                   {mode === 'project' && (
                     <div className="col-span-2">
                       <p className="text-[10px] text-white/70 uppercase tracking-wider mb-1.5">Role</p>
-                      <div className="flex gap-1 bg-[#0E0E0E] border border-white/10 rounded-md p-0.5">
+                      <div className="flex gap-1 bg-[#0D0D0A] border border-white/10 rounded-md p-0.5">
                         <SegBtn active={role === 'viewer'} onClick={() => setRole('viewer')} icon={<Eye size={10} />}>Viewer</SegBtn>
                         <SegBtn active={role === 'commenter'} onClick={() => setRole('commenter')} icon={<MessageSquare size={10} />}>Commenter</SegBtn>
                       </div>
@@ -906,10 +906,10 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                     <input
                       type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                       placeholder="Password" autoComplete="new-password"
-                      className="col-span-2 bg-[#0E0E0E] border border-white/10 rounded-md px-3 py-2 text-[11px] text-white placeholder:text-white/50 focus:outline-none focus:border-white/40"
+                      className="col-span-2 bg-[#0D0D0A] border border-white/10 rounded-md px-3 py-2 text-[11px] text-white placeholder:text-white/50 focus:outline-none focus:border-white/40"
                     />
                   )}
-                  <div className="col-span-2 flex items-center gap-2 bg-[#0E0E0E] border border-white/10 rounded-md px-3 py-2">
+                  <div className="col-span-2 flex items-center gap-2 bg-[#0D0D0A] border border-white/10 rounded-md px-3 py-2">
                     <Calendar size={11} className="text-white/70 shrink-0" />
                     <span className="text-[10px] text-white/80 uppercase tracking-wider">Expires</span>
                     <Dropdown
@@ -926,7 +926,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                     />
                   </div>
                   {campaigns.length > 0 && (
-                    <div className="col-span-2 flex items-center gap-2 bg-[#0E0E0E] border border-white/10 rounded-md px-3 py-2">
+                    <div className="col-span-2 flex items-center gap-2 bg-[#0D0D0A] border border-white/10 rounded-md px-3 py-2">
                       <Zap size={11} className="text-white/70 shrink-0" />
                       <span className="text-[10px] text-white/80 uppercase tracking-wider">Campaign</span>
                       <Dropdown
@@ -1038,7 +1038,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
         <style jsx>{`
           .custom-scrollbar::-webkit-scrollbar { width: 4px; }
           .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-          .custom-scrollbar::-webkit-scrollbar-thumb { background: #222222; border-radius: 10px; }
+          .custom-scrollbar::-webkit-scrollbar-thumb { background: #1f1a10; border-radius: 10px; }
         `}</style>
     </Modal>
   );

@@ -46,7 +46,7 @@ export function QueueDrawer({ onClose }: QueueDrawerProps) {
       contentClassName="p-0 custom-scrollbar"
     >
       {queue.length > 0 && (
-        <div className="flex justify-end border-b border-[#0E0E0E] px-5 py-3">
+        <div className="flex justify-end border-b border-[#0D0D0A] px-5 py-3">
           <button
             onClick={clearQueue}
             className="tap flex items-center gap-1 rounded border border-white/10 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-white/60 hover:border-red-900/40 hover:text-red-400"
@@ -167,8 +167,8 @@ export function QueueDrawer({ onClose }: QueueDrawerProps) {
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #222222; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #333333; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #1f1a10; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #3d3020; }
       `}</style>
     </Modal>
   );
@@ -188,7 +188,7 @@ function Section({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="px-3 py-3 border-b border-[#0E0E0E] last:border-b-0">
+    <div className="px-3 py-3 border-b border-[#0D0D0A] last:border-b-0">
       <div className="flex items-center gap-2 px-2 mb-2">
         {icon}
         <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-white/60">{title}</h3>
@@ -232,13 +232,13 @@ function Row({
           ? 'bg-white/10 border-white/ shadow-lg shadow-white/10'
           : muted
             ? 'bg-transparent border-transparent hover:bg-[#101010] opacity-70 hover:opacity-100'
-            : 'bg-transparent border-transparent hover:bg-[#0E0E0E] hover:border-white/10'
+            : 'bg-transparent border-transparent hover:bg-[#0D0D0A] hover:border-white/10'
       }`}
     >
       {dragHandle && (
         <GripVertical size={12} className="text-white/30 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing" />
       )}
-      <div className="w-9 h-9 bg-[#0E0E0E] rounded-lg overflow-hidden shrink-0 border border-white/10 relative">
+      <div className="w-9 h-9 bg-[#0D0D0A] rounded-lg overflow-hidden shrink-0 border border-white/10 relative">
         {track.cover_url ? (
           <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
         ) : (

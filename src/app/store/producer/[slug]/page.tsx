@@ -188,7 +188,7 @@ export default function ProducerPage({
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#090907]/60 to-[#090907]" />
           </div>
         ) : (
-          <div className="h-[140px] md:h-[200px] w-full bg-gradient-to-b from-[#111111] to-[#090907]" />
+          <div className="h-[140px] md:h-[200px] w-full bg-gradient-to-b from-[#0D0D0A] to-[#090907]" />
         )}
 
         {/* Back link */}

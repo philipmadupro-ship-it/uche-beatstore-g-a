@@ -178,7 +178,7 @@ export function TrackGridCard({
                   {onClickDetails && (
                     <button
                       onClick={() => { close(); onClickDetails(track); }}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E]"
+                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
                     >
                       <Info size={12} className="text-white" /> View details
                     </button>
@@ -186,7 +186,7 @@ export function TrackGridCard({
                   {onShare && (
                     <button
                       onClick={() => { close(); onShare(track); }}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E]"
+                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
                     >
                       <Share2 size={12} className="text-white" /> Share track
                     </button>
@@ -194,7 +194,7 @@ export function TrackGridCard({
                   {onRemoveFromContext && (
                     <button
                       onClick={() => { close(); onRemoveFromContext(track); }}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0E0E0E]"
+                      className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
                     >
                       <MinusCircle size={12} className="text-white/80" /> {removeLabel}
                     </button>

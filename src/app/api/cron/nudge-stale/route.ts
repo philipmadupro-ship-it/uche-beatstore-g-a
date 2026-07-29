@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
               <div style="margin-top: 40px;">
                 <a href="${shareUrl}" style="background: #FFFFFF; color: #090907; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.2em; font-size: 12px;">Listen again</a>
               </div>
-              <p style="margin-top: 60px; font-size: 10px; color: #777777; text-transform: uppercase; letter-spacing: 0.5em;">Sent via U2C</p>
+              <p style="margin-top: 60px; font-size: 10px; color: #706B61; text-transform: uppercase; letter-spacing: 0.5em;">Sent via U2C</p>
             </div>
           `,
         });

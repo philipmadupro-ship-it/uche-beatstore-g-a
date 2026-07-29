@@ -13,7 +13,7 @@
 import { escapeHtml } from './templates';
 
 const BG      = '#090907';
-const BG2     = '#0E0E0E';
+const BG2     = '#0D0D0A';
 const BG3     = 'rgba(255,255,255,0.1)';
 const TEXT    = '#FFFFFF';
 const MUTED   = 'rgba(255,255,255,0.8)';

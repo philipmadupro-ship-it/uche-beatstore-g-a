@@ -37,7 +37,7 @@ const STATUS_OPTIONS: { value: TrackStatus; label: string; color: string }[] = [
   { value: 'maq',         label: 'MAQ',        color: 'bg-[#1f1a10] text-[#c8a47a] border-[#3d3020]/40' },
   { value: 'needs_work',  label: 'WIP',        color: 'bg-[#1f1a0a] text-white border-[#3a2f1f]' },
   { value: 'finished',    label: 'Finished',   color: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
-  { value: 'archived',    label: 'Archived',   color: 'bg-[#0E0E0E] text-white/60 border-white/10' },
+  { value: 'archived',    label: 'Archived',   color: 'bg-[#0D0D0A] text-white/60 border-white/10' },
 ];
 
 const TYPE_OPTIONS: { value: TrackType; label: string }[] = [
@@ -373,8 +373,8 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                     onChange={(e) => setTempTitle(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRename()}
                   />
-                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#0E0E0E] text-white"><Check size={14} /></button>
-                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(track?.title || ''); }} className="p-1.5 rounded hover:bg-[#0E0E0E] text-white/40"><X size={14} /></button>
+                  <button onClick={handleRename} className="p-1.5 rounded hover:bg-[#0D0D0A] text-white"><Check size={14} /></button>
+                  <button onClick={() => { setIsEditingTitle(false); setTempTitle(track?.title || ''); }} className="p-1.5 rounded hover:bg-[#0D0D0A] text-white/40"><X size={14} /></button>
                 </div>
               ) : (
                 <div className="group flex items-center gap-2 mb-2 sm:mb-3">

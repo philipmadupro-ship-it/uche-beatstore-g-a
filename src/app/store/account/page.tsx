@@ -82,7 +82,7 @@ export default function AccountSignInPage() {
           Back to store
         </Link>
 
-        <div className="bg-[#0E0E0E] rounded-lg border border-white/10 p-8 space-y-6">
+        <div className="bg-[#0D0D0A] rounded-lg border border-white/10 p-8 space-y-6">
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight uppercase text-white">U2C Beatstore</h1>
             <p className="mt-2 text-sm text-white/80">

@@ -184,7 +184,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
       <div className="bg-white/[0.02] border border-white/10 rounded-2xl w-full max-w-3xl max-h-[88vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 h-14 border-b border-[#0E0E0E] shrink-0">
+        <div className="flex items-center justify-between px-6 h-14 border-b border-[#0D0D0A] shrink-0">
           <div>
             <h2 className="text-[14px] font-semibold text-white">{title}</h2>
             <p className="text-[10px] font-mono text-white/40 uppercase tracking-widest mt-0.5">
@@ -195,7 +195,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
         </div>
 
         {/* Search + filter toggle */}
-        <div className="px-5 py-3 border-b border-[#0E0E0E] space-y-2.5 shrink-0">
+        <div className="px-5 py-3 border-b border-[#0D0D0A] space-y-2.5 shrink-0">
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
@@ -318,7 +318,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
         </div>
 
         {/* Footer */}
-        <div className="px-5 h-14 border-t border-[#0E0E0E] flex items-center justify-between shrink-0">
+        <div className="px-5 h-14 border-t border-[#0D0D0A] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <p className="text-[10px] text-white/40 font-mono uppercase tracking-widest">
               {selected.size > 0 ? `${selected.size} selected` : 'Select tracks'}

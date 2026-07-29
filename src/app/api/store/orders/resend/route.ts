@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
                 Download your files
               </a>
             </div>
-            <p style="margin-top:48px;font-size:10px;color:#777777;text-transform:uppercase;letter-spacing:0.5em">
+            <p style="margin-top:48px;font-size:10px;color:#706B61;text-transform:uppercase;letter-spacing:0.5em">
               Questions? Reply to this email.
             </p>
           </div>
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
                 Access your bundle
               </a>
             </div>
-            <p style="margin-top:48px;font-size:10px;color:#777777;text-transform:uppercase;letter-spacing:0.5em">
+            <p style="margin-top:48px;font-size:10px;color:#706B61;text-transform:uppercase;letter-spacing:0.5em">
               Questions? Reply to this email.
             </p>
           </div>

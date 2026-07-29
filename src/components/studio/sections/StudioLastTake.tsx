@@ -22,7 +22,7 @@ export function StudioLastTake({ take, saving, onSave }: Props) {
   const downloadName = `studio-take-${take.size}.${extension}`;
 
   return (
-    <div className="border border-[#0E0E0E] rounded-lg p-5 bg-[#090907]">
+    <div className="border border-[#0D0D0A] rounded-lg p-5 bg-[#090907]">
       <div className="flex items-center justify-between mb-3">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white">Last take</p>

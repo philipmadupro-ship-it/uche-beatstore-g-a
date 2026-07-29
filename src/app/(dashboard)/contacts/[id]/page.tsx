@@ -195,7 +195,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
           {/* Left column — avatar disc + identity + actions. Sticky on
               tall viewports so the right column scrolls under it. */}
           <div className="lg:sticky lg:top-10 lg:self-start">
-            <div className="rounded-2xl bg-gradient-to-br from-[#111111] to-[#090907] border border-white/10 p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] relative overflow-hidden">
+            <div className="rounded-2xl bg-gradient-to-br from-[#0D0D0A] to-[#090907] border border-white/10 p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] relative overflow-hidden">
               {/* Warm radial wash in the corner — same lit-from-corner
                   pattern the drawer header + share modal use. */}
               <div

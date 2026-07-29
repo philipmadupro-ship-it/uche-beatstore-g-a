@@ -123,7 +123,7 @@ function mapToUiTier(t: ApiLicenseTier): LicenseTier {
     stemsIncluded: t.stems_included,
     creditRequired: t.credit_required,
     accentClass: t.is_exclusive
-      ? 'border-white/ bg-gradient-to-b from-white/10 to-[#111111]'
+      ? 'border-white/ bg-gradient-to-b from-white/10 to-[#0D0D0A]'
       : 'border-white/20 hover:border-white/',
     buttonClass: t.is_exclusive
       ? 'bg-white hover:bg-white text-black'
@@ -623,7 +623,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                   <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-3">More beats</p>
                   <div className="space-y-2">
                     {related.slice(0, 4).map((r) => (
-                      <Link key={r.id} href={`/store/${r.id}`} className="flex items-center gap-3 rounded-lg hover:bg-[#0E0E0E] p-1.5 -mx-1.5 transition-colors group">
+                      <Link key={r.id} href={`/store/${r.id}`} className="flex items-center gap-3 rounded-lg hover:bg-[#0D0D0A] p-1.5 -mx-1.5 transition-colors group">
                         <div className="w-9 h-9 rounded-md overflow-hidden bg-[#090907] shrink-0">
                           {r.cover_url
                             ? <div className="relative h-full w-full"><CoverImage src={r.cover_url} alt="" sizes="36px" className="object-cover" /></div>

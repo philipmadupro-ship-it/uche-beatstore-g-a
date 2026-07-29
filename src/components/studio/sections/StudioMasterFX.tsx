@@ -32,7 +32,7 @@ export function StudioMasterFX({
   delayFeedback, setDelayFeedback,
 }: Props) {
   return (
-    <aside className="rounded-2xl border border-[#0E0E0E] bg-[#0D0B09] p-3 sm:p-4 xl:sticky xl:top-6 xl:self-start">
+    <aside className="rounded-2xl border border-[#0D0D0A] bg-[#0D0B09] p-3 sm:p-4 xl:sticky xl:top-6 xl:self-start">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Headphones size={12} className="text-white" />

@@ -87,7 +87,7 @@ export function ListRow({
 
   const rowClass = cn(
     'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors sm:px-4',
-    active ? 'bg-[#0E0E0E]' : 'hover:bg-[#0E0E0E]/60',
+    active ? 'bg-[#0D0D0A]' : 'hover:bg-[#0D0D0A]/60',
     className,
   );
 

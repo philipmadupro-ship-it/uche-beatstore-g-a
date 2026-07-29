@@ -85,7 +85,7 @@ export async function autoDeliverStems(
             html: emailShell(
               'U2C Beatstore',
               `${emailHeading('Your stems are ready')}
-               <p style="color:#CCCCCC;font-size:13px;margin:0 0 20px">The producer just uploaded the stems for your exclusive purchase. Download them any time from your delivery page.</p>
+               <p style="color:#C7B89D;font-size:13px;margin:0 0 20px">The producer just uploaded the stems for your exclusive purchase. Download them any time from your delivery page.</p>
                ${emailButton('Download stems', downloadUrl)}`,
             ),
           });

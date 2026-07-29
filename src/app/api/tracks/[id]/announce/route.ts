@@ -104,7 +104,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           html: emailShell('New drop',
             `${emailHeading(title)}
              ${cover ? `<img src="${cover}" alt="" width="280" style="border-radius:12px;margin:0 0 16px;max-width:100%" />` : ''}
-             <p style="color:#CCCCCC;font-size:13px;margin:0 0 20px"><strong style="color:#FFFFFF">${producerName}</strong> just listed a new beat. Be first to grab it.</p>
+             <p style="color:#C7B89D;font-size:13px;margin:0 0 20px"><strong style="color:#FFFFFF">${producerName}</strong> just listed a new beat. Be first to grab it.</p>
              ${emailButton('Listen now', beatUrl)}
              ${emailFooter(`You follow ${producerName} on U2C.`, manageUrl)}`,
           ),

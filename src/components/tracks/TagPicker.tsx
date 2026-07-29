@@ -43,7 +43,7 @@ export function TagPicker({ trackId, features }: TagPickerProps) {
   }, [features, tags]);
 
   return (
-    <div className="space-y-6 p-4 bg-[#0E0E0E] border border-white/10 rounded-2xl w-full max-w-sm shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
+    <div className="space-y-6 p-4 bg-[#0D0D0A] border border-white/10 rounded-2xl w-full max-w-sm shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">Tag Workspace</h3>
       </div>

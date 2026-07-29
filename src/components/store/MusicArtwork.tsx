@@ -61,7 +61,7 @@ export function MusicArtwork({
         className="relative w-[92%] h-[92%] rounded-full shadow-[0_8px_32px_rgba(0,0,0,0.55)]"
         style={{
           background:
-            'radial-gradient(circle at center, #161616 0%, #090907 24%, #111111 27%, #090907 32%, #111111 35%, #090907 40%, #111111 43%, #090907 48%, #111111 51%, #090907 56%, #111111 59%, #090907 64%, #111111 67%, #090907 72%, #090907 100%)',
+            'radial-gradient(circle at center, #161616 0%, #090907 24%, #0D0D0A 27%, #090907 32%, #0D0D0A 35%, #090907 40%, #0D0D0A 43%, #090907 48%, #0D0D0A 51%, #090907 56%, #0D0D0A 59%, #090907 64%, #0D0D0A 67%, #090907 72%, #090907 100%)',
           // Spin while playing; pause freezes the rotation in place.
           animation: 'vinylSpin 8s linear infinite',
           animationPlayState: isPlaying ? 'running' : 'paused',

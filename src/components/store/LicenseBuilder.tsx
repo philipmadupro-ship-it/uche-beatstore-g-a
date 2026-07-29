@@ -473,13 +473,13 @@ export function LicenseBuilder() {
           font-family: ui-monospace, monospace;
           text-transform: uppercase;
           letter-spacing: 0.15em;
-          color: #777777;
+          color: #706B61;
           margin-bottom: 6px;
         }
         .license-input {
           width: 100%;
           background: #0D0D0D;
-          border: 1px solid #222222;
+          border: 1px solid #1f1a10;
           border-radius: 8px;
           padding: 8px 12px;
           font-size: 12px;
@@ -488,8 +488,8 @@ export function LicenseBuilder() {
           transition: border-color 0.15s;
           appearance: none;
         }
-        .license-input::placeholder { color: #777777; }
-        .license-input:focus { border-color: #CCCCCC; }
+        .license-input::placeholder { color: #706B61; }
+        .license-input:focus { border-color: #C7B89D; }
       `}</style>
     </div>
   );

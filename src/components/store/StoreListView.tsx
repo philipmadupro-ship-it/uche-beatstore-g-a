@@ -247,7 +247,7 @@ export function StoreListView({
                   <div
                     data-row-action
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute right-0 top-9 z-30 w-48 rounded-xl border border-white/[0.08] bg-[#0E0E0E] py-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
+                    className="absolute right-0 top-9 z-30 w-48 rounded-xl border border-white/[0.08] bg-[#0D0D0A] py-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
                   >
                     <button
                       onClick={() => { onPreview(t); setMenuFor(null); }}

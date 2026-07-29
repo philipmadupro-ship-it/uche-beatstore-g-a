@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
                   Open my account
                 </a>
               </div>
-              <p style="margin-top: 32px; font-size: 11px; color: #AAAAAA;">
+              <p style="margin-top: 32px; font-size: 11px; color: #AAA294;">
                 This link expires in 24 hours. Don't share it — anyone with the link can see your purchases.
               </p>
             </div>

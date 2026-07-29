@@ -224,7 +224,7 @@ export function CommandPalette() {
                     onClick={item.action}
                     onMouseEnter={() => setActiveIdx(i)}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
-                      active ? 'bg-[#0E0E0E]' : 'hover:bg-[#101010]'
+                      active ? 'bg-[#0D0D0A]' : 'hover:bg-[#101010]'
                     }`}
                   >
                     <Icon size={13} className={active ? 'text-white' : 'text-white/60'} />

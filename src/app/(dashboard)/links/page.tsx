@@ -392,7 +392,7 @@ export default function LinksPage() {
                   onClick={() => setActive(link)}
                   className={cn(
                     'group relative text-left rounded-2xl p-4 transition-all cursor-pointer overflow-hidden',
-                    'bg-gradient-to-br from-[#111111] to-[#090907] border',
+                    'bg-gradient-to-br from-[#0D0D0A] to-[#090907] border',
                     selected
                       ? 'border-white/ from-white/10/40'
                       : 'border-white/10 hover:border-white/20 hover:from-[#161616]',

@@ -186,22 +186,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           subject = `Your offer on "${title}" was accepted`;
           if (paymentUrl) {
             body = `<h1 style="color:#6DC6A4;font-size:22px;margin:0 0 8px">Offer accepted — ${money(offered)}</h1>
-              <p style="color:#CCCCCC;font-size:13px;margin:0 0 20px">The producer accepted your offer on <strong style="color:#FFFFFF">${title}</strong>. Pay securely below to unlock your exclusive download — the link is good for this agreed price.</p>
+              <p style="color:#C7B89D;font-size:13px;margin:0 0 20px">The producer accepted your offer on <strong style="color:#FFFFFF">${title}</strong>. Pay securely below to unlock your exclusive download — the link is good for this agreed price.</p>
               ${emailButton(`Pay ${money(offered)} & download`, paymentUrl)}
-              <p style="color:#AAAAAA;font-size:11px;margin:16px 0 0">Or reply to this email with any questions before paying.</p>`;
+              <p style="color:#AAA294;font-size:11px;margin:16px 0 0">Or reply to this email with any questions before paying.</p>`;
           } else {
             body = `<h1 style="color:#6DC6A4;font-size:22px;margin:0 0 8px">Offer accepted — ${money(offered)}</h1>
-              <p style="color:#CCCCCC;font-size:13px;margin:0 0 16px">The producer accepted your offer on <strong style="color:#FFFFFF">${title}</strong>. Reply to this email to arrange payment + delivery.</p>`;
+              <p style="color:#C7B89D;font-size:13px;margin:0 0 16px">The producer accepted your offer on <strong style="color:#FFFFFF">${title}</strong>. Reply to this email to arrange payment + delivery.</p>`;
           }
         } else if (action === 'counter') {
           const counter = parsed.data.counter_price_usd!;
           subject = `Counter-offer on "${title}" — ${money(counter)}`;
           body = `<h1 style="color:#FFFFFF;font-size:22px;margin:0 0 8px">Counter-offer: ${money(counter)}</h1>
-            <p style="color:#CCCCCC;font-size:13px;margin:0 0 16px">You offered ${money(offered)} for <strong style="color:#FFFFFF">${title}</strong>. The producer countered at <strong style="color:#FFFFFF">${money(counter)}</strong>. Reply to accept or keep negotiating.</p>`;
+            <p style="color:#C7B89D;font-size:13px;margin:0 0 16px">You offered ${money(offered)} for <strong style="color:#FFFFFF">${title}</strong>. The producer countered at <strong style="color:#FFFFFF">${money(counter)}</strong>. Reply to accept or keep negotiating.</p>`;
         } else {
           subject = `Update on your offer for "${title}"`;
-          body = `<h1 style="color:#CCCCCC;font-size:20px;margin:0 0 8px">Offer declined</h1>
-            <p style="color:#CCCCCC;font-size:13px;margin:0 0 16px">The producer passed on your ${money(offered)} offer for <strong style="color:#FFFFFF">${title}</strong> for now. Feel free to browse other beats or send a new offer.</p>`;
+          body = `<h1 style="color:#C7B89D;font-size:20px;margin:0 0 8px">Offer declined</h1>
+            <p style="color:#C7B89D;font-size:13px;margin:0 0 16px">The producer passed on your ${money(offered)} offer for <strong style="color:#FFFFFF">${title}</strong> for now. Feel free to browse other beats or send a new offer.</p>`;
         }
 
         const resend = new Resend(resendKey);

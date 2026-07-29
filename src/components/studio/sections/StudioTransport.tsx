@@ -50,7 +50,7 @@ export function StudioTransport({
   };
 
   return (
-    <div className="rounded-xl border border-[#0E0E0E] bg-[#0D0B09] p-3 sm:p-4">
+    <div className="rounded-xl border border-[#0D0D0A] bg-[#0D0B09] p-3 sm:p-4">
       {/* Scrub bar — luxury Slider primitive. Loop region renders as a
           translucent band underneath via absolute overlay. */}
       <div className="flex items-center gap-3 text-[10px] font-mono text-white/80">
@@ -113,7 +113,7 @@ export function StudioTransport({
             className={`min-h-[54px] rounded-lg border px-2 py-2 text-[9px] font-mono uppercase tracking-[0.16em] transition-colors ${
               preservePitch
                 ? 'border-white/ bg-white/10 text-white'
-                : 'border-white/10 bg-[#0E0E0E] text-white/60 hover:text-white'
+                : 'border-white/10 bg-[#0D0D0A] text-white/60 hover:text-white'
             }`}
           >
             Lock<br />
@@ -124,7 +124,7 @@ export function StudioTransport({
             className={`flex min-h-[54px] items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[9px] font-mono uppercase tracking-[0.16em] transition-colors ${
               loopOn
                 ? 'border-white/ bg-white/10 text-white'
-                : 'border-white/10 bg-[#0E0E0E] text-white/60 hover:text-white'
+                : 'border-white/10 bg-[#0D0D0A] text-white/60 hover:text-white'
             }`}
           >
             <Repeat size={10} /> Loop

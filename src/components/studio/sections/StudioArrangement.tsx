@@ -492,7 +492,7 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
   if (!url) return null;
 
   return (
-    <div className="border border-[#0E0E0E] rounded-lg p-5 bg-[#090907]">
+    <div className="border border-[#0D0D0A] rounded-lg p-5 bg-[#090907]">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-white">Arrangement</p>

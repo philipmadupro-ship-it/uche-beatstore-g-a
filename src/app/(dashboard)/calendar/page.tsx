@@ -172,7 +172,7 @@ export default function CalendarPage() {
             the lg breakpoint so the month grid stays large on tablets
             (the side panel slides under it instead of squeezing both). */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4 mb-32 min-h-0">
-          <Card className="relative flex flex-col overflow-hidden bg-gradient-to-br from-[#111111] to-[#090907]">
+          <Card className="relative flex flex-col overflow-hidden bg-gradient-to-br from-[#0D0D0A] to-[#090907]">
             {/* Day headers — slightly larger and warmer than before. */}
             <div className="grid grid-cols-7 border-b border-white/10 bg-[#090907]/60 backdrop-blur-sm">
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (

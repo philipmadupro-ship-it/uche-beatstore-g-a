@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
            <td style="padding:8px 0;color:#FFFFFF;font-size:14px"><a href="${appUrl}/store/${b.id}" style="color:#FFFFFF;text-decoration:none">${b.title}</a></td>
          </tr>`,
       ).join('');
-      const more = beats.length > 12 ? `<p style="color:#AAAAAA;font-size:12px;margin:4px 0 0">+${beats.length - 12} more</p>` : '';
+      const more = beats.length > 12 ? `<p style="color:#AAA294;font-size:12px;margin:4px 0 0">+${beats.length - 12} more</p>` : '';
       const headline = beats.length === 1 ? `${producerName} dropped a new beat` : `${producerName} dropped ${beats.length} new beats`;
 
       const resend = new Resend(resendKey);

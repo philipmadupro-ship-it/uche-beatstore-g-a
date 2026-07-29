@@ -31,8 +31,8 @@ export function StudioTrackPicker({
   const activeTrack = activeId ? tracks.find((t) => t.id === activeId) : null;
 
   return (
-    <aside className="flex max-h-[360px] flex-col overflow-hidden rounded-2xl border border-[#0E0E0E] bg-[#090907] lg:h-[calc(100vh-220px)] lg:max-h-none">
-      <div className="p-3 border-b border-[#0E0E0E]">
+    <aside className="flex max-h-[360px] flex-col overflow-hidden rounded-2xl border border-[#0D0D0A] bg-[#090907] lg:h-[calc(100vh-220px)] lg:max-h-none">
+      <div className="p-3 border-b border-[#0D0D0A]">
         <div className="relative">
           <Search size={11} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30" />
           <input
@@ -134,7 +134,7 @@ function TrackThumb({ track, active = false }: { track: Track; active?: boolean 
   }
 
   return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#0E0E0E]">
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#0D0D0A]">
       <Music2 size={12} className={active ? 'text-white' : 'text-white/40'} />
     </div>
   );

@@ -332,7 +332,7 @@ export function LyricsStudio({ trackId }: Props) {
 
   /* ─────── UI ─────── */
   return (
-    <div className="border border-[#0E0E0E] rounded-2xl bg-white/[0.02] overflow-hidden">
+    <div className="border border-[#0D0D0A] rounded-2xl bg-white/[0.02] overflow-hidden">
       {/* toolbar — quiet header: title, live count, autosave state, version/history */}
       <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 min-h-10 sm:h-11 py-2 sm:py-0 bg-transparent">
         <Music2 size={12} className="text-white" />
@@ -417,8 +417,8 @@ Everything autosaves.`}
         </div>
 
         {/* word tools — secondary sidebar, separated by a faint rule */}
-        <div className="flex flex-col border-t lg:border-t-0 lg:border-l border-[#0E0E0E]">
-          <div className="px-3 py-2 sm:py-3 border-b border-[#0E0E0E]">
+        <div className="flex flex-col border-t lg:border-t-0 lg:border-l border-[#0D0D0A]">
+          <div className="px-3 py-2 sm:py-3 border-b border-[#0D0D0A]">
             <div className="flex items-center gap-2 mb-2">
               <Search size={11} className="text-white/40" />
               <input
@@ -532,7 +532,7 @@ Everything autosaves.`}
             </div>
 
             {/* Definition */}
-            <div className="px-3 py-2 border-t border-[#0E0E0E]">
+            <div className="px-3 py-2 border-t border-[#0D0D0A]">
               <p className="text-[9px] font-mono uppercase tracking-wider text-white/40 mb-2 flex items-center gap-1.5">
                 <BookOpen size={9} /> definition
               </p>
@@ -601,8 +601,8 @@ Everything autosaves.`}
 
       {/* History */}
       {showHistory && (
-        <div className="border-t border-[#0E0E0E] bg-[#090907]">
-          <div className="flex items-center justify-between px-4 h-9 border-b border-[#0E0E0E]">
+        <div className="border-t border-[#0D0D0A] bg-[#090907]">
+          <div className="flex items-center justify-between px-4 h-9 border-b border-[#0D0D0A]">
             <span className="text-[10px] font-mono uppercase tracking-wider text-white/80">
               Version history · {history.length}
             </span>

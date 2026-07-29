@@ -111,7 +111,7 @@ export function StemPlayer({ vocalsUrl, drumsUrl, bassUrl, otherUrl }: StemPlaye
   );
 
   return (
-    <div className="space-y-4 bg-[#0E0E0E] p-8 rounded-3xl border border-white/10">
+    <div className="space-y-4 bg-[#0D0D0A] p-8 rounded-3xl border border-white/10">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h3 className="text-sm font-black uppercase tracking-[0.3em] text-white">Stem Mixer</h3>
