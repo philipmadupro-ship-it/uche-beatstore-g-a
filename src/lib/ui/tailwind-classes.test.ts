@@ -18,13 +18,25 @@ import { execSync } from 'node:child_process';
  * them, so it deliberately scans source text rather than rendered output.
  */
 
-/** Every tracked source file we style in. */
+/**
+ * Every tracked source file we style in, minus this one.
+ *
+ * Excluding self is load-bearing, not tidiness: the patterns below are spelled
+ * out verbatim in this file's comments and test names, so a scan that included
+ * it would always report three false positives. That is not hypothetical — the
+ * first version of this test omitted the filter and passed anyway, because
+ * `git ls-files` lists only *tracked* files and the test was still untracked
+ * when it ran. Committing it was what turned it red.
+ */
 function sourceFiles(): string[] {
   const out = execSync('git ls-files "src/**/*.tsx" "src/**/*.ts" "src/**/*.css"', {
     encoding: 'utf8',
     cwd: process.cwd(),
   });
-  return out.split('\n').filter(Boolean);
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .filter((f) => !f.endsWith('src/lib/ui/tailwind-classes.test.ts'));
 }
 
 /**

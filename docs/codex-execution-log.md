@@ -6278,3 +6278,25 @@ Docs-only change; `npm test` re-run to confirm nothing depends on the file — 5
   pattern (a Vitest scan) could be extended to flag new `text-black bg-white font-semibold`
   clusters once Phase 5 has cleared the existing ones — pointless to add before then, since it
   would fail on 31 known sites.
+
+### Correction — the Phase 1 guardrail flagged itself
+
+Immediately after the Phase 2 commit, `npm test` went red: 2 failures, both in the new
+`src/lib/ui/tailwind-classes.test.ts`, reporting three violations **inside the guardrail file
+itself** — its own doc comments and test names spell the defect patterns out verbatim.
+
+Why it was not caught in Phase 1: `sourceFiles()` uses `git ls-files`, which lists only
+**tracked** files. When the test was first run it was still untracked, so it never scanned
+itself and passed. Committing it is what made it visible to itself and turned it red. The
+Phase 1 run was genuinely green at the moment it was measured, and became false the instant it
+landed — a nasty shape of bug, since the verification and the regression cannot both be
+observed in the same state.
+
+Fixed by excluding the file from its own scan, with the reasoning recorded in the code so the
+filter is not later "cleaned up" as redundant. Re-verified the exclusion is narrow enough to
+still work: injected a doubled modifier into `ui/Dropdown.tsx`, watched the suite fail naming
+that exact line, restored, watched it pass.
+
+Process note: the Phase 2 push was chained after the test command without gating on its exit
+status, so a red suite was pushed. `main` was red for one commit. Gate and push must be
+separate steps.
