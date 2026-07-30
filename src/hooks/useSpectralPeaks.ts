@@ -26,10 +26,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { canFetchReadableAudio, cdnAudioSrc } from '@/lib/audio/cdn';
 import { resampleSeries, type SpectralBands } from '@/lib/audio/spectral-peaks';
+import { detectPitchSeries, rmsToDb } from '@/lib/audio/pitch';
 
 /** Longer than this and we don't bother — previews are short by design. */
 const MAX_ANALYSIS_SECONDS = 60 * 8;
 const ANALYSIS_SAMPLE_RATE = 22050;
+/** Pitch resolution — a quarter of the band resolution; see note at the call site. */
+const PITCH_SLICES = 128;
+
+/** Nearest-neighbour stretch of a sparse series onto a denser index space. */
+function stretchNullable(values: (number | null)[], target: number): (number | null)[] {
+  if (values.length === 0) return new Array<number | null>(target).fill(null);
+  if (values.length === target) return values.slice();
+  const out = new Array<number | null>(target);
+  for (let i = 0; i < target; i++) {
+    out[i] = values[Math.min(values.length - 1, Math.floor((i * values.length) / target))];
+  }
+  return out;
+}
 
 /** Crossovers roughly matching how a DAW splits a mix for metering. */
 const LOW_CUTOFF_HZ = 250;
@@ -40,14 +54,24 @@ type Status = 'idle' | 'analyzing' | 'ready' | 'unavailable';
 
 export interface SpectralPeaksResult {
   bands: SpectralBands | null;
+  /** Per-slice level in dBFS, aligned to `bands`. Drives the readout. */
+  db: number[] | null;
+  /** Per-slice dominant frequency; null entries where the audio has no pitch. */
+  hz: (number | null)[] | null;
   status: Status;
+}
+
+/** Everything we cache per track — bands plus the readout series. */
+interface AnalysisResult extends SpectralBands {
+  db: number[];
+  hz: (number | null)[];
 }
 
 /**
  * Session cache. Analysis is deterministic per track, so a plain module-level
  * Map is correct and avoids re-decoding when the user reopens the preview.
  */
-const cache = new Map<string, SpectralBands>();
+const cache = new Map<string, AnalysisResult>();
 /** Tracks we've already failed on, so we don't retry a doomed decode. */
 const failed = new Set<string>();
 
@@ -121,6 +145,8 @@ export function useSpectralPeaks(
   sliceCount: number,
 ): SpectralPeaksResult {
   const [bands, setBands] = useState<SpectralBands | null>(null);
+  const [db, setDb] = useState<number[] | null>(null);
+  const [hz, setHz] = useState<(number | null)[] | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   // Guards against a resolved analysis for a previous track landing after the
   // user has already skipped to the next one.
@@ -129,32 +155,39 @@ export function useSpectralPeaks(
   useEffect(() => {
     activeTrackRef.current = trackId;
 
+    /** Resample a cached analysis down to the requested slice count. */
+    const applyResult = (r: AnalysisResult, slices: number) => {
+      setBands({
+        low: resampleSeries(r.low, slices),
+        mid: resampleSeries(r.mid, slices),
+        high: resampleSeries(r.high, slices),
+      });
+      setDb(resampleSeries(r.db, slices));
+      setHz(stretchNullable(r.hz, slices));
+    };
+
     if (!trackId || !audioUrl) {
-      setBands(null);
+      setBands(null); setDb(null); setHz(null);
       setStatus('idle');
       return;
     }
 
     const cached = cache.get(trackId);
     if (cached) {
-      setBands({
-        low: resampleSeries(cached.low, sliceCount),
-        mid: resampleSeries(cached.mid, sliceCount),
-        high: resampleSeries(cached.high, sliceCount),
-      });
+      applyResult(cached, sliceCount);
       setStatus('ready');
       return;
     }
 
     if (failed.has(trackId)) {
-      setBands(null);
+      setBands(null); setDb(null); setHz(null);
       setStatus('unavailable');
       return;
     }
 
     const analysisUrl = resolveAnalysisUrl(audioUrl);
     if (!analysisUrl) {
-      setBands(null);
+      setBands(null); setDb(null); setHz(null);
       setStatus('unavailable');
       return;
     }
@@ -162,7 +195,7 @@ export function useSpectralPeaks(
     const controller = new AbortController();
     let cancelled = false;
     setStatus('analyzing');
-    setBands(null);
+    setBands(null); setDb(null); setHz(null);
 
     (async () => {
       try {
@@ -202,25 +235,34 @@ export function useSpectralPeaks(
         // the current lane needs — so a re-render at a different bar count
         // never re-decodes.
         const CACHE_SLICES = 512;
-        const result: SpectralBands = {
+        // Level and pitch come from the UNFILTERED signal — the readout should
+        // report what you actually hear, not the energy of one band. Reuses the
+        // buffer we already decoded, so this costs no extra network or decode.
+        const mono = decoded.getChannelData(0);
+        const levelRms = sliceRms(mono, CACHE_SLICES);
+        const result: AnalysisResult = {
           low: sliceRms(low, CACHE_SLICES),
           mid: sliceRms(mid, CACHE_SLICES),
           high: sliceRms(high, CACHE_SLICES),
+          db: levelRms.map(rmsToDb),
+          // Pitch is the expensive part (autocorrelation), so it runs at a
+          // quarter resolution and is stretched — a readout does not need
+          // sub-second pitch detail.
+          hz: stretchNullable(
+            detectPitchSeries(mono, decoded.sampleRate, PITCH_SLICES),
+            CACHE_SLICES,
+          ),
         };
         cache.set(trackId, result);
 
         if (activeTrackRef.current !== trackId) return;
-        setBands({
-          low: resampleSeries(result.low, sliceCount),
-          mid: resampleSeries(result.mid, sliceCount),
-          high: resampleSeries(result.high, sliceCount),
-        });
+        applyResult(result, sliceCount);
         setStatus('ready');
       } catch {
         if (cancelled) return;
         failed.add(trackId);
         if (activeTrackRef.current !== trackId) return;
-        setBands(null);
+        setBands(null); setDb(null); setHz(null);
         setStatus('unavailable');
       }
     })();
@@ -231,5 +273,5 @@ export function useSpectralPeaks(
     };
   }, [trackId, audioUrl, sliceCount]);
 
-  return { bands, status };
+  return { bands, db, hz, status };
 }

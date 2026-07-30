@@ -6300,3 +6300,68 @@ that exact line, restored, watched it pass.
 Process note: the Phase 2 push was chained after the test command without gating on its exit
 status, so a red suite was pushed. `main` was red for one commit. Gate and push must be
 separate steps.
+
+---
+
+## Phase 4 (first pass) — Continuous canvas waveform + readout
+
+### Problems Discovered
+
+- The lane was **96 discrete flex `<span>` bars**, which was the owner's core
+  objection: *"mine is just bars… I want the waveform to really correspond to the audio."*
+- **The colour was being hidden by the renderer, not missing.** Reading pixels back off the
+  canvas showed 42 distinct colours at 0.395 mean saturation — the palette *was* applying. The
+  problem was `globalAlpha = 0.28` on unplayed audio: since most of a track is unplayed most of
+  the time, the spectral colour (the entire point of the waveform) was invisible across most of
+  the lane. Raised to 0.55.
+- **The palette itself was too desaturated.** An earlier revision pulled the band colours toward
+  the warm UI palette (lows to amber, highs to near-white), which read as flat grey-green. This
+  is the one place in the app where colour is *data*, so it needs to be legible as colour to
+  justify its exemption from the one-accent rule.
+- **Linear amplitude scaling made a mastered beat look like a thread.** Most columns sit far
+  below the peak, so the waveform had almost no body. A 0.62 gamma curve lifts the low end the
+  way DAW displays do.
+
+### Changes Made
+
+- **`SpectralWaveform` rewritten as a canvas renderer.** One filled column per CSS pixel, drawn
+  mirrored about a centre axis. Canvas rather than DOM because a continuous waveform is hundreds
+  of columns — as elements that is hundreds of nodes restyled on every progress tick, the same
+  scrolling-jank class of problem removed elsewhere in this codebase.
+- **Readout overlay** — `−23 dB · 52.0 Hz · G#1 3¢`, read from the analysis at the playhead
+  slice, monospace + `tabular-nums` so it doesn't jitter, `whitespace-nowrap` after the first
+  attempt wrapped mid-value onto two lines.
+- **Thin full-height playhead**, no glow. Legend chips removed — the readout carries the
+  information now.
+- **Elapsed / remaining** (`−2:35`) rather than elapsed / total, per the reference.
+- **`prefers-reduced-motion` honoured** (a hard-constraint gap flagged in the audit) and column
+  count now follows a `ResizeObserver`, replacing the hard-coded 96 bars that became ~1.3px per
+  bar on a 320px phone.
+- **`useSpectralPeaks` extended** to return per-slice `db` and `hz`, computed from the buffer it
+  already decodes — so the readout works today without waiting on the sidecar. `pitch.ts` is pure
+  and client-safe, so the same code will serve both sides once analysis moves server-side.
+
+### A test that was passing for the wrong reason
+
+Changing the palette failed `separates colour rather than averaging to mud`. Investigating rather
+than adjusting the expectation: the test fed three **constant** bands, and because each band is
+normalised against its own peak, a constant band always normalises to 1 — so all three came out
+equal and the colour was grey *by construction*. The assertion had been passing only by accident
+of the old palette's channel ordering. Rewrote it with varying series so a slice genuinely sits
+at the low band's peak while mid and high sit below theirs, and added the mirror case so the
+mapping is pinned at both ends.
+
+### Tests Performed
+
+`npx tsc --noEmit` clean · `npx eslint .` 0 errors · `npm test` **610/610** · build green.
+Verified live on `/store` by reading pixel data back off the canvas — colour count, saturation
+and per-column values — rather than trusting the screenshot.
+
+### Remaining Concerns
+
+- Sampling `document.querySelector('canvas')` initially returned the *store hero* canvas, not the
+  waveform; there are two on the page. Any future canvas assertion needs to select by parent.
+- Cover-art animation still pending from the owner.
+- The sidecar plumbing (Phase 3 remainder: `uploadBandsSidecar`, `tracks.bands_url` migration,
+  8 write paths, backfill) is still open. The renderer works without it; the sidecar removes the
+  per-visitor decode and the `/api/audio` round-trip.

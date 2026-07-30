@@ -89,14 +89,27 @@ describe('buildSpectralBars', () => {
   });
 
   it('separates colour rather than averaging to mud when bands are close', () => {
-    // A slice where lows lead only modestly must still read clearly warm.
-    // A plain weighted average would land near the midpoint of the three
-    // band colours and every bar would look the same grey-green.
-    const out = buildSpectralBars(bands([1, 1], [0.75, 0.75], [0.6, 0.6]));
+    // Slice 0 sits at the low band's peak while mid and high sit well below
+    // their own peaks, so lows genuinely dominate there and it must read warm.
+    //
+    // Note the shape of this input: because each band is normalised against
+    // its OWN peak, a constant band always normalises to 1. Feeding three
+    // constant bands would make all three equal and the colour grey no matter
+    // what the weighting does — which is not a test of anything. The series
+    // therefore has to vary.
+    const out = buildSpectralBars(bands([1, 0.5], [0.3, 1], [0.2, 1]));
     const [r, g, b] = rgb(out[0].color);
     expect(out[0].dominant).toBe('low');
     expect(r).toBeGreaterThan(g);
     expect(r).toBeGreaterThan(b);
+  });
+
+  it('reads cool when highs dominate a slice', () => {
+    // The mirror case, so the mapping is pinned at both ends.
+    const out = buildSpectralBars(bands([0.2, 1], [0.3, 1], [1, 0.5]));
+    const [r, , b] = rgb(out[0].color);
+    expect(out[0].dominant).toBe('high');
+    expect(b).toBeGreaterThan(r);
   });
 
   it('handles all-silent input without dividing by zero', () => {

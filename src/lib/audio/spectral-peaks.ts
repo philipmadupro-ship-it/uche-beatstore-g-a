@@ -45,15 +45,25 @@ export const SPECTRAL_MIN_HEIGHT = 0.06;
 const CONTRAST_EXPONENT = 2.6;
 
 /**
- * Channel weights. Classic additive spectral mapping — low=red, mid=green,
- * high=blue — but pulled toward the warm palette so it sits in a dark warm UI
- * instead of looking like a test pattern: the lows lean amber rather than pure
- * red, and the highs lean toward the white accent rather than pure blue.
+ * Additive spectral mapping — low=red, mid=green, high=blue, the convention a
+ * DAW spectral view uses.
+ *
+ * Saturation is deliberate. An earlier revision desaturated these toward the
+ * warm UI palette (lows to amber, highs to near-white) and the result read as
+ * flat grey-green: the colour stopped carrying information, which is the whole
+ * point of colouring a waveform by frequency. This is the one place in the app
+ * where colour is data rather than decoration, so it is exempt from the
+ * one-accent rule in docs/design-direction.md — and it needs to be legible as
+ * colour to earn that exemption.
+ *
+ * Lows lean crimson rather than pure red and highs lean toward a cool blue, so
+ * a bass-heavy beat reads magenta/red and an airy one reads blue — matching the
+ * reference player the owner supplied.
  */
 const BAND_RGB = {
-  low: [232, 122, 90] as const,
-  mid: [138, 200, 132] as const,
-  high: [214, 226, 245] as const,
+  low: [236, 62, 104] as const,
+  mid: [104, 214, 126] as const,
+  high: [88, 156, 252] as const,
 };
 
 function clamp01(n: number): number {
