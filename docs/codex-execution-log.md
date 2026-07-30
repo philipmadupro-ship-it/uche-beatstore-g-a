@@ -6113,3 +6113,30 @@ Verified live on `/store` by opening a beat card: 96 bars, **87 distinct colours
 
 The share drawer could not be exercised live (needs a valid share token), so it is covered by
 types + build + the fact that it renders the identical component with a converted callback.
+
+### Follow-up: share drawer verified live (gap from the previous entry closed)
+
+The previous entry admitted the share drawer had only been covered by types + build, never
+clicked. Closed that properly rather than leaving it asserted:
+
+- Pulled a real, non-expiring track share token from `/api/links` (`/share/rYcAO6JqqgNI`),
+  loaded the public share page, and opened the track details drawer.
+- **Lane confirmed on the share surface:** 96 bars, 87 distinct colours, colour spread **222**
+  (notably higher than the store track measured earlier — a different beat with more spectral
+  variety, which is itself evidence the colour tracks real audio rather than a constant),
+  legend in the `ready` state, `aria-label` "Seek COULD IT BE 130 BPM",
+  `aria-valuetext` "0:00 elapsed of 1:15".
+- **`effectiveDuration` fallback proven:** the lane reported 1:15, the share *preview* length,
+  before playback had begun — which is exactly what that fallback was added for.
+- **Play/seek routing proven:** with the drawer's track active the lane's click routed to seek
+  (not play), and the drawer's own transport flipped the header from "Paused" to "Now playing".
+- **Dot behaviour proven:** the Spotify-style thumb appears on the lane once `isPlaying` is
+  true, per `showThumb = isPlaying || hovering || dragging`.
+
+Method note: an initial attempt used a synthetic `PointerEvent`, which cannot start playback —
+browser autoplay policy requires a real user gesture — so the check was redone with genuine
+clicks through the browser tool. Worth remembering for future audio verification.
+
+Not proven, and stated rather than glossed: the share page's own `<audio>` element carries an
+empty `src` in this local environment, so the playhead was never observed physically advancing.
+That is share-page playback plumbing untouched by this work, not a regression in the lane.
