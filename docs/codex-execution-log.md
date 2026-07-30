@@ -6223,3 +6223,58 @@ Panchang (166) only.
 - The `text-black bg-white font-semibold shadow-md` pill style recurs across ~25 of the repaired
   sites. Those are exactly the solid-white buttons Phase 2/5 replace with translucent controls —
   left alone here deliberately, since Phase 1's job was only to make the classes *valid*.
+
+---
+
+## Phase 2 — Rewrite the design direction: control language
+
+### Area Inspected
+
+`docs/design-direction.md` — the master spec every UI pass traces back to.
+
+### Problems Discovered
+
+- **The spec sanctioned the thing the owner disliked.** Principle 3 said white "is reserved for
+  the primary action and the active/playing state" — which reads as *use white for buttons*.
+  Combined with the beige→white migration mechanically rewriting every accent-coloured button
+  as `text-black bg-white font-semibold shadow-md`, the result was a wall of solid-white
+  buttons across the app. The spec was documenting a migration side effect as if it were a
+  design decision.
+- Measured baseline: **288 solid `bg-white` usages across 100 files**, of which **31 across 24
+  files** carry that exact migration signature.
+- The spec still claimed three fonts while a fourth (Inter) shipped — now true again after
+  Phase 1 removed it, so the constraint was tightened to say so explicitly.
+- The surface-order list still read as a to-do although all six surfaces had been passed, which
+  made it useless for deciding what to do next.
+
+### Changes Made
+
+- **Principle 3 rewritten**: the accent marks **state** (active/playing/selected/focused), it is
+  **not a button surface**. Kept the amendment history visible rather than silently rewriting,
+  so the next reader understands why it changed twice.
+- **New "Control language" section** — the substantive addition. A four-state translucent scale
+  (rest `bg-white/[0.06]` → hover `/[0.10]` → active `/[0.14]` → disabled `opacity-40`), with
+  solid white reserved for **exactly one primary action per view**. Explicit rules for chips,
+  icon-only controls (no fill at rest — prominence from size and spacing), and status badges
+  (text + hairline, never solid). Includes the *why*: any remaining
+  `text-black bg-white font-semibold shadow-md` cluster is migration residue, not intent.
+- **New "The beat preview player" section** — captures the owner's supplied reference so Phase 4
+  has a written spec rather than living only in screenshots: continuous mirrored waveform (not
+  bars), frequency colouring, the `dB · Hz · note ± cents` readout, thin playhead, metadata line,
+  remaining-time progress, plain-icon transport, cover art as anchor with the waveform *below*
+  it. Notes that waveform colour is deliberately exempt from the one-accent rule, because there
+  colour is information rather than decoration.
+- **Surface order replaced with an ordered open-work list** carrying the audit numbers, so the
+  next session can pick up without re-deriving them.
+- **Three-faces constraint tightened** to name the faces and record that Inter was removed.
+
+### Tests Performed
+
+Docs-only change; `npm test` re-run to confirm nothing depends on the file — 562/562 green.
+
+### Remaining Concerns
+
+- The doc now *describes* the translucent language but nothing enforces it. The Phase 1 guardrail
+  pattern (a Vitest scan) could be extended to flag new `text-black bg-white font-semibold`
+  clusters once Phase 5 has cleared the existing ones — pointless to add before then, since it
+  would fail on 31 known sites.
