@@ -124,7 +124,7 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded font-bold ${
                         item.license.is_exclusive
-                          ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/'
+                          ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/20'
                           : 'text-white/80 bg-white/20 border border-white/20'
                       }`}>
                         {item.license.name}
@@ -175,7 +175,7 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(null); }}
                 placeholder="you@example.com"
-                className="w-full bg-white/[0.02] border border-white/10 focus:border-white/ rounded-lg py-2.5 px-3 text-[12px] text-white placeholder:text-white/30 outline-none transition-colors"
+                className="w-full bg-white/[0.02] border border-white/10 focus:border-white/20 rounded-lg py-2.5 px-3 text-[12px] text-white placeholder:text-white/30 outline-none transition-colors"
               />
               {error && (
                 <p className="text-[11px] text-red-400 leading-tight">{error}</p>

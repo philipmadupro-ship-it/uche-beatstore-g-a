@@ -372,7 +372,7 @@ export function ShareTrackDetailsDrawer({
 
 function StatCell({ label, value, accent }: { label: string; value: string; accent?: 'minor' | 'major' }) {
   return (
-    <div className="bg-white/[0.04]/50 border border-white/ rounded-xl p-3 text-center">
+    <div className="bg-white/[0.04]/50 border border-white/20 rounded-xl p-3 text-center">
       <p className="text-[8px] font-mono uppercase tracking-widest text-white/40">{label}</p>
       <p className={`text-[13px] font-bold mt-1 font-mono ${
         accent === 'minor' ? 'text-[#c8a47a]' :
@@ -403,7 +403,7 @@ function LicenseCard({
   return (
     <div className={`rounded-xl border p-4 space-y-3 relative overflow-hidden ${
       isExclusive
-        ? 'border-white/ bg-gradient-to-br from-[#0D0D0A] to-transparent'
+        ? 'border-white/20 bg-gradient-to-br from-[#0D0D0A] to-transparent'
         : 'border-white/10 bg-white/[0.04]'
     }`}>
       {badge && !isExclusive && (

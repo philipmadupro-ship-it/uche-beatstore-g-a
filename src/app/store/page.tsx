@@ -1101,7 +1101,7 @@ function StorePage() {
           <button
             onClick={() => setSidebarOpen((o) => !o)}
             className={`tap lg:hidden flex min-h-11 items-center gap-1.5 rounded-full border px-4 py-2 text-[10px] font-mono uppercase tracking-wider transition-colors ${sidebarOpen || hasActiveFilters
-                ? 'border-white/ text-black bg-white font-semibold shadow-md hover:bg-white/90/5'
+                ? 'border-white/20 text-black bg-white font-semibold shadow-md hover:bg-white/90'
                 : 'border-white/10 text-white/60 hover:text-white'
               }`}
           >
@@ -1223,7 +1223,7 @@ function StorePage() {
                 <button
                   key={f}
                   onClick={() => setTypeFilter(f)}
-                  className={`px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider rounded-full transition-colors whitespace-nowrap ${typeFilter === f ? 'text-white border border-white/ bg-white/10' : 'bg-transparent text-white/40 hover:text-white/80'
+                  className={`px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider rounded-full transition-colors whitespace-nowrap ${typeFilter === f ? 'text-white border border-white/20 bg-white/10' : 'bg-transparent text-white/40 hover:text-white/80'
                     }`}
                 >
                   {f}

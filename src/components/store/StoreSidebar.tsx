@@ -88,7 +88,7 @@ function PillButton({
       onClick={onClick}
       className={`tap min-h-11 whitespace-nowrap rounded-full border px-3 py-2 font-mono text-[10px] uppercase tracking-wider transition-[background-color,border-color,color,opacity] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black ${active
         ? 'text-black border-white/30'
-        : 'bg-transparent text-white/60 border-white/10 hover:border-white/ hover:text-white/80'
+        : 'bg-transparent text-white/60 border-white/10 hover:border-white/20 hover:text-white/80'
       }`}
       style={active ? { backgroundColor: accentColor, borderColor: accentColor } : {}}
     >
@@ -214,7 +214,7 @@ export function StoreSidebar(props: Props) {
       </FacetSection>
 
       {hasActiveFilters && (
-        <div className="rounded-lg border border-white/ bg-white/[0.04] p-2.5">
+        <div className="rounded-lg border border-white/20 bg-white/[0.04] p-2.5">
           <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-white/80 mb-1.5">
             Applied
           </p>
@@ -453,7 +453,7 @@ export function StoreSidebar(props: Props) {
       <button
         onClick={() => setFavoritesOnly(!favoritesOnly)}
         className={`tap flex min-h-11 items-center justify-between rounded-lg border px-3 py-2.5 transition-all ${favoritesOnly
-            ? 'border-white/ text-black bg-white font-semibold shadow-md hover:bg-white/90/[0.08]'
+            ? 'border-white/20 text-black bg-white font-semibold shadow-md hover:bg-white/90/[0.08]'
             : 'bg-transparent border-white/10 text-white/60 hover:border-white/20'
           }`}
       >
@@ -487,7 +487,7 @@ export function StoreSidebar(props: Props) {
       <button
         onClick={onReset}
         disabled={!hasActiveFilters}
-        className="tap flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-white/60 transition-all hover:border-white/ hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+        className="tap flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 font-mono text-[10px] uppercase tracking-wider text-white/60 transition-all hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
       >
         <RotateCcw size={10} />
         Reset filters

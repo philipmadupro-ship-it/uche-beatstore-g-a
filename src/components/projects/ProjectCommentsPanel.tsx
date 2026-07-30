@@ -272,7 +272,7 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
                 key={c.id}
                 className={`group rounded-md px-4 py-3 border ${
                   isOwner
-                    ? 'bg-white/ border-white/'
+                    ? 'bg-white/10 border-white/20'
                     : 'bg-[#090907] border-white/10'
                 }`}
               >
@@ -303,7 +303,7 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
                     </span>
                     {onTrack && (
                       <span
-                        className="flex items-center gap-1 text-[9px] font-mono text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/ rounded px-1.5 py-0.5 truncate"
+                        className="flex items-center gap-1 text-[9px] font-mono text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/20 rounded px-1.5 py-0.5 truncate"
                         title={`Pinned to ${onTrack}`}
                       >
                         <Pin size={8} />
@@ -317,7 +317,7 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
                       // metadata: tells the owner *which slice* of the
                       // track the reviewer flagged.
                       <span
-                        className="text-[9px] font-mono text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/ rounded px-1.5 py-0.5"
+                        className="text-[9px] font-mono text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/20 rounded px-1.5 py-0.5"
                         title="Region-anchored comment"
                       >
                         {fmtTime(c.region_start)}–{fmtTime(c.region_end)}

@@ -180,7 +180,7 @@ export function VisionLibraryView({
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold tracking-tight text-white/90">Continue Playing</h2>
-                <span className="text-[10px] font-mono text-black bg-white font-semibold shadow-md hover:bg-white/90/10 px-2 py-0.5 rounded-full border border-white/20">Active</span>
+                <span className="text-[10px] font-mono text-black bg-white font-semibold shadow-md hover:bg-white/90 px-2 py-0.5 rounded-full border border-white/20">Active</span>
               </div>
 
               <div className="space-y-2.5">

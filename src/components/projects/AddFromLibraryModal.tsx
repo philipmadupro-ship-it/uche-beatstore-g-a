@@ -203,7 +203,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
                 className="w-full bg-white/[0.02] border border-white/10 rounded-lg pl-8 pr-3 py-2 text-[13px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20" />
             </div>
             <button onClick={() => setShowFilters((v) => !v)}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium border transition-colors shrink-0 ${showFilters || activeCount > 0 ? 'bg-white/10 text-white border-white/' : 'bg-white/[0.04] border-white/10 text-white/80 hover:text-white hover:border-white/20'}`}>
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium border transition-colors shrink-0 ${showFilters || activeCount > 0 ? 'bg-white/10 text-white border-white/20' : 'bg-white/[0.04] border-white/10 text-white/80 hover:text-white hover:border-white/20'}`}>
               <SlidersHorizontal size={12} />
               Filters{activeCount > 0 ? ` · ${activeCount}` : ''}
               <ChevronDown size={11} className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
@@ -277,7 +277,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
                 return (
                   <li key={t.id}>
                     <button type="button" disabled={isExcluded} onClick={() => toggle(t.id)}
-                      className={`w-full flex items-center gap-3 px-5 py-3 border-b border-white/ text-left transition-colors ${isExcluded ? 'opacity-35 cursor-not-allowed' : isSel ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}>
+                      className={`w-full flex items-center gap-3 px-5 py-3 border-b border-white/20 text-left transition-colors ${isExcluded ? 'opacity-35 cursor-not-allowed' : isSel ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}>
                       <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors ${isSel ? 'bg-white border-white/30' : 'border-white/20'}`}>
                         {isSel && <Check size={11} className="text-black" />}
                       </div>

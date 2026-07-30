@@ -64,7 +64,7 @@ export function TagPicker({ trackId, features }: TagPickerProps) {
                 type="button"
                 onClick={() => toggleTag.mutate({ tag: t, category: 'custom', active: true })}
                 title="Remove tag"
-                className="group inline-flex items-center gap-1 rounded-lg border border-white/ bg-white/12 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white transition-colors hover:bg-white/20"
+                className="group inline-flex items-center gap-1 rounded-lg border border-white/20 bg-white/12 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white transition-colors hover:bg-white/20"
               >
                 {t}
                 <X size={9} className="opacity-60 transition-opacity group-hover:opacity-100" />
@@ -86,7 +86,7 @@ export function TagPicker({ trackId, features }: TagPickerProps) {
                 key={`${s.category}:${s.tag}`}
                 onClick={() => handleToggle(s.tag, s.category)}
                 title={s.reason}
-                className="group px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 border bg-[#090907] border-dashed border-white/ text-white/80 hover:bg-white/10 hover:border-white/50 hover:text-white"
+                className="group px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 border bg-[#090907] border-dashed border-white/20 text-white/80 hover:bg-white/10 hover:border-white/50 hover:text-white"
               >
                 {s.tag}
                 <span className="ml-1.5 opacity-50 group-hover:opacity-80">+</span>

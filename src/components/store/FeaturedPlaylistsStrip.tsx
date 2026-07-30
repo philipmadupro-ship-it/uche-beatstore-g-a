@@ -100,7 +100,7 @@ export function FeaturedPlaylistsStrip({
             onClick={() => setExpandedId((id) => (id === pl.id ? null : pl.id))}
             className={`shrink-0 w-[120px] sm:w-[140px] text-left group transition-all ${expandedId === pl.id ? 'opacity-100' : ''}`}
           >
-            <div className={`relative w-full aspect-square rounded-xl bg-white/[0.04] border overflow-hidden mb-2 flex items-center justify-center transition-all ${expandedId === pl.id ? 'border-white/ shadow-lg shadow-white/10' : 'border-white/10 group-hover:border-white/20'}`}>
+            <div className={`relative w-full aspect-square rounded-xl bg-white/[0.04] border overflow-hidden mb-2 flex items-center justify-center transition-all ${expandedId === pl.id ? 'border-white/20 shadow-lg shadow-white/10' : 'border-white/10 group-hover:border-white/20'}`}>
               {pl.cover_url
                 ? <CoverImage src={pl.cover_url} sizes="140px" priority={index === 0} className="object-cover" />
                 : <ListMusic size={24} className="text-white/30" />}
@@ -146,7 +146,7 @@ export function FeaturedPlaylistsStrip({
                 {onAddAllToCart && pl.tracks.some((t) => priceFor(t, 'lease') != null) && (
                   <button
                     onClick={() => onAddAllToCart(pl.tracks, 'lease')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/ text-white text-[9px] font-mono uppercase tracking-widest hover:bg-white/10 transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-white/20 text-white text-[9px] font-mono uppercase tracking-widest hover:bg-white/10 transition-colors"
                   >
                     <ShoppingBag size={11} />
                     Add All — Lease

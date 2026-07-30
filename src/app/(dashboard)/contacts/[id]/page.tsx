@@ -203,7 +203,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                 style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%)' }}
               />
               <div className="relative z-10">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-white/10 to-[#161616] border border-white/ flex items-center justify-center mb-4 shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-white/10 to-[#161616] border border-white/20 flex items-center justify-center mb-4 shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
                   <span className="text-[28px] font-medium text-white">
                     {contact.name[0]?.toUpperCase() ?? '?'}
                   </span>
@@ -227,7 +227,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                     <span className={`text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                       contact.buyer_pipeline_status === 'purchased' || contact.buyer_pipeline_status === 'repeat_buyer'
                         ? 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/25'
-                        : 'text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border-white/25'
+                        : 'text-black bg-white font-semibold shadow-md hover:bg-white/90 border-white/25'
                     }`}>
                       {contact.buyer_pipeline_status.replace(/_/g, ' ')}
                     </span>

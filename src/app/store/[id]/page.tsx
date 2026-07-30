@@ -123,8 +123,8 @@ function mapToUiTier(t: ApiLicenseTier): LicenseTier {
     stemsIncluded: t.stems_included,
     creditRequired: t.credit_required,
     accentClass: t.is_exclusive
-      ? 'border-white/ bg-gradient-to-b from-white/10 to-[#0D0D0A]'
-      : 'border-white/20 hover:border-white/',
+      ? 'border-white/20 bg-gradient-to-b from-white/10 to-[#0D0D0A]'
+      : 'border-white/20 hover:border-white/20',
     buttonClass: t.is_exclusive
       ? 'bg-white hover:bg-white text-black'
       : 'bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08]',
@@ -525,7 +525,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                 )}
 
                 {track.exclusive_sold ? (
-                  <div className="rounded-xl border border-white/ bg-white/[0.04] px-5 py-6 text-center">
+                  <div className="rounded-xl border border-white/20 bg-white/[0.04] px-5 py-6 text-center">
                     <p className="mb-1.5 text-[9px] font-mono uppercase tracking-[0.25em] text-white">Exclusive sold</p>
                     <p className="text-[11px] leading-relaxed text-white/80">
                       The exclusive rights to this beat have been purchased.
@@ -852,7 +852,7 @@ function LicenseComparison({ tiers, accent }: { tiers: LicenseTier[]; accent: st
 
   return (
     <details className="group mt-4 rounded-xl border border-white/[0.07] bg-white/[0.02]">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-[9px] font-mono uppercase tracking-[0.16em] text-white/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30/50">
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-[9px] font-mono uppercase tracking-[0.16em] text-white/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60">
         Compare every right
         <ChevronRight size={12} aria-hidden="true" className="transition-transform group-open:rotate-90" style={{ color: accent }} />
       </summary>

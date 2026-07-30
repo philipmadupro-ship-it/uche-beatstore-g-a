@@ -435,7 +435,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
               <button
                 onClick={() => router.push(`/studio?track=${track.id}`)}
                 title="Open this track in the studio (loop / pitch / stems / record)"
-                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[12px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/ hover:bg-white/10"
+                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[12px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/20 hover:bg-white/10"
               >
                 <Sliders size={12} />
                 Studio

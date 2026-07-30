@@ -46,7 +46,7 @@ export function LibraryVersionHistory({ track, versions }: Props) {
         <div className="flex items-center gap-2">
           <History size={14} className="text-white" />
           <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white">Version history</h2>
-          <span className="text-[10px] font-mono text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/ rounded px-2 py-0.5">
+          <span className="text-[10px] font-mono text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/20 rounded px-2 py-0.5">
             {versions.length}
           </span>
         </div>
@@ -66,8 +66,8 @@ export function LibraryVersionHistory({ track, versions }: Props) {
       ) : (
         <div className="grid grid-cols-1 gap-2">
           {/* Live row */}
-          <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-gradient-to-r from-white/10 to-[#0f0f1a] border border-white/">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-white w-14 text-center bg-[#090907] border border-white/ rounded py-1 px-1">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-gradient-to-r from-white/10 to-[#0f0f1a] border border-white/20">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-white w-14 text-center bg-[#090907] border border-white/20 rounded py-1 px-1">
               Live
             </span>
             <div className="flex-1 min-w-0">

@@ -75,7 +75,7 @@ export function TrackNotesEditor({ track, onOptimistic, onRollback, onSaved }: P
           placeholder="ADD PRODUCTION NOTES, COLLABORATORS, OR MIX VERSION DETAILS..."
         />
         {isSaving && (
-          <div className="absolute top-3 right-3 flex items-center gap-2 px-2 py-1 bg-white/10 rounded-md border border-white/ animate-in fade-in">
+          <div className="absolute top-3 right-3 flex items-center gap-2 px-2 py-1 bg-white/10 rounded-md border border-white/20 animate-in fade-in">
             <Loader2 size={10} className="animate-spin text-white" />
             <span className="text-[8px] font-bold text-white uppercase tracking-widest">Saving</span>
           </div>

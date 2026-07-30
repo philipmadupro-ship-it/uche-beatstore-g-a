@@ -251,7 +251,7 @@ export function LicenseBuilder() {
                 <p className="text-[13px] font-semibold text-white truncate">
                   {draft.name || 'Untitled'}
                   {draft.is_exclusive && (
-                    <span className="ml-2 text-[9px] font-mono uppercase tracking-wider text-black bg-white font-semibold shadow-md hover:bg-white/90/10 px-1.5 py-0.5 rounded-full border border-white/">
+                    <span className="ml-2 text-[9px] font-mono uppercase tracking-wider text-black bg-white font-semibold shadow-md hover:bg-white/90 px-1.5 py-0.5 rounded-full border border-white/20">
                       Exclusive
                     </span>
                   )}

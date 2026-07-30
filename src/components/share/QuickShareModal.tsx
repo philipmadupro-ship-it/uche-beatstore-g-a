@@ -140,7 +140,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
         {createdUrl ? (
           // Done-state — same glass card + copy/dismiss as ProjectShareModal.
           <div className="p-6 space-y-4">
-            <div className="flex items-center gap-2 bg-white/[0.02] border border-white/ rounded-xl px-3 py-2.5">
+            <div className="flex items-center gap-2 bg-white/[0.02] border border-white/20 rounded-xl px-3 py-2.5">
               <Link2 size={12} className="text-white shrink-0" />
               <input
                 readOnly
@@ -203,7 +203,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
                         <button
                           onClick={() => toggleOne(t.id)}
                           className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors ${
-                            selected ? 'bg-white/ border border-white/' : 'border border-transparent hover:bg-white/[0.02]'
+                            selected ? 'bg-white/10 border border-white/20' : 'border border-transparent hover:bg-white/[0.02]'
                           }`}
                         >
                           <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
@@ -252,7 +252,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
                 <button
                   onClick={() => setAllowDownloads((v) => !v)}
                   className={`px-3 py-2 rounded-md border text-[10px] font-mono uppercase tracking-wider transition-colors ${
-                    allowDownloads ? 'bg-white/10 border-white/ text-white' : 'bg-[#090907] border-white/10 text-white/40'
+                    allowDownloads ? 'bg-white/10 border-white/20 text-white' : 'bg-[#090907] border-white/10 text-white/40'
                   }`}
                   title="Allow downloads"
                 >

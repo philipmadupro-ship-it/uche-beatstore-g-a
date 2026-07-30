@@ -62,7 +62,7 @@ interface Offer {
 }
 
 const OFFER_STATUS_STYLES: Record<Offer['status'], string> = {
-  pending: 'text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border-white/',
+  pending: 'text-black bg-white font-semibold shadow-md hover:bg-white/90 border-white/20',
   accepted: 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/20',
   countered: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
   declined: 'text-white/80 bg-white/[0.04] border-white/[0.06]',

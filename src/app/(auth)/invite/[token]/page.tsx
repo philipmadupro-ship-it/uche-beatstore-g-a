@@ -95,7 +95,7 @@ export default function InvitePage({ params: paramsPromise }: { params: Promise<
             <button onClick={() => window.location.href = '/login'} className="mt-10 text-[10px] font-black uppercase tracking-[0.3em] text-white hover:text-white transition-colors">Return to Terminal</button>
           </div>
         ) : done ? (
-          <div className="bg-[#0D0D0A] border border-white/ rounded-3xl p-12 text-center shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] animate-in zoom-in-95">
+          <div className="bg-[#0D0D0A] border border-white/20 rounded-3xl p-12 text-center shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] animate-in zoom-in-95">
              <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-8 text-white">
                <Mail size={40} />
             </div>
@@ -114,7 +114,7 @@ export default function InvitePage({ params: paramsPromise }: { params: Promise<
                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/40 mb-3 block">Deployment Invitation</span>
                <h2 className="text-3xl font-black uppercase tracking-tight text-white leading-tight mb-2">Join the Workspace</h2>
                <div className="flex items-center gap-2">
-                 <span className="text-[10px] font-bold uppercase tracking-widest bg-white/10 text-white px-3 py-1 rounded-lg border border-white/">
+                 <span className="text-[10px] font-bold uppercase tracking-widest bg-white/10 text-white px-3 py-1 rounded-lg border border-white/20">
                   {invite?.role}
                  </span>
                </div>

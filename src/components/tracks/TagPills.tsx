@@ -27,7 +27,7 @@ export function TagPills({ tags, maxVisible = 2, onClick }: TagPillsProps) {
       {visibleTags.map((tag) => (
         <span 
           key={tag}
-          className="px-2 py-0.5 rounded-md bg-white/10 text-white text-[9px] font-bold uppercase tracking-wider border border-white/"
+          className="px-2 py-0.5 rounded-md bg-white/10 text-white text-[9px] font-bold uppercase tracking-wider border border-white/20"
         >
           {tag}
         </span>

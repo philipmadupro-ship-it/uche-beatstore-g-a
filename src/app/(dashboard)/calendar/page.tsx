@@ -197,7 +197,7 @@ export default function CalendarPage() {
                       !day.isCurrentMonth ? 'bg-[#08070a]' : ''
                     } ${
                       isSelected
-                        ? 'bg-gradient-to-br from-white/10/80 to-[#161616]/40 ring-1 ring-white/30 ring-inset z-10'
+                        ? 'bg-gradient-to-br from-white/10 to-[#161616]/40 ring-1 ring-white/30 ring-inset z-10'
                         : 'hover:bg-white/[0.02]'
                     }`}
                   >
@@ -236,7 +236,7 @@ export default function CalendarPage() {
                         empty cells don't carry pixel noise. */}
                     <button
                       onClick={(e) => { e.stopPropagation(); setShowAddModal(true); }}
-                      className="tap absolute bottom-1.5 right-1.5 flex size-6 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-white/60 opacity-0 transition-opacity hover:border-white/ hover:text-white group-hover:opacity-100"
+                      className="tap absolute bottom-1.5 right-1.5 flex size-6 items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.04] text-white/60 opacity-0 transition-opacity hover:border-white/20 hover:text-white group-hover:opacity-100"
                       aria-label={`Add event on ${day.fullDate.toLocaleDateString()}`}
                     >
                       <Plus size={10} aria-hidden="true" />

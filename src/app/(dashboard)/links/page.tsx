@@ -344,7 +344,7 @@ export default function LinksPage() {
                         {link.title || link.token}
                       </span>
                       {isTop && (
-                        <span className="shrink-0 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/15 border border-white/ text-white">
+                        <span className="shrink-0 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/15 border border-white/20 text-white">
                           Top
                         </span>
                       )}
@@ -394,7 +394,7 @@ export default function LinksPage() {
                     'group relative text-left rounded-2xl p-4 transition-all cursor-pointer overflow-hidden',
                     'bg-gradient-to-br from-[#0D0D0A] to-[#090907] border',
                     selected
-                      ? 'border-white/ from-white/10/40'
+                      ? 'border-white/20 from-white/10'
                       : 'border-white/10 hover:border-white/20 hover:from-[#161616]',
                     'active:scale-[0.99]',
                     expired && 'opacity-40',
@@ -431,7 +431,7 @@ export default function LinksPage() {
                         {link.title || link.token}
                       </h3>
                       {isTop && (
-                        <span className="shrink-0 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/15 border border-white/ text-white">
+                        <span className="shrink-0 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/15 border border-white/20 text-white">
                           Top
                         </span>
                       )}
@@ -682,7 +682,7 @@ function LinkPopup({
 
           {/* URL card — full URL, selectable. Big tappable Copy at
               the right for the dominant action. */}
-          <div className="flex items-center gap-2 bg-white/[0.02] border border-white/ rounded-xl px-3 py-2.5 mb-4 backdrop-blur-sm">
+          <div className="flex items-center gap-2 bg-white/[0.02] border border-white/20 rounded-xl px-3 py-2.5 mb-4 backdrop-blur-sm">
             <Link2 size={12} className="text-white shrink-0" />
             <input
               readOnly
@@ -770,7 +770,7 @@ function LinkPopup({
                     className={cn(
                       'w-full px-2.5 py-2 text-[11px] font-medium rounded-md border transition-colors flex items-center justify-center gap-1.5',
                       editAllowDownloads
-                        ? 'bg-white/10 border-white/ text-white'
+                        ? 'bg-white/10 border-white/20 text-white'
                         : 'bg-[#090907] border-white/10 text-white/40 hover:border-white/20',
                     )}
                   >
@@ -884,7 +884,7 @@ function LinkPopup({
 function FlagChip({ icon, label, tone }: { icon?: React.ReactNode; label: string; tone?: 'warn' | 'danger' }) {
   const cls =
     tone === 'danger' ? 'text-red-400 border-red-500/30' :
-    tone === 'warn' ? 'text-white border-white/' :
+    tone === 'warn' ? 'text-white border-white/20' :
     'text-white/80 border-white/20';
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border ${cls}`}>

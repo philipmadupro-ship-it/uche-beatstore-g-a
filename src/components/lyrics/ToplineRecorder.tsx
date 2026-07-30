@@ -185,7 +185,7 @@ export function ToplineRecorder({ trackId }: { trackId: string }) {
           <button
             onClick={start}
             disabled={uploading}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white/10 border border-white/ text-white text-[10px] font-medium hover:bg-[#332b1d] transition-colors disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white/10 border border-white/20 text-white text-[10px] font-medium hover:bg-[#332b1d] transition-colors disabled:opacity-50"
           >
             {uploading ? <Loader2 size={11} className="animate-spin" /> : <Mic size={11} />}
             {uploading ? 'Saving…' : 'Record topline'}

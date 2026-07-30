@@ -537,7 +537,7 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
           <button
             onClick={splitAtPlayhead}
             disabled={duration <= 0}
-            className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider px-2.5 py-1.5 rounded-md bg-white/10 border border-white/ text-white hover:bg-[#221d4a] hover:border-white/ disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider px-2.5 py-1.5 rounded-md bg-white/10 border border-white/20 text-white hover:bg-[#221d4a] hover:border-white/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             title="Split at playhead (S)"
           >
             <Scissors size={11} /> Split
@@ -629,8 +629,8 @@ export function StudioArrangement({ trackId, url, duration, currentTime, onSeek,
                 onClick={() => onSeek(clip.sourceStart)}
                 className={cn(
                   'shrink-0 group relative rounded-lg overflow-hidden cursor-grab active:cursor-grabbing',
-                  'bg-gradient-to-br from-white/10 to-[#0A0A0A] border border-white/',
-                  'hover:border-white/ transition-colors',
+                  'bg-gradient-to-br from-white/10 to-[#0A0A0A] border border-white/20',
+                  'hover:border-white/20 transition-colors',
                 )}
                 style={{ width: widthPx, height: 72 }}
                 title={`Clip ${i + 1}: ${fmt(clip.sourceStart)} → ${fmt(clip.sourceEnd)}`}

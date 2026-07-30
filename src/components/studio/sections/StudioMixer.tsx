@@ -120,7 +120,7 @@ function ChannelStrip({ name, color, state, onChange }: ChannelStripProps) {
             onClick={() => onChange({ solo: !state.solo })}
             className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
               state.solo
-                ? 'bg-white/10 border-white/ text-white'
+                ? 'bg-white/10 border-white/20 text-white'
                 : 'bg-[#0D0D0A] border-white/10 text-white/60 hover:text-white'
             }`}
           >S</button>

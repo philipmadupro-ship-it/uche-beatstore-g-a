@@ -60,7 +60,7 @@ export function StudioTrackPicker({
                 <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 mb-3">Now loaded</p>
                 <button
                   onClick={() => onPick(activeTrack.id)}
-                  className="mb-4 flex w-full items-center gap-3 rounded-xl border border-white/ bg-white/10 px-3 py-2 text-left"
+                  className="mb-4 flex w-full items-center gap-3 rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-left"
                 >
                   <TrackThumb track={activeTrack} active />
                   <div className="min-w-0 flex-1">
@@ -105,7 +105,7 @@ export function StudioTrackPicker({
                 </p>
               </div>
               {t.stems_status === 'done' && (
-                <span className="text-[8px] font-mono uppercase tracking-wider text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/ rounded px-1.5 py-0.5">
+                <span className="text-[8px] font-mono uppercase tracking-wider text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/20 rounded px-1.5 py-0.5">
                   Stems
                 </span>
               )}
@@ -127,7 +127,7 @@ function TrackThumb({ track, active = false }: { track: Track; active?: boolean 
         src={cover}
         alt=""
         className={`h-9 w-9 shrink-0 rounded-lg border object-cover ${
-          active ? 'border-white/' : 'border-white/10'
+          active ? 'border-white/20' : 'border-white/10'
         }`}
       />
     );

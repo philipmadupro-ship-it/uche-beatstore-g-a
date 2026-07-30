@@ -441,7 +441,7 @@ Everything autosaves.`}
                   onClick={() => setLookupKind(k)}
                   className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border transition-colors ${
                     lookupKind === k
-                      ? 'bg-white/10 text-white border-white/'
+                      ? 'bg-white/10 text-white border-white/20'
                       : 'border-white/10 text-white/60 hover:text-white/80'
                   }`}
                 >
@@ -470,7 +470,7 @@ Everything autosaves.`}
                     onClick={() => setSylFilter(null)}
                     className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
                       sylFilter == null
-                        ? 'bg-white/10 text-white border-white/'
+                        ? 'bg-white/10 text-white border-white/20'
                         : 'border-white/10 text-white/60 hover:text-white/80'
                     }`}
                   >
@@ -483,7 +483,7 @@ Everything autosaves.`}
                       title={`${count} ${n}-syllable result${count === 1 ? '' : 's'}`}
                       className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border transition-colors ${
                         sylFilter === n
-                          ? 'bg-white/10 text-white border-white/'
+                          ? 'bg-white/10 text-white border-white/20'
                           : 'border-white/10 text-white/60 hover:text-white/80'
                       }`}
                     >
@@ -511,7 +511,7 @@ Everything autosaves.`}
                           key={h.word + (h.score ?? '')}
                           onClick={() => replaceWordAtCaret(h.word)}
                           title={`${syl} syl${h.score ? ` · score ${h.score}` : ''}`}
-                          className="text-[10px] px-2 py-0.5 rounded-md border border-white/10 bg-white/[0.04] text-white hover:bg-white/10 hover:border-white/ hover:text-white transition-colors"
+                          className="text-[10px] px-2 py-0.5 rounded-md border border-white/10 bg-white/[0.04] text-white hover:bg-white/10 hover:border-white/20 hover:text-white transition-colors"
                         >
                           {h.word}
                           <span className="ml-1 text-white/40">·{syl}</span>
@@ -522,7 +522,7 @@ Everything autosaves.`}
                   {visibleHits.length > resultLimit && (
                     <button
                       onClick={() => setResultLimit((n) => n + 40)}
-                      className="mt-2 text-[9px] font-mono uppercase tracking-wider text-white/60 hover:text-white border border-white/10 hover:border-white/ rounded px-2 py-1"
+                      className="mt-2 text-[9px] font-mono uppercase tracking-wider text-white/60 hover:text-white border border-white/10 hover:border-white/20 rounded px-2 py-1"
                     >
                       Show more · {visibleHits.length - resultLimit} hidden
                     </button>
@@ -647,7 +647,7 @@ Everything autosaves.`}
                       </button>
                       <button
                         onClick={() => restoreEntry(h)}
-                        className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border border-white/10 text-white hover:bg-white/10 hover:border-white/ flex items-center gap-1"
+                        className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded border border-white/10 text-white hover:bg-white/10 hover:border-white/20 flex items-center gap-1"
                       >
                         <RefreshCw size={9} /> Restore
                       </button>

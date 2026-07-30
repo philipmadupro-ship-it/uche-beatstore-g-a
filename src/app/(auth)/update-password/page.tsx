@@ -47,7 +47,7 @@ export default function UpdatePasswordPage() {
     <div className="flex min-h-screen items-center justify-center bg-[#090907] p-4 text-white">
       <div className="w-full max-w-sm space-y-6 bg-[#0D0D0A] p-8 rounded-lg border border-white/10">
         <div className="text-center">
-          <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-white/10 border border-white/ flex items-center justify-center">
+          <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
             <Lock className="w-5 h-5 text-white" />
           </div>
           <h1 className="text-xl font-bold tracking-tight uppercase">Set New Password</h1>

@@ -166,7 +166,7 @@ export default function ProfilePage() {
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => setShowPreview(true)}
-                className="flex h-9 items-center gap-2 rounded-full border border-white/20 bg-[#090907] px-3 text-[11px] font-medium text-white/80 transition-all hover:border-white/ hover:text-white"
+                className="flex h-9 items-center gap-2 rounded-full border border-white/20 bg-[#090907] px-3 text-[11px] font-medium text-white/80 transition-all hover:border-white/20 hover:text-white"
               >
                 <Eye size={13} />
                 Preview
@@ -203,7 +203,7 @@ export default function ProfilePage() {
             <div className="flex gap-5 items-start">
               <div
                 onClick={() => heroInputRef.current?.click()}
-                className="w-28 h-28 rounded-2xl bg-[#0D0D0A] border border-white/10 overflow-hidden shrink-0 cursor-pointer hover:border-white/ transition-colors group relative"
+                className="w-28 h-28 rounded-2xl bg-[#0D0D0A] border border-white/10 overflow-hidden shrink-0 cursor-pointer hover:border-white/20 transition-colors group relative"
               >
                 {profile.hero_image_url ? (
                   <img src={profile.hero_image_url} alt="" className="w-full h-full object-cover" />
@@ -366,7 +366,7 @@ export default function ProfilePage() {
                       onClick={() => setValue('font_style', s)}
                       className={`py-2.5 rounded-xl border text-[10px] font-mono uppercase tracking-wider transition-all ${
                         (profile.font_style || 'default') === s
-                          ? 'border-white/ bg-white/10 text-white'
+                          ? 'border-white/20 bg-white/10 text-white'
                           : 'border-white/10 text-white/40 hover:text-white'
                       }`}
                     >

@@ -72,7 +72,7 @@ export function LicenseSelector({
             className={`w-full text-left px-4 py-3.5 rounded-xl border-2 transition-all ${
               isSelected
                 ? 'border-white/30 bg-[#1a1610]/40'
-                : 'border-white/10 hover:border-white/ bg-transparent'
+                : 'border-white/10 hover:border-white/20 bg-transparent'
             }`}
             style={isSelected ? { borderColor: accentColor } : {}}
           >

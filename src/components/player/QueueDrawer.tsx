@@ -229,7 +229,7 @@ function Row({
       onClick={onPlay}
       className={`group flex items-center gap-3 p-2.5 rounded-lg border cursor-pointer transition-all ${
         isCurrent
-          ? 'bg-white/10 border-white/ shadow-lg shadow-white/10'
+          ? 'bg-white/10 border-white/20 shadow-lg shadow-white/10'
           : muted
             ? 'bg-transparent border-transparent hover:bg-[#101010] opacity-70 hover:opacity-100'
             : 'bg-transparent border-transparent hover:bg-[#0D0D0A] hover:border-white/10'

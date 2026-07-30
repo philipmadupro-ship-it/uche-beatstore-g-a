@@ -93,7 +93,7 @@ export function StoreListView({
               }}
               onMouseEnter={() => setHovered(t.id)}
               onMouseLeave={() => setHovered((v) => (v === t.id ? null : v))}
-              className={`relative grid grid-cols-[44px_minmax(0,1fr)_auto_32px] md:grid-cols-[44px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_32px_32px] gap-3 md:gap-4 items-center px-4 md:px-6 py-3 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/30/40 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
+              className={`relative grid grid-cols-[44px_minmax(0,1fr)_auto_32px] md:grid-cols-[44px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_32px_32px] gap-3 md:gap-4 items-center px-4 md:px-6 py-3 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/60 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
               style={isPreview ? { boxShadow: `inset 2px 0 0 ${accentColor}` } : isCur ? { boxShadow: `inset 2px 0 0 ${accentColor}80` } : {}}
             >
               {/* Cover w/ hover-play */}

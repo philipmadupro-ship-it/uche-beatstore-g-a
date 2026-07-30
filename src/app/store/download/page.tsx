@@ -41,13 +41,13 @@ function fmt(s: number | null | undefined) {
 }
 
 const FORMAT_META: Record<string, { icon: React.ReactNode; accent: string; bg: string; border: string }> = {
-  mp3:      { icon: <Music size={12} />,  accent: 'text-white', bg: 'bg-white/10',      border: 'border-white/' },
-  'wav-main': { icon: <Disc3 size={12} />, accent: 'text-white', bg: 'bg-white/20',      border: 'border-white/' },
-  wav:      { icon: <Disc3 size={12} />,  accent: 'text-white', bg: 'bg-white/20',      border: 'border-white/' },
+  mp3:      { icon: <Music size={12} />,  accent: 'text-white', bg: 'bg-white/10',      border: 'border-white/20' },
+  'wav-main': { icon: <Disc3 size={12} />, accent: 'text-white', bg: 'bg-white/20',      border: 'border-white/20' },
+  wav:      { icon: <Disc3 size={12} />,  accent: 'text-white', bg: 'bg-white/20',      border: 'border-white/20' },
   vocals:   { icon: <Waves size={12} />,  accent: 'text-[#c8a47a]', bg: 'bg-[#1f1a10]/60',   border: 'border-[#3d3020]/20' },
   drums:    { icon: <Waves size={12} />,  accent: 'text-[#e87a5a]', bg: 'bg-[#1f1010]/60',   border: 'border-[#8B3A2A]/20' },
   bass:     { icon: <Waves size={12} />,  accent: 'text-[#8ecf9f]', bg: 'bg-[#0d1f14]/60',   border: 'border-[#3A7A50]/20' },
-  other:    { icon: <Waves size={12} />,  accent: 'text-white', bg: 'bg-white/',   border: 'border-white/' },
+  other:    { icon: <Waves size={12} />,  accent: 'text-white', bg: 'bg-white/10',   border: 'border-white/20' },
 };
 
 function getFormatMeta(format: string) {
@@ -247,7 +247,7 @@ function DownloadPortal() {
                 key={track.id}
                 className={`overflow-hidden rounded-[22px] border transition-all ${
                   isCurrent
-                    ? 'border-white/ bg-white/[0.04]'
+                    ? 'border-white/20 bg-white/[0.04]'
                     : 'border-white/10 bg-white/[0.04]/60'
                 }`}
               >
@@ -281,7 +281,7 @@ function DownloadPortal() {
                     <div className="flex items-center flex-wrap gap-2 mt-1.5">
                       <span className={`text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                         track.license_type === 'exclusive'
-                          ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border-white/'
+                          ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90 border-white/20'
                           : 'text-white/60 bg-white/[0.03] border-white/10'
                       }`}>
                         {track.license_type === 'exclusive' ? 'Exclusive' : 'Lease'}

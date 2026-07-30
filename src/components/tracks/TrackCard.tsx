@@ -230,7 +230,7 @@ export function TrackCard({
             type="button"
             onClick={(e) => { e.stopPropagation(); onSelectChange?.(track, !selected); }}
             className={`h-10 w-10 rounded-lg flex items-center justify-center transition-colors ${
-            selected ? 'bg-white border border-white/30 text-black' : 'border border-white/ bg-[#090907]/70 text-white/30 hover:border-white/30 hover:text-white/80'
+            selected ? 'bg-white border border-white/30 text-black' : 'border border-white/20 bg-[#090907]/70 text-white/30 hover:border-white/30 hover:text-white/80'
           }`}
             aria-pressed={selected}
             aria-label={selected ? 'Deselect track' : 'Select track'}

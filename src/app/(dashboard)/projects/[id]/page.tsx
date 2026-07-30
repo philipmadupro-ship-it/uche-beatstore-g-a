@@ -583,7 +583,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           15s; that's good enough until we wire Supabase Realtime. */}
       {project && (
         <PageContainer className="pt-0 pb-12">
-          <div className="rounded-2xl border border-white/ bg-white/[0.02]/55 p-3 sm:p-4">
+          <div className="rounded-2xl border border-white/20 bg-white/[0.02]/55 p-3 sm:p-4">
             <ProjectCommentsPanel
               projectId={params.id as string}
               tracks={tracks.map((t) => ({ id: t.id, title: t.title }))}

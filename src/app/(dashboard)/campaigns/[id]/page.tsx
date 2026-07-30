@@ -50,7 +50,7 @@ interface Target {
 
 const STATUS_STYLES: Record<Target['status'], string> = {
   sent: 'text-white/80 bg-white/[0.04] border-white/[0.08]',
-  opened: 'text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border-white/20',
+  opened: 'text-black bg-white font-semibold shadow-md hover:bg-white/90 border-white/20',
   interested: 'text-[#c8a47a] bg-[#c8a47a]/10 border-[#c8a47a]/25',
   negotiating: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
   placed: 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/20',

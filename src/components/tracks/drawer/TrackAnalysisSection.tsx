@@ -116,7 +116,7 @@ export function TrackAnalysisSection({ track, onUpdate }: Props) {
           disabled={isAnalyzing || !canAnalyze}
           onClick={handleAnalyze}
           title={canAnalyze ? 'Re-analyze this track' : 'Upload source audio before analyzing'}
-          className="tap flex min-h-11 items-center gap-1.5 rounded border border-white/10 bg-[#101010] px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-white/80 transition-colors hover:border-white/ hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className="tap flex min-h-11 items-center gap-1.5 rounded border border-white/10 bg-[#101010] px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-white/80 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isAnalyzing ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
           {isAnalyzing ? 'Analyzing…' : 'Re-analyze'}

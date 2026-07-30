@@ -24,7 +24,7 @@ export function TagChips({ tags, max = 3, accentGenre = false }: Props) {
             key={t.tag}
             className={`px-1.5 py-0.5 rounded text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 border ${
               isGenre && accentGenre
-                ? 'bg-white/10 border-white/'
+                ? 'bg-white/10 border-white/20'
                 : 'bg-white/20 border-white/10'
             }`}
           >

@@ -61,7 +61,7 @@ export function BeatCard({
       tabIndex={0}
       onClick={onPreview}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPreview(); } }}
-      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-white/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30/50 ${
+      className={`group relative flex cursor-pointer flex-col overflow-hidden rounded-xl border bg-white/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 ${
         isActive ? '' : 'border-white/[0.06] hover:border-white/[0.12]'
       }`}
       style={{

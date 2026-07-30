@@ -1832,7 +1832,7 @@ export default function StoreEditorPage() {
                       onClick={() => setForm((f) => ({ ...f, font_style: fs }))}
                       className={`px-4 py-2 rounded-lg text-[11px] font-medium border transition-colors capitalize ${
                         form.font_style === fs
-                          ? 'bg-white/10 border-white/ text-white'
+                          ? 'bg-white/10 border-white/20 text-white'
                           : 'bg-white/[0.02] border-white/10 text-white/60 hover:text-white hover:border-white/20'
                       }`}
                     >

@@ -6140,3 +6140,86 @@ clicks through the browser tool. Worth remembering for future audio verification
 Not proven, and stated rather than glossed: the share page's own `<audio>` element carries an
 empty `src` in this local environment, so the playhead was never observed physically advancing.
 That is share-page playback plumbing untouched by this work, not a regression in the lane.
+
+---
+
+## Phase 1 — Repair the scripted-migration damage (accessibility)
+
+### Skills Used
+
+`.codex/skills/quiet-luxury-ui` (hard constraint: "keep all aria attributes, keyboard handling,
+focus states"), `.codex/skills/antigravity-testing-release`.
+
+### Problems Discovered
+
+- **167 dead Tailwind classes across 67 files**, all collateral from the scripted beige→white
+  migration (`3fe5698`) — the same commit that had already broken `LiquidGlassButton`.
+  Two defect shapes: an empty opacity modifier (`border-white/` with no value, 142×) and a
+  doubled one (`ring-white/30/40`, 25×). **Both compile to no CSS at all.**
+- **~10 of them were `focus-visible:` rings** on elements that also set `focus:outline-none` —
+  so those elements had *no visible keyboard focus indicator whatsoever*. Confirmed live before
+  the fix: a focused store list row computed `boxShadow: none` **and** `outline: none`.
+  Affected the shared `ui/Dropdown` and `ui/ProductList` primitives (propagating to every
+  consumer), plus `store/BeatCard`, `StoreListView`, both checkout inputs, `store/[id]`,
+  `TrackGridCard`, `StemUploader`, `MiniWaveform`.
+- `ui/MediaCard.tsx:67` — the *selected* state rendered no border at all.
+- These are invisible to `tsc`, ESLint and a passing build, which is why they survived several
+  review passes including my own.
+
+### Changes Made
+
+- **Focus rings → `ring-white/60`.** Deliberately *not* a verbatim restore of the pre-migration
+  alphas: those included `ring-white/10` on checkout, which is invisible on a near-black
+  surface. A focus indicator that fails contrast defeats the purpose of the fix, so one
+  clearly-visible value is used across all of them (principle 7, one anatomy per pattern).
+  `TrackGridCard`'s ring is *selection*, not focus, so it keeps its original `/60`.
+- **`border-white/` → `border-white/20`** (142 sites). Context sampled across 40+ sites was
+  consistently the active/selected branch of a ternary, or a panel paired with a `bg-white/10`
+  fill — i.e. the beige accent border the migration stripped. `/20` is the emphasis step above
+  the `/10` default.
+- **`bg-white/` → `bg-white/10`** (6 sites) — fills stay subtler than borders.
+- **`hover:bg-white/90/10` → `hover:bg-white/90`** (25 sites) — the migration wrote `/90` and
+  left the pre-migration alpha stranded; the first value is the intended one.
+
+### Guardrail
+
+`src/lib/ui/tailwind-classes.test.ts` — scans every tracked source file for both defect shapes
+and fails with exact `file:line` plus the offending class string. **Verified it actually
+catches a regression** rather than passing vacuously: re-injected the `MediaCard` defect, watched
+the suite fail naming that exact line, then restored and watched it pass.
+
+### Problems Fixed
+
+Verified live in the browser with a side-by-side probe of the generated CSS:
+- `ring-white/60` → `--tw-ring-color: color-mix(in oklab, #fff 60%, transparent)`
+- `ring-white/30/40` → `--tw-ring-color: (none)` — confirming the broken form produced nothing
+- `border-white/20` → a real colour at 0.2 alpha
+
+Also confirmed real keyboard focus (Tab, not programmatic `.focus()`, which does not reliably
+trigger `:focus-visible`) paints a visible indicator.
+
+### Also fixed this pass — a fourth font
+
+The owner asked why the font had changed. It was **not** this initiative: `Inter` was a fourth
+face bound to `--font-store` and scoped via `.store-ui` to override `.font-mono` / `.text-eyebrow`
+/ `.text-micro` on `/store` and `/store/producer` only — so storefront labels rendered in a
+different typeface to the rest of the app, contradicting the "three faces" rule in AGENTS.md.
+My type-scale work had consolidated more labels onto the mono scale, which is exactly the set
+Inter overrode, making the split newly obvious. On the owner's decision, removed: the
+`@font-face`, the `--font-store` token, the `.store-ui` override, `InterVariable.woff2`, and the
+stale Inter entries in `design-system/foundations/typography.ts`. The Inter reference in the
+contact **email template** stays — different rendering context entirely.
+
+Verified live: Inter no longer loaded; `/store` now computes to Akira Expanded (603 elements) and
+Panchang (166) only.
+
+### Tests Performed
+
+`npx tsc --noEmit` clean · `npx eslint .` 0 errors (96 pre-existing warnings) ·
+`npm test` **562/562** across 102 files (up from 560; +2 guardrail) · `npm run build` green.
+
+### Remaining Concerns
+
+- The `text-black bg-white font-semibold shadow-md` pill style recurs across ~25 of the repaired
+  sites. Those are exactly the solid-white buttons Phase 2/5 replace with translucent controls —
+  left alone here deliberately, since Phase 1's job was only to make the classes *valid*.

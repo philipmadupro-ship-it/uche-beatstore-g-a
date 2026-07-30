@@ -137,7 +137,7 @@ export function ActivityPanel({ open, onClose }: Props) {
                   className={cn(
                     'shrink-0 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono uppercase tracking-wider transition-colors border',
                     active
-                      ? 'bg-white/10 text-white border-white/'
+                      ? 'bg-white/10 text-white border-white/20'
                       : 'bg-transparent text-white/60 border-white/[0.06] hover:text-white hover:border-white/[0.12]',
                   )}
                 >

@@ -1,9 +1,9 @@
 export const beatstorTypography = {
   fonts: {
     brand: "'Synkopy', 'Akira Expanded', ui-sans-serif, system-ui",
-    interface: "'Akira Expanded', 'Inter', ui-sans-serif, system-ui",
-    store: "'Inter', ui-sans-serif, system-ui",
-    technical: "'Panchang', 'Inter', ui-monospace, SFMono-Regular, Menlo, monospace",
+    interface: "'Akira Expanded', ui-sans-serif, system-ui",
+    store: "'Akira Expanded', ui-sans-serif, system-ui",
+    technical: "'Panchang', ui-monospace, SFMono-Regular, Menlo, monospace",
   },
   weights: {
     regular: 400,

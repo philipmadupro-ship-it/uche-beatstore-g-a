@@ -112,7 +112,7 @@ export function DrawerActionList({ actions, onAction, disabled, defaultVisible }
               disabled={disabled}
               className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] text-white hover:bg-white/[0.05] transition-all group relative overflow-hidden"
             >
-              <div className={`w-8 h-8 rounded-lg bg-[#090907] border border-white/10 flex items-center justify-center ${action.color} opacity-80 group-hover:opacity-100 group-hover:border-white/ transition-all`}>
+              <div className={`w-8 h-8 rounded-lg bg-[#090907] border border-white/10 flex items-center justify-center ${action.color} opacity-80 group-hover:opacity-100 group-hover:border-white/20 transition-all`}>
                 <Icon size={16} />
               </div>
               <span className={`${action.color} group-hover:text-white transition-colors`}>{action.label}</span>

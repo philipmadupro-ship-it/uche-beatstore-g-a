@@ -68,11 +68,11 @@ export default function BandcampRemixCard({
   // Border treatment mirrors BeatCard's "active" affordances so a remix card
   // visually responds to play / preview state in the same vocabulary.
   const borderClass = isPreview
-    ? 'border-white/ shadow-lg shadow-white/10'
+    ? 'border-white/20 shadow-lg shadow-white/10'
     : isPlaying
       ? 'shadow-md'
       : isCurrent
-        ? 'border-white/'
+        ? 'border-white/20'
         : 'border-white/10 hover:border-white/20';
 
   const borderStyle = isPreview

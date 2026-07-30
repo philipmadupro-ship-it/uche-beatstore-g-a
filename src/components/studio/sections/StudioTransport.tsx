@@ -61,7 +61,7 @@ export function StudioTransport({
               z-index ordering. */}
           {loopOn && duration > 0 && loopB > loopA && (
             <div
-              className="absolute top-1/2 -translate-y-1/2 h-2 bg-white/15 border border-white/ rounded pointer-events-none z-0"
+              className="absolute top-1/2 -translate-y-1/2 h-2 bg-white/15 border border-white/20 rounded pointer-events-none z-0"
               style={{
                 left: `${(loopA / duration) * 100}%`,
                 width: `${((loopB - loopA) / duration) * 100}%`,
@@ -112,7 +112,7 @@ export function StudioTransport({
             onClick={() => setPreservePitch((v) => !v)}
             className={`min-h-[54px] rounded-lg border px-2 py-2 text-[9px] font-mono uppercase tracking-[0.16em] transition-colors ${
               preservePitch
-                ? 'border-white/ bg-white/10 text-white'
+                ? 'border-white/20 bg-white/10 text-white'
                 : 'border-white/10 bg-[#0D0D0A] text-white/60 hover:text-white'
             }`}
           >
@@ -123,7 +123,7 @@ export function StudioTransport({
             onClick={toggleLoop}
             className={`flex min-h-[54px] items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-[9px] font-mono uppercase tracking-[0.16em] transition-colors ${
               loopOn
-                ? 'border-white/ bg-white/10 text-white'
+                ? 'border-white/20 bg-white/10 text-white'
                 : 'border-white/10 bg-[#0D0D0A] text-white/60 hover:text-white'
             }`}
           >

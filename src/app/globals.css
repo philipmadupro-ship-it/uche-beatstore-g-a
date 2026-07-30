@@ -2,14 +2,6 @@
 
 /* ── Custom Fonts ──────────────────────────────────────────────────── */
 
-@font-face {
-  font-family: 'Inter';
-  src: url('/fonts/InterVariable.woff2') format('woff2');
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
-
 /* Akira Expanded — main body font for the entire app. Bold, geometric,
  * expanded letterforms that give the UI its "producer studio" identity.
  * Replaces Geist Sans as the primary typeface. */
@@ -210,7 +202,6 @@
   --dur-med: 260ms;
   --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-decelerate: cubic-bezier(0.22, 1, 0.36, 1);
-  --font-store: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 [data-theme="de-roche-archive"] {
@@ -332,20 +323,13 @@ body {
 
 /* Storefront typography.
  *
- * Akira Expanded (body) and Synkopy (.font-heading) are the brand identity and
- * stay. Do NOT swap the storefront's running text to --font-store: it was
- * tried and reverted on the owner's instruction. --font-store remains scoped to
- * the small label classes below only. */
+ * Three faces only, as documented: Akira Expanded (body), Synkopy
+ * (.font-heading), Panchang (.font-mono). The storefront previously overrode
+ * mono labels to a fourth face (Inter, via --font-store) on .store-ui, which
+ * meant /store and /store/producer rendered their labels in a different
+ * typeface to the rest of the app. Removed — the label tracking below stays. */
 .store-ui {
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-}
-
-.store-ui .font-mono,
-.store-ui .mono,
-.store-ui .font-panchang,
-.store-ui .text-eyebrow,
-.store-ui .text-micro {
-  font-family: var(--font-store);
 }
 
 .store-ui .font-mono,

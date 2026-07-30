@@ -335,7 +335,7 @@ export function TopBar() {
                     <Link
                       href="/store-editor"
                       onClick={() => setNotifOpen(false)}
-                      className="flex items-start gap-3 border-b border-white/ px-4 py-3 transition-colors hover:bg-white/[0.03]"
+                      className="flex items-start gap-3 border-b border-white/20 px-4 py-3 transition-colors hover:bg-white/[0.03]"
                     >
                       <div className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/[0.05]">
                         <AlertTriangle size={13} className="text-white" />
@@ -358,7 +358,7 @@ export function TopBar() {
                     notifs.map((n) => (
                       <div
                         key={n.id}
-                        className={`flex items-start gap-3 px-4 py-3 border-b border-white/ last:border-0 transition-colors ${n.read ? 'opacity-60' : 'bg-white/[0.04]/40'}`}
+                        className={`flex items-start gap-3 px-4 py-3 border-b border-white/20 last:border-0 transition-colors ${n.read ? 'opacity-60' : 'bg-white/[0.04]/40'}`}
                       >
                         <div className="w-6 h-6 rounded-lg bg-white/[0.05] border border-white/20 flex items-center justify-center shrink-0 mt-0.5">
                           {notifIcon(n.kind)}
@@ -411,7 +411,7 @@ export function TopBar() {
         </div>
 
         {/* ── Row 2: sub-tabs of the active hub ───────────────────── */}
-        <div className="h-11 flex items-center gap-1 px-3 md:px-6 border-t border-white/ overflow-x-auto no-scrollbar">
+        <div className="h-11 flex items-center gap-1 px-3 md:px-6 border-t border-white/20 overflow-x-auto no-scrollbar">
           {/* On mobile, show which hub you're in (since hub buttons are in the drawer) */}
           <span className="md:hidden flex items-center gap-1.5 pr-2 mr-1 border-r border-white/10 text-[10px] font-mono uppercase tracking-[0.15em] text-white/60 shrink-0">
             <group.icon size={12} />

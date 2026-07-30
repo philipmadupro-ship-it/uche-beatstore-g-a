@@ -182,7 +182,7 @@ export function Dropdown<T extends string = string>({
           'inline-flex min-h-10 items-center justify-between gap-2 px-3 py-2 rounded-md',
           'bg-white/[0.04] border border-white/10 text-[11px] text-white',
           'hover:border-white/20 transition-colors',
-          'focus:outline-none focus:border-white/ focus:ring-1 focus:ring-white/30/20',
+          'focus:outline-none focus:border-white/20 focus:ring-1 focus:ring-white/30',
           'disabled:opacity-40 disabled:cursor-not-allowed',
           open && 'border-white/20',
           className,

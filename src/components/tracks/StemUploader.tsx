@@ -194,7 +194,7 @@ function StemSlot({
       onDrop={(e) => { e.preventDefault(); setDrag(false); handleFiles(e.dataTransfer.files); }}
       aria-describedby={error ? `${inputId}-error` : undefined}
       className={cn(
-        'tap group relative w-full min-h-14 px-3 py-3 rounded-lg border text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30/40 focus-visible:ring-offset-2 focus-visible:ring-offset-black',
+        'tap group relative w-full min-h-14 px-3 py-3 rounded-lg border text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black',
         drag
           ? 'border-white/50 bg-white/10'
           : url
@@ -321,7 +321,7 @@ function AddStemRow({ trackId, onAdded }: { trackId: string; onAdded: () => void
       <button
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
-        className="tap mt-4 flex min-h-11 items-center gap-1.5 rounded-md border border-white/ bg-white/10 px-3 py-2 text-[11px] font-medium text-white transition-colors hover:bg-[#332b1d] disabled:opacity-50"
+        className="tap mt-4 flex min-h-11 items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-3 py-2 text-[11px] font-medium text-white transition-colors hover:bg-[#332b1d] disabled:opacity-50"
       >
         {uploading ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
         Add stem

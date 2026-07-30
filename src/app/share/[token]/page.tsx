@@ -375,7 +375,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
           className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] max-w-[90vw] sm:max-w-md px-5 py-3 rounded-full border backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] flex items-center gap-3 animate-in slide-in-from-top-4 fade-in duration-300 ${
             purchaseBanner === 'success'
               ? 'bg-[#0e1f17]/95 border-[#6DC6A4]/30 text-[#9fe5c1]'
-              : 'bg-[#1f1410]/95 border-white/ text-white'
+              : 'bg-[#1f1410]/95 border-white/20 text-white'
           }`}
         >
           {purchaseBanner === 'success' ? (

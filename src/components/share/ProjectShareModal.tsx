@@ -385,7 +385,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                 brief). Pre-generate the CTA is a single full-width pill. */}
             {generatedUrl ? (
               <div className="space-y-3">
-                <div className="flex items-center gap-2 bg-white/[0.02] border border-white/ rounded-xl px-3 py-2.5 backdrop-blur-sm">
+                <div className="flex items-center gap-2 bg-white/[0.02] border border-white/20 rounded-xl px-3 py-2.5 backdrop-blur-sm">
                   <Link2 size={12} className="text-white shrink-0" />
                   <input
                     readOnly
@@ -447,7 +447,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                         revoked || expired ? 'bg-[#090907] border-[#161616] opacity-50' : 'bg-[#090907] border-white/10 hover:border-white/20'
                       } transition-all`}
                     >
-                      <div className="w-7 h-7 rounded bg-white/10 border border-white/ flex items-center justify-center shrink-0">
+                      <div className="w-7 h-7 rounded bg-white/10 border border-white/20 flex items-center justify-center shrink-0">
                         <Icon size={11} />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -455,7 +455,7 @@ export function ProjectShareModal({ projectId, projectTitle, coverUrl, onClose }
                           <span className="text-[11px] font-medium text-white truncate">
                             {s.label || s.invited_email || 'Untitled link'}
                           </span>
-                          <span className="text-[8px] font-bold text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/ rounded px-1.5 py-0.5 uppercase">
+                          <span className="text-[8px] font-bold text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/20 rounded px-1.5 py-0.5 uppercase">
                             {ROLE_INFO[s.role].label}
                           </span>
                           {revoked && <span className="text-[8px] text-red-400 uppercase">Revoked</span>}
@@ -517,7 +517,7 @@ function ToggleRow({ icon, label, active, onToggle }: { icon: React.ReactNode; l
     <button
       onClick={onToggle}
       className={`w-full flex items-center justify-between px-3 py-2 rounded-md border transition-colors ${
-        active ? 'bg-white/10 border-white/ text-white' : 'bg-[#090907] border-white/10 text-white/80 hover:border-white/20'
+        active ? 'bg-white/10 border-white/20 text-white' : 'bg-[#090907] border-white/10 text-white/80 hover:border-white/20'
       }`}
     >
       <span className="flex items-center gap-2 text-[11px] font-medium">

@@ -600,7 +600,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] max-w-[90vw] sm:max-w-md px-5 py-3 rounded-full border backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] flex items-center gap-3 animate-in slide-in-from-top-4 fade-in duration-300 ${
             purchaseBanner === 'success'
               ? 'bg-[#0e1f17]/95 border-[#6DC6A4]/30 text-[#9fe5c1]'
-              : 'bg-[#1f1410]/95 border-white/ text-white'
+              : 'bg-[#1f1410]/95 border-white/20 text-white'
           }`}
         >
           {purchaseBanner === 'success' ? (
@@ -852,7 +852,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                 </p>
               </div>
               {useDawCanvas && (
-                <span className="text-[9px] font-bold text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/ rounded-full px-2.5 py-1 uppercase tracking-wider">
+                <span className="text-[9px] font-bold text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/20 rounded-full px-2.5 py-1 uppercase tracking-wider">
                   DAW mode
                 </span>
               )}
@@ -1086,7 +1086,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                           }}
                           className={`text-[9px] font-mono rounded px-1.5 py-0.5 inline-flex items-center gap-1 ${
                             canSeek
-                              ? 'bg-white/10 border border-white/ text-white hover:bg-[#231f4a] hover:border-white/50 cursor-pointer'
+                              ? 'bg-white/10 border border-white/20 text-white hover:bg-[#231f4a] hover:border-white/50 cursor-pointer'
                               : 'bg-white/[0.05] border border-white/10 text-white/60 cursor-not-allowed'
                           } transition-colors`}
                           title={canSeek ? 'Jump to this region' : 'Switch to the pinned track to play this region'}
@@ -1125,7 +1125,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                 <button
                   type="button"
                   onClick={() => setPinnedRegion(null)}
-                  className="flex items-center gap-2 w-full bg-white/10 border border-white/ rounded px-3 py-1.5 text-[10px] font-mono text-white hover:bg-[#231f4a] transition-colors"
+                  className="flex items-center gap-2 w-full bg-white/10 border border-white/20 rounded px-3 py-1.5 text-[10px] font-mono text-white hover:bg-[#231f4a] transition-colors"
                   title="Click to unpin this region"
                 >
                   <Play size={9} fill="currentColor" />
@@ -1169,7 +1169,7 @@ function RoleBadge({ role }: { role: ShareInfo['role'] }) {
   } as const;
   const { icon: Icon, label } = map[role];
   return (
-    <span className="flex items-center gap-1.5 text-[10px] font-bold text-black bg-white font-semibold shadow-md hover:bg-white/90/10 border border-white/ rounded-full px-3 py-1.5 uppercase tracking-wider">
+    <span className="flex items-center gap-1.5 text-[10px] font-bold text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/20 rounded-full px-3 py-1.5 uppercase tracking-wider">
       <Icon size={10} />
       {label}
     </span>

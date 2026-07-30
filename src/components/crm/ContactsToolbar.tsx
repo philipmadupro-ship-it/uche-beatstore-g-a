@@ -72,7 +72,7 @@ export function ContactsToolbar(p: Props) {
           <div className="py-1">
             {CATEGORY_OPTS.map((seg) => (
               <button key={seg} onClick={() => { p.setCategoryFilter(seg); close(); }}
-                className={`w-full flex items-center justify-between px-3 py-1.5 text-[12px] capitalize transition-colors ${p.categoryFilter === seg ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90/10' : 'text-white/80 hover:bg-white/5'}`}>
+                className={`w-full flex items-center justify-between px-3 py-1.5 text-[12px] capitalize transition-colors ${p.categoryFilter === seg ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90' : 'text-white/80 hover:bg-white/5'}`}>
                 <span>{seg === 'nudge' ? 'Needs nudge' : seg}</span>
                 <span className="text-[10px] font-mono text-white/50">{p.categoryCount(seg)}</span>
               </button>
@@ -87,7 +87,7 @@ export function ContactsToolbar(p: Props) {
           <div className="py-1">
             {STATUS_OPTS.map((o) => (
               <button key={o.value} onClick={() => { p.setStatusFilter(o.value); close(); }}
-                className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors ${p.statusFilter === o.value ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90/10' : 'text-white/80 hover:bg-white/5'}`}>
+                className={`w-full text-left px-3 py-1.5 text-[12px] transition-colors ${p.statusFilter === o.value ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90' : 'text-white/80 hover:bg-white/5'}`}>
                 {o.label}
               </button>
             ))}
@@ -109,7 +109,7 @@ export function ContactsToolbar(p: Props) {
                 const on = p.tagFilter.has(tag);
                 return (
                   <button key={tag} onClick={() => p.toggleTag(tag)}
-                    className={`w-full flex items-center justify-between px-3 py-1.5 text-[12px] transition-colors ${on ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90/10' : 'text-white/80 hover:bg-white/5'}`}>
+                    className={`w-full flex items-center justify-between px-3 py-1.5 text-[12px] transition-colors ${on ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90' : 'text-white/80 hover:bg-white/5'}`}>
                     <span>{tag}</span>
                     {on && <Check size={12} className="text-white" />}
                   </button>
@@ -139,7 +139,7 @@ export function ContactsToolbar(p: Props) {
               {p.segments.map((seg) => (
                 <div key={seg.id} className="group flex items-center">
                   <button onClick={() => { p.onApplySegment(seg); close(); }}
-                    className={`flex-1 text-left px-3 py-1.5 text-[12px] transition-colors ${p.activeSegmentId === seg.id ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90/10' : 'text-white/80 hover:bg-white/5'}`}>
+                    className={`flex-1 text-left px-3 py-1.5 text-[12px] transition-colors ${p.activeSegmentId === seg.id ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90' : 'text-white/80 hover:bg-white/5'}`}>
                     {seg.name}
                   </button>
                   <button onClick={() => p.onDeleteSegment(seg)} className="px-2 text-white/40 hover:text-red-400 opacity-0 group-hover:opacity-100"><X size={11} /></button>

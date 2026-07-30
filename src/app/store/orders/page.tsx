@@ -73,7 +73,7 @@ export default function OrdersPage() {
 
         <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 sm:p-8">
           <div className="mb-7">
-            <span className="mb-4 grid size-11 place-items-center rounded-full border border-white/ bg-white/10 text-white">
+            <span className="mb-4 grid size-11 place-items-center rounded-full border border-white/20 bg-white/10 text-white">
               <LockKeyhole size={17} />
             </span>
             <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.28em] text-white/80">
@@ -117,7 +117,7 @@ export default function OrdersPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
                     autoComplete="email"
-                    className="w-full rounded-xl border border-white/10 bg-[#090907] py-3 pl-9 pr-3 text-[13px] text-white outline-none transition-colors placeholder:text-white/40 focus:border-white/"
+                    className="w-full rounded-xl border border-white/10 bg-[#090907] py-3 pl-9 pr-3 text-[13px] text-white outline-none transition-colors placeholder:text-white/40 focus:border-white/20"
                   />
                 </div>
               </div>

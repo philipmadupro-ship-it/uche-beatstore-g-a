@@ -24,7 +24,7 @@ import { Map as MapIcon } from 'lucide-react';
 
 const SEGMENT_TONES: Record<string, { bg: string; ring: string; text: string }> = {
   intro:   { bg: 'bg-[#2a3a5a]/40', ring: 'ring-white/30',  text: 'text-[#a8c4e8]' },
-  verse:   { bg: 'bg-white/', ring: 'ring-white/30',  text: 'text-white' },
+  verse:   { bg: 'bg-white/10', ring: 'ring-white/30',  text: 'text-white' },
   chorus:  { bg: 'bg-[#3a2a5a]/50', ring: 'ring-white/30',  text: 'text-[#cbb8f0]' },
   bridge:  { bg: 'bg-[#5a3a2a]/40', ring: 'ring-white/30',  text: 'text-[#f0c498]' },
   drop:    { bg: 'bg-[#5a2a4a]/50', ring: 'ring-white/30',  text: 'text-[#f0a8c8]' },

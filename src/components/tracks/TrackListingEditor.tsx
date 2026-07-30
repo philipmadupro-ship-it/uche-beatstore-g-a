@@ -449,7 +449,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
                     <button
                       onClick={scheduleDrop}
                       disabled={!scheduleInput || saving === 'scheduled_publish_at'}
-                      className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded-md bg-white/10 border border-white/ text-white hover:bg-[#332b1d] transition-colors disabled:opacity-40"
+                      className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded-md bg-white/10 border border-white/20 text-white hover:bg-[#332b1d] transition-colors disabled:opacity-40"
                     >
                       Set
                     </button>
@@ -521,7 +521,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
             summary={coverUrlInput ? 'Set' : 'Recommended'} open={openSections.has('cover')} onToggle={() => toggleSection('cover')}>
             <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
               <div onClick={() => fileInputRef.current?.click()}
-                className="w-16 h-16 rounded-lg bg-[#0D0D0A] border border-white/10 overflow-hidden shrink-0 cursor-pointer hover:border-white/ transition-colors relative group">
+                className="w-16 h-16 rounded-lg bg-[#0D0D0A] border border-white/10 overflow-hidden shrink-0 cursor-pointer hover:border-white/20 transition-colors relative group">
                 {coverUrlInput ? (
                   <NextImage src={coverUrlInput} alt="" fill sizes="64px" className="object-cover" />
                 ) : (
@@ -679,7 +679,7 @@ function LicenseTierRow({
           {row.is_exclusive ? 'WAV + stems' : 'MP3'}
         </span>
         {row.is_exclusive && (
-          <span className="ml-1.5 text-[8px] font-mono uppercase tracking-wider text-black bg-white font-semibold shadow-md hover:bg-white/90/10 px-1 py-0.5 rounded">Excl</span>
+          <span className="ml-1.5 text-[8px] font-mono uppercase tracking-wider text-black bg-white font-semibold shadow-md hover:bg-white/90 px-1 py-0.5 rounded">Excl</span>
         )}
       </div>
 

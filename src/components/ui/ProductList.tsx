@@ -173,7 +173,7 @@ export function FolderContainerCard({
       <button type="button" onClick={onClick} className="block w-[112px] text-left sm:w-[124px]">
         <div className={cn(
           'relative mb-2 aspect-square overflow-hidden rounded-[20px] bg-[#202020] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-transform group-hover:-translate-y-0.5',
-          active && 'ring-2 ring-white/30/80',
+          active && 'ring-2 ring-white/80',
         )}>
           {visibleCovers.length > 0 ? (
             <div className={cn(

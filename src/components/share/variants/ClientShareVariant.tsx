@@ -290,7 +290,7 @@ export function ClientShareVariant({
           {shareToken && (
             <button
               onClick={() => setCartOpen(true)}
-              className="relative flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/20 hover:border-white/ transition-colors"
+              className="relative flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/20 hover:border-white/20 transition-colors"
             >
               <ShoppingCart size={13} className="text-white" />
               {cartCount > 0 ? (
@@ -535,8 +535,8 @@ export function ClientShareVariant({
                               onClick={() => handleAddToCart(t)}
                               className={`flex flex-col items-center px-2.5 py-1.5 rounded-lg border transition-colors ${
                                 isExcl
-                                  ? 'bg-white/[0.07] border-white/ hover:border-white/ hover:bg-white/10'
-                                  : 'bg-white/[0.04] border-white/20 hover:border-white/ hover:bg-white/[0.05]'
+                                  ? 'bg-white/[0.07] border-white/20 hover:border-white/20 hover:bg-white/10'
+                                  : 'bg-white/[0.04] border-white/20 hover:border-white/20 hover:bg-white/[0.05]'
                               }`}
                             >
                               <span className={`text-[8px] font-mono uppercase tracking-wider ${isExcl ? 'text-white/80' : 'text-white/60'}`}>

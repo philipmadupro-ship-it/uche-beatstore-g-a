@@ -244,7 +244,7 @@ export function FilterBar({ filters, onChange, embedded = false }: FilterBarProp
                   <button key={k} onClick={() => toggleKey(k)}
                     className={`w-9 h-9 rounded-lg text-[11px] font-mono font-bold transition-all ${
                       filters.keys.has(k)
-                        ? 'bg-white/10 border border-white/ text-white shadow-[0_0_6px_rgba(231,215,190,0.12)]'
+                        ? 'bg-white/10 border border-white/20 text-white shadow-[0_0_6px_rgba(231,215,190,0.12)]'
                         : 'bg-white/[0.04] border border-white/10 text-white/40 hover:text-white/80 hover:border-white/20'
                     }`}>{k}</button>
                 ))}

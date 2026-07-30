@@ -35,7 +35,7 @@ export default function LicensesSettingsPage() {
         />
 
         {/* Redirect notice */}
-        <div className="rounded-xl border border-white/ bg-white/5 p-4 mb-6 flex items-start gap-3">
+        <div className="rounded-xl border border-white/20 bg-white/5 p-4 mb-6 flex items-start gap-3">
           <ExternalLink size={13} className="text-white shrink-0 mt-0.5" />
           <div className="text-[11px] text-white/80 leading-relaxed">
             <p className="font-medium text-white mb-1">This section has moved</p>

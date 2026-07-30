@@ -299,7 +299,7 @@ export function ContactsTable(p: Props) {
                 <button
                   onClick={() => p.onSend(c)}
                   aria-label={sends > 0 ? `Send another beat to ${c.name}` : `Send beat to ${c.name}`}
-                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-bold text-black bg-white font-semibold shadow-md hover:bg-white/90/15 border border-white/30 hover:bg-white/25 active:scale-[0.98] transition-transform shadow-sm"
+                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-bold text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/30 hover:bg-white/25 active:scale-[0.98] transition-transform shadow-sm"
                 >
                   {sends > 0 ? <Mail size={14} /> : <Send size={14} />}
                   {sends > 0 ? 'Again' : 'Send'}

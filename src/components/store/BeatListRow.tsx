@@ -32,9 +32,9 @@ export function BeatListRow({
     <div
       id={`beat-${track.id}`}
       className={`overflow-hidden rounded-xl border transition-all duration-200 ${isPreview
-          ? 'border-white/ bg-[#0D0D0A]'
+          ? 'border-white/20 bg-[#0D0D0A]'
           : isCurrent
-            ? 'border-white/ bg-[#0D0D0A]'
+            ? 'border-white/20 bg-[#0D0D0A]'
             : 'border-white/10 bg-white/[0.04] hover:border-white/10 hover:bg-[#0D0D0A]'
         }`}
       style={
@@ -87,7 +87,7 @@ export function BeatListRow({
                 .slice(0, 3)
                 .map((t) => (
                   <span key={t.tag} className={`px-1.5 py-0.5 rounded text-[8px] font-mono uppercase tracking-wider border shrink-0 ${t.category === 'genre'
-                      ? 'bg-white/10 text-white border-white/'
+                      ? 'bg-white/10 text-white border-white/20'
                       : 'bg-white/20 text-white/60 border-white/10'}`}>
                     {t.tag}
                   </span>
@@ -122,7 +122,7 @@ export function BeatListRow({
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
           {track.exclusive_sold ? (
-            <span className="px-2 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white/[0.03] border border-white/ text-white text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
+            <span className="px-2 py-1.5 sm:px-3 sm:py-2 rounded-md bg-white/[0.03] border border-white/20 text-white text-[9px] sm:text-[10px] font-bold uppercase tracking-wider">
               <span className="sm:hidden">Sold</span>
               <span className="hidden sm:inline">Exclusive Sold</span>
             </span>

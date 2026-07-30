@@ -237,7 +237,7 @@ export function SimilarTracks({ trackId, onPick }: Props) {
                   {(harmonicHit || tempoHit) && (
                     <div className="flex items-center gap-1 mt-1">
                       {harmonicHit && <span className="text-[8px] font-mono uppercase tracking-wider text-[#c8a47a] bg-[#1f1a10]/60 px-1 py-0.5 rounded">key</span>}
-                      {tempoHit && <span className="text-[8px] font-mono uppercase tracking-wider text-black bg-white font-semibold shadow-md hover:bg-white/90/10 px-1 py-0.5 rounded">tempo</span>}
+                      {tempoHit && <span className="text-[8px] font-mono uppercase tracking-wider text-black bg-white font-semibold shadow-md hover:bg-white/90 px-1 py-0.5 rounded">tempo</span>}
                     </div>
                   )}
                 </div>
@@ -277,7 +277,7 @@ function FilterChip({ active, onClick, label }: { active: boolean; onClick: () =
       className={cn(
         'text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded-full border transition-colors',
         active
-          ? 'bg-white/10 text-white border-white/'
+          ? 'bg-white/10 text-white border-white/20'
           : 'border-white/10 text-white/60 hover:text-white/80 hover:border-white/20',
       )}
     >
@@ -294,7 +294,7 @@ function Segment({ value, onChange, options }: { value: string; onChange: (v: st
       className={cn(
         'text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded-full border bg-transparent cursor-pointer transition-colors focus:outline-none',
         value !== 'all'
-          ? 'bg-white/10 text-white border-white/'
+          ? 'bg-white/10 text-white border-white/20'
           : 'border-white/10 text-white/60 hover:text-white/80 hover:border-white/20',
       )}
     >

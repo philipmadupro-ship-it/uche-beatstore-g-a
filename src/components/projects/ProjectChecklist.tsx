@@ -119,7 +119,7 @@ export function ProjectChecklist({ projectId, items, onChanged }: Props) {
           <div key={it.id} className="flex items-center gap-2.5 py-1 group">
             <button onClick={() => toggle(it.id)}
               className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                it.done ? 'bg-[#6DC6A4] border-[#6DC6A4]' : 'border-white/20 hover:border-white/'
+                it.done ? 'bg-[#6DC6A4] border-[#6DC6A4]' : 'border-white/20 hover:border-white/20'
               }`}>
               {it.done && <Check size={10} className="text-black" />}
             </button>

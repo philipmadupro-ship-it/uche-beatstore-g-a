@@ -352,7 +352,7 @@ function CheckoutContent() {
             ].map((step, index) => (
               <div
                 key={step.label}
-                className={`rounded-xl border px-3 py-2 ${step.active ? 'border-white/ bg-white/8 text-white' : 'border-white/[0.05] bg-white/[0.02] text-white/40'}`}
+                className={`rounded-xl border px-3 py-2 ${step.active ? 'border-white/20 bg-white/8 text-white' : 'border-white/[0.05] bg-white/[0.02] text-white/40'}`}
               >
                 <p className="text-[9px] font-mono uppercase tracking-[0.18em]">0{index + 1}</p>
                 <p className="mt-1 text-[11px] font-semibold">{step.label}</p>
@@ -410,7 +410,7 @@ function CheckoutContent() {
                     inputMode="email"
                     aria-invalid={emailError ? 'true' : 'false'}
                     aria-describedby={emailError ? 'checkout-email-error' : 'checkout-email-help'}
-                    className={`w-full bg-[#090907] border rounded-xl py-3 pl-10 pr-4 text-[13px] text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/30/10 transition-colors ${emailError ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-white/20'
+                    className={`w-full bg-[#090907] border rounded-xl py-3 pl-10 pr-4 text-[13px] text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/60 transition-colors ${emailError ? 'border-red-500/50 focus:border-red-500' : 'border-white/10 focus:border-white/20'
                       }`}
                     required
                   />
@@ -456,7 +456,7 @@ function CheckoutContent() {
               <button
                 type="submit"
                 disabled={!termsAccepted}
-                className="w-full py-3.5 rounded-xl bg-white hover:bg-white active:scale-[0.99] text-black text-[11px] font-bold uppercase tracking-wider transition-all focus:outline-none focus:ring-2 focus:ring-white/30/30 disabled:cursor-not-allowed disabled:opacity-45"
+                className="w-full py-3.5 rounded-xl bg-white hover:bg-white active:scale-[0.99] text-black text-[11px] font-bold uppercase tracking-wider transition-all focus:outline-none focus:ring-2 focus:ring-white/60 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Continue to Payment
               </button>
@@ -488,7 +488,7 @@ function CheckoutContent() {
         </div>
 
         {/* 2. Payment Section */}
-        <div className={`rounded-[20px] border transition-all duration-300 ${isEmailSubmitted ? 'border-white/10 bg-white/[0.04]' : 'border-white/ bg-white/[0.04]/30 opacity-50 pointer-events-none'
+        <div className={`rounded-[20px] border transition-all duration-300 ${isEmailSubmitted ? 'border-white/10 bg-white/[0.04]' : 'border-white/20 bg-white/[0.04]/30 opacity-50 pointer-events-none'
           } p-5 md:p-6`}>
           <div className="flex items-center gap-3 mb-5">
             <div className="w-7 h-7 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center text-[11px] font-mono text-white/80 font-bold">
@@ -510,7 +510,7 @@ function CheckoutContent() {
               in the deployment environment. Checkout will not work until this is fixed.
             </div>
           ) : stripePublishableKey.startsWith('pk_test') && (
-            <div className="mb-5 p-3 rounded-xl bg-white/ border border-white/ text-[9px] text-white/80 font-mono leading-relaxed">
+            <div className="mb-5 p-3 rounded-xl bg-white/10 border border-white/20 text-[9px] text-white/80 font-mono leading-relaxed">
               💡 <strong>Test Mode Active:</strong> You can complete purchases using Stripe test cards (e.g. 4242 4242 4242 4242).
             </div>
           )}

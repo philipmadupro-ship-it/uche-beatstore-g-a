@@ -130,7 +130,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
             {/* Allow Downloads */}
             <label className="flex items-center justify-between cursor-pointer group">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#0D0D0A] border border-white/10 flex items-center justify-center group-hover:border-white/ transition-colors">
+                <div className="w-10 h-10 rounded-xl bg-[#0D0D0A] border border-white/10 flex items-center justify-center group-hover:border-white/20 transition-colors">
                   <Download size={16} className="text-white/80" />
                 </div>
                 <div>
@@ -145,7 +145,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
             <div className="space-y-3">
               <label className="flex items-center justify-between cursor-pointer group">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#0D0D0A] border border-white/10 flex items-center justify-center group-hover:border-white/ transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-[#0D0D0A] border border-white/10 flex items-center justify-center group-hover:border-white/20 transition-colors">
                     <Lock size={16} className="text-white/80" />
                   </div>
                   <div>
@@ -170,7 +170,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
             <div className="space-y-3">
               <label className="flex items-center justify-between cursor-pointer group">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#0D0D0A] border border-white/10 flex items-center justify-center group-hover:border-white/ transition-colors">
+                  <div className="w-10 h-10 rounded-xl bg-[#0D0D0A] border border-white/10 flex items-center justify-center group-hover:border-white/20 transition-colors">
                     <Calendar size={16} className="text-white/80" />
                   </div>
                   <div>
@@ -189,7 +189,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
                       className={`flex-1 py-3 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
                         expiryDays === d
                           ? 'bg-white text-black font-semibold shadow-md hover:bg-white/90 shadow-lg shadow-white/10'
-                          : 'bg-[#0D0D0A] border border-white/10 text-white/80 hover:border-white/'
+                          : 'bg-[#0D0D0A] border border-white/10 text-white/80 hover:border-white/20'
                       }`}
                     >
                       {d}d
@@ -221,7 +221,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
           </div>
         ) : (
           <div className="p-8 space-y-6 animate-in fade-in duration-500">
-            <div className="flex items-center justify-center w-16 h-16 mx-auto bg-white/10 rounded-full border border-white/">
+            <div className="flex items-center justify-center w-16 h-16 mx-auto bg-white/10 rounded-full border border-white/20">
               <Check size={28} className="text-white" strokeWidth={3} />
             </div>
             <div className="text-center">

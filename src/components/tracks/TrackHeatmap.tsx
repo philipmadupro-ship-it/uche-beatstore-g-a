@@ -92,7 +92,7 @@ export function TrackHeatmap({ trackId, durationSeconds }: TrackHeatmapProps) {
 
   if (loading) {
     return (
-      <div className="h-28 w-full flex items-center justify-center bg-white/[0.02]/50 border border-white/ rounded-xl">
+      <div className="h-28 w-full flex items-center justify-center bg-white/[0.02]/50 border border-white/20 rounded-xl">
         <Loader2 size={16} className="animate-spin text-white/80" />
       </div>
     );

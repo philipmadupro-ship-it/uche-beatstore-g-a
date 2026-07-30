@@ -67,7 +67,7 @@ export function TrackGridCard({
 
   return (
     <div
-      className={`group relative flex flex-col cursor-pointer ${selected ? 'ring-2 ring-white/30/60 rounded-xl' : ''}`}
+      className={`group relative flex flex-col cursor-pointer ${selected ? 'ring-2 ring-white/60 rounded-xl' : ''}`}
       onClick={handleCardClick}
       draggable
       onDragStart={(e) => {
@@ -78,9 +78,9 @@ export function TrackGridCard({
       {/* Cover art */}
       <div className={`relative aspect-square rounded-xl overflow-hidden border transition-all duration-200 mb-2.5 ${
         isCurrent
-          ? 'border-white/ shadow-lg shadow-white/10'
+          ? 'border-white/20 shadow-lg shadow-white/10'
           : selected
-            ? 'border-white/'
+            ? 'border-white/20'
             : 'border-white/10 group-hover:border-white/20'
       }`}>
         {track.cover_url ? (

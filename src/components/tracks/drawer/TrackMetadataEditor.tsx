@@ -83,7 +83,7 @@ export function TrackMetadataEditor({ track, onPatch, onRatingChange }: Props) {
               onClick={() => onPatch({ type: opt.value })}
               className={`px-3 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider border transition-all ${
                 track.type === opt.value
-                  ? 'bg-white/10 border-white/ text-white shadow-sm'
+                  ? 'bg-white/10 border-white/20 text-white shadow-sm'
                   : 'bg-transparent border-white/10 text-white/40 hover:border-white/20 hover:text-white/60'
               }`}
             >

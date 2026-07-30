@@ -64,7 +64,7 @@ export function MediaCard({
     <div
       className={cn(
         'relative mb-2.5 aspect-square overflow-hidden rounded-xl border bg-white/[0.02] transition-all duration-200 group-hover:-translate-y-0.5 sm:rounded-2xl',
-        selected ? 'border-white/' : 'border-white/10 group-hover:border-white/20',
+        selected ? 'border-white/40' : 'border-white/10 group-hover:border-white/20',
       )}
     >
       {coverUrl ? (
