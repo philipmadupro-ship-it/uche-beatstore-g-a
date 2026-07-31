@@ -36,77 +36,51 @@ export interface SpectralBar {
 /** Floor so silence still shows a hairline rather than a gap. */
 export const SPECTRAL_MIN_HEIGHT = 0.06;
 
-/** Darkest a visible column is allowed to get, so colour never vanishes. */
-const MIN_CHANNEL = 46;
-
 /**
- * How hard the loudest band dominates the blend. 2 (plain power) averages two
- * coexisting bands into mud; 5 keeps the winner's hue while still letting a
- * close second tint it.
- */
-const DOMINANCE_EXPONENT = 5;
-
-/**
- * Serato-like frequency → colour gradient.
+ * Single-hue colour ramp — "shades of one colour", not a rainbow.
  *
- * Ported from `turbo/libdjwaveform` (main.c), which renders Serato/NeuralMix-
- * style waveforms. Control points are `[Hz, r, g, b]`, linearly interpolated.
- * The shape is what produces the familiar DJ-waveform look: deep red sub-bass
- * rising to bright red ~250Hz, through brown/olive in the low mids, bright
- * green around 700Hz–1.4kHz (where vocals sit), darkening through teal ~2.7kHz,
- * into blue from ~2.9kHz and brightening again in the air band.
+ * A prior revision coloured bands by frequency (low=red, mid=green,
+ * high=blue via a ported Serato/libdjwaveform gradient). On review that read
+ * as multi-hue and disharmonious against the rest of the UI — up to 88
+ * distinct hues across one waveform, measured live. This keeps the same
+ * *information* (you can still see where the 808 sits versus the hats) but
+ * encodes it as LIGHTNESS within one fixed hue rather than as a hue change:
+ * bass-heavy moments sit as a deep, saturated version of the colour; airy
+ * moments sit pale and desaturated; loudness overall lifts brightness.
+ *
+ * The hue (33°) is not arbitrary — it matches `#c8a47a`, the warm gold
+ * already used everywhere else in the app for the musical-key badge
+ * (`docs/design-direction.md` principle 3's semantic exception list). Reusing
+ * it means the waveform's "exemption from the one-accent rule" (it still
+ * needs its own vivid instrument-readout language) doesn't fight the rest of
+ * the palette — it's drawn from a colour the product already uses.
  */
-const FREQ_GRADIENT: ReadonlyArray<readonly [number, number, number, number]> = [
-  [10, 0x83, 0x1e, 0x1e], [50, 0x94, 0x1e, 0x1e], [100, 0xa1, 0x1e, 0x1e],
-  [150, 0xbf, 0x1e, 0x1e], [250, 0xbf, 0x1e, 0x1e], [300, 0xbd, 0x2c, 0x1e],
-  [350, 0x8a, 0x48, 0x1f], [400, 0x91, 0x59, 0x1e], [450, 0x73, 0x60, 0x1e],
-  [500, 0x49, 0x63, 0x1e], [550, 0x42, 0x71, 0x1f], [600, 0x30, 0x61, 0x1e],
-  [650, 0x33, 0xa6, 0x1d], [700, 0x27, 0xbf, 0x1e], [800, 0x27, 0xbf, 0x1e],
-  [850, 0x1d, 0x9d, 0x1f], [900, 0x1d, 0x9d, 0x1f], [950, 0x1e, 0x8d, 0x1f],
-  [1300, 0x1e, 0x8d, 0x1f], [1350, 0x1d, 0xbf, 0x25], [1450, 0x1d, 0xbf, 0x25],
-  [1500, 0x1e, 0xa8, 0x2d], [1550, 0x1e, 0x5e, 0x2d], [1600, 0x1e, 0x73, 0x2d],
-  [1650, 0x1e, 0x5e, 0x2d], [2600, 0x1e, 0x5e, 0x2d], [2650, 0x1e, 0x5e, 0x3b],
-  [2700, 0x1e, 0x5e, 0x4f], [2750, 0x1e, 0x5c, 0x6d], [2800, 0x1d, 0x54, 0x79],
-  [2850, 0x1e, 0x42, 0x79], [2900, 0x1e, 0x22, 0x6a], [2950, 0x1e, 0x1e, 0x61],
-  [3000, 0x1e, 0x1e, 0x5c], [5400, 0x1e, 0x1e, 0x5c], [5450, 0x1e, 0x1e, 0x71],
-  [5500, 0x1e, 0x1e, 0x85], [5550, 0x1e, 0x1e, 0xb5], [5600, 0x1e, 0x1e, 0xbf],
-  [5650, 0x1e, 0x1e, 0xbf], [5700, 0x1e, 0x1e, 0xad], [5750, 0x1e, 0x1e, 0x94],
-  [5850, 0x1e, 0x1e, 0x94], [5900, 0x1e, 0x1e, 0x87], [10700, 0x1e, 0x1e, 0x87],
-  [10750, 0x28, 0x28, 0xd6], [10800, 0x28, 0x28, 0xb9], [10850, 0x28, 0x28, 0xf0],
-];
+const BASE_HUE = 33;
+const BASE_SAT = 0.5;
 
-/** Linear interpolation into FREQ_GRADIENT. Clamps outside the defined range. */
-export function colorForFrequency(hz: number): [number, number, number] {
-  if (!Number.isFinite(hz)) return [30, 30, 30];
-  const first = FREQ_GRADIENT[0];
-  const last = FREQ_GRADIENT[FREQ_GRADIENT.length - 1];
-  if (hz <= first[0]) return [first[1], first[2], first[3]];
-  if (hz >= last[0]) return [last[1], last[2], last[3]];
-
-  for (let i = 1; i < FREQ_GRADIENT.length; i++) {
-    const [f1, r1, g1, b1] = FREQ_GRADIENT[i];
-    if (hz > f1) continue;
-    const [f0, r0, g0, b0] = FREQ_GRADIENT[i - 1];
-    const span = f1 - f0;
-    const t = span > 0 ? (hz - f0) / span : 0;
-    return [
-      Math.round(r0 + (r1 - r0) * t),
-      Math.round(g0 + (g1 - g0) * t),
-      Math.round(b0 + (b1 - b0) * t),
-    ];
+/** HSL (0..1 each) to an `[r,g,b]` triple, 0..255. */
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  if (s <= 0) {
+    const v = Math.round(l * 255);
+    return [v, v, v];
   }
-  return [last[1], last[2], last[3]];
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const hue2rgb = (t: number): number => {
+    let tt = t;
+    if (tt < 0) tt += 1;
+    if (tt > 1) tt -= 1;
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2) return q;
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+  return [
+    Math.round(hue2rgb(h + 1 / 3) * 255),
+    Math.round(hue2rgb(h) * 255),
+    Math.round(hue2rgb(h - 1 / 3) * 255),
+  ];
 }
-
-/**
- * Representative frequency for each band, used to sample the gradient.
- *
- * libdjwaveform power-weights a gradient lookup across every FFT bin. We hold
- * three bands rather than a full spectrum, so we sample the gradient at each
- * band's centre and power-weight those three — the same computation at coarser
- * resolution. Chosen inside each band's passband, not at its crossover.
- */
-const BAND_CENTRE_HZ = { low: 110, mid: 700, high: 5200 } as const;
 
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -118,7 +92,7 @@ function clamp01(n: number): number {
  *
  * Per-band rather than global: highs carry far less energy than lows in almost
  * every mix, so a global normalise would render hats nearly black and the
- * colour would collapse to "everything is red". Normalising each band against
+ * colour would collapse to "everything is dark". Normalising each band against
  * itself is what makes the hats actually visible — the same reason DAW spectral
  * views weight bands independently.
  */
@@ -135,8 +109,10 @@ function normaliseBand(values: number[]): number[] {
 /**
  * Build coloured bars from per-slice band energy.
  *
- * Height comes from combined loudness; colour is additive RGB per band, so a
- * full-spectrum hit reads white, an 808 reads red and hats read blue.
+ * Height comes from combined loudness. Colour is one hue throughout; only
+ * lightness (and, slightly, saturation) vary with band content and level, so
+ * a slice that's all sub-bass reads as a deep saturated shade and a slice of
+ * hats reads pale — variation within one colour, not between colours.
  */
 export function buildSpectralBars(bands: SpectralBands): SpectralBar[] {
   const len = Math.min(bands.low.length, bands.mid.length, bands.high.length);
@@ -159,58 +135,18 @@ export function buildSpectralBars(bands: SpectralBands): SpectralBar[] {
     const l = low[i];
     const m = mid[i];
     const h = high[i];
+    const energy = clamp01((l + m + h) / 3);
 
-    // POWER-WEIGHTED GRADIENT AVERAGE — libdjwaveform's algorithm:
-    //
-    //   for each bin:  acc += power * gradient(freqHz)
-    //   colour = acc / totalPower
-    //
-    // We hold three bands instead of a full FFT, so we sample the gradient at
-    // each band's centre frequency and weight by that band's power. Same
-    // computation, coarser resolution.
-    //
-    // This replaced additive RGB (channel intensity = band amplitude), which
-    // could only ever produce mixtures of three fixed hues. A gradient gives
-    // *continuous* colour: sub-bass and upper-bass are different reds, and a
-    // slice sliding from bass to mids sweeps smoothly through the ramp instead
-    // of stepping between primaries. That continuity is what the reference
-    // players have and this did not.
-    //
-    // Power, not amplitude: energy is amplitude squared, so weighting by power
-    // is what makes a loud band actually dominate the blend.
-    // Weights are raised to DOMINANCE_EXPONENT, not merely squared.
-    //
-    // A plain power-weighted average across three coarse bands lands on the
-    // midpoint whenever two bands coexist — red (bass) averaged with green
-    // (mids) gives olive/amber, which is exactly the muddy colour the owner
-    // rejected twice. Serato averages over hundreds of FFT bins where energy is
-    // concentrated, so its average stays near a real spectral peak; with three
-    // bands the average is almost always between them. Biasing hard toward the
-    // dominant band recovers the vivid red / green / blue the reference shows.
-    const pLow = Math.pow(l, DOMINANCE_EXPONENT);
-    const pMid = Math.pow(m, DOMINANCE_EXPONENT);
-    const pHigh = Math.pow(h, DOMINANCE_EXPONENT);
-    const totalP = pLow + pMid + pHigh;
+    // Signed tilt: which end of the spectrum this slice leans toward, -1 (all
+    // bass) to +1 (all air). Drives LIGHTNESS, never hue — that's the point.
+    const tilt = (l + m + h) > 0 ? (h - l) / (l + m + h) : 0;
 
-    let r: number, g: number, b: number;
-    if (totalP <= 1e-9) {
-      [r, g, b] = [MIN_CHANNEL, MIN_CHANNEL, MIN_CHANNEL];
-    } else {
-      const cl = colorForFrequency(BAND_CENTRE_HZ.low);
-      const cm = colorForFrequency(BAND_CENTRE_HZ.mid);
-      const ch = colorForFrequency(BAND_CENTRE_HZ.high);
-      const inv = 1 / totalP;
-      r = Math.round((cl[0] * pLow + cm[0] * pMid + ch[0] * pHigh) * inv);
-      g = Math.round((cl[1] * pLow + cm[1] * pMid + ch[1] * pHigh) * inv);
-      b = Math.round((cl[2] * pLow + cm[2] * pMid + ch[2] * pHigh) * inv);
+    // Deep and saturated for bass, pale and soft for air; energy lifts
+    // brightness overall so louder moments read brighter within that range.
+    const lightness = clamp01(0.22 + energy * 0.32 + tilt * 0.22);
+    const saturation = clamp01(BASE_SAT + energy * 0.22 - Math.abs(tilt) * 0.08);
 
-      // The gradient is authored for a bright display; lift it so it reads on
-      // a near-black panel without losing the hue relationships.
-      const boost = 1 / Math.max(0.35, Math.pow(clamp01(l + m + h), 0.5));
-      r = Math.min(255, Math.round(r * boost));
-      g = Math.min(255, Math.round(g * boost));
-      b = Math.min(255, Math.round(b * boost));
-    }
+    const [r, g, b] = hslToRgb(BASE_HUE / 360, saturation, lightness);
 
     const height = peakTotal > 0
       ? Math.max(SPECTRAL_MIN_HEIGHT, clamp01(rawTotals[i] / peakTotal))

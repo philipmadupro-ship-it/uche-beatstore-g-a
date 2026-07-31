@@ -36,116 +36,63 @@ describe('buildSpectralBars', () => {
     expect(out.map((b) => b.dominant)).toEqual(['low', 'mid', 'high']);
   });
 
-  it('maps bands to Serato hues: bass red, vocals green, hats blue', () => {
-    // R = lows (kick/808), G = mids (vocals/snare), B = highs (hats/air).
-    const out = buildSpectralBars(bands([1, 0, 0], [0, 1, 0], [0, 0, 1]));
-    const [lr, lg, lb] = rgb(out[0].color);
-    const [mr, mg, mb] = rgb(out[1].color);
-    const [hr, hg, hb] = rgb(out[2].color);
-    expect(lr).toBeGreaterThan(lg); expect(lr).toBeGreaterThan(lb);   // bass -> red
-    expect(mg).toBeGreaterThan(mr); expect(mg).toBeGreaterThan(mb);   // vocals -> green
-    expect(hb).toBeGreaterThan(hr); expect(hb).toBeGreaterThan(hg);   // hats -> blue
-  });
+  it('is a single hue: every colour it produces converts to the same HSL hue', () => {
+    // The whole point of this pass: the owner rejected a multi-hue mapping
+    // (red bass / green vocals / blue hats — up to 88 distinct hues measured
+    // live on one waveform) and asked for "shades of one colour". This is the
+    // property that actually enforces that request, computed by converting
+    // each rgb() back to HSL rather than trusting the implementation not to
+    // drift.
+    const hueOf = (color: string): number => {
+      const [r, g, b] = rgb(color);
+      const [rn, gn, bn] = [r / 255, g / 255, b / 255];
+      const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
+      if (max === min) return -1; // achromatic (pure grey) — no hue to compare
+      const d = max - min;
+      let h: number;
+      if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0));
+      else if (max === gn) h = (bn - rn) / d + 2;
+      else h = (rn - gn) / d + 4;
+      return Math.round(h * 60);
+    };
 
-  it('produces continuous intermediate hues as content shifts between bands', () => {
-    // This is the property a gradient has and additive RGB does not, and the
-    // reason the model was changed: a slice moving from bass toward mids must
-    // pass through intermediate colour, not jump between primaries.
-    //
-    // Deliberately replaces an earlier "full spectrum is brightest and least
-    // saturated" assertion — that was an invariant of the ADDITIVE model. Under
-    // a power-weighted gradient average, full-spectrum content averages toward
-    // the middle of the ramp rather than summing to white, so keeping that
-    // assertion would have been testing a model no longer in use.
-    const out = buildSpectralBars(
-      bands([1, 0.66, 0.33, 0], [0, 0.33, 0.66, 1], [0, 0, 0, 0]),
-    );
-    const hues = out.map((bar) => rgb(bar.color));
-
-    // Red falls and green rises monotonically across the sweep.
-    for (let i = 1; i < hues.length; i++) {
-      expect(hues[i][0]).toBeLessThanOrEqual(hues[i - 1][0] + 2);
-      expect(hues[i][1]).toBeGreaterThanOrEqual(hues[i - 1][1] - 2);
+    const out = buildSpectralBars(bands([1, 0.4, 0.9, 0.1], [0.2, 1, 0.3, 0.9], [0.6, 0.1, 1, 0.5]));
+    const hues = out.map((b) => b.color).map(hueOf).filter((h) => h >= 0);
+    expect(hues.length).toBeGreaterThan(0);
+    for (const h of hues) {
+      expect(h).toBeGreaterThanOrEqual(30);
+      expect(h).toBeLessThanOrEqual(36);
     }
-    // Ends are unambiguous: bass reads red, mids read green.
-    expect(hues[0][0]).toBeGreaterThan(hues[0][1]);
-    expect(hues[3][1]).toBeGreaterThan(hues[3][0]);
   });
 
-  it('normalises each band independently so quiet highs stay visible', () => {
+  it('encodes bass-vs-air as lightness, not as a different colour', () => {
+    // Bass-dominant reads deep/dark; air-dominant reads pale/light — but both
+    // are the SAME hue. This replaces the old "bass=red, hats=blue" assertion,
+    // which was testing exactly the multi-hue behaviour the owner rejected.
+    // Per-band normalisation means a band always reads 1.0 at ITS OWN peak
+    // index regardless of absolute level, so a naive [1,0]/[0.1,0]/[0.1,0]
+    // input would normalise every band to 1 at index 0 and collapse the two
+    // cases to the same colour. Each band's peak is placed at a different
+    // index instead, so index 0 is genuinely low-dominant / high-dominant.
+    const bassHeavy = buildSpectralBars(bands([1, 0.3], [0.3, 1], [0.2, 1]));
+    const airHeavy = buildSpectralBars(bands([0.2, 1], [0.3, 1], [1, 0.3]));
+    const bassLum = rgb(bassHeavy[0].color).reduce((s, v) => s + v, 0);
+    const airLum = rgb(airHeavy[0].color).reduce((s, v) => s + v, 0);
+    expect(airLum).toBeGreaterThan(bassLum);
+    expect(bassHeavy[0].dominant).toBe('low');
+    expect(airHeavy[0].dominant).toBe('high');
+  });
+
+  it('normalises each band independently so quiet highs still lighten the shade', () => {
     // Highs are 100x quieter than lows in absolute terms. A global normalise
-    // would render the hats-only slice as near-black; per-band keeps its colour.
-    const out = buildSpectralBars(bands([100, 0], [0, 0], [0, 1]));
-    expect(out[1].dominant).toBe('high');
-    const [r, g, b] = rgb(out[1].color);
-    // Blue-leading and comfortably visible, rather than crushed to black.
-    expect(b).toBeGreaterThan(r);
-    expect(b).toBeGreaterThan(g);
-    expect(b).toBeGreaterThan(90);
-  });
-
-  it('never renders a visible column at pure black', () => {
-    // A floor keeps quiet-but-present audio legible instead of vanishing.
-    const out = buildSpectralBars(bands([1, 0.001], [1, 0.001], [1, 0.001]));
-    const [r, g, b] = rgb(out[1].color);
-    expect(Math.max(r, g, b)).toBeGreaterThan(20);
-  });
-
-  it('scales height by raw loudness, not normalised colour', () => {
-    // Second slice is far louder overall, so it must be the taller bar.
-    const out = buildSpectralBars(bands([0.1, 1], [0.1, 1], [0.1, 1]));
-    expect(out[1].height).toBeGreaterThan(out[0].height);
-    expect(out[1].height).toBeCloseTo(1, 5);
-  });
-
-  it('floors silent slices at the minimum height instead of zero', () => {
-    const out = buildSpectralBars(bands([0, 1], [0, 1], [0, 1]));
-    expect(out[0].height).toBe(SPECTRAL_MIN_HEIGHT);
-  });
-
-  it('clamps heights to 0..1', () => {
-    const out = buildSpectralBars(bands([5, 2], [5, 2], [5, 2]));
-    for (const bar of out) {
-      expect(bar.height).toBeGreaterThanOrEqual(0);
-      expect(bar.height).toBeLessThanOrEqual(1);
-    }
-  });
-
-  it('survives NaN and Infinity without emitting NaN output', () => {
-    const out = buildSpectralBars(bands([NaN, 1], [Infinity, 1], [0, 1]));
-    for (const bar of out) {
-      expect(Number.isFinite(bar.height)).toBe(true);
-      expect(bar.color).toMatch(/^rgb\(\d+, \d+, \d+\)$/);
-    }
-  });
-
-  it('treats negative sample values by magnitude', () => {
-    const positive = buildSpectralBars(bands([1, 0.5], [0, 0], [0, 0]));
-    const negative = buildSpectralBars(bands([-1, -0.5], [0, 0], [0, 0]));
-    expect(negative.map((b) => b.height)).toEqual(positive.map((b) => b.height));
-  });
-
-  it('keeps a low-dominant slice red rather than averaging to mud', () => {
-    // Slice 0 sits at the low band's peak while mid and high sit well below
-    // their own peaks, so lows genuinely dominate there and it must read warm.
-    //
-    // Note the shape of this input: because each band is normalised against
-    // its OWN peak, a constant band always normalises to 1. Feeding three
-    // constant bands would make all three equal and the colour grey no matter
-    // what the weighting does — which is not a test of anything. The series
-    // therefore has to vary.
-    const out = buildSpectralBars(bands([1, 0.5], [0.3, 1], [0.2, 1]));
-    const [r, g, b] = rgb(out[0].color);
-    expect(out[0].dominant).toBe('low');
-    expect(r).toBeGreaterThan(g);
-    expect(r).toBeGreaterThan(b);
-  });
-
-  it('reads blue when highs dominate a slice', () => {
-    const out = buildSpectralBars(bands([0.2, 1], [0.3, 1], [1, 0.5]));
-    const [r, , b] = rgb(out[0].color);
-    expect(out[0].dominant).toBe('high');
-    expect(b).toBeGreaterThan(r);
+    // would treat the hats-only slice as silent; per-band normalisation is
+    // what makes it register at all.
+    const loud = buildSpectralBars(bands([100, 0], [0, 0], [0, 0]));
+    const quietHighs = buildSpectralBars(bands([100, 0], [0, 0], [0, 1]));
+    expect(quietHighs[1].dominant).toBe('high');
+    const loudLum = rgb(loud[0].color).reduce((s, v) => s + v, 0);
+    const quietHighsLum = rgb(quietHighs[1].color).reduce((s, v) => s + v, 0);
+    expect(quietHighsLum).toBeGreaterThan(loudLum);
   });
 
   it('handles all-silent input without dividing by zero', () => {

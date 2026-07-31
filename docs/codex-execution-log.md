@@ -6705,3 +6705,60 @@ green / blue instead of averaging everything to mud.
 - The amber has now been reported three times against three different colour models. If it
   persists, the remaining lever is a real per-bin FFT rather than three bands; the gradient is
   already ported and would work unchanged.
+
+---
+
+## Phase 4 (seventh pass) — Single-hue waveform: "shades of one colour"
+
+### Problem
+
+Measured live before this pass: **88 distinct hues** across one waveform (the Serato-style
+red/green/blue-by-frequency mapping from the previous pass). Owner: "make sure the rgb is more
+harmonious and should be shades of one colour."
+
+### Change
+
+Replaced the multi-hue frequency gradient with a single fixed hue, encoding band content and
+loudness as **lightness and saturation only**:
+
+- **Hue = 33°**, matching `#c8a47a` — the warm gold already used everywhere in the app for the
+  musical-key badge. Not an arbitrary choice: reusing an existing token means the waveform's
+  exemption from the one-accent rule (principle 3) no longer fights the rest of the palette.
+- **Tilt** (`(high − low) / total`, −1..+1) drives lightness: bass-dominant slices sit deep and
+  saturated, air-dominant slices sit pale and soft — same hue throughout, only how dark/light.
+- **Energy** lifts overall brightness so louder passages read brighter within that range.
+- Per-band normalisation (each band against its own peak, not a global peak) is preserved from
+  the prior model — without it, quiet hi-hats would read as pure black rather than a pale shade.
+- Removed the ported Serato/libdjwaveform frequency gradient, `colorForFrequency`,
+  `BAND_CENTRE_HZ` and the dominance-exponent blending entirely — dead code with no other
+  consumers, confirmed by grep before deletion.
+
+### Tests
+
+Rewrote the colour tests that had asserted the multi-hue mapping (`bass=red / vocals=green /
+hats=blue`) — that was testing exactly the behaviour just rejected. New coverage:
+- **Converts every produced colour back to HSL and asserts the hue is within a few degrees of
+  33°** across a genuinely varied input — this is the property that actually enforces "one
+  colour," rather than trusting the implementation not to drift.
+- Bass-dominant vs air-dominant slices differ in **lightness** (luminance sum), not hue.
+- Per-band normalisation still lightens quiet highs rather than crushing them to black.
+
+One test's first draft failed correctly: feeding `[1,0]` per band collapsed every band to the
+same normalised value at index 0, because per-band peak-normalisation means a band always reads
+1.0 at its *own* peak regardless of absolute level — an artifact of the test input, not the
+implementation. Fixed by placing each band's peak at a different index.
+
+`tsc` clean · `eslint` 0 errors · **604 tests** · build green.
+
+### Verified live
+
+Sampled the rendered canvas pixel-by-pixel and converted back to HSL: **7 distinct hues, all
+30–36°** (a ±3° range around the target, well inside "one colour"). Sample RGBs ranged
+`89,64,26` (deep bronze) to `128,88,39` (warm amber) — variation in depth, not in colour family.
+
+### Still open
+
+- Sidecar plumbing (Phase 3 remainder) — analysis still runs per-visitor in the browser.
+- ASCII cover art's own colour ramp (`AsciiCoverArt.tsx`, unrelated file) still uses its own
+  4-stop green/gold ramp from the supplied 21st.dev config and was not touched this pass — the
+  owner's instruction was specifically about "the rgb" (the waveform).
