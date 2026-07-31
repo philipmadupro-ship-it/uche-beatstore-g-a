@@ -31,6 +31,9 @@
 
 import { useEffect, useRef } from 'react';
 import { WAVEFORM_HUE, hslToRgb } from '@/lib/audio/spectral-peaks';
+import { createLogger } from '@/lib/log';
+
+const log = createLogger('player.ascii-cover-art');
 
 /** `charSet: "standard"` — dark to light. Glyph index tracks luminance. */
 const RAMP = ' .:-=+*#%@';
@@ -137,11 +140,19 @@ export function AsciiCoverArt({ src, level, bass = 0, playing, className }: Prop
   const levelRef = useRef(level);
   const bassRef = useRef(bass);
   const playingRef = useRef(playing);
+  /** Wakes the render loop when it has suspended itself. Set by the effect below. */
+  const wakeRef = useRef<(() => void) | null>(null);
+
   // Refs rather than deps so the render loop is created once; writing them
-  // during render would be unsafe under concurrent rendering.
-  useEffect(() => { levelRef.current = level; }, [level]);
-  useEffect(() => { bassRef.current = bass; }, [bass]);
-  useEffect(() => { playingRef.current = playing; }, [playing]);
+  // during render would be unsafe under concurrent rendering. One effect rather
+  // than three — they always fire together and each must also wake the loop,
+  // which now suspends whenever nothing is animating.
+  useEffect(() => {
+    levelRef.current = level;
+    bassRef.current = bass;
+    playingRef.current = playing;
+    wakeRef.current?.();
+  }, [level, bass, playing]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -149,7 +160,11 @@ export function AsciiCoverArt({ src, level, bass = 0, playing, className }: Prop
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Live, not a one-shot read: a viewer who turns reduced-motion ON while the
+    // preview is open should have the animation stop immediately, not at the
+    // next remount. `matches` was previously captured once at effect setup.
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let reduced = motionQuery.matches;
 
     // Offscreen buffer: exactly one pixel per ASCII cell.
     const buf = document.createElement('canvas');
@@ -159,6 +174,26 @@ export function AsciiCoverArt({ src, level, bass = 0, playing, className }: Prop
     let raf = 0;
     let t = 0;
     let cols = 0, rows = 0, dpr = 1;
+
+    /**
+     * Whether a frame is currently scheduled.
+     *
+     * The loop SUSPENDS when there is nothing moving to draw, instead of
+     * running the full pipeline 60 times a second regardless. That pipeline is
+     * not cheap — a `getImageData` readback, ~1k `fillText` calls, two gradient
+     * allocations and a few hundred `Math.random()` grain dots per frame — and
+     * it previously ran even while paused and even under reduced motion, where
+     * only the clock `t` was frozen. On a public storefront the drawer can sit
+     * open indefinitely, so that was pure battery drain, and the film grain
+     * kept animating under reduced motion in violation of the project's own
+     * hard constraint on it.
+     */
+    let running = false;
+    const ensureRunning = () => {
+      if (running) return;
+      running = true;
+      raf = requestAnimationFrame(draw);
+    };
 
     // The cover art is the SOURCE the grid samples. Previously this rendered
     // procedural smoke and ignored the image entirely, so the effect had no
@@ -176,7 +211,9 @@ export function AsciiCoverArt({ src, level, bass = 0, playing, className }: Prop
     // say so. Same-origin avoids the CORS requirement entirely.
     const img = new Image();
     let imgReady = false;
-    img.onload = () => { imgReady = true; };
+    // Each of these makes the canvas out of date, so each must wake a suspended
+    // loop — otherwise a cover that finishes loading while paused never appears.
+    img.onload = () => { imgReady = true; ensureRunning(); };
     img.onerror = () => { imgReady = false; };
     img.src = `/_next/image?url=${encodeURIComponent(src)}&w=640&q=75`;
 
@@ -206,19 +243,52 @@ export function AsciiCoverArt({ src, level, bass = 0, playing, className }: Prop
     // open. The observer now always exists, so as soon as the layout settles
     // to a real size it fires and `cols`/`rows` become valid.
     resize();
-    const ro = new ResizeObserver(() => resize());
+    const ro = new ResizeObserver(() => { resize(); ensureRunning(); });
     ro.observe(canvas);
 
-    // Wrapped in try/catch so a thrown exception can't silently kill the RAF
-    // chain — without this, one bad frame (e.g. a transient zero-size buffer)
-    // would leave the canvas permanently blank with no error surfaced anywhere.
+    const onMotionChange = () => { reduced = motionQuery.matches; ensureRunning(); };
+    motionQuery.addEventListener('change', onMotionChange);
+
+    // A thrown frame must not silently kill the RAF chain — but it must not be
+    // swallowed either. An earlier revision caught and discarded, which is
+    // exactly what made the original blank-canvas bug so expensive to find:
+    // a dead effect with no diagnostic anywhere. So: report the first failure,
+    // tolerate a few transient ones (a resize mid-frame can legitimately
+    // throw once), then stop rescheduling rather than burn 60fps forever on a
+    // loop that cannot succeed.
+    let consecutiveFailures = 0;
+    const MAX_CONSECUTIVE_FAILURES = 10;
+
     const draw = () => {
       try {
         drawInner();
-      } catch {
-        // Swallow and retry next frame rather than let the loop die.
+        consecutiveFailures = 0;
+      } catch (err) {
+        consecutiveFailures++;
+        if (consecutiveFailures === 1) {
+          log.warn('ascii cover art frame failed', {
+            error: err instanceof Error ? err.message : String(err),
+            cols, rows, src,
+          });
+        }
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          log.error('ascii cover art giving up after repeated frame failures', {
+            failures: consecutiveFailures, src,
+          });
+          running = false;
+          return; // stop rescheduling
+        }
       }
-      raf = requestAnimationFrame(draw);
+
+      // Keep going only while something is actually moving. Paused (or reduced
+      // motion) means the next frame would be identical to the one just drawn,
+      // so suspend; `ensureRunning` wakes us when state, size or the image
+      // changes.
+      if (playingRef.current && !reduced) {
+        raf = requestAnimationFrame(draw);
+      } else {
+        running = false;
+      }
     };
 
     const drawInner = () => {
@@ -327,8 +397,16 @@ export function AsciiCoverArt({ src, level, bass = 0, playing, className }: Prop
       }
     };
 
-    raf = requestAnimationFrame(draw);
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+    wakeRef.current = ensureRunning;
+    ensureRunning();
+
+    return () => {
+      cancelAnimationFrame(raf);
+      running = false;
+      wakeRef.current = null;
+      ro.disconnect();
+      motionQuery.removeEventListener('change', onMotionChange);
+    };
     // `src` IS a dependency: without it the loop keeps the previously loaded
     // image when the user changes track, so the ASCII would render the wrong
     // cover. level/bass/playing are deliberately excluded — they are read

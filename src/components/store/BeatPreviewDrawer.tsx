@@ -8,8 +8,7 @@ import {
 import { LicenseSelector } from '@/components/store/LicenseSelector';
 import { SpectralWaveform } from '@/components/player/SpectralWaveform';
 import { AsciiCoverArt } from '@/components/player/AsciiCoverArt';
-import { useSpectralPeaks } from '@/hooks/useSpectralPeaks';
-import { loudnessRange, levelAtProgress, bassAtProgress } from '@/lib/audio/spectral-peaks';
+import { useAudioReactivity } from '@/hooks/useAudioReactivity';
 import { Drawer } from '@/components/ui/Drawer';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -58,14 +57,11 @@ export function BeatPreviewDrawer({
 
   // Same analysis the waveform consumes (module-cached per track, so this is a
   // cache hit rather than a second decode). Sampled at the playhead so the
-  // cover art and the waveform react to the same instant in the track.
-  const { db, bands } = useSpectralPeaks(track.id, track.audio_url, 4096);
-  // Normalised against the track's own loudness rather than a fixed dB window —
-  // see `loudnessRange` for why the fixed window made the art look static.
-  // Memoised because it sorts; the per-frame lookup below is O(1).
-  const dbRange = useMemo(() => loudnessRange(db ?? []), [db]);
-  const audioLevel = db?.length && isCurrent ? levelAtProgress(db, progress, dbRange) : 0;
-  const audioBass = bands?.low?.length && isCurrent ? bassAtProgress(bands.low, progress) : 0;
+  // cover art and the waveform react to the same instant in the track. Gated on
+  // `isCurrent`: this drawer can show a track that isn't the one playing.
+  const {
+    level: audioLevel, bass: audioBass,
+  } = useAudioReactivity(track.id, track.audio_url, progress, isCurrent);
 
   const activeLicenses: LicenseTier[] = licenses.length > 0
     ? [...licenses].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))

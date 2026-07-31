@@ -6887,3 +6887,88 @@ figure is a floor on the improvement, not a full characterisation of the respons
 ### Still open
 
 - Sidecar plumbing (Phase 3 remainder) — analysis still runs per-visitor in the browser.
+
+---
+
+## Phase 4 (tenth pass) — Code-quality pass: the five improvements
+
+Asked "how would you improve the code", then "do all". Five items, all landed.
+
+### 1. Component/hook tests — the layer with zero coverage
+
+`components/player` had 0 tests across 13 files; `components/store` 0 across 29. The pure
+logic is well covered, but EVERY bug this project hit in the player was a **lifecycle** bug,
+which the extract-to-`lib/`-and-test rule structurally cannot catch.
+
+Added the repo's first component test setup (`jsdom`, `@testing-library/react`) and
+`AsciiCoverArt.test.tsx` — 12 tests pinning each historical bug: duplicate rAF scheduling,
+the CORS-blocked raw-R2 image load, the permanent resize bailout, the empty-deps stale cover,
+plus the new suspend/wake behaviour.
+
+**These were verified to actually fail against the broken code.** Reintroducing the duplicate
+`requestAnimationFrame` turned 6 of the 12 red, including the one that pins it directly. A
+regression test that has never been seen to fail is not evidence of anything.
+
+### 2. Stale-analysis cache (a live bug, flagged in the plan doc and never fixed)
+
+`useSpectralPeaks` cached on `trackId` alone in a module-level Map. Replacing a track's audio
+while keeping its id served the OLD file's bands/dB/pitch for the rest of the session — a
+waveform that disagrees with what you hear, uninvalidatable short of a reload. Now keyed on
+track id AND audio URL, with the in-flight guard keyed the same way.
+
+### 3. The empty catch (my own, from the previous pass)
+
+The previous pass wrapped the draw loop in `try { } catch { /* swallow */ }`. That is precisely
+what made the blank-canvas bug so expensive to find. Now: report the first failure through
+`createLogger`, tolerate up to 10 transient ones (a mid-frame resize can legitimately throw),
+then stop rescheduling rather than burn 60fps forever on a loop that cannot succeed.
+
+### 4. The loop ignored both `paused` and reduced-motion
+
+Only the clock `t` was frozen when paused — the full pipeline still ran 60x/sec: a
+`getImageData` readback, ~1k `fillText` calls, two gradient allocations, hundreds of
+`Math.random()` grain dots. On a public storefront the drawer can sit open indefinitely, so
+this was pure battery drain, and **the film grain kept animating under reduced motion**, in
+violation of the project's own hard constraint.
+
+The loop now suspends when nothing is moving and is woken by state, size or image changes.
+`prefers-reduced-motion` is also read live via a `change` listener instead of captured once at
+effect setup, so toggling the OS setting now takes effect immediately.
+
+### 5. `PlayerBar` (597 lines) split
+
+Extracted `useNextTrackPreload`, `useAmbientCoverColor`, `usePlayerKeyboardShortcuts`, and —
+the one that matters — `useAudioReactivity`, which both `PlayerBar` and `BeatPreviewDrawer`
+now share. The triplicated dB mapping fixed last pass is now single-sourced by construction
+rather than by discipline. 597 → 532 lines.
+
+### Bonus: a NUL byte in source, and a guard for it
+
+While writing the cache key, the NUL separator was written as a **raw 0x00 byte** into the .ts
+file rather than an escape. `tsc`, ESLint, tests and build were all green — a raw NUL inside a
+string literal is legal TypeScript — but `grep` classified the file as binary and silently
+reported no matches when searching it for its own symbols, and `git diff` would have degraded
+to "Binary files differ".
+
+Fixed, then added `src/lib/source-hygiene.test.ts` scanning tracked sources for literal C0/DEL
+characters. **Verified by injecting a NUL into an unrelated file** and confirming the guard
+reports it with exact file, line and codepoint. Same rationale as the Tailwind modifier guard:
+source text is the only place this class of defect is visible.
+
+### Verified live
+
+Store preview drawer renders correctly; no console errors. Component-specific probe of the
+ASCII canvas: **byte-identical across 400ms while paused** (loop genuinely suspended), and
+**changing while playing** — the intended behaviour on both sides.
+
+Two earlier attempts at this measurement were confounded and discarded rather than reported:
+a global rAF counter picked up every other animation on the page, and calling `audio.play()`
+directly never flips the React `playing` prop, so the loop correctly stayed suspended and the
+result looked like a bug. Only the third method isolates the component.
+
+`tsc` clean · `eslint` 0 errors · **630 tests** (was 604; +26) · build green.
+
+### Still open
+
+- Sidecar plumbing (Phase 3 remainder) — analysis still runs per-visitor in the browser.
+- `components/store` still has no component tests; only the player got them this pass.

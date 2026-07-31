@@ -13,15 +13,15 @@ import { SpectralWaveform } from './SpectralWaveform';
 import { AsciiCoverArt } from './AsciiCoverArt';
 import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
-import { useState, useRef, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useState, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import { extractCoverColor } from '@/lib/audio/cover-color';
-import { canFetchReadableAudio, cdnAudioSrc } from '@/lib/audio/cdn';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { getPlayerStreamStatus } from '@/lib/audio/player-status';
-import { useSpectralPeaks } from '@/hooks/useSpectralPeaks';
-import { loudnessRange, levelAtProgress, bassAtProgress } from '@/lib/audio/spectral-peaks';
+import { useAudioReactivity } from '@/hooks/useAudioReactivity';
+import { useNextTrackPreload } from '@/hooks/useNextTrackPreload';
+import { useAmbientCoverColor } from '@/hooks/useAmbientCoverColor';
+import { usePlayerKeyboardShortcuts } from '@/hooks/usePlayerKeyboardShortcuts';
 
 const subscribeToClientSnapshot = () => () => undefined;
 const getClientSnapshot = () => true;
@@ -48,32 +48,8 @@ export function PlayerBar() {
     shuffle, toggleShuffle, repeat, cycleRepeat,
   } = usePlayer();
 
-  // ── Preload the next track for near-gapless advance ──────────────
-  // The gap between tracks today is the next file's network fetch. We
-  // warm the browser HTTP cache (audio + peaks sidecar) for the next
-  // sequential track while the current one plays, so useWaveSurfer's
-  // load() resolves instantly on advance. Skipped in shuffle (next is
-  // unpredictable) and when paused (don't burn data in the background).
-  useEffect(() => {
-    if (!isPlaying || shuffle || !currentTrack || queue.length === 0) return;
-    const idx = queue.findIndex((t) => t.id === currentTrack.id);
-    const upcoming = queue[idx + 1] ?? (repeat === 'all' ? queue[0] : null);
-    if (!upcoming?.audio_url || upcoming.id === currentTrack.id) return;
-    const ctrl = new AbortController();
-    // Low-priority so it never competes with the current track's stream.
-    // Warm the SAME direct R2/CDN URL the engine will request (not the proxy).
-    // Only for direct http(s) previews — a proxy-bound r2:// master would pull
-    // the full ~80MB file through the origin, burning mobile data and choking
-    // the active stream's bandwidth.
-    const warmSrc = cdnAudioSrc(upcoming.audio_url);
-    if (/^https?:\/\//i.test(warmSrc) && canFetchReadableAudio(warmSrc)) {
-      fetch(warmSrc, { signal: ctrl.signal, priority: 'low' as RequestPriority }).catch(() => {});
-    }
-    if (upcoming.peaks_url) {
-      fetch(upcoming.peaks_url, { signal: ctrl.signal, cache: 'force-cache' }).catch(() => {});
-    }
-    return () => ctrl.abort();
-  }, [currentTrack, isPlaying, shuffle, repeat, queue]);
+  useNextTrackPreload({ currentTrack, queue, isPlaying, shuffle, repeat });
+
   // Mute is implemented by setting engine volume to 0 and stashing
   // the previous level so we can restore it on unmute. Without this,
   // clicking mute just flipped a local boolean — the audio kept
@@ -92,64 +68,23 @@ export function PlayerBar() {
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
   const mounted = useSyncExternalStore(subscribeToClientSnapshot, getClientSnapshot, getServerSnapshot);
 
-  // ── Ambient color from cover art ────────────────────────────────
-  // Extracted once per cover and used to tint the Now Playing overlay.
-  const [ambient, setAmbient] = useState<string | null>(null);
-  const coverUrl = currentTrack?.cover_url ?? null;
-  useEffect(() => {
-    let cancelled = false;
-    if (!coverUrl) return;
-    extractCoverColor(coverUrl).then((c) => { if (!cancelled) setAmbient(c); });
-    return () => { cancelled = true; };
-  }, [coverUrl]);
-  const displayAmbient = coverUrl ? ambient : null;
+  // Ambient colour from the cover art, used to tint the Now Playing overlay.
+  const displayAmbient = useAmbientCoverColor(currentTrack?.cover_url);
 
-  // ── Global keyboard shortcuts ───────────────────────────────────
-  // Space play/pause · ←/→ seek 5s · ↑/↓ volume · n/p next/prev · m mute.
-  // Ignored while the user is typing in a field or a modal input.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement | null;
-      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const dur = currentTrack?.duration_seconds || 0;
-      const canAttemptPlayback = Boolean(currentTrack?.audio_url);
-      switch (e.key) {
-        case ' ':
-          e.preventDefault();
-          if (canAttemptPlayback) togglePlay();
-          break;
-        case 'ArrowRight': if (dur > 0) { e.preventDefault(); seekTo(Math.min(1, progress + 5 / dur)); } break;
-        case 'ArrowLeft':  if (dur > 0) { e.preventDefault(); seekTo(Math.max(0, progress - 5 / dur)); } break;
-        case 'ArrowUp':   e.preventDefault(); setVolume(Math.min(1, volume + 0.1)); break;
-        case 'ArrowDown': e.preventDefault(); setVolume(Math.max(0, volume - 0.1)); break;
-        case 'n': case 'N': next(); break;
-        case 'p': case 'P': prev(); break;
-        case 'm': case 'M':
-          if (volume > 0) { prevVolumeRef.current = volume; setVolume(0); }
-          else setVolume(prevVolumeRef.current || 0.8);
-          break;
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [currentTrack, progress, volume, togglePlay, next, prev, seekTo, setVolume]);
+  usePlayerKeyboardShortcuts({
+    currentTrack, progress, volume, togglePlay, next, prev, seekTo, setVolume, prevVolumeRef,
+  });
 
   // Analysis for the reactive cover art. Module-cached per track, so when the
   // Now Playing card is open alongside the store drawer this is a cache hit
   // rather than a second decode. Called before the early return below because
-  // hooks must run unconditionally.
-  const { db: npDb, bands: npBands } = useSpectralPeaks(
+  // hooks must run unconditionally. Same hook as the store preview drawer, so
+  // both surfaces react identically by construction rather than by coincidence.
+  const { level: nowPlayingLevel, bass: nowPlayingBass } = useAudioReactivity(
     currentTrack?.id ?? null,
     currentTrack?.audio_url,
-    4096,
+    progress,
   );
-  // Shared with the store preview drawer so both surfaces react identically —
-  // and normalised against the track's own loudness rather than a fixed dB
-  // window, which compressed real material into ~7% of the range.
-  const npDbRange = useMemo(() => loudnessRange(npDb ?? []), [npDb]);
-  const nowPlayingLevel = npDb?.length ? levelAtProgress(npDb, progress, npDbRange) : 0;
-  const nowPlayingBass = npBands?.low?.length ? bassAtProgress(npBands.low, progress) : 0;
 
   if (!currentTrack) return null;
 

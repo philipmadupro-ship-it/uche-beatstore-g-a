@@ -68,12 +68,24 @@ interface AnalysisResult extends SpectralBands {
 }
 
 /**
- * Session cache. Analysis is deterministic per track, so a plain module-level
- * Map is correct and avoids re-decoding when the user reopens the preview.
+ * Session cache. Analysis is deterministic per track *and audio file*, so a
+ * plain module-level Map is correct and avoids re-decoding when the user
+ * reopens the preview.
+ *
+ * Keyed on track id AND audio URL, not id alone. A track's audio can be
+ * replaced (re-upload, new version) while keeping its id — with an id-only key
+ * this Map lives for the whole session and would serve the OLD file's bands,
+ * dB and pitch against the NEW audio forever: a waveform that doesn't match
+ * what you hear, with no way to invalidate short of a reload.
  */
 const cache = new Map<string, AnalysisResult>();
 /** Tracks we've already failed on, so we don't retry a doomed decode. */
 const failed = new Set<string>();
+
+/** Cache identity for one analysis: the track *and* the exact file analysed. */
+export function analysisKey(trackId: string, audioUrl: string): string {
+  return `${trackId}\u0000${audioUrl}`;
+}
 
 /**
  * Pick a URL whose bytes `fetch()` can actually READ.
@@ -153,7 +165,11 @@ export function useSpectralPeaks(
   const activeTrackRef = useRef<string | null>(null);
 
   useEffect(() => {
-    activeTrackRef.current = trackId;
+    // Identity is the track AND its audio file — see `analysisKey`. Tracked as
+    // the active key (not the bare track id) so that replacing a track's audio
+    // in place correctly invalidates an in-flight analysis of the old file.
+    const key = trackId && audioUrl ? analysisKey(trackId, audioUrl) : null;
+    activeTrackRef.current = key;
 
     /** Resample a cached analysis down to the requested slice count. */
     const applyResult = (r: AnalysisResult, slices: number) => {
@@ -166,20 +182,20 @@ export function useSpectralPeaks(
       setHz(stretchNullable(r.hz, slices));
     };
 
-    if (!trackId || !audioUrl) {
+    if (!trackId || !audioUrl || !key) {
       setBands(null); setDb(null); setHz(null);
       setStatus('idle');
       return;
     }
 
-    const cached = cache.get(trackId);
+    const cached = cache.get(key);
     if (cached) {
       applyResult(cached, sliceCount);
       setStatus('ready');
       return;
     }
 
-    if (failed.has(trackId)) {
+    if (failed.has(key)) {
       setBands(null); setDb(null); setHz(null);
       setStatus('unavailable');
       return;
@@ -259,15 +275,15 @@ export function useSpectralPeaks(
             CACHE_SLICES,
           ),
         };
-        cache.set(trackId, result);
+        cache.set(key, result);
 
-        if (activeTrackRef.current !== trackId) return;
+        if (activeTrackRef.current !== key) return;
         applyResult(result, sliceCount);
         setStatus('ready');
       } catch {
         if (cancelled) return;
-        failed.add(trackId);
-        if (activeTrackRef.current !== trackId) return;
+        failed.add(key);
+        if (activeTrackRef.current !== key) return;
         setBands(null); setDb(null); setHz(null);
         setStatus('unavailable');
       }
