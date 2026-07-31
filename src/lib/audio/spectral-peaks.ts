@@ -178,6 +178,112 @@ export function buildAmplitudeBars(peaks: number[]): SpectralBar[] {
   }));
 }
 
+/* ── Playhead level sampling ──────────────────────────────────────────────
+ *
+ * Everything reactive (ASCII cover art brightness, waveform bloom) is driven
+ * by "how loud is the track right now, 0..1". That mapping used to be written
+ * inline in three separate components as `(db[i] + 45) / 45` — a FIXED −45..0
+ * dBFS window.
+ *
+ * That window is far wider than real material occupies. A mastered track sits
+ * around −25..−15 dBFS, so the fixed mapping only ever produced levels in
+ * roughly 0.45..0.55 — about 7% of the available range. Measured live on a
+ * real preview: dB moved −24.9…−21.6, level moved 0.45…0.52, and after the
+ * consuming component's own `0.75 + level * 0.45` brightness lift the visible
+ * change was ~3%. The art *was* reacting; the maths compressed the reaction
+ * to below the threshold of visibility, which is why it read as static.
+ *
+ * Normalising against the track's OWN loudness range instead is the same
+ * principle `normaliseBand` already applies to the colour bands above, and for
+ * the same reason: an absolute scale collapses real material into a sliver of
+ * the output range.
+ */
+
+/** Robust loudness bounds for one track, in dBFS. */
+export interface LoudnessRange {
+  lo: number;
+  hi: number;
+}
+
+/**
+ * Narrowest range we'll normalise across. A track that really is near-constant
+ * in level would otherwise divide by ~0 and turn imperceptible noise into
+ * full-scale flicker — worse than under-reacting.
+ *
+ * Kept deliberately small (3 dB): short-term level variation within a mastered
+ * mix is only a few dB, and a larger floor would re-flatten exactly the
+ * material this normalisation exists to make visible.
+ */
+const MIN_DB_SPAN = 3;
+
+/** Index into a per-slice series at a 0..1 playhead position. */
+function indexAtProgress(length: number, progress: number): number {
+  if (length <= 0) return 0;
+  const p = clamp01(progress);
+  return Math.min(length - 1, Math.max(0, Math.round(p * (length - 1))));
+}
+
+/**
+ * The track's own loudness range, taken at the 5th/95th percentile rather than
+ * min/max so a silent lead-in or one clipped transient can't stretch the scale
+ * and flatten everything else back out.
+ *
+ * Computed once per track by the caller (it sorts, so it is not free) and
+ * passed into `levelAtProgress` per frame.
+ */
+export function loudnessRange(db: number[]): LoudnessRange {
+  const finite = db.filter((v) => Number.isFinite(v));
+  if (finite.length === 0) return { lo: -45, hi: 0 };
+
+  const sorted = [...finite].sort((a, b) => a - b);
+
+  // Trim from each end by COUNT, not by a percentile index. A percentile
+  // rounds to index 0 on short series (5% of 8 samples is 0.4 → 0), which
+  // silently trims nothing and lets a single digital-silence frame set the
+  // floor — the exact outlier this is meant to reject. Always drop at least
+  // one sample per end once there are enough to spare.
+  const trim = sorted.length >= 8 ? Math.max(1, Math.floor(sorted.length * 0.05)) : 0;
+  let lo = sorted[trim];
+  let hi = sorted[sorted.length - 1 - trim];
+
+  if (hi - lo < MIN_DB_SPAN) {
+    const mid = (hi + lo) / 2;
+    lo = mid - MIN_DB_SPAN / 2;
+    hi = mid + MIN_DB_SPAN / 2;
+  }
+  return { lo, hi };
+}
+
+/** Loudness at the playhead as 0..1, normalised against the track's own range. */
+export function levelAtProgress(db: number[], progress: number, range: LoudnessRange): number {
+  if (db.length === 0) return 0;
+  const v = db[indexAtProgress(db.length, progress)];
+  if (!Number.isFinite(v)) return 0;
+  const span = range.hi - range.lo;
+  if (span <= 0) return 0;
+  return clamp01((v - range.lo) / span);
+}
+
+/**
+ * Low-band energy at the playhead as 0..1, against the band's own peak.
+ *
+ * Loops to find the peak rather than `Math.max(...low)` — the spread form
+ * throws `RangeError: Maximum call stack size exceeded` once the series is
+ * long enough, and these are per-slice arrays whose length depends on track
+ * duration, so it is a real (if latent) crash on long audio.
+ */
+export function bassAtProgress(low: number[], progress: number): number {
+  if (low.length === 0) return 0;
+  let peak = 0;
+  for (const v of low) {
+    const abs = Math.abs(Number.isFinite(v) ? v : 0);
+    if (abs > peak) peak = abs;
+  }
+  if (peak <= 0) return 0;
+  const v = low[indexAtProgress(low.length, progress)];
+  return clamp01(Math.abs(Number.isFinite(v) ? v : 0) / peak);
+}
+
 /**
  * Downsample an arbitrary-length series to exactly `target` buckets using mean
  * energy per bucket. Peaks files ship at whatever resolution they were built

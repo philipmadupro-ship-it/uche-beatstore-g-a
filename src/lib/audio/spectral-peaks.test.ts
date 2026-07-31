@@ -3,6 +3,9 @@ import {
   buildSpectralBars,
   buildAmplitudeBars,
   resampleSeries,
+  loudnessRange,
+  levelAtProgress,
+  bassAtProgress,
   SPECTRAL_MIN_HEIGHT,
   type SpectralBands,
 } from './spectral-peaks';
@@ -120,6 +123,79 @@ describe('buildAmplitudeBars', () => {
   it('floors silence and survives an all-zero series', () => {
     const out = buildAmplitudeBars([0, 0]);
     expect(out.every((b) => b.height === SPECTRAL_MIN_HEIGHT)).toBe(true);
+  });
+});
+
+describe('playhead level sampling', () => {
+  /** A mastered-sounding track: everything inside a narrow, realistic dB band. */
+  const realistic = [-24.9, -24.6, -23.3, -24.2, -22.6, -21.6, -24.7, -23.9];
+
+  it('uses most of the 0..1 range on realistic material', () => {
+    // The regression this whole extraction exists for. The old inline mapping,
+    // `(db + 45) / 45`, put this exact series into 0.45..0.52 — 7% of the
+    // range — so the art it drove changed by ~3% and read as static.
+    const range = loudnessRange(realistic);
+    const levels = realistic.map((_, i) =>
+      levelAtProgress(realistic, i / (realistic.length - 1), range));
+    const spread = Math.max(...levels) - Math.min(...levels);
+    expect(spread).toBeGreaterThan(0.75);
+
+    const old = realistic.map((v) => Math.max(0, Math.min(1, (v + 45) / 45)));
+    expect(spread).toBeGreaterThan((Math.max(...old) - Math.min(...old)) * 5);
+  });
+
+  it('maps the quietest slice low and the loudest slice high', () => {
+    const range = loudnessRange(realistic);
+    expect(levelAtProgress([-24.9], 0, range)).toBeLessThan(0.2);
+    expect(levelAtProgress([-21.6], 0, range)).toBeGreaterThan(0.8);
+  });
+
+  it('ignores outliers when setting the range', () => {
+    // One digital-silence lead-in frame must not stretch the scale and squash
+    // the real material back into a sliver — that is why this uses
+    // percentiles rather than min/max.
+    const withSilence = [-120, ...realistic];
+    const a = loudnessRange(realistic);
+    const b = loudnessRange(withSilence);
+    expect(Math.abs(b.lo - a.lo)).toBeLessThan(6);
+  });
+
+  it('widens a near-constant track rather than dividing by ~zero', () => {
+    const flat = new Array(20).fill(-20);
+    const range = loudnessRange(flat);
+    expect(range.hi - range.lo).toBeGreaterThanOrEqual(3);
+    const lvl = levelAtProgress(flat, 0.5, range);
+    expect(Number.isFinite(lvl)).toBe(true);
+    expect(lvl).toBeGreaterThanOrEqual(0);
+    expect(lvl).toBeLessThanOrEqual(1);
+  });
+
+  it('survives empty and non-finite input', () => {
+    expect(levelAtProgress([], 0.5, loudnessRange([]))).toBe(0);
+    expect(loudnessRange([])).toEqual({ lo: -45, hi: 0 });
+    expect(levelAtProgress([NaN], 0, { lo: -45, hi: 0 })).toBe(0);
+    expect(bassAtProgress([], 0.5)).toBe(0);
+  });
+
+  it('clamps progress outside 0..1 to the ends instead of reading undefined', () => {
+    const range = loudnessRange(realistic);
+    expect(Number.isFinite(levelAtProgress(realistic, -5, range))).toBe(true);
+    expect(Number.isFinite(levelAtProgress(realistic, 99, range))).toBe(true);
+    expect(bassAtProgress([1, 2, 3], 99)).toBeCloseTo(1, 5);
+  });
+
+  it('normalises bass against its own peak', () => {
+    expect(bassAtProgress([0.5, 1], 1)).toBeCloseTo(1, 5);
+    expect(bassAtProgress([0.5, 1], 0)).toBeCloseTo(0.5, 5);
+    expect(bassAtProgress([0, 0], 0.5)).toBe(0);
+  });
+
+  it('finds the bass peak without spreading a long array onto the stack', () => {
+    // `Math.max(...arr)` — the form this replaced — throws RangeError here.
+    const long = new Array(200_000).fill(0.25);
+    long[123] = 1;
+    expect(() => bassAtProgress(long, 0.5)).not.toThrow();
+    expect(bassAtProgress(long, 0.5)).toBeCloseTo(0.25, 5);
   });
 });
 

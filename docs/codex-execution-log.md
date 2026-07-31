@@ -6823,3 +6823,67 @@ tinted gold, no longer blank) render correctly with no console errors.
 ### Still open
 
 - Sidecar plumbing (Phase 3 remainder) — analysis still runs per-visitor in the browser.
+
+---
+
+## Phase 4 (ninth pass) — Audio reactivity was mathematically invisible
+
+### Problem
+
+Asked to verify the last features actually work. They rendered correctly, but measuring the
+ASCII cover art's response to the audio showed it was **effectively static**: mean glyph
+brightness moved only **6.5%** across several seconds of playing music, holding constant for
+~6 s at a time.
+
+The data pipeline was fine — the readout pill (fed by the same `db[]` array at the playhead)
+updated ~4×/sec with genuine variation (−24.9 … −21.6 dB). The defect was the mapping.
+
+### Root cause
+
+Level was computed as `(db[i] + 45) / 45` — a **fixed −45…0 dBFS window**. Real mastered
+material occupies a few dB near the top of that window, so:
+
+| stage | range |
+|---|---|
+| track's actual dB | −24.9 … −21.6 (3.3 dB) |
+| level after fixed mapping | 0.45 … 0.52 (7% of 0..1) |
+| brightness after `0.75 + level × 0.45` | ~3% change |
+
+The art *was* reacting; the maths compressed the reaction below visibility. This is the same
+failure mode `normaliseBand` already guards against for the colour bands — an absolute scale
+collapses real material into a sliver of the output range.
+
+The identical expression was duplicated inline in **three** components (`BeatPreviewDrawer`,
+`PlayerBar`, `SpectralWaveform`), so the waveform's reactive bloom was equally flattened.
+Precisely the "logic inside React components can't be tested in isolation and gets silently
+reverted" case CLAUDE.md rule 4 warns about.
+
+### Change
+
+Extracted to pure, Vitest-covered functions in `spectral-peaks.ts` and wired all three sites:
+
+- `loudnessRange(db)` — the track's **own** loudness bounds, trimmed by *count* from each end.
+  A percentile index was tried first and was wrong: 5% of 8 samples rounds to index 0, so it
+  trimmed nothing and a single digital-silence frame still set the floor. The test for outlier
+  rejection caught this before it shipped.
+- `levelAtProgress(db, progress, range)` — O(1) per frame; the sort is memoised per track.
+- `bassAtProgress(low, progress)` — also replaces `Math.max(...series)`, which throws
+  `RangeError` on long series. A 200k-element regression test now covers that latent crash.
+
+`MIN_DB_SPAN` is 3 dB, not 6: short-term variation inside a mastered mix is only a few dB, and
+a larger floor would re-flatten the exact material this exists to reveal.
+
+### Verified live
+
+Same measurement, same content, after the fix: brightness spread **6.5% → 24%** (~3.7× more
+reactive). Confirmed on the Now Playing card's ASCII canvas while the track played.
+
+Measurement caveat, stated honestly: `getImageData` on a 348² canvas is expensive enough to
+throttle the sampling timer to ~1 s, so this method cannot resolve sub-second changes. The 24%
+figure is a floor on the improvement, not a full characterisation of the response curve.
+
+`tsc` clean · `eslint` 0 errors · **612 tests** (7 new) · build green.
+
+### Still open
+
+- Sidecar plumbing (Phase 3 remainder) — analysis still runs per-visitor in the browser.

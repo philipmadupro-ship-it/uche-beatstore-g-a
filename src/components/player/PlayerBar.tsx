@@ -13,7 +13,7 @@ import { SpectralWaveform } from './SpectralWaveform';
 import { AsciiCoverArt } from './AsciiCoverArt';
 import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
-import { useState, useRef, useEffect, useSyncExternalStore } from 'react';
+import { useState, useRef, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { extractCoverColor } from '@/lib/audio/cover-color';
@@ -21,6 +21,7 @@ import { canFetchReadableAudio, cdnAudioSrc } from '@/lib/audio/cdn';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { getPlayerStreamStatus } from '@/lib/audio/player-status';
 import { useSpectralPeaks } from '@/hooks/useSpectralPeaks';
+import { loudnessRange, levelAtProgress, bassAtProgress } from '@/lib/audio/spectral-peaks';
 
 const subscribeToClientSnapshot = () => () => undefined;
 const getClientSnapshot = () => true;
@@ -143,15 +144,12 @@ export function PlayerBar() {
     currentTrack?.audio_url,
     4096,
   );
-  const sampleAt = (series: number[] | null | undefined, norm = false): number => {
-    if (!series?.length) return 0;
-    const i = Math.min(series.length - 1, Math.max(0, Math.round(progress * (series.length - 1))));
-    if (!norm) return Math.max(0, Math.min(1, (series[i] + 45) / 45));
-    const peak = Math.max(...series);
-    return peak > 0 ? Math.max(0, Math.min(1, series[i] / peak)) : 0;
-  };
-  const nowPlayingLevel = sampleAt(npDb);
-  const nowPlayingBass = sampleAt(npBands?.low, true);
+  // Shared with the store preview drawer so both surfaces react identically —
+  // and normalised against the track's own loudness rather than a fixed dB
+  // window, which compressed real material into ~7% of the range.
+  const npDbRange = useMemo(() => loudnessRange(npDb ?? []), [npDb]);
+  const nowPlayingLevel = npDb?.length ? levelAtProgress(npDb, progress, npDbRange) : 0;
+  const nowPlayingBass = npBands?.low?.length ? bassAtProgress(npBands.low, progress) : 0;
 
   if (!currentTrack) return null;
 

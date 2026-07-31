@@ -25,7 +25,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSpectralPeaks } from '@/hooks/useSpectralPeaks';
 import { useVisualPeaks } from '@/hooks/useVisualPeaks';
-import { buildAmplitudeBars, buildSpectralBars, type SpectralBar } from '@/lib/audio/spectral-peaks';
+import {
+  buildAmplitudeBars, buildSpectralBars, loudnessRange, levelAtProgress, type SpectralBar,
+} from '@/lib/audio/spectral-peaks';
 import { formatReadout } from '@/lib/audio/pitch';
 import { keyboardSeekFraction } from '@/lib/audio/seek-accessibility';
 import { cn } from '@/lib/utils';
@@ -159,13 +161,16 @@ export function SpectralWaveform({
     const centreY = height / 2;
     const maxHalf = (height / 2) * 0.86;
 
-    /** Normalised 0..1 loudness at a given position, from the dB series. */
-    const levelAt = (p: number): number => {
-      if (!db || db.length === 0) return 0;
-      const i = Math.min(db.length - 1, Math.max(0, Math.round(p * (db.length - 1))));
-      // −45dB..0dB maps to 0..1; below that is effectively silence.
-      return clamp01((db[i] + 45) / 45);
-    };
+    /**
+     * Normalised 0..1 loudness at a given position, from the dB series.
+     *
+     * Against the track's own range, not a fixed −45..0 dB window: real
+     * material sits in a few dB near the top of that window, so the fixed
+     * mapping only ever produced ~0.45..0.55 and the bloom it drives barely
+     * moved. See `loudnessRange` for the measurement.
+     */
+    const range = loudnessRange(db ?? []);
+    const levelAt = (p: number): number => (db?.length ? levelAtProgress(db, p, range) : 0);
 
     let raf = 0;
 
