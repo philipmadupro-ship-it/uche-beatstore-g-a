@@ -34,10 +34,19 @@ import { cn } from '@/lib/utils';
  * Analysis resolution. Independent of render width: we analyse once at this
  * resolution and map columns onto it, so resizing never re-analyses.
  */
-const ANALYSIS_SLICES = 512;
+const ANALYSIS_SLICES = 4096;
 
 /** Column width in CSS pixels. 1 gives the dense reference look. */
 const COLUMN_WIDTH = 1;
+
+/**
+ * How many seconds of audio the scrolling window shows.
+ *
+ * The playhead stays centred and the waveform moves past it, so this sets the
+ * zoom. ~14s shows roughly 8 bars at trap tempo — enough to read the groove and
+ * see a transient arriving, without the columns becoming a blur.
+ */
+const DEFAULT_VISIBLE_SECONDS = 14;
 
 interface Props {
   trackId: string;
@@ -54,6 +63,8 @@ interface Props {
   durationSeconds: number;
   /** Panel height in CSS pixels. */
   height?: number;
+  /** Seconds of audio visible in the scrolling window. */
+  visibleSeconds?: number;
   className?: string;
 }
 
@@ -70,7 +81,7 @@ function fmtTime(seconds: number): string {
 
 export function SpectralWaveform({
   trackId, audioUrl, peaksUrl, progress, isPlaying, canSeek, onSeek, label,
-  durationSeconds, height = 132, className,
+  durationSeconds, height = 132, visibleSeconds = DEFAULT_VISIBLE_SECONDS, className,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -168,13 +179,30 @@ export function SpectralWaveform({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
 
-      const playedColumns = p * columns;
-      const headX = p * width;
+      // Playhead is FIXED at the centre and the waveform scrolls past it,
+      // showing only a window around the current position — the way a DAW
+      // transport reads. Previously the whole track was drawn statically with a
+      // travelling playhead, which is a progress bar, not a transport: at three
+      // minutes across 350px each column spanned ~0.5s, so nothing visibly
+      // moved and none of the detail was legible.
+      const headX = width / 2;
+      const halfWindow = visibleSeconds / 2;
+      const centreTime = p * durationSeconds;
+      // Seconds represented by one column, used to map x <-> time.
+      const secondsPerColumn = visibleSeconds / columns;
       // How far the reactive bloom reaches either side of the playhead.
       const bloomPx = width * 0.06;
 
       for (let x = 0; x < columns; x++) {
-        const bar = bars[Math.min(bars.length - 1, Math.floor((x / columns) * bars.length))];
+        const px = x * COLUMN_WIDTH;
+        // Time this column represents.
+        const t = centreTime - halfWindow + x * secondsPerColumn;
+        // Before the start or past the end there is nothing to draw — that is
+        // what keeps the view honest about where you are in the track.
+        if (t < 0 || t > durationSeconds) continue;
+
+        const frac = durationSeconds > 0 ? t / durationSeconds : 0;
+        const bar = bars[Math.min(bars.length - 1, Math.max(0, Math.floor(frac * bars.length)))];
 
         // Gamma curve: linear scaling makes a mastered beat look like a thin
         // thread, since most columns sit far below the peak. DAW displays lift
@@ -183,7 +211,6 @@ export function SpectralWaveform({
 
         // Reactive bloom — columns near the playhead swell with the current
         // loudness, so the waveform visibly pumps in time with the beat.
-        const px = x * COLUMN_WIDTH;
         const dist = Math.abs(px - headX);
         if (dist < bloomPx) {
           const falloff = 1 - dist / bloomPx;
@@ -191,10 +218,9 @@ export function SpectralWaveform({
         }
         half = Math.max(0.75, Math.min(maxHalf * 1.12, half));
 
-        // Unplayed audio is dimmed, not hidden. At 0.28 the spectral colour —
-        // the whole reason this waveform exists — was invisible across most of
-        // the lane, since most of a track is unplayed most of the time.
-        ctx.globalAlpha = px <= playedColumns ? 1 : 0.55;
+        // Everything left of the centre has been played. Unplayed audio is
+        // dimmed, not hidden, so the spectral colour still carries.
+        ctx.globalAlpha = t <= centreTime ? 1 : 0.55;
         ctx.fillStyle = bar.color;
         // Mirrored about the centre axis — the shape a DAW draws.
         ctx.fillRect(px, centreY - half, COLUMN_WIDTH, half * 2);
@@ -219,16 +245,21 @@ export function SpectralWaveform({
 
     raf = requestAnimationFrame(paint);
     return () => cancelAnimationFrame(raf);
-  }, [bars, db, width, height, prefersReducedMotion]);
+  }, [bars, db, width, height, prefersReducedMotion, durationSeconds, visibleSeconds]);
 
   // ── Interaction ─────────────────────────────────────────────────
+  // Seeking maps through the visible WINDOW, not the full width: with the
+  // playhead centred, clicking left of centre means "jump back this many
+  // seconds", not "jump to this fraction of the track".
   const seekFromClientX = useCallback((clientX: number) => {
     const el = wrapRef.current;
-    if (!el || !canSeek) return;
+    if (!el || !canSeek || durationSeconds <= 0) return;
     const r = el.getBoundingClientRect();
     if (r.width <= 0) return;
-    onSeek(clamp01((clientX - r.left) / r.width));
-  }, [canSeek, onSeek]);
+    const offsetFromCentre = (clientX - r.left) / r.width - 0.5;
+    const t = posRef.current * durationSeconds + offsetFromCentre * visibleSeconds;
+    onSeek(clamp01(t / durationSeconds));
+  }, [canSeek, onSeek, durationSeconds, visibleSeconds]);
 
   // Listeners on window so the drag survives the pointer leaving the lane,
   // which is how every real scrubber behaves.
@@ -311,8 +342,7 @@ export function SpectralWaveform({
         {/* Playhead — a thin full-height line, no glow. */}
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 w-px bg-white/80"
-          style={{ left: `${pos * 100}%` }}
+          className="pointer-events-none absolute inset-y-0 left-1/2 w-px bg-white/80"
         />
         <span
           aria-hidden
@@ -322,7 +352,7 @@ export function SpectralWaveform({
             showThumb ? 'opacity-100' : 'opacity-0',
             dragging ? 'h-3 w-3' : 'h-2 w-2',
           )}
-          style={{ left: `${pos * 100}%` }}
+          style={{ left: '50%' }}
         />
 
         {status === 'analyzing' && (

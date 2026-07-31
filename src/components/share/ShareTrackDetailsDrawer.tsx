@@ -45,7 +45,9 @@ interface ShareTrackDetailsDrawerProps {
   onPlay: (track: Track) => void;
   isPlaying: boolean;
   playingId: string | null;
-  currentTime: number;
+  /** Kept in the contract for callers; the waveform derives its own display
+   *  time from progress + duration. */
+  currentTime?: number;
   duration: number;
   progressPct: number;
   onSeek: (seconds: number) => void;
@@ -96,7 +98,6 @@ export function ShareTrackDetailsDrawer({
   onPlay,
   isPlaying,
   playingId,
-  currentTime,
   duration,
   progressPct,
   onSeek,
@@ -282,10 +283,9 @@ export function ShareTrackDetailsDrawer({
                 label={track.title}
                 durationSeconds={effectiveDuration}
               />
-              <div className="flex justify-between text-[10px] font-mono text-white/40 tabular-nums">
-                <span>{isActive ? fmt(currentTime) : '0:00'}</span>
-                <span>{fmt(effectiveDuration)}</span>
-              </div>
+              {/* No time row here — SpectralWaveform renders its own
+                  elapsed/remaining pair, and keeping this one stacked two rows
+                  showing the same elapsed value. */}
             </div>
           </div>
 

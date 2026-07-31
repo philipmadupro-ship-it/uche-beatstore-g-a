@@ -52,11 +52,6 @@ export function BeatPreviewDrawer({
   const similar = useMemo(() => getSimilarTracks(track, allTracks, 5), [track, allTracks]);
 
   const dur = track.duration_seconds ?? 0;
-  const fmt = (s: number) => {
-    if (!isFinite(s) || s < 0) return '0:00';
-    return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
-  };
-  const currentSec = isCurrent ? progress * dur : 0;
 
   const activeLicenses: LicenseTier[] = licenses.length > 0
     ? [...licenses].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -193,14 +188,10 @@ export function BeatPreviewDrawer({
               label={track.title}
               durationSeconds={dur}
             />
-            <div className="flex justify-between mt-1.5">
-              <span className="text-[9px] font-mono text-white/40 tabular-nums">
-                {isCurrent ? fmt(currentSec) : '0:00'}
-              </span>
-              <span className="text-[9px] font-mono text-white/40 tabular-nums">
-                {dur ? fmt(dur) : '—'}
-              </span>
-            </div>
+            {/* No time row here — SpectralWaveform renders its own
+                elapsed/remaining pair. Keeping this one produced two stacked
+                rows showing the same elapsed value with different right-hand
+                figures (remaining vs total). */}
           </div>
 
           {/* ── License selector — keep the buying decision adjacent to preview ── */}

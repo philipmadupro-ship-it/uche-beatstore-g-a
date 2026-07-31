@@ -234,7 +234,13 @@ export function useSpectralPeaks(
         // Cache at a generous fixed resolution, then resample down to whatever
         // the current lane needs — so a re-render at a different bar count
         // never re-decodes.
-        const CACHE_SLICES = 512;
+        // Resolution of the cached analysis. Raised from 512 once the waveform
+        // became a zoomed scrolling window: at 512, a 3-minute track gives one
+        // slice per ~0.36s, so a 14s window had ~39 slices stretched across
+        // ~350px and rendered as chunky blocks rather than a waveform. 4096
+        // gives ~22 slices/sec — roughly one per column at that zoom. Cost is
+        // an RMS pass per band (cheap); pitch stays at PITCH_SLICES.
+        const CACHE_SLICES = 4096;
         // Level and pitch come from the UNFILTERED signal — the readout should
         // report what you actually hear, not the energy of one band. Reuses the
         // buffer we already decoded, so this costs no extra network or decode.
