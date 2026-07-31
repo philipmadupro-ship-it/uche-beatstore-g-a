@@ -6365,3 +6365,72 @@ and per-column values — rather than trusting the screenshot.
 - The sidecar plumbing (Phase 3 remainder: `uploadBandsSidecar`, `tracks.bands_url` migration,
   8 write paths, backfill) is still open. The renderer works without it; the sidecar removes the
   per-visitor decode and the `/api/audio` round-trip.
+
+---
+
+## Phase 4 (second pass) — Audio-reactive animation
+
+### Owner request
+
+"Make it more like [a YouTube Short] and it should be audio reactive and follow the slider and
+time of the song." **The video could not be viewed** — YouTube gates fetching behind a consent
+redirect, and video frames aren't extractable regardless. Built from the written brief only;
+the visual reference remains unconfirmed.
+
+### Changes Made
+
+- **requestAnimationFrame render loop** replaces repaint-on-prop-change. The player reports
+  progress only a few times a second, so painting on that alone makes the waveform *step*. The
+  loop eases toward the reported position, so it moves continuously while staying locked to the
+  slider and clock. Large deltas (>2%) snap instead of easing — those are seeks, and gliding
+  after a drag would feel broken.
+- **Reactive bloom**: columns within ~6% of the playhead swell with the current loudness, with a
+  squared falloff, so the waveform visibly pumps in time with the track.
+- **Playhead glow** tinted by the currently dominant band and scaled by level — the clearest
+  signal that the visual is tracking *audio* rather than just the clock.
+- Both level and position are smoothed (0.2 / 0.25 lerp) so the motion breathes instead of
+  flickering at slice boundaries. All reactive motion is disabled under `prefers-reduced-motion`
+  — the level term is forced to 0, leaving the waveform static but fully legible.
+
+"Reactive" is driven by the **precomputed per-slice level and band mix**, not a live
+`AnalyserNode`. An analyser needs `createMediaElementSource`, which requires CORS on the audio
+(the wall that already forces the analysis proxy) *and* would route playback through Web Audio,
+endangering the synchronous tap-to-play path. Precomputed data carries the same information at
+no risk.
+
+### Problems Discovered
+
+- **`Cannot update ref during render`** (eslint `react-hooks/refs`): `posRef.current = pos` at
+  render time is unsafe under concurrent rendering, where a render may be discarded. Moved into
+  an effect.
+- **A hook-order crash that blanked the page.** React reported the previous render's hook list as
+  `useRef, useState x4, useRef` — which is exactly the *pre-rewrite* component's shape, against a
+  new list starting `useState` at position 6 (the `db` state added to `useSpectralPeaks`). The
+  new code was compiled but a stale module instance was still mounted; a plain reload did not
+  clear it. Fixed by stopping the dev server, clearing `.next/cache`, and restarting — after
+  which the page rendered and the drawer opened normally.
+- Method note: an initial grep for hook order used `use(Ref|State)\(` and **silently missed every
+  generic call** (`useState<Foo>(...)`), producing a wrong picture of the component. The corrected
+  pattern `use(Ref|State|...)[<(]` is what made the real order visible.
+
+### Tests Performed
+
+`npx tsc --noEmit` clean · `npx eslint .` 0 errors · `npm test` 610/610 · `npm run build` green.
+
+### NOT verified — stated rather than glossed
+
+The animation itself was **not** confirmed running. After the cache clear the store page rendered
+and the drawer opened once, but the preview browser then became unreliable — it spontaneously
+navigated to `/library`, and subsequently `/store` rendered only the player pill (body text 67
+chars) despite `/api/store` returning 5 tracks with HTTP 200 and no console or server errors. The
+frame-sampling check that would prove the canvas is animating could not be completed. The
+hook-order crash *is* confirmed fixed (console is clean where it previously errored on every
+render), but "the waveform visibly pulses with the music" rests on code inspection, not
+observation.
+
+### Remaining Concerns
+
+- Re-run the frame-sampling verification in a fresh browser session before trusting the reactive
+  behaviour.
+- Sidecar plumbing (Phase 3 remainder) still open.
+- Cover-art animation still pending from the owner.

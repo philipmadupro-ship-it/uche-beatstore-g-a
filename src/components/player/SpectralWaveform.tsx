@@ -105,7 +105,27 @@ export function SpectralWaveform({
 
   const prefersReducedMotion = useReducedMotion();
 
-  // ── Canvas paint ────────────────────────────────────────────────
+  // ── Audio-reactive canvas paint ─────────────────────────────────
+  //
+  // Driven by requestAnimationFrame rather than repainting on each `progress`
+  // prop change. The player reports progress only a few times a second, so
+  // painting on that alone makes the visual step rather than move. The loop
+  // interpolates between reports, so the waveform breathes with the track and
+  // stays locked to the slider and the clock.
+  //
+  // "Reactive" here means reacting to the real audio at the playhead — the
+  // precomputed per-slice level and band mix — not to a live AnalyserNode. A
+  // live analyser would need `createMediaElementSource`, which requires CORS on
+  // the audio (the wall that already forces the analysis proxy) and would route
+  // playback through Web Audio, endangering the synchronous tap-to-play path.
+  // Precomputed data is the same information without either risk.
+  const posRef = useRef(pos);
+  const smoothPosRef = useRef(pos);
+  const levelRef = useRef(0);
+  // Synced in an effect rather than during render: writing a ref mid-render is
+  // unsafe under concurrent rendering, where a render can be discarded.
+  useEffect(() => { posRef.current = pos; }, [pos]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || width <= 0 || bars.length === 0) return;
@@ -113,41 +133,93 @@ export function SpectralWaveform({
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.floor(width * dpr);
     canvas.height = Math.floor(height * dpr);
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, width, height);
 
     const columns = Math.max(1, Math.floor(width / COLUMN_WIDTH));
     const centreY = height / 2;
-    // Leave headroom so a full-scale peak doesn't touch the panel edge.
     const maxHalf = (height / 2) * 0.86;
-    const playedColumns = pos * columns;
 
-    for (let x = 0; x < columns; x++) {
-      // Map this column onto the analysis series.
-      const bar = bars[Math.min(bars.length - 1, Math.floor((x / columns) * bars.length))];
-      // Gamma curve on the amplitude. Linear scaling makes a mastered beat
-      // look like a thin thread down the middle, because most columns sit far
-      // below the peak; DAW displays lift the low end so the body of the track
-      // is visible. 0.62 was picked against real previews — full enough to read
-      // as a waveform, not so flat that dynamics disappear.
-      const half = Math.max(0.75, Math.pow(bar.height, 0.62) * maxHalf);
-      const played = x <= playedColumns;
+    /** Normalised 0..1 loudness at a given position, from the dB series. */
+    const levelAt = (p: number): number => {
+      if (!db || db.length === 0) return 0;
+      const i = Math.min(db.length - 1, Math.max(0, Math.round(p * (db.length - 1))));
+      // −45dB..0dB maps to 0..1; below that is effectively silence.
+      return clamp01((db[i] + 45) / 45);
+    };
 
-      // Unplayed audio is dimmed, not hidden. At 0.28 the spectral colour —
-      // the entire reason this waveform exists — was invisible across most of
-      // the lane, since most of a track is unplayed most of the time. 0.55
-      // keeps the progress distinction readable while the colour still carries.
-      ctx.globalAlpha = played ? 1 : 0.55;
-      ctx.fillStyle = bar.color;
-      // Mirrored about the centre axis — the shape a DAW draws.
-      ctx.fillRect(x * COLUMN_WIDTH, centreY - half, COLUMN_WIDTH, half * 2);
-    }
+    let raf = 0;
 
-    ctx.globalAlpha = 1;
-  }, [bars, width, height, pos]);
+    const paint = () => {
+      // Ease toward the reported position instead of snapping to it.
+      const target = posRef.current;
+      const delta = target - smoothPosRef.current;
+      // Large jumps are seeks, not playback — follow those immediately or the
+      // waveform would visibly glide after the user drags the slider.
+      smoothPosRef.current = Math.abs(delta) > 0.02 ? target : smoothPosRef.current + delta * 0.25;
+      const p = smoothPosRef.current;
+
+      // Smooth the level too, so the bloom pulses with the music rather than
+      // flickering on every slice boundary.
+      const targetLevel = levelAt(p);
+      levelRef.current += (targetLevel - levelRef.current) * 0.2;
+      const level = prefersReducedMotion ? 0 : levelRef.current;
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+
+      const playedColumns = p * columns;
+      const headX = p * width;
+      // How far the reactive bloom reaches either side of the playhead.
+      const bloomPx = width * 0.06;
+
+      for (let x = 0; x < columns; x++) {
+        const bar = bars[Math.min(bars.length - 1, Math.floor((x / columns) * bars.length))];
+
+        // Gamma curve: linear scaling makes a mastered beat look like a thin
+        // thread, since most columns sit far below the peak. DAW displays lift
+        // the low end so the body of the track is visible.
+        let half = Math.pow(bar.height, 0.62) * maxHalf;
+
+        // Reactive bloom — columns near the playhead swell with the current
+        // loudness, so the waveform visibly pumps in time with the beat.
+        const px = x * COLUMN_WIDTH;
+        const dist = Math.abs(px - headX);
+        if (dist < bloomPx) {
+          const falloff = 1 - dist / bloomPx;
+          half *= 1 + level * 0.55 * falloff * falloff;
+        }
+        half = Math.max(0.75, Math.min(maxHalf * 1.12, half));
+
+        // Unplayed audio is dimmed, not hidden. At 0.28 the spectral colour —
+        // the whole reason this waveform exists — was invisible across most of
+        // the lane, since most of a track is unplayed most of the time.
+        ctx.globalAlpha = px <= playedColumns ? 1 : 0.55;
+        ctx.fillStyle = bar.color;
+        // Mirrored about the centre axis — the shape a DAW draws.
+        ctx.fillRect(px, centreY - half, COLUMN_WIDTH, half * 2);
+      }
+
+      // Glow behind the playhead, tinted by whichever band currently dominates
+      // and scaled by loudness — the clearest read that the visual is tracking
+      // the audio and not just the clock.
+      if (level > 0.02) {
+        const headBar = bars[Math.min(bars.length - 1, Math.floor(p * bars.length))];
+        const g = ctx.createRadialGradient(headX, centreY, 0, headX, centreY, bloomPx * 1.6);
+        g.addColorStop(0, headBar.color);
+        g.addColorStop(1, 'transparent');
+        ctx.globalAlpha = 0.16 * level;
+        ctx.fillStyle = g;
+        ctx.fillRect(headX - bloomPx * 1.6, 0, bloomPx * 3.2, height);
+      }
+
+      ctx.globalAlpha = 1;
+      raf = requestAnimationFrame(paint);
+    };
+
+    raf = requestAnimationFrame(paint);
+    return () => cancelAnimationFrame(raf);
+  }, [bars, db, width, height, prefersReducedMotion]);
 
   // ── Interaction ─────────────────────────────────────────────────
   const seekFromClientX = useCallback((clientX: number) => {
