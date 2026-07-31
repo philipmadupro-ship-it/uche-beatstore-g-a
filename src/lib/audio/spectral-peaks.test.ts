@@ -47,17 +47,25 @@ describe('buildSpectralBars', () => {
     expect(hb).toBeGreaterThan(hr); expect(hb).toBeGreaterThan(hg);   // hats -> blue
   });
 
-  it('renders full-spectrum content as the brightest, least-saturated column', () => {
-    // All three bands at once sums to a bright warm bone in this additive
-    // model — the clearest signal that colour reflects content rather than
-    // merely which band dominates. Deliberately NOT pure white: the primaries
-    // are tinted so the waveform sits in the app's warm palette.
+  it('renders full-spectrum content brightest and least saturated', () => {
+    // The invariant that holds for ANY palette choice: a slice containing all
+    // three bands is both the brightest column and the least saturated one,
+    // because the primaries sum. This is deliberately tint-agnostic — earlier
+    // versions pinned an exact hue and had to be rewritten every time the
+    // primaries were retuned, which made the test track the implementation
+    // instead of the behaviour.
     const out = buildSpectralBars(bands([1, 1, 0], [1, 0, 0], [1, 0, 0]));
-    const [r, g, b] = rgb(out[0].color);
-    const [br] = rgb(out[1].color);
-    expect(Math.min(r, g, b)).toBeGreaterThan(180);        // bright
-    expect(r).toBeGreaterThan(b);                           // and warm
-    expect(r).toBeGreaterThan(br);                          // brighter than bass-only
+    const [fr, fg, fb] = rgb(out[0].color);   // all three bands
+    const [br, bg, bb] = rgb(out[1].color);   // lows only
+
+    const brightness = (r: number, g: number, b: number) => (r + g + b) / 3;
+    const saturation = (r: number, g: number, b: number) => {
+      const mx = Math.max(r, g, b);
+      return mx === 0 ? 0 : (mx - Math.min(r, g, b)) / mx;
+    };
+
+    expect(brightness(fr, fg, fb)).toBeGreaterThan(brightness(br, bg, bb));
+    expect(saturation(fr, fg, fb)).toBeLessThan(saturation(br, bg, bb));
   });
 
   it('normalises each band independently so quiet highs stay visible', () => {

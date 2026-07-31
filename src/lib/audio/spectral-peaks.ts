@@ -48,23 +48,29 @@ const COLOUR_GAMMA = 0.55;
 const MIN_CHANNEL = 46;
 
 /**
- * Tinted band primaries, summed additively.
+ * Band primaries — near-pure RGB, as Serato actually renders.
  *
- *   BAND_LOW  ember red      — kick, 808, sub
- *   BAND_MID  warm sage      — vocals, snare, melody
- *   BAND_HIGH cool pale blue — hats, cymbals, air
+ *   BAND_LOW  red    — kick, 808, sub
+ *   BAND_MID  green  — vocals, snare, melody
+ *   BAND_HIGH blue   — hats, cymbals, air
  *
- * Chosen so all three at full strength sum to roughly (252, 222, 199) — the
- * warm bone already used across the app — instead of clinical white. Each
- * primary is still unambiguously red / green / blue in isolation, so the
- * Serato reading survives.
+ * An earlier revision tinted these toward the app's warm palette (ember /
+ * sage / pale blue) so a full-spectrum sum landed on warm bone. That was the
+ * wrong call: it made bass-heavy material read amber, which is not what Serato
+ * or the reference players look like, and the owner rejected it. The waveform
+ * is an instrument readout, not decoration — it gets to keep its own vivid
+ * language, and `docs/design-direction.md` already exempts it from the
+ * one-accent rule for exactly this reason.
+ *
+ * Slight desaturation off the absolute primaries only, so the three mix into
+ * clean secondaries (bass+mid = orange, mid+high = cyan) instead of clipping.
  */
-const BAND_LOW = [196, 74, 58] as const;
-const BAND_MID = [150, 168, 96] as const;
-const BAND_HIGH = [120, 168, 214] as const;
+const BAND_LOW = [255, 42, 58] as const;
+const BAND_MID = [46, 230, 104] as const;
+const BAND_HIGH = [58, 138, 255] as const;
 
-/** Divisor that lands a full-spectrum sum on warm bone rather than clipping. */
-const SUM_SCALE = 1.85;
+/** Divisor so a full-spectrum sum reaches white without clipping to mush. */
+const SUM_SCALE = 1.55;
 
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;

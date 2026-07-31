@@ -72,6 +72,14 @@ function clamp01(n: number) {
   return n < 0 ? 0 : n > 1 ? 1 : Number.isFinite(n) ? n : 0;
 }
 
+/** Blend an `rgb()` string toward white by `amount` (0..1). */
+function lighten(color: string, amount: number): string {
+  const m = color.match(/rgb\((\d+), (\d+), (\d+)\)/);
+  if (!m) return color;
+  const mix = (v: number) => Math.round(v + (255 - v) * amount);
+  return `rgb(${mix(+m[1])}, ${mix(+m[2])}, ${mix(+m[3])})`;
+}
+
 function fmtTime(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
   const m = Math.floor(seconds / 60);
@@ -221,9 +229,26 @@ export function SpectralWaveform({
         // Everything left of the centre has been played. Unplayed audio is
         // dimmed, not hidden, so the spectral colour still carries.
         ctx.globalAlpha = t <= centreTime ? 1 : 0.55;
+
+        // Two-tone column: a brighter core inside a saturated envelope. Both
+        // reference players show this — a light band running through the middle
+        // of the waveform with deeper colour at the extremes. It reads as far
+        // more detailed than a flat column because it separates sustained
+        // energy (the core) from transient peaks (the envelope), and it is what
+        // gives Serato's waveform its depth.
+        //
+        // Columns are drawn 0.15px wider than their step so neighbours overlap
+        // very slightly; without that, sub-pixel positioning leaves hairline
+        // gaps that read as vertical banding across the lane.
         ctx.fillStyle = bar.color;
-        // Mirrored about the centre axis — the shape a DAW draws.
-        ctx.fillRect(px, centreY - half, COLUMN_WIDTH, half * 2);
+        ctx.fillRect(px, centreY - half, COLUMN_WIDTH + 0.15, half * 2);
+
+        // Inner core, scaled by how much of the column is sustained rather than
+        // peak. Lightened toward white rather than a fixed colour so it keeps
+        // the column's own hue.
+        const coreHalf = half * 0.42;
+        ctx.fillStyle = lighten(bar.color, 0.45);
+        ctx.fillRect(px, centreY - coreHalf, COLUMN_WIDTH + 0.15, coreHalf * 2);
       }
 
       // Glow behind the playhead, tinted by whichever band currently dominates

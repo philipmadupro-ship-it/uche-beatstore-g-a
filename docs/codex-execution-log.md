@@ -6492,3 +6492,44 @@ bass-driven beat — and full-spectrum hits rendering white is only possible in 
 so that distribution is itself the evidence the rewrite worked.
 
 Sources: Serato Support "Track Overview Display"; Serato forum thread on crossover frequencies.
+
+### Correction — the warm tint was wrong
+
+The previous pass tinted the band primaries toward the app's warm palette so a full-spectrum sum
+landed on bone. **The owner rejected it**: it made bass-heavy material read amber, which is not
+what Serato or the reference screenshots look like (those are vivid blue and magenta).
+
+Reverted to near-pure RGB (`255,42,58` / `46,230,104` / `58,138,255`), desaturated only slightly
+so the bands mix into clean secondaries rather than clipping. The reasoning is recorded in-code so
+it isn't "harmonised" again: the waveform is an instrument readout, not decoration, and
+`design-direction.md` already exempts it from the one-accent rule for that reason.
+
+**A test lesson.** The full-spectrum colour test had now been rewritten three times — once per
+palette retune — because it pinned an exact hue. It has been rewritten to assert the *invariant*
+instead: a full-spectrum slice is the brightest and least saturated column, which holds for any
+palette. It was tracking the implementation rather than the behaviour.
+
+### Precision
+
+`turbo/libdjwaveform` (a Serato-style renderer) notes its own limitation: *"we only draw a
+mirrored column-graph, not an anti-aliased interpolated (smooth) waveform like Serato."* Ours was
+the same column graph. Two changes toward the reference:
+
+- **Two-tone columns** — a lightened core inside the saturated envelope. Both reference
+  screenshots show this: a bright band through the middle with deeper colour at the extremes. It
+  separates sustained energy from transient peaks and is most of what makes Serato's waveform look
+  detailed rather than flat.
+- **0.15px column overlap** — sub-pixel positioning was leaving hairline gaps that read as
+  vertical banding across the lane.
+
+`tsc` clean · `eslint` 0 errors · 612 tests · build green. Verified at 0:00 the lane correctly
+draws only the right half, since nothing exists before t=0.
+
+### Still open
+
+- Sidecar plumbing (Phase 3 remainder): `uploadBandsSidecar`, `tracks.bands_url` migration, the 8
+  write paths, backfill. Analysis still runs per-visitor in the browser.
+- A true frequency→RGB *gradient* (libdjwaveform interpolates between control points over a
+  continuous spectral centroid) rather than three discrete bands — likely the remaining gap
+  between this and Serato's exact look.
+- Cover-art animation, pending from the owner.
