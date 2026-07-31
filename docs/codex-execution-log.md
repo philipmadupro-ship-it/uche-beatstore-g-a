@@ -6434,3 +6434,61 @@ observation.
   behaviour.
 - Sidecar plumbing (Phase 3 remainder) still open.
 - Cover-art animation still pending from the owner.
+
+---
+
+## Phase 4 (third pass) — Serato colour model, researched
+
+### Research
+
+Owner asked for Serato/Rekordbox-style colouring where hue corresponds to content
+(bass/voice/highs). Serato's published model:
+
+| Colour | Band | Content |
+|---|---|---|
+| Red | below ~200 Hz | kick, 808, sub |
+| Green | ~200 Hz – 1.5 kHz | **vocals**, snare, melody |
+| Blue | above ~1.5 kHz | hats, cymbals, air |
+
+### The architectural finding
+
+Serato uses **additive RGB — each channel's intensity IS that band's amplitude**. Mine blended
+three fixed palette hues by *relative share*. That distinction explains every colour complaint
+so far: a share-blend can only ever express "which band dominates", and since each band is
+normalised against its own peak, most slices have all three at a similar relative level, so
+nearly every column landed on the midpoint of the palette — a flat grey-green. **Blending fixed
+hues was the wrong primitive; the amplitudes are the colour.** Full-spectrum content is
+unrepresentable in a share-blend, but in an additive model it simply reads bright.
+
+### Changes Made
+
+- **Rewrote the colour model to additive.** A perceptual gamma (0.55) lifts quiet band content,
+  and a floor stops any visible column crushing to black.
+- **Crossovers moved to Serato's** 200 Hz / 1.5 kHz (from 250 Hz / 4 kHz), in both the client hook
+  and the server module — they must stay in lockstep or the two produce different colours. The mid
+  band was also **widened** (bandpass Q 0.7 → 0.5, centred 550 Hz): a narrow peak at 1.4 kHz
+  sampled one frequency and missed most of the voice, which is precisely the band the owner wanted
+  represented.
+- **Tinted the primaries** on the owner's follow-up ("more coherent with the rest"): ember red,
+  warm sage, cool pale blue, scaled so a full-spectrum sum lands on the app's warm bone
+  (~252,222,199) rather than clinical white. Each primary is still unambiguously R/G/B in
+  isolation, so the Serato reading survives while the waveform belongs to the same product as
+  everything around it.
+
+### Tests
+
+Two tests failed on the model change and were **rewritten to assert the new meaning rather than
+loosened**: full-spectrum is now "brightest and warm, brighter than bass-only" (not "near-white",
+which the tinted model deliberately isn't), and the quiet-highs case asserts blue-leading and
+visible rather than a hardcoded channel value.
+
+`tsc` clean · `eslint` 0 errors · **612 tests** · build green.
+
+### Verified live
+
+Pixel-sampled 350 columns of a trap instrumental: **238 red-leading** (kick/808), **50 blue**
+(hats), **37 white** (full-spectrum transients), **25 green** (mids). Musically correct for a
+bass-driven beat — and full-spectrum hits rendering white is only possible in the additive model,
+so that distribution is itself the evidence the rewrite worked.
+
+Sources: Serato Support "Track Overview Display"; Serato forum thread on crossover frequencies.

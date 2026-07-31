@@ -37,34 +37,34 @@ export interface SpectralBar {
 export const SPECTRAL_MIN_HEIGHT = 0.06;
 
 /**
- * How hard the dominant band pulls the colour. 1 = plain average (mud);
- * higher = more separation. 2.6 was picked against real trap/drill previews:
- * enough that an 808 reads clearly amber and hats read pale, without going so
- * far that every bar snaps to a pure primary and the mix detail is lost.
+ * Channel gamma. Below 1 it lifts quieter band content so the colour stays
+ * readable instead of collapsing to black on anything but the loudest hits —
+ * the same reason DAW and DJ waveform displays are perceptually scaled rather
+ * than linear.
  */
-const CONTRAST_EXPONENT = 2.6;
+const COLOUR_GAMMA = 0.55;
+
+/** Darkest a visible column is allowed to get, so colour never vanishes. */
+const MIN_CHANNEL = 46;
 
 /**
- * Additive spectral mapping — low=red, mid=green, high=blue, the convention a
- * DAW spectral view uses.
+ * Tinted band primaries, summed additively.
  *
- * Saturation is deliberate. An earlier revision desaturated these toward the
- * warm UI palette (lows to amber, highs to near-white) and the result read as
- * flat grey-green: the colour stopped carrying information, which is the whole
- * point of colouring a waveform by frequency. This is the one place in the app
- * where colour is data rather than decoration, so it is exempt from the
- * one-accent rule in docs/design-direction.md — and it needs to be legible as
- * colour to earn that exemption.
+ *   BAND_LOW  ember red      — kick, 808, sub
+ *   BAND_MID  warm sage      — vocals, snare, melody
+ *   BAND_HIGH cool pale blue — hats, cymbals, air
  *
- * Lows lean crimson rather than pure red and highs lean toward a cool blue, so
- * a bass-heavy beat reads magenta/red and an airy one reads blue — matching the
- * reference player the owner supplied.
+ * Chosen so all three at full strength sum to roughly (252, 222, 199) — the
+ * warm bone already used across the app — instead of clinical white. Each
+ * primary is still unambiguously red / green / blue in isolation, so the
+ * Serato reading survives.
  */
-const BAND_RGB = {
-  low: [236, 62, 104] as const,
-  mid: [104, 214, 126] as const,
-  high: [88, 156, 252] as const,
-};
+const BAND_LOW = [196, 74, 58] as const;
+const BAND_MID = [150, 168, 96] as const;
+const BAND_HIGH = [120, 168, 214] as const;
+
+/** Divisor that lands a full-spectrum sum on warm bone rather than clipping. */
+const SUM_SCALE = 1.85;
 
 function clamp01(n: number): number {
   if (!Number.isFinite(n)) return 0;
@@ -93,8 +93,8 @@ function normaliseBand(values: number[]): number[] {
 /**
  * Build coloured bars from per-slice band energy.
  *
- * Height comes from combined loudness; colour comes from the *mix* of bands,
- * so a slice that's all sub-bass reads amber and a slice of hats reads pale.
+ * Height comes from combined loudness; colour is additive RGB per band, so a
+ * full-spectrum hit reads white, an 808 reads red and hats read blue.
  */
 export function buildSpectralBars(bands: SpectralBands): SpectralBar[] {
   const len = Math.min(bands.low.length, bands.mid.length, bands.high.length);
@@ -117,31 +117,43 @@ export function buildSpectralBars(bands: SpectralBands): SpectralBar[] {
     const l = low[i];
     const m = mid[i];
     const h = high[i];
-    const sum = l + m + h;
 
-    // Weighted blend of the three band colours by their relative share, with
-    // the weights pushed through a power curve first.
+    // ADDITIVE, Serato-style: R = lows (kick/808), G = mids (vocals/snare),
+    // B = highs (hats/air). The colour tells you what is IN the sound, not
+    // merely which band happens to lead. This replaced a weighted blend of
+    // fixed hues by relative share, which could only ever express dominance —
+    // and since per-band normalisation leaves most slices with all three bands
+    // at a similar relative level, nearly every column landed on the palette's
+    // midpoint as a flat grey-green. The amplitudes *are* the colour.
     //
-    // Without the curve the result is mud: per-band normalisation leaves most
-    // slices with all three bands at a similar relative level, so a plain
-    // weighted average lands on the midpoint of the three colours (a flat
-    // grey-green) for nearly every bar. Squaring the weights makes the
-    // dominant band pull much harder, which is what gives a DAW's spectral
-    // view its readable colour separation.
-    let r: number, g: number, b: number;
-    if (sum <= 0) {
-      [r, g, b] = BAND_RGB.high;
-    } else {
-      const cl = (l / sum) ** CONTRAST_EXPONENT;
-      const cm = (m / sum) ** CONTRAST_EXPONENT;
-      const ch = (h / sum) ** CONTRAST_EXPONENT;
-      const cSum = cl + cm + ch;
-      const wl = cSum > 0 ? cl / cSum : 1 / 3;
-      const wm = cSum > 0 ? cm / cSum : 1 / 3;
-      const wh = cSum > 0 ? ch / cSum : 1 / 3;
-      r = Math.round(BAND_RGB.low[0] * wl + BAND_RGB.mid[0] * wm + BAND_RGB.high[0] * wh);
-      g = Math.round(BAND_RGB.low[1] * wl + BAND_RGB.mid[1] * wm + BAND_RGB.high[1] * wh);
-      b = Math.round(BAND_RGB.low[2] * wl + BAND_RGB.mid[2] * wm + BAND_RGB.high[2] * wh);
+    // The primaries are TINTED rather than pure R/G/B, and summed additively.
+    // Pure channels are the textbook Serato mapping but read as a neon test
+    // pattern against this app's warm near-black surfaces. Tinting keeps the
+    // semantics — bass still reads red, vocals green, hats blue — while the
+    // full-spectrum sum lands on the palette's warm bone rather than clinical
+    // white, so the waveform belongs to the same product as everything around
+    // it. Summing (not blending by share) is what preserves the additive
+    // behaviour: more content in a band means more of that channel.
+    const gamma = COLOUR_GAMMA;
+    const wl = Math.pow(clamp01(l), gamma);
+    const wm = Math.pow(clamp01(m), gamma);
+    const wh = Math.pow(clamp01(h), gamma);
+
+    let r = Math.round((BAND_LOW[0] * wl + BAND_MID[0] * wm + BAND_HIGH[0] * wh) / SUM_SCALE);
+    let g = Math.round((BAND_LOW[1] * wl + BAND_MID[1] * wm + BAND_HIGH[1] * wh) / SUM_SCALE);
+    let b = Math.round((BAND_LOW[2] * wl + BAND_MID[2] * wm + BAND_HIGH[2] * wh) / SUM_SCALE);
+    r = Math.min(255, r); g = Math.min(255, g); b = Math.min(255, b);
+
+    // Floor the total brightness so quiet-but-present audio stays visible
+    // rather than fading to near-black and losing its colour entirely.
+    const brightest = Math.max(r, g, b);
+    if (brightest > 0 && brightest < MIN_CHANNEL) {
+      const lift = MIN_CHANNEL / brightest;
+      r = Math.min(255, Math.round(r * lift));
+      g = Math.min(255, Math.round(g * lift));
+      b = Math.min(255, Math.round(b * lift));
+    } else if (brightest === 0) {
+      r = g = b = MIN_CHANNEL;
     }
 
     const height = peakTotal > 0

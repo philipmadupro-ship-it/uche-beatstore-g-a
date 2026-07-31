@@ -46,9 +46,9 @@ function stretchNullable(values: (number | null)[], target: number): (number | n
 }
 
 /** Crossovers roughly matching how a DAW splits a mix for metering. */
-const LOW_CUTOFF_HZ = 250;
-const MID_CENTER_HZ = 1400;
-const HIGH_CUTOFF_HZ = 4000;
+const LOW_CUTOFF_HZ = 200;
+const MID_CENTER_HZ = 550;
+const HIGH_CUTOFF_HZ = 1500;
 
 type Status = 'idle' | 'analyzing' | 'ready' | 'unavailable';
 
@@ -222,7 +222,7 @@ export function useSpectralPeaks(
           renderBand(decoded, (f) => {
             f.type = 'bandpass';
             f.frequency.value = MID_CENTER_HZ;
-            f.Q.value = 0.7;
+            f.Q.value = 0.5;
           }),
           renderBand(decoded, (f) => {
             f.type = 'highpass';

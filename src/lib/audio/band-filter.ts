@@ -38,11 +38,17 @@ export type FilterKind = 'lowpass' | 'bandpass' | 'highpass';
  * and highpass were created without setting `.Q`, so they used the spec
  * default of 1; the bandpass explicitly set 0.7.
  */
-export const LOW_CUTOFF_HZ = 250;
-export const MID_CENTER_HZ = 1400;
-export const HIGH_CUTOFF_HZ = 4000;
+/**
+ * Serato's crossovers: red below ~200Hz, green ~200Hz-1.5kHz, blue above.
+ * Green is where vocals and snares live, which is why the mid band is a WIDE
+ * bandpass (low Q) centred in that span rather than a narrow peak — a narrow
+ * peak samples one frequency and misses most of the voice.
+ */
+export const LOW_CUTOFF_HZ = 200;
+export const MID_CENTER_HZ = 550;
+export const HIGH_CUTOFF_HZ = 1500;
 export const DEFAULT_Q = 1;
-export const BANDPASS_Q = 0.7;
+export const BANDPASS_Q = 0.5;
 
 /**
  * RBJ Audio EQ Cookbook coefficients, normalised by a0.

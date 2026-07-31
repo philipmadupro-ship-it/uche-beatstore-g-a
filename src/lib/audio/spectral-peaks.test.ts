@@ -36,13 +36,28 @@ describe('buildSpectralBars', () => {
     expect(out.map((b) => b.dominant)).toEqual(['low', 'mid', 'high']);
   });
 
-  it('leans warm when lows dominate and pale when highs dominate', () => {
-    const out = buildSpectralBars(bands([1, 0], [0, 0], [0, 1]));
-    const [lowR, , lowB] = rgb(out[0].color);
-    const [highR, , highB] = rgb(out[1].color);
-    // Low-dominant slice: red channel leads blue. High-dominant: the reverse.
-    expect(lowR).toBeGreaterThan(lowB);
-    expect(highB).toBeGreaterThan(highR);
+  it('maps bands to RGB channels the way Serato does', () => {
+    // R = lows (kick/808), G = mids (vocals/snare), B = highs (hats/air).
+    const out = buildSpectralBars(bands([1, 0, 0], [0, 1, 0], [0, 0, 1]));
+    const [lr, lg, lb] = rgb(out[0].color);
+    const [mr, mg, mb] = rgb(out[1].color);
+    const [hr, hg, hb] = rgb(out[2].color);
+    expect(lr).toBeGreaterThan(lg); expect(lr).toBeGreaterThan(lb);   // bass -> red
+    expect(mg).toBeGreaterThan(mr); expect(mg).toBeGreaterThan(mb);   // vocals -> green
+    expect(hb).toBeGreaterThan(hr); expect(hb).toBeGreaterThan(hg);   // hats -> blue
+  });
+
+  it('renders full-spectrum content as the brightest, least-saturated column', () => {
+    // All three bands at once sums to a bright warm bone in this additive
+    // model — the clearest signal that colour reflects content rather than
+    // merely which band dominates. Deliberately NOT pure white: the primaries
+    // are tinted so the waveform sits in the app's warm palette.
+    const out = buildSpectralBars(bands([1, 1, 0], [1, 0, 0], [1, 0, 0]));
+    const [r, g, b] = rgb(out[0].color);
+    const [br] = rgb(out[1].color);
+    expect(Math.min(r, g, b)).toBeGreaterThan(180);        // bright
+    expect(r).toBeGreaterThan(b);                           // and warm
+    expect(r).toBeGreaterThan(br);                          // brighter than bass-only
   });
 
   it('normalises each band independently so quiet highs stay visible', () => {
@@ -50,8 +65,18 @@ describe('buildSpectralBars', () => {
     // would render the hats-only slice as near-black; per-band keeps its colour.
     const out = buildSpectralBars(bands([100, 0], [0, 0], [0, 1]));
     expect(out[1].dominant).toBe('high');
-    const [, , b] = rgb(out[1].color);
-    expect(b).toBeGreaterThan(200);
+    const [r, g, b] = rgb(out[1].color);
+    // Blue-leading and comfortably visible, rather than crushed to black.
+    expect(b).toBeGreaterThan(r);
+    expect(b).toBeGreaterThan(g);
+    expect(b).toBeGreaterThan(90);
+  });
+
+  it('never renders a visible column at pure black', () => {
+    // A floor keeps quiet-but-present audio legible instead of vanishing.
+    const out = buildSpectralBars(bands([1, 0.001], [1, 0.001], [1, 0.001]));
+    const [r, g, b] = rgb(out[1].color);
+    expect(Math.max(r, g, b)).toBeGreaterThan(20);
   });
 
   it('scales height by raw loudness, not normalised colour', () => {
@@ -88,7 +113,7 @@ describe('buildSpectralBars', () => {
     expect(negative.map((b) => b.height)).toEqual(positive.map((b) => b.height));
   });
 
-  it('separates colour rather than averaging to mud when bands are close', () => {
+  it('keeps a low-dominant slice red rather than averaging to mud', () => {
     // Slice 0 sits at the low band's peak while mid and high sit well below
     // their own peaks, so lows genuinely dominate there and it must read warm.
     //
@@ -104,8 +129,7 @@ describe('buildSpectralBars', () => {
     expect(r).toBeGreaterThan(b);
   });
 
-  it('reads cool when highs dominate a slice', () => {
-    // The mirror case, so the mapping is pinned at both ends.
+  it('reads blue when highs dominate a slice', () => {
     const out = buildSpectralBars(bands([0.2, 1], [0.3, 1], [1, 0.5]));
     const [r, , b] = rgb(out[0].color);
     expect(out[0].dominant).toBe('high');
