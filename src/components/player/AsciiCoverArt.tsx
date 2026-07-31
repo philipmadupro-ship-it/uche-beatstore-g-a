@@ -30,6 +30,7 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { WAVEFORM_HUE, hslToRgb } from '@/lib/audio/spectral-peaks';
 
 /** `charSet: "standard"` — dark to light. Glyph index tracks luminance. */
 const RAMP = ' .:-=+*#%@';
@@ -64,14 +65,42 @@ const CFG = {
   shaderIntensity: 0.47,
   shaderWarp: 0.37,
   shaderGrain: 0.12,
-  // shaderSource.colors — the smoke ramp, dark green to pale yellow.
-  colors: [
-    [0x03, 0x12, 0x0e],
-    [0x0e, 0x7c, 0x5a],
-    [0x7c, 0xe5, 0x77],
-    [0xf4, 0xff, 0xc7],
-  ] as const,
 };
+
+/**
+ * Smoke ramp, unified with the waveform's palette (the same `WAVEFORM_HUE` —
+ * 33°/`#c8a47a` gold used for the musical-key badge app-wide) rather than the
+ * 21st.dev config's own dark-green to pale-yellow stops.
+ *
+ * NOT four pre-baked RGB stops lerped together. An earlier version did that
+ * and it silently broke monochromicity: linearly interpolating RGB between
+ * two colours that individually sit on the same hue does not itself stay on
+ * that hue for intermediate values — RGB space isn't hue-linear. That
+ * produced a real spread of ~30 distinct hues on screen despite every anchor
+ * stop being correct in isolation. Computing HSL directly for every input `t`
+ * and converting once, the same way the waveform does in `spectral-peaks.ts`,
+ * is what actually guarantees a single hue throughout.
+ */
+/**
+ * `lift` (audio-level brightness boost) is folded into LIGHTNESS here, before
+ * the HSL→RGB conversion, rather than applied as a post-hoc `r * lift` /
+ * `g * lift` / `b * lift` scale on the caller side. That earlier approach
+ * clamped each channel independently at 255 — whichever channel hit the
+ * ceiling first got capped while the others kept scaling, distorting the
+ * R:G:B ratio and therefore the hue itself. Measured live: glyph pixels at
+ * high lightness/lift drifted as far as hue 153° despite `WAVEFORM_HUE` being
+ * a constant 33°. Applying the boost to lightness instead means `hslToRgb`
+ * still receives one fixed hue and clamps in HSL space (uniformly), so the
+ * output hue can't drift regardless of how bright the moment is.
+ */
+function rampColor(t: number, lift = 1): [number, number, number] {
+  const clamped = t < 0 ? 0 : t > 1 ? 1 : t;
+  const lightness = Math.min(1, (0.06 + clamped * 0.86) * lift);
+  // Saturation peaks in the low-mid range (matches the shape of the original
+  // 4-stop ramp) and tapers toward both the darkest and palest ends.
+  const saturation = 0.62 - Math.abs(clamped - 0.35) * 0.35;
+  return hslToRgb(WAVEFORM_HUE / 360, Math.max(0.15, saturation), lightness);
+}
 
 /* ── Value noise + fbm. Deterministic, seeded, no dependency. ────────── */
 
@@ -101,20 +130,6 @@ function fbm(x: number, y: number, seed: number, octaves = 4): number {
     amp *= 0.5;
   }
   return sum;
-}
-
-/** Sample the 4-stop smoke ramp. */
-function rampColor(t: number): [number, number, number] {
-  const c = CFG.colors;
-  const clamped = t < 0 ? 0 : t > 1 ? 1 : t;
-  const scaled = clamped * (c.length - 1);
-  const i = Math.min(c.length - 2, Math.floor(scaled));
-  const f = scaled - i;
-  return [
-    c[i][0] + (c[i + 1][0] - c[i][0]) * f,
-    c[i][1] + (c[i + 1][1] - c[i][1]) * f,
-    c[i][2] + (c[i + 1][2] - c[i][2]) * f,
-  ];
 }
 
 export function AsciiCoverArt({ src, level, bass = 0, playing, className }: Props) {
@@ -150,11 +165,20 @@ export function AsciiCoverArt({ src, level, bass = 0, playing, className }: Prop
     // relationship to the artwork — the owner's "it does not interact with the
     // cover art". The smoke now only *displaces* where each cell samples from,
     // so the artwork stays recognisable while the audio moves it.
+    //
+    // Loaded through Next's own image optimizer (the same same-origin path
+    // `next/image`/`CoverImage` already uses) rather than the raw R2 URL. An
+    // earlier version fetched the R2 URL directly with `crossOrigin:
+    // 'anonymous'`; the public bucket sends no CORS headers (documented
+    // limitation — the same one that forces the audio analysis proxy), so
+    // that load silently failed every time. `imgReady` never became true,
+    // nothing was ever drawn, and there was no error surfaced anywhere to
+    // say so. Same-origin avoids the CORS requirement entirely.
     const img = new Image();
-    img.crossOrigin = 'anonymous';
     let imgReady = false;
     img.onload = () => { imgReady = true; };
-    img.src = src;
+    img.onerror = () => { imgReady = false; };
+    img.src = `/_next/image?url=${encodeURIComponent(src)}&w=640&q=75`;
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -169,11 +193,42 @@ export function AsciiCoverArt({ src, level, bass = 0, playing, className }: Prop
       return true;
     };
 
-    if (!resize()) return;
+    // Set up the ResizeObserver FIRST and never bail out permanently.
+    //
+    // This used to be `if (!resize()) return;` — a one-shot call that gave up
+    // for good if the canvas measured zero size on the very first effect run.
+    // That is a real, common case here: the parent is a Drawer that animates
+    // open (`animate-in fade-in duration-300`), so on mount the hero can still
+    // be mid-transition and report a zero-size rect. Bailing out at that point
+    // meant the ResizeObserver was never created, so nothing ever re-measured
+    // it and the canvas stayed blank for the rest of its life — confirmed live:
+    // every sampled pixel read alpha 0 no matter how long the preview had been
+    // open. The observer now always exists, so as soon as the layout settles
+    // to a real size it fires and `cols`/`rows` become valid.
+    resize();
     const ro = new ResizeObserver(() => resize());
     ro.observe(canvas);
 
+    // Wrapped in try/catch so a thrown exception can't silently kill the RAF
+    // chain — without this, one bad frame (e.g. a transient zero-size buffer)
+    // would leave the canvas permanently blank with no error surfaced anywhere.
     const draw = () => {
+      try {
+        drawInner();
+      } catch {
+        // Swallow and retry next frame rather than let the loop die.
+      }
+      raf = requestAnimationFrame(draw);
+    };
+
+    const drawInner = () => {
+      // Not yet measured to a real size — try again next frame rather than
+      // drawing into a zero-size buffer (or, worse, silently doing nothing
+      // forever the way the old one-shot bailout did).
+      if (cols <= 0 || rows <= 0) {
+        return;
+      }
+
       const lvl = levelRef.current;
       const bs = bassRef.current;
 
@@ -231,9 +286,9 @@ export function AsciiCoverArt({ src, level, bass = 0, playing, className }: Prop
 
           // Colour from the smoke ramp so glyphs keep the palette; brightness
           // lifts with level so the whole piece pulses with the track.
-          const [r, g, b] = rampColor(lum);
           const lift = 0.75 + lvl * 0.45;
-          ctx.fillStyle = `rgb(${Math.min(255, r * lift) | 0}, ${Math.min(255, g * lift) | 0}, ${Math.min(255, b * lift) | 0})`;
+          const [r, g, b] = rampColor(lum, lift);
+          ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
           ctx.globalAlpha = 0.35 + lum * 0.65;
           ctx.fillText(ch, cx * cell, cy * cell);
         }
@@ -270,8 +325,6 @@ export function AsciiCoverArt({ src, level, bass = 0, playing, className }: Prop
       for (let i = 0; i < grains; i++) {
         ctx.fillRect(Math.random() * w, Math.random() * h, 1, 1);
       }
-
-      raf = requestAnimationFrame(draw);
     };
 
     raf = requestAnimationFrame(draw);

@@ -55,11 +55,11 @@ export const SPECTRAL_MIN_HEIGHT = 0.06;
  * needs its own vivid instrument-readout language) doesn't fight the rest of
  * the palette — it's drawn from a colour the product already uses.
  */
-const BASE_HUE = 33;
+export const WAVEFORM_HUE = 33;
 const BASE_SAT = 0.5;
 
 /** HSL (0..1 each) to an `[r,g,b]` triple, 0..255. */
-function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+export function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   if (s <= 0) {
     const v = Math.round(l * 255);
     return [v, v, v];
@@ -146,7 +146,7 @@ export function buildSpectralBars(bands: SpectralBands): SpectralBar[] {
     const lightness = clamp01(0.22 + energy * 0.32 + tilt * 0.22);
     const saturation = clamp01(BASE_SAT + energy * 0.22 - Math.abs(tilt) * 0.08);
 
-    const [r, g, b] = hslToRgb(BASE_HUE / 360, saturation, lightness);
+    const [r, g, b] = hslToRgb(WAVEFORM_HUE / 360, saturation, lightness);
 
     const height = peakTotal > 0
       ? Math.max(SPECTRAL_MIN_HEIGHT, clamp01(rawTotals[i] / peakTotal))

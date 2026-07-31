@@ -6762,3 +6762,64 @@ Sampled the rendered canvas pixel-by-pixel and converted back to HSL: **7 distin
 - ASCII cover art's own colour ramp (`AsciiCoverArt.tsx`, unrelated file) still uses its own
   4-stop green/gold ramp from the supplied 21st.dev config and was not touched this pass — the
   owner's instruction was specifically about "the rgb" (the waveform).
+
+---
+
+## Phase 4 (eighth pass) — Unify ASCII cover art palette; fix a real blank-canvas bug
+
+### Problem
+
+Owner: "unify and make sure that the preview is working" — two asks. (1) `AsciiCoverArt`'s smoke
+ramp still used its own 4-stop green→gold stops from the supplied config, not the single-hue
+33° palette just adopted by the waveform. (2) Verify the preview (drawer waveform + ASCII cover
+art) actually renders live, not just that the automated gate passes.
+
+Live investigation on (2) found the ASCII canvas rendering fully transparent — every sampled
+pixel `alpha=0` — despite the cover image loading successfully and `resize()` reporting valid
+non-zero `cols`/`rows`. No console error ever appeared.
+
+### Root cause (blank canvas)
+
+A leftover `raf = requestAnimationFrame(draw);` at the tail of `drawInner` was scheduling a
+second frame on top of the outer `draw()` wrapper's own scheduling (added earlier while adding a
+try/catch to surface silent exceptions). Every successful frame therefore queued two more, so the
+number of pending `requestAnimationFrame` callbacks doubled every frame — an exponential runaway
+that starves the main thread within a couple dozen frames, well before Chrome's DevTools would
+even flag it as a loop. The canvas never got to paint a frame before the thread was saturated.
+Fixed by removing the duplicate scheduling call; the outer wrapper is now the only place `raf` is
+reassigned.
+
+### Change (unify)
+
+Imported `WAVEFORM_HUE` and `hslToRgb` from `spectral-peaks.ts` (both now exported for this
+reason) and rewrote `rampColor()` to compute HSL directly at hue 33° per call, same approach as
+the waveform, instead of lerping pre-baked RGB stops (the RGB-interpolation hue-drift bug from
+the previous pass, reapplied here and caught before it shipped).
+
+A second, separate hue-fidelity bug was found and fixed in the same pass: the glyph "lift"
+(audio-level brightness boost) was applied as `r * lift` / `g * lift` / `b * lift`, each clamped
+to 255 independently. Whichever channel hit the ceiling first got capped while the others kept
+scaling, distorting the R:G:B ratio — and therefore the hue — at high lightness/lift. Measured
+live: glyph hues drifted as far as 153° despite `WAVEFORM_HUE` being a fixed 33°. Fixed by folding
+`lift` into HSL lightness *before* calling `hslToRgb`, so hue can't drift regardless of brightness
+— `rampColor(t, lift)` now returns the final colour directly, no post-hoc channel scaling.
+
+### Verified live
+
+Reused the earlier verification methodology — sample rendered canvas pixels, convert back to HSL,
+don't trust the implementation. After the two fixes: canvas alpha is non-zero across the drawn
+frame (confirmed via `getImageData`), and the fix eliminated the specific clipping-driven drift
+(153° cases gone). Residual hue spread at glyph anti-aliased edges (compositing the gold glyph
+fill against the `#03120E` near-black background necessarily blends toward the background's own
+faint hue at partial-coverage pixels) remains, but this is inherent to canvas text antialiasing
+over a differently-hued backdrop, not a defect in the colour computation itself — the pure
+`rampColor` function is hue-invariant by construction (`hslToRgb` with one fixed hue). Confirmed
+in the browser: opened `/store`, previewed "yeat synth" (has cover art), played it, and watched
+both the waveform (gold, playhead-locked) and the ASCII cover art (visibly displacing with bass,
+tinted gold, no longer blank) render correctly with no console errors.
+
+`tsc` clean · `eslint` 0 errors · **604 tests** · build green.
+
+### Still open
+
+- Sidecar plumbing (Phase 3 remainder) — analysis still runs per-visitor in the browser.
