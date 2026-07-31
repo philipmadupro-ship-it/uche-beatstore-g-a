@@ -48,12 +48,6 @@ const COLUMN_WIDTH = 1;
  */
 const DEFAULT_VISIBLE_SECONDS = 14;
 
-/** Transient shake: how sharply level must rise, how loud it must already be. */
-const SHAKE_RISE = 0.055;
-const SHAKE_LEVEL = 0.45;
-/** Per-frame decay — fast enough that the jolt is over before the next beat. */
-const SHAKE_DECAY = 0.86;
-
 interface Props {
   trackId: string;
   audioUrl?: string | null;
@@ -147,8 +141,6 @@ export function SpectralWaveform({
   const posRef = useRef(pos);
   const smoothPosRef = useRef(pos);
   const levelRef = useRef(0);
-  const prevLevelRef = useRef(0);
-  const shakeRef = useRef(0);
   // Synced in an effect rather than during render: writing a ref mid-render is
   // unsafe under concurrent rendering, where a render can be discarded.
   useEffect(() => { posRef.current = pos; }, [pos]);
@@ -212,23 +204,6 @@ export function SpectralWaveform({
       const secondsPerColumn = visibleSeconds / columns;
       // How far the reactive bloom reaches either side of the playhead.
       const bloomPx = width * 0.14;
-      // Transient shake. Deliberately NOT a constant breathing motion — that
-      // read as restless. The lane sits still and only jolts when a genuinely
-      // loud hit lands, so the movement means something. `prevLevel` gives us
-      // the attack (rise in level); a shake fires only when the audio both
-      // JUMPS and is LOUD, which is what a kick or snare looks like and what a
-      // sustained pad does not.
-      const rise = level - prevLevelRef.current;
-      prevLevelRef.current = level;
-      if (!prefersReducedMotion && rise > SHAKE_RISE && level > SHAKE_LEVEL) {
-        shakeRef.current = Math.min(1, shakeRef.current + rise * 2.2);
-      }
-      shakeRef.current *= SHAKE_DECAY;
-      const shake = shakeRef.current;
-      // A couple of pixels at most — felt rather than seen.
-      const shakeY = shake > 0.01 ? (Math.random() - 0.5) * shake * 3.2 : 0;
-      // Offset the whole lane vertically for the jolt.
-      ctx.setTransform(dpr, 0, 0, dpr, 0, shakeY * dpr);
 
       for (let x = 0; x < columns; x++) {
         const px = x * COLUMN_WIDTH;
@@ -296,7 +271,7 @@ export function SpectralWaveform({
         const g = ctx.createRadialGradient(headX, centreY, 0, headX, centreY, bloomPx * 1.9);
         g.addColorStop(0, headBar.color);
         g.addColorStop(1, 'transparent');
-        ctx.globalAlpha = 0.10 * level + 0.30 * shake;
+        ctx.globalAlpha = 0.22 * level;
         ctx.fillStyle = g;
         ctx.fillRect(headX - bloomPx * 1.6, 0, bloomPx * 3.2, height);
       }

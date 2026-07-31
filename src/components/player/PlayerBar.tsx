@@ -450,6 +450,7 @@ export function PlayerBar() {
                     {/* Same audio-reactive ASCII treatment as the store preview,
                         so the card and the drawer are one visual language. */}
                     <AsciiCoverArt
+                      src={currentTrack.cover_url}
                       level={nowPlayingLevel}
                       bass={nowPlayingBass}
                       playing={isPlaying}

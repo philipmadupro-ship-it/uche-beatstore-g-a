@@ -6659,3 +6659,49 @@ over the artwork and produces distinct frame signatures across samples, confirmi
 - Sidecar plumbing (Phase 3 remainder) — analysis still runs per-visitor in the browser.
 - Reactivity of the ASCII layer was confirmed *animating*, but not that it visibly responds to
   loud passages specifically; that needs a longer observation than this session allowed.
+
+---
+
+## Phase 4 (sixth pass) — ASCII samples the artwork; shake removed; amber fixed
+
+Three corrections from the owner.
+
+### 1. "It does not interact with the cover art"
+
+Correct, and it was a design error on my part: the effect rendered procedural smoke and ignored
+the image entirely, so it was decoration floating *over* the artwork rather than a treatment
+*of* it. The cover art is now the source the ASCII grid samples — the smoke field only
+**displaces** where each cell reads from, so the artwork stays recognisable while the audio moves
+it. Drawn in horizontal bands with per-band offsets rather than per-cell resampling: far cheaper,
+and it reads as the image rippling.
+
+Also fixed a real bug found by lint: the render loop had an empty dependency array, so changing
+track kept the **previously loaded** image and the ASCII would show the wrong cover. `src` is now
+a dependency; `level`/`bass`/`playing` stay out deliberately because they are read through refs so
+the loop is created once rather than rebuilt per frame.
+
+### 2. "Take away the shake"
+
+Removed. The transient jolt added a pass earlier is gone; the playhead glow now scales with level
+alone.
+
+### 3. "Make sure the colours are the RGB colour" — the amber, again
+
+Third report of amber, and the cause was structural rather than palette. A power-weighted
+**average** across three coarse bands lands on the midpoint whenever two bands coexist: red (bass)
+averaged with green (mids) is olive/amber. libdjwaveform avoids this because it averages over
+hundreds of FFT bins where energy concentrates near a real spectral peak; with three bands the
+average sits *between* them almost always.
+
+Fixed by raising the weights to a dominance exponent (5) rather than plain power (2), so the
+loudest band keeps its own hue while a close second only tints it. That recovers vivid red /
+green / blue instead of averaging everything to mud.
+
+`tsc` clean · `eslint` 0 errors · 612 tests · build green.
+
+### Still open
+
+- Sidecar plumbing (Phase 3 remainder) — analysis still runs per-visitor in the browser.
+- The amber has now been reported three times against three different colour models. If it
+  persists, the remaining lever is a real per-bin FFT rather than three bands; the gradient is
+  already ported and would work unchanged.

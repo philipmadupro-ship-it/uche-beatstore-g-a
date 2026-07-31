@@ -35,6 +35,9 @@ import { useEffect, useRef } from 'react';
 const RAMP = ' .:-=+*#%@';
 
 interface Props {
+  /** The cover art to convert into ASCII. This is the source that gets
+   *  sampled — the effect transforms the artwork rather than floating over it. */
+  src: string;
   /** 0..1 current loudness; drives shimmer and glyph brightness. */
   level: number;
   /** 0..1 low-band energy; bass pushes the smoke. */
@@ -114,7 +117,7 @@ function rampColor(t: number): [number, number, number] {
   ];
 }
 
-export function AsciiCoverArt({ level, bass = 0, playing, className }: Props) {
+export function AsciiCoverArt({ src, level, bass = 0, playing, className }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const levelRef = useRef(level);
   const bassRef = useRef(bass);
@@ -141,6 +144,17 @@ export function AsciiCoverArt({ level, bass = 0, playing, className }: Props) {
     let raf = 0;
     let t = 0;
     let cols = 0, rows = 0, dpr = 1;
+
+    // The cover art is the SOURCE the grid samples. Previously this rendered
+    // procedural smoke and ignored the image entirely, so the effect had no
+    // relationship to the artwork — the owner's "it does not interact with the
+    // cover art". The smoke now only *displaces* where each cell samples from,
+    // so the artwork stays recognisable while the audio moves it.
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    let imgReady = false;
+    img.onload = () => { imgReady = true; };
+    img.src = src;
 
     const resize = () => {
       const rect = canvas.getBoundingClientRect();
@@ -173,42 +187,28 @@ export function AsciiCoverArt({ level, bass = 0, playing, className }: Props) {
       const h = canvas.height / dpr;
       const cell = CFG.cellSize;
 
-      /* 1 ─ Smoke into the low-res buffer, one pixel per cell. */
-      const img = bctx.createImageData(cols, rows);
-      const data = img.data;
-      // Bass adds turbulence, so an 808 visibly pushes the smoke around.
-      const warp = CFG.shaderWarp * (1 + bs * 1.4);
-
-      for (let cy = 0; cy < rows; cy++) {
-        for (let cx = 0; cx < cols; cx++) {
-          const nx = (cx / cols) * 3.2 * CFG.shaderZoom;
-          const ny = (cy / rows) * 3.2 * CFG.shaderZoom;
-
-          // Domain warp — the standard way to turn plain fbm into smoke.
-          const qx = fbm(nx + t * 0.6, ny, 1);
-          const qy = fbm(nx + 5.2, ny + t * 0.4 + 1.3, 1);
-          let v = fbm(nx + warp * qx * 2, ny + warp * qy * 2, 1, 5);
-
-          // shimmer: a travelling brightness wave, amplitude scaled by level.
-          const shimmer =
-            Math.sin((cx * 0.35) - t * 3.2 + (cy * 0.12)) *
-            0.09 * CFG.animIntensity * (0.35 + lvl);
-          v = v * (0.6 + CFG.shaderIntensity) + shimmer;
-
-          // contrast 128 (>100 = increase), then grayscale 100.
-          const k = CFG.contrast / 100;
-          v = (v - 0.5) * k + 0.5;
-          v = v < 0 ? 0 : v > 1 ? 1 : v;
-
-          const [r, g, b] = rampColor(v);
-          const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-          const grey = Math.round(lum * 255);
-
-          const o = (cy * cols + cx) * 4;
-          data[o] = grey; data[o + 1] = grey; data[o + 2] = grey; data[o + 3] = 255;
+      /* 1 ─ Draw the COVER ART into the low-res buffer, one pixel per cell,
+             displaced by the smoke field. Each cell therefore carries the
+             artwork's own colour at a position that drifts with the audio. */
+      bctx.clearRect(0, 0, cols, rows);
+      if (imgReady) {
+        // Bass widens the displacement, so an 808 visibly shoves the image.
+        const push = (0.6 + bs * 3.4) * CFG.animIntensity;
+        // Draw in a few horizontal bands, each offset by the smoke field. Far
+        // cheaper than per-cell resampling and reads as the image rippling.
+        const bands = 14;
+        for (let i = 0; i < bands; i++) {
+          const sy = (i / bands) * rows;
+          const bh = Math.ceil(rows / bands) + 1;
+          const n = fbm(i * 0.7, t * 1.6, 1, 3) - 0.5;
+          const dx = n * push;
+          bctx.drawImage(
+            img,
+            0, (i / bands) * img.height, img.width, img.height / bands,
+            dx, sy, cols, bh,
+          );
         }
       }
-      bctx.putImageData(img, 0, 0);
 
       /* 2 ─ ASCII pass. */
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -276,7 +276,11 @@ export function AsciiCoverArt({ level, bass = 0, playing, className }: Props) {
 
     raf = requestAnimationFrame(draw);
     return () => { cancelAnimationFrame(raf); ro.disconnect(); };
-  }, []);
+    // `src` IS a dependency: without it the loop keeps the previously loaded
+    // image when the user changes track, so the ASCII would render the wrong
+    // cover. level/bass/playing are deliberately excluded — they are read
+    // through refs so the loop is created once rather than per frame.
+  }, [src]);
 
   return <canvas ref={canvasRef} aria-hidden className={className} />;
 }

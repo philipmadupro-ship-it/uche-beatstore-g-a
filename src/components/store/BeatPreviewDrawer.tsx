@@ -144,6 +144,7 @@ export function BeatPreviewDrawer({
               effect would read as noise on nothing. */}
           {track.cover_url && (
           <AsciiCoverArt
+            src={track.cover_url}
             level={audioLevel}
             bass={audioBass}
             playing={isCurrent && isPlaying}

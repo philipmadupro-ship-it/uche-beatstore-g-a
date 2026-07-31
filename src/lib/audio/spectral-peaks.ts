@@ -40,6 +40,13 @@ export const SPECTRAL_MIN_HEIGHT = 0.06;
 const MIN_CHANNEL = 46;
 
 /**
+ * How hard the loudest band dominates the blend. 2 (plain power) averages two
+ * coexisting bands into mud; 5 keeps the winner's hue while still letting a
+ * close second tint it.
+ */
+const DOMINANCE_EXPONENT = 5;
+
+/**
  * Serato-like frequency → colour gradient.
  *
  * Ported from `turbo/libdjwaveform` (main.c), which renders Serato/NeuralMix-
@@ -171,9 +178,18 @@ export function buildSpectralBars(bands: SpectralBands): SpectralBar[] {
     //
     // Power, not amplitude: energy is amplitude squared, so weighting by power
     // is what makes a loud band actually dominate the blend.
-    const pLow = l * l;
-    const pMid = m * m;
-    const pHigh = h * h;
+    // Weights are raised to DOMINANCE_EXPONENT, not merely squared.
+    //
+    // A plain power-weighted average across three coarse bands lands on the
+    // midpoint whenever two bands coexist — red (bass) averaged with green
+    // (mids) gives olive/amber, which is exactly the muddy colour the owner
+    // rejected twice. Serato averages over hundreds of FFT bins where energy is
+    // concentrated, so its average stays near a real spectral peak; with three
+    // bands the average is almost always between them. Biasing hard toward the
+    // dominant band recovers the vivid red / green / blue the reference shows.
+    const pLow = Math.pow(l, DOMINANCE_EXPONENT);
+    const pMid = Math.pow(m, DOMINANCE_EXPONENT);
+    const pHigh = Math.pow(h, DOMINANCE_EXPONENT);
     const totalP = pLow + pMid + pHigh;
 
     let r: number, g: number, b: number;
