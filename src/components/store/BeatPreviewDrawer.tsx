@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { LicenseSelector } from '@/components/store/LicenseSelector';
 import { SpectralWaveform } from '@/components/player/SpectralWaveform';
+import { AsciiCoverArt } from '@/components/player/AsciiCoverArt';
+import { useSpectralPeaks } from '@/hooks/useSpectralPeaks';
 import { Drawer } from '@/components/ui/Drawer';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -52,6 +54,22 @@ export function BeatPreviewDrawer({
   const similar = useMemo(() => getSimilarTracks(track, allTracks, 5), [track, allTracks]);
 
   const dur = track.duration_seconds ?? 0;
+
+  // Same analysis the waveform consumes (module-cached per track, so this is a
+  // cache hit rather than a second decode). Sampled at the playhead so the
+  // cover art and the waveform react to the same instant in the track.
+  const { db, bands } = useSpectralPeaks(track.id, track.audio_url, 4096);
+  const audioLevel = (() => {
+    if (!db?.length || !isCurrent) return 0;
+    const i = Math.min(db.length - 1, Math.max(0, Math.round(progress * (db.length - 1))));
+    return Math.max(0, Math.min(1, (db[i] + 45) / 45));
+  })();
+  const audioBass = (() => {
+    if (!bands?.low?.length || !isCurrent) return 0;
+    const i = Math.min(bands.low.length - 1, Math.max(0, Math.round(progress * (bands.low.length - 1))));
+    const peak = Math.max(...bands.low);
+    return peak > 0 ? Math.max(0, Math.min(1, bands.low[i] / peak)) : 0;
+  })();
 
   const activeLicenses: LicenseTier[] = licenses.length > 0
     ? [...licenses].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
@@ -120,6 +138,17 @@ export function BeatPreviewDrawer({
             <CoverImage src={track.cover_url} sizes="(max-width: 640px) 100vw, 480px" priority className="object-cover" />
           ) : (
             <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 40% 50%, ${accentColor}22 0%, transparent 70%), #090907` }} />
+          )}
+          {/* Audio-reactive ASCII layer, only where there is artwork to react
+              over. Without a cover the hero is already a plain gradient and the
+              effect would read as noise on nothing. */}
+          {track.cover_url && (
+          <AsciiCoverArt
+            level={audioLevel}
+            bass={audioBass}
+            playing={isCurrent && isPlaying}
+            className="absolute inset-0 h-full w-full mix-blend-screen opacity-80"
+          />
           )}
           <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/20 to-[#090907]" />
 

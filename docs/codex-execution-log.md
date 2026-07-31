@@ -6608,3 +6608,54 @@ Sources: `turbo/libdjwaveform` (`djwaveform.c`, `main.c`); Serato Support "Track
 - True per-bin FFT would give finer colour than three band centres; the gradient is ported and
   ready if that becomes worthwhile.
 - Cover-art animation, pending from the owner.
+
+---
+
+## Phase 4 (fifth pass) — Audio-reactive ASCII cover art
+
+Owner supplied the 21st.dev "Custom ASCII art" spec as the cover-art animation, to be
+audio-reactive.
+
+### Scope decision, stated rather than assumed
+
+The supplied JSON pins **one** configuration. It selects `renderMode: characters`,
+`shaderSource.preset: smoke`, `grayscale: 100`, `blurType: tilt`, `animStyle: shimmer`, and
+enables only `vignette` and `filmGrain`; the other 24 render modes, 7 post-effects, lights, mask
+and tone curve are all disabled in it. `AsciiCoverArt` implements that configuration faithfully
+and does **not** implement the inactive branches — they would be dead code. The component
+docblock records this so the omission is legible rather than looking like an oversight.
+
+### Implementation
+
+- **Procedural smoke**: seeded value-noise fbm with domain warping (the standard way to turn
+  plain fbm into smoke), mapped through the four supplied colour stops.
+- **Key performance decision**: the shader renders into an offscreen buffer at **one pixel per
+  ASCII cell**, not full resolution. The ASCII pass only ever samples one value per cell, so
+  full-res rendering and averaging would be pure waste. This is the main reason it holds 60fps
+  over a live player.
+- Tilt blur is approximated with gradient scrims and film grain with sparse dots rather than
+  per-pixel noise — at this cell size both are visually equivalent to the real operations and
+  roughly two orders of magnitude cheaper per frame.
+
+### Audio reactivity
+
+`level` and `bass` are sampled at the playhead from the **same** `useSpectralPeaks` analysis that
+drives the waveform, so the art and the waveform respond to the same instant. Level drives
+shimmer amplitude, glyph brightness and the animation clock; the low band adds turbulence, so an
+808 visibly pushes the smoke. The hook is module-cached per track, so the second consumer is a
+cache hit rather than a second decode.
+
+### Placement
+
+Per the owner: shown **only when the track has cover art** (without one the hero is already a
+plain gradient and the effect would read as noise over nothing), on both the store preview drawer
+and the Now Playing card, so the two surfaces share one visual language.
+
+`tsc` clean · `eslint` 0 errors · 612 tests · build green. Verified live: the ASCII canvas renders
+over the artwork and produces distinct frame signatures across samples, confirming animation.
+
+### Still open
+
+- Sidecar plumbing (Phase 3 remainder) — analysis still runs per-visitor in the browser.
+- Reactivity of the ASCII layer was confirmed *animating*, but not that it visibly responds to
+  loud passages specifically; that needs a longer observation than this session allowed.

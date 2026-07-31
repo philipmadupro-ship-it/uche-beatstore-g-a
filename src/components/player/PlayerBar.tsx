@@ -10,6 +10,7 @@ import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';
 import { MarqueeText } from './MarqueeText';
 import { SimpleAudioEngine } from './SimpleAudioEngine';
 import { SpectralWaveform } from './SpectralWaveform';
+import { AsciiCoverArt } from './AsciiCoverArt';
 import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
 import { useState, useRef, useEffect, useSyncExternalStore } from 'react';
@@ -19,6 +20,7 @@ import { extractCoverColor } from '@/lib/audio/cover-color';
 import { canFetchReadableAudio, cdnAudioSrc } from '@/lib/audio/cdn';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { getPlayerStreamStatus } from '@/lib/audio/player-status';
+import { useSpectralPeaks } from '@/hooks/useSpectralPeaks';
 
 const subscribeToClientSnapshot = () => () => undefined;
 const getClientSnapshot = () => true;
@@ -131,6 +133,25 @@ export function PlayerBar() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [currentTrack, progress, volume, togglePlay, next, prev, seekTo, setVolume]);
+
+  // Analysis for the reactive cover art. Module-cached per track, so when the
+  // Now Playing card is open alongside the store drawer this is a cache hit
+  // rather than a second decode. Called before the early return below because
+  // hooks must run unconditionally.
+  const { db: npDb, bands: npBands } = useSpectralPeaks(
+    currentTrack?.id ?? null,
+    currentTrack?.audio_url,
+    4096,
+  );
+  const sampleAt = (series: number[] | null | undefined, norm = false): number => {
+    if (!series?.length) return 0;
+    const i = Math.min(series.length - 1, Math.max(0, Math.round(progress * (series.length - 1))));
+    if (!norm) return Math.max(0, Math.min(1, (series[i] + 45) / 45));
+    const peak = Math.max(...series);
+    return peak > 0 ? Math.max(0, Math.min(1, series[i] / peak)) : 0;
+  };
+  const nowPlayingLevel = sampleAt(npDb);
+  const nowPlayingBass = sampleAt(npBands?.low, true);
 
   if (!currentTrack) return null;
 
@@ -419,12 +440,22 @@ export function PlayerBar() {
             <div className="flex items-center justify-center pt-5 pb-1">
               <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.04]">
                 {currentTrack.cover_url ? (
-                  <CoverImage
-                    src={currentTrack.cover_url}
-                    alt=""
-                    sizes="400px"
-                    className="h-full w-full object-cover"
-                  />
+                  <>
+                    <CoverImage
+                      src={currentTrack.cover_url}
+                      alt=""
+                      sizes="400px"
+                      className="h-full w-full object-cover"
+                    />
+                    {/* Same audio-reactive ASCII treatment as the store preview,
+                        so the card and the drawer are one visual language. */}
+                    <AsciiCoverArt
+                      level={nowPlayingLevel}
+                      bass={nowPlayingBass}
+                      playing={isPlaying}
+                      className="absolute inset-0 h-full w-full mix-blend-screen opacity-80"
+                    />
+                  </>
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-white/25">
                     <Music size={44} />
