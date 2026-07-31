@@ -36,7 +36,7 @@ describe('buildSpectralBars', () => {
     expect(out.map((b) => b.dominant)).toEqual(['low', 'mid', 'high']);
   });
 
-  it('maps bands to RGB channels the way Serato does', () => {
+  it('maps bands to Serato hues: bass red, vocals green, hats blue', () => {
     // R = lows (kick/808), G = mids (vocals/snare), B = highs (hats/air).
     const out = buildSpectralBars(bands([1, 0, 0], [0, 1, 0], [0, 0, 1]));
     const [lr, lg, lb] = rgb(out[0].color);
@@ -47,25 +47,29 @@ describe('buildSpectralBars', () => {
     expect(hb).toBeGreaterThan(hr); expect(hb).toBeGreaterThan(hg);   // hats -> blue
   });
 
-  it('renders full-spectrum content brightest and least saturated', () => {
-    // The invariant that holds for ANY palette choice: a slice containing all
-    // three bands is both the brightest column and the least saturated one,
-    // because the primaries sum. This is deliberately tint-agnostic — earlier
-    // versions pinned an exact hue and had to be rewritten every time the
-    // primaries were retuned, which made the test track the implementation
-    // instead of the behaviour.
-    const out = buildSpectralBars(bands([1, 1, 0], [1, 0, 0], [1, 0, 0]));
-    const [fr, fg, fb] = rgb(out[0].color);   // all three bands
-    const [br, bg, bb] = rgb(out[1].color);   // lows only
+  it('produces continuous intermediate hues as content shifts between bands', () => {
+    // This is the property a gradient has and additive RGB does not, and the
+    // reason the model was changed: a slice moving from bass toward mids must
+    // pass through intermediate colour, not jump between primaries.
+    //
+    // Deliberately replaces an earlier "full spectrum is brightest and least
+    // saturated" assertion — that was an invariant of the ADDITIVE model. Under
+    // a power-weighted gradient average, full-spectrum content averages toward
+    // the middle of the ramp rather than summing to white, so keeping that
+    // assertion would have been testing a model no longer in use.
+    const out = buildSpectralBars(
+      bands([1, 0.66, 0.33, 0], [0, 0.33, 0.66, 1], [0, 0, 0, 0]),
+    );
+    const hues = out.map((bar) => rgb(bar.color));
 
-    const brightness = (r: number, g: number, b: number) => (r + g + b) / 3;
-    const saturation = (r: number, g: number, b: number) => {
-      const mx = Math.max(r, g, b);
-      return mx === 0 ? 0 : (mx - Math.min(r, g, b)) / mx;
-    };
-
-    expect(brightness(fr, fg, fb)).toBeGreaterThan(brightness(br, bg, bb));
-    expect(saturation(fr, fg, fb)).toBeLessThan(saturation(br, bg, bb));
+    // Red falls and green rises monotonically across the sweep.
+    for (let i = 1; i < hues.length; i++) {
+      expect(hues[i][0]).toBeLessThanOrEqual(hues[i - 1][0] + 2);
+      expect(hues[i][1]).toBeGreaterThanOrEqual(hues[i - 1][1] - 2);
+    }
+    // Ends are unambiguous: bass reads red, mids read green.
+    expect(hues[0][0]).toBeGreaterThan(hues[0][1]);
+    expect(hues[3][1]).toBeGreaterThan(hues[3][0]);
   });
 
   it('normalises each band independently so quiet highs stay visible', () => {

@@ -6533,3 +6533,78 @@ draws only the right half, since nothing exists before t=0.
   continuous spectral centroid) rather than three discrete bands — likely the remaining gap
   between this and Serato's exact look.
 - Cover-art animation, pending from the owner.
+
+---
+
+## Phase 4 (fourth pass) — Serato's real algorithm, from source
+
+### Research
+
+Cloned `turbo/libdjwaveform` (a Serato/NeuralMix-style renderer) and read `djwaveform.c`
+directly rather than relying on documentation, which omitted every number that mattered. The
+per-column algorithm:
+
+```c
+for each FFT bin k:
+    pwr    = re*re + im*im
+    freqHz = k * (sampleRate / fftSize)
+    acc   += pwr * gradient(freqHz)     // interpolated colour lookup
+    totalP += pwr
+colour = acc / totalP                    // POWER-weighted average
+height = peakAmp                         // absolute peak, clamped to 1
+```
+
+Plus a 48-point gradient (`main.c`) from 10Hz to 10.85kHz: deep red sub-bass → bright red ~250Hz
+→ brown/olive low-mids → bright green ~700Hz-1.4kHz (vocals) → teal ~2.75kHz → blue from ~2.9kHz
+→ brighter blue in the air band.
+
+### Changes Made
+
+- **Ported the gradient and the power-weighted average.** We hold three bands rather than a full
+  FFT, so the gradient is sampled at each band's centre frequency and weighted by that band's
+  power — the same computation at coarser resolution. Power, not amplitude: energy is amplitude
+  squared, which is what lets a loud band actually dominate the blend.
+- **Why this replaced additive RGB:** additive could only ever produce mixtures of three fixed
+  hues. A gradient gives *continuous* colour — sub-bass and upper-bass are different reds, and a
+  slice sliding from bass to mids sweeps through the ramp instead of stepping between primaries.
+  That continuity was the remaining gap to the reference players.
+
+### Reactivity, in two corrections
+
+The owner asked for more reactivity, then that it was "too much… little shake when loud but not
+always".
+
+1. **Over-boosted first.** Raising the bloom to 1.15x with a 1.35x clamp pushed the playhead
+   column past the panel height, so it **pegged at full height every frame and the swing became
+   invisible** — measurably *less* reactive despite a larger multiplier. Caught by sampling the
+   column height across frames (a constant 132 in a 132px panel). Headroom is what makes motion
+   legible.
+2. **Replaced constant motion with a transient shake.** The lane-wide "breathing" read as
+   restless. Removed. The lane now sits still and jolts only when the level both *jumps* and is
+   *loud* — kick/snare shape, not sustained pads — via an envelope follower with fast attack and
+   slow release (0.55 / 0.12), decaying at 0.86/frame so the jolt clears before the next beat.
+   Max ~3px: felt rather than seen.
+
+### Tests
+
+The "full-spectrum is brightest and least saturated" assertion was an invariant of the *additive*
+model; under a weighted-gradient average, full-spectrum content averages toward the middle of the
+ramp rather than summing to white. Replaced with the property the gradient actually provides:
+sweeping content from bass to mids produces monotonically shifting, continuous hues. Also removed
+`COLOUR_GAMMA`, dead after the model swap.
+
+`tsc` clean · `eslint` 0 errors · 612 tests · build green.
+
+### Verified live
+
+Playhead column: **80–100px swing inside a 132px panel, no clipping**, and ~10px of vertical
+offset variation confirming the shake fires selectively.
+
+Sources: `turbo/libdjwaveform` (`djwaveform.c`, `main.c`); Serato Support "Track Overview Display".
+
+### Still open
+
+- Sidecar plumbing (Phase 3 remainder). Analysis still runs per-visitor in the browser.
+- True per-bin FFT would give finer colour than three band centres; the gradient is ported and
+  ready if that becomes worthwhile.
+- Cover-art animation, pending from the owner.
