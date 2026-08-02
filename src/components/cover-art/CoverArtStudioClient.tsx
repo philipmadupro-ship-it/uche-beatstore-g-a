@@ -59,6 +59,7 @@ import {
   type TextArtworkLayer,
   type WaveformArtworkLayer,
 } from './cover-art-document';
+import { CoverGeneratorPanel } from './CoverGeneratorPanel';
 import { useVisualPeaks } from '@/hooks/useVisualPeaks';
 
 type Surface = 'dev-lab' | 'cover-art-studio';
@@ -424,6 +425,62 @@ export function CoverArtStudioClient({ surface = 'dev-lab' }: CoverArtStudioClie
     });
   }
 
+  /**
+   * Drop a generated image into the document's image layer.
+   *
+   * Reuses the existing layer rather than appending a new one — the templates
+   * already position and mask an "Artwork Image" layer per art direction, so
+   * filling it keeps the composition the direction intended. If a document has
+   * no image layer (a template without one), a full-bleed layer is added behind
+   * everything else so the artwork reads as a background plate.
+   *
+   * Stores the inlined data URI, not the R2 URL: the SVG export path renders
+   * through an <img>, which cannot fetch cross-origin, so a bare URL would
+   * export a cover with the artwork missing.
+   */
+  function handleGeneratedImage(image: { dataUrl: string; url: string }) {
+    updateDocument((current) => {
+      const existing = current.layers.find((layer) => layer.type === 'image');
+      if (existing) {
+        return {
+          ...current,
+          layers: current.layers.map((layer) => (
+            layer.id === existing.id
+              ? { ...layer, src: image.dataUrl, label: 'Generated artwork', visible: true }
+              : layer
+          )),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      return {
+        ...current,
+        layers: [
+          ...current.layers,
+          {
+            id: `generated-image-${Date.now()}`,
+            name: 'Generated Artwork',
+            type: 'image' as const,
+            x: 0,
+            y: 0,
+            width: current.width,
+            height: current.height,
+            rotation: 0,
+            opacity: 1,
+            visible: true,
+            locked: false,
+            // Behind every other layer so text and waveform stay legible.
+            zIndex: -1,
+            blendMode: 'normal' as const,
+            src: image.dataUrl,
+            label: 'Generated artwork',
+            treatment: 'normal' as const,
+          },
+        ],
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  }
+
   function undo() {
     setHistory((items) => {
       const previous = items.at(-1);
@@ -713,6 +770,7 @@ export function CoverArtStudioClient({ surface = 'dev-lab' }: CoverArtStudioClie
             attachOptions={attachOptions}
             attachState={attachState}
             attachError={attachError}
+            onGeneratedImage={handleGeneratedImage}
             onSourceKind={setSourceKind}
             onSourceId={setSelectedSourceId}
             onDirection={(id) => {
@@ -911,8 +969,10 @@ function ContextPanel({
   onAttachTargetKind,
   onAttachTargetId,
   onAttach,
+  onGeneratedImage,
 }: {
   activeTool: CoverArtTool;
+  onGeneratedImage: (image: { dataUrl: string; url: string }) => void;
   sourceKind: ArtworkSource['kind'];
   sourceOptions: CoverAttachOption[];
   sourceState: 'idle' | 'loading' | 'loaded' | 'failed';
@@ -1108,7 +1168,15 @@ function ContextPanel({
         </div>
       ) : null}
 
-      {!['source', 'directions', 'typography', 'waveform', 'brand', 'history'].includes(activeTool) ? (
+      {activeTool === 'media' ? (
+        <CoverGeneratorPanel
+          palette={document.palette}
+          styleName={coverArtDirections.find((d) => d.id === directionId)?.name ?? ''}
+          onGenerated={onGeneratedImage}
+        />
+      ) : null}
+
+      {!['source', 'directions', 'media', 'typography', 'waveform', 'brand', 'history'].includes(activeTool) ? (
         <div className="space-y-4">
           <p className="text-sm leading-relaxed text-[#AAA294]">This panel is staged for Phase 1. Select layers, use Typography, Brand and Waveform, then export or attach the artwork.</p>
           <div className="border border-[#EBE1CC1A] p-3 text-sm text-[#AAA294]">Advanced controls will open here without changing the editor structure.</div>

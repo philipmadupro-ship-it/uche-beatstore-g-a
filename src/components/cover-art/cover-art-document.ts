@@ -455,6 +455,26 @@ export function updateWaveformLayerPeaks(
   ));
 }
 
+/** One channel of a hex colour as a 0..1 value, for SVG filter tables. */
+export function hexChannel(hex: string, channel: 0 | 1 | 2): string {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return channel === 0 ? '0' : '0';
+  let h = m[1];
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const v = parseInt(h.slice(channel * 2, channel * 2 + 2), 16) / 255;
+  return v.toFixed(3);
+}
+
+/** Maps an image layer's treatment to the matching filter defined in <defs>. */
+function imageTreatmentFilter(treatment: ImageArtworkLayer['treatment']): string {
+  switch (treatment) {
+    case 'duotone': return ' filter="url(#imgDuotone)"';
+    case 'mineral-tint': return ' filter="url(#imgMineral)"';
+    case 'high-contrast': return ' filter="url(#imgHighContrast)"';
+    default: return '';
+  }
+}
+
 export function renderArtworkDocumentSvg(document: ArtworkDocument) {
   const fontFor = (layer: TextArtworkLayer) => {
     if (layer.fontFamily === 'mono') return 'Panchang, monospace';
@@ -480,6 +500,15 @@ export function renderArtworkDocumentSvg(document: ArtworkDocument) {
         return `<rect ${common} width="${layer.width}" height="${layer.height}" fill="${layer.fill}" stroke="${layer.stroke ?? 'none'}" stroke-width="${layer.strokeWidth ?? 0}" />`;
       }
       if (layer.type === 'image') {
+        // Render the actual artwork when the layer has one. `src` existed on
+        // the type but was never read here, so every image layer — including a
+        // generated or uploaded cover — drew as the grey placeholder box
+        // forever. `preserveAspectRatio="xMidYMid slice"` fills the frame the
+        // way a cover crop should rather than letterboxing it.
+        if (layer.src) {
+          const treatmentFilter = imageTreatmentFilter(layer.treatment);
+          return `<image ${common} width="${layer.width}" height="${layer.height}" href="${escape(layer.src)}" preserveAspectRatio="xMidYMid slice"${treatmentFilter} />`;
+        }
         return `<rect ${common} width="${layer.width}" height="${layer.height}" fill="${document.palette.panel}" stroke="${document.palette.accent}" stroke-width="4" /><text ${common} x="${layer.width / 2}" y="${layer.height / 2}" text-anchor="middle" dominant-baseline="middle" fill="${document.palette.muted}" font-size="64" font-family="Panchang, monospace">${escape(layer.label)}</text>`;
       }
       if (layer.type === 'waveform') {
@@ -515,6 +544,24 @@ export function renderArtworkDocumentSvg(document: ArtworkDocument) {
       <rect width="80" height="80" fill="${document.palette.text}" opacity="0.04" />
       <path d="M0 13H80M0 47H80M11 0V80M53 0V80" stroke="${document.palette.muted}" stroke-width="1" opacity="0.16" />
     </pattern>
+    <filter id="imgDuotone">
+      <feColorMatrix type="saturate" values="0" />
+      <feComponentTransfer>
+        <feFuncR type="table" tableValues="${hexChannel(document.palette.background, 0)} ${hexChannel(document.palette.accent, 0)}" />
+        <feFuncG type="table" tableValues="${hexChannel(document.palette.background, 1)} ${hexChannel(document.palette.accent, 1)}" />
+        <feFuncB type="table" tableValues="${hexChannel(document.palette.background, 2)} ${hexChannel(document.palette.accent, 2)}" />
+      </feComponentTransfer>
+    </filter>
+    <filter id="imgMineral">
+      <feColorMatrix type="saturate" values="0.35" />
+    </filter>
+    <filter id="imgHighContrast">
+      <feComponentTransfer>
+        <feFuncR type="linear" slope="1.6" intercept="-0.3" />
+        <feFuncG type="linear" slope="1.6" intercept="-0.3" />
+        <feFuncB type="linear" slope="1.6" intercept="-0.3" />
+      </feComponentTransfer>
+    </filter>
   </defs>
   <rect width="${document.width}" height="${document.height}" fill="${document.background}" />
   ${layerMarkup}

@@ -14,6 +14,9 @@
 
 import { create } from 'zustand';
 import { errorMessage, isError } from '@/lib/errors';
+import {
+  parsePersistedUploads, bytesFromCompletedParts, type PersistedItem,
+} from './persisted-uploads';
 
 type UploadAnalysis = {
   bpm?: number | null;
@@ -100,22 +103,8 @@ const successCallbacks: Record<string, ((track: UploadedTrack) => void) | undefi
 
 /* ─────────── persistence ─────────── */
 
-interface PersistedItem {
-  id: string;
-  sessionId: string | null;
-  fileName: string;
-  fileSize: number;
-  fileLastModified: number;
-  contentType: string;
-  partSize: number;
-  totalParts: number;
-  completedPartNumbers: number[];
-  type: string;
-  projectId: string | null;
-  replaceTrackId: string | null;
-  status: UploadStatus;
-  startedAt: number;
-}
+// Shape + validation live in `persisted-uploads.ts` so they can be unit-tested
+// without a store. localStorage is untrusted input: see that file for why.
 
 function persist(state: ManagerState) {
   if (typeof window === 'undefined') return;
@@ -147,10 +136,9 @@ function persist(state: ManagerState) {
 function loadPersisted(): PersistedItem[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
+    return parsePersistedUploads(localStorage.getItem(LS_KEY));
   } catch {
+    // localStorage itself can throw (disabled, or a security policy).
     return [];
   }
 }
@@ -443,7 +431,7 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
           fileLastModified: p.fileLastModified,
           contentType: p.contentType,
           status: 'interrupted',
-          bytesUploaded: p.completedPartNumbers.length * (p.partSize || 1),
+          bytesUploaded: bytesFromCompletedParts(p),
           partSize: p.partSize,
           totalParts: p.totalParts,
           completedPartNumbers: new Set(p.completedPartNumbers),

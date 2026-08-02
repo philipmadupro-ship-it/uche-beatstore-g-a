@@ -86,3 +86,52 @@ describe('cover art document model', () => {
     });
   });
 });
+
+describe('renderArtworkDocumentSvg image layers', () => {
+  const withImageSrc = (src: string, treatment = 'normal') => {
+    const doc = createArtworkDocument('de-roche-mineral', { kind: 'track', id: 't1', label: 'Beat' });
+    return {
+      ...doc,
+      layers: doc.layers.map((layer) => (
+        layer.type === 'image' ? { ...layer, src, treatment } : layer
+      )),
+    };
+  };
+
+  it('renders an <image> element when the layer has a src', () => {
+    // `src` existed on the type but was never read by the renderer, so every
+    // image layer — including a generated or uploaded cover — drew as the grey
+    // placeholder box forever.
+    const svg = renderArtworkDocumentSvg(withImageSrc('https://cdn.example/a.png') as never);
+    expect(svg).toContain('<image');
+    expect(svg).toContain('href="https://cdn.example/a.png"');
+  });
+
+  it('fills the frame rather than letterboxing', () => {
+    const svg = renderArtworkDocumentSvg(withImageSrc('https://cdn.example/a.png') as never);
+    expect(svg).toContain('preserveAspectRatio="xMidYMid slice"');
+  });
+
+  it('still renders the placeholder when there is no src', () => {
+    const doc = createArtworkDocument('de-roche-mineral', { kind: 'track', id: 't1', label: 'Beat' });
+    const svg = renderArtworkDocumentSvg(doc);
+    expect(svg).not.toContain('<image');
+    expect(svg).toContain('Imported image placeholder');
+  });
+
+  it('applies the treatment filter the layer asks for', () => {
+    expect(renderArtworkDocumentSvg(withImageSrc('u', 'duotone') as never)).toContain('url(#imgDuotone)');
+    expect(renderArtworkDocumentSvg(withImageSrc('u', 'high-contrast') as never)).toContain('url(#imgHighContrast)');
+    expect(renderArtworkDocumentSvg(withImageSrc('u', 'normal') as never)).not.toContain('filter="url(#img');
+  });
+
+  it('escapes the src so a crafted URL cannot break out of the attribute', () => {
+    const svg = renderArtworkDocumentSvg(withImageSrc('a"><script>alert(1)</script>') as never);
+    expect(svg).not.toContain('<script>');
+  });
+
+  it('accepts a data URI, which is what generated covers use for export', () => {
+    const svg = renderArtworkDocumentSvg(withImageSrc('data:image/png;base64,AAAA') as never);
+    expect(svg).toContain('data:image/png;base64,AAAA');
+  });
+});
