@@ -32,16 +32,17 @@ describe('cover attach options', () => {
         musicalKey: 'F minor',
         durationSeconds: 128,
         peaksUrl: '/peaks.json',
+        audioUrl: null,
       },
     ]);
   });
 
   it('normalizes project and playlist response envelopes', () => {
     expect(normalizeCoverAttachOptions('project', { projects: [{ id: 'p-1', name: 'Tape One', track_count: 7 }] })).toEqual([
-      { id: 'p-1', label: 'Tape One', detail: '7 tracks', coverUrl: null, bpm: null, musicalKey: null, durationSeconds: null, peaksUrl: null },
+      { id: 'p-1', label: 'Tape One', detail: '7 tracks', coverUrl: null, bpm: null, musicalKey: null, durationSeconds: null, peaksUrl: null, audioUrl: null },
     ]);
     expect(normalizeCoverAttachOptions('playlist', { playlists: [{ id: 'pl-1', name: 'Outreach', track_count: 1 }] })).toEqual([
-      { id: 'pl-1', label: 'Outreach', detail: '1 track', coverUrl: null, bpm: null, musicalKey: null, durationSeconds: null, peaksUrl: null },
+      { id: 'pl-1', label: 'Outreach', detail: '1 track', coverUrl: null, bpm: null, musicalKey: null, durationSeconds: null, peaksUrl: null, audioUrl: null },
     ]);
   });
 
@@ -59,7 +60,7 @@ describe('cover attach options', () => {
     const fetchMock = mockFetch({ ok: true, body: { projects: [{ id: 'project 1', name: 'Archive' }] } });
 
     await expect(fetchCoverAttachOptions('project', 12)).resolves.toEqual([
-      { id: 'project 1', label: 'Archive', coverUrl: null, bpm: null, musicalKey: null, durationSeconds: null, peaksUrl: null },
+      { id: 'project 1', label: 'Archive', coverUrl: null, bpm: null, musicalKey: null, durationSeconds: null, peaksUrl: null, audioUrl: null },
     ]);
 
     expect(fetchMock).toHaveBeenCalledWith('/api/projects?limit=12', { cache: 'no-store' });

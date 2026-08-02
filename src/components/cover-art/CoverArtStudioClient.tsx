@@ -60,6 +60,11 @@ import {
   type WaveformArtworkLayer,
 } from './cover-art-document';
 import { CoverGeneratorPanel } from './CoverGeneratorPanel';
+import { HudSlider } from './HudSlider';
+import { usePlayer } from '@/hooks/usePlayer';
+import type { Track } from '@/lib/types';
+import { useAudioReactivity } from '@/hooks/useAudioReactivity';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useVisualPeaks } from '@/hooks/useVisualPeaks';
 
 type Surface = 'dev-lab' | 'cover-art-studio';
@@ -191,6 +196,54 @@ function SegmentedButton<T extends string>({
   );
 }
 
+/**
+ * Every continuous value in the studio is a slider.
+ *
+ * This kept its name and signature so all twelve call sites convert at once
+ * rather than being touched individually. A number spinner gave no sense of
+ * where a value sat within its range and could not be explored by dragging;
+ * `HudSlider` shows the range, and still accepts an exact typed value.
+ *
+ * Position and size have no natural ceiling, so they get defaults derived from
+ * the 3000px document rather than an arbitrary 100.
+ */
+/**
+ * Collapses a side panel. Icon points the way the panel will move, which is
+ * the convention every editor uses and the only thing that makes a bare
+ * chevron legible without a label.
+ */
+function PanelToggle({ side, open, onToggle }: { side: 'left' | 'right'; open: boolean; onToggle: () => void }) {
+  const Icon = (side === 'left') === open ? PanelChevronLeft : PanelChevronRight;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={open}
+      aria-label={`${open ? 'Collapse' : 'Expand'} ${side} panel`}
+      title={`${open ? 'Collapse' : 'Expand'} ${side} panel`}
+      className="grid h-7 w-7 place-items-center text-[#6A655C] transition-colors hover:text-[#EEE8DD] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C7B89D]"
+    >
+      <Icon />
+    </button>
+  );
+}
+
+function PanelChevronLeft() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+      <path d="M7.5 2.5 4 6l3.5 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PanelChevronRight() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+      <path d="M4.5 2.5 8 6l-3.5 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function NumberInput({
   label,
   value,
@@ -207,18 +260,14 @@ function NumberInput({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="grid gap-1.5">
-      <FieldLabel>{label}</FieldLabel>
-      <input
-        type="number"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="h-9 border border-[#EBE1CC1A] bg-[#0D0D0A] px-2 text-sm text-[#EEE8DD] outline-none focus:border-[#EBE1CC52]"
-      />
-    </label>
+    <HudSlider
+      label={label}
+      value={value}
+      min={min ?? 0}
+      max={max ?? 3000}
+      step={step}
+      onChange={onChange}
+    />
   );
 }
 
@@ -296,6 +345,10 @@ function WaveformGraphic({ layer }: { layer: WaveformArtworkLayer }) {
 export function CoverArtStudioClient({ surface = 'dev-lab' }: CoverArtStudioClientProps) {
   const initialSource: ArtworkSource = { kind: 'empty', label: 'Empty design', detail: '3000 x 3000' };
   const [activeTool, setActiveTool] = useState<CoverArtTool>('source');
+  // Both panels start open — a first-time user needs to see the controls exist.
+  // Collapsing is for once you know the tool and want the canvas.
+  const [leftPanelOpen, setLeftPanelOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [sourceKind, setSourceKind] = useState<ArtworkSource['kind']>('track');
   const [sourceOptions, setSourceOptions] = useState<CoverAttachOption[]>([]);
   const [sourceState, setSourceState] = useState<'idle' | 'loading' | 'loaded' | 'failed'>('idle');
@@ -330,6 +383,66 @@ export function CoverArtStudioClient({ surface = 'dev-lab' }: CoverArtStudioClie
   const selectedTextLayer = selectedLayer?.type === 'text' ? selectedLayer : null;
   const selectedWaveformLayer = selectedLayer?.type === 'waveform' ? selectedLayer : null;
   const selectedSourceOption = sourceOptions.find((option) => option.id === selectedSourceId) ?? null;
+
+  /**
+   * Live audio reaction for the preview.
+   *
+   * Reads the SAME analysis the player and store drawer use, so the cover
+   * reacts to exactly the moment you are hearing. Gated on the studio's
+   * selected source actually being the track that is playing — otherwise the
+   * artwork would pulse to an unrelated song, which is worse than static.
+   *
+   * PREVIEW ONLY. The exported SVG/PNG is a still image; this exists so the
+   * cover can be judged against its track while being designed, not to bake
+   * motion into the artwork.
+   */
+  const currentTrack = usePlayer((state) => state.currentTrack);
+  const playerProgress = usePlayer((state) => state.progress);
+  const playerIsPlaying = usePlayer((state) => state.isPlaying);
+  const setPlayerTrack = usePlayer((state) => state.setTrack);
+  const togglePlayerPlay = usePlayer((state) => state.togglePlay);
+  const previewingCurrentTrack = Boolean(
+    sourceKind === 'track' && selectedSourceId && currentTrack?.id === selectedSourceId,
+  );
+  const reactivity = useAudioReactivity(
+    previewingCurrentTrack ? selectedSourceId : null,
+    previewingCurrentTrack ? currentTrack?.audio_url : null,
+    playerProgress,
+    previewingCurrentTrack && playerIsPlaying,
+  );
+  const prefersReducedMotion = useReducedMotion();
+  // Reduced motion means no pulsing at all — this is decorative movement, and
+  // the project's constraint on it is explicit.
+  const reactive = prefersReducedMotion
+    ? { level: 0, bass: 0 }
+    : { level: reactivity.level, bass: reactivity.bass };
+
+  /**
+   * Audition the selected source in place.
+   *
+   * Without this the reaction above is unreachable in practice: it only fires
+   * when the playing track IS the studio's source, and there was no way to make
+   * that true from this screen — you had to leave, find the beat in the
+   * library, play it, and come back. Loads the source into the player if it
+   * isn't already there, otherwise just toggles.
+   */
+  const auditionSource = () => {
+    if (!selectedSourceOption || sourceKind !== 'track') return;
+    if (currentTrack?.id === selectedSourceId) {
+      togglePlayerPlay();
+      return;
+    }
+    setPlayerTrack({
+      id: selectedSourceOption.id,
+      title: selectedSourceOption.label,
+      audio_url: selectedSourceOption.audioUrl ?? null,
+      cover_url: selectedSourceOption.coverUrl ?? null,
+      bpm: selectedSourceOption.bpm ?? null,
+      key: selectedSourceOption.musicalKey ?? null,
+      duration_seconds: selectedSourceOption.durationSeconds ?? null,
+      peaks_url: selectedSourceOption.peaksUrl ?? null,
+    } as Track);
+  };
   const sortedLayers = useMemo(() => sortArtworkLayers(document.layers), [document.layers]);
   const renderedSvg = useMemo(() => renderArtworkDocumentSvg(document), [document]);
   const safeName = document.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cover-art';
@@ -747,7 +860,20 @@ export function CoverArtStudioClient({ surface = 'dev-lab' }: CoverArtStudioClie
           onUpload={uploadGeneratedCover}
         />
 
-        <div className="grid min-h-0 grid-cols-1 lg:grid-cols-[4.75rem_20rem_minmax(0,1fr)_19rem]">
+        {/* Panels collapse so the artwork can take the whole field. Both were
+            permanently pinned before, leaving the thing being designed with
+            about a quarter of the screen — backwards for a canvas tool. Column
+            widths also tightened (20rem/19rem to 18rem/16rem) now that controls
+            are sliders rather than grids of chips. */}
+        <div
+          className={cn(
+            'grid min-h-0 grid-cols-1 transition-[grid-template-columns] duration-200',
+            leftPanelOpen && rightPanelOpen && 'lg:grid-cols-[3.5rem_18rem_minmax(0,1fr)_16rem]',
+            leftPanelOpen && !rightPanelOpen && 'lg:grid-cols-[3.5rem_18rem_minmax(0,1fr)_0rem]',
+            !leftPanelOpen && rightPanelOpen && 'lg:grid-cols-[3.5rem_0rem_minmax(0,1fr)_16rem]',
+            !leftPanelOpen && !rightPanelOpen && 'lg:grid-cols-[3.5rem_0rem_minmax(0,1fr)_0rem]',
+          )}
+        >
           <ToolRail activeTool={activeTool} onTool={setActiveTool} />
           <ContextPanel
             activeTool={activeTool}
@@ -771,6 +897,7 @@ export function CoverArtStudioClient({ surface = 'dev-lab' }: CoverArtStudioClie
             attachState={attachState}
             attachError={attachError}
             onGeneratedImage={handleGeneratedImage}
+            open={leftPanelOpen}
             onSourceKind={setSourceKind}
             onSourceId={setSelectedSourceId}
             onDirection={(id) => {
@@ -803,6 +930,14 @@ export function CoverArtStudioClient({ surface = 'dev-lab' }: CoverArtStudioClie
             onEditLayer={setEditingLayerId}
             onUpdateText={(id, text) => updateDocument((current) => patchLayer<TextArtworkLayer>(current, id, { text }))}
             onZoom={setZoom}
+            leftPanelOpen={leftPanelOpen}
+            rightPanelOpen={rightPanelOpen}
+            onToggleLeftPanel={() => setLeftPanelOpen((v) => !v)}
+            onToggleRightPanel={() => setRightPanelOpen((v) => !v)}
+            reactive={reactive}
+            canAudition={sourceKind === 'track' && Boolean(selectedSourceId)}
+            auditioning={previewingCurrentTrack && playerIsPlaying}
+            onAudition={auditionSource}
           />
 
           <PropertiesInspector
@@ -814,6 +949,7 @@ export function CoverArtStudioClient({ surface = 'dev-lab' }: CoverArtStudioClie
             onDelete={deleteSelectedLayer}
             onMoveLayer={moveSelectedLayer}
             onSelectLayer={(id) => setSelectedLayerIds([id])}
+            open={rightPanelOpen}
           />
         </div>
 
@@ -970,8 +1106,10 @@ function ContextPanel({
   onAttachTargetId,
   onAttach,
   onGeneratedImage,
+  open,
 }: {
   activeTool: CoverArtTool;
+  open: boolean;
   onGeneratedImage: (image: { dataUrl: string; url: string }) => void;
   sourceKind: ArtworkSource['kind'];
   sourceOptions: CoverAttachOption[];
@@ -1005,7 +1143,21 @@ function ContextPanel({
   onAttach: () => void;
 }) {
   return (
-    <aside className="min-h-0 overflow-y-auto border-r border-[#EBE1CC1A] bg-[#10100D] p-4">
+    <aside
+      // NOT `display:none` when collapsed. A hidden grid item is removed from
+      // placement entirely, so every later item slides one column left — the
+      // canvas landed in the 0rem track and the artwork vanished. Collapsing to
+      // zero width keeps the item in the grid. `inert` takes the hidden
+      // controls out of the tab order without removing them from layout.
+      aria-hidden={!open}
+      inert={!open ? true : undefined}
+      className={cn(
+        'min-h-0 bg-[#10100D]',
+        open
+          ? 'overflow-y-auto border-r border-[#EBE1CC1A] p-4'
+          : 'w-0 overflow-hidden border-0 p-0',
+      )}
+    >
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <p className="text-[11px] text-[#706B61]">Step {Math.max(1, toolItems.findIndex((item) => item.id === activeTool) + 1)}</p>
@@ -1221,6 +1373,14 @@ function CanvasWorkspace({
   onEditLayer,
   onUpdateText,
   onZoom,
+  leftPanelOpen,
+  rightPanelOpen,
+  onToggleLeftPanel,
+  onToggleRightPanel,
+  reactive,
+  canAudition,
+  auditioning,
+  onAudition,
 }: {
   artboardRef: React.RefObject<HTMLDivElement | null>;
   document: ArtworkDocument;
@@ -1237,18 +1397,80 @@ function CanvasWorkspace({
   onEditLayer: (id: string | null) => void;
   onUpdateText: (id: string, text: string) => void;
   onZoom: (zoom: number) => void;
+  leftPanelOpen: boolean;
+  rightPanelOpen: boolean;
+  onToggleLeftPanel: () => void;
+  onToggleRightPanel: () => void;
+  /** 0..1 loudness and bass at the playhead of the track being previewed. */
+  reactive: { level: number; bass: number };
+  canAudition: boolean;
+  auditioning: boolean;
+  onAudition: () => void;
 }) {
   return (
     <section className="relative min-h-0 overflow-hidden bg-[#0A0A08]">
-      <div className="absolute left-4 top-4 z-10 flex items-center gap-2 border border-[#EBE1CC1A] bg-[#0D0D0A]/90 p-1">
-        {[0.16, 0.22, 0.3].map((value) => (
-          <button key={value} type="button" onClick={() => onZoom(value)} className={cn('h-8 px-2 text-xs', zoom === value ? 'bg-[#C7B89D] text-[#080806]' : 'text-[#AAA294] hover:text-[#EEE8DD]')}>
-            {Math.round(value * 100)}%
-          </button>
-        ))}
-      </div>
-      <div className="absolute right-4 top-4 z-10 border border-[#EBE1CC1A] bg-[#0D0D0A]/90 px-3 py-2 text-xs text-[#AAA294]">
-        {previewMode === 'desktop' ? 'Desktop preview' : 'Mobile preview'} / safe guides on
+      {/* Overlay HUD rather than bordered boxes: the canvas reads as one
+          surface with instruments floating on it, not three panes competing. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between p-3">
+        <div className="pointer-events-auto flex items-center gap-1 bg-[#0D0D0A]/80 p-0.5 backdrop-blur-sm">
+          <PanelToggle
+            side="left"
+            open={leftPanelOpen}
+            onToggle={() => onToggleLeftPanel()}
+          />
+          <span aria-hidden className="mx-1 h-4 w-px bg-[#EBE1CC1A]" />
+          {canAudition ? (
+            <>
+              <button
+                type="button"
+                onClick={onAudition}
+                aria-pressed={auditioning}
+                aria-label={auditioning ? 'Pause source track' : 'Play source track'}
+                title={auditioning ? 'Pause source track' : 'Play source track to make the cover react'}
+                className={cn(
+                  'grid h-7 w-7 place-items-center transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C7B89D]',
+                  auditioning ? 'text-[#C7B89D]' : 'text-[#6A655C] hover:text-[#EEE8DD]',
+                )}
+              >
+                {auditioning ? <Pause size={12} /> : <Play size={12} />}
+              </button>
+              {/* Level meter: confirms at a glance that the reaction is live,
+                  and gives the producer something to read when the artwork
+                  itself is deliberately moving only a few percent. */}
+              <span aria-hidden className="relative h-[3px] w-10 overflow-hidden bg-[#26241F]">
+                <span
+                  className="absolute inset-y-0 left-0 bg-[#C7B89D]"
+                  style={{ width: `${Math.round(reactive.level * 100)}%` }}
+                />
+              </span>
+              <span aria-hidden className="mx-1 h-4 w-px bg-[#EBE1CC1A]" />
+            </>
+          ) : null}
+          {[0.16, 0.22, 0.3].map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => onZoom(value)}
+              className={cn(
+                'h-7 px-2 font-mono text-[10px] tabular-nums transition-colors',
+                zoom === value ? 'text-[#C7B89D]' : 'text-[#6A655C] hover:text-[#EEE8DD]',
+              )}
+            >
+              {Math.round(value * 100)}%
+            </button>
+          ))}
+        </div>
+        <div className="pointer-events-auto flex items-center gap-2 bg-[#0D0D0A]/80 px-2 py-1.5 backdrop-blur-sm">
+          <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#6A655C]">
+            {previewMode === 'desktop' ? 'Desktop' : 'Mobile'} · guides on
+          </span>
+          <span aria-hidden className="h-4 w-px bg-[#EBE1CC1A]" />
+          <PanelToggle
+            side="right"
+            open={rightPanelOpen}
+            onToggle={() => onToggleRightPanel()}
+          />
+        </div>
       </div>
       <div className="grid h-full place-items-center overflow-auto p-12" onClick={onClearSelection}>
         <div
@@ -1266,13 +1488,28 @@ function CanvasWorkspace({
           {sortedLayers.map((layer) => {
             if (!layer.visible) return null;
             const selected = selectedLayerIds.includes(layer.id);
+            // Live audio reaction, PREVIEW ONLY — see `reactive` on this
+            // component. The image breathes with overall loudness and the
+            // waveform stretches with the bass, so you can judge the cover
+            // against the track it belongs to rather than against silence.
+            // Deliberately small multipliers: this is a design surface, and a
+            // layer that jumps around cannot be positioned accurately.
+            const reactScale = layer.type === 'image' ? 1 + reactive.level * 0.045 : 1;
+            const reactStretch = layer.type === 'waveform' ? 1 + reactive.bass * 0.5 : 1;
+            const reactOpacity = layer.type === 'waveform'
+              ? Math.min(1, layer.opacity * (0.75 + reactive.level * 0.45))
+              : layer.opacity;
+
             const style: CSSProperties = {
               left: layer.x * zoom,
               top: layer.y * zoom,
               width: layer.width * zoom,
               height: layer.height * zoom,
-              opacity: layer.opacity,
-              transform: `rotate(${layer.rotation}deg)`,
+              opacity: reactOpacity,
+              transform: `rotate(${layer.rotation}deg) scale(${reactScale}) scaleY(${reactStretch})`,
+              // Not transitioned: the values already arrive smoothed from the
+              // analysis, and a CSS transition on top would lag the audio.
+              transformOrigin: 'center',
               mixBlendMode: layer.blendMode,
               zIndex: layer.zIndex,
               pointerEvents: layer.type === 'texture' ? 'none' : undefined,
@@ -1406,6 +1643,7 @@ function PropertiesInspector({
   onDelete,
   onMoveLayer,
   onSelectLayer,
+  open,
 }: {
   document: ArtworkDocument;
   selectedLayer: ArtworkLayer | null;
@@ -1415,9 +1653,19 @@ function PropertiesInspector({
   onDelete: () => void;
   onMoveLayer: (delta: -1 | 1) => void;
   onSelectLayer: (id: string) => void;
+  open: boolean;
 }) {
   return (
-    <aside className="hidden min-h-0 overflow-y-auto border-l border-[#EBE1CC1A] bg-[#10100D] p-4 xl:block">
+    <aside
+      aria-hidden={!open}
+      inert={!open ? true : undefined}
+      className={cn(
+        'hidden min-h-0 bg-[#10100D] xl:block',
+        open
+          ? 'overflow-y-auto border-l border-[#EBE1CC1A] p-4'
+          : 'w-0 overflow-hidden border-0 p-0',
+      )}
+    >
       <div className="mb-4 flex items-center gap-2">
         <PanelRight size={16} />
         <h2 className="text-lg font-semibold text-[#EEE8DD]">Inspector</h2>

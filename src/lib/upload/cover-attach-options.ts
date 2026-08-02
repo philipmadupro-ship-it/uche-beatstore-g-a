@@ -11,6 +11,9 @@ export type CoverAttachOption = {
   musicalKey?: string | null;
   durationSeconds?: number | null;
   peaksUrl?: string | null;
+  /** Needed to audition the track from the cover studio so the artwork can
+   *  react to it. Tracks only; null for projects and playlists. */
+  audioUrl?: string | null;
 };
 
 type CoverAttachRecord = {
@@ -22,6 +25,7 @@ type CoverAttachRecord = {
   key?: unknown;
   duration_seconds?: unknown;
   peaks_url?: unknown;
+  audio_url?: unknown;
   track_count?: unknown;
   cover_url?: unknown;
 };
@@ -85,6 +89,7 @@ export function normalizeCoverAttachOptions(kind: CoverAttachTargetKind, data: u
         musicalKey: text(row.key) || null,
         durationSeconds: numberOrNull(row.duration_seconds),
         peaksUrl: text(row.peaks_url) || null,
+        audioUrl: text(row.audio_url) || null,
       });
   }
   return options;

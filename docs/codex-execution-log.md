@@ -7052,3 +7052,80 @@ documented APIs, but the first real call to OpenAI or Gemini has not been made.
 
 - Sidecar plumbing (Phase 3 remainder).
 - Generation is one-shot: no variations, no img2img, no aspect ratios besides square.
+
+---
+
+## Cover Art Studio — work-field UI + audio-reactive preview
+
+Brief from the owner, sharpened before implementing: the artwork is the subject and every
+control is subordinate to it; read like Photoshop crossed with a Jarvis HUD; continuous values
+become sliders; text inputs only where language is genuinely required.
+
+Measured starting point: the artwork occupied roughly a quarter of a 1512px viewport, wedged
+between two permanently-pinned 20rem/19rem columns, with no sliders anywhere — every control was
+a bordered chip or a number spinner at uniform contrast, so nothing had hierarchy.
+
+### Sliders
+
+`HudSlider` — thin track with a filled portion, small handle, live monospace tabular readout.
+Built on a native `input[type=range]`, so the slider role, focus and the full keyboard contract
+(arrows, Home/End, PageUp/Down) come from the platform instead of being re-implemented.
+
+Kept the numeric field **alongside** the track rather than replacing it. Dragging is fast but
+imprecise and several of these values need to be exact — matching tracking across two text
+layers, setting rotation to precisely 0. Scrub or type, as Photoshop, Figma and every DAW do.
+
+Converted by replacing the body of the existing `NumberInput`, so all twelve call sites — X, Y,
+width, height, rotate, opacity, size, tracking, amplitude, stroke, smoothing — became sliders in
+one change rather than twelve.
+
+### Canvas dominance
+
+Both panels now collapse from a HUD bar floating over the canvas (toggle, zoom, status), so the
+artwork can take the whole field.
+
+**A bug I introduced and caught in the browser:** collapsing with `display:none` blanked the
+canvas entirely. A hidden grid item is removed from placement, so every later item slides one
+column left and the canvas landed in the 0rem track. Collapsing to `w-0` keeps the item in the
+grid; `inert` takes the hidden controls out of the tab order without removing them from layout.
+
+### Audio-reactive preview
+
+The image layer breathes with overall loudness and the waveform stretches with the bass, driven
+by `useAudioReactivity` — the same analysis the player and store drawer use, so the cover reacts
+to exactly the moment being heard. Multipliers are deliberately small (4.5% scale, 50% stretch):
+this is a design surface, and a layer that jumps cannot be positioned accurately.
+
+Gated on the studio's selected source actually being the playing track — otherwise the artwork
+would pulse to an unrelated song, which is worse than static. That gate exposed a real gap:
+there was no way to play the selected source from this screen, so the reaction was unreachable
+in practice. Added an audition button and a level meter to the HUD, which required threading
+`audio_url` through `CoverAttachOption` (already present in the `lean=1` column set, verified
+before relying on it).
+
+`prefers-reduced-motion` zeroes the reaction entirely — it is decorative movement. The new
+`useReducedMotion` uses `useSyncExternalStore` rather than `useState` + `useEffect`: a media
+query IS an external store, and that avoids a state write inside an effect while giving SSR an
+explicit snapshot.
+
+**Preview only.** The exported SVG/PNG is a still image; the reaction exists so the cover can be
+judged against its track while being designed, not to bake motion into artwork.
+
+### Also fixed
+
+`ImageArtworkLayer.treatment` was dead alongside `src` — duotone / mineral-tint / high-contrast
+were selectable but never rendered. Now backed by real SVG filters.
+
+### Verified live
+
+Selected a source, hit audition, sampled the artboard layer transforms: **10 of 10 samples
+distinct**, image at `scale(1.0225)`, waveform `scaleY` moving 1.072 → 1.041 against the playing
+instrumental. Panel collapse re-tested after the grid fix — canvas renders full-width.
+
+`tsc` clean · `eslint` 0 errors · **674 tests** · build green.
+
+### Still open
+
+- Only the numeric controls became sliders; the source list and direction picker are still chip
+  clusters and remain the densest part of the left panel.
+- Zoom is still three fixed steps (16/22/30%) rather than a continuous control.
