@@ -187,7 +187,7 @@ function SegmentedButton<T extends string>({
       className={cn(
         'min-h-9 border px-3 text-[12px] transition-colors',
         active
-          ? 'border-[#C7B89D]/50 bg-[#C7B89D] text-[#080806]'
+          ? 'border-[#D4BFA0]/60 bg-[#D4BFA0]/[0.14] text-[#E8DCC8]'
           : 'border-[#EBE1CC1A] bg-[#151510] text-[#AAA294] hover:border-[#EBE1CC52] hover:text-[#EEE8DD]',
       )}
     >
@@ -221,7 +221,7 @@ function PanelToggle({ side, open, onToggle }: { side: 'left' | 'right'; open: b
       aria-pressed={open}
       aria-label={`${open ? 'Collapse' : 'Expand'} ${side} panel`}
       title={`${open ? 'Collapse' : 'Expand'} ${side} panel`}
-      className="grid h-7 w-7 place-items-center text-[#6A655C] transition-colors hover:text-[#EEE8DD] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C7B89D]"
+      className="grid h-7 w-7 place-items-center text-[#6A655C] transition-colors hover:text-[#EEE8DD] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#D4BFA0]"
     >
       <Icon />
     </button>
@@ -1033,7 +1033,7 @@ function StudioTopbar({
           <Download size={14} />
           SVG
         </button>
-        <button type="button" onClick={onDownloadRaster} disabled={exportState === 'exporting'} className="h-9 border border-[#C7B89D]/50 bg-[#C7B89D] px-3 text-xs font-semibold text-[#080806] disabled:opacity-60">
+        <button type="button" onClick={onDownloadRaster} disabled={exportState === 'exporting'} className="h-9 border border-[#D4BFA0] bg-[#D4BFA0] px-3 text-xs font-semibold text-[#0A0907] transition-colors hover:bg-[#E0CDB2] disabled:opacity-60">
           {exportState === 'exporting' ? 'Rendering' : 'Export'}
         </button>
         <button type="button" onClick={onUpload} disabled={uploadState === 'uploading'} className="hidden h-9 border border-[#EBE1CC1A] px-3 text-xs text-[#AAA294] hover:text-[#EEE8DD] md:inline-flex md:items-center md:gap-2">
@@ -1061,7 +1061,7 @@ function ToolRail({ activeTool, onTool }: { activeTool: CoverArtTool; onTool: (t
               onClick={() => onTool(item.id)}
               className={cn(
                 'grid h-12 w-12 place-items-center border text-[#706B61] transition-colors',
-                active ? 'border-[#C7B89D]/50 bg-[#151510] text-[#EEE8DD]' : 'border-transparent hover:border-[#EBE1CC1A] hover:text-[#AAA294]',
+                active ? 'border-[#D4BFA0]/50 bg-[#151510] text-[#EEE8DD]' : 'border-transparent hover:border-[#EBE1CC1A] hover:text-[#AAA294]',
               )}
             >
               <Icon size={18} strokeWidth={1.7} />
@@ -1186,7 +1186,7 @@ function ContextPanel({
                   onClick={() => onSourceId(option.id)}
                   className={cn(
                     'grid min-h-14 grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-3 border p-2 text-left',
-                    active ? 'border-[#C7B89D]/50 bg-[#151510]' : 'border-[#EBE1CC1A] hover:border-[#EBE1CC52]',
+                    active ? 'border-[#D4BFA0]/50 bg-[#151510]' : 'border-[#EBE1CC1A] hover:border-[#EBE1CC52]',
                   )}
                 >
                   <span className="block h-10 w-10 bg-cover bg-center" style={option.coverUrl ? { backgroundImage: `url(${option.coverUrl})` } : { background: '#1B1A15' }} />
@@ -1198,7 +1198,7 @@ function ContextPanel({
               );
             })}
           </div>
-          <button type="button" onClick={onUseDirection} className="h-10 w-full bg-[#C7B89D] text-sm font-semibold text-[#080806]">Start from source</button>
+          <button type="button" onClick={onUseDirection} className="h-10 w-full text-sm font-semibold transition-colors border border-[#D4BFA0]/30 bg-[#D4BFA0]/[0.10] text-[#E8DCC8] hover:border-[#D4BFA0]/50 hover:bg-[#D4BFA0]/[0.16]">Start from source</button>
         </div>
       ) : null}
 
@@ -1211,7 +1211,7 @@ function ContextPanel({
                 key={direction.id}
                 type="button"
                 onClick={() => onDirection(direction.id)}
-                className={cn('w-full border p-3 text-left', active ? 'border-[#C7B89D]/50 bg-[#151510]' : 'border-[#EBE1CC1A] hover:border-[#EBE1CC52]')}
+                className={cn('w-full border p-3 text-left', active ? 'border-[#D4BFA0]/50 bg-[#151510]' : 'border-[#EBE1CC1A] hover:border-[#EBE1CC52]')}
               >
                 <span className="mb-3 grid h-24 grid-cols-4 gap-1">
                   {Object.values(direction.palette).slice(0, 4).map((color) => <span key={color} style={{ background: color }} />)}
@@ -1269,7 +1269,7 @@ function ContextPanel({
                   type="button"
                   onClick={onAnalyzeWaveform}
                   disabled={!sourceCanAnalyze || waveformAnalysisState === 'analyzing' || selectedTrackPeaksSource === 'real'}
-                  className="mt-3 h-9 w-full border border-[#C7B89D]/50 bg-[#C7B89D] text-sm font-semibold text-[#080806] disabled:cursor-not-allowed disabled:opacity-45"
+                  className="mt-3 h-9 w-full text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-45 border border-[#D4BFA0]/30 bg-[#D4BFA0]/[0.10] text-[#E8DCC8] hover:border-[#D4BFA0]/50 hover:bg-[#D4BFA0]/[0.16]"
                 >
                   {waveformAnalysisState === 'analyzing'
                     ? 'Analyzing beat'
@@ -1347,7 +1347,7 @@ function ContextPanel({
             {attachOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
           </select>
         ) : null}
-        <button type="button" disabled={!generatedCoverUrl || attachState === 'attaching'} onClick={onAttach} className="mt-2 h-10 w-full border border-[#C7B89D]/50 bg-[#C7B89D] text-sm font-semibold text-[#080806] disabled:opacity-45">
+        <button type="button" disabled={!generatedCoverUrl || attachState === 'attaching'} onClick={onAttach} className="mt-2 h-10 w-full text-sm font-semibold transition-colors disabled:opacity-45 border border-[#D4BFA0]/30 bg-[#D4BFA0]/[0.10] text-[#E8DCC8] hover:border-[#D4BFA0]/50 hover:bg-[#D4BFA0]/[0.16]">
           {attachState === 'attaching' ? 'Attaching' : attachState === 'attached' ? 'Attached' : 'Attach uploaded cover'}
         </button>
         {attachError ? <p className="mt-2 text-sm text-[#DED1B8]">{attachError}</p> : null}
@@ -1428,8 +1428,8 @@ function CanvasWorkspace({
                 aria-label={auditioning ? 'Pause source track' : 'Play source track'}
                 title={auditioning ? 'Pause source track' : 'Play source track to make the cover react'}
                 className={cn(
-                  'grid h-7 w-7 place-items-center transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#C7B89D]',
-                  auditioning ? 'text-[#C7B89D]' : 'text-[#6A655C] hover:text-[#EEE8DD]',
+                  'grid h-7 w-7 place-items-center transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#D4BFA0]',
+                  auditioning ? 'text-[#D4BFA0]' : 'text-[#6A655C] hover:text-[#EEE8DD]',
                 )}
               >
                 {auditioning ? <Pause size={12} /> : <Play size={12} />}
@@ -1439,7 +1439,7 @@ function CanvasWorkspace({
                   itself is deliberately moving only a few percent. */}
               <span aria-hidden className="relative h-[3px] w-10 overflow-hidden bg-[#26241F]">
                 <span
-                  className="absolute inset-y-0 left-0 bg-[#C7B89D]"
+                  className="absolute inset-y-0 left-0 bg-[#D4BFA0]"
                   style={{ width: `${Math.round(reactive.level * 100)}%` }}
                 />
               </span>
@@ -1453,7 +1453,7 @@ function CanvasWorkspace({
               onClick={() => onZoom(value)}
               className={cn(
                 'h-7 px-2 font-mono text-[10px] tabular-nums transition-colors',
-                zoom === value ? 'text-[#C7B89D]' : 'text-[#6A655C] hover:text-[#EEE8DD]',
+                zoom === value ? 'text-[#D4BFA0]' : 'text-[#6A655C] hover:text-[#EEE8DD]',
               )}
             >
               {Math.round(value * 100)}%
@@ -1531,7 +1531,7 @@ function CanvasWorkspace({
                 onPointerCancel={onEndDrag}
                 className={cn(
                   'absolute select-none outline-none',
-                  selected ? 'ring-1 ring-[#C7B89D]' : 'hover:ring-1 hover:ring-[#EEE8DD33]',
+                  selected ? 'ring-1 ring-[#D4BFA0]' : 'hover:ring-1 hover:ring-[#EEE8DD33]',
                   layer.locked ? 'cursor-not-allowed' : 'cursor-move',
                 )}
                 style={style}
@@ -1539,9 +1539,9 @@ function CanvasWorkspace({
                 <CanvasLayer layer={layer} zoom={zoom} editing={editingLayerId === layer.id} onEditDone={() => onEditLayer(null)} onUpdateText={(text) => onUpdateText(layer.id, text)} />
                 {selected && !layer.locked ? (
                   <>
-                    <span className="absolute -right-1 -top-1 h-2 w-2 bg-[#C7B89D]" />
-                    <span className="absolute -bottom-1 -right-1 h-2 w-2 bg-[#C7B89D]" />
-                    <span className="absolute -top-8 right-0 border border-[#EBE1CC1A] bg-[#080806] px-2 py-1 text-[10px] text-[#C7B89D]">drag / arrows</span>
+                    <span className="absolute -right-1 -top-1 h-2 w-2 bg-[#D4BFA0]" />
+                    <span className="absolute -bottom-1 -right-1 h-2 w-2 bg-[#D4BFA0]" />
+                    <span className="absolute -top-8 right-0 border border-[#EBE1CC1A] bg-[#080806] px-2 py-1 text-[10px] text-[#D4BFA0]">drag / arrows</span>
                   </>
                 ) : null}
               </div>
@@ -1713,7 +1713,7 @@ function PropertiesInspector({
               key={layer.id}
               type="button"
               onClick={() => onSelectLayer(layer.id)}
-              className={cn('grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 border p-2 text-left', selectedLayer?.id === layer.id ? 'border-[#C7B89D]/50 bg-[#151510]' : 'border-[#EBE1CC1A] hover:border-[#EBE1CC52]')}
+              className={cn('grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2 border p-2 text-left', selectedLayer?.id === layer.id ? 'border-[#D4BFA0]/50 bg-[#151510]' : 'border-[#EBE1CC1A] hover:border-[#EBE1CC52]')}
             >
               <LayerPreview layer={layer} />
               <span className="min-w-0">
@@ -1735,7 +1735,7 @@ function AudioTimeline({ document }: { document: ArtworkDocument }) {
   return (
     <footer className="grid grid-cols-[3rem_minmax(0,1fr)_auto] items-center gap-3 border-t border-[#EBE1CC1A] bg-[#0D0D0A] px-4">
       <div className="grid h-11 w-11 place-items-center border border-[#EBE1CC1A]" style={{ background: document.palette.panel }}>
-        <Music2 size={17} className="text-[#C7B89D]" />
+        <Music2 size={17} className="text-[#D4BFA0]" />
       </div>
       <div className="min-w-0">
         <div className="flex items-center gap-3">
@@ -1749,7 +1749,7 @@ function AudioTimeline({ document }: { document: ArtworkDocument }) {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <button type="button" aria-label="Play preview" className="grid h-10 w-10 place-items-center border border-[#C7B89D]/50 bg-[#C7B89D] text-[#080806]">
+        <button type="button" aria-label="Play preview" className="grid h-10 w-10 place-items-center transition-colors border border-[#D4BFA0]/30 bg-[#D4BFA0]/[0.10] text-[#E8DCC8] hover:border-[#D4BFA0]/50 hover:bg-[#D4BFA0]/[0.16]">
           <Play size={16} fill="currentColor" />
         </button>
         <button type="button" aria-label="Pause preview" className="grid h-10 w-10 place-items-center border border-[#EBE1CC1A] text-[#AAA294]">

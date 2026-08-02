@@ -130,8 +130,8 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
           <div className="space-y-1">
             <p className="text-[12px] text-[#EEE8DD]">No image provider configured.</p>
             <p className="text-[11px] leading-relaxed text-[#706B61]">
-              Set <code className="text-[#C7B89D]">OPENAI_API_KEY</code> or{' '}
-              <code className="text-[#C7B89D]">GEMINI_API_KEY</code> in the server environment
+              Set <code className="text-[#D4BFA0]">OPENAI_API_KEY</code> or{' '}
+              <code className="text-[#D4BFA0]">GEMINI_API_KEY</code> in the server environment
               (Vercel → Settings → Environment Variables), then redeploy. Keys stay server-side and
               are never sent to the browser.
             </p>
@@ -150,7 +150,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
                 onClick={() => setProvider(p)}
                 className={`border px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] transition ${
                   provider === p
-                    ? 'border-[#C7B89D] bg-[#C7B89D1A] text-[#EEE8DD]'
+                    ? 'border-[#D4BFA0] bg-[#D4BFA01A] text-[#EEE8DD]'
                     : 'border-[#EBE1CC1A] text-[#706B61] hover:border-[#EBE1CC33]'
                 }`}
               >
@@ -171,7 +171,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
           onChange={(e) => setPrompt(e.target.value)}
           rows={3}
           placeholder="Describe the artwork — subject, texture, light…"
-          className="w-full resize-y border border-[#EBE1CC1A] bg-[#0D0D0A] p-2.5 text-[12px] text-[#EEE8DD] placeholder:text-[#4A463E] focus-visible:border-[#C7B89D] focus-visible:outline-none"
+          className="w-full resize-y border border-[#EBE1CC1A] bg-[#0D0D0A] p-2.5 text-[12px] text-[#EEE8DD] placeholder:text-[#4A463E] focus-visible:border-[#D4BFA0] focus-visible:outline-none"
         />
         <div className="flex flex-wrap gap-1.5">
           {PRESETS.map((p) => (
@@ -199,7 +199,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
                 onClick={() => toggleColor(key)}
                 aria-pressed={on}
                 className={`flex items-center gap-1.5 border px-2 py-1 text-[10px] transition ${
-                  on ? 'border-[#C7B89D] text-[#EEE8DD]' : 'border-[#EBE1CC1A] text-[#706B61]'
+                  on ? 'border-[#D4BFA0] text-[#EEE8DD]' : 'border-[#EBE1CC1A] text-[#706B61]'
                 }`}
               >
                 <span
@@ -226,7 +226,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
           value={avoid}
           onChange={(e) => setAvoid(e.target.value)}
           placeholder="faces, people, clutter…"
-          className="w-full border border-[#EBE1CC1A] bg-[#0D0D0A] p-2 text-[12px] text-[#EEE8DD] placeholder:text-[#4A463E] focus-visible:border-[#C7B89D] focus-visible:outline-none"
+          className="w-full border border-[#EBE1CC1A] bg-[#0D0D0A] p-2 text-[12px] text-[#EEE8DD] placeholder:text-[#4A463E] focus-visible:border-[#D4BFA0] focus-visible:outline-none"
         />
       </div>
 
@@ -234,7 +234,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
         type="button"
         onClick={generate}
         disabled={busy || !prompt.trim() || !provider}
-        className="flex w-full items-center justify-center gap-2 border border-[#C7B89D] bg-[#C7B89D] px-3 py-2.5 text-[11px] uppercase tracking-[0.16em] text-[#0D0D0A] transition disabled:cursor-not-allowed disabled:border-[#EBE1CC1A] disabled:bg-transparent disabled:text-[#4A463E]"
+        className="flex w-full items-center justify-center gap-2 border border-[#D4BFA0] bg-[#D4BFA0] px-3 py-2.5 text-[11px] uppercase tracking-[0.16em] text-[#0D0D0A] transition disabled:cursor-not-allowed disabled:border-[#EBE1CC1A] disabled:bg-transparent disabled:text-[#4A463E]"
       >
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
         {busy ? 'Generating…' : 'Generate cover'}

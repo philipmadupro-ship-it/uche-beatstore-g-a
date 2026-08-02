@@ -71,7 +71,7 @@ export function HudSlider({
       <div className="flex items-baseline justify-between gap-2">
         <label
           htmlFor={id}
-          className="text-[9px] uppercase tracking-[0.18em] text-[#6A655C] transition-colors group-focus-within:text-[#C7B89D]"
+          className="text-[9px] uppercase tracking-[0.18em] text-[#6A655C] transition-colors group-focus-within:text-[#D4BFA0]"
         >
           {label}
         </label>
@@ -85,7 +85,7 @@ export function HudSlider({
             if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur(); }
           }}
           inputMode="decimal"
-          className="w-14 bg-transparent text-right font-mono text-[11px] tabular-nums text-[#EEE8DD] outline-none focus-visible:text-[#C7B89D]"
+          className="w-14 bg-transparent text-right font-mono text-[11px] tabular-nums text-[#EEE8DD] outline-none focus-visible:text-[#D4BFA0]"
         />
       </div>
 
@@ -101,7 +101,7 @@ export function HudSlider({
         // filled portion stays perfectly aligned with the native thumb.
         style={{
           background:
-            `linear-gradient(to right, #C7B89D 0%, #C7B89D ${pct}%, #26241F ${pct}%, #26241F 100%)`,
+            `linear-gradient(to right, #D4BFA0 0%, #D4BFA0 ${pct}%, #26241F ${pct}%, #26241F 100%)`,
         }}
         className="
           h-[3px] w-full cursor-pointer appearance-none rounded-full outline-none
@@ -115,7 +115,7 @@ export function HudSlider({
           [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full
           [&::-moz-range-thumb]:border [&::-moz-range-thumb]:border-[#0D0D0A]
           [&::-moz-range-thumb]:bg-[#EEE8DD]
-          focus-visible:ring-1 focus-visible:ring-[#C7B89D] focus-visible:ring-offset-2
+          focus-visible:ring-1 focus-visible:ring-[#D4BFA0] focus-visible:ring-offset-2
           focus-visible:ring-offset-[#0D0D0A]
         "
       />

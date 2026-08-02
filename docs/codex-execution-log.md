@@ -7129,3 +7129,66 @@ instrumental. Panel collapse re-tested after the grid fix — canvas renders ful
 - Only the numeric controls became sliders; the source list and direction picker are still chip
   clusters and remain the densest part of the left panel.
 - Zoom is still three fixed steps (16/22/30%) rather than a continuous control.
+
+---
+
+## Library rows + cover-art button colour
+
+### Track rows: the stars/date overlap was arithmetic, not taste
+
+Root-caused rather than nudged. The row grid gave the rating column **112px** while its contents
+needed ~133px: five stars at 15px each (11px icon + 2px padding) = 83px, plus an 8px gap, plus a
+badge slot with `min-w-[42px]` that reserved space even when there was no badge. The overflow
+pushed left into the neighbouring 70px time column, so the stars sat on top of the date.
+
+Fixed at the cause: time column 70 → 84px, rating column 112 → 148px, the badge slot no longer
+reserves width when empty, and both the stars group and the badge are `shrink-0` so they can
+never be squeezed back into the date again. Duration and date are `whitespace-nowrap`.
+
+Verified by measuring the rendered geometry rather than eyeballing: columns resolve to
+`40 / 538 / 371 / 84 / 148 / 32` and a pass over every adjacent pair found **0 overlaps**.
+
+### Borders
+
+Rows carried background tint only, so adjacent rows blurred together. Each row now has a 1px
+border that also distinguishes its state: default `white/[0.07]`, hover `/[0.16]`, current
+`/[0.18]`, selected `/[0.22]`.
+
+### More information per row
+
+Added a store/price marker: a listed track shows its lease price (`$100`) or `Listed`. This was
+state the producer already owned but could only see by opening tracks one at a time — the wrong
+way to answer "what have I actually listed?" across a 50-track library.
+
+### Cover-art buttons
+
+Two problems, not one. The studio used `#C7B89D`, a paler one-off rather than the app's real
+accent token `#D4BFA0`. And **five** buttons were solid-filled — export, start-from-source,
+analyze, attach, play — so five things competed as the primary action, which is a real part of
+why the surface read as busy.
+
+Retoned to `#D4BFA0` and applied the control language already written into
+`docs/design-direction.md` principle 3: solid fill is reserved for ONE primary action per view.
+Export keeps the solid accent; everything else became translucent
+(`bg-[#D4BFA0]/[0.10]` + hairline border).
+
+### Uploads re-verified
+
+Uploaded a real 345 KB WAV through the actual UI after the earlier persistence fix: tray reports
+`done`, zero unhandled rejections, `localStorage` clean.
+
+### A dev-server red herring, recorded so it is not re-investigated
+
+The console showed `Module not found: Can't resolve '@/hooks/useReducedMotion'` plus a
+hooks-order warning. Both were stale: the hook file was created after the dev server had built
+its module graph, and the hooks-order warning is the normal HMR artifact of changing a hook's
+implementation (`useState` → `useSyncExternalStore`) while the component was mounted. A restart
+plus a clean `next build` resolve the module fine, and the page renders — which a genuine
+unresolved import would have prevented outright.
+
+`tsc` clean · `eslint` 0 errors · **674 tests** · build green.
+
+### Not done — needs the owner to disambiguate
+
+- "different ways of portraying filters in library"
+- "take away the special music library"

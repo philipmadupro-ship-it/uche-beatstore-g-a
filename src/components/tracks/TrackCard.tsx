@@ -190,12 +190,12 @@ export function TrackCard({
           cover_url: track.cover_url ?? null,
         });
       }}
-      className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-lg px-2.5 py-2 transition-colors cursor-pointer md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_70px_112px_32px] md:gap-4 md:px-3 ${
+      className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-lg border px-2.5 py-2 transition-colors cursor-pointer md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_84px_148px_32px] md:gap-4 md:px-3 ${
         isCurrent
-          ? 'bg-white/[0.06] shadow-[inset_2px_0_0_#FFFFFF]'
+          ? 'border-white/[0.18] bg-white/[0.06] shadow-[inset_2px_0_0_#FFFFFF]'
           : selected
-            ? 'bg-white/[0.08]'
-            : 'hover:bg-white/[0.04]'
+            ? 'border-white/[0.22] bg-white/[0.08]'
+            : 'border-white/[0.07] hover:border-white/[0.16] hover:bg-white/[0.04]'
       }`}
     >
       {/* Cover/play cell — mirrors the Store list row. In select or store
@@ -272,8 +272,19 @@ export function TrackCard({
         </p>
       </div>
 
-      {/* Tags + rating — secondary support, same hierarchy as Store list. */}
+      {/* Tags + commerce state — secondary support, same hierarchy as Store list.
+          The store/price markers are here because they were previously only
+          visible by opening each track one at a time, which is the wrong way to
+          answer "what have I actually listed?" across a 50-track library. */}
       <div className="relative z-10 hidden min-w-0 items-center gap-2 md:flex">
+        {track.store_listed ? (
+          <span
+            title={track.lease_price_usd != null ? `Listed from $${track.lease_price_usd}` : 'Listed on the store'}
+            className="shrink-0 rounded border border-[#D4BFA0]/25 bg-[#D4BFA0]/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[#D4BFA0]"
+          >
+            {track.lease_price_usd != null ? `$${track.lease_price_usd}` : 'Listed'}
+          </span>
+        ) : null}
         {genreMoodTags.slice(0, 2).map((tt) => (
           <span
             key={`${tt.category}-${tt.tag}`}
@@ -286,13 +297,13 @@ export function TrackCard({
 
       {/* Time / added */}
       <div className="relative z-10 hidden text-right md:block">
-        <p className="text-[11px] font-mono tabular-nums text-white/60">{durationLabel}</p>
-        <p className="mt-0.5 text-[9px] font-mono uppercase tracking-[0.14em] text-white/30">{uploadDate}</p>
+        <p className="whitespace-nowrap text-[11px] font-mono tabular-nums text-white/60">{durationLabel}</p>
+        <p className="mt-0.5 whitespace-nowrap text-[9px] font-mono uppercase tracking-[0.14em] text-white/30">{uploadDate}</p>
       </div>
 
       {/* Rating stars */}
       <div className="relative z-10 hidden items-center justify-end gap-2 md:flex" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-0.5">
           {[1, 2, 3, 4, 5].map((star) => (
             <button key={star} onClick={(e) => handleRating(e, star)} className="cursor-pointer p-0.5">
               <Star
@@ -304,7 +315,7 @@ export function TrackCard({
             </button>
           ))}
         </div>
-        <div className="flex min-w-[42px] justify-end">
+        <div className="flex shrink-0 justify-end">
           {isCached && (
             <span className="rounded border border-white/[0.14] px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-white/55">
               Offline
