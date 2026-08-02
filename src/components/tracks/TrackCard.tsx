@@ -44,6 +44,29 @@ interface TrackCardProps {
   isLastInOrder?: boolean;
 }
 
+/**
+ * Column template for a track row and for any header that labels it.
+ *
+ * Exported and shared because it was previously written out by hand in three
+ * files — this component, the library header and the project header. Widening
+ * two columns here to stop the rating stars colliding with the date left both
+ * headers labelling the wrong columns, which is the failure mode a duplicated
+ * layout constant guarantees eventually.
+ *
+ *   40px  index / play
+ *   1.45fr title + metadata
+ *   1fr    tags + store state
+ *   84px   duration + added date
+ *   148px  rating + offline/stems badge
+ *   32px   row menu
+ *
+ * The `md:` prefix is baked into the value, not applied at the use site. A
+ * class name assembled at runtime (`md:${...}`) is invisible to Tailwind's
+ * scanner, which reads source text rather than evaluating it — the CSS would
+ * never be generated and every row would collapse to a single column.
+ */
+export const TRACK_ROW_GRID = 'md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_84px_148px_32px]';
+
 type TrackTag = {
   tag: string;
   category?: string | null;
@@ -190,11 +213,11 @@ export function TrackCard({
           cover_url: track.cover_url ?? null,
         });
       }}
-      className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-lg border px-2.5 py-2 transition-colors cursor-pointer md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_84px_148px_32px] md:gap-4 md:px-3 ${
+      className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-lg border px-2.5 py-2 transition-colors cursor-pointer ${TRACK_ROW_GRID} md:gap-4 md:px-3 ${
         isCurrent
-          ? 'border-white/[0.18] bg-white/[0.06] shadow-[inset_2px_0_0_#FFFFFF]'
+          ? 'border-[#D4BFA0]/35 bg-[#D4BFA0]/[0.07] shadow-[inset_3px_0_0_#D4BFA0]'
           : selected
-            ? 'border-white/[0.22] bg-white/[0.08]'
+            ? 'border-white/[0.24] bg-white/[0.08]'
             : 'border-white/[0.07] hover:border-white/[0.16] hover:bg-white/[0.04]'
       }`}
     >
@@ -260,16 +283,27 @@ export function TrackCard({
 
       {/* Title + core metadata */}
       <div className="relative z-10 min-w-0">
-        <h4 className={`truncate text-[14px] font-semibold leading-tight ${isCurrent ? 'text-white' : 'text-white'}`}>
+        <h4 className={`truncate text-[14px] font-semibold leading-tight tracking-[-0.01em] transition-colors ${
+          isCurrent ? 'text-white' : 'text-white/95 group-hover:text-white'
+        }`}>
           {track.title}
         </h4>
-        <p className="mt-1 truncate text-[9px] font-mono uppercase tracking-[0.14em] text-white/40">
-          {[
-            track.bpm ? `${track.bpm} BPM` : null,
-            track.key ? `${track.key}${track.scale === 'minor' ? 'm' : ''}` : null,
-            track.type,
-          ].filter(Boolean).join(' · ') || '—'}
-        </p>
+        {/* Metadata as discrete cells rather than a ' · ' string: BPM and key
+            are the two values a producer scans for, and a run-on line makes
+            them hunt. Separators are rendered, not typed, so a missing value
+            cannot leave a dangling dot. */}
+        <div className="mt-1 flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.14em] text-white/40">
+          {track.bpm ? (
+            <span className="tabular-nums text-white/55">{track.bpm}<span className="text-white/30"> BPM</span></span>
+          ) : null}
+          {track.bpm && track.key ? <span aria-hidden className="h-2 w-px bg-white/15" /> : null}
+          {track.key ? (
+            <span className="text-white/55">{track.key}{track.scale === 'minor' ? 'm' : ''}</span>
+          ) : null}
+          {(track.bpm || track.key) && track.type ? <span aria-hidden className="h-2 w-px bg-white/15" /> : null}
+          {track.type ? <span className="truncate">{track.type}</span> : null}
+          {!track.bpm && !track.key && !track.type ? <span>—</span> : null}
+        </div>
       </div>
 
       {/* Tags + commerce state — secondary support, same hierarchy as Store list.
@@ -303,17 +337,30 @@ export function TrackCard({
 
       {/* Rating stars */}
       <div className="relative z-10 hidden items-center justify-end gap-2 md:flex" onClick={(e) => e.stopPropagation()}>
-        <div className="flex shrink-0 items-center gap-0.5">
-          {[1, 2, 3, 4, 5].map((star) => (
-            <button key={star} onClick={(e) => handleRating(e, star)} className="cursor-pointer p-0.5">
-              <Star
-                size={11}
-                fill={track.rating && track.rating >= star ? '#c8a84b' : 'none'}
-                strokeWidth={1.5}
-                className={track.rating && track.rating >= star ? 'text-[#c8a84b]' : 'text-white/20 transition-colors hover:text-[#c8a84b]'}
-              />
-            </button>
-          ))}
+        <div
+          className={`flex shrink-0 items-center gap-0.5 transition-opacity ${
+            track.rating ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+          }`}
+        >
+          {[1, 2, 3, 4, 5].map((star) => {
+            const on = Boolean(track.rating && track.rating >= star);
+            return (
+              <button
+                key={star}
+                onClick={(e) => handleRating(e, star)}
+                className="cursor-pointer p-0.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c8a84b] rounded-sm"
+                aria-label={`Rate ${star} star${star === 1 ? '' : 's'}`}
+                aria-pressed={on}
+              >
+                <Star
+                  size={11}
+                  fill={on ? '#c8a84b' : 'none'}
+                  strokeWidth={1.5}
+                  className={on ? 'text-[#c8a84b]' : 'text-white/25 transition-colors hover:text-[#c8a84b]'}
+                />
+              </button>
+            );
+          })}
         </div>
         <div className="flex shrink-0 justify-end">
           {isCached && (

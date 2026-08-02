@@ -7241,3 +7241,59 @@ Pill row gone, `FILTERS` badge present with an active count, Type facet inside t
 narrowing the list when Remixes is selected, view toggles reduced to List / Grid / Portfolio.
 
 `tsc` clean · `eslint` 0 errors · **674 tests** · build green.
+
+---
+
+## Track rows: shared grid, hierarchy, quieter chrome (library + projects)
+
+Owner: "improve the tracks UI in library and projects using all the skills possible." Loaded the
+`frontend-design` skill, then made a deliberate call about it: this app already has a committed
+aesthetic (dark warm, Akira/Synkopy/Panchang, `#D4BFA0`) documented in `design-direction.md`
+with explicit "no new colours, no new font imports" constraints. So the skill's *craft* —
+hierarchy, density, depth, motion, detail — was applied inside that system rather than used to
+introduce a competing direction. The skill's own instruction is context-specific character, and
+the context here is an established product, not a greenfield page.
+
+### A regression I had caused, found while starting the work
+
+The previous pass widened two row columns (70→84, 112→148) to stop the rating stars colliding
+with the date — but that grid template was written out **by hand in three files**: `TrackCard`,
+the library header and the project header. Only the row changed, so both headers were left
+labelling the wrong columns.
+
+Fixed at the root: `TRACK_ROW_GRID` is now exported from `TrackCard` and consumed by both
+headers, so a column change can no longer desync from its labels.
+
+Two traps inside that fix, both caught before shipping:
+- The `md:` prefix is baked into the constant's value rather than applied at the use site.
+  `md:${CONST}` assembles a class name at runtime, which Tailwind's scanner cannot see — it
+  reads source text rather than evaluating it, so the CSS would never be generated and every row
+  would collapse to one column.
+- Adding a 1px border to rows changed their box model, so the flexible columns resolved ~1.2px
+  narrower than the header's. Verified by comparing computed `grid-template-columns`, then fixed
+  with a transparent border on the header. Now byte-identical on both surfaces:
+  library `40 538.562 371.422 84 148 32`, projects `40 301.828 208.156 84 148 32` — different
+  container widths, same resolution, which is what proves the shared constant rather than a
+  coincidence.
+
+### Craft
+
+- **Title/metadata hierarchy.** Title and metadata sat 4px apart at near-equal weight, so a row
+  read as one undifferentiated block. Title gains presence and tighter tracking; metadata becomes
+  discrete cells with rendered hairline separators instead of a `' · '` string — BPM and key are
+  what a producer scans for, and a run-on line makes them hunt. Rendered separators also mean a
+  missing value cannot leave a dangling dot, which the string join did.
+- **Rating quieted.** Five outlined stars on every row is permanent noise for a value most tracks
+  never set. Unrated rows reveal the control on hover/focus; rated rows always show it, because
+  a rating IS information. Each star also gained an `aria-label` and `aria-pressed` — they were
+  unlabelled buttons before.
+- **Playing state.** A 2px white inset bar was easy to lose in a long list. The playing row now
+  carries an accent edge and faint accent tint from `#D4BFA0`, so it reads as lit; selection
+  stays neutral so the two states never look alike.
+
+### Verified live
+
+Header/row alignment measured on both surfaces (identical computed column tracks), playing row
+visibly distinct, stars absent on unrated rows and present on rated ones.
+
+`tsc` clean · `eslint` 0 errors · **674 tests** · build green.

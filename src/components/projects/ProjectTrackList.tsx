@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { Search, Music, Library, Plus, GripVertical, X, Tag, CheckSquare } from 'lucide-react';
-import { TrackCard } from '@/components/tracks/TrackCard';
+import { TrackCard, TRACK_ROW_GRID } from '@/components/tracks/TrackCard';
 import { Track } from '@/lib/types';
 
 interface Props {
@@ -181,7 +181,7 @@ export function ProjectTrackList({
       <div className="space-y-1.5 pb-1 mb-32">
         {/* Header mirrors the Store-style product row: cover/play,
             title/meta, vibe, time, rating/offline, actions. */}
-        <div className="hidden md:grid md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_70px_112px_32px] items-center gap-4 px-3 h-8 text-[9px] font-mono uppercase tracking-wider text-white/40">
+        <div className={`hidden md:grid ${TRACK_ROW_GRID} items-center gap-4 border border-transparent px-3 h-8 text-[9px] font-mono uppercase tracking-wider text-white/40`}>
           {selectable ? (
             <span className="flex items-center justify-center">
               <input
