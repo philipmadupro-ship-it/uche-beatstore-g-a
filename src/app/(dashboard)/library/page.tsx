@@ -33,7 +33,6 @@ import { Drawer } from '@/components/ui/Drawer';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { listCached } from '@/lib/offline/audio-cache';
 import { TrackGridCard } from '@/components/tracks/TrackGridCard';
-import { VisionLibraryView } from '@/components/library/VisionLibraryView';
 import MusicPortfolio, { type PortfolioTrack } from '@/components/library/MusicPortfolio';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
@@ -95,8 +94,6 @@ export default function LibraryPage() {
   const [loading, setLoading] = useState(() => !getCached('library:tracks'));
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'beat' | 'instrumental' | 'song' | 'remix'>('all');
-  const [offlineOnly, setOfflineOnly] = useState(false);
   const [cachedIds, setCachedIds] = useState<Set<string>>(new Set());
 
   const refreshOfflineList = async () => {
@@ -110,6 +107,7 @@ export default function LibraryPage() {
 
   useEffect(() => {
     refreshOfflineList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracks]);
 
   const [sortMode, setSortMode] = useState<SortMode>('recent');
@@ -127,7 +125,7 @@ export default function LibraryPage() {
   const [bulkTagPanel, setBulkTagPanel] = useState<'addTags' | 'removeTags' | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [shareTarget, setShareTarget] = useState<Track | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'portfolio' | 'vision'>('vision');
+  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'portfolio'>('list');
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<LibraryFilters>(() => ({
@@ -136,6 +134,14 @@ export default function LibraryPage() {
     statuses: new Set<string>(),
     keys: new Set<string>(),
   }));
+
+  // Re-read the cached-id list when the offline facet is switched on. The old
+  // Offline pill refreshed on click; without this the filter could show a stale
+  // set for anything cached since the page loaded.
+  useEffect(() => {
+    if (filters.offlineOnly) refreshOfflineList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.offlineOnly]);
   // ── Smart playlists — saved auto-updating filter views (mig 067) ──
   const [smartPlaylists, setSmartPlaylists] = useState<Array<{ id: string; name: string; filter: Record<string, unknown> }>>([]);
   const [activeSmartId, setActiveSmartId] = useState<string | null>(null);
@@ -158,7 +164,7 @@ export default function LibraryPage() {
     try {
       const res = await fetch('/api/smart-playlists', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, filter: { ...serializeFilters(filters), typeFilter } }),
+        body: JSON.stringify({ name, filter: serializeFilters(filters) }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed');
       toast.success('Smart playlist saved', 'It updates automatically as new tracks match.');
@@ -169,11 +175,16 @@ export default function LibraryPage() {
   };
 
   const applySmartPlaylist = (sp: { id: string; filter: Record<string, unknown> }) => {
-    setFilters(deserializeFilters(sp.filter));
-    const savedType = sp.filter?.typeFilter;
-    if (savedType === 'all' || savedType === 'beat' || savedType === 'instrumental' || savedType === 'song' || savedType === 'remix') {
-      setTypeFilter(savedType);
-    }
+    // Smart playlists saved before type moved into the filter model carry it
+    // as a sibling `typeFilter` key; fold that in so they still apply correctly.
+    const legacyType = sp.filter?.typeFilter;
+    const restored = deserializeFilters(sp.filter);
+    setFilters(
+      legacyType === 'beat' || legacyType === 'instrumental' || legacyType === 'song'
+        || legacyType === 'remix' || legacyType === 'all'
+        ? { ...restored, type: legacyType }
+        : restored,
+    );
     setActiveSmartId(sp.id);
     setShowFilters(true);
     setBrowseMode('all');
@@ -185,8 +196,10 @@ export default function LibraryPage() {
     await fetch(`/api/smart-playlists/${id}`, { method: 'DELETE' }).catch(() => undefined);
   };
   useEffect(() => {
-    const saved = localStorage.getItem('library-view') as 'list' | 'grid' | 'portfolio' | 'vision' | null;
-    if (saved === 'list' || saved === 'grid' || saved === 'portfolio' || saved === 'vision') setViewMode(saved);
+    const saved = localStorage.getItem('library-view') as 'list' | 'grid' | 'portfolio' | null;
+    // 'vision' is no longer a view; anyone whose saved preference still
+    // names it falls back to the track list rather than a blank surface.
+    if (saved === 'list' || saved === 'grid' || saved === 'portfolio') setViewMode(saved);
   }, []);
   useEffect(() => {
     const media = window.matchMedia('(max-width: 639px)');
@@ -412,8 +425,8 @@ export default function LibraryPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const matched = tracks.filter((t) => {
-      if (offlineOnly && !cachedIds.has(t.id)) return false;
-      if (typeFilter !== 'all' && t.type !== typeFilter) return false;
+      if (filters.offlineOnly && !cachedIds.has(t.id)) return false;
+      if (filters.type !== 'all' && t.type !== filters.type) return false;
       if (filters.bpmMin != null && (t.bpm == null || t.bpm < filters.bpmMin)) return false;
       if (filters.bpmMax != null && (t.bpm == null || t.bpm > filters.bpmMax)) return false;
       if (filters.keys.size > 0 && (!t.key || !filters.keys.has(t.key))) return false;
@@ -477,7 +490,7 @@ export default function LibraryPage() {
         sorted.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     }
     return sorted;
-  }, [tracks, search, typeFilter, offlineOnly, cachedIds, sortMode, filters]);
+  }, [tracks, search, cachedIds, sortMode, filters]);
 
   const currentHeroTrack = currentTrack || filtered[0] || null;
   const heroCoverUrl = currentHeroTrack?.cover_url || null;
@@ -488,7 +501,7 @@ export default function LibraryPage() {
   const PAGE_SIZE = 50;
 
   // Reset page when filters change
-  useEffect(() => { setCurrentPage(0); }, [search, typeFilter, offlineOnly, sortMode, filters]);
+  useEffect(() => { setCurrentPage(0); }, [search, sortMode, filters]);
 
   // Paginated slice for 'all' view
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
@@ -1067,46 +1080,6 @@ export default function LibraryPage() {
             single-type filters. "All" resets. Only shown in 'all' list view. */}
         {effectiveBrowseMode === 'all' && (
           <>
-        <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
-          {([
-            { value: 'all',          label: 'All' },
-            { value: 'beat',         label: 'Beats' },
-            { value: 'instrumental', label: 'Instrumentals' },
-            { value: 'song',         label: 'Songs' },
-            { value: 'remix',        label: 'Remixes' },
-          ] as const).map(({ value, label }) => (
-            <button
-              key={value}
-              onClick={() => { setOfflineOnly(false); setTypeFilter(value); }}
-              className={`shrink-0 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[10px] sm:text-[11px] font-medium transition-colors ${
-                typeFilter === value && !offlineOnly
-                  ? 'bg-white text-black'
-                  : 'bg-white/[0.04] border border-white/[0.06] text-white/80 hover:text-white hover:bg-white/[0.08]'
-              }`}
-            >{label}</button>
-          ))}
-          
-          <button
-            onClick={() => {
-              setOfflineOnly(true);
-              refreshOfflineList();
-            }}
-            className={`shrink-0 px-2.5 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[10px] sm:text-[11px] font-medium capitalize transition-colors flex items-center gap-1.5 ${
-              offlineOnly
-                ? 'bg-white text-black border border-white/40'
-                : 'bg-white/[0.04] border border-white/[0.06] text-white/80 hover:text-white hover:bg-white/[0.08]'
-            }`}
-          >
-            <span>Offline</span>
-            {cachedIds.size > 0 && (
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                offlineOnly ? 'bg-black/20 text-black' : 'bg-white/20 text-white'
-              }`}>
-                {cachedIds.size}
-              </span>
-            )}
-          </button>
-        </div>
 
         {/* Secondary toolbar — search on the left, sort dropdown on the
             right. Lives below the chips so the hero + chip strip read
@@ -1163,15 +1136,6 @@ export default function LibraryPage() {
                 title="Grid view"
               >
                 <LayoutGrid size={13} />
-              </button>
-              <button
-                onClick={() => setViewMode('vision')}
-                className={`p-1.5 rounded-full transition-colors ${
-                  effectiveViewMode === 'vision' ? 'bg-white text-black' : 'text-white/60 hover:text-white/80'
-                }`}
-                title="Vision view"
-              >
-                <Disc3 size={13} />
               </button>
               <button
                 onClick={() => setViewMode('portfolio')}
@@ -1258,17 +1222,6 @@ export default function LibraryPage() {
                 ? 'Upload above to start building your Vault'
                 : 'Try a different search or filter'}
             </p>
-          </div>
-        ) : effectiveViewMode === 'vision' ? (
-          <div className="mb-32">
-            <VisionLibraryView
-              tracks={pageTracks}
-              playlists={playlists}
-              currentTrackId={currentTrack?.id ?? null}
-              isPlaying={isPlaying}
-              onPlayTrack={(track) => playTrack(track)}
-              onClickDetails={(track) => setSelectedTrack(track)}
-            />
           </div>
         ) : effectiveViewMode === 'list' ? (
           <div className="mb-32 space-y-1.5">

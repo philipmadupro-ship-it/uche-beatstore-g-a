@@ -7192,3 +7192,52 @@ unresolved import would have prevented outright.
 
 - "different ways of portraying filters in library"
 - "take away the special music library"
+
+---
+
+## Library: one filter control, Vision view removed
+
+Both items were the owner's answers to the two questions left open in the previous pass.
+
+### One control
+
+The library had **two** controls governing the same result set: a pill row (All / Beats /
+Instrumentals / Songs / Remixes / Offline) sitting above the list, and a `Filters` panel holding
+genre, state, BPM, key, scale and rating.
+
+That split was not only visual clutter — it made the active-filter badge wrong. `Filters` could
+read "0 active" while the list was in fact narrowed to Remixes, because the count only ever knew
+about its own half of the filtering.
+
+`type` and `offlineOnly` moved into `LibraryFilters`, so:
+- `hasActiveFilters` and `activeFilterCount` now see every facet,
+- saved smart playlists carry type through `serializeFilters` instead of a sibling key,
+- the standalone 40-line pill row is deleted.
+
+Type renders as the first facet inside the panel. Offline is grouped with it but kept as a
+separate toggle rather than a sixth type — it is a different axis (cached locally), and treating
+it as a type is why selecting it used to silently clear the type selection.
+
+Two compatibility details worth recording:
+- Smart playlists saved before this change store type as a sibling `typeFilter` key. That legacy
+  shape is still read and folded into the restored filters, so existing saved views keep working.
+- The old Offline pill refreshed the cached-id list on click. That refresh is preserved as an
+  effect on the facet, otherwise the filter could show a stale set for anything cached since page
+  load.
+
+### Vision view removed
+
+`VisionLibraryView` — the recommendations/collections surface — was the **default** view, so the
+library opened on a streaming-app style browse page rather than the producer's tracks. Removed
+the render branch, the toggle and the import; default is now the track list.
+
+Two incidental improvements fell out: the Vision and Portfolio toggles shared an identical
+`Disc3` icon and were indistinguishable, and a saved `library-view` preference naming `vision`
+now falls back to the list rather than rendering nothing.
+
+### Verified live
+
+Pill row gone, `FILTERS` badge present with an active count, Type facet inside the panel and
+narrowing the list when Remixes is selected, view toggles reduced to List / Grid / Portfolio.
+
+`tsc` clean · `eslint` 0 errors · **674 tests** · build green.

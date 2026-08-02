@@ -15,7 +15,15 @@ const STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
   { value: 'archived',   label: 'Archived', color: 'bg-[#0D0D0A] text-white/60 border-white/10'    },
 ];
 
+export type LibraryTrackType = 'all' | 'beat' | 'instrumental' | 'song' | 'remix';
+
 export interface LibraryFilters {
+  /** Track type. Folded in from the standalone pill row so every facet that
+   *  narrows the list lives in one control. */
+  type: LibraryTrackType;
+  /** Cached-for-offline only. Was a sixth pill sitting beside the types even
+   *  though it is a different axis entirely. */
+  offlineOnly: boolean;
   // Genre chips (first-class)
   genres: Set<string>;
   // State chips (first-class)
@@ -29,6 +37,8 @@ export interface LibraryFilters {
 }
 
 export const DEFAULT_FILTERS: LibraryFilters = {
+  type: 'all',
+  offlineOnly: false,
   genres: new Set(),
   statuses: new Set(),
   bpmMin: null,
@@ -40,6 +50,8 @@ export const DEFAULT_FILTERS: LibraryFilters = {
 
 export function hasActiveFilters(f: LibraryFilters): boolean {
   return (
+    f.type !== 'all' ||
+    f.offlineOnly ||
     f.genres.size > 0 ||
     f.statuses.size > 0 ||
     f.bpmMin != null ||
@@ -52,6 +64,8 @@ export function hasActiveFilters(f: LibraryFilters): boolean {
 
 export function activeFilterCount(f: LibraryFilters): number {
   return [
+    f.type !== 'all',
+    f.offlineOnly,
     f.genres.size > 0,
     f.statuses.size > 0,
     f.bpmMin != null || f.bpmMax != null,
@@ -64,6 +78,8 @@ export function activeFilterCount(f: LibraryFilters): number {
 /** Serialize filters to a plain JSON object (Sets → arrays) for storage. */
 export function serializeFilters(f: LibraryFilters): Record<string, unknown> {
   return {
+    type: f.type,
+    offlineOnly: f.offlineOnly,
     genres: Array.from(f.genres),
     statuses: Array.from(f.statuses),
     bpmMin: f.bpmMin,
@@ -75,6 +91,8 @@ export function serializeFilters(f: LibraryFilters): Record<string, unknown> {
 }
 
 type SerializedLibraryFilters = {
+  type?: unknown;
+  offlineOnly?: unknown;
   genres?: unknown;
   statuses?: unknown;
   bpmMin?: unknown;
@@ -87,7 +105,10 @@ type SerializedLibraryFilters = {
 /** Rehydrate filters from a stored JSON object (arrays → Sets). */
 export function deserializeFilters(raw: unknown): LibraryFilters {
   const r = (raw && typeof raw === 'object' ? raw : {}) as SerializedLibraryFilters;
+  const TYPES: LibraryTrackType[] = ['all', 'beat', 'instrumental', 'song', 'remix'];
   return {
+    type: TYPES.includes(r.type as LibraryTrackType) ? (r.type as LibraryTrackType) : 'all',
+    offlineOnly: r.offlineOnly === true,
     genres: new Set<string>(Array.isArray(r.genres) ? r.genres : []),
     statuses: new Set<string>(Array.isArray(r.statuses) ? r.statuses : []),
     bpmMin: typeof r.bpmMin === 'number' ? r.bpmMin : null,
@@ -103,6 +124,14 @@ interface FilterBarProps {
   onChange: (f: LibraryFilters) => void;
   embedded?: boolean;
 }
+
+const TYPE_OPTIONS: Array<{ value: LibraryTrackType; label: string }> = [
+  { value: 'all', label: 'All' },
+  { value: 'beat', label: 'Beats' },
+  { value: 'instrumental', label: 'Instrumentals' },
+  { value: 'song', label: 'Songs' },
+  { value: 'remix', label: 'Remixes' },
+];
 
 export function FilterBar({ filters, onChange, embedded = false }: FilterBarProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -131,6 +160,41 @@ export function FilterBar({ filters, onChange, embedded = false }: FilterBarProp
       'space-y-4 animate-in fade-in slide-in-from-top-2 duration-200',
       embedded ? 'pb-2' : 'bg-white/[0.02] border border-white/10 rounded-xl p-4 mb-4',
     )}>
+
+      {/* ── Type + Offline ──────────────────────────────────────────
+           Previously a separate pill row above the list. Two controls
+           governing the same result set meant the "Filters" badge could read
+           "0 active" while the list was in fact filtered to Remixes — the
+           count only ever knew about its own half. */}
+      <div>
+        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-2">Type</p>
+        <div className="flex flex-wrap gap-1.5">
+          {TYPE_OPTIONS.map(({ value, label }) => {
+            const active = filters.type === value && !filters.offlineOnly;
+            return (
+              <button
+                key={value}
+                onClick={() => set({ type: value, offlineOnly: false })}
+                aria-pressed={active}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                  active
+                    ? 'bg-white text-black border-white/30'
+                    : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white/80 hover:border-white/20'
+                }`}
+              >{label}</button>
+            );
+          })}
+          <button
+            onClick={() => set({ offlineOnly: !filters.offlineOnly })}
+            aria-pressed={filters.offlineOnly}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+              filters.offlineOnly
+                ? 'bg-white text-black border-white/30'
+                : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white/80 hover:border-white/20'
+            }`}
+          >Offline</button>
+        </div>
+      </div>
 
       {/* ── Genre (first-class) ─────────────────────────────────── */}
       <div>
