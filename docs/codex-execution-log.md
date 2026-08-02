@@ -7297,3 +7297,49 @@ Header/row alignment measured on both surfaces (identical computed column tracks
 visibly distinct, stars absent on unrated rows and present on rated ones.
 
 `tsc` clean · `eslint` 0 errors · **674 tests** · build green.
+
+---
+
+## Track UI, second pass: labels, grid view, dead code
+
+Continued from the row work. Three findings, all things the previous pass exposed rather than
+created.
+
+### Header labels described the wrong columns
+
+Widening and re-sharing the grid fixed *alignment*, but the labels themselves were still from an
+older layout. Column 3 was labelled "Tags · Rating" while holding tags and the store/price
+badge; column 5 was labelled "State" while holding the rating stars and the offline/stems badge.
+So the rating column was labelled "State" and the word "Rating" sat above tags — on both the
+library and project headers. Now "Tags · Store" and "Rating".
+
+Worth noting the library's "Rating" label is also its sort control, so the mislabel meant the
+sort button and the column it sorted did not agree either.
+
+### Grid view was left behind
+
+The list row got the accent playing-state last pass; the grid card still used white, so the same
+track looked like a different state depending on which view you were in. Aligned to `#D4BFA0`.
+
+More seriously, the grid card's four-bar playing equalizer ran `animate-pulse` with **no
+`prefers-reduced-motion` gate at all**. AGENTS.md names the vinyl spin, particle text and cosmos
+fades as motion that must be disabled; a pulsing equalizer is the same category and had been
+missed. It now renders static bars under reduced motion — still communicating "playing", just
+not animating — via the `useReducedMotion` hook added for the cover studio.
+
+### Dead code from the previous pass
+
+Removing the Vision view left `VisionLibraryView.tsx` orphaned — 259 lines with no remaining
+consumer, confirmed by grep before deleting. It also contained two more ungated `animate-pulse`
+uses and an `animate-spin-slow`, so deleting it removes that debt rather than requiring it to be
+fixed.
+
+### A console red herring, again
+
+The dev console reported a JSX syntax error in `library/page.tsx:1258`. It was stale buffer from
+the moment mid-edit when the header's `className="..."` had been opened as a template literal
+but not yet closed. Confirmed stale three ways: `tsc` clean, `next build` clean with zero
+"Syntax Error" occurrences, and the page rendering. Recorded because this is the second time
+buffered dev-server output has looked like a live failure.
+
+`tsc` clean · `eslint` 0 errors · **674 tests** · build green.

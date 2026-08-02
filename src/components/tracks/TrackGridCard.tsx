@@ -7,6 +7,7 @@ import { Popover } from '@/components/ui/Popover';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { setTrackDragData } from '@/lib/dnd';
 
 interface TrackGridCardProps {
@@ -43,6 +44,7 @@ export function TrackGridCard({
 }: TrackGridCardProps) {
   const { currentTrack, isPlaying, setTrack, togglePlay } = usePlayer();
   const { rate: rateTrack } = useRating(track.id, track.rating || 0);
+  const reducedMotion = useReducedMotion();
 
   const isCurrent = currentTrack?.id === track.id;
   const isActive = isCurrent && isPlaying;
@@ -78,7 +80,7 @@ export function TrackGridCard({
       {/* Cover art */}
       <div className={`relative aspect-square rounded-xl overflow-hidden border transition-all duration-200 mb-2.5 ${
         isCurrent
-          ? 'border-white/20 shadow-lg shadow-white/10'
+          ? 'border-[#D4BFA0]/45 shadow-lg shadow-[#D4BFA0]/15'
           : selected
             ? 'border-white/20'
             : 'border-white/10 group-hover:border-white/20'
@@ -98,11 +100,19 @@ export function TrackGridCard({
         {/* Playing equalizer overlay */}
         {isActive && (
           <div className="absolute inset-0 bg-black/30 flex items-end justify-center pb-3">
-            <div className="flex gap-0.5 items-end h-5">
-              <div className="w-1 bg-white rounded-full animate-pulse" style={{ height: '60%' }} />
-              <div className="w-1 bg-white rounded-full animate-pulse" style={{ height: '100%', animationDelay: '120ms' }} />
-              <div className="w-1 bg-white rounded-full animate-pulse" style={{ height: '40%', animationDelay: '240ms' }} />
-              <div className="w-1 bg-white rounded-full animate-pulse" style={{ height: '80%', animationDelay: '60ms' }} />
+            <div className="flex gap-0.5 items-end h-5" aria-hidden>
+              {[
+                { h: '60%', d: '0ms' },
+                { h: '100%', d: '120ms' },
+                { h: '40%', d: '240ms' },
+                { h: '80%', d: '60ms' },
+              ].map((bar) => (
+                <div
+                  key={bar.d}
+                  className={`w-1 rounded-full bg-[#D4BFA0] ${reducedMotion ? '' : 'animate-pulse'}`}
+                  style={{ height: bar.h, animationDelay: reducedMotion ? undefined : bar.d }}
+                />
+              ))}
             </div>
           </div>
         )}

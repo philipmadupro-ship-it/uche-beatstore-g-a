@@ -1273,9 +1273,9 @@ export default function LibraryPage() {
               {(
                 [
                   { label: 'Title', sort: 'title' as SortMode, always: true },
-                  { label: 'Tags · Rating', sort: null, always: false, cls: 'hidden md:block' },
+                  { label: 'Tags · Store', sort: null, always: false, cls: 'hidden md:block' },
                   { label: 'Time', sort: 'recent' as SortMode, always: false, cls: 'hidden md:flex justify-end' },
-                  { label: 'State', sort: 'rating' as SortMode, always: false, cls: 'hidden md:flex justify-end', activeSort: sortMode === 'rating' },
+                  { label: 'Rating', sort: 'rating' as SortMode, always: false, cls: 'hidden md:flex justify-end', activeSort: sortMode === 'rating' },
                 ] as Array<{ label: string; sort: SortMode | null; always: boolean; cls?: string; activeSort?: boolean }>
               ).map(({ label, sort, cls, activeSort }) => {
                 const isActive = activeSort ?? (sort != null && sortMode === sort);

@@ -196,9 +196,9 @@ export function ProjectTrackList({
             <span />
           )}
           <span>Title</span>
-          <span className="hidden md:block">Tags · Rating</span>
+          <span className="hidden md:block">Tags · Store</span>
           <span className="hidden md:block text-right">Time</span>
-          <span className="hidden md:block text-right">State</span>
+          <span className="hidden md:block text-right">Rating</span>
           <span />
         </div>
 
