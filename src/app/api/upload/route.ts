@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { uploadPrivateAudio, uploadPeaksSidecar, uploadPublicPreview } from '@/lib/storage/upload';
+import { uploadPrivateAudio, uploadPublicPreview } from '@/lib/storage/upload';
+import { buildAndUploadSidecars } from '@/lib/audio/sidecars';
 import { analyzeAudio } from '@/lib/audio/analyze.server';
 import type { AudioFeatures } from '@/lib/audio/analyze.server';
 import { getAuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
-import { extractPeaks } from '@/lib/audio/peaks';
 import { isSupabaseConfigured, insert, update, getAll } from '@/lib/local-store';
 import { requireRowOwnership } from '@/lib/db';
 import { createClient as createServerClient } from '@/lib/supabase/server';
@@ -154,14 +154,14 @@ export async function POST(req: NextRequest) {
 
     // Waveform peaks (best-effort sidecar). Failures don't block upload.
     let peaksUrl: string | null = null;
+    let bandsUrl: string | null = null;
     if (!isSupabaseConfigured()) {
       try {
-        const peaks = await extractPeaks(buffer);
-        if (peaks) {
-          peaksUrl = await uploadPeaksSidecar(audioUrl, JSON.stringify(peaks));
-        }
+        const sidecars = await buildAndUploadSidecars(buffer, audioUrl);
+        peaksUrl = sidecars.peaksUrl;
+        bandsUrl = sidecars.bandsUrl;
       } catch (err) {
-        console.warn('Peaks extraction/upload failed, continuing without:', err);
+        console.warn('Sidecar extraction/upload failed, continuing without:', err);
       }
     }
 
@@ -181,6 +181,7 @@ export async function POST(req: NextRequest) {
       audio_url: audioUrl,
       preview_url: previewUrl,
       peaks_url: peaksUrl,
+      bands_url: bandsUrl,
       ...merged,
       stems_status: 'none' as const,
     };

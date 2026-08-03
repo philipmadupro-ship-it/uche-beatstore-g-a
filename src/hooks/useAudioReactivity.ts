@@ -44,8 +44,10 @@ export function useAudioReactivity(
    * is not the one actually playing, where reacting would be a lie.
    */
   enabled = true,
+  /** Precomputed sidecar; skips in-browser decoding when present. */
+  bandsUrl?: string | null,
 ): AudioReactivity {
-  const { db, bands } = useSpectralPeaks(trackId, audioUrl, SLICE_COUNT);
+  const { db, bands } = useSpectralPeaks(trackId, audioUrl, SLICE_COUNT, bandsUrl);
 
   // Memoised because it sorts the series; the per-frame lookups below are O(1).
   const range = useMemo(() => loudnessRange(db ?? []), [db]);

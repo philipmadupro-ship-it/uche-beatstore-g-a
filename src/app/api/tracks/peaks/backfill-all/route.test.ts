@@ -3,9 +3,10 @@ import { NextRequest } from 'next/server';
 
 const mockRequireUser = vi.fn();
 const mockIsSupabaseConfigured = vi.fn();
-const mockExtractPeaks = vi.fn();
 const mockReadStoredObject = vi.fn();
-const mockUploadPeaksSidecar = vi.fn();
+// The route now goes through one helper that builds and uploads BOTH sidecars,
+// so that is the seam to mock rather than extractPeaks + uploadPeaksSidecar.
+const mockBuildAndUploadSidecars = vi.fn();
 
 vi.mock('@/lib/auth/ownership', () => ({
   requireUser: () => mockRequireUser(),
@@ -15,13 +16,12 @@ vi.mock('@/lib/local-store', () => ({
   isSupabaseConfigured: () => mockIsSupabaseConfigured(),
 }));
 
-vi.mock('@/lib/audio/peaks', () => ({
-  extractPeaks: (...args: unknown[]) => mockExtractPeaks(...args),
+vi.mock('@/lib/audio/sidecars', () => ({
+  buildAndUploadSidecars: (...args: unknown[]) => mockBuildAndUploadSidecars(...args),
 }));
 
 vi.mock('@/lib/storage/upload', () => ({
   readStoredObject: (...args: unknown[]) => mockReadStoredObject(...args),
-  uploadPeaksSidecar: (...args: unknown[]) => mockUploadPeaksSidecar(...args),
 }));
 
 vi.mock('@/lib/log', () => ({
@@ -34,6 +34,7 @@ function req(path = '/api/tracks/peaks/backfill-all'): NextRequest {
 
 function createTracksAdmin(tracks: Array<{ id: string; title: string; audio_url: string }>) {
   const eqCalls: Array<[string, unknown]> = [];
+  const orCalls: string[] = [];
   const updateCalls: Array<{ patch: Record<string, unknown>; id: string }> = [];
   const selectChain = {
     eq: vi.fn((field: string, value: unknown) => {
@@ -41,6 +42,13 @@ function createTracksAdmin(tracks: Array<{ id: string; title: string; audio_url:
       return selectChain;
     }),
     is: vi.fn(() => selectChain),
+    // The backfill selects tracks missing EITHER sidecar. It used to filter
+    // `.is('peaks_url', null)`, which would now skip the whole existing
+    // catalogue — those tracks all have peaks and none have bands.
+    or: vi.fn((filter: string) => {
+      orCalls.push(filter);
+      return selectChain;
+    }),
     not: vi.fn(() => Promise.resolve({ data: tracks, error: null })),
   };
   const table = {
@@ -58,7 +66,7 @@ function createTracksAdmin(tracks: Array<{ id: string; title: string; audio_url:
       return table;
     }),
   };
-  return { admin, eqCalls, updateCalls, table, selectChain };
+  return { admin, eqCalls, orCalls, updateCalls, table, selectChain };
 }
 
 async function loadRoute() {
@@ -69,8 +77,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockIsSupabaseConfigured.mockReturnValue(true);
   mockReadStoredObject.mockResolvedValue(Buffer.from('audio'));
-  mockExtractPeaks.mockResolvedValue({ sampleRate: 44100, samples: [0.1, 0.8] });
-  mockUploadPeaksSidecar.mockResolvedValue('https://pub.r2.dev/peaks/track-1.json');
+  mockBuildAndUploadSidecars.mockResolvedValue({
+    peaksUrl: 'https://pub.r2.dev/peaks/track-1.json',
+    bandsUrl: 'https://pub.r2.dev/peaks/track-1.bands.json',
+    undecodable: false,
+  });
 });
 
 describe('POST /api/tracks/peaks/backfill-all', () => {
@@ -90,8 +101,28 @@ describe('POST /api/tracks/peaks/backfill-all', () => {
     expect(eqCalls).toContainEqual(['store_listed', true]);
     expect(body.succeeded).toBe(1);
     expect(updateCalls).toEqual([
-      { id: 'track-1', patch: { peaks_url: 'https://pub.r2.dev/peaks/track-1.json' } },
+      {
+        id: 'track-1',
+        patch: {
+          peaks_url: 'https://pub.r2.dev/peaks/track-1.json',
+          bands_url: 'https://pub.r2.dev/peaks/track-1.bands.json',
+        },
+      },
     ]);
+  });
+
+  it('selects tracks missing EITHER sidecar, not just tracks with no peaks', async () => {
+    // The filter used to be `.is('peaks_url', null)`. Left alone, it would skip
+    // the entire existing catalogue — every one of those tracks already has
+    // peaks and none has bands — so the backfill would report success while
+    // converting nothing, and the store would keep decoding in-browser.
+    const { admin, orCalls } = createTracksAdmin([]);
+    mockRequireUser.mockResolvedValue({ ok: true, userId: 'user-1', admin });
+
+    const mod = await loadRoute();
+    await mod.POST(req());
+
+    expect(orCalls).toEqual(['peaks_url.is.null,bands_url.is.null']);
   });
 
   it('keeps the legacy all-track scope when no store filter is present', async () => {
@@ -114,7 +145,7 @@ describe('POST /api/tracks/peaks/backfill-all', () => {
       { id: 'track-1', title: 'Broken Beat', audio_url: 'r2://tracks/track-1.mp3' },
     ]);
     mockRequireUser.mockResolvedValue({ ok: true, userId: 'user-1', admin });
-    mockExtractPeaks.mockResolvedValueOnce(null);
+    mockBuildAndUploadSidecars.mockResolvedValueOnce({ peaksUrl: null, bandsUrl: null, undecodable: true });
 
     const mod = await loadRoute();
     const res = await mod.POST(req('/api/tracks/peaks/backfill-all?store_listed=1'));

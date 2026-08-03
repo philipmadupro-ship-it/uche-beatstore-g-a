@@ -151,10 +151,59 @@ async function renderBand(
   return rendered.getChannelData(0);
 }
 
+
+/** Shape of the `.bands.json` sidecar written at upload (see `lib/audio/peaks.ts`). */
+interface BandsSidecar {
+  version: number;
+  slices: number;
+  low: number[];
+  mid: number[];
+  high: number[];
+  db: number[];
+  hz: (number | null)[];
+}
+
+/**
+ * Validate a fetched sidecar before trusting it.
+ *
+ * The file is fetched from a CDN and could be truncated, from an older schema,
+ * or simply not the JSON we expected. Returning null routes the caller to
+ * local analysis rather than rendering a waveform from a half-parsed file —
+ * the same reasoning as the localStorage validation in `persisted-uploads.ts`.
+ */
+export function parseBandsSidecar(file: Partial<BandsSidecar> | null): AnalysisResult | null {
+  if (!file || typeof file !== 'object') return null;
+  const { low, mid, high, db, hz } = file;
+  if (!Array.isArray(low) || !Array.isArray(mid) || !Array.isArray(high)) return null;
+  if (!Array.isArray(db)) return null;
+  if (low.length === 0) return null;
+  // Every array must share one index space; the client looks all four up with
+  // a single slice index.
+  if (mid.length !== low.length || high.length !== low.length || db.length !== low.length) return null;
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return {
+    low: low.map(num),
+    mid: mid.map(num),
+    high: high.map(num),
+    db: db.map(num),
+    hz: Array.isArray(hz) && hz.length === low.length
+      ? hz.map((v) => (typeof v === 'number' && Number.isFinite(v) ? v : null))
+      : new Array<number | null>(low.length).fill(null),
+  };
+}
+
 export function useSpectralPeaks(
   trackId: string | null,
   audioUrl: string | null | undefined,
   sliceCount: number,
+  /**
+   * Precomputed `.bands.json` produced at upload. When present the whole
+   * decode path below is skipped: one cached JSON fetch instead of pulling the
+   * audio and running three OfflineAudioContext renders in the visitor's
+   * browser. Undefined for tracks uploaded before the sidecar existed, which
+   * still fall back to analysing locally.
+   */
+  bandsUrl?: string | null,
 ): SpectralPeaksResult {
   const [bands, setBands] = useState<SpectralBands | null>(null);
   const [db, setDb] = useState<number[] | null>(null);
@@ -201,6 +250,36 @@ export function useSpectralPeaks(
       return;
     }
 
+    const controller = new AbortController();
+    let cancelled = false;
+
+    // ── Fast path: precomputed sidecar ────────────────────────────────────
+    // Immutable and CDN-cached, so this is usually a disk hit and always
+    // cheaper than decoding. Only on failure do we fall through to the
+    // in-browser analysis below.
+    if (bandsUrl) {
+      setStatus('analyzing');
+      (async () => {
+        try {
+          const res = await fetch(bandsUrl, { signal: controller.signal, cache: 'force-cache' });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const file = await res.json() as Partial<BandsSidecar>;
+          if (cancelled) return;
+          const parsed = parseBandsSidecar(file);
+          if (!parsed) throw new Error('malformed bands sidecar');
+          cache.set(key, parsed);
+          if (activeTrackRef.current !== key) return;
+          applyResult(parsed, sliceCount);
+          setStatus('ready');
+        } catch {
+          // Sidecar missing or unreadable — fall back to decoding locally so
+          // a bad sidecar degrades to "slower" rather than "no waveform".
+          if (!cancelled && activeTrackRef.current === key) runLocalAnalysis();
+        }
+      })();
+      return () => { cancelled = true; controller.abort(); };
+    }
+
     const analysisUrl = resolveAnalysisUrl(audioUrl);
     if (!analysisUrl) {
       setBands(null); setDb(null); setHz(null);
@@ -208,18 +287,24 @@ export function useSpectralPeaks(
       return;
     }
 
-    const controller = new AbortController();
-    let cancelled = false;
     setStatus('analyzing');
     setBands(null); setDb(null); setHz(null);
 
-    (async () => {
+    runLocalAnalysis();
+
+    // The original in-browser path: fetch the audio, decode it, run three
+    // filtered renders. Kept as the fallback for tracks with no sidecar yet.
+    function runLocalAnalysis() {
+      const src = analysisUrl;
+      const cacheKey = key;
+      if (!src || !cacheKey) return;
+      (async () => {
       try {
         if (typeof window === 'undefined' || !('OfflineAudioContext' in window)) {
           throw new Error('OfflineAudioContext unavailable');
         }
 
-        const res = await fetch(analysisUrl, { signal: controller.signal, cache: 'force-cache' });
+        const res = await fetch(src, { signal: controller.signal, cache: 'force-cache' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const raw = await res.arrayBuffer();
         if (cancelled) return;
@@ -275,19 +360,20 @@ export function useSpectralPeaks(
             CACHE_SLICES,
           ),
         };
-        cache.set(key, result);
+        cache.set(cacheKey, result);
 
-        if (activeTrackRef.current !== key) return;
+        if (activeTrackRef.current !== cacheKey) return;
         applyResult(result, sliceCount);
         setStatus('ready');
       } catch {
         if (cancelled) return;
-        failed.add(key);
-        if (activeTrackRef.current !== key) return;
+        failed.add(cacheKey);
+        if (activeTrackRef.current !== cacheKey) return;
         setBands(null); setDb(null); setHz(null);
         setStatus('unavailable');
       }
-    })();
+      })();
+    }
 
     return () => {
       cancelled = true;

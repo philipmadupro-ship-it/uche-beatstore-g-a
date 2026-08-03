@@ -180,63 +180,85 @@ export async function getPresignedUrl(keyOrRef: string): Promise<string> {
  * Returns the public URL of the JSON, or null if upload failed (the caller
  * should treat peaks as best-effort and fall back to client-side decode).
  */
-export async function uploadPeaksSidecar(
+/**
+ * Store a JSON sidecar alongside an audio object.
+ *
+ * Shared by the peaks and bands sidecars. These differ only in filename
+ * suffix, so the placement logic — local dev fallback, private `r2://` refs,
+ * legacy public URLs, cache headers — lives here once rather than being
+ * duplicated per sidecar type and drifting.
+ *
+ * Returns null rather than throwing: a missing sidecar degrades to
+ * analysing in the browser, which is a slower path but not a broken one, and
+ * an upload should never fail because its optional derivative did.
+ */
+async function uploadJsonSidecar(
   audioUrl: string,
-  peaksJson: string,
+  json: string,
+  /** Filename suffix including the leading dot, e.g. `.peaks.json`. */
+  suffix: string,
+  label: string,
 ): Promise<string | null> {
   try {
     if (!isR2Configured()) {
-      // Local dev: write a sidecar next to the audio file in /public/uploads.
-      // audioUrl looks like "/uploads/abc123.mp3" — derive the sidecar path.
+      // Local dev: write next to the audio file in /public/uploads.
       const m = audioUrl.match(/^\/uploads\/(.+)$/);
       if (!m) return null;
       const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
       if (!fs.existsSync(uploadsDir)) {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
-      const sidecarPath = path.join(uploadsDir, `${m[1]}.peaks.json`);
-      fs.writeFileSync(sidecarPath, peaksJson, 'utf-8');
-      return `/uploads/${m[1]}.peaks.json`;
+      fs.writeFileSync(path.join(uploadsDir, `${m[1]}${suffix}`), json, 'utf-8');
+      return `/uploads/${m[1]}${suffix}`;
     }
 
     const bucketName = process.env.R2_BUCKET_NAME;
     const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
     if (!bucketName || !publicUrl) return null;
 
+    // Sidecars always go to the PUBLIC bucket even when the audio itself is a
+    // private master — they carry no audio, only derived numbers, and the
+    // store needs to read them without a signed URL.
     const privateRef = parseR2ObjectRef(audioUrl);
-    if (privateRef) {
-      const peaksKey = `peaks/${privateRef.key.replace(/\//g, '-')}.peaks.json`;
-      await r2.send(new PutObjectCommand({
-        Bucket: bucketName,
-        Key: peaksKey,
-        Body: peaksJson,
-        ContentType: 'application/json',
-        CacheControl: 'public, max-age=31536000, immutable',
-      }));
-      return `${publicUrl.replace(/\/$/, '')}/${peaksKey}`;
-    }
-
-    // Pull the object key out of the legacy public R2 URL.
-    const prefix = publicUrl.replace(/\/$/, '') + '/';
-    if (!audioUrl.startsWith(prefix)) return null;
-    const audioKey = audioUrl.slice(prefix.length);
-    const peaksKey = `${audioKey}.peaks.json`;
+    const key = privateRef
+      ? `peaks/${privateRef.key.replace(/\//g, '-')}${suffix}`
+      : (() => {
+        const prefix = `${publicUrl.replace(/\/$/, '')}/`;
+        return audioUrl.startsWith(prefix) ? `${audioUrl.slice(prefix.length)}${suffix}` : null;
+      })();
+    if (!key) return null;
 
     await r2.send(new PutObjectCommand({
       Bucket: bucketName,
-      Key: peaksKey,
-      Body: peaksJson,
+      Key: key,
+      Body: json,
       ContentType: 'application/json',
-      // Long cache — peaks for a given audio object are immutable, so
-      // give the CDN a year to keep them.
+      // A sidecar for a given audio object never changes — the object key
+      // changes instead — so the CDN can hold it for a year.
       CacheControl: 'public, max-age=31536000, immutable',
     }));
 
-    return `${publicUrl.replace(/\/$/, '')}/${peaksKey}`;
+    return `${publicUrl.replace(/\/$/, '')}/${key}`;
   } catch (err) {
-    console.warn('uploadPeaksSidecar failed:', err);
+    console.warn(`${label} failed:`, err);
     return null;
   }
+}
+
+/** Amplitude peaks sidecar (`.peaks.json`). */
+export function uploadPeaksSidecar(audioUrl: string, peaksJson: string): Promise<string | null> {
+  return uploadJsonSidecar(audioUrl, peaksJson, '.peaks.json', 'uploadPeaksSidecar');
+}
+
+/**
+ * Spectral bands sidecar (`.bands.json`).
+ *
+ * Separate key from peaks, not an extension of it: peaks are already cached
+ * immutable for a year, so editing them in place would serve stale copies, and
+ * amplitude-only consumers should not have to download a ~3x larger payload.
+ */
+export function uploadBandsSidecar(audioUrl: string, bandsJson: string): Promise<string | null> {
+  return uploadJsonSidecar(audioUrl, bandsJson, '.bands.json', 'uploadBandsSidecar');
 }
 
 /**

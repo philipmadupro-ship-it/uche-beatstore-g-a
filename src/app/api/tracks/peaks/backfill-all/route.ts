@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
-import { extractPeaks } from '@/lib/audio/peaks';
-import { readStoredObject, uploadPeaksSidecar } from '@/lib/storage/upload';
+import { readStoredObject } from '@/lib/storage/upload';
+import { buildAndUploadSidecars } from '@/lib/audio/sidecars';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -35,12 +35,19 @@ export async function POST(req: NextRequest) {
 
   let query = admin
     .from('tracks')
-    .select('id, title, audio_url, peaks_url')
+    .select('id, title, audio_url, peaks_url, bands_url')
     .eq('user_id', userId);
   if (listedOnly) query = query.eq('store_listed', true);
 
+  // Anything MISSING EITHER sidecar, not just tracks with no peaks.
+  //
+  // The filter used to be `.is('peaks_url', null)`, which was correct when
+  // peaks were the only sidecar — but it would now skip the entire existing
+  // catalogue, since those tracks all have peaks and none have bands. They are
+  // exactly the tracks that still force every store visitor to analyse audio
+  // in their own browser.
   const { data: tracks, error } = await query
-    .is('peaks_url', null)
+    .or('peaks_url.is.null,bands_url.is.null')
     .not('audio_url', 'is', null);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -50,11 +57,13 @@ export async function POST(req: NextRequest) {
   for (const t of targets) {
     try {
       const buf = await readStoredObject(t.audio_url);
-      const peaks = await extractPeaks(buf);
-      if (!peaks) throw new Error('decoder returned null');
-      const peaksUrl = await uploadPeaksSidecar(t.audio_url, JSON.stringify(peaks));
+      const { peaksUrl, bandsUrl, undecodable } = await buildAndUploadSidecars(buf, t.audio_url);
+      if (undecodable) throw new Error('decoder returned null');
       if (!peaksUrl) throw new Error('sidecar upload failed');
-      await admin.from('tracks').update({ peaks_url: peaksUrl }).eq('id', t.id);
+      await admin.from('tracks').update({
+        peaks_url: peaksUrl,
+        ...(bandsUrl ? { bands_url: bandsUrl } : {}),
+      }).eq('id', t.id);
       results.push({ id: t.id, title: t.title, ok: true });
     } catch (err) {
       const msg = errorMessage(err);

@@ -16,6 +16,8 @@ export interface Track {
   /** URL of the precomputed waveform peaks sidecar (JSON). Optional —
    *  older tracks may not have it; WavePlayer falls back to client decode. */
   peaks_url?: string | null;
+  /** Precomputed spectral sidecar (.bands.json). Null until analysed. */
+  bands_url?: string | null;
   cover_url?: string | null;
   duration_seconds: number | null;
   bpm: number | null;

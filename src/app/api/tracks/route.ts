@@ -257,7 +257,7 @@ async function listBoundedTracks(
       'exclusive_sold', 'voice_tag_enabled', 'created_at',
       // audio_url + preview_status drive the library's "Analyze N" / preview
       // backfill affordance (owner-only response, so the private ref is fine).
-      'audio_url', 'preview_status',
+      'audio_url', 'preview_status', 'peaks_url', 'bands_url',
       'track_tags(tag, category)', 'stems(status)',
     ].join(', '))
     .or(`user_id.eq.${safeUserId},user_id.is.null`);

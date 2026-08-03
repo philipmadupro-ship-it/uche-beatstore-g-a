@@ -7388,3 +7388,61 @@ Then confirmed the guard is not vacuous by reintroducing the original playlist h
 it failed and named the file — before restoring.
 
 `tsc` clean · `eslint` 0 errors · **677 tests** (3 new) · build green.
+
+---
+
+## Priority 1 — Sidecar v2 plumbing: analysis moves off the visitor's device
+
+Phase 3's *pure* half had been built long ago and then stranded: `band-filter.ts`,
+`pitch.ts`, `BandsFile`, `BANDS_SLICES` and `extractPeaksAndBands` all existed and were correct.
+`extractPeaksAndBands` had **zero callers**. So every visitor to the public store was still
+pulling the audio and running three `OfflineAudioContext` renders in their own browser to derive
+numbers the server could have computed once. This pass is the missing wire.
+
+**Migration 105** adds `tracks.bands_url` plus a partial index on
+`(created_at) WHERE bands_url IS NULL AND audio_url IS NOT NULL` so backfill scans stay cheap
+and shrink as the catalogue is converted. A separate column rather than extending `peaks.json`:
+peaks are uploaded `immutable, max-age=31536000`, so editing them in place would serve stale CDN
+copies for up to a year, and amplitude-only consumers shouldn't pay for a ~3x payload.
+
+**Storage.** `uploadPeaksSidecar` and a new `uploadBandsSidecar` now share one
+`uploadJsonSidecar` — the two differ by a filename suffix, and copy-pasting 55 lines of
+placement logic (local-dev fallback, private `r2://` refs, legacy public URLs, cache headers) is
+precisely how the duplicated-constant bugs earlier in this project happened.
+
+**One helper, six call sites.** `buildAndUploadSidecars` wires extraction to upload with an
+explicit failure policy: peaks are load-bearing so failure is reported; bands are an enhancement
+so failure is logged and swallowed — a bad spectral pass must never fail an upload, it just
+means the client falls back to analysing locally. Wired into upload/complete, legacy upload,
+peaks regenerate and backfill.
+
+**The backfill filter was the trap.** It selected `.is('peaks_url', null)`. Left alone it would
+have skipped the entire existing catalogue — those tracks all have peaks and none have bands —
+so the backfill would report success while converting nothing. Widened to
+`.or('peaks_url.is.null,bands_url.is.null')`, and pinned with a test that asserts the exact
+filter string. (Static string, no interpolation, so the PostgREST `.or()` footgun in CLAUDE.md
+does not apply here.)
+
+**Client fast path.** `useSpectralPeaks` takes an optional `bandsUrl` and, when present, fetches
+one `force-cache` JSON instead of decoding. A malformed or missing sidecar falls through to the
+original in-browser path, so a bad sidecar degrades to "slower", never "no waveform".
+`parseBandsSidecar` validates before trusting: all four series must share one index space,
+because the client looks them up with a single slice index and a short array would read
+`undefined` mid-render. 7 tests.
+
+`bands_url` is threaded through `Track`, `StoreTrack`, `/api/store`, `/api/store/[id]`,
+`/api/tracks`, `useAudioReactivity`, the preview drawer and the player — without that the fast
+path is unreachable.
+
+Three existing backfill tests broke and were updated rather than worked around: the Supabase
+mock had no `.or()`, and the route's mocking seam moved from `extractPeaks` +
+`uploadPeaksSidecar` to `buildAndUploadSidecars`.
+
+`tsc` clean · `eslint` 0 errors · **685 tests** · build green.
+
+### Required before this helps in prod
+
+1. Apply migration 105 on Supabase.
+2. Run the backfill (`POST /api/tracks/peaks/backfill-all`) to convert existing tracks.
+   Until then every track still has `bands_url = null` and takes the old in-browser path — the
+   change is safe but inert.

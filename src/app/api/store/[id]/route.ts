@@ -10,7 +10,7 @@ export const revalidate = 60;
 
 const TRACK_FIELDS = [
   'id', 'user_id', 'title', 'type',
-  'audio_url', 'preview_url', 'peaks_url', 'cover_url',
+  'audio_url', 'preview_url', 'peaks_url', 'bands_url', 'cover_url',
   'duration_seconds', 'bpm', 'key', 'scale',
   'rating', 'description',
   'lease_price_usd', 'exclusive_price_usd',
@@ -25,6 +25,7 @@ interface StoreTrackRow extends Record<string, unknown> {
   audio_url?: string | null;
   preview_url?: string | null;
   peaks_url?: string | null;
+  bands_url?: string | null;
   cover_url?: string | null;
   duration_seconds?: number | null;
   bpm?: number | null;

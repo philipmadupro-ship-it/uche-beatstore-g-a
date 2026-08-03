@@ -61,7 +61,7 @@ export function BeatPreviewDrawer({
   // `isCurrent`: this drawer can show a track that isn't the one playing.
   const {
     level: audioLevel, bass: audioBass,
-  } = useAudioReactivity(track.id, track.audio_url, progress, isCurrent);
+  } = useAudioReactivity(track.id, track.audio_url, progress, isCurrent, track.bands_url);
 
   const activeLicenses: LicenseTier[] = licenses.length > 0
     ? [...licenses].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))

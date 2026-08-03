@@ -5,8 +5,8 @@ import { analyzeAudio } from '@/lib/audio/analyze.server';
 import type { AudioFeatures } from '@/lib/audio/analyze.server';
 import { getAuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
-import { extractPeaks } from '@/lib/audio/peaks';
-import { uploadPeaksSidecar, uploadPublicPreview } from '@/lib/storage/upload';
+import { uploadPublicPreview } from '@/lib/storage/upload';
+import { buildAndUploadSidecars } from '@/lib/audio/sidecars';
 import { isSupabaseConfigured, insert, update, getAll } from '@/lib/local-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { titleFromFilename, nextVersionLabel } from '@/lib/naming';
@@ -206,16 +206,20 @@ export async function POST(req: NextRequest) {
       console.warn('AudD features failed, using zeros:', err);
     }
 
-    // Peaks extraction — non-fatal; WavePlayer falls back to client decode.
+    // Sidecars — non-fatal; the client falls back to decoding in-browser.
+    // Bands are computed here so store visitors never have to: that fallback
+    // runs OfflineAudioContext per visitor, per track, on the public page.
     let peaksUrl: string | null = null;
+    let bandsUrl: string | null = null;
     try {
       if (!audioBuffer) audioBuffer = await readAssembledBuffer(audioUrl).catch(() => null);
       if (audioBuffer) {
-        const peaks = await extractPeaks(audioBuffer);
-        if (peaks) peaksUrl = await uploadPeaksSidecar(audioUrl, JSON.stringify(peaks));
+        const sidecars = await buildAndUploadSidecars(audioBuffer, audioUrl);
+        peaksUrl = sidecars.peaksUrl;
+        bandsUrl = sidecars.bandsUrl;
       }
     } catch (err) {
-      console.warn('Peaks extraction/upload failed, continuing without:', err);
+      console.warn('Sidecar extraction/upload failed, continuing without:', err);
     }
 
     let previewUrl: string | null = null;
@@ -233,6 +237,7 @@ export async function POST(req: NextRequest) {
       audio_url: audioUrl,
       preview_url: previewUrl,
       peaks_url: peaksUrl,
+      bands_url: bandsUrl,
       ...merged,
       stems_status: 'none' as const,
     };

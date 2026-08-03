@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, getById, update, requireRowOwnership } from '@/lib/db';
-import { extractPeaks } from '@/lib/audio/peaks';
-import { readStoredObject, uploadPeaksSidecar } from '@/lib/storage/upload';
+import { readStoredObject } from '@/lib/storage/upload';
+import { buildAndUploadSidecars } from '@/lib/audio/sidecars';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   try {
     let track: TrackPeaksRow | null = null;
-    let updateSupabasePeaks: ((peaksUrl: string) => Promise<NextResponse>) | null = null;
+    let updateSupabasePeaks: ((peaksUrl: string, bandsUrl: string | null) => Promise<NextResponse>) | null = null;
     if (isSupabaseConfigured()) {
       const owner = await requireRowOwnership('tracks', id);
       if (!owner.ok) return owner.res;
@@ -41,15 +41,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const { data, error } = await admin.from('tracks').select('audio_url, peaks_url').eq('id', id).single();
       if (error) throw error;
       track = data as TrackPeaksRow;
-      updateSupabasePeaks = async (peaksUrl) => {
+      updateSupabasePeaks = async (peaksUrl, bandsUrl) => {
         const { data: updatedTrack, error: updateError } = await admin
           .from('tracks')
-          .update({ peaks_url: peaksUrl })
+          // bands_url only written when we actually produced one, so a failed
+          // spectral pass never clears a previously good sidecar.
+          .update({ peaks_url: peaksUrl, ...(bandsUrl ? { bands_url: bandsUrl } : {}) })
           .eq('id', id)
           .select()
           .single();
         if (updateError) throw updateError;
-        return NextResponse.json({ track: updatedTrack, peaks_url: peaksUrl });
+        return NextResponse.json({ track: updatedTrack, peaks_url: peaksUrl, bands_url: bandsUrl });
       };
     } else {
       track = getById<TrackPeaksRow>('tracks', id);
@@ -72,21 +74,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       );
     }
 
-    const peaks = await extractPeaks(buf);
-    if (!peaks) {
+    // Regenerating peaks also regenerates the spectral sidecar, so a track
+    // re-analysed after this ships stops falling back to in-browser analysis.
+    const { peaksUrl, bandsUrl, undecodable } = await buildAndUploadSidecars(buf, rawUrl);
+    if (undecodable) {
       return NextResponse.json({ error: 'Peak extraction returned nothing decodable' }, { status: 422 });
     }
-    const peaksUrl = await uploadPeaksSidecar(rawUrl, JSON.stringify(peaks));
     if (!peaksUrl) {
       return NextResponse.json({ error: 'Peaks sidecar upload failed' }, { status: 500 });
     }
 
     if (updateSupabasePeaks) {
-      return updateSupabasePeaks(peaksUrl);
+      return updateSupabasePeaks(peaksUrl, bandsUrl);
     }
 
-    const updated = update('tracks', id, { peaks_url: peaksUrl });
-    return NextResponse.json({ track: updated, peaks_url: peaksUrl });
+    const updated = update('tracks', id, {
+      peaks_url: peaksUrl,
+      ...(bandsUrl ? { bands_url: bandsUrl } : {}),
+    });
+    return NextResponse.json({ track: updated, peaks_url: peaksUrl, bands_url: bandsUrl });
   } catch (error) {
     log.error('peaks backfill failed', { trackId: id, error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });

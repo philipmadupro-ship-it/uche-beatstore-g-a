@@ -40,6 +40,7 @@ export interface PlaylistTrackItem {
   type: string;
   audio_url: string;
   peaks_url?: string | null;
+  bands_url?: string | null;
   cover_url?: string | null;
   duration_seconds?: number | null;
   bpm?: number | null;

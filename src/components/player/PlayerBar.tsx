@@ -84,6 +84,8 @@ export function PlayerBar() {
     currentTrack?.id ?? null,
     currentTrack?.audio_url,
     progress,
+    true,
+    currentTrack?.bands_url,
   );
 
   if (!currentTrack) return null;
