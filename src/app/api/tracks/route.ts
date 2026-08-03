@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { selectWithOptionalColumns } from '@/lib/db/optional-columns';
 import {
   scopedList,
   isErrorResponse,
@@ -247,41 +248,65 @@ async function listBoundedTracks(
   const safeUserId = safeSellerId(owner.userId);
   if (!safeUserId) return NextResponse.json({ error: 'Invalid user id' }, { status: 400 });
 
-  let dbQuery = owner.admin
-    .from('tracks')
-    .select([
-      'id', 'title', 'type', 'cover_url', 'duration_seconds', 'peaks_url',
-      'bpm', 'key', 'scale', 'rating', 'store_listed',
-      'store_featured', 'store_sort_order', 'scheduled_publish_at',
-      'lease_price_usd', 'exclusive_price_usd', 'free_download_enabled',
-      'exclusive_sold', 'voice_tag_enabled', 'created_at',
-      // audio_url + preview_status drive the library's "Analyze N" / preview
-      // backfill affordance (owner-only response, so the private ref is fine).
-      'audio_url', 'preview_status', 'peaks_url', 'bands_url',
-      'track_tags(tag, category)', 'stems(status)',
-    ].join(', '))
-    .or(`user_id.eq.${safeUserId},user_id.is.null`);
+  const BASE_COLUMNS = [
+    'id', 'title', 'type', 'cover_url', 'duration_seconds', 'peaks_url',
+    'bpm', 'key', 'scale', 'rating', 'store_listed',
+    'store_featured', 'store_sort_order', 'scheduled_publish_at',
+    'lease_price_usd', 'exclusive_price_usd', 'free_download_enabled',
+    'exclusive_sold', 'voice_tag_enabled', 'created_at',
+    // audio_url + preview_status drive the library's "Analyze N" / preview
+    // backfill affordance (owner-only response, so the private ref is fine).
+    'audio_url', 'preview_status',
+    'track_tags(tag, category)', 'stems(status)',
+  ];
+  // Requested when present, dropped when the schema is behind. Adding this to
+  // the list unconditionally made the entire query fail with "column
+  // tracks.bands_url does not exist" wherever migration 105 had not been
+  // applied — and a failed select is not a missing feature, it is an EMPTY
+  // LIBRARY. See lib/db/optional-columns.
+  const OPTIONAL_COLUMNS: string[] = [];
 
-  if (filters.type && filters.type !== 'all') dbQuery = dbQuery.eq('type', filters.type);
-  if (filters.key) dbQuery = dbQuery.eq('key', filters.key);
-  if (filters.minRating) dbQuery = dbQuery.gte('rating', Number(filters.minRating));
-  if (filters.minBpm) dbQuery = dbQuery.gte('bpm', Number(filters.minBpm));
-  if (filters.maxBpm) dbQuery = dbQuery.lte('bpm', Number(filters.maxBpm));
-  if (filters.storeListed === '1') dbQuery = dbQuery.eq('store_listed', true);
-  if (filters.storeListed === '0') dbQuery = dbQuery.eq('store_listed', false);
-  if (junctionIds) dbQuery = dbQuery.in('id', junctionIds);
-  if (q) {
-    const safeQ = q.replace(/[%,()]/g, ' ').trim();
-    if (safeQ) {
-      const bpmFilter = /^\d{2,3}$/.test(safeQ) ? `,bpm.eq.${Number(safeQ)}` : '';
-      dbQuery = dbQuery.or(`title.ilike.%${safeQ}%,description.ilike.%${safeQ}%,key.ilike.%${safeQ}%${bpmFilter}`);
+  // The filter chain is rebuilt per attempt because a Supabase query builder
+  // cannot have its select swapped after construction.
+  const runTracksQuery = (columns: string) => {
+    let dbQuery = owner.admin
+      .from('tracks')
+      .select(columns)
+      .or(`user_id.eq.${safeUserId},user_id.is.null`);
+
+    if (filters.type && filters.type !== 'all') dbQuery = dbQuery.eq('type', filters.type);
+    if (filters.key) dbQuery = dbQuery.eq('key', filters.key);
+    if (filters.minRating) dbQuery = dbQuery.gte('rating', Number(filters.minRating));
+    if (filters.minBpm) dbQuery = dbQuery.gte('bpm', Number(filters.minBpm));
+    if (filters.maxBpm) dbQuery = dbQuery.lte('bpm', Number(filters.maxBpm));
+    if (filters.storeListed === '1') dbQuery = dbQuery.eq('store_listed', true);
+    if (filters.storeListed === '0') dbQuery = dbQuery.eq('store_listed', false);
+    if (junctionIds) dbQuery = dbQuery.in('id', junctionIds);
+    if (q) {
+      const safeQ = q.replace(/[%,()]/g, ' ').trim();
+      if (safeQ) {
+        const bpmFilter = /^\d{2,3}$/.test(safeQ) ? `,bpm.eq.${Number(safeQ)}` : '';
+        dbQuery = dbQuery.or(`title.ilike.%${safeQ}%,description.ilike.%${safeQ}%,key.ilike.%${safeQ}%${bpmFilter}`);
+      }
     }
-  }
 
-  const { data, error } = await dbQuery
-    .order('created_at', { ascending: false })
-    .range(cursor, cursor + limit);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return dbQuery
+      .order('created_at', { ascending: false })
+      .range(cursor, cursor + limit);
+  };
+
+  const { data, error } = await selectWithOptionalColumns(
+    BASE_COLUMNS,
+    OPTIONAL_COLUMNS,
+    async (columns) => {
+      const { data: rows, error: queryError } = await runTracksQuery(columns);
+      return { data: rows as unknown, error: queryError };
+    },
+  );
+  if (error) {
+    const message = (error as { message?: string })?.message ?? 'Query failed';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 
   const rows = (data ?? []) as unknown as TrackListRow[];
   const hasMore = rows.length > limit;

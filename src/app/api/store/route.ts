@@ -406,7 +406,7 @@ export async function GET(req: NextRequest) {
       .from('tracks')
       .select([
         'id', 'user_id', 'title', 'type',
-        'audio_url', 'peaks_url', 'bands_url', 'cover_url',
+        'audio_url', 'peaks_url', 'cover_url',
         'duration_seconds', 'bpm', 'key', 'scale',
         'rating', 'description',
         'lease_price_usd', 'exclusive_price_usd', 'wav_url', 'preview_url',
@@ -430,7 +430,7 @@ export async function GET(req: NextRequest) {
         .from('tracks')
         .select([
           'id', 'user_id', 'title', 'type',
-          'audio_url', 'peaks_url', 'bands_url', 'cover_url',
+          'audio_url', 'peaks_url', 'cover_url',
           'duration_seconds', 'bpm', 'key', 'scale',
           'rating', 'description',
           'lease_price_usd', 'exclusive_price_usd', 'wav_url', 'preview_url',
@@ -601,7 +601,7 @@ export async function GET(req: NextRequest) {
         if (playlistTrackIds.length > 0) {
           const { data: ptRows } = await admin
             .from('tracks')
-            .select('id, title, type, audio_url, preview_url, peaks_url, bands_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled, exclusive_sold, wav_url, stems_status')
+            .select('id, title, type, audio_url, preview_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled, exclusive_sold, wav_url, stems_status')
             .in('id', playlistTrackIds);
           for (const t of (ptRows ?? []) as StoreTrackRow[]) {
             playlistTrackMap[t.id] = redactPublicTrackMedia({ ...t, cover_url: sanitizeUrl(t.cover_url), has_wav: Boolean(t.wav_url) });
@@ -660,7 +660,7 @@ export async function GET(req: NextRequest) {
         if (projectTrackIds.length > 0) {
           const { data: ptRows } = await admin
             .from('tracks')
-            .select('id, title, type, audio_url, preview_url, peaks_url, bands_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled, exclusive_sold, wav_url, stems_status')
+            .select('id, title, type, audio_url, preview_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lease_price_usd, exclusive_price_usd, free_download_enabled, exclusive_sold, wav_url, stems_status')
             .in('id', projectTrackIds);
           for (const t of (ptRows ?? []) as StoreTrackRow[]) {
             projectTrackMap[t.id] = redactPublicTrackMedia({ ...t, cover_url: sanitizeUrl(t.cover_url), has_wav: Boolean(t.wav_url) });

@@ -7503,3 +7503,49 @@ since there is no data here to exercise it.
 
 Apply migration `037_store_free_downloads` if it is not already applied there. The panel is
 inert without it — and, more importantly, no leads are being recorded at all until it is.
+
+---
+
+## Mobile track rows + a regression I introduced and then removed the cause of
+
+### The regression: a schema-coupled read path emptied the library
+
+Adding `bands_url` to the `select(...)` lists in the previous pass made the app hard-depend on
+migration 105. On this database — where 105 is not applied — the entire tracks query failed with
+`column tracks.bands_url does not exist`, and the dashboard rendered **"LIBRARY · 0"** with 57
+tracks sitting in the database. On the public store the same change would have emptied the
+catalogue.
+
+Caught in the browser, not by the gate: `tsc`, ESLint, 700 tests and the build were all green,
+because a column that exists in code and not in the database is not a type error.
+
+**The fix is not a retry, it is removing the coupling.** Both sidecars are written by
+`uploadJsonSidecar` to the SAME object key with a different suffix, so the spectral URL can be
+DERIVED from `peaks_url`, which the read paths already select:
+
+    …/abc.mp3.peaks.json  →  …/abc.mp3.bands.json
+
+`bandsUrlFromPeaksUrl` (in its own dependency-free module, so it is importable from client
+components and tests without dragging in the R2 SDK) replaces the column on every read path. If
+the file is not there the fetch 404s and the client falls back to local analysis — exactly the
+degradation that was designed in. The column still exists and is still written, because the
+backfill needs it to know which tracks are done; nothing *reads* it.
+
+Also added `lib/db/optional-columns.ts` (`isMissingColumnError`,
+`selectWithOptionalColumns`) with 7 tests, and used it on the tracks route. It deliberately does
+NOT retry on unrelated failures — turning a permissions or connection error into a silent
+partial success would be worse than the original bug.
+
+Library verified back to 57 tracks, no console errors.
+
+### Mobile track rows
+
+Below `md` the tags, time and rating columns are all `hidden`, so a phone showed a title and
+nothing else — while the project's stated direction is that mobile mirrors web. Rather than
+force five columns into 375px, the row continues onto a second line carrying the same
+information: duration and date (the Time column), the store/price marker, offline state, and the
+rating as a single numeral rather than five tap targets too small to hit accurately.
+
+Verified at 375px: the line renders and reads e.g. `1:20 | AUG 2 | ★5`.
+
+`tsc` clean · `eslint` 0 errors · **712 tests** (12 new) · build green.

@@ -304,6 +304,43 @@ export function TrackCard({
           {track.type ? <span className="truncate">{track.type}</span> : null}
           {!track.bpm && !track.key && !track.type ? <span>—</span> : null}
         </div>
+
+        {/* Mobile-only continuation of the row.
+            Below `md` the tags, time and rating columns are all hidden, which
+            left a phone showing a title and nothing else — while the project's
+            stated direction is that mobile mirrors web. Rather than cram five
+            columns into 375px, the same information continues on a second line:
+            duration and date (the Time column), the store/price marker, and the
+            rating as a single numeral instead of five tap targets too small to
+            hit accurately anyway. */}
+        <div className="mt-1 flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.12em] text-white/35 md:hidden">
+          <span className="tabular-nums">{durationLabel}</span>
+          <span aria-hidden className="h-2 w-px bg-white/15" />
+          <span className="tabular-nums">{uploadDate}</span>
+          {track.rating ? (
+            <>
+              <span aria-hidden className="h-2 w-px bg-white/15" />
+              <span className="flex items-center gap-0.5 text-[#c8a84b]">
+                <Star size={8} fill="#c8a84b" strokeWidth={0} aria-hidden />
+                <span className="tabular-nums">{track.rating}</span>
+              </span>
+            </>
+          ) : null}
+          {track.store_listed ? (
+            <>
+              <span aria-hidden className="h-2 w-px bg-white/15" />
+              <span className="text-[#D4BFA0]">
+                {track.lease_price_usd != null ? `$${track.lease_price_usd}` : 'Listed'}
+              </span>
+            </>
+          ) : null}
+          {isCached ? (
+            <>
+              <span aria-hidden className="h-2 w-px bg-white/15" />
+              <span className="text-white/45">Offline</span>
+            </>
+          ) : null}
+        </div>
       </div>
 
       {/* Tags + commerce state — secondary support, same hierarchy as Store list.

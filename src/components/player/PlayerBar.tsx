@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { getPlayerStreamStatus } from '@/lib/audio/player-status';
 import { useAudioReactivity } from '@/hooks/useAudioReactivity';
+import { bandsUrlFromPeaksUrl } from '@/lib/audio/sidecar-url';
 import { useNextTrackPreload } from '@/hooks/useNextTrackPreload';
 import { useAmbientCoverColor } from '@/hooks/useAmbientCoverColor';
 import { usePlayerKeyboardShortcuts } from '@/hooks/usePlayerKeyboardShortcuts';
@@ -85,7 +86,7 @@ export function PlayerBar() {
     currentTrack?.audio_url,
     progress,
     true,
-    currentTrack?.bands_url,
+    bandsUrlFromPeaksUrl(currentTrack?.peaks_url),
   );
 
   if (!currentTrack) return null;

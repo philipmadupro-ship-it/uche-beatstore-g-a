@@ -9,6 +9,7 @@ import { LicenseSelector } from '@/components/store/LicenseSelector';
 import { SpectralWaveform } from '@/components/player/SpectralWaveform';
 import { AsciiCoverArt } from '@/components/player/AsciiCoverArt';
 import { useAudioReactivity } from '@/hooks/useAudioReactivity';
+import { bandsUrlFromPeaksUrl } from '@/lib/audio/sidecar-url';
 import { Drawer } from '@/components/ui/Drawer';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -61,7 +62,10 @@ export function BeatPreviewDrawer({
   // `isCurrent`: this drawer can show a track that isn't the one playing.
   const {
     level: audioLevel, bass: audioBass,
-  } = useAudioReactivity(track.id, track.audio_url, progress, isCurrent, track.bands_url);
+  } = useAudioReactivity(
+    track.id, track.audio_url, progress, isCurrent,
+    bandsUrlFromPeaksUrl(track.peaks_url),
+  );
 
   const activeLicenses: LicenseTier[] = licenses.length > 0
     ? [...licenses].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
