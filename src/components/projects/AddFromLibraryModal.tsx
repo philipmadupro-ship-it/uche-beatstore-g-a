@@ -12,6 +12,7 @@ import { X, Search, Music, Loader2, Check, SlidersHorizontal, ChevronDown } from
 import { fmtBpm, fmtKey, fmtDuration } from '@/lib/audio/format';
 import { errorMessage } from '@/lib/errors';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface Props {
   endpoint: string;
@@ -57,6 +58,7 @@ interface AddTracksResponse {
 }
 
 export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdded, title = 'Add from library' }: Props) {
+  const panelRef = useDialogBehavior({ open: true, onClose });
   const [tracks, setTracks] = useState<LibraryTrack[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -181,7 +183,15 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
-      <div className="bg-white/[0.02] border border-white/10 rounded-2xl w-full max-w-3xl max-h-[88vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Add tracks from library"
+        tabIndex={-1}
+        className="bg-white/[0.02] border border-white/10 rounded-2xl w-full max-w-3xl max-h-[88vh] overflow-hidden flex flex-col focus:outline-none"
+        onClick={(e) => e.stopPropagation()}
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 h-14 border-b border-[#0D0D0A] shrink-0">

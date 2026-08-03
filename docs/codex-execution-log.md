@@ -7549,3 +7549,61 @@ rating as a single numeral rather than five tap targets too small to hit accurat
 Verified at 375px: the line renders and reads e.g. `1:20 | AUG 2 | ★5`.
 
 `tsc` clean · `eslint` 0 errors · **712 tests** (12 new) · build green.
+
+---
+
+## Priority 3 — Dialog semantics for hand-rolled overlays
+
+### What the audit actually found
+
+My assessment said "33 modals without `role="dialog"`". Investigating corrected that: the shared
+`ui/Modal` and `ui/Drawer` primitives are **already correct** — focus trap, Escape, focus
+restore, `role="dialog"`. The problem is ~29 hand-rolled `fixed inset-0` overlays that predate
+them and bypass the primitive entirely.
+
+A meaningful share of those are dropdowns, option menus and sidebars, which are `role="menu"`
+and must NOT trap focus — trapping in a menu strands a keyboard user inside a popup they
+expected to tab out of. So "migrate all 29 to Modal" would have been the wrong instruction as
+well as a risky one.
+
+### Approach
+
+`useDialogBehavior` gives an existing overlay the three things it is missing — Escape, focus
+trap, focus restoration — in three lines, without touching its markup or layout. Rewriting each
+overlay onto `ui/Modal` is a large behavioural change with real regression risk; this is a
+retrofit. New work should still use `ui/Modal`.
+
+`trapFocus: false` is provided precisely so menus can take Escape and focus restore without the
+trap.
+
+Applied to the buyer-facing `FreeDownloadModal` first (it is on the public store, so a keyboard
+or screen-reader visitor reaches it before anything in the dashboard), then
+`ImportContactsModal` and `AddFromLibraryModal`.
+
+### A real bug the tests caught
+
+The first implementation filtered focusable elements with `offsetParent !== null` to skip hidden
+controls. That is **wrong for this exact use case**: `offsetParent` is null for any
+`position: fixed` element — which is precisely what a modal panel is — so it would have excluded
+every real control in the dialog and left the trap pinning focus to the panel itself.
+
+It surfaced as three failing tests, and it would have been invisible in review: the filter reads
+as obviously correct. Removed; the selector already excludes `[disabled]` and `tabindex="-1"`,
+and a stray hidden control in the cycle is a far smaller problem than a trap that skips the
+buttons.
+
+Also fixed a stale-ref hazard flagged by lint rather than suppressing it: the cleanup read
+`panelRef.current`, which React may already have detached by then, silently skipping focus
+restoration. The node is now captured inside the effect.
+
+9 tests cover each behaviour, including that Tab is NOT intercepted mid-dialog (only the edges
+wrap, or the dialog becomes impossible to move through) and that `trapFocus: false` genuinely
+does not trap.
+
+`tsc` clean · `eslint` 0 errors · **721 tests** (9 new) · build green.
+
+### Remaining
+
+~26 overlays still bypass the primitive. The hook makes each a three-line change, but they need
+categorising first — dialog vs menu — because applying a focus trap to a menu is worse than
+leaving it alone.

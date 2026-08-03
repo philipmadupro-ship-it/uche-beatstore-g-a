@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { errorMessage } from '@/lib/errors';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface PreviewContact {
   name: string;
@@ -59,6 +60,7 @@ const CAT_COLORS: Record<string, string> = {
 };
 
 export function ImportContactsModal({ onClose, onSuccess }: Props) {
+  const panelRef = useDialogBehavior({ open: true, onClose });
   const fileRef = useRef<HTMLInputElement>(null);
   const [filename, setFilename] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
@@ -169,7 +171,12 @@ export function ImportContactsModal({ onClose, onSuccess }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-[#090907] border border-white/10 rounded-lg w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Import contacts"
+        tabIndex={-1}
+        className="bg-[#090907] border border-white/10 rounded-lg w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col focus:outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 h-12 border-b border-white/10">
