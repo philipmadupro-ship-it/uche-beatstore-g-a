@@ -56,11 +56,23 @@ export async function POST(req: NextRequest) {
     if (!track.free_download_enabled) return NextResponse.json({ error: 'Free download not enabled' }, { status: 403 });
     if (!track.audio_url) return NextResponse.json({ error: 'Audio unavailable' }, { status: 404 });
 
-    // Log the download (migration 037 — non-fatal if table doesn't exist yet)
-    try {
-      await admin.from('store_free_downloads').insert({ track_id, email });
-    } catch {
-      // migration not yet applied — skip
+    // Log the download (migration 037). Non-fatal — a missing lead record must
+    // never block the visitor's download.
+    //
+    // NOTE the failure mode this used to hide: supabase-js RESOLVES with
+    // `{ error }` rather than throwing, so the previous `try/catch` around this
+    // call could never fire. The insert failing (e.g. migration 037 not applied)
+    // was invisible because nothing inspected `.error` — the catch only looked
+    // like it was handling it. Checking the result is what actually surfaces it.
+    const { error: leadError } = await admin
+      .from('store_free_downloads')
+      .insert({ track_id, email });
+    if (leadError) {
+      log.warn('free download lead not recorded', {
+        trackId: track_id,
+        error: leadError.message,
+        hint: 'apply migration 037_store_free_downloads if the table is missing',
+      });
     }
 
     // Upsert buyer contact (migration 038 — non-fatal if column doesn't exist)

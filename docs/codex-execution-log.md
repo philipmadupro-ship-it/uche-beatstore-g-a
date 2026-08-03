@@ -7446,3 +7446,60 @@ mock had no `.or()`, and the route's mocking seam moved from `extractPeaks` +
 2. Run the backfill (`POST /api/tracks/peaks/backfill-all`) to convert existing tracks.
    Until then every track still has `bands_url = null` and takes the old in-browser path — the
    change is safe but inert.
+
+---
+
+## Priority 2 — Free-download leads: making the list legible
+
+### A correction to the assessment that prompted this
+
+I reported that `store_free_downloads` was "captured and never used". Investigating properly
+turned up two corrections worth recording:
+
+1. The free-download route **already upserts a contact** (`category: 'buyer'`,
+   `buyer_pipeline_status: 'new_lead'`, `onConflict: 'email'`). So leads were not being thrown
+   away. "Nothing reads the table" was true; "the list goes nowhere" was overstated.
+2. On this database the table **does not exist at all** — migration 037 was never applied. So
+   nothing is being captured here in the first place.
+
+### A silent failure the investigation exposed
+
+The insert was wrapped in `try/catch` with the comment "non-fatal if table doesn't exist yet".
+That catch can never fire: `supabase-js` RESOLVES with `{ error }` rather than throwing. The
+failure was invisible because nothing inspected `.error` — the `try/catch` only looked like it
+was handling it, which is worse than no handling, because it reads as deliberate. Now the result
+is checked and a missing table is logged with the migration to apply.
+
+This is the same shape as the `catch {}` in `AsciiCoverArt` earlier in this project: a swallowed
+error that made a real defect invisible for far longer than it should have been.
+
+### What was built
+
+- `lib/crm/free-download-leads.ts` — pure aggregation, 15 tests. A lead is a PERSON, not a
+  download: rows are collapsed by normalised email, so the same address in different casing is
+  one lead and repeat downloaders surface as `3x` rather than three rows. Sorted by most recent
+  activity, not volume — someone following up wants who is warm *now*.
+- `GET/POST /api/store/free-downloads`. Owner scoping is via a join through `tracks.user_id`,
+  because the table only stores `track_id`; without that join the endpoint would leak every
+  producer's list on a multi-tenant deployment. POST only promotes addresses that actually
+  appear in the caller's own download list — otherwise it would be an arbitrary
+  contact-injection endpoint. Idempotent, so re-running after a partial failure is safe.
+- `FreeDownloadLeads` panel on `/contacts`, rendering nothing when the list is empty rather than
+  showing an empty shell.
+
+Promotion is explicit rather than automatic: someone who took a free beat has not opted into
+outreach, and auto-filling the CRM with them would corrupt both its meaning and its pipeline
+statistics.
+
+### Verified
+
+Panel correctly renders nothing on this database (no table, no leads). The API returns a clean
+error rather than a 500 crash. Aggregation is covered by unit tests rather than by a live list,
+since there is no data here to exercise it.
+
+`tsc` clean · `eslint` 0 errors · **700 tests** (15 new) · build green.
+
+### Required before this does anything in prod
+
+Apply migration `037_store_free_downloads` if it is not already applied there. The panel is
+inert without it — and, more importantly, no leads are being recorded at all until it is.

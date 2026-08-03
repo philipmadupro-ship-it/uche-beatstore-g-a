@@ -1,5 +1,6 @@
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ContactsView } from '@/components/crm/ContactsView';
+import { FreeDownloadLeads } from '@/components/crm/FreeDownloadLeads';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
@@ -80,6 +81,11 @@ export default async function ContactsPage() {
   const { contacts, beatSends, error } = await loadInitialData();
   return (
     <DashboardLayout>
+      {/* Sits above the CRM: these are people who already wanted the music
+          enough to hand over an address, and until now the list was invisible. */}
+      <div className="mx-auto max-w-[1400px] px-4 pt-4 sm:px-6">
+        <FreeDownloadLeads />
+      </div>
       <ContactsView
         initialContacts={contacts}
         initialBeatSends={beatSends}
