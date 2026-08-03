@@ -7343,3 +7343,48 @@ but not yet closed. Confirmed stale three ways: `tsc` clean, `next build` clean 
 buffered dev-server output has looked like a live failure.
 
 `tsc` clean · `eslint` 0 errors · **674 tests** · build green.
+
+---
+
+## Track UI, third pass: the playlist header, and a guard for the whole class
+
+### The worst instance of the duplicated-grid bug
+
+Auditing the remaining `TrackCard` consumers turned up the playlist detail page, which was worse
+than the two headers fixed earlier. It declared its own table:
+
+    grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px]   (md: 9 cols, lg: 10)
+
+…above rows that are `TrackCard`, which renders **six**. They could not line up at any
+breakpoint. The labels described a layout that no longer existed either — `Type`, `BPM · Key`,
+`Added` and `Tags` named columns `TrackCard` does not draw, so `Added` and `Tags` labelled
+nothing at all. This predates the recent column work; it is what the earlier passes' duplication
+was hiding.
+
+Repointed at `TRACK_ROW_GRID` with labels matching the real cells: `# / Title / Tags · Store /
+Time / Rating`. Verified live — header and rows both resolve to
+`40 301.828 208.156 84 148 32`.
+
+That makes four surfaces (library, projects, playlists, producer) consistent, with zero
+hand-written row templates remaining.
+
+### A guard, because this class of bug is invisible to the normal gate
+
+A misaligned grid is valid code that merely renders wrong — `tsc`, ESLint, the tests and the
+build were all green through both incidents. `track-row-grid.test.ts` now asserts:
+
+1. `TRACK_ROW_GRID` bakes in its `md:` prefix (a runtime-assembled class is invisible to
+   Tailwind's scanner, so the CSS would silently never be emitted).
+2. No other file restates the column template.
+3. No file renders `<TrackCard>` beneath a hand-written row-like grid.
+
+**The guard found a fourth file on its first run** — the producer page. That turned out to be a
+false positive worth recording: it renders `TrackCard` in a card gallery and separately has a
+`[280px_1fr]` sidebar layout. So assertion 3 needed a real definition of "row header" rather
+than "any px grid": four or more tracks with at least two fixed px widths. That matches the
+playlist's eight-column table and leaves two-track page layouts alone.
+
+Then confirmed the guard is not vacuous by reintroducing the original playlist header verbatim —
+it failed and named the file — before restoring.
+
+`tsc` clean · `eslint` 0 errors · **677 tests** (3 new) · build green.

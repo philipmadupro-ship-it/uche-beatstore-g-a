@@ -9,7 +9,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageContainer } from '@/components/layout/PageHeader';
-import { TrackCard } from '@/components/tracks/TrackCard';
+import { TrackCard, TRACK_ROW_GRID } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { PlaylistOfflineSync } from '@/components/offline/PlaylistOfflineSync';
@@ -555,15 +555,18 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               )}
             </div>
           )}
-          <div className="hidden h-9 grid-cols-[32px_32px_1fr_90px_72px_110px_110px_32px] items-center gap-4 border-b border-[#24211B] px-4 text-[10px] font-mono uppercase tracking-wider text-white/40 sm:grid md:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_110px_32px] lg:grid-cols-[32px_32px_1fr_110px_72px_130px_110px_100px_110px_32px]">
+          {/* Uses the same column template as the rows beneath it.
+              This header previously declared its own 8/9/10-column table
+              (#, Title, Type, BPM · Key, Added, Rating, Tags) while the rows
+              are `TrackCard`, which renders six. They could not line up at any
+              breakpoint, and the labels named columns TrackCard stopped drawing
+              — "Added" and "Tags" had no corresponding cell at all. */}
+          <div className={`hidden md:grid ${TRACK_ROW_GRID} h-8 items-center gap-4 border border-transparent border-b-[#24211B] px-3 text-[9px] font-mono uppercase tracking-wider text-white/40`}>
             <span className="text-center">#</span>
-            <span />
             <span>Title</span>
-            <span className="hidden sm:block">Type</span>
-            <span className="hidden sm:block">BPM · Key</span>
-            <span className="hidden sm:block">Added</span>
-            <span className="text-right hidden sm:block">Rating</span>
-            <span className="hidden lg:block">Tags</span>
+            <span className="hidden md:block">Tags · Store</span>
+            <span className="hidden md:block text-right">Time</span>
+            <span className="hidden md:block text-right">Rating</span>
             <span />
           </div>
 
