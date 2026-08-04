@@ -7667,3 +7667,53 @@ Genre and mood tags drive the richest terms, and most of the listed catalogue is
 tagging is now directly worth money rather than tidiness. A per-track "search title" field
 (distinct from the display title) would let the beat pages themselves target the same phrases;
 that needs a migration.
+
+---
+
+## Transformation 1b — Bulk auto-tagging: feeding the discovery engine
+
+The discovery engine shipped, then immediately revealed its own bottleneck: landing pages are
+generated from genre and mood tags, and almost nothing in the catalogue is tagged. So the store
+generated two pages and stayed effectively invisible.
+
+`suggestTags` already existed and was already good — confidence-scored genre/mood suggestions
+derived from BPM, energy, danceability, valence and acousticness, with human-readable reasons.
+But it was wired only into `TagPicker`: manual, one track at a time. Fifty-seven tracks meant
+fifty-seven decisions, which is why none had been made.
+
+### What shipped
+
+- **`lib/audio/bulk-tagging.ts`** — pure, 14 tests. Plans what to tag without writing anything.
+- **`GET/POST /api/tracks/auto-tag`** — preview and apply, owner-gated.
+- **Library toolbar affordance**, sitting beside the existing "Analyze N".
+
+### The decisions that make it safe on a whole catalogue
+
+- **A confidence floor of 0.7.** The costs are asymmetric: a missing tag costs one landing page,
+  a wrong tag puts a beat on a page it does not belong on — which wastes the visitor and makes
+  the page read as spam. The threshold therefore favours silence.
+- **Plan is separate from write.** The producer sees what will happen first. Bulk-editing a
+  catalogue with no preview is how people end up undoing work by hand.
+- **Manual tags are never touched**; the plan only ever ADDS.
+- **The toast reports discovery pages gained, not tags written.** Tags are the means; the reason
+  to run this is search visibility, and reporting only a tag count would hide whether the action
+  achieved anything.
+
+### A real flaw the tests caught
+
+The cap started as "at most 4 tags per RUN". The idempotency test failed and exposed why that is
+wrong: a track with five strong suggestions gains four now and the fifth next time, so repeated
+runs creep past the very limit the cap exists to enforce. Now it bounds the track's TOTAL tags,
+which makes the cap real and makes re-running genuinely converge — important, because this is
+meant to be safe to run after every upload batch.
+
+### Verified live
+
+`GET` against the real catalogue returns **114 tags across 47 tracks, 10 skipped**, with genuine
+reasoning (`"BPM 142 fits UK Drill range (138–145)"`, confidence 1.0). The button renders as
+"Auto-tag 47".
+
+**Not applied.** Tagging changes what appears on the public store, so the write is left as the
+owner's click rather than performed automatically.
+
+`tsc` clean · `eslint` 0 errors · **756 tests** (14 new) · build green.

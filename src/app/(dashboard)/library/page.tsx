@@ -696,6 +696,46 @@ export default function LibraryPage() {
 
   const [bulkAnalyzing, setBulkAnalyzing] = useState<{ done: number; total: number } | null>(null);
 
+  // Auto-tagging exists to feed the discovery engine: landing pages are
+  // generated from genre/mood tags, so an untagged catalogue produces no entry
+  // points and the store stays invisible to search. The toast reports pages
+  // gained rather than tags written, because that is the thing worth knowing.
+  const [autoTagPlan, setAutoTagPlan] = useState<{ totalTags: number; tracksAffected: number } | null>(null);
+  const [autoTagging, setAutoTagging] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/tracks/auto-tag')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!cancelled && j?.totalTags) setAutoTagPlan(j); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [tracks.length]);
+
+  const runAutoTag = async () => {
+    setAutoTagging(true);
+    try {
+      const res = await fetch('/api/tracks/auto-tag', { method: 'POST' });
+      const j = await res.json();
+      if (!res.ok) {
+        toast.error('Auto-tag failed', j?.error ?? 'Please try again.');
+        return;
+      }
+      toast.success(
+        `Tagged ${j.tracksAffected} beats`,
+        j.newDiscoveryPages > 0
+          ? `${j.newDiscoveryPages} new discovery page${j.newDiscoveryPages === 1 ? '' : 's'} — ${j.totalDiscoveryPages} total.`
+          : `${j.applied} tags added.`,
+      );
+      setAutoTagPlan(null);
+      fetchTracks();
+    } catch (e) {
+      toast.error('Auto-tag failed', errorMessage(e));
+    } finally {
+      setAutoTagging(false);
+    }
+  };
+
   const runBulkAnalyze = async () => {
     if (stale.length === 0 || bulkAnalyzing) return;
     setBulkAnalyzing({ done: 0, total: stale.length });
@@ -865,6 +905,13 @@ export default function LibraryPage() {
                 {stale.length > 0 && (
                   <LiquidGlassButton onClick={runBulkAnalyze} disabled={!!bulkAnalyzing}>
                     {bulkAnalyzing ? <><Loader2 size={12} className="animate-spin mr-1.5" /><span>{bulkAnalyzing.done}/{bulkAnalyzing.total}</span></> : <><Sparkles size={12} className="mr-1.5" /><span>Analyze {stale.length}</span></>}
+                  </LiquidGlassButton>
+                )}
+                {autoTagPlan && autoTagPlan.tracksAffected > 0 && (
+                  <LiquidGlassButton onClick={runAutoTag} disabled={autoTagging}>
+                    {autoTagging
+                      ? <><Loader2 size={12} className="animate-spin mr-1.5" /><span>Tagging…</span></>
+                      : <><Tag size={12} className="mr-1.5" /><span>Auto-tag {autoTagPlan.tracksAffected}</span></>}
                   </LiquidGlassButton>
                 )}
                 <LiquidGlassButton onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }} active={selectMode} className="ml-auto">
