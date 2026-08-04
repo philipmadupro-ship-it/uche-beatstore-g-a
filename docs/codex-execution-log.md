@@ -7607,3 +7607,63 @@ does not trap.
 ~26 overlays still bypass the primitive. The hook makes each a three-line change, but they need
 categorising first — dialog vs menu — because applying a focus trap to a menu is worse than
 leaving it alone.
+
+---
+
+## Transformation 1 — Discovery engine
+
+Owner asked for features that transform the application rather than repair it, and chose the
+discovery engine. The reasoning: this app is an excellent vault and storefront, but the only
+people who could ever reach the store were people who were sent a link. Beats are titled
+`151 BPM G# MIN BELLEOMETRY @uche2crazyyy` — how a producer finds a file, not how a rapper finds
+a beat — and the storefront had **one** indexable page for the entire catalogue, no sitemap and
+no robots.txt.
+
+### What shipped
+
+- **`lib/store/discovery.ts`** — pure, 21 tests. Derives search phrases the catalogue can
+  honestly answer from data already stored: genre tags, mood tags, track type, BPM buckets.
+  `Trap` → `Trap Type Beat` → `/store/type/trap-type-beat`.
+- **`robots.ts`** — did not exist. Points at the sitemap and explicitly disallows the tokenised
+  per-buyer routes (`/store/download`, `/store/projects/access`, `/share`) rather than relying on
+  auth alone, since those URLs would be crawlable if one ever leaked via a referrer.
+- **`sitemap.ts`** — did not exist. Every store-listed track plus every discovery page.
+- **`/store/type/[slug]`** — a SERVER component, deliberately. The rest of the store is
+  client-rendered, which is fine for an app but means a crawler sees an empty shell. The whole
+  value here is that the track list is in the HTML.
+
+### The design constraint that matters
+
+`MIN_TRACKS_PER_TERM = 3`. A term only becomes a page when enough real tracks match it. A page
+promising "drill type beats" that shows two unrelated results wastes the visit, and thin pages
+get demoted anyway — so the honest behaviour and the effective one coincide.
+
+Generation and matching are separate functions, with a test asserting that every generated term
+matches at least the threshold and that its count equals what the page will actually render.
+Without that property a "Trap" page could list tracks that are not trap.
+
+The sitemap and the landing routes read the catalogue through **one** shared loader, so the
+sitemap can never advertise a URL that would 404 — repeatedly pointing crawlers at dead links is
+how a site loses trust.
+
+### Verified live
+
+- `robots.txt` and `sitemap.xml` both serve; 9 URLs including the generated term pages.
+- `/store/type/instrumentals` returns 200 with `<title>Instrumentals — Uche2crazyyyy</title>`,
+  an accurate description ("5 instrumentals by…"), a canonical URL, and **five `/store/<id>`
+  anchors present in the raw HTML with no JavaScript executed** — the property the whole feature
+  exists for.
+- An unknown slug returns 404 rather than an empty page.
+
+Only two terms generate today because only ~5 tracks are store-listed and the threshold refuses
+thin pages. That is the intended behaviour, and the surface grows automatically as the catalogue
+and its tagging do.
+
+`tsc` clean · `eslint` 0 errors · **742 tests** (21 new) · build green.
+
+### Where the remaining upside is
+
+Genre and mood tags drive the richest terms, and most of the listed catalogue is untagged — so
+tagging is now directly worth money rather than tidiness. A per-track "search title" field
+(distinct from the display title) would let the beat pages themselves target the same phrases;
+that needs a migration.
