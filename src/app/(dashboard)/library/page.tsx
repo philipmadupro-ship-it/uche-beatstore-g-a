@@ -37,6 +37,7 @@ import MusicPortfolio, { type PortfolioTrack } from '@/components/library/MusicP
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
+import { SellReadinessPanel } from '@/components/library/SellReadinessPanel';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 
 // Sort modes — added so the library is browsable beyond "newest first."
@@ -91,6 +92,33 @@ export default function LibraryPage() {
   // Seeded from the session cache so returning to the library paints the last
   // known list instantly (no skeleton); the mount fetch then refreshes it.
   const [tracks, setTracks] = useState<Track[]>(() => getCached<Track[]>('library:tracks') ?? []);
+
+  /**
+   * Whether the producer has a fallback price on their profile.
+   *
+   * The store falls back to `creator_profiles.license_*_price_usd` when a track
+   * has no override, so a track without its own price is only truly blocked
+   * when there is no default either. Flagging every track regardless would be
+   * noise, and noise is what makes a checklist get ignored.
+   */
+  const [hasDefaultPrice, setHasDefaultPrice] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/profile')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (cancelled || !j) return;
+        const p = j.profile ?? j;
+        setHasDefaultPrice(
+          (p?.license_lease_price_usd ?? null) != null
+          || (p?.license_exclusive_price_usd ?? null) != null,
+        );
+      })
+      // Assume a default exists on failure: a false "no price" on every track
+      // is worse than staying quiet.
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   const [loading, setLoading] = useState(() => !getCached('library:tracks'));
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -1237,6 +1265,13 @@ export default function LibraryPage() {
         <div className="mb-8">
           <DropZone onUploadSuccess={fetchTracks} openRef={uploadOpenRef} />
         </div>
+
+        {/* Sits immediately after upload, which is the moment a producer would
+            otherwise assume the job is done. Upload previously ended in silence:
+            the beat landed untagged, unpriced and unlisted with nothing saying
+            so, and the store editor's own "needs attention" panel only inspects
+            beats that are ALREADY listed — so these were invisible everywhere. */}
+        <SellReadinessPanel tracks={tracks} hasDefaultPrice={hasDefaultPrice} />
 
         {loading ? (
           <div className="flex items-center justify-center py-16">

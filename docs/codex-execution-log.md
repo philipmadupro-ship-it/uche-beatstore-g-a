@@ -7717,3 +7717,66 @@ reasoning (`"BPM 142 fits UK Drill range (138–145)"`, confidence 1.0). The but
 owner's click rather than performed automatically.
 
 `tsc` clean · `eslint` 0 errors · **756 tests** (14 new) · build green.
+
+---
+
+## Workflow critique + sell-readiness panel
+
+Asked for a critique of the UI and workflow, then to apply it. Judged the app against one
+question: how many steps, across how many screens, from "I made a beat" to "someone can buy it"
+— and does the app ever say you stopped short?
+
+### Findings
+
+1. **Upload is a dead end.** `DropZone` marks the card done, clears it after four seconds, and
+   stops. The beat is untagged, unpriced and unlisted, and nothing says so. The happy path ends
+   before the step that makes money.
+2. **Selling one beat spans three screens.** Upload in `/library` → toggle `store_listed` in
+   `/store-editor` → set price in `/library/[id]`. No breadcrumb between them.
+3. **The only quality feedback is scoped to the wrong set.** `getStoreEditorAttentionIssues`
+   inspects LISTED beats. Unlisted ones — the majority — are structurally excluded from the one
+   mechanism that could tell you they are incomplete.
+4. **The library buries its subject**: hero card, upload row, four stat cards, section header,
+   filter row and dropzone all precede the first track.
+
+### Applied: findings 1 and 3, which are the same absence
+
+`lib/store/readiness.ts` (pure, 20 tests) computes what stands between each beat and a buyer,
+and `SellReadinessPanel` renders it in the LIBRARY — directly after the dropzone, which is the
+moment a producer would otherwise assume the job is done.
+
+Design choices worth recording:
+- `hasDefaultPrice` respects the `creator_profiles` price fallback, so a track without its own
+  price is only flagged when there is no default either. Flagging all 57 when a perfectly good
+  default exists is noise, and noise is what makes a checklist ignored.
+- Blockers are ordered by how many tracks they affect — the order in which one bulk fix pays off
+  most.
+- Each blocker carries a REASON ("Appears on no discovery page, so search cannot find it"), so
+  it reads as a diagnosis rather than a chore list.
+- Rows link straight to `/library/[id]`, where every blocker can be fixed — rather than sending
+  the producer to a third screen.
+
+### A correction to my own model, caught by running it
+
+The first version reported **"57 beats not earning, 0 ready to sell"** — while five beats were
+genuinely listed and priced, just without covers. That is false, and an overstating diagnostic
+is one the producer learns to ignore.
+
+Split into HARD blockers (`not-listed`, `no-price` — literally unpurchasable) and conversion
+issues (`no-cover`, `no-tags`, `no-metadata` — findable/convertible, but buyable). The headline
+now counts what nobody can buy, the sidebar counts what IS purchasable, and hard blockers render
+louder than soft ones. Verified live: "…nobody can buy · 2 purchasable".
+
+### Also recorded
+
+Third instance this session of stale dev-server console output looking like a live failure — a
+duplicate-identifier parse error persisted in the buffer after the source was already correct.
+`tsc` and a restart both confirmed it stale.
+
+`tsc` clean · `eslint` 0 errors · **776 tests** (20 new) · build green.
+
+### Not applied
+
+Findings 2 and 4 — collapsing the three-screen listing flow, and the library's top-heavy
+hierarchy — are larger structural changes that deserve their own pass rather than being folded
+into this one.
