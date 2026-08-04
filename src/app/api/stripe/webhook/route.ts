@@ -332,14 +332,58 @@ async function runFulfillment(params: {
 
     if (exclusiveTrackIds.length > 0) {
       try {
-        const { error } = await admin
+        // CONDITIONAL claim: only flip tracks that are still unsold.
+        //
+        // The availability check happens at checkout, but the lock lands here —
+        // and between the two the buyer spends seconds or minutes on Stripe's
+        // card form. Two buyers can both pass the checkout check, both pay, and
+        // both believe they hold an exclusive licence on the same beat.
+        //
+        // An unconditional `update({ exclusive_sold: true })` succeeds for the
+        // second buyer too, so the double sale leaves no trace anywhere and the
+        // producer finds out from the buyer. Filtering on `exclusive_sold=false`
+        // and comparing what came back turns that into a detected, actionable
+        // event: whatever is missing from the returned rows was already sold.
+        const { data: claimed, error } = await admin
           .from('tracks')
           .update({ exclusive_sold: true })
-          .in('id', exclusiveTrackIds);
+          .in('id', exclusiveTrackIds)
+          .eq('exclusive_sold', false)
+          .select('id, title');
+
         if (error) {
           log.warn('exclusivity lock failed', { trackIds: exclusiveTrackIds, error: errorMessage(error) });
         } else {
-          log.info('exclusive tracks marked sold', { trackIds: exclusiveTrackIds });
+          const claimedIds = new Set((claimed ?? []).map((t) => t.id as string));
+          const lost = exclusiveTrackIds.filter((id) => !claimedIds.has(id));
+
+          if (lost.length > 0) {
+            // This buyer paid for an exclusive that was already sold. Flag the
+            // purchase so /sales can surface it for refund rather than leaving
+            // the producer to discover it from a complaint.
+            log.error('EXCLUSIVE DOUBLE SALE — track already sold when payment landed', {
+              trackIds: lost,
+              sessionId: session.id,
+              buyerEmail: meta.buyer_email ?? null,
+            });
+            await admin
+              .from('license_purchases')
+              .update({ needs_refund_review: true })
+              .eq('stripe_session_id', session.id)
+              .then(({ error: flagError }) => {
+                // Column may not exist on older schemas; the log above is the
+                // durable record either way, so this must not break the webhook.
+                if (flagError) {
+                  log.warn('could not flag purchase for refund review', {
+                    sessionId: session.id, error: flagError.message,
+                  });
+                }
+              });
+          }
+
+          log.info('exclusive tracks marked sold', {
+            claimed: [...claimedIds], lost,
+          });
         }
       } catch (err) {
         log.warn('exclusivity lock threw', { error: errorMessage(err) });
