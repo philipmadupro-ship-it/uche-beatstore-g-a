@@ -35,6 +35,7 @@ import { StudioArrangement } from '@/components/studio/sections/StudioArrangemen
 import { StudioMixer } from '@/components/studio/sections/StudioMixer';
 import { StudioLastTake } from '@/components/studio/sections/StudioLastTake';
 import { PageContainer } from '@/components/layout/PageHeader';
+import { GlassPlayButton } from '@/components/ui/GlassPlayButton';
 
 type StemKey = 'vocals' | 'drums' | 'bass' | 'other';
 
@@ -641,12 +642,12 @@ export function StudioWorkstation() {
                     </p>
                   </div>
                 </div>
-                <button
+                <GlassPlayButton
+                  size="lg"
+                  playing={isPlaying}
                   onClick={togglePlay}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105 active:scale-95 sm:h-11 sm:w-11"
-                >
-                    {isPlaying ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" className="ml-0.5" />}
-                </button>
+                  label={isPlaying ? 'Pause loop' : 'Play loop'}
+                />
               </div>
 
               {/* Hidden audio elements */}

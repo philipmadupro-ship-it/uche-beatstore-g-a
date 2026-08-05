@@ -175,7 +175,8 @@ export function FeaturedPlaylistsStrip({
                   <div key={t.id} className={`flex items-center gap-3 px-4 py-2.5 hover:bg-[#0D0D0A] transition-colors ${isCur ? 'bg-[#0D0D0A]' : ''}`}>
                     <button
                       onClick={() => { if (pl) onPlay(t, pl); }}
-                      className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-colors ${isCur ? 'bg-white text-black' : 'bg-white/[0.06] text-white/80 hover:bg-white/[0.12] hover:text-white'}`}
+                      className="glass-play-surface w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                      data-playing={isCur && isPlaying ? 'true' : 'false'}
                     >
                       {isCur && isPlaying
                         ? <PauseGlyph size={11} />

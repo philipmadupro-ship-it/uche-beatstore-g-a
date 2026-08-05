@@ -92,7 +92,7 @@ export function MediaCard({
         <button
           onClick={onTogglePin}
           disabled={pinBusy}
-          className="absolute left-2 top-2 z-20 grid size-6 place-items-center rounded-full bg-white text-black shadow-sm tap"
+          className="glass-play glass-play-surface absolute left-2 top-2 z-20 grid size-6 place-items-center rounded-full tap"
           title="Unpin"
         >
           <Pin size={10} fill="currentColor" />

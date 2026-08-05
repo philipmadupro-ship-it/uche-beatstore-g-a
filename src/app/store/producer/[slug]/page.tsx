@@ -431,7 +431,7 @@ function TrackCard({
           onClick={(e) => { e.preventDefault(); onPlay(); }}
           className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
         >
-          <div className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-lg">
+          <div className="glass-play-surface w-12 h-12 rounded-full flex items-center justify-center" data-playing={isCurrent && isPlaying ? 'true' : 'false'}>
             {isCurrent && isPlaying ? (
               <PauseGlyph size={18} />
             ) : (

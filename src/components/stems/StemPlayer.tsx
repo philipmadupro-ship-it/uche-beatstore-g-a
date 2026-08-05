@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import WaveSurfer from 'wavesurfer.js';
 import { Play, Pause, Volume2, VolumeX, Loader2 } from 'lucide-react';
+import { GlassPlayButton } from '@/components/ui/GlassPlayButton';
 
 interface StemPlayerProps {
   vocalsUrl: string;
@@ -117,13 +118,13 @@ export function StemPlayer({ vocalsUrl, drumsUrl, bassUrl, otherUrl }: StemPlaye
           <h3 className="text-sm font-black uppercase tracking-[0.3em] text-white">Stem Mixer</h3>
           <p className="text-[9px] font-bold uppercase tracking-widest text-white/40 mt-1">4-Channel Spectral Isolation</p>
         </div>
-        <button 
+        <GlassPlayButton
+          size="lg"
+          playing={isPlaying}
+          loading={loading}
           onClick={() => setIsPlaying(!isPlaying)}
-          disabled={loading}
-          className="w-12 h-12 rounded-full bg-white text-black font-semibold shadow-md hover:bg-white/90 flex items-center justify-center hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? <Loader2 size={20} className="animate-spin" /> : (isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-1" />)}
-        </button>
+          label={isPlaying ? 'Pause stems' : 'Play stems'}
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

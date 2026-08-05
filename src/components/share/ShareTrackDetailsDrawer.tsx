@@ -232,7 +232,7 @@ export function ShareTrackDetailsDrawer({
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={handlePlayToggle}
-                className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
+                className="glass-play glass-play-surface w-16 h-16 rounded-full flex items-center justify-center"
               >
                 {isCurrentPlaying ? (
                   <Pause size={22} fill="currentColor" />
@@ -248,7 +248,7 @@ export function ShareTrackDetailsDrawer({
             <div className="flex items-center gap-3">
               <button
                 onClick={handlePlayToggle}
-                className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform shrink-0"
+                className="glass-play glass-play-surface w-10 h-10 rounded-full flex items-center justify-center shrink-0"
               >
                 {isCurrentPlaying ? (
                   <Pause size={13} fill="currentColor" />

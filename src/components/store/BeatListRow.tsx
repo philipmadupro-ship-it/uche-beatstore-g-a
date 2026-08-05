@@ -48,7 +48,8 @@ export function BeatListRow({
       <div className="flex items-center gap-3 px-3 py-2.5">
         <button
           onClick={onPlay}
-          className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors shrink-0 ${isCurrent ? 'text-black' : 'bg-white/[0.06] text-white/80 hover:bg-white/[0.12] hover:text-white'}`}
+          className="glass-play-surface w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+          data-playing={isCurrent ? 'true' : 'false'}
           style={isCurrent ? { backgroundColor: accentColor } : {}}
         >
           {isCurrent && isPlaying

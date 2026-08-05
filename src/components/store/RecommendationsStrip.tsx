@@ -86,7 +86,7 @@ export function RecommendationsStrip<T extends MinTrack>({
                   }`}
                   aria-label={isCurrentPlaying ? 'Pause' : 'Play'}
                 >
-                  <span className={`${compact ? 'w-8 h-8' : 'w-10 h-10'} rounded-full bg-white text-black flex items-center justify-center`}>
+                  <span className={`glass-play-surface ${compact ? 'w-8 h-8' : 'w-10 h-10'} rounded-full flex items-center justify-center`} data-playing={isCurrentPlaying ? 'true' : 'false'}>
                     {isCurrentPlaying ? <PauseGlyph size={compact ? 14 : 17} /> : <PlayGlyph size={compact ? 14 : 17} className="ml-0.5" />}
                   </span>
                 </span>

@@ -204,7 +204,7 @@ export function ToplineRecorder({ trackId }: { trackId: string }) {
               <button
                 onClick={() => togglePlay(t)}
                 className={cn('w-7 h-7 rounded-full flex items-center justify-center shrink-0 transition-colors',
-                  playingId === t.id ? 'bg-white text-black' : 'bg-white/[0.05] text-white/80 hover:text-white')}
+                  playingId === t.id ? 'glass-play-surface' : 'bg-white/[0.05] text-white/80 hover:text-white')}
                 aria-label={playingId === t.id ? 'Pause' : 'Play'}
               >
                 {playingId === t.id ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" className="ml-0.5" />}

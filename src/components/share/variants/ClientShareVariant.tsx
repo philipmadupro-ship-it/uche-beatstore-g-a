@@ -15,6 +15,7 @@ import { ShareTrackDetailsDrawer } from '@/components/share/ShareTrackDetailsDra
 import { LicenseSelector } from '@/components/store/LicenseSelector';
 import type { LicenseTier } from '@/components/store/LicenseSelector';
 import type { Track as CartTrack } from '@/lib/types';
+import { GlassPlayButton } from '@/components/ui/GlassPlayButton';
 
 function InstagramIcon({ size = 12 }: { size?: number }) {
   return (
@@ -688,12 +689,11 @@ export function ClientShareVariant({
               >
                 <SkipBack size={14} fill="currentColor" />
               </button>
-              <button
+              <GlassPlayButton
+                playing={isPlaying}
                 onClick={() => onPlay(playingTrack)}
-                className="-m-0.5 flex size-10 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105 active:scale-95"
-              >
-                {isPlaying ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" className="ml-0.5" />}
-              </button>
+                className="-m-0.5"
+              />
               <button
                 onClick={handleNext}
                 disabled={playingIdx >= tracks.length - 1}

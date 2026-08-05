@@ -206,7 +206,7 @@ export function ProjectDetailHeader(props: Props) {
           <button
             onClick={onPlay}
             disabled={playDisabled}
-            className="grid size-9 place-items-center rounded-full bg-white text-black hover:bg-white/90 active:scale-[0.98] disabled:opacity-30 transition-all sm:inline-flex sm:size-auto sm:gap-2 sm:px-4 sm:py-2 sm:text-[12px] sm:font-medium"
+            className="glass-play grid size-9 place-items-center rounded-full border border-white/[0.14] bg-white/[0.07] text-white backdrop-blur-md shadow-[inset_0_1px_0_0_rgba(255,255,255,0.18),0_2px_10px_rgba(0,0,0,0.28)] transition-[transform,background-color,border-color] duration-[var(--dur-fast)] ease-[var(--ease-spring)] hover:border-white/25 hover:bg-white/[0.13] disabled:opacity-30 sm:inline-flex sm:size-auto sm:gap-2 sm:px-4 sm:py-2 sm:text-[12px] sm:font-medium"
             title="Play project"
           >
             <Play size={12} fill="currentColor" className="ml-0.5" />

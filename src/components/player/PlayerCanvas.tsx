@@ -290,7 +290,7 @@ export function PlayerCanvas({
                 if (ws?.isPlaying()) pause();
                 else play();
               }}
-              className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform"
+              className="glass-play glass-play-surface w-9 h-9 rounded-full flex items-center justify-center"
               title="Play / pause (Space)"
             >
               {instanceRef.current?.isPlaying() ? (

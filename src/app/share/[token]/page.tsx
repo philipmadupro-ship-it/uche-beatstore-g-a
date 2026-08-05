@@ -656,7 +656,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
                 <SkipBack size={16} fill="currentColor" />
               </button>
               <button onClick={togglePlay}
-                className="w-10 h-10 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shrink-0">
+                className="glass-play glass-play-surface w-10 h-10 rounded-full flex items-center justify-center shrink-0">
                 {isPlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" className="ml-0.5" />}
               </button>
               <button onClick={nextTrack} disabled={activeIndex === tracks.length - 1}

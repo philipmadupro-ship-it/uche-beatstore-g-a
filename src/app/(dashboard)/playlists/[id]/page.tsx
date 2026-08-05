@@ -453,7 +453,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               <button
                 onClick={handlePlayAll}
                 disabled={!tracks.length}
-                className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-md text-[12px] font-medium hover:bg-white/90 disabled:opacity-30 transition-colors"
+                className="glass-play-surface flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-medium disabled:opacity-30"
               >
                 <Play size={12} fill="currentColor" className="ml-0.5" />
                 Play

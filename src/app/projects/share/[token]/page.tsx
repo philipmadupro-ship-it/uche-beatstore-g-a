@@ -912,7 +912,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                 <SkipBack size={14} fill="currentColor" />
               </button>
               {!useDawCanvas && (
-                <button onClick={togglePlay} className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform">
+                <button onClick={togglePlay} className="glass-play glass-play-surface w-10 h-10 rounded-full flex items-center justify-center">
                   {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
                 </button>
               )}

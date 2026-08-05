@@ -215,10 +215,11 @@ export function PlayerBar() {
               onClick={handlePrimaryPlay}
               disabled={!streamStatus.canAttemptPlayback}
               className={cn(
-                'w-10 h-10 rounded-full flex items-center justify-center text-black ml-0.5 mr-0.5 bg-white active:scale-95 transition-transform duration-150',
+                'glass-play-surface w-10 h-10 rounded-full flex items-center justify-center ml-0.5 mr-0.5 active:scale-95 transition-transform duration-150',
                 streamStatus.canAttemptPlayback ? 'hover:scale-[1.05]' : 'cursor-not-allowed opacity-55',
               )}
               aria-label={isPlaying ? 'Pause' : 'Play'}
+              data-playing={isPlaying ? 'true' : 'false'}
               title={streamStatus.detail ?? streamStatus.title}
             >
               {isBuffering ? <Loader2 size={16} className="animate-spin" /> : isPlaying ? <PauseGlyph size={16} /> : <PlayGlyph size={16} className="ml-0.5" />}
@@ -477,10 +478,11 @@ export function PlayerBar() {
                   onClick={handlePrimaryPlay}
                   disabled={!streamStatus.canAttemptPlayback}
                   className={cn(
-                    'grid h-[3.25rem] w-[3.25rem] place-items-center rounded-full bg-white text-[#090907] transition-transform duration-150 active:scale-95',
+                    'glass-play-surface grid h-[3.25rem] w-[3.25rem] place-items-center rounded-full transition-transform duration-150 active:scale-95',
                     streamStatus.canAttemptPlayback ? 'hover:scale-[1.04]' : 'cursor-not-allowed opacity-55',
                   )}
                   aria-label={isPlaying ? 'Pause' : 'Play'}
+                  data-playing={isPlaying ? 'true' : 'false'}
                   title={streamStatus.detail ?? streamStatus.title}
                 >
                   {isPlaying ? <PauseGlyph size={22} /> : <PlayGlyph size={22} className="ml-0.5" />}

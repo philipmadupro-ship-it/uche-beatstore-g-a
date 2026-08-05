@@ -124,7 +124,7 @@ export function TrackGridCard({
           }`}>
             <button
               onClick={handlePlay}
-              className="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
+              className="glass-play glass-play-surface w-14 h-14 rounded-full flex items-center justify-center"
             >
               {isActive ? (
                 <PauseGlyph size={20} />

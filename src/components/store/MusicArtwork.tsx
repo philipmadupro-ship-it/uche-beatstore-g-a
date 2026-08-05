@@ -106,7 +106,7 @@ export function MusicArtwork({
           onMouseEnter={() => setShowTip(true)}
           onMouseLeave={() => setShowTip(false)}
           aria-label={isPlaying ? 'Pause' : 'Play'}
-          className="pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:scale-105 active:scale-95"
+          className="glass-play-surface pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
         >
           {isLoading ? (
             <Loader2 size={18} className="animate-spin" />
