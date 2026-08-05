@@ -10,8 +10,6 @@ import {
   formatBytes, formatSpeed, formatEta,
   type UploadItem,
 } from '@/lib/upload/manager';
-import { useNavPanel } from '@/hooks/useNavPanel';
-import { cn } from '@/lib/utils';
 
 /**
  * Persistent tray of in-flight uploads. Mounted globally in the dashboard
@@ -20,9 +18,6 @@ import { cn } from '@/lib/utils';
  */
 export function UploadsTray() {
   const order = useUploadManager((s) => s.order);
-  // The tray is pinned bottom-right, which is exactly where the secondary nav
-  // panel now lives. Offset it by the panel's width so the two never overlap.
-  const panelOpen = useNavPanel((s) => s.open);
   const uploads = useUploadManager((s) => s.uploads);
   const hydrate = useUploadManager((s) => s.hydrate);
   const [expanded, setExpanded] = useState(true);
@@ -57,11 +52,7 @@ export function UploadsTray() {
   const done = visible.filter((u) => u.status === 'success').length;
 
   return (
-    <div className={cn(
-      'fixed bottom-24 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)]',
-      'transition-[right] duration-[var(--dur-med)] ease-[var(--ease-spring)]',
-      panelOpen ? 'md:right-[15rem]' : 'md:right-[4.25rem]',
-    )}>
+    <div className="fixed bottom-24 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)]">
       <div className="bg-[#090907] border border-white/10 rounded-lg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden">
         <button
           onClick={() => setExpanded((x) => !x)}

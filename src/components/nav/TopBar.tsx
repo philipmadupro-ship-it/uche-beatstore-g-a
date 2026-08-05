@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import {
+  Settings,
+  Store,
+  ChevronDown,
   Search,
   Bell,
   Menu,
@@ -13,11 +16,10 @@ import {
   RotateCcw,
   AlertTriangle,
   Tag,
-  PanelRight,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
-import { useNavPanel } from '@/hooks/useNavPanel';
-import { NAV_GROUPS, ALL_GROUPS, activeGroupFor, isItemActive } from './model';
+import { NAV_GROUPS, ALL_GROUPS, activeGroupFor, isItemActive, type NavGroup } from './model';
+import { Popover } from '@/components/ui/Popover';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { cn } from '@/lib/utils';
@@ -52,8 +54,6 @@ function timeAgo(iso: string) {
 export function TopBar() {
   const pathname = usePathname();
   const openPalette = useCommandPalette((s) => s.setOpen);
-  const panelOpen = useNavPanel((s) => s.open);
-  const togglePanel = useNavPanel((s) => s.toggle);
   const [activityOpen, setActivityOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -144,15 +144,6 @@ export function TopBar() {
       <header className="fixed top-0 left-0 right-0 bg-[#090907]/95 backdrop-blur-md border-b border-white/10 z-30">
         {/* ── Row 1: brand · hubs · utilities ─────────────────────── */}
         <div className="h-14 flex items-center px-4 md:px-6 gap-3 md:gap-5">
-          {/* Mobile hamburger */}
-          <button
-            onClick={() => setMobileOpen(true)}
-            className="tap md:hidden w-9 h-9 rounded-md flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
-            aria-label="Open navigation menu"
-          >
-            <Menu size={18} />
-          </button>
-
           {/* Brand */}
           <Link href="/library" className="flex items-center gap-2.5 group shrink-0">
             <div className="w-6 h-6 rounded-[6px] bg-white flex items-center justify-center">
@@ -163,28 +154,13 @@ export function TopBar() {
             </span>
           </Link>
 
-          {/* Primary hubs — desktop only (mobile switches hubs via drawer) */}
+          {/* Primary hubs — each opens its surfaces as a dropdown, so every
+              destination is one click from a single row. This is what replaced
+              the permanent second row of sub-tabs. */}
           <nav className="hidden md:flex items-center gap-1 flex-1">
-            {NAV_GROUPS.map((g) => {
-              const active = group.key === g.key;
-              const Icon = g.icon;
-              return (
-                <Link
-                  key={g.key}
-                  href={g.items[0].href}
-                  aria-current={active ? 'page' : undefined}
-                  className={cn(
-                    'flex items-center gap-2 px-3.5 py-2 rounded-lg text-[13px] font-medium tracking-tight transition-colors',
-                    active
-                      ? 'bg-[#0D0D0A] text-white'
-                      : 'text-white/60 hover:text-white hover:bg-[#101010]',
-                  )}
-                >
-                  <Icon size={15} strokeWidth={1.75} />
-                  <span>{g.label}</span>
-                </Link>
-              );
-            })}
+            {NAV_GROUPS.map((g) => (
+              <HubMenu key={g.key} group={g} active={group.key === g.key} pathname={pathname} />
+            ))}
           </nav>
 
           {/* Spacer on mobile so the right cluster hugs the edge */}
@@ -196,7 +172,7 @@ export function TopBar() {
             className="hidden md:flex items-center gap-2 w-48 lg:w-56 bg-white/[0.04] border border-white/10 rounded-md py-1.5 px-3 text-[11px] text-white/60 hover:border-white/20 hover:text-white transition-colors shrink-0"
             title="Search (⌘K)"
           >
-            <Search size={12} />
+            <Search size={14} />
             <span className="flex-1 text-left">Search</span>
             <kbd className="text-[9px] font-mono border border-white/10 rounded px-1 py-0.5">⌘K</kbd>
           </button>
@@ -204,10 +180,10 @@ export function TopBar() {
           {/* Search icon — mobile (opens ⌘K palette) */}
           <button
             onClick={() => openPalette(true)}
-            className="tap md:hidden w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
+            className="tap md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
             aria-label="Search"
           >
-            <Search size={16} />
+            <Search size={19} />
           </button>
 
           {/* Notifications */}
@@ -218,7 +194,7 @@ export function TopBar() {
               aria-label="Notifications"
               title="Notifications"
             >
-              <Bell size={15} />
+              <Bell size={18} />
               {unread > 0 && (
                 <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-[#6DC6A4] text-black text-[9px] font-black flex items-center justify-center leading-none">
                   {unread > 9 ? '9+' : unread}
@@ -284,20 +260,43 @@ export function TopBar() {
             )}
           </div>
 
-          {/* Secondary-nav panel toggle — desktop. The panel holds the hub
-              surfaces that used to occupy a permanent second row. */}
-          <button
-            onClick={togglePanel}
-            aria-expanded={panelOpen}
-            aria-controls="nav-panel"
-            aria-label={panelOpen ? 'Collapse navigation panel' : 'Expand navigation panel'}
-            title={panelOpen ? 'Collapse panel' : 'Expand panel'}
+          {/* View public storefront */}
+          <Link
+            href="/store"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="View public storefront"
+            aria-label="View public storefront"
+            className="tap hidden md:flex w-9 h-9 rounded-full items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors shrink-0"
+          >
+            <Store size={17} />
+          </Link>
+
+          {/* Settings */}
+          <Link
+            href="/settings"
+            aria-label="Open settings"
+            title="Settings"
+            aria-current={isItemActive('/settings', pathname) ? 'page' : undefined}
             className={cn(
               'tap hidden md:flex w-9 h-9 rounded-full items-center justify-center transition-colors shrink-0',
-              panelOpen ? 'bg-[#0D0D0A] text-white' : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
+              isItemActive('/settings', pathname)
+                ? 'bg-[#0D0D0A] text-white'
+                : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
             )}
           >
-            <PanelRight size={15} />
+            <Settings size={17} />
+          </Link>
+
+          {/* Mobile menu — on the right, because that is the edge the drawer
+              slides in from. A left-hand control opening a right-hand panel
+              reads as a mistake every time. */}
+          <button
+            onClick={() => setMobileOpen(true)}
+            className="tap md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors order-last"
+            aria-label="Open navigation menu"
+          >
+            <Menu size={22} />
           </button>
 
           {/* Profile */}
@@ -307,13 +306,13 @@ export function TopBar() {
             title="Profile"
             aria-current={isItemActive('/profile', pathname) ? 'page' : undefined}
             className={cn(
-              'tap flex items-center justify-center shrink-0 w-8 h-8 rounded-full transition-colors',
+              'tap flex items-center justify-center shrink-0 w-9 h-9 rounded-full transition-colors',
               isItemActive('/profile', pathname)
                 ? 'bg-white/20 border border-white/40'
                 : 'bg-white/[0.05] border border-white/20 hover:border-white/30',
             )}
           >
-            <User size={13} className={isItemActive('/profile', pathname) ? 'text-white' : 'text-white/60'} />
+            <User size={16} className={isItemActive('/profile', pathname) ? 'text-white' : 'text-white/60'} />
           </Link>
         </div>
 
@@ -327,7 +326,7 @@ export function TopBar() {
             className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in duration-200"
           />
           <aside
-            className="md:hidden fixed top-0 left-0 bottom-0 w-[min(85vw,300px)] z-50 bg-[#090907] border-r border-white/[0.06] flex flex-col animate-in slide-in-from-left duration-300"
+            className="md:hidden fixed top-0 right-0 bottom-0 w-[min(85vw,300px)] z-50 bg-[#090907] border-l border-white/[0.06] flex flex-col animate-in slide-in-from-right duration-300"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
@@ -339,14 +338,14 @@ export function TopBar() {
                 className="tap w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
                 aria-label="Close menu"
               >
-                <X size={16} />
+                <X size={19} />
               </button>
             </div>
             <nav className="flex-1 px-3 py-4 overflow-y-auto">
               {ALL_GROUPS.map((g) => (
                 <div key={g.key} className="mb-4 last:mb-0">
                   <p className="px-3 mb-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-white/50 flex items-center gap-1.5">
-                    <g.icon size={11} />
+                    <g.icon size={14} />
                     {g.label}
                   </p>
                   <div className="space-y-0.5">
@@ -366,7 +365,7 @@ export function TopBar() {
                               : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
                           )}
                         >
-                          <Icon size={15} strokeWidth={1.75} />
+                          <Icon size={19} strokeWidth={1.75} />
                           <span className="font-medium tracking-tight">{it.label}</span>
                         </Link>
                       );
@@ -381,5 +380,75 @@ export function TopBar() {
 
       <ActivityPanel open={activityOpen} onClose={() => setActivityOpen(false)} />
     </>
+  );
+}
+
+/**
+ * One primary hub, rendered as a dropdown of its surfaces.
+ *
+ * Replaces the second fixed nav row. That row showed the active hub's
+ * surfaces permanently — 44px of chrome on every page to serve the moment you
+ * actually change surface. As a menu, every destination stays one click away
+ * while costing nothing at rest.
+ *
+ * The trigger navigates as well as opens: clicking "Catalog" goes to the
+ * hub's first surface, so the common case (switch hub, take the default page)
+ * is still a single click and does not require aiming at a menu item.
+ */
+function HubMenu({ group, active, pathname }: { group: NavGroup; active: boolean; pathname: string }) {
+  const Icon = group.icon;
+
+  return (
+    <Popover
+      width={216}
+      trigger={({ open, toggle, ref }) => (
+        <button
+          ref={ref as (el: HTMLButtonElement | null) => void}
+          onClick={toggle}
+          aria-expanded={open}
+          aria-haspopup="true"
+          aria-current={active ? 'page' : undefined}
+          className={cn(
+            'flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium tracking-tight transition-colors',
+            active || open
+              ? 'bg-[#0D0D0A] text-white'
+              : 'text-white/60 hover:bg-[#101010] hover:text-white',
+          )}
+        >
+          <Icon size={18} strokeWidth={1.75} />
+          <span>{group.label}</span>
+          <ChevronDown
+            size={13}
+            aria-hidden
+            className={cn('transition-transform duration-[var(--dur-fast)]', open ? 'rotate-180' : '')}
+          />
+        </button>
+      )}
+    >
+      {(close) => (
+        <div className="p-1" role="menu">
+          {group.items.map((it) => {
+            const itemActive = isItemActive(it.href, pathname);
+            const ItemIcon = it.icon;
+            return (
+              <Link
+                key={it.href}
+                href={it.href}
+                role="menuitem"
+                onClick={close}
+                aria-current={itemActive ? 'page' : undefined}
+                className={cn(
+                  'tap flex min-h-10 items-center gap-3 rounded-lg px-2.5 text-[13px] font-medium tracking-tight transition-colors',
+                  itemActive ? 'bg-[#0D0D0A] text-white' : 'text-white/65 hover:bg-white/[0.06] hover:text-white',
+                )}
+              >
+                <ItemIcon size={17} strokeWidth={1.75} className="shrink-0" />
+                <span className="truncate">{it.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </Popover>
   );
 }
