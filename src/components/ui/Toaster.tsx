@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useToastStore, type Toast } from '@/hooks/useToast';
 import { CheckCircle2, AlertTriangle, AlertCircle, Info, X } from 'lucide-react';
 
@@ -25,7 +26,11 @@ export function Toaster() {
     <div
       className="fixed bottom-32 right-6 z-[100] flex flex-col gap-2 pointer-events-none"
       aria-live="polite"
-      aria-atomic="true"
+      // NOT aria-atomic. With `true` the entire region is re-announced on any
+      // change, so adding a third toast makes a screen reader read all three
+      // again from the top. Each card is its own status/alert; the region only
+      // needs to announce what was added.
+      aria-relevant="additions"
     >
       {toasts.map((t) => (
         <ToastCard key={t.id} toast={t} onDismiss={() => dismiss(t.id)} />
@@ -37,16 +42,40 @@ export function Toaster() {
 function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
   const Icon = ICONS[toast.kind];
   const accent = ACCENTS[toast.kind];
+  const [paused, setPaused] = useState(false);
+
+  // Hold the card while the pointer or keyboard focus is on it. A 3.5s toast
+  // carrying a description is easy to lose halfway through reading, and a
+  // toast with action buttons could previously vanish while being tabbed to.
+  useEffect(() => {
+    if (!paused) return;
+    const store = useToastStore.getState();
+    store.hold(toast.id);
+    return () => useToastStore.getState().release(toast.id);
+  }, [paused, toast.id]);
 
   return (
     <div
       role={toast.kind === 'error' || toast.kind === 'warning' ? 'alert' : 'status'}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={() => setPaused(false)}
       className={`pointer-events-auto w-80 bg-[#14110d] border ${accent} rounded-xl shadow-[0_16px_40px_-8px_rgba(0,0,0,0.6)] animate-in slide-in-from-right-4 fade-in duration-200`}
     >
       <div className="flex items-start gap-3 p-4">
         <Icon size={16} className={`shrink-0 mt-0.5 ${accent.split(' ').pop()}`} />
         <div className="flex-1 min-w-0">
-          <p className="text-[12px] font-semibold text-white leading-snug">{toast.title}</p>
+          <p className="text-[12px] font-semibold text-white leading-snug">
+            {toast.title}
+            {/* Repeats collapse into a count rather than stacking identical
+                cards down the screen. */}
+            {toast.count > 1 ? (
+              <span className="ml-1.5 font-mono text-[10px] tabular-nums text-white/45">
+                &times;{toast.count}
+              </span>
+            ) : null}
+          </p>
           {toast.description && (
             <p className="text-[11px] text-white/80 mt-1 leading-relaxed whitespace-pre-line">{toast.description}</p>
           )}

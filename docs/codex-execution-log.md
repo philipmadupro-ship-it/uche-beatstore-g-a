@@ -7780,3 +7780,58 @@ duplicate-identifier parse error persisted in the buffer after the source was al
 Findings 2 and 4 — collapsing the three-screen listing flow, and the library's top-heavy
 hierarchy — are larger structural changes that deserve their own pass rather than being folded
 into this one.
+
+---
+
+## Notifications and popups — toast queue policy
+
+333 `toast.*` call sites, and the store appended every push unconditionally with no cap and no
+deduplication. Two consequences reachable in normal use:
+
+- A batch reporting per-item failures stacks one card per item. Twenty failures cover the
+  screen, and the oldest scroll out of reach before they can be read.
+- A retry loop firing the same message renders it repeatedly. Five identical "Could not save"
+  cards convey nothing one card and a count would not.
+
+### What shipped
+
+`lib/ui/toast-queue.ts` — pure, 14 tests. Queue *policy* extracted from the Zustand setter,
+because policy inside a setter cannot be unit-tested and this project's rule is that untested
+logic gets silently reverted.
+
+- **Cap at 4 visible.** Dropping from the FRONT: the oldest card has been readable longest, and
+  the newest describes what just happened.
+- **Deduplication by what a user can see** (kind + title + description, ignoring id and
+  duration). A repeat bumps a count and moves to the end so it reads as the most recent event.
+- **Dedupe returns the EXISTING id**, so a caller holding an id to dismiss later still dismisses
+  the right card.
+
+The public API is unchanged, so none of the 333 call sites were touched.
+
+### Three defects fixed alongside
+
+- **Duplicate timers.** A deduped push previously would have scheduled a second timer against
+  the same id, dismissing a card mid-read. Timers are now tracked in a map and only scheduled
+  for genuinely new toasts.
+- **Timer leak on manual dismiss.** Dismissing left its timer pending. Now cleared.
+- **`aria-atomic="true"` on the live region.** That re-announces the ENTIRE stack on any change,
+  so adding a third toast made a screen reader read all three again from the top. Replaced with
+  `aria-relevant="additions"` — each card is already its own status/alert.
+
+### Added
+
+Hover and focus pause auto-dismiss (`hold`/`release`). A 3.5s toast carrying a description was
+easy to lose halfway through reading, and a toast with action buttons could vanish while being
+tabbed to. Release restarts the full duration rather than resuming a remainder, since the
+pointer left because reading finished.
+
+### Verification — stated precisely
+
+Verified: `tsc` clean, `eslint` 0 errors, **790 tests** (14 new) covering cap, dedupe, ordering
+and id preservation, build green, and the library renders normally (59 tracks) so the store
+rewire caused no regression.
+
+**NOT verified live: the count badge and hover-pause on screen.** I could not reliably trigger a
+toast through the UI in this environment — a JS-dispatched click on the copy-link button does
+not produce one (clipboard needs a real gesture), and the browser renderer crashed mid-attempt.
+The queue behaviour behind them is unit-tested; their rendering is not.
