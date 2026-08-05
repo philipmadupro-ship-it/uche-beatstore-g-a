@@ -20,9 +20,11 @@ interface DropZoneProps {
   /** Surfaces react-dropzone's open() so an external button (e.g. the
    *  library hero's "Upload beat") can launch the file picker directly. */
   openRef?: React.MutableRefObject<(() => void) | null>;
-  /** 'hidden' renders nothing until files are picked, then shows the normal
-   *  progress cards — lets a page offer upload through a single button
-   *  without a permanent drop panel taking vertical space. */
+  /** 'hidden' renders no inline panel: upload is offered through a button
+   *  (via `openRef`) plus a full-page drop target that appears only while a
+   *  file is being dragged over the window. Progress cards still appear once
+   *  files are in flight. Lets a page keep drag-and-drop without paying a
+   *  permanent dashed rectangle for it. */
   variant?: 'full' | 'hidden';
 }
 
@@ -190,6 +192,51 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
     return () => { openRef.current = null; };
   }, [openRef, open]);
 
+  /* Drop-to-upload without a permanent drop target.
+     The `hidden` variant renders nothing until files are in flight, which
+     used to mean the page had no drop zone at all — dragging a beat onto
+     Browse mode simply did nothing. Instead of paying a dashed rectangle on
+     every visit for a capability used occasionally, watch the window for a
+     file drag and surface a full-page target only while one is in progress.
+
+     `dragDepth` counts enter/leave pairs: dragging across a child element
+     fires `dragleave` on the parent, so a boolean flag flickers the overlay
+     off mid-drag. */
+  const [fileDragActive, setFileDragActive] = useState(false);
+  const dragDepth = useRef(0);
+
+  useEffect(() => {
+    if (variant !== 'hidden') return;
+
+    const carriesFiles = (e: DragEvent) =>
+      Array.from(e.dataTransfer?.types ?? []).includes('Files');
+
+    const onEnter = (e: DragEvent) => {
+      if (!carriesFiles(e)) return;
+      dragDepth.current += 1;
+      setFileDragActive(true);
+    };
+    const onLeave = (e: DragEvent) => {
+      if (!carriesFiles(e)) return;
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) setFileDragActive(false);
+    };
+    // Without preventDefault the browser navigates to the dropped file.
+    const onOver = (e: DragEvent) => { if (carriesFiles(e)) e.preventDefault(); };
+    const onDrop = () => { dragDepth.current = 0; setFileDragActive(false); };
+
+    window.addEventListener('dragenter', onEnter);
+    window.addEventListener('dragleave', onLeave);
+    window.addEventListener('dragover', onOver);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragenter', onEnter);
+      window.removeEventListener('dragleave', onLeave);
+      window.removeEventListener('dragover', onOver);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, [variant]);
+
   const analyzing = cards.some((c) => c.analyzing);
   const uploadableCards = cards.filter((c) => !c.rejected);
   const rejectedCards = cards.filter((c) => c.rejected);
@@ -198,8 +245,36 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
 
   const collapsed = variant === 'hidden' && cards.length === 0;
 
+  if (collapsed) {
+    return (
+      <div
+        {...getRootProps()}
+        aria-hidden={!fileDragActive}
+        className={`fixed inset-0 z-[150] grid place-items-center p-8 transition-opacity duration-200 ${
+          fileDragActive
+            ? 'pointer-events-auto opacity-100'
+            : 'pointer-events-none opacity-0'
+        }`}
+      >
+        <input {...getInputProps()} />
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+        <div className="relative flex flex-col items-center gap-3 rounded-3xl border-2 border-dashed border-white/30 bg-white/[0.06] px-12 py-10 text-center backdrop-blur-md">
+          <div className="grid size-12 place-items-center rounded-2xl bg-white/10 text-white">
+            <Upload size={20} />
+          </div>
+          <p className="text-[13px] font-bold uppercase tracking-widest text-white">
+            Drop to upload
+          </p>
+          <p className="font-mono text-[10px] text-white/50">
+            WAV · FLAC · AIFF · MP3 · M4A · OGG · up to 500 MB
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={collapsed ? 'hidden' : 'space-y-3'}>
+    <div className="space-y-3">
       {/* Type picker */}
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] font-mono uppercase tracking-widest text-white/40 mr-1">Upload as</span>

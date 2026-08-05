@@ -16,6 +16,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Disclosure } from '@/components/ui/Disclosure';
 import {
   summariseReadiness,
   isHardBlocker,
@@ -50,20 +51,19 @@ export function SellReadinessPanel({ tracks, hasDefaultPrice }: Props) {
     ? `${summary.unpurchasableCount} ${summary.unpurchasableCount === 1 ? 'beat' : 'beats'} nobody can buy`
     : `${summary.blockedCount} ${summary.blockedCount === 1 ? 'beat' : 'beats'} could sell better`;
 
+  // Collapsed by default. The headline is the part that has to be seen — it
+  // names the problem and its size. The blocker breakdown and the track list
+  // are what you read once you have decided to act, and rendering them
+  // permanently put a wall of diagnostics between the producer and their
+  // library on every single visit.
   return (
-    <section className="mb-6 rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-4">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <AlertTriangle size={13} className="text-amber-400/80" aria-hidden />
-          <h2 className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-400/80">
-            {headline}
-          </h2>
-        </div>
-        <p className="font-mono text-[10px] tabular-nums text-white/35">
-          {summary.purchasableCount} purchasable
-        </p>
-      </div>
-
+    <Disclosure
+      className="mb-6"
+      tone="warning"
+      title={headline}
+      summary={`${summary.purchasableCount} purchasable`}
+      icon={<AlertTriangle size={13} className="text-amber-400/80" aria-hidden />}
+    >
       {/* Blockers first, ordered by how many beats each affects — that is the
           order in which fixing one thing pays off most. */}
       <ul className="mb-3 space-y-1.5">
@@ -112,6 +112,6 @@ export function SellReadinessPanel({ tracks, hasDefaultPrice }: Props) {
           </button>
         ) : null}
       </div>
-    </section>
+    </Disclosure>
   );
 }

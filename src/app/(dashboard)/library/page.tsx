@@ -1261,9 +1261,13 @@ export default function LibraryPage() {
           </div>
         )}
 
-        {/* Upload */}
+        {/* Upload — no permanent drop panel, matching Browse mode. The hero
+            "Upload beat" button opens the picker and dropping files on the
+            page still works; this zone materialises only once files are in
+            flight, so progress stays visible without a dashed rectangle
+            occupying the fold on every visit. */}
         <div className="mb-8">
-          <DropZone onUploadSuccess={fetchTracks} openRef={uploadOpenRef} />
+          <DropZone onUploadSuccess={fetchTracks} openRef={uploadOpenRef} variant="hidden" />
         </div>
 
         {/* Sits immediately after upload, which is the moment a producer would
