@@ -1,4 +1,6 @@
 import { TopBar } from '@/components/nav/TopBar';
+import { NavPanel } from '@/components/nav/NavPanel';
+import { DashboardShell } from './DashboardShell';
 import { PlayerBar } from '@/components/player/PlayerBar';
 import { MediaSessionBridge } from '@/components/player/MediaSessionBridge';
 import { UploadsTray } from '@/components/upload/UploadsTray';
@@ -16,10 +18,8 @@ export default function DashboardGroupLayout({ children }: { children: React.Rea
   return (
     <div className="min-h-screen">
       <WidgetErrorBoundary name="TopBar"><TopBar /></WidgetErrorBoundary>
-      {/* Top padding clears the two-row nav (h-14 hubs + h-11 sub-tabs = 100px). */}
-      <main className="pt-[100px] pb-28 min-h-screen">
-        {children}
-      </main>
+      <WidgetErrorBoundary name="NavPanel"><NavPanel /></WidgetErrorBoundary>
+      <DashboardShell>{children}</DashboardShell>
       <WidgetErrorBoundary name="PlayerBar"><PlayerBar /></WidgetErrorBoundary>
       <WidgetErrorBoundary name="MediaSessionBridge"><MediaSessionBridge /></WidgetErrorBoundary>
       <WidgetErrorBoundary name="UploadsTray"><UploadsTray /></WidgetErrorBoundary>

@@ -4,32 +4,20 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import {
-  Home,
-  Layers,
-  ListMusic,
-  Users,
-  Calendar,
-  Link2,
-  Settings,
   Search,
-  Sliders,
-  CloudOff,
   Bell,
   Menu,
   X,
   User,
-  Store,
-  ExternalLink,
   ShoppingBag,
   RotateCcw,
   AlertTriangle,
   Tag,
-  Library,
-  BarChart3,
-  Send,
-  Palette,
+  PanelRight,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
+import { useNavPanel } from '@/hooks/useNavPanel';
+import { NAV_GROUPS, ALL_GROUPS, activeGroupFor, isItemActive } from './model';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { cn } from '@/lib/utils';
@@ -61,79 +49,11 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-/**
- * Navigation model — Spotify-style hubs.
- *
- * The 12+ dashboard surfaces are grouped into 3 primary HUBS (Catalog / Store
- * / CRM) plus an Account group reached via the avatar. Routes are unchanged —
- * this is purely how the nav is presented:
- *   - Row 1 (desktop): the 3 hub buttons. Clicking a hub goes to its first
- *     surface. The hub you're in is highlighted.
- *   - Row 2: the active hub's surfaces as sub-tabs (the "you're in Catalog,
- *     here's what's in it" strip). Works on mobile as a scroll row.
- *   - Mobile: hub switching happens in the drawer (grouped with headers);
- *     sub-tab switching happens in Row 2.
- *
- * Collapsing a scrolling row of 9 into 3 destinations is the whole point —
- * "you always know where you are."
- */
-interface NavItem { label: string; href: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number; className?: string }>; }
-interface NavGroup { key: string; label: string; icon: NavItem['icon']; items: NavItem[]; }
-
-const NAV_GROUPS: NavGroup[] = [
-  {
-    key: 'catalog', label: 'Catalog', icon: Library,
-    items: [
-      { label: 'Library', href: '/library', icon: Home },
-      { label: 'Projects', href: '/projects', icon: Layers },
-      { label: 'Playlists', href: '/playlists', icon: ListMusic },
-      { label: 'Studio', href: '/studio', icon: Sliders },
-      { label: 'Offline', href: '/offline', icon: CloudOff },
-    ],
-  },
-  {
-    key: 'store', label: 'Store', icon: Store,
-    items: [
-      { label: 'Editor', href: '/store-editor', icon: Store },
-      { label: 'Cover Art', href: '/cover-art', icon: Palette },
-      { label: 'Sales', href: '/sales', icon: ShoppingBag },
-      { label: 'Analytics', href: '/analytics', icon: BarChart3 },
-    ],
-  },
-  {
-    key: 'crm', label: 'CRM', icon: Users,
-    items: [
-      { label: 'Contacts', href: '/contacts', icon: Users },
-      { label: 'Campaigns', href: '/campaigns', icon: Send },
-      { label: 'Calendar', href: '/calendar', icon: Calendar },
-      { label: 'Links', href: '/links', icon: Link2 },
-    ],
-  },
-];
-
-// Reached via the avatar (not a primary hub button), but still a valid group
-// so the sub-tab strip stays populated on /profile and /settings.
-const ACCOUNT_GROUP: NavGroup = {
-  key: 'account', label: 'Account', icon: User,
-  items: [
-    { label: 'Profile', href: '/profile', icon: User },
-    { label: 'Settings', href: '/settings', icon: Settings },
-  ],
-};
-
-const ALL_GROUPS = [...NAV_GROUPS, ACCOUNT_GROUP];
-
-function isItemActive(href: string, pathname: string): boolean {
-  return pathname === href || pathname.startsWith(href + '/');
-}
-
-function activeGroupFor(pathname: string): NavGroup {
-  return ALL_GROUPS.find((g) => g.items.some((it) => isItemActive(it.href, pathname))) ?? NAV_GROUPS[0];
-}
-
 export function TopBar() {
   const pathname = usePathname();
   const openPalette = useCommandPalette((s) => s.setOpen);
+  const panelOpen = useNavPanel((s) => s.open);
+  const togglePanel = useNavPanel((s) => s.toggle);
   const [activityOpen, setActivityOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -290,19 +210,6 @@ export function TopBar() {
             <Search size={16} />
           </button>
 
-          {/* View public storefront */}
-          <Link
-            href="/store"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="View public storefront"
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider text-white/60 hover:text-white hover:bg-[#0D0D0A] border border-transparent hover:border-white/10 transition-all shrink-0"
-          >
-            <Store size={11} />
-            <span>Store</span>
-            <ExternalLink size={9} className="opacity-60" />
-          </Link>
-
           {/* Notifications */}
           <div className="relative shrink-0" ref={notifRef}>
             <button
@@ -377,21 +284,21 @@ export function TopBar() {
             )}
           </div>
 
-          {/* Settings — desktop */}
-          <Link
-            href="/settings"
-            aria-label="Open settings"
-            title="Settings"
-            aria-current={isItemActive('/settings', pathname) ? 'page' : undefined}
+          {/* Secondary-nav panel toggle — desktop. The panel holds the hub
+              surfaces that used to occupy a permanent second row. */}
+          <button
+            onClick={togglePanel}
+            aria-expanded={panelOpen}
+            aria-controls="nav-panel"
+            aria-label={panelOpen ? 'Collapse navigation panel' : 'Expand navigation panel'}
+            title={panelOpen ? 'Collapse panel' : 'Expand panel'}
             className={cn(
               'tap hidden md:flex w-9 h-9 rounded-full items-center justify-center transition-colors shrink-0',
-              isItemActive('/settings', pathname)
-                ? 'bg-[#0D0D0A] text-white'
-                : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
+              panelOpen ? 'bg-[#0D0D0A] text-white' : 'text-white/60 hover:text-white hover:bg-white/[0.04]',
             )}
           >
-            <Settings size={15} />
-          </Link>
+            <PanelRight size={15} />
+          </button>
 
           {/* Profile */}
           <Link
@@ -410,39 +317,6 @@ export function TopBar() {
           </Link>
         </div>
 
-        {/* ── Row 2: sub-tabs of the active hub ───────────────────── */}
-        <div className="h-11 flex items-center gap-1 px-3 md:px-6 border-t border-white/20 overflow-x-auto no-scrollbar">
-          {/* On mobile, show which hub you're in (since hub buttons are in the drawer) */}
-          <span className="md:hidden flex items-center gap-1.5 pr-2 mr-1 border-r border-white/10 text-[10px] font-mono uppercase tracking-[0.15em] text-white/60 shrink-0">
-            <group.icon size={12} />
-            {group.label}
-          </span>
-          {group.items.map((it) => {
-            const active = isItemActive(it.href, pathname);
-            const Icon = it.icon;
-            return (
-              <Link
-                key={it.href}
-                href={it.href}
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium tracking-tight transition-colors shrink-0 whitespace-nowrap',
-                  active
-                    ? 'text-white bg-[#0D0D0A]'
-                    : 'text-white/60 hover:text-white hover:bg-[#101010]',
-                )}
-              >
-                <Icon size={13} strokeWidth={1.75} />
-                <span>{it.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-
-        <style jsx>{`
-          .no-scrollbar::-webkit-scrollbar { display: none; }
-          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        `}</style>
       </header>
 
       {/* ── Mobile drawer — grouped by hub ──────────────────────── */}
