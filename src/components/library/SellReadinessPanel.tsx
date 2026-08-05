@@ -62,7 +62,7 @@ export function SellReadinessPanel({ tracks, hasDefaultPrice }: Props) {
       tone="warning"
       title={headline}
       summary={`${summary.purchasableCount} purchasable`}
-      icon={<AlertTriangle size={13} className="text-amber-400/80" aria-hidden />}
+      icon={<AlertTriangle size={13} className="text-[var(--error-text)]" aria-hidden />}
     >
       {/* Blockers first, ordered by how many beats each affects — that is the
           order in which fixing one thing pays off most. */}
@@ -71,7 +71,7 @@ export function SellReadinessPanel({ tracks, hasDefaultPrice }: Props) {
           <li key={blocker} className="flex items-baseline gap-2 text-[11px]">
             <span
               className={`w-7 shrink-0 text-right font-mono tabular-nums ${
-                isHardBlocker(blocker) ? 'text-amber-300/90' : 'text-white/45'
+                isHardBlocker(blocker) ? 'text-[var(--error-text)]' : 'text-white/45'
               }`}
             >
               {count}

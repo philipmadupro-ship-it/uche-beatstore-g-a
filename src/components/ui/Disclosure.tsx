@@ -25,7 +25,9 @@ export interface DisclosureProps {
   /** Shown beside the title while collapsed — a count, a state, a preview. */
   summary?: string;
   icon?: React.ReactNode;
-  /** Emphasis for sections that are reporting a problem. */
+  /** Emphasis for sections that are reporting a problem. Uses the palette's
+   *  red tokens rather than amber: amber reads as "in progress" next to the
+   *  store's own gold accents, and this is reporting lost revenue. */
   tone?: 'default' | 'warning';
   defaultOpen?: boolean;
   open?: boolean;
@@ -60,7 +62,7 @@ export function Disclosure({
       className={cn(
         'overflow-hidden rounded-xl border',
         tone === 'warning'
-          ? 'border-amber-500/20 bg-amber-500/[0.04]'
+          ? 'border-[var(--error)]/45 bg-[var(--error-strong)]/[0.05]'
           : 'border-white/10 bg-white/[0.02]',
         className,
       )}
@@ -77,7 +79,7 @@ export function Disclosure({
           <span
             className={cn(
               'truncate font-mono text-[10px] uppercase tracking-[0.2em]',
-              tone === 'warning' ? 'text-amber-400/80' : 'text-white/70',
+              tone === 'warning' ? 'text-[var(--error-text)]' : 'text-white/70',
             )}
           >
             {title}
