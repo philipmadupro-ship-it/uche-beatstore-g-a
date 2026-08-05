@@ -16,6 +16,7 @@ import { ProducerShareVariant } from '@/components/share/variants/ProducerShareV
 import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 type RecipientKind = 'client' | 'producer' | 'rapper' | 'friend';
 
@@ -49,6 +50,7 @@ interface LegacyCreatorShape {
 export default function PublicSharePage({ params: paramsPromise }: { params: Promise<{ token: string }> }) {
   const params = React.use(paramsPromise);
   const token = params.token;
+  const reducedMotion = useReducedMotion();
 
   // ── purchase state ──────────────────────────────────────────────────
   // Mirrors the modern share page. Stripe redirects here with
@@ -706,9 +708,9 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
                   <div className="w-5 text-center shrink-0">
                     {active && isPlaying ? (
                       <div className="flex gap-0.5 items-end h-3 justify-center">
-                        <div className="w-0.5 bg-white animate-pulse h-2" />
-                        <div className="w-0.5 bg-white animate-pulse h-3" style={{ animationDelay: '150ms' }} />
-                        <div className="w-0.5 bg-white animate-pulse h-1.5" style={{ animationDelay: '300ms' }} />
+                        <div className={`w-0.5 bg-white h-2 ${reducedMotion ? '' : 'animate-pulse'}`} />
+                        <div className={`w-0.5 bg-white h-3 ${reducedMotion ? '' : 'animate-pulse'}`} style={{ animationDelay: '150ms' }} />
+                        <div className={`w-0.5 bg-white h-1.5 ${reducedMotion ? '' : 'animate-pulse'}`} style={{ animationDelay: '300ms' }} />
                       </div>
                     ) : (
                       <span className={`text-[11px] font-mono ${active ? 'text-white' : 'text-white/30'}`}>{i + 1}</span>

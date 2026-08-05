@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, Square, Loader2, Trash2, Play, Pause, AudioLines } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 /**
  * Topline recorder — a quick voice-memo session inside the Lyrics Studio
@@ -50,6 +51,7 @@ function extFor(mime: string): string {
 }
 
 export function ToplineRecorder({ trackId }: { trackId: string }) {
+  const reducedMotion = useReducedMotion();
   const [items, setItems] = useState<Topline[]>([]);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -179,7 +181,7 @@ export function ToplineRecorder({ trackId }: { trackId: string }) {
           >
             <Square size={11} fill="currentColor" />
             Stop · {mmss(elapsed)}
-            <span className="w-1.5 h-1.5 rounded-full bg-[#e88a8a] animate-pulse ml-0.5" />
+            <span className={`w-1.5 h-1.5 rounded-full bg-[#e88a8a] ml-0.5 ${reducedMotion ? '' : 'animate-pulse'}`} />
           </button>
         ) : (
           <button

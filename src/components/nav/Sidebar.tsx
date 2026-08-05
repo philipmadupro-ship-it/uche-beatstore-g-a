@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import {
   Disc3,
   Layers,
@@ -79,6 +80,7 @@ interface SidebarProject {
 }
 
 export function Sidebar() {
+  const reducedMotion = useReducedMotion();
   const pathname = usePathname();
   const router = useRouter();
   const { currentTrack } = usePlayer();
@@ -257,9 +259,9 @@ export function Sidebar() {
               <span className="font-medium tracking-tight font-heading flex-1">{item.label}</span>
               {isPlayingHere && (
                 <span className="flex gap-0.5 items-end h-3 shrink-0">
-                  <span className="w-0.5 bg-white animate-bounce rounded-full" style={{ height: '6px', animationDelay: '0ms' }} />
-                  <span className="w-0.5 bg-white animate-bounce rounded-full" style={{ height: '10px', animationDelay: '120ms' }} />
-                  <span className="w-0.5 bg-white animate-bounce rounded-full" style={{ height: '7px', animationDelay: '240ms' }} />
+                  <span className={`w-0.5 bg-white rounded-full ${reducedMotion ? '' : 'animate-bounce'}`} style={{ height: '6px', animationDelay: '0ms' }} />
+                  <span className={`w-0.5 bg-white rounded-full ${reducedMotion ? '' : 'animate-bounce'}`} style={{ height: '10px', animationDelay: '120ms' }} />
+                  <span className={`w-0.5 bg-white rounded-full ${reducedMotion ? '' : 'animate-bounce'}`} style={{ height: '7px', animationDelay: '240ms' }} />
                 </span>
               )}
             </Link>
@@ -319,9 +321,9 @@ export function Sidebar() {
             </div>
             <p className="text-[10px] text-white truncate flex-1 font-medium">{currentTrack.title || 'Untitled'}</p>
             <span className="flex gap-0.5 items-end h-2.5 shrink-0">
-              <span className="w-0.5 bg-white animate-bounce rounded-full" style={{ height: '5px', animationDelay: '0ms' }} />
-              <span className="w-0.5 bg-white animate-bounce rounded-full" style={{ height: '9px', animationDelay: '120ms' }} />
-              <span className="w-0.5 bg-white animate-bounce rounded-full" style={{ height: '6px', animationDelay: '240ms' }} />
+              <span className={`w-0.5 bg-white rounded-full ${reducedMotion ? '' : 'animate-bounce'}`} style={{ height: '5px', animationDelay: '0ms' }} />
+              <span className={`w-0.5 bg-white rounded-full ${reducedMotion ? '' : 'animate-bounce'}`} style={{ height: '9px', animationDelay: '120ms' }} />
+              <span className={`w-0.5 bg-white rounded-full ${reducedMotion ? '' : 'animate-bounce'}`} style={{ height: '6px', animationDelay: '240ms' }} />
             </span>
           </div>
         )}

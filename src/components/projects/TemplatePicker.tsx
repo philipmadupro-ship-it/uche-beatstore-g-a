@@ -4,6 +4,7 @@ import { Loader2, X } from 'lucide-react';
 import { useState } from 'react';
 import { PROJECT_TEMPLATES, seedChecklist } from '@/lib/projects/templates';
 import { toast } from '@/hooks/useToast';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 /**
  * Template picker modal. Used when creating a project or from the options menu
@@ -19,6 +20,7 @@ export function TemplatePicker({
   onClose: () => void;
   onApplied?: () => void;
 }) {
+  const panelRef = useDialogBehavior({ open: true, onClose });
   const [applying, setApplying] = useState<string | null>(null);
 
   const apply = async (slug: string) => {
@@ -43,7 +45,15 @@ export function TemplatePicker({
 
   return (
     <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.02] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Apply a template"
+        tabIndex={-1}
+        className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.02] shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] focus:outline-none"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <h3 className="text-[13px] font-semibold text-white">Apply a template</h3>
           <button onClick={onClose} className="text-white/40 hover:text-white transition-colors"><X size={14} /></button>

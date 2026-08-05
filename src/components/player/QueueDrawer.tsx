@@ -5,6 +5,7 @@ import { Track } from '@/lib/types';
 import { Play, Music, ListMusic, Trash2, Minus, History as HistoryIcon, ArrowRight, GripVertical } from 'lucide-react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { Modal } from '@/components/ui/Modal';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 interface QueueDrawerProps {
   onClose: () => void;
@@ -222,6 +223,7 @@ function Row({
   onPlay: () => void;
   onRemove: (() => void) | null;
 }) {
+  const reducedMotion = useReducedMotion();
   const durationSeconds = track.duration_seconds ?? 0;
 
   return (
@@ -249,9 +251,9 @@ function Row({
         {isCurrent && isPlaying && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
             <div className="flex gap-0.5 items-end h-3">
-              <div className="w-0.5 bg-white animate-bounce h-2" style={{ animationDelay: '0ms' }} />
-              <div className="w-0.5 bg-white animate-bounce h-3" style={{ animationDelay: '150ms' }} />
-              <div className="w-0.5 bg-white animate-bounce h-1.5" style={{ animationDelay: '300ms' }} />
+              <div className={`w-0.5 bg-white h-2 ${reducedMotion ? '' : 'animate-bounce'}`} style={{ animationDelay: '0ms' }} />
+              <div className={`w-0.5 bg-white h-3 ${reducedMotion ? '' : 'animate-bounce'}`} style={{ animationDelay: '150ms' }} />
+              <div className={`w-0.5 bg-white h-1.5 ${reducedMotion ? '' : 'animate-bounce'}`} style={{ animationDelay: '300ms' }} />
             </div>
           </div>
         )}

@@ -20,9 +20,10 @@
  *                         triggers in a row.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Loader2, Share2, X, Download } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface ModalProps {
   trackId: string;
@@ -38,18 +39,8 @@ export function ShareCardModal({
   trackId, trackTitle, kind = 'playing', accentColor = '#FFFFFF', open, onClose,
 }: ModalProps) {
   const [sharing, setSharing] = useState(false);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useDialogBehavior({ open, onClose });
   const cardUrl = `/api/store/share-card?track_id=${encodeURIComponent(trackId)}&kind=${kind}`;
-
-  useEffect(() => {
-    if (!open) return;
-    closeButtonRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose, open]);
 
   const nativeShare = async () => {
     if (typeof navigator === 'undefined' || !navigator.share) {
@@ -84,14 +75,15 @@ export function ShareCardModal({
       role="presentation"
     >
       <div
-        className="relative bg-white/[0.04] border border-white/[0.10] rounded-2xl p-5 max-w-md w-full"
+        ref={panelRef}
+        className="relative bg-white/[0.04] border border-white/[0.10] rounded-2xl p-5 max-w-md w-full focus:outline-none"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="share-card-title"
+        tabIndex={-1}
       >
         <button
-          ref={closeButtonRef}
           type="button"
           onClick={onClose}
           className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors"

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 export interface DrawerAction {
   icon: LucideIcon;
@@ -33,6 +34,7 @@ interface Props {
 export function DrawerActionList({ actions, onAction, disabled, defaultVisible }: Props) {
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const overflowMenuRef = useDialogBehavior({ open: overflowOpen, onClose: () => setOverflowOpen(false), trapFocus: false });
   const PRIMARY_COUNT = 5;
   const primary = actions.slice(0, PRIMARY_COUNT);
   const overflow = actions.slice(PRIMARY_COUNT);
@@ -78,7 +80,12 @@ export function DrawerActionList({ actions, onAction, disabled, defaultVisible }
               {overflowOpen && (
                 <>
                   <div className="fixed inset-0 z-50" onClick={() => setOverflowOpen(false)} />
-                  <div className="absolute bottom-full mb-2 right-0 z-60 w-44 bg-white/[0.04] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden">
+                  <div
+                    ref={overflowMenuRef}
+                    role="menu"
+                    tabIndex={-1}
+                    className="absolute bottom-full mb-2 right-0 z-60 w-44 bg-white/[0.04] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden focus:outline-none"
+                  >
                     {overflow.map((action, i) => {
                       const Icon = action.icon;
                       return (

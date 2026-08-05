@@ -139,7 +139,7 @@ export function Modal({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          'ui-modal-panel relative flex max-h-[min(90dvh,760px)] w-full flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)]',
+          'ui-modal-panel relative flex max-h-[min(90dvh,760px)] w-full flex-col overflow-hidden rounded-[20px] border border-[var(--border)] bg-[var(--bg-card)]',
           sizeClasses[size],
           className,
         )}

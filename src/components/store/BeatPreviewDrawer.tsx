@@ -175,22 +175,21 @@ export function BeatPreviewDrawer({
             <TagChips tags={track.tags ?? []} max={3} accentGenre />
           </div>
 
-          {/* Play button — centred circle, always visible */}
+          {/* Play button — centred, plain icon, no filled disc. Prominence
+              comes from glyph size + hover wash (design-direction.md's
+              "beat preview player" section), not a solid fill. */}
           <button
             onClick={onPlay}
             aria-label={isCurrent && isPlaying ? 'Pause' : 'Play'}
             className="absolute inset-0 flex items-center justify-center z-[5]"
           >
             <div
-              className="flex h-14 w-14 items-center justify-center rounded-full"
-              style={{
-                backgroundColor: accentColor,
-                transition: 'transform 300ms cubic-bezier(0.32,0.72,0,1), opacity 200ms',
-              }}
+              className="flex h-14 w-14 items-center justify-center rounded-full transition-colors hover:bg-white/[0.08]"
+              style={{ color: accentColor, transition: 'transform 300ms cubic-bezier(0.32,0.72,0,1), background-color 200ms' }}
             >
               {isCurrent && isPlaying
-                ? <Pause size={22} fill="black" className="text-black" />
-                : <Play size={22} fill="black" className="text-black ml-1" />}
+                ? <Pause size={30} />
+                : <Play size={30} className="ml-1" />}
             </div>
           </button>
         </div>

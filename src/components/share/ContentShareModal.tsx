@@ -8,6 +8,7 @@ import { Dropdown } from '@/components/ui/Dropdown';
 import { useCallback, useEffect, useState } from 'react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast, confirmToast } from '@/hooks/useToast';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface ContentShare {
   id: string;
@@ -58,6 +59,7 @@ async function responseError(res: Response) {
 }
 
 export function ContentShareModal({ contentType, contentId, contentTitle, coverUrl, onClose }: Props) {
+  const panelRef = useDialogBehavior({ open: true, onClose });
   const [role, setRole] = useState<ContentShare['role']>('viewer');
   const [recipientKind, setRecipientKind] = useState<'client' | 'producer' | 'rapper' | 'friend'>('client');
   const [salesEnabled, setSalesEnabled] = useState(false);
@@ -197,7 +199,12 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
       onClick={onClose}
     >
       <div
-        className="w-full max-w-[640px] max-h-[90vh] flex flex-col rounded-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-500 bg-gradient-to-b from-[#121214]/95 via-[#0e0e10]/95 to-[#090907]/98 backdrop-blur-2xl border border-white/[0.06] shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset]"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Share — ${contentTitle}`}
+        tabIndex={-1}
+        className="w-full max-w-[640px] max-h-[90vh] flex flex-col rounded-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-500 bg-gradient-to-b from-[#121214]/95 via-[#0e0e10]/95 to-[#090907]/98 backdrop-blur-2xl border border-white/[0.06] shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset] focus:outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative p-6 border-b border-white/[0.04] overflow-hidden">

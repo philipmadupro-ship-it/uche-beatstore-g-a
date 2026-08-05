@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Plus, Check, X, FolderPlus } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface Folder { id: string; name: string }
 
@@ -20,6 +21,7 @@ export function ProjectFolderSelect({
   onClose: () => void;
   onSaved?: () => void;
 }) {
+  const panelRef = useDialogBehavior({ open: true, onClose });
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -91,7 +93,15 @@ export function ProjectFolderSelect({
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/[0.02] flex flex-col max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Move to folders"
+        tabIndex={-1}
+        className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/[0.02] flex flex-col max-h-[80vh] focus:outline-none"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-2">
             <FolderPlus size={13} className="text-white/80" />

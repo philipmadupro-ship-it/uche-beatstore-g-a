@@ -31,6 +31,7 @@ import { ContactActivityTimeline } from '@/components/crm/ContactActivityTimelin
 import { ContactTasks } from '@/components/crm/ContactTasks';
 import type { CrmStage } from '@/lib/contracts';
 import { toast, confirmToast } from '@/hooks/useToast';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { cn } from '@/lib/utils';
 import type { Contact, BeatSend } from '@/lib/types';
 
@@ -373,13 +374,14 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
  * about a single contact, not a filter.
  */
 function EngagementPill({ tone }: { tone: 'active' | 'engaged' | 'cold' }) {
+  const reducedMotion = useReducedMotion();
   const cfg =
     tone === 'active'  ? { dot: 'bg-white', text: 'text-white font-bold', ring: 'ring-white/40', label: 'Active' }
   : tone === 'engaged' ? { dot: 'bg-white/60', text: 'text-white/70', ring: 'ring-white/20',    label: 'Engaged' }
   :                      { dot: 'bg-white/30', text: 'text-white/50', ring: 'ring-white/10',    label: 'Cold' };
   return (
     <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-inset ${cfg.ring} ${cfg.text}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${tone === 'active' ? 'animate-pulse' : ''}`} />
+      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${tone === 'active' && !reducedMotion ? 'animate-pulse' : ''}`} />
       {cfg.label}
     </span>
   );

@@ -7835,3 +7835,110 @@ rewire caused no regression.
 toast through the UI in this environment — a JS-dispatched click on the copy-link button does
 not produce one (clipboard needs a real gesture), and the browser renderer crashed mid-attempt.
 The queue behaviour behind them is unit-tested; their rendering is not.
+
+---
+
+## 2026-08-05 - Closing out the preview-player plan's remaining phases
+
+Working from a self-audited punch list of everything still outstanding from the original
+`flickering-weaving-music.md` plan plus every ad-hoc request made since. Explicitly declined:
+a scripted type-scale collapse and radii/tokenization sweep across 375+175 files — this
+codebase has one documented incident of a scripted Tailwind migration causing 144 dead classes,
+and "don't script this" is the standing lesson.
+
+### Reduced-motion source guard
+
+Hand-fixing the same bug class three times in one session (an ungated `animate-pulse` /
+`animate-bounce` shipped on a new "now playing" indicator) is what a source guard is for. A
+targeted grep for the two utilities (excluding `animate-spin`, which is always a functional
+`Loader2` spinner) found **14 real ungated sites**, not the 8 I'd tracked going in — six more
+turned up once I ran the grep across the whole tree instead of trusting my running list:
+`contacts/[id]` `EngagementPill`, library's `MiniTrackCard`, the producer profile page's
+`TrackCard`, `store/download`'s now-playing dot, `store/[id]`'s now-playing dot, and the legacy
+`share/[token]` equalizer. All 14 gated behind `useReducedMotion()`, matching the existing
+`TrackGridCard.tsx` pattern.
+
+New guard: `src/lib/ui/reduced-motion.test.ts`, same convention as `tailwind-classes.test.ts` —
+scans tracked source for `animate-(pulse|bounce)` and fails on any line without `reducedMotion`
+in it, with a documented allowlist for genuinely transient loading feedback (skeleton
+placeholders, an actual stem-processing overlay, an auth-verification spinner) that isn't the
+ambient-decoration bug class this guards against.
+
+### localStorage JSON.parse audit
+
+Of 20 `JSON.parse` call sites in `src`, most already catch parse errors — but three caught the
+*parse* exception while trusting the *shape* of whatever came back, then handed it straight into
+`useState` for a `.map()`/`.filter()` in render. That's the exact `persisted-uploads.ts` crash
+class: valid JSON, wrong shape, uncaught `TypeError` on render. Fixed `playlists/page.tsx` and
+`projects/page.tsx`'s `loadRecentIds()` and `SendBeatModal.tsx`'s `loadTemplates()` with
+`Array.isArray` + per-item shape guards. The rest (store pages, `lib/dnd.ts`) already had the
+risky operation inside the `try`, so a wrong shape was already caught, not a live bug.
+
+### Plain-icon transport (design-direction.md's still-open "preview player rebuild")
+
+Removed the filled/solid play-circle transport from all three "beat preview player" surfaces:
+`PlayerBar`'s mini-pill and expanded Now Playing card, `BeatPreviewDrawer`, and
+`ShareTrackDetailsDrawer` (both its cover-hover button and inline player button) — replacing
+`bg-white`/accent-filled discs with icon-only buttons per the spec's explicit rule: *"Icon-only
+controls carry no fill at rest — prominence comes from size and spacing, not a filled disc."*
+Verified live: Now Playing card renders with the size-only transport and the live dB/Hz/note
+readout, click toggles play/pause correctly.
+
+### `ui/Modal.tsx` radius, and the rest of the translucent-control audit
+
+`Modal.tsx`'s panel was `rounded-2xl` (16px) against the doc's 20px vocabulary — fixed. Audited
+`BeatCard`, `StoreListView`, `CartDrawer`, and `store/checkout/page.tsx` expecting more residue;
+found almost all of it was already migrated in an earlier pass this session, and the only
+remaining solid-white buttons are legitimate single-primary-action exceptions (floating cart
+pill, empty-cart CTA, checkout's Pay button). Found and fixed the one real miss: checkout's
+step-1 numbered badge was still `bg-white text-black` while its sibling step-2 badge two
+sections down had already been migrated — a solid-fill status badge, forbidden by the doc's own
+rule. Brought it in line with translucent + border.
+
+### Dialog semantics retrofit — 22 overlays
+
+`useDialogBehavior` (Escape, focus trap, focus restoration) had been applied to 3 of ~29
+hand-rolled overlays going into this session. Audited the rest via a research pass, correctly
+splitting dialogs (full trap) from menus/popovers (Escape-only, `trapFocus: false` — trapping a
+dropdown strands keyboard users inside something they expected to tab out of), and retrofitted
+all 22 reachable ones: `LinkPopup`, the profile preview slide-over, `OfferModal`,
+`ActivityPanel`, `CommandPalette` (reconciling its own combined keydown handler down to just the
+⌘K toggle), `TopBar`'s mobile drawer, `PlayerBar`'s Now Playing overlay, both playlist/project
+folder-select modals, both playlist/project options menus (plus their tags sub-modals — and a
+real bug caught in passing: the rename input's local Escape didn't stop propagation, so
+canceling a rename would have also closed the whole menu once the document-level Escape handler
+existed), `DeliveryPackButton`, `TemplatePicker`, the share-variant `CartDrawer` (removing its
+manual Escape effect), `ContentShareModal`, `ShareTrackDetailsDrawer`, `ShareCardModal` (removing
+manual focus/Escape logic — confirmed its close button is DOM-first, so autofocus behavior is
+unchanged), `StoreSidebar`'s mobile filter sheet, `TrackDetailsDrawer`, and
+`DrawerActionList`/`DrawerStemOverlay`.
+
+Skipped 3 components with zero call sites anywhere in `src/` (`ProjectShareModal.tsx`,
+`ShareModal.tsx`, `BeatMatchModal.tsx` — likely dead, superseded by `ContentShareModal`/
+`QuickShareModal`; flagged separately rather than spending retrofit effort on unreachable code)
+and `GlassPage.tsx` (its `fixed inset-0` divs are decorative `-z-10` background layers, not
+overlays).
+
+### Exclusive-sale reservation
+
+Went in expecting to build an atomic claim from scratch. Found the atomic conditional
+`UPDATE ... WHERE exclusive_sold = false ... RETURNING` guard against the double-sale race was
+**already correctly implemented** in the webhook, comparing returned rows to detect which buyer
+lost the race — no new migration needed there. The actual gap: it tries to flag the loser via
+`license_purchases.needs_refund_review`, a column that was never migrated (referenced only in
+the webhook, nowhere else in the repo), so the flag silently no-opped and nothing ever surfaced
+it on `/sales`.
+
+Fixed with migration `106_license_purchases_refund_review.sql` (idempotent, mirrors the existing
+`needs_stems_upload`/052 pattern), wired the column through `/api/sales`, added an owner-gated
+`POST /api/sales/resolve-refund-review` (acknowledgement only — **no Stripe refund API call
+anywhere in this change or this repo**; refunding stays a manual producer action via the
+existing Stripe-dashboard link), and added a red "Needs refund review" badge + "Mark reviewed"
+button + status filter to `/sales`, mirroring the existing "Awaiting stems" pattern.
+
+**Migration 106 must be applied on Supabase before this is live in prod.**
+
+### Verification
+
+`tsc` clean · `eslint` 0 errors (95 pre-existing warnings, none introduced) · **791 tests**
+passing · `npm run build` green after every phase above.

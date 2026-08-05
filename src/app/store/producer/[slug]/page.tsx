@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { usePlayer } from '@/hooks/usePlayer';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { toast } from '@/hooks/useToast';
 import { getBuyerToken } from '@/lib/buyer-session';
 import type { Track } from '@/lib/types';
@@ -409,6 +410,7 @@ function TrackCard({
   isPlaying: boolean;
   onPlay: () => void;
 }) {
+  const reducedMotion = useReducedMotion();
   return (
     <Link
       href={`/store/${track.id}`}
@@ -441,7 +443,7 @@ function TrackCard({
         </button>
         {isCurrent && (
           <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/70 backdrop-blur text-[8px] font-mono uppercase tracking-wider text-white flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#6DC6A4] animate-pulse" />
+            <span className={`w-1.5 h-1.5 rounded-full bg-[#6DC6A4] ${reducedMotion ? '' : 'animate-pulse'}`} />
             {isPlaying ? 'Playing' : 'Paused'}
           </div>
         )}

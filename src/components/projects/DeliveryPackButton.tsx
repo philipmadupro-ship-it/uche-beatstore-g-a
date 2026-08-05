@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Download, Loader2, PackageOpen } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface Props {
   projectId: string;
@@ -19,6 +20,7 @@ export function DeliveryPackButton({ projectId, projectName }: Props) {
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<{ name: string; url: string; type: string }[] | null>(null);
   const [open, setOpen] = useState(false);
+  const panelRef = useDialogBehavior({ open, onClose: () => setOpen(false) });
 
   const fetchManifest = async () => {
     if (loading) return;
@@ -67,7 +69,15 @@ export function DeliveryPackButton({ projectId, projectName }: Props) {
 
       {open && files && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setOpen(false)}>
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.02]" onClick={(e) => e.stopPropagation()}>
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Delivery pack — ${projectName}`}
+            tabIndex={-1}
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.02] focus:outline-none"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
               <div>
                 <h3 className="text-[13px] font-semibold text-white">Delivery pack</h3>

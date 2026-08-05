@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface ActivityItem {
   id: string;
@@ -50,6 +51,7 @@ const KIND_META: Record<ActivityItem['kind'], { icon: React.ElementType; color: 
 type ActivityFilter = 'all' | ActivityItem['kind'];
 
 export function ActivityPanel({ open, onClose }: Props) {
+  const panelRef = useDialogBehavior({ open, onClose });
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,11 +99,16 @@ export function ActivityPanel({ open, onClose }: Props) {
       {/* Panel — slides in from the right edge. Glass surface matches
           the rest of the recent UI work (player bar, drawer header). */}
       <aside
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Recent activity"
+        tabIndex={-1}
         className="fixed top-0 right-0 bottom-0 z-[90] w-[360px] flex flex-col
                    bg-gradient-to-b from-[#101012]/95 via-[#090907]/95 to-[#090907]/95
                    backdrop-blur-2xl border-l border-white/[0.06]
                    shadow-[-12px_0_40px_rgba(0,0,0,0.5)]
-                   animate-in slide-in-from-right duration-300"
+                   animate-in slide-in-from-right duration-300 focus:outline-none"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
           <div className="flex items-center gap-2">

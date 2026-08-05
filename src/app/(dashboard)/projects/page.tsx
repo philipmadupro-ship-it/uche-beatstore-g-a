@@ -44,7 +44,12 @@ const MAX_RECENT = 8;
 
 function loadRecentIds(): string[] {
   if (typeof window === 'undefined') return [];
-  try { return JSON.parse(localStorage.getItem(RECENTLY_OPENED_KEY) || '[]'); } catch { return []; }
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RECENTLY_OPENED_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 function trackRecentOpen(id: string) {
   const prev = loadRecentIds().filter((x) => x !== id);

@@ -13,8 +13,10 @@ import { ProgressBar } from '@/components/player/ProgressBar';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useCart } from '@/hooks/useCart';
 import { toast } from '@/hooks/useToast';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { slugify } from '@/lib/slug';
 import { BeatComments } from '@/components/store/BeatComments';
 import { ShareMenu } from '@/components/store/ShareMenu';
@@ -140,6 +142,7 @@ const TYPE_LABELS: Record<string, string> = {
 export default function StoreProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { currentTrack, isPlaying, setTrack: playTrack, togglePlay, setQueue, progress, seekTo } = usePlayer();
+  const reducedMotion = useReducedMotion();
   const { addItem, setIsOpen } = useCart();
   const [offerOpen, setOfferOpen] = useState(false);
 
@@ -345,7 +348,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                       className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/70 backdrop-blur-sm text-[9px] font-mono uppercase tracking-wider"
                       style={{ color: accent }}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#6DC6A4] animate-pulse" />
+                      <span className={`w-1.5 h-1.5 rounded-full bg-[#6DC6A4] ${reducedMotion ? '' : 'animate-pulse'}`} />
                       {isCurrentPlaying ? 'Now playing' : 'Paused'}
                     </div>
                   )}
@@ -920,6 +923,7 @@ function OfferModal({ trackId, trackTitle, accent, onClose }: {
   accent: string;
   onClose: () => void;
 }) {
+  const panelRef = useDialogBehavior({ open: true, onClose });
   const [email, setEmail] = useState('');
   const [priceStr, setPriceStr] = useState('');
   const [message, setMessage] = useState('');
@@ -951,7 +955,15 @@ function OfferModal({ trackId, trackTitle, accent, onClose }: {
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/[0.02] p-6" onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Make an offer — ${trackTitle}`}
+        tabIndex={-1}
+        className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/[0.02] p-6 focus:outline-none"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-start justify-between mb-4">
           <div>
             <p className="text-[9px] font-mono uppercase tracking-[0.25em]" style={{ color: accent }}>Make an offer</p>

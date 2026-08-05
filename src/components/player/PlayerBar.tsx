@@ -13,6 +13,7 @@ import { SpectralWaveform } from './SpectralWaveform';
 import { AsciiCoverArt } from './AsciiCoverArt';
 import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { useState, useRef, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
@@ -67,6 +68,7 @@ export function PlayerBar() {
   };
   const [queueOpen, setQueueOpen] = useState(false);
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
+  const nowPlayingPanelRef = useDialogBehavior({ open: nowPlayingOpen, onClose: () => setNowPlayingOpen(false) });
   const mounted = useSyncExternalStore(subscribeToClientSnapshot, getClientSnapshot, getServerSnapshot);
 
   // Ambient colour from the cover art, used to tint the Now Playing overlay.
@@ -205,8 +207,8 @@ export function PlayerBar() {
             </span>
           </div>
 
-          {/* Transport — center-right. The play button is the dominant
-              circular element so it reads as the pill's "anchor". */}
+          {/* Transport — center-right. No filled discs; the play button reads
+              as the pill's "anchor" via larger glyph size, not a solid fill. */}
           <div className="flex items-center gap-0.5 shrink-0">
             <button onClick={prev} className="w-8 h-8 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Previous track">
               <PrevGlyph size={15} />
@@ -215,13 +217,13 @@ export function PlayerBar() {
               onClick={handlePrimaryPlay}
               disabled={!streamStatus.canAttemptPlayback}
               className={cn(
-                'w-10 h-10 rounded-full flex items-center justify-center text-black ml-0.5 mr-0.5 bg-white active:scale-95 transition-transform duration-150',
+                'w-10 h-10 rounded-full flex items-center justify-center text-white ml-0.5 mr-0.5 hover:bg-white/[0.08] active:scale-95 transition-all',
                 streamStatus.canAttemptPlayback ? 'hover:scale-[1.05]' : 'cursor-not-allowed opacity-55',
               )}
               aria-label={isPlaying ? 'Pause' : 'Play'}
               title={streamStatus.detail ?? streamStatus.title}
             >
-              {isBuffering ? <Loader2 size={16} className="animate-spin" /> : isPlaying ? <PauseGlyph size={16} /> : <PlayGlyph size={16} className="ml-0.5" />}
+              {isBuffering ? <Loader2 size={18} className="animate-spin" /> : isPlaying ? <PauseGlyph size={20} /> : <PlayGlyph size={20} className="ml-0.5" />}
             </button>
             <button onClick={next} className="w-8 h-8 flex items-center justify-center rounded-full text-white/80 hover:text-white hover:bg-white/[0.06] active:scale-90 transition-all" aria-label="Next track">
               <NextGlyph size={15} />
@@ -347,7 +349,14 @@ export function PlayerBar() {
 
           {/* The card — solid, luxury, centered. Holds the whole now-playing
               experience: vinyl, title, waveform, transport, volume. */}
-          <div className="relative z-10 w-full max-w-[400px] max-h-[94vh] overflow-y-auto no-scrollbar rounded-[20px] border border-white/[0.09] bg-[#14110d] shadow-[0_40px_120px_-12px_rgba(0,0,0,0.78)] px-6 pt-5 pb-6">
+          <div
+            ref={nowPlayingPanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Now playing"
+            tabIndex={-1}
+            className="relative z-10 w-full max-w-[400px] max-h-[94vh] overflow-y-auto no-scrollbar rounded-[20px] border border-white/[0.09] bg-[#14110d] shadow-[0_40px_120px_-12px_rgba(0,0,0,0.78)] px-6 pt-5 pb-6 focus:outline-none"
+          >
             {/* Top bar */}
             <div className="flex items-center justify-between pb-1">
               <button
@@ -448,9 +457,9 @@ export function PlayerBar() {
                 </div>
               </div>
 
-              {/* Transport — translucent glass fills, one step smaller than
-                  before. The play button stays the only solid element so it
-                  remains the single obvious action. Tap targets stay >= 40px
+              {/* Transport — all icon-only, no filled discs (design-direction.md's
+                  "beat preview player" section). Play/pause reads as dominant via
+                  glyph size + spacing, not a solid fill. Tap targets stay >= 40px
                   via padding even though the visual discs are smaller. */}
               <div className="flex items-center justify-center gap-5 mt-5 mb-4">
                 <button
@@ -477,13 +486,13 @@ export function PlayerBar() {
                   onClick={handlePrimaryPlay}
                   disabled={!streamStatus.canAttemptPlayback}
                   className={cn(
-                    'grid h-[3.25rem] w-[3.25rem] place-items-center rounded-full bg-white text-[#090907] transition-transform duration-150 active:scale-95',
+                    'grid h-[3.25rem] w-[3.25rem] place-items-center rounded-full text-white transition-all duration-150 active:scale-95 hover:bg-white/[0.08]',
                     streamStatus.canAttemptPlayback ? 'hover:scale-[1.04]' : 'cursor-not-allowed opacity-55',
                   )}
                   aria-label={isPlaying ? 'Pause' : 'Play'}
                   title={streamStatus.detail ?? streamStatus.title}
                 >
-                  {isPlaying ? <PauseGlyph size={22} /> : <PlayGlyph size={22} className="ml-0.5" />}
+                  {isPlaying ? <PauseGlyph size={30} /> : <PlayGlyph size={30} className="ml-0.5" />}
                 </button>
                 <button
                   onClick={next}

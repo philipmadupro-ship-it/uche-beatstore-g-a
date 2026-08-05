@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { X, ShoppingCart, Trash2, Loader2, Mail, ArrowRight, Music } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface CartDrawerProps {
   shareToken: string;
@@ -13,14 +14,7 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const drawerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const close = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsOpen(false); };
-    document.addEventListener('keydown', close);
-    return () => document.removeEventListener('keydown', close);
-  }, [isOpen, setIsOpen]);
+  const drawerRef = useDialogBehavior({ open: isOpen, onClose: () => setIsOpen(false) });
 
   const handleCheckout = async () => {
     setError(null);
@@ -66,7 +60,11 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
       {/* Drawer */}
       <div
         ref={drawerRef}
-        className="fixed right-0 top-0 bottom-0 w-full sm:w-[400px] bg-white/[0.02] border-l border-white/10 z-50 flex flex-col shadow-[0_0_80px_rgba(0,0,0,0.9)] animate-in slide-in-from-right duration-300"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Cart"
+        tabIndex={-1}
+        className="fixed right-0 top-0 bottom-0 w-full sm:w-[400px] bg-white/[0.02] border-l border-white/10 z-50 flex flex-col shadow-[0_0_80px_rgba(0,0,0,0.9)] animate-in slide-in-from-right duration-300 focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 bg-[#0e0c09]">

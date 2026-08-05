@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import {
   X, Send, Loader2, Search, Check, Music, Layers, Eye, Pencil,
   Lock, Calendar, MessageSquare, Download, Disc3, Tag as TagIcon, Users, Sparkles,
@@ -75,6 +76,7 @@ type ShareRole = 'viewer' | 'commenter';
  * recipient so revocation / per-contact tracking stays clean.
  */
 export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds, priorSentTrackIds, campaignId: initialCampaignId, onClose, onSuccess }: SendBeatModalProps) {
+  const reducedMotion = useReducedMotion();
   // Normalize the input — caller can pass either `contact` or `contacts`.
   // Internal logic only sees `recipients`.
   const initialRecipients = useMemo<Contact[]>(() => {
@@ -125,7 +127,19 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
   // ── Message templates — saved to localStorage ─────────────────────────
   const TEMPLATES_KEY = 'antigravity-msg-templates';
   interface MsgTemplate { id: string; name: string; subject: string; message: string; createdAt: number }
-  const loadTemplates = (): MsgTemplate[] => { try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]'); } catch { return []; } };
+  const loadTemplates = (): MsgTemplate[] => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(TEMPLATES_KEY) || '[]');
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((t): t is MsgTemplate =>
+        !!t && typeof t === 'object'
+        && typeof t.id === 'string' && typeof t.name === 'string'
+        && typeof t.subject === 'string' && typeof t.message === 'string',
+      );
+    } catch {
+      return [];
+    }
+  };
   const [templates, setTemplates] = useState<MsgTemplate[]>(() => typeof window !== 'undefined' ? loadTemplates() : []);
   const [showTemplates, setShowTemplates] = useState(false);
   const saveTemplate = () => {
@@ -627,7 +641,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 <div className="mb-4 p-3 rounded-lg border border-[#c8a47a]/25 bg-[#100e1f]/90 backdrop-blur-md space-y-2 animate-in fade-in duration-300">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-[#c8a47a]">
-                      <Sparkles size={11} className="animate-pulse text-[#c8a47a]" />
+                      <Sparkles size={11} className={`text-[#c8a47a] ${reducedMotion ? '' : 'animate-pulse'}`} />
                       <span className="text-[9px] font-bold uppercase tracking-widest font-akira">
                         AI SUGGESTIONS FOR {baselineTrack.title.toUpperCase()}
                       </span>

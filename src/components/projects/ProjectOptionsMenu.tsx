@@ -10,6 +10,7 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { ProjectFolderSelect } from './ProjectFolderSelect';
 import { TemplatePicker } from './TemplatePicker';
 import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface ProjectLite {
   id: string;
@@ -51,6 +52,7 @@ export function ProjectOptionsMenu({
   const [showFolders, setShowFolders] = useState(false);
   const [showTemplate, setShowTemplate] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const menuRef = useDialogBehavior({ open, onClose: () => setOpen(false), trapFocus: false });
 
   const patch = async (body: Record<string, unknown>, label: string) => {
     setBusy(label);
@@ -131,15 +133,18 @@ export function ProjectOptionsMenu({
           <>
             <div className="fixed inset-0 z-40" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(false); }} />
             <div
+              ref={menuRef}
+              role="menu"
+              tabIndex={-1}
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              className={`absolute top-full mt-1 ${align === 'right' ? 'right-0' : 'left-0'} z-50 w-52 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden py-1`}
+              className={`absolute top-full mt-1 ${align === 'right' ? 'right-0' : 'left-0'} z-50 w-52 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden py-1 focus:outline-none`}
             >
               {renaming ? (
                 <div className="p-2">
                   <input
                     autoFocus value={nameDraft}
                     onChange={(e) => setNameDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') submitRename(); if (e.key === 'Escape') setRenaming(false); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') submitRename(); if (e.key === 'Escape') { e.stopPropagation(); setRenaming(false); } }}
                     className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2.5 py-2 text-[12px] text-white focus:outline-none focus:border-white/20"
                   />
                   <div className="flex justify-end gap-1.5 mt-2">

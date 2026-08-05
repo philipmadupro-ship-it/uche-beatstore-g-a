@@ -15,6 +15,7 @@
  */
 
 import { Download, Heart } from 'lucide-react';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { seededGradient } from '@/lib/ui/cover-gradient';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { CoverImage } from '@/components/ui/CoverImage';
@@ -62,6 +63,7 @@ export default function BandcampRemixCard({
   isWishlisted,
   onToggleWishlist,
 }: BandcampRemixCardProps) {
+  const reducedMotion = useReducedMotion();
   const hasLicenseTiers = licenseCount > 0;
   const buyPrice = hasLicenseTiers ? lowestLicensePrice : priceLease ?? priceExclusive;
 
@@ -160,7 +162,9 @@ export default function BandcampRemixCard({
         {/* Bottom: title + producer + price */}
         <div className="absolute bottom-0 inset-x-0 p-2.5 flex flex-col items-start gap-1.5 sm:flex-row sm:items-end sm:justify-between sm:gap-2">
           <div className="min-w-0 w-full flex-1">
-            {isCurrent && <span className="block w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] animate-pulse mb-1.5" />}
+            {isCurrent && (
+              <span className={`block w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] mb-1.5 ${reducedMotion ? '' : 'animate-pulse'}`} />
+            )}
             <p
               className="text-[15px] sm:text-base font-bold text-[#FFF8EE] truncate leading-tight [text-shadow:0_2px_8px_rgba(0,0,0,0.95)]"
               style={isCurrent ? { color: accentColor } : {}}

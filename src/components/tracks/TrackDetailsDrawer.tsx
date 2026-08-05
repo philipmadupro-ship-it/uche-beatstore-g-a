@@ -20,6 +20,7 @@ import { DrawerStemOverlay } from '@/components/tracks/drawer/DrawerStemOverlay'
 import { TrackMetadataEditor } from '@/components/tracks/drawer/TrackMetadataEditor';
 import { TrackNotesEditor } from '@/components/tracks/drawer/TrackNotesEditor';
 import { DrawerActionList } from '@/components/tracks/drawer/DrawerActionList';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 // Type/Status options moved into drawer/TrackMetadataEditor along with
 // the editor UI itself.
@@ -118,6 +119,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
   const [view, setView] = useState<'details' | 'insights'>('details');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isReplacing, setIsReplacing] = useState(false);
+  const panelRef = useDialogBehavior({ open: true, onClose });
 
   if (!track) return null;
 
@@ -377,7 +379,14 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in" 
         onClick={onClose}
       />
-      <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-[#0c0b09] border-l border-white/[0.06] z-50 flex flex-col animate-in slide-in-from-right duration-300">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${track.title} details`}
+        tabIndex={-1}
+        className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-[#0c0b09] border-l border-white/[0.06] z-50 flex flex-col animate-in slide-in-from-right duration-300 focus:outline-none"
+      >
         <div className="relative p-6 border-b border-white/[0.06]">
           <div className="relative flex items-start justify-between w-full gap-3">
             <div className="min-w-0 flex-1">

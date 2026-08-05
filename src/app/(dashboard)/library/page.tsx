@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_HOME_ROWS, type HomeRowConfig } from '@/lib/dashboard/home-config';
 import { getCached, setCached } from '@/lib/client-cache';
 import { usePlayer } from '@/hooks/usePlayer';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { DropZone } from '@/components/upload/DropZone';
 import { TrackCard, TRACK_ROW_GRID } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
@@ -1677,6 +1678,7 @@ function MiniTrackCard({
   onPlay: () => void;
   onOpen: () => void;
 }) {
+  const reducedMotion = useReducedMotion();
   return (
     <div
       className="group relative shrink-0 w-[112px] sm:w-[132px] cursor-pointer"
@@ -1706,7 +1708,7 @@ function MiniTrackCard({
         >
           <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
             {isPlaying
-              ? <div className="flex items-end gap-[2px] h-4">{[3,5,7,5,3].map((h,i)=><span key={i} className="w-[3px] rounded-sm bg-white animate-bounce" style={{height:h,animationDelay:`${i*80}ms`}}/>)}</div>
+              ? <div className="flex items-end gap-[2px] h-4">{[3,5,7,5,3].map((h,i)=><span key={i} className={`w-[3px] rounded-sm bg-white ${reducedMotion ? '' : 'animate-bounce'}`} style={{height:h,animationDelay:`${i*80}ms`}}/>)}</div>
               : <PlayGlyph size={15} className="text-white ml-0.5" />}
           </div>
         </button>
