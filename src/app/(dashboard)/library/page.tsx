@@ -21,7 +21,7 @@ import { DEFAULT_HOME_ROWS, type HomeRowConfig } from '@/lib/dashboard/home-conf
 import { getCached, setCached } from '@/lib/client-cache';
 import { usePlayer } from '@/hooks/usePlayer';
 import { DropZone } from '@/components/upload/DropZone';
-import { TrackCard, TRACK_ROW_GRID } from '@/components/tracks/TrackCard';
+import { TrackCard } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { Track, Playlist, Project } from '@/lib/types';
 import { errorMessage } from '@/lib/errors';
@@ -39,6 +39,9 @@ import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
 import { SellReadinessPanel } from '@/components/library/SellReadinessPanel';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
+import { gridTemplate, resolveColumns } from '@/lib/library/columns';
+import { useLibraryColumns } from '@/hooks/useLibraryColumns';
+import { ColumnPicker } from '@/components/library/ColumnPicker';
 
 // Sort modes — added so the library is browsable beyond "newest first."
 // `recent` reflects upload time; `recently_played` would need a history
@@ -156,6 +159,11 @@ export default function LibraryPage() {
   const [viewMode, setViewMode] = useState<'list' | 'grid' | 'portfolio'>('list');
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Configured library columns, validated on the way out of storage — a saved
+  // layout from an older build must not be able to render an unusable table.
+  const columnIds = useLibraryColumns((s) => s.columnIds);
+  const activeColumns = useMemo(() => resolveColumns(columnIds), [columnIds]);
   const [filters, setFilters] = useState<LibraryFilters>(() => ({
     ...DEFAULT_FILTERS,
     genres: new Set<string>(),
@@ -1186,6 +1194,11 @@ export default function LibraryPage() {
                 </span>
               )}
             </button>
+            {/* Column config sits with the other list controls rather than in
+                settings: it is a per-task adjustment, not a preference you set
+                once and forget. Only meaningful for the table, so it is hidden
+                in grid and portfolio views. */}
+            {viewMode === 'list' && <ColumnPicker />}
             <Dropdown
               value={sortMode}
               onChange={(v) => setSortMode(v as SortMode)}
@@ -1322,7 +1335,10 @@ export default function LibraryPage() {
             {/* Header mirrors the Store list product row rather than the
                 old table grid: cover/play, title/meta, vibe, time,
                 rating/offline, actions. */}
-            <div className={`hidden md:grid ${TRACK_ROW_GRID} items-center gap-4 border border-transparent px-3 h-8 text-[9px] font-mono uppercase tracking-wider`}>
+            <div
+              style={{ '--track-row-cols': gridTemplate(activeColumns) } as React.CSSProperties}
+              className="track-row-dynamic hidden md:grid items-center gap-4 border border-transparent px-3 h-8 text-[9px] font-mono uppercase tracking-wider"
+            >
               <span className="text-center flex items-center justify-center text-white/30">
                 {sortMode === 'store_order' ? (
                   <Store size={10} className="text-white" />
@@ -1355,29 +1371,25 @@ export default function LibraryPage() {
                   ''
                 )}
               </span>
-              {/* Clickable sort headers */}
-              {(
-                [
-                  { label: 'Title', sort: 'title' as SortMode, always: true },
-                  { label: 'Tags · Store', sort: null, always: false, cls: 'hidden md:block' },
-                  { label: 'Time', sort: 'recent' as SortMode, always: false, cls: 'hidden md:flex justify-end' },
-                  { label: 'Rating', sort: 'rating' as SortMode, always: false, cls: 'hidden md:flex justify-end', activeSort: sortMode === 'rating' },
-                ] as Array<{ label: string; sort: SortMode | null; always: boolean; cls?: string; activeSort?: boolean }>
-              ).map(({ label, sort, cls, activeSort }) => {
-                const isActive = activeSort ?? (sort != null && sortMode === sort);
-                if (!sort) return <span key={label} className={`${cls ?? ''} text-white/40`}>{label}</span>;
+              {/* Headers come from the configured columns, so the header and
+                  the rows can never disagree about what is displayed. */}
+              {activeColumns.map((col) => {
+                const alignCls = col.align === 'right' ? 'flex justify-end' : 'block';
+                if (!col.sort) {
+                  return <span key={col.id} className={`${alignCls} truncate text-white/40`}>{col.label}</span>;
+                }
+                const isActive = sortMode === col.sort;
                 return (
                   <button
-                    key={label}
-                    onClick={() => setSortMode(sort)}
-                    className={`flex items-center gap-1 transition-colors hover:text-white ${cls ?? ''} ${
-                      isActive ? 'text-white' : 'text-white/40'
-                    }`}
+                    key={col.id}
+                    onClick={() => setSortMode(col.sort!)}
+                    aria-label={`Sort by ${col.label}`}
+                    className={`flex items-center gap-1 truncate transition-colors hover:text-white ${
+                      col.align === 'right' ? 'justify-end' : ''
+                    } ${isActive ? 'text-white' : 'text-white/40'}`}
                   >
-                    {label}
-                    <span className="text-[9px]">
-                      {isActive ? (sortMode === 'bpm-desc' ? '↓' : '↑') : ''}
-                    </span>
+                    {col.label}
+                    <span className="text-[9px]">{isActive ? (sortMode === 'bpm-desc' ? '↓' : '↑') : ''}</span>
                   </button>
                 );
               })}
@@ -1390,6 +1402,7 @@ export default function LibraryPage() {
                   key={t.id}
                   track={t}
                   index={absIdx + 1}
+                  columns={activeColumns}
                   onClickDetails={(track) => setSelectedTrack(track)}
                   onPlayClick={() => playTrack(t)}
                   onDelete={(track) => handleDeleteTrack(track)}

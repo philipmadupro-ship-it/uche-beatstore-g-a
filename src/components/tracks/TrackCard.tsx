@@ -10,8 +10,14 @@ import { useRating } from '@/hooks/useRating';
 import { setTrackDragData } from '@/lib/dnd';
 import { cacheTrack, getCachedMeta, removeCached } from '@/lib/offline/audio-cache';
 import { toast } from '@/hooks/useToast';
+import { gridTemplate, type LibraryColumn, type TrackWithTags } from '@/lib/library/columns';
 
 interface TrackCardProps {
+  /** When set, the row renders these data columns instead of its fixed
+   *  tags/time/rating trio. Only the library passes this — playlists and
+   *  projects keep the standard row, which is why it is optional rather
+   *  than a required shape every caller has to construct. */
+  columns?: LibraryColumn[];
   track: Track;
   index: number;
   onClickDetails?: (track: Track) => void;
@@ -96,6 +102,7 @@ export function TrackCard({
   moveControls = 'cell',
   isFirstInOrder = false,
   isLastInOrder = false,
+  columns,
 }: TrackCardProps) {
   void index;
   const { currentTrack, isPlaying, setTrack, togglePlay } = usePlayer();
@@ -213,7 +220,8 @@ export function TrackCard({
           cover_url: track.cover_url ?? null,
         });
       }}
-      className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-lg border px-2.5 py-2 transition-colors cursor-pointer ${TRACK_ROW_GRID} md:gap-4 md:px-3 ${
+      style={columns ? ({ '--track-row-cols': gridTemplate(columns) } as React.CSSProperties) : undefined}
+      className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-lg border px-2.5 py-2 transition-colors cursor-pointer ${columns ? 'track-row-dynamic' : TRACK_ROW_GRID} md:gap-4 md:px-3 ${
         isCurrent
           ? 'border-[#D4BFA0]/35 bg-[#D4BFA0]/[0.07] shadow-[inset_3px_0_0_#D4BFA0]'
           : selected
@@ -343,6 +351,66 @@ export function TrackCard({
         </div>
       </div>
 
+      {columns ? (
+        /* Configured columns. Title is skipped: it is already rendered above
+           as the row's primary cell with its own metadata line, and drawing
+           it twice would waste the widest track in the grid. Rating keeps its
+           interactive stars; everything else is read-only text. */
+        columns.map((col) => {
+          if (col.id === 'title') return null;
+          if (col.id === 'rating') {
+            return (
+              <div
+                key={col.id}
+                className="relative z-10 hidden items-center justify-end gap-2 md:flex"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className={`flex shrink-0 items-center gap-0.5 transition-opacity ${
+                  track.rating ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+                }`}>
+                  {[1, 2, 3, 4, 5].map((star) => {
+                    const on = Boolean(track.rating && track.rating >= star);
+                    return (
+                      <button
+                        key={star}
+                        onClick={(e) => handleRating(e, star)}
+                        className="cursor-pointer p-0.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#c8a84b] rounded-sm"
+                        aria-label={`Rate ${star} star${star === 1 ? '' : 's'}`}
+                        aria-pressed={on}
+                      >
+                        <Star
+                          size={11}
+                          fill={on ? '#c8a84b' : 'none'}
+                          strokeWidth={1.5}
+                          className={on ? 'text-[#c8a84b]' : 'text-white/25 transition-colors hover:text-[#c8a84b]'}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          }
+          const value = col.value(track as TrackWithTags);
+          return (
+            <div
+              key={col.id}
+              className={`relative z-10 hidden min-w-0 md:block ${col.align === 'right' ? 'text-right' : ''}`}
+            >
+              <p className={`truncate text-[11px] ${
+                value
+                  ? 'font-mono tabular-nums text-white/60'
+                  : 'text-white/20'
+              }`}>
+                {/* An em dash rather than an empty cell: a blank reads as a
+                    rendering fault, a dash reads as "no value". */}
+                {value || '—'}
+              </p>
+            </div>
+          );
+        })
+      ) : (
+        <>
       {/* Tags + commerce state — secondary support, same hierarchy as Store list.
           The store/price markers are here because they were previously only
           visible by opening each track one at a time, which is the wrong way to
@@ -412,6 +480,8 @@ export function TrackCard({
           )}
         </div>
       </div>
+        </>
+      )}
 
       {/* More */}
       <div ref={menuRef} className="relative z-20 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>

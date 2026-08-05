@@ -836,3 +836,15 @@ input[type=range]::-webkit-slider-thumb {
   margin-top: -4px;
   cursor: pointer;
 }
+
+/* ── Library rows with configurable columns ────────────────────────────
+   The template is per-row data, so it has to come through an inline style
+   — but inline styles cannot be media-queried, and the mobile layout is a
+   fixed three-track grid regardless of which columns are configured. A
+   custom property carries the value in and this rule applies it only from
+   `md` up, which keeps both layouts declarative. */
+@media (min-width: 768px) {
+  .track-row-dynamic {
+    grid-template-columns: var(--track-row-cols);
+  }
+}
