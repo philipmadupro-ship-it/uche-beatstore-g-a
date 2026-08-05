@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Field } from '@/components/ui/Field';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { ErasureRequestSchema } from '@/lib/contracts';
+import { DefaultArtworkCard } from '@/components/settings/DefaultArtworkCard';
 
 interface TeamMember {
   user_id: string;
@@ -266,6 +267,9 @@ export default function SettingsPage() {
               </form>
             </Card>
           </section>
+
+          {/* Default artwork + brand palette */}
+          <DefaultArtworkCard />
 
           {/* Preferences */}
           <section>

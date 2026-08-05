@@ -4,11 +4,11 @@ import { Track } from '@/lib/types';
 import { Music, Star, MoreHorizontal, Trash2, MinusCircle, Info, Share2 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { Popover } from '@/components/ui/Popover';
-import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { setTrackDragData } from '@/lib/dnd';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface TrackGridCardProps {
   track: Track;
@@ -85,17 +85,18 @@ export function TrackGridCard({
             ? 'border-white/20'
             : 'border-white/10 group-hover:border-white/20'
       }`}>
-        {track.cover_url ? (
-          <CoverImage
-            src={track.cover_url}
-            sizes="(max-width: 640px) 50vw, 220px"
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-br from-white/10 to-[#090907] flex items-center justify-center">
-            <Music size={28} className="text-white/30" />
-          </div>
-        )}
+        {/* No cover falls back to the producer's default artwork, and past
+            that to a gradient built from their brand palette and seeded by
+            this track's id — so a coverless catalogue still looks deliberate
+            rather than like forty grey music glyphs. */}
+        <ArtworkFallback
+          src={track.cover_url}
+          seed={track.id}
+          sizes="(max-width: 640px) 50vw, 220px"
+          className="object-cover transition-transform duration-500 group-hover:scale-105"
+        >
+          <Music size={28} aria-hidden />
+        </ArtworkFallback>
 
         {/* Playing equalizer overlay */}
         {isActive && (

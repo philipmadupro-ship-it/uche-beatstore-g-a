@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
       display_name,
       bio,
       hero_image_url,
+      default_artwork_url,
+      default_artwork_palette,
       credits,
       license_lease_price_usd,
       license_exclusive_price_usd,
@@ -60,6 +62,10 @@ export async function POST(req: NextRequest) {
       display_name: display_name || null,
       bio: bio || null,
       hero_image_url: hero_image_url || null,
+      default_artwork_url: default_artwork_url || null,
+      // Clearing the artwork must clear the palette with it, or the next
+      // upload inherits the previous brand's colours.
+      default_artwork_palette: default_artwork_url ? (default_artwork_palette ?? null) : null,
       credits: credits || null,
       license_lease_price_usd: license_lease_price_usd ? parseFloat(String(license_lease_price_usd)) : null,
       license_exclusive_price_usd: license_exclusive_price_usd ? parseFloat(String(license_exclusive_price_usd)) : null,
