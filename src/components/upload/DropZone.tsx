@@ -89,7 +89,7 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
     if (mountedRef.current) setCards(next);
   }, []);
 
-  const onDrop = useCallback(async (accepted: File[], rejected: FileRejection[]) => {
+  const onDrop = useCallback((accepted: File[], rejected: FileRejection[]) => {
     if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
 
     const rejectedCards: FileCard[] = rejected.map((item, i) => ({
@@ -109,49 +109,58 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
     }
 
     // Populate cards immediately so the user sees their files right away.
-    const initial: FileCard[] = accepted.map((f) => ({
-      id: `accepted-${f.name}-${f.size}-${f.lastModified}`,
+    const initial: FileCard[] = accepted.map((f, i) => ({
+      // Index-suffixed: two identical files in one drop would otherwise share
+      // an id, and card patches would land on the wrong row.
+      id: `accepted-${i}-${f.name}-${f.size}-${f.lastModified}`,
       file: f,
       ext: uploadFileExtension(f.name),
       analyzing: true,
       queued: false,
       done: false,
     }));
-    const acceptedOffset = rejectedCards.length;
     safeSetCards([...rejectedCards, ...initial]);
 
-    // Run analysis in parallel, update each card as its result lands.
-    const analyses = await Promise.all(
-      accepted.map(async (f, i) => {
-        try {
-          const result = await analyzeAudio(f);
-          safeSetCards((prev) => prev.map((c, ci) =>
-            ci === acceptedOffset + i
-              ? { ...c, analyzing: false, bpm: result?.bpm ?? null, key: result?.key ?? null, scale: result?.scale ?? null }
-              : c,
-          ));
-          return result;
-        } catch {
-          safeSetCards((prev) => prev.map((c, ci) =>
-            ci === acceptedOffset + i ? { ...c, analyzing: false, analysisError: true } : c,
-          ));
-          return null;
-        }
-      }),
-    );
-
-    // Enqueue all files.
+    // Enqueue FIRST, analyse alongside.
+    //
+    // This used to `await Promise.all(accepted.map(analyzeAudio))` and only
+    // enqueue afterwards. Analysis reads the whole file into an ArrayBuffer and
+    // decodes it, so a large WAV bought several seconds of an unresponsive tab
+    // during which not one byte had been sent — the upload looked hung, and
+    // people retried, which started the decode over. Bytes are the slow part;
+    // the analysis promise is handed to the manager and collected at /complete.
     accepted.forEach((file, i) => {
+      const cardId = initial[i].id;
+      const patchCard = (patch: Partial<FileCard>) =>
+        safeSetCards((prev) => prev.map((c) => (c.id === cardId ? { ...c, ...patch } : c)));
+
+      const analysis = analyzeAudio(file)
+        .then((result) => {
+          patchCard({
+            analyzing: false,
+            bpm: result?.bpm ?? null,
+            key: result?.key ?? null,
+            scale: result?.scale ?? null,
+          });
+          return result;
+        })
+        .catch(() => {
+          // Analysis is best-effort — the server takes its own swing at BPM/key
+          // in /complete, and the track page has a Re-analyze button.
+          patchCard({ analyzing: false, analysisError: true });
+          return null;
+        });
+
       enqueue(file, {
         type: selectedType,
         projectId: playlistId ?? null,
-        analysis: analyses[i],
+        analysis,
         onSuccess: () => {
-          safeSetCards((prev) => prev.map((c, ci) => ci === acceptedOffset + i ? { ...c, done: true } : c));
+          patchCard({ done: true });
           onUploadSuccess?.();
         },
       });
-      safeSetCards((prev) => prev.map((c, ci) => ci === acceptedOffset + i ? { ...c, queued: true } : c));
+      patchCard({ queued: true });
     });
 
     // Clear successful/queued cards after a short beat; rejected files stay

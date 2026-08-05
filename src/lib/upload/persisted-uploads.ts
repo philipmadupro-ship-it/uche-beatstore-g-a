@@ -24,6 +24,7 @@
  */
 
 import type { UploadStatus } from './manager';
+import { bytesFromParts } from './progress';
 
 /** One upload as stored in localStorage. */
 export interface PersistedItem {
@@ -138,9 +139,14 @@ export function parsePersistedUploads(raw: string | null | undefined): Persisted
  * Bytes already uploaded, inferred from completed parts.
  *
  * Capped at `fileSize` so a corrupted part list cannot produce a progress bar
- * reading over 100%.
+ * reading over 100%, and aware that the final part is short — see
+ * `bytesFromParts`, which owns the arithmetic for both this and the live path.
  */
 export function bytesFromCompletedParts(item: PersistedItem): number {
-  const raw = item.completedPartNumbers.length * item.partSize;
-  return item.fileSize > 0 ? Math.min(item.fileSize, raw) : raw;
+  return bytesFromParts({
+    completedPartNumbers: item.completedPartNumbers,
+    partSize: item.partSize,
+    totalParts: item.totalParts,
+    fileSize: item.fileSize,
+  });
 }
