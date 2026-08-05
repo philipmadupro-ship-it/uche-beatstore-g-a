@@ -182,25 +182,46 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Apply "team only" policy to all tables
+-- Apply "team only" policy to the tables created above.
+--
+-- This originally queried information_schema.tables live, which silently
+-- re-scopes to whatever tables exist in `public` at the moment this file
+-- runs. On a fresh database that's exactly the 11 tables above; replayed
+-- against an already-fully-migrated database (this file is idempotent and
+-- meant to be safely re-runnable) it's ~100 unrelated tables added by every
+-- migration since, each already covered by its own later, usually
+-- owner-scoped policy — creating "team only" on those too would be a silent,
+-- unreviewed RLS broadening, not a fix. Pinned to the fixed list instead, so
+-- a full replay is idempotent and behaviourally identical to the first run.
+-- (share_links / share_plays are handled separately below — they also need
+-- public access.)
 DO $$
 DECLARE
     t TEXT;
 BEGIN
-    FOR t IN 
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name NOT IN ('share_links', 'share_plays') -- share_links needs public access too
+    FOR t IN SELECT unnest(ARRAY[
+        'tracks', 'playlists', 'playlist_tracks', 'contacts', 'beat_sends',
+        'calendar_events', 'invites', 'team_members', 'track_tags', 'stems',
+        'rating_history'
+    ])
     LOOP
-        EXECUTE format('CREATE POLICY "team only" ON public.%I FOR ALL USING (public.is_team_member())', t);
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public' AND tablename = t AND policyname = 'team only'
+        ) THEN
+            EXECUTE format('CREATE POLICY "team only" ON public.%I FOR ALL USING (public.is_team_member())', t);
+        END IF;
     END LOOP;
 END $$;
 
 -- Special Policies for Share Links (Public Read)
+DROP POLICY IF EXISTS "team only" ON public.share_links;
 CREATE POLICY "team only" ON public.share_links FOR ALL USING (public.is_team_member());
+DROP POLICY IF EXISTS "public read session" ON public.share_links;
 CREATE POLICY "public read session" ON public.share_links FOR SELECT USING (true); -- Public can read link info if they have token (further filtering in app)
 
+DROP POLICY IF EXISTS "team only" ON public.share_plays;
 CREATE POLICY "team only" ON public.share_plays FOR ALL USING (public.is_team_member());
+DROP POLICY IF EXISTS "public insert play" ON public.share_plays;
 CREATE POLICY "public insert play" ON public.share_plays FOR INSERT WITH CHECK (true); -- Public can log plays
 

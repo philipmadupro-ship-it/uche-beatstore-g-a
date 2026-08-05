@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "owner" ON public.notifications;
 CREATE POLICY "owner" ON public.notifications
   FOR ALL USING (user_id = auth.uid());
 
