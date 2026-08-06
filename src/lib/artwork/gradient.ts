@@ -50,6 +50,21 @@ export const COMPOSITIONS: Composition[] = [
   'linear', 'spotlight', 'sweep', 'dual', 'ridge', 'halo',
 ];
 
+/**
+ * Which shapes each kind may draw.
+ *
+ * Hue alone was not separating projects from playlists strongly enough in a
+ * mixed grid — two things the same colour read as the same thing regardless of
+ * what shade they are. Giving each kind its own shapes makes the category
+ * legible before the colour is even processed. The sets overlap on `linear` so
+ * the three still look like one system rather than three unrelated apps.
+ */
+const KIND_COMPOSITIONS: Record<ArtworkKind, Composition[]> = {
+  track:    ['linear', 'spotlight', 'sweep', 'dual', 'ridge', 'halo'],
+  project:  ['linear', 'ridge', 'dual'],
+  playlist: ['linear', 'halo', 'spotlight'],
+};
+
 export interface GradientSpec {
   /** Which archetype was drawn — exposed for tests and diagnostics. */
   composition: Composition;
@@ -96,6 +111,10 @@ const KIND_TREATMENT: Record<ArtworkKind, { offset: number; hue: number }> = {
  * stops looking like one label.
  */
 const ITEM_HUE_SPREAD = 26;
+
+/** Drift allowed when a tag colour is the anchor. Tight enough that the tag
+ *  stays recognisable, loose enough that two beats are not the same picture. */
+const TAG_HUE_SPREAD = 11;
 
 /** Used when the producer has set no artwork — the theme accent, dimmed. */
 export const FALLBACK_PALETTE = ['#C4B49C', '#6C6255'];
@@ -162,11 +181,29 @@ export function seededRandom(seed: number): () => number {
  * empty or unusable palette falls back to the theme accent so this never
  * returns nothing — a fallback that can itself fail is not a fallback.
  */
+export interface GradientOptions {
+  kind?: ArtworkKind;
+  /**
+   * The palette came from a tag rather than the brand, so hold the hue close.
+   *
+   * The point of tag colour is that every Trap beat looks like Trap. The full
+   * ±26° drift used for brand palettes is wide enough to walk a tag out of its
+   * own hue, which defeats it — two beats would be distinguishable but neither
+   * would be identifiable.
+   */
+  tagAnchored?: boolean;
+}
+
 export function generateGradient(
   palette: string[],
   seed: string,
-  kind: ArtworkKind = 'track',
+  kindOrOptions: ArtworkKind | GradientOptions = 'track',
 ): GradientSpec {
+  const options: GradientOptions = typeof kindOrOptions === 'string'
+    ? { kind: kindOrOptions }
+    : kindOrOptions;
+  const kind = options.kind ?? 'track';
+  const hueSpread = options.tagAnchored ? TAG_HUE_SPREAD : ITEM_HUE_SPREAD;
   const usable = palette.filter(isValidHex);
   const base = usable.length > 0 ? usable : FALLBACK_PALETTE;
 
@@ -179,21 +216,31 @@ export function generateGradient(
 
   const rand = seededRandom(hashSeed(seed));
 
-  // Pick the lead colour from the palette rather than always the dominant
-  // one — otherwise every cover in a catalogue opens with the same hue.
-  const pickedLead = colors[Math.floor(rand() * colors.length)] ?? colors[0];
+  /* Choosing the lead.
+     
+     For a brand palette, pick at random: otherwise every cover in a catalogue
+     opens on the same hue.
+     
+     For a TAG palette the first entry is the tag's own colour, and it must
+     lead. Picking randomly there meant a Trap cover and a Drill cover could
+     both land on the shared brand support colour and come out identical — the
+     tag colour was present but not deciding anything, which defeats the point
+     of having one. */
+  const pickedLead = options.tagAnchored
+    ? colors[0]
+    : (colors[Math.floor(rand() * colors.length)] ?? colors[0]);
   // The second colour is a different entry when there is one, so two-colour
   // brands still produce a gradient rather than a flat wash.
   const others = colors.filter((c) => c !== pickedLead);
   const pickedSupport = others.length > 0
-    ? others[Math.floor(rand() * others.length)]
+    ? (options.tagAnchored ? others[0] : others[Math.floor(rand() * others.length)])
     : adjustLightness(pickedLead, 0.18);
 
   // Per-item drift. Lead and support rotate together so the pair stays
   // harmonic — rotating them independently produces clashes rather than
   // variety. Saturation moves too, so two items with a similar hue still
   // differ in how vivid they read.
-  const itemHue = (rand() * 2 - 1) * ITEM_HUE_SPREAD;
+  const itemHue = (rand() * 2 - 1) * hueSpread;
   const itemSat = 0.8 + rand() * 0.55;
   const lead = adjustSaturation(rotateHue(pickedLead, itemHue), itemSat);
   const support = adjustSaturation(rotateHue(pickedSupport, itemHue * 0.6), itemSat);
@@ -221,7 +268,8 @@ export function generateGradient(
     { color: highlight, position: 100 },
   ];
 
-  const composition = COMPOSITIONS[Math.floor(rand() * COMPOSITIONS.length)];
+  const allowed = KIND_COMPOSITIONS[kind] ?? COMPOSITIONS;
+  const composition = allowed[Math.floor(rand() * allowed.length)];
 
   const stopList = stops.map((st) => `${st.color} ${st.position}%`).join(', ');
   const glowX = 20 + Math.floor(rand() * 60);
@@ -309,6 +357,10 @@ export function generateGradient(
  * Separate because it is what JSX call sites actually want, and having them
  * reach into `.css` on a spec they otherwise ignore reads worse everywhere.
  */
-export function gradientCss(palette: string[], seed: string, kind: ArtworkKind = 'track'): string {
-  return generateGradient(palette, seed, kind).css;
+export function gradientCss(
+  palette: string[],
+  seed: string,
+  kindOrOptions: ArtworkKind | GradientOptions = 'track',
+): string {
+  return generateGradient(palette, seed, kindOrOptions).css;
 }

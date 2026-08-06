@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Track } from '@/lib/types';
 import { MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2, Share2, ChevronUp, ChevronDown, Check } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
@@ -198,6 +198,15 @@ export function TrackCard({
   const { rate: rateTrack } = useRating(track.id, track.rating || 0);
   const durationLabel = formatDuration(track.duration_seconds ?? null);
   const genreMoodTags = trackTags.filter((tt) => tt.category === 'genre' || tt.category === 'mood');
+  // Genre first, then mood — the gradient leads on the first entry, and genre
+  // is the axis a producer actually browses by.
+  const artworkTags = useMemo(
+    () => [
+      ...trackTags.filter((tt) => tt.category === 'genre').map((tt) => tt.tag),
+      ...trackTags.filter((tt) => tt.category === 'mood').map((tt) => tt.tag),
+    ],
+    [trackTags],
+  );
 
   const handleRating = (e: React.MouseEvent, star: number) => {
     e.stopPropagation();
@@ -280,7 +289,7 @@ export function TrackCard({
                 default artwork, then a gradient seeded by this track. The list
                 is the library's default view, so leaving it on a bare glyph
                 meant most people never saw their own artwork at all. */}
-            <ArtworkFallback src={track.cover_url} seed={track.id} sizes="40px" className="object-cover">
+            <ArtworkFallback src={track.cover_url} seed={track.id} tags={artworkTags} sizes="40px" className="object-cover">
               <Music size={13} aria-hidden />
             </ArtworkFallback>
             <span className={`absolute inset-0 flex items-center justify-center bg-black/55 transition-opacity ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>

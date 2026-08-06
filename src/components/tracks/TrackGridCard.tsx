@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Track } from '@/lib/types';
 import { Music, Star, MoreHorizontal, Trash2, MinusCircle, Info, Share2 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
@@ -42,6 +43,16 @@ export function TrackGridCard({
   selected = false,
   onSelectChange,
 }: TrackGridCardProps) {
+  // Genre first, then mood: the gradient leads on the first entry, and genre
+  // is what a producer browses by.
+  const artworkTags = useMemo(() => {
+    const tags = (track as { track_tags?: Array<{ tag: string; category?: string | null }> }).track_tags ?? [];
+    return [
+      ...tags.filter((t) => t.category === 'genre').map((t) => t.tag),
+      ...tags.filter((t) => t.category === 'mood').map((t) => t.tag),
+    ];
+  }, [track]);
+
   const { currentTrack, isPlaying, setTrack, togglePlay } = usePlayer();
   const { rate: rateTrack } = useRating(track.id, track.rating || 0);
   const reducedMotion = useReducedMotion();
@@ -92,6 +103,7 @@ export function TrackGridCard({
         <ArtworkFallback
           src={track.cover_url}
           seed={track.id}
+          tags={artworkTags}
           sizes="(max-width: 640px) 50vw, 220px"
           className="object-cover transition-transform duration-500 group-hover:scale-105"
         >

@@ -14,6 +14,7 @@ import { Field } from '@/components/ui/Field';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { ErasureRequestSchema } from '@/lib/contracts';
 import { DefaultArtworkCard } from '@/components/settings/DefaultArtworkCard';
+import { TagColorsCard } from '@/components/settings/TagColorsCard';
 
 interface TeamMember {
   user_id: string;
@@ -270,6 +271,9 @@ export default function SettingsPage() {
 
           {/* Default artwork + brand palette */}
           <DefaultArtworkCard />
+
+          {/* Tag colours — what the generated artwork is keyed to */}
+          <TagColorsCard />
 
           {/* Preferences */}
           <section>

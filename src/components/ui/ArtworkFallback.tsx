@@ -3,6 +3,8 @@
 import { useMemo } from 'react';
 import { generateGradient, type ArtworkKind } from '@/lib/artwork/gradient';
 import { useBrandArtwork } from '@/hooks/useBrandArtwork';
+import { useTagColors } from '@/hooks/useTagColors';
+import { paletteForTags } from '@/lib/artwork/tag-colors';
 import { CoverImage } from './CoverImage';
 import { cn } from '@/lib/utils';
 
@@ -40,6 +42,14 @@ interface ArtworkFallbackProps {
    * rather than looking like one undifferentiated set.
    */
   kind?: ArtworkKind;
+  /**
+   * The item's tags, most significant first.
+   *
+   * When present the first tag's colour leads the gradient, so everything
+   * sharing a tag shares a hue and a catalogue groups by genre on sight.
+   * Absent, the artwork falls back to the brand palette exactly as before.
+   */
+  tags?: readonly string[];
   /** Render only the gradient, with no brand emblem over it. */
   gradientOnly?: boolean;
 }
@@ -53,11 +63,23 @@ export function ArtworkFallback({
   priority,
   children,
   kind = 'track',
+  tags,
   gradientOnly = false,
 }: ArtworkFallbackProps) {
   const { defaultArtworkUrl, palette } = useBrandArtwork();
+  const tagColors = useTagColors();
 
-  const gradient = useMemo(() => generateGradient(palette, seed, kind), [palette, seed, kind]);
+  const tagged = (tags?.length ?? 0) > 0;
+  const gradient = useMemo(
+    () => generateGradient(
+      tagged ? paletteForTags(tags!, palette, tagColors) : palette,
+      seed,
+      // A tag palette holds its hue tight so the tag stays recognisable; a
+      // brand palette is free to drift, since it has nothing to encode.
+      { kind, tagAnchored: tagged },
+    ),
+    [tagged, tags, palette, tagColors, seed, kind],
+  );
 
   // The item's own cover always wins — a real photograph beats anything
   // generated, and this only fills a gap.
