@@ -25,6 +25,10 @@ interface Props {
   contactId: string;
   contactName: string;
   onSendBeat?: () => void;
+  /** Fired once the engagement summary loads, so a parent page (e.g. the
+   *  contact detail header) can show a Kind badge / lifetime value without
+   *  this component's self-contained fetch being duplicated. */
+  onSummary?: (summary: EngagementSummary | null) => void;
 }
 
 const KIND_META: Record<ActivityKind, { icon: React.ComponentType<{ size?: number }>; tint: string; ring: string }> = {
@@ -50,7 +54,7 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export function ContactActivityTimeline({ contactId, contactName, onSendBeat }: Props) {
+export function ContactActivityTimeline({ contactId, contactName, onSendBeat, onSummary }: Props) {
   const [timeline, setTimeline] = useState<ContactActivity[]>([]);
   const [summary, setSummary] = useState<EngagementSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,12 +68,13 @@ export function ContactActivityTimeline({ contactId, contactName, onSendBeat }: 
       const data = await res.json();
       setTimeline(data.timeline ?? []);
       setSummary(data.summary ?? null);
+      onSummary?.(data.summary ?? null);
     } catch {
       // leave empty; parent shows the rest of the page regardless
     } finally {
       setLoading(false);
     }
-  }, [contactId]);
+  }, [contactId, onSummary]);
 
   useEffect(() => { void load(); }, [load]);
 

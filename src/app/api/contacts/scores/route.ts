@@ -99,9 +99,15 @@ export async function GET() {
       }
     }
 
-    // 5. Score each contact.
+    // 5. Score each contact. Raw signal counts ride along with score/tier —
+    // the CRM list derives each contact's kind (buyer/artist/lead/contact,
+    // see lib/contacts/kind.ts) and its revenue/favorites badges from these
+    // without a second round-trip.
     const now = Date.now();
-    const scores: Record<string, { score: number; tier: LeadTier }> = {};
+    const scores: Record<string, {
+      score: number; tier: LeadTier;
+      sends: number; purchases: number; revenue: number; favorites: number;
+    }> = {};
     for (const id of contactIds) {
       const a = agg.get(id);
       const r = scoreLead({
@@ -115,7 +121,11 @@ export async function GET() {
         lastTouch: a?.lastTouch ? new Date(a.lastTouch).toISOString() : null,
         now,
       });
-      scores[id] = { score: r.score, tier: r.tier };
+      scores[id] = {
+        score: r.score, tier: r.tier,
+        sends: a?.sends ?? 0, purchases: a?.purchases ?? 0,
+        revenue: a?.revenue ?? 0, favorites: a?.favorites ?? 0,
+      };
     }
 
     return NextResponse.json({ scores });

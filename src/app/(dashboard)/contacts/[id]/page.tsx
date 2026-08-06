@@ -25,9 +25,11 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { SendBeatModal } from '@/components/crm/SendBeatModal';
 import { ContactTagPicker } from '@/components/crm/ContactTagPicker';
-import { ContactStageCell, relativeDays } from '@/components/crm/contacts-shared';
+import { ContactStageCell, KindBadge, relativeDays } from '@/components/crm/contacts-shared';
 import { NudgeModal } from '@/components/crm/NudgeModal';
 import { ContactActivityTimeline } from '@/components/crm/ContactActivityTimeline';
+import type { EngagementSummary } from '@/lib/contacts/activity';
+import { deriveContactKind } from '@/lib/contacts/kind';
 import { ContactTasks } from '@/components/crm/ContactTasks';
 import type { CrmStage } from '@/lib/contracts';
 import { toast, confirmToast } from '@/hooks/useToast';
@@ -53,6 +55,9 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
   const [error, setError] = useState<string | null>(null);
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [nudgeModalOpen, setNudgeModalOpen] = useState(false);
+  // Fed by ContactActivityTimeline's onSummary — lets the header show a Kind
+  // badge + lifetime value without a second fetch of the same data.
+  const [activitySummary, setActivitySummary] = useState<EngagementSummary | null>(null);
 
   // ── Fetch ───────────────────────────────────────────────────────────
   const fetchAll = async () => {
@@ -179,6 +184,12 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
   }
 
   const pipeline = latestStatus ? PIPELINE_TONES[latestStatus] ?? PIPELINE_TONES.sent : null;
+  const kind = deriveContactKind({
+    purchases: activitySummary?.purchases ?? 0,
+    sends: sends.length,
+    favorites: activitySummary?.favorites ?? 0,
+    crmStatus: contact.crm_status ?? null,
+  });
 
   return (
     <DashboardLayout>
@@ -215,6 +226,18 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                   className="text-[22px] font-medium text-white leading-tight tracking-tight"
                   placeholder="Name"
                 />
+
+                {/* Kind (buyer/artist/lead/contact) + lifetime value — "what is
+                    this person to me" leads the profile, per lib/contacts/kind.ts. */}
+                <div className="flex items-center gap-3 mt-2">
+                  <KindBadge kind={kind} />
+                  {(activitySummary?.revenue ?? 0) > 0 && (
+                    <span className="text-[11px] font-mono tabular-nums text-white/50">
+                      ${(activitySummary!.revenue).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} lifetime
+                    </span>
+                  )}
+                </div>
+
                 <div className="flex items-center gap-1.5 mt-2 text-[11px] text-white/60">
                   {contact.role && <span>{contact.role}</span>}
                   {contact.role && contact.label && <span>·</span>}
@@ -228,7 +251,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                     <span className={`text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                       contact.buyer_pipeline_status === 'purchased' || contact.buyer_pipeline_status === 'repeat_buyer'
                         ? 'text-[#6DC6A4] bg-[#6DC6A4]/10 border-[#6DC6A4]/25'
-                        : 'text-black bg-white font-semibold shadow-md hover:bg-white/90 border-white/25'
+                        : 'text-[#7aa8e8] bg-[#7aa8e8]/10 border-[#7aa8e8]/25'
                     }`}>
                       {contact.buyer_pipeline_status.replace(/_/g, ' ')}
                     </span>
@@ -343,6 +366,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
               contactId={contact.id}
               contactName={contact.name}
               onSendBeat={() => setSendModalOpen(true)}
+              onSummary={setActivitySummary}
             />
           </div>
         </div>
