@@ -24,6 +24,7 @@ import { ActivityPanel } from '@/components/activity/ActivityPanel';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { cn } from '@/lib/utils';
+import { useBrandArtwork } from '@/hooks/useBrandArtwork';
 
 interface Notification {
   id: string;
@@ -55,6 +56,7 @@ function timeAgo(iso: string) {
 export function TopBar() {
   const pathname = usePathname();
   const openPalette = useCommandPalette((s) => s.setOpen);
+  const { logoUrl } = useBrandArtwork();
   const [activityOpen, setActivityOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const mobilePanelRef = useDialogBehavior({ open: mobileOpen, onClose: () => setMobileOpen(false) });
@@ -146,11 +148,23 @@ export function TopBar() {
       <header className="fixed top-0 left-0 right-0 bg-[#090907]/95 backdrop-blur-md border-b border-white/10 z-30">
         {/* ── Row 1: brand · hubs · utilities ─────────────────────── */}
         <div className="h-14 flex items-center px-4 md:px-6 gap-3 md:gap-5">
-          {/* Brand */}
+          {/* Brand — the producer's logo when they have set one. Contained
+              rather than covered: a wide wordmark cropped to fill loses its
+              ends, and this is the one place the mark has to stay legible at
+              24px. */}
           <Link href="/library" className="flex items-center gap-2.5 group shrink-0">
-            <div className="w-6 h-6 rounded-[6px] bg-white flex items-center justify-center">
-              <span className="text-[10px] font-black text-black tracking-tighter">U2C</span>
-            </div>
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoUrl}
+                alt=""
+                className="h-7 w-7 rounded-[6px] object-contain"
+              />
+            ) : (
+              <div className="w-6 h-6 rounded-[6px] bg-white flex items-center justify-center">
+                <span className="text-[10px] font-black text-black tracking-tighter">U2C</span>
+              </div>
+            )}
             <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-white/90 group-hover:text-white hidden lg:inline">
               u2c beatstore
             </span>
@@ -337,7 +351,11 @@ export function TopBar() {
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
-              <span className="text-[11px] font-semibold tracking-[0.22em] uppercase text-white">
+              <span className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.22em] uppercase text-white">
+                {logoUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="" className="h-6 w-6 rounded-[5px] object-contain" />
+                )}
                 U2C Beatstore
               </span>
               <button

@@ -30,6 +30,11 @@ export async function POST(req: NextRequest) {
       hero_image_url,
       default_artwork_url,
       default_artwork_palette,
+      logo_url,
+      default_artwork_project_url,
+      default_artwork_project_palette,
+      default_artwork_playlist_url,
+      default_artwork_playlist_palette,
       credits,
       license_lease_price_usd,
       license_exclusive_price_usd,
@@ -66,6 +71,13 @@ export async function POST(req: NextRequest) {
       // Clearing the artwork must clear the palette with it, or the next
       // upload inherits the previous brand's colours.
       default_artwork_palette: default_artwork_url ? (default_artwork_palette ?? null) : null,
+      logo_url: logo_url || null,
+      default_artwork_project_url: default_artwork_project_url || null,
+      // Same rule as the track palette: clearing the image clears its colours,
+      // or the next upload silently inherits the previous brand's.
+      default_artwork_project_palette: default_artwork_project_url ? (default_artwork_project_palette ?? null) : null,
+      default_artwork_playlist_url: default_artwork_playlist_url || null,
+      default_artwork_playlist_palette: default_artwork_playlist_url ? (default_artwork_playlist_palette ?? null) : null,
       credits: credits || null,
       license_lease_price_usd: license_lease_price_usd ? parseFloat(String(license_lease_price_usd)) : null,
       license_exclusive_price_usd: license_exclusive_price_usd ? parseFloat(String(license_exclusive_price_usd)) : null,

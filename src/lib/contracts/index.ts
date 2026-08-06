@@ -389,10 +389,21 @@ export const CreatorProfilePatchSchema = z.object({
   bio: z.string().max(10000).nullish(),
   hero_image_url: z.string().max(2000).nullish(),
   default_artwork_url: z.string().max(2000).nullish(),
+  logo_url: z.string().max(2000).nullish(),
+  default_artwork_project_url: z.string().max(2000).nullish(),
+  default_artwork_playlist_url: z.string().max(2000).nullish(),
   // Array of {hex,weight} from the client-side extractor. Validated again on
   // read via normalisePalette — this only bounds the size so a hand-rolled
   // request can't push an unbounded blob into the row.
   default_artwork_palette: z
+    .array(z.object({ hex: z.string().max(9), weight: z.number().optional() }))
+    .max(12)
+    .nullish(),
+  default_artwork_project_palette: z
+    .array(z.object({ hex: z.string().max(9), weight: z.number().optional() }))
+    .max(12)
+    .nullish(),
+  default_artwork_playlist_palette: z
     .array(z.object({ hex: z.string().max(9), weight: z.number().optional() }))
     .max(12)
     .nullish(),
