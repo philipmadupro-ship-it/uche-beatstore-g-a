@@ -32,20 +32,17 @@ After applying, wait ~10s for the PostgREST schema cache to reload (the
 `NOTIFY pgrst` line). If you hit `Could not find column X in schema cache`,
 re-run `NOTIFY pgrst, 'reload schema';` and wait.
 
-## ⚠️ Currently UNAPPLIED (apply these now)
-These were added in recent work and the app's matching features stay inert
-until applied:
-- `096_contacts_unique_owner_email.sql` — unique index enabling the webhook's
-  atomic contact upsert (fixes a double-insert race).
-- `097_store_events_funnel.sql` — `store_events` table; the `/analytics` funnel
-  + event tracking write here.
-- `098_store_catalogue_index.sql` — partial index for the storefront catalogue
-  query.
+## ⚠️ Currently UNAPPLIED
+None — all 106 migrations were confirmed applied via a full clean replay
+(2026-08-05). If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 095. When two branches both add a migration, both
+Latest applied baseline = 106. When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
-naming (we renumbered 040/041 → 046/047 once already).
+naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
+have two independent files sharing a number from a past parallel-branch
+collision — both sides of each pair are legitimate and applied, just
+renumber the *next* new migration past 106, don't touch the existing pairs).
 
 ## Future: gate it in CI/CD
 The robust end state is a deploy step that runs `npm run db:migrate` against the
