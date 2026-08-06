@@ -19,6 +19,10 @@ import { CoverImage } from '@/components/ui/CoverImage';
 import { seededGradient } from '@/lib/ui/cover-gradient';
 import type { StoreTrack } from './types';
 
+// A single recent sale reads as a fluke, not momentum — the whole point of a
+// social-proof signal is that it's true, so this is the bar for "worth saying".
+const MOMENTUM_THRESHOLD = 2;
+
 interface Props {
   track: StoreTrack;
   allTracks: StoreTrack[];
@@ -37,12 +41,16 @@ interface Props {
   accentColor: string;
   isWishlisted?: boolean;
   onToggleWishlist?: () => void;
+  /** Paid sales for this track in the last 7 days. Only rendered once it
+   *  clears MOMENTUM_THRESHOLD below — a single sale reads as a fluke,
+   *  not momentum. */
+  recentSales?: number;
 }
 
 export function BeatCard({
   track, priceLease, priceExclusive, licenseCount = 0, lowestLicensePrice = null, isCurrent, isPlaying, isPreview,
   onPreview, onAddLease, onAddExclusive, onFreeDownload, accentColor,
-  isWishlisted, onToggleWishlist,
+  isWishlisted, onToggleWishlist, recentSales,
 }: Props) {
   const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
 
@@ -145,6 +153,11 @@ export function BeatCard({
           <p className="mt-1 truncate text-[9px] font-mono uppercase tracking-[0.14em] text-white/45">
             {[track.type, keyLabel].filter(Boolean).join(' · ')}
           </p>
+          {(recentSales ?? 0) >= MOMENTUM_THRESHOLD && (
+            <p className="mt-1 truncate text-[9px] font-mono uppercase tracking-[0.14em] text-[#6DC6A4]">
+              {recentSales} sold this week
+            </p>
+          )}
         </div>
       </div>
 

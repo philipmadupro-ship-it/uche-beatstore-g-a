@@ -41,12 +41,18 @@ interface Props {
   onFreeDownload: (t: StoreTrack) => void;
   isWishlisted: (id: string) => boolean;
   onToggleWishlist: (id: string) => void;
+  /** trackId → paid sales in the last 7 days. Only shown once a track
+   *  clears MOMENTUM_THRESHOLD — a single sale reads as a fluke. */
+  momentumByTrack?: Record<string, number>;
 }
+
+const MOMENTUM_THRESHOLD = 2;
 
 export function StoreListView({
   tracks, accentColor, currentTrackId, isPlaying, isPreviewId,
   priceFor, onPlay, onPreview, onAddLease, onAddExclusive, onFreeDownload,
   licenseCount = 0, lowestLicensePrice = null, isWishlisted, onToggleWishlist,
+  momentumByTrack = {},
 }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -151,6 +157,11 @@ export function StoreListView({
                   ))}
                 {(t.tags ?? []).filter((x) => x.category === 'genre' || x.category === 'mood').length === 0 && (
                   <span className="truncate text-[9px] font-mono text-white/35">—</span>
+                )}
+                {(momentumByTrack[t.id] ?? 0) >= MOMENTUM_THRESHOLD && (
+                  <span className="shrink-0 text-[9px] font-mono uppercase tracking-[0.14em] text-[#6DC6A4]">
+                    {momentumByTrack[t.id]} sold this week
+                  </span>
                 )}
                 {t.rating != null && Number(t.rating) > 0 && (
                   <span className="ml-auto flex shrink-0 items-center gap-0.5 text-[11px] font-mono text-[#c8a84b]">
