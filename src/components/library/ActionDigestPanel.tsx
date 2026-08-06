@@ -17,6 +17,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Bell, ChevronDown, ChevronUp, ShoppingBag, Handshake, UserPlus } from 'lucide-react';
+import { Disclosure } from '@/components/ui/Disclosure';
 import {
   buildActionDigest,
   type DigestItem,
@@ -60,15 +61,24 @@ export function ActionDigestPanel() {
 
   const visible = digest.items.slice(0, expanded ? 50 : 4);
 
-  return (
-    <section className="mb-6 rounded-xl border border-white/10 bg-white/[0.02] p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <Bell size={13} className="text-white/50" aria-hidden />
-        <h2 className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">
-          {digest.total} {digest.total === 1 ? 'thing needs' : 'things need'} you
-        </h2>
-      </div>
+  // Collapsed, like every other diagnostic block above the catalogue. The
+  // headline is the part that must be seen — it names how much is waiting;
+  // the items themselves are what you read once you have decided to act.
+  // Rendering them permanently put a second wall between the producer and
+  // their library, which is the habit this app has been moving away from.
+  const byDomain = digest.items.reduce<Record<string, number>>((acc, item) => {
+    acc[item.domain] = (acc[item.domain] ?? 0) + 1;
+    return acc;
+  }, {});
 
+  return (
+    <Disclosure
+      className="mb-6"
+      title={`${digest.total} ${digest.total === 1 ? 'thing needs' : 'things need'} you`}
+      // A collapsed section still has to say what is inside it.
+      summary={Object.entries(byDomain).map(([d, n]) => `${n} ${d}`).join(' · ')}
+      icon={<Bell size={13} className="text-white/50" aria-hidden />}
+    >
       <ul className="space-y-1">
         {visible.map((item) => {
           const meta = DOMAIN_META[item.domain];
@@ -103,6 +113,6 @@ export function ActionDigestPanel() {
           {expanded ? 'Show less' : `Show all ${digest.total}`}
         </button>
       ) : null}
-    </section>
+    </Disclosure>
   );
 }
