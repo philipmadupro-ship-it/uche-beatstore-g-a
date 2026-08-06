@@ -42,7 +42,13 @@ interface BandcampRemixCardProps {
   // Optional so other call sites that don't have a wishlist still work.
   isWishlisted?: boolean;
   onToggleWishlist?: () => void;
+  /** Paid sales for this track in the last 7 days. Only rendered once it
+   *  clears MOMENTUM_THRESHOLD (see BeatCard.tsx) — a single sale reads
+   *  as a fluke, not momentum. */
+  recentSales?: number;
 }
+
+const MOMENTUM_THRESHOLD = 2;
 
 export default function BandcampRemixCard({
   track,
@@ -62,6 +68,7 @@ export default function BandcampRemixCard({
   accentColor,
   isWishlisted,
   onToggleWishlist,
+  recentSales,
 }: BandcampRemixCardProps) {
   const reducedMotion = useReducedMotion();
   const hasLicenseTiers = licenseCount > 0;
@@ -173,6 +180,11 @@ export default function BandcampRemixCard({
             </p>
             {creatorName && (
               <p className="text-[9px] font-mono text-white/40 truncate mt-0.5">{creatorName}</p>
+            )}
+            {(recentSales ?? 0) >= MOMENTUM_THRESHOLD && (
+              <p className="text-[9px] font-mono uppercase tracking-[0.14em] text-[#6DC6A4] truncate mt-0.5">
+                {recentSales} sold this week
+              </p>
             )}
           </div>
           {!track.free_download_enabled && buyPrice != null && (
