@@ -1695,6 +1695,15 @@ function MiniTrackCard({
   onPlay: () => void;
   onOpen: () => void;
 }) {
+  // Genre first, then mood — the gradient leads on the first entry, so a
+  // Browse row of one genre comes out as one colour family.
+  const artworkTags = useMemo(() => {
+    const tags = (track as TrackWithInlineTags).track_tags ?? [];
+    return [
+      ...tags.filter((t) => t.category === 'genre').map((t) => t.tag),
+      ...tags.filter((t) => t.category === 'mood').map((t) => t.tag),
+    ];
+  }, [track]);
   return (
     <div
       className="group relative shrink-0 w-[112px] sm:w-[132px] cursor-pointer"
@@ -1702,7 +1711,7 @@ function MiniTrackCard({
     >
       {/* Cover art + overlays */}
       <div className={`relative w-full aspect-square rounded-xl overflow-hidden bg-white/[0.04] border mb-2 transition-all ${isCurrent ? 'border-white/60 ring-1 ring-white/30' : 'border-white/10 group-hover:border-white/20'}`}>
-        <ArtworkFallback src={track.cover_url} seed={track.id} alt={track.title} kind="track" className="object-cover">
+        <ArtworkFallback src={track.cover_url} seed={track.id} alt={track.title} kind="track" tags={artworkTags} className="object-cover">
           <Music size={24} aria-hidden />
         </ArtworkFallback>
         {/* State badge */}

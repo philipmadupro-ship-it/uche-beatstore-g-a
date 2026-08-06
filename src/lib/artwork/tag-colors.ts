@@ -81,10 +81,27 @@ export function paletteForTags(
 ): string[] {
   if (tags.length === 0) return [...brandPalette];
 
-  const lead = colorForTag(tags[0], overrides);
+  /* Which tag leads.
+     
+     Not simply the first. Tag order comes from a join and is arbitrary: in the
+     working catalogue most Trap beats carry Trap second or third, behind
+     Pluggnb or Jersey Club, so leading on the first tag scattered Trap across
+     every hue — the exact thing tag colour exists to prevent.
+     
+     A tag the producer has explicitly given a colour is a statement that it
+     matters, so those lead. Assign Trap a colour and every Trap beat leads on
+     it wherever Trap sits in its tag list. With none assigned this falls back
+     to the first tag, so an untouched account behaves as before. */
+  const ordered = [
+    ...tags.filter((t) => overrides[normaliseTagKey(t)]),
+    ...tags.filter((t) => !overrides[normaliseTagKey(t)]),
+  ];
+
+  const lead = colorForTag(ordered[0], overrides);
   // A second tag contributes a supporting colour; beyond two the gradient
   // stops being readable as any of them.
-  const second = tags[1] ? colorForTag(tags[1], overrides) : null;
+  const secondTag = ordered[1];
+  const second = secondTag ? colorForTag(secondTag, overrides) : null;
 
   const support = second && second !== lead
     ? second

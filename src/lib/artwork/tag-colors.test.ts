@@ -56,6 +56,26 @@ describe('paletteForTags', () => {
     expect(paletteForTags(['Trap', 'Dark'], BRAND)[1]).toBe(colorForTag('Dark'));
   });
 
+  it('leads on a tag the producer has coloured, wherever it sits in the list', () => {
+    // The real catalogue case: Trap is usually the second or third tag, behind
+    // Pluggnb. Leading on the first tag scattered Trap across every hue.
+    const overrides = { trap: '#3ecf4a' };
+    const palette = paletteForTags(['Pluggnb', 'Trap'], BRAND, overrides);
+    expect(palette[0]).toBe('#3ecf4a');
+  });
+
+  it('is unchanged when no tag on the track has been coloured', () => {
+    expect(paletteForTags(['Pluggnb', 'Trap'], BRAND)[0]).toBe(colorForTag('Pluggnb'));
+  });
+
+  it('keeps a stable lead when several tags are coloured', () => {
+    const overrides = { trap: '#3ecf4a', pluggnb: '#ff0000' };
+    const a = paletteForTags(['Pluggnb', 'Trap'], BRAND, overrides);
+    const b = paletteForTags(['Pluggnb', 'Trap'], BRAND, overrides);
+    expect(a).toEqual(b);
+    expect(a[0]).toBe('#ff0000');
+  });
+
   it('falls back to the brand palette when untagged, so nothing regresses', () => {
     expect(paletteForTags([], BRAND)).toEqual(BRAND);
   });
