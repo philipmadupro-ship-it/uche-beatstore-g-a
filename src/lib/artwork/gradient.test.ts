@@ -137,6 +137,35 @@ describe('generateGradient', () => {
     }
   });
 
+  it('varies the light itself, not just where it lands', () => {
+    // A fixed alpha in a different position still reads as one template with
+    // the sheen moved. Strength has to differ too.
+    const alphas = new Set(
+      Array.from({ length: 30 }, (_, i) => generateGradient(BRAND, `t-${i}`).glow.alpha),
+    );
+    expect(alphas.size).toBeGreaterThan(20);
+  });
+
+  it('keeps the highlight subtle at both extremes', () => {
+    for (let i = 0; i < 60; i++) {
+      const { glow } = generateGradient(BRAND, `t-${i}`);
+      // Never invisible, never a blown-out white patch on a dark cover.
+      expect(glow.alpha).toBeGreaterThanOrEqual(0.07);
+      expect(glow.alpha).toBeLessThanOrEqual(0.2);
+      expect(glow.x).toBeGreaterThanOrEqual(0);
+      expect(glow.x).toBeLessThanOrEqual(100);
+      expect(glow.y).toBeGreaterThanOrEqual(0);
+      expect(glow.y).toBeLessThanOrEqual(100);
+    }
+  });
+
+  it('emits a parseable rgba highlight rather than a hex-with-alpha suffix', () => {
+    const { css } = generateGradient(BRAND, 'seed');
+    expect(css).toMatch(/rgba\(\d+, \d+, \d+, 0\.\d+\)/);
+    // The old `#rrggbb22` form produced values some parsers reject.
+    expect(css).not.toMatch(/#[0-9a-f]{8}\b/i);
+  });
+
   it('uses the fallback palette when given none', () => {
     expect(FALLBACK_PALETTE.every(isValidHex)).toBe(true);
   });

@@ -11,6 +11,7 @@ import { setTrackDragData } from '@/lib/dnd';
 import { cacheTrack, getCachedMeta, removeCached } from '@/lib/offline/audio-cache';
 import { toast } from '@/hooks/useToast';
 import { gridTemplate, type LibraryColumn, type TrackWithTags } from '@/lib/library/columns';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface TrackCardProps {
   /** When set, the row renders these data columns instead of its fixed
@@ -275,13 +276,13 @@ export function TrackCard({
             className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#090907] text-white"
             aria-label={isActive ? 'Pause track' : 'Play track'}
           >
-            {track.cover_url ? (
-              <CoverImage src={track.cover_url} sizes="40px" className="object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-white/30">
-                <Music size={13} />
-              </div>
-            )}
+            {/* Same resolution as the grid: own cover, then the producer's
+                default artwork, then a gradient seeded by this track. The list
+                is the library's default view, so leaving it on a bare glyph
+                meant most people never saw their own artwork at all. */}
+            <ArtworkFallback src={track.cover_url} seed={track.id} sizes="40px" className="object-cover" gradientOnly>
+              <Music size={13} aria-hidden />
+            </ArtworkFallback>
             <span className={`absolute inset-0 flex items-center justify-center bg-black/55 transition-opacity ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
               {isActive ? <PauseGlyph size={13} /> : <PlayGlyph size={13} className="ml-0.5" />}
             </span>

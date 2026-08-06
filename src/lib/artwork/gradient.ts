@@ -20,13 +20,24 @@
  *     gradient looking like default CSS
  */
 
-import { adjustLightness, adjustSaturation, isValidHex, mix } from './color';
+import { adjustLightness, adjustSaturation, hexToRgb, isValidHex, mix } from './color';
+
+/** `#rrggbb` + alpha → `rgba(...)`. A two-digit hex suffix can only express
+ *  256 steps and reads as noise in the output; this keeps the CSS legible. */
+function rgba(hex: string, alpha: number): string {
+  const c = hexToRgb(hex);
+  if (!c) return hex;
+  const a = Math.max(0, Math.min(1, alpha));
+  return `rgba(${Math.round(c.r)}, ${Math.round(c.g)}, ${Math.round(c.b)}, ${a.toFixed(3)})`;
+}
 
 export interface GradientSpec {
   /** Ready for `background-image`. */
   css: string;
   /** Degrees, for callers that want to render their own. */
   angle: number;
+  /** The seeded highlight: position in percent, strength 0..1. */
+  glow: { x: number; y: number; alpha: number };
   stops: Array<{ color: string; position: number }>;
   /** The colour to draw a glyph or initial in over this background. */
   foreground: string;
@@ -116,11 +127,21 @@ export function generateGradient(palette: string[], seed: string): GradientSpec 
   // differently on each cover.
   const glowX = 20 + Math.floor(rand() * 60);
   const glowY = 15 + Math.floor(rand() * 45);
-  const glow = `radial-gradient(120% 90% at ${glowX}% ${glowY}%, ${mix(highlight, '#ffffff', 0.10)}22 0%, transparent 60%)`;
+  // Strength, spread and falloff all vary per beat, not just position. With a
+  // fixed alpha every cover carried the same sheen in a different place, which
+  // still read as one template — the difference registered as "moved" rather
+  // than "different". Varying the light itself is what makes two covers from
+  // the same palette feel like separate pieces of art.
+  const glowAlpha = 0.07 + rand() * 0.13;
+  const glowW = 95 + Math.floor(rand() * 55);
+  const glowH = 70 + Math.floor(rand() * 45);
+  const glowFalloff = 48 + Math.floor(rand() * 22);
+  const glow = `radial-gradient(${glowW}% ${glowH}% at ${glowX}% ${glowY}%, ${rgba(mix(highlight, '#ffffff', 0.10), glowAlpha)} 0%, transparent ${glowFalloff}%)`;
 
   return {
     css: `${glow}, ${linear}`,
     angle,
+    glow: { x: glowX, y: glowY, alpha: glowAlpha },
     stops,
     // Every gradient is anchored to a near-black base, so a light foreground
     // always clears contrast — no need to branch on the palette.

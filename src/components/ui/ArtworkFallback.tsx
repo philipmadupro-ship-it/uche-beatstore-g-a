@@ -34,8 +34,18 @@ interface ArtworkFallbackProps {
   priority?: boolean;
   /** Rendered centred over the gradient (an initial, a glyph). */
   children?: React.ReactNode;
-  /** Skip the producer's default image and go straight to a gradient. Used
-   *  where a repeated logo would be actively unhelpful, e.g. dense lists. */
+  /**
+   * Skip the producer's default image and go straight to a gradient.
+   *
+   * Set on the catalogue's track rows and cards. With 55 of 59 beats lacking
+   * a cover, using the default image there rendered the same logo 46 times
+   * down one screen — which reads as "nothing here" just as fast as the grey
+   * glyphs it replaced. The image is still doing its job: it is where the
+   * palette comes from. It just is not repeated as the artwork itself.
+   *
+   * Left off wherever artwork appears alone or a handful at a time, where a
+   * real image beats a generated one.
+   */
   gradientOnly?: boolean;
 }
 
