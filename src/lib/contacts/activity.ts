@@ -1,13 +1,19 @@
 /**
  * Contact activity timeline — pure builders.
  *
- * The CRM timeline is the merge of three sources:
+ * The CRM timeline is the merge of four sources:
  *   1. Stored `contact_activity` rows (manual notes, stage changes, and
  *      system events the webhooks already logged).
  *   2. Derived events from `beat_sends` (sent / opened / link-clicked) — so
  *      the timeline is correct even for sends that predate activity logging.
  *   3. Derived events from `license_purchases` matched by buyer email — the
  *      buyer→contact link, surfaced as a "Bought X" event.
+ *   4. Derived events from `buyer_favorites` matched by buyer email — a
+ *      signed-in buyer favoriting a track before they ever purchase. Without
+ *      this, that engagement was invisible to the CRM: contacts were only
+ *      ever created on a completed purchase, so a warm buyer who'd created
+ *      an account and favorited three tracks looked identical to a stranger
+ *      who'd never visited.
  *
  * Everything here is pure (no IO) so the merge/dedupe/sort logic is unit
  * tested in isolation — the route just feeds it rows. This is the
@@ -19,6 +25,7 @@ export type ActivityKind =
   | 'email_opened'
   | 'link_clicked'
   | 'track_played'
+  | 'favorited'
   | 'purchase'
   | 'note'
   | 'stage_change';
@@ -62,6 +69,11 @@ export interface PurchaseRow {
   amount_usd?: number | null;
   created_at?: string | null;
   stripe_session_id?: string | null;
+}
+
+export interface BuyerFavoriteRow {
+  track_id: string;
+  created_at: string;
 }
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
@@ -152,10 +164,32 @@ export function activityFromPurchases(
     });
 }
 
+/**
+ * buyer_favorites (matched by buyer email) → one "Favorited X" event each.
+ *
+ * A buyer favoriting a track only happens through a signed-in, persistent
+ * buyer account (see AGENTS.md "Buyer accounts") — unlike the anonymous
+ * localStorage wishlist on public browsing, this is a real signed-in-intent
+ * signal, which is why it's worth a contact-timeline event on its own.
+ */
+export function activityFromBuyerFavorites(
+  favorites: BuyerFavoriteRow[],
+  titleMap: Record<string, string>,
+): ContactActivity[] {
+  return favorites.map((f) => ({
+    id: `fav-${f.track_id}`,
+    kind: 'favorited' as const,
+    title: `Favorited ${titleMap[f.track_id] ?? 'a track'}`,
+    metadata: { track_id: f.track_id },
+    occurredAt: f.created_at,
+    derived: true,
+  }));
+}
+
 /** Stored rows → ContactActivity (kind validated loosely; unknowns kept as note). */
 export function activityFromStored(rows: StoredActivityRow[]): ContactActivity[] {
   const known: ActivityKind[] = [
-    'beat_sent', 'email_opened', 'link_clicked', 'track_played', 'purchase', 'note', 'stage_change',
+    'beat_sent', 'email_opened', 'link_clicked', 'track_played', 'favorited', 'purchase', 'note', 'stage_change',
   ];
   return rows.map((r) => ({
     id: r.id,
@@ -185,12 +219,14 @@ export function buildContactTimeline(params: {
   stored: StoredActivityRow[];
   beatSends: BeatSendRow[];
   purchases: PurchaseRow[];
+  favorites?: BuyerFavoriteRow[];
   titleMap: Record<string, string>;
 }): ContactActivity[] {
   const stored = activityFromStored(params.stored);
   const derived = [
     ...activityFromBeatSends(params.beatSends, params.titleMap),
     ...activityFromPurchases(params.purchases, params.titleMap),
+    ...activityFromBuyerFavorites(params.favorites ?? [], params.titleMap),
   ];
 
   // Index of dedupe keys already present in stored rows.
@@ -225,6 +261,8 @@ export function dedupeKey(a: ContactActivity): string | null {
       return m.beat_send_id ? `email_opened:${m.beat_send_id}` : null;
     case 'link_clicked':
       return m.beat_send_id ? `link_clicked:${m.beat_send_id}` : null;
+    case 'favorited':
+      return m.track_id ? `favorited:${m.track_id}` : null;
     default:
       return null;
   }
@@ -237,6 +275,7 @@ export interface EngagementSummary {
   opens: number;
   clicks: number;
   plays: number;
+  favorites: number;
   purchases: number;
   revenue: number;
   lastTouch: string | null;
@@ -244,7 +283,7 @@ export interface EngagementSummary {
 
 export function summarizeEngagement(timeline: ContactActivity[]): EngagementSummary {
   const s: EngagementSummary = {
-    sends: 0, opens: 0, clicks: 0, plays: 0, purchases: 0, revenue: 0, lastTouch: null,
+    sends: 0, opens: 0, clicks: 0, plays: 0, favorites: 0, purchases: 0, revenue: 0, lastTouch: null,
   };
   for (const a of timeline) {
     switch (a.kind) {
@@ -252,6 +291,7 @@ export function summarizeEngagement(timeline: ContactActivity[]): EngagementSumm
       case 'email_opened': s.opens++; break;
       case 'link_clicked': s.clicks++; break;
       case 'track_played': s.plays++; break;
+      case 'favorited': s.favorites++; break;
       case 'purchase':
         s.purchases++;
         s.revenue += Number((a.metadata?.amount_usd as number) ?? 0) || 0;

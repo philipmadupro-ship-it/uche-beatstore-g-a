@@ -2,12 +2,14 @@ import { describe, it, expect } from 'vitest';
 import {
   activityFromBeatSends,
   activityFromPurchases,
+  activityFromBuyerFavorites,
   buildContactTimeline,
   summarizeEngagement,
   dedupeKey,
   type StoredActivityRow,
   type BeatSendRow,
   type PurchaseRow,
+  type BuyerFavoriteRow,
 } from './activity';
 
 const titleMap = { t1: 'Yeat Synth', t2: 'Word Without You', t3: 'Found Me' };
@@ -64,6 +66,23 @@ describe('activityFromPurchases', () => {
   });
 });
 
+describe('activityFromBuyerFavorites', () => {
+  it('formats a favorite event with the track title', () => {
+    const favorites: BuyerFavoriteRow[] = [{ track_id: 't1', created_at: '2026-03-01T10:00:00Z' }];
+    const out = activityFromBuyerFavorites(favorites, titleMap);
+    expect(out).toHaveLength(1);
+    expect(out[0].kind).toBe('favorited');
+    expect(out[0].title).toBe('Favorited Yeat Synth');
+    expect(out[0].metadata?.track_id).toBe('t1');
+    expect(out[0].derived).toBe(true);
+  });
+
+  it('falls back to "a track" when the id has no title', () => {
+    const out = activityFromBuyerFavorites([{ track_id: 'unknown', created_at: '2026-03-01T10:00:00Z' }], titleMap);
+    expect(out[0].title).toBe('Favorited a track');
+  });
+});
+
 describe('buildContactTimeline', () => {
   it('merges stored + derived and sorts newest-first', () => {
     const stored: StoredActivityRow[] = [
@@ -108,6 +127,23 @@ describe('buildContactTimeline', () => {
     expect(tl).toHaveLength(1);
     expect(tl[0].derived).toBe(true);
   });
+
+  it('merges in favorites, sorted alongside everything else', () => {
+    const tl = buildContactTimeline({
+      stored: [],
+      beatSends: [],
+      purchases: [],
+      favorites: [{ track_id: 't1', created_at: '2026-03-01T10:00:00Z' }],
+      titleMap,
+    });
+    expect(tl).toHaveLength(1);
+    expect(tl[0].kind).toBe('favorited');
+  });
+
+  it('defaults to no favorites when the param is omitted (back-compat)', () => {
+    const tl = buildContactTimeline({ stored: [], beatSends: [], purchases: [], titleMap });
+    expect(tl).toHaveLength(0);
+  });
 });
 
 describe('dedupeKey', () => {
@@ -117,6 +153,10 @@ describe('dedupeKey', () => {
   });
   it('returns null for notes', () => {
     expect(dedupeKey({ id: 'x', kind: 'note', title: '', occurredAt: '', metadata: {} })).toBeNull();
+  });
+  it('keys favorites by track_id', () => {
+    expect(dedupeKey({ id: 'x', kind: 'favorited', title: '', occurredAt: '', metadata: { track_id: 't1' } }))
+      .toBe('favorited:t1');
   });
 });
 
@@ -137,5 +177,19 @@ describe('summarizeEngagement', () => {
     expect(s.purchases).toBe(2);
     expect(s.revenue).toBe(180);
     expect(s.lastTouch).toBe('2026-02-05T10:00:00Z'); // newest
+  });
+
+  it('counts favorites', () => {
+    const tl = buildContactTimeline({
+      stored: [],
+      beatSends: [],
+      purchases: [],
+      favorites: [
+        { track_id: 't1', created_at: '2026-01-01T10:00:00Z' },
+        { track_id: 't2', created_at: '2026-01-02T10:00:00Z' },
+      ],
+      titleMap,
+    });
+    expect(summarizeEngagement(tl).favorites).toBe(2);
   });
 });

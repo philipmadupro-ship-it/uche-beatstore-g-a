@@ -14,6 +14,7 @@ export interface ScoreInput {
   opens: number;
   clicks: number;
   plays: number;
+  favorites?: number;
   purchases: number;
   revenue: number;
   /** ISO timestamp of the most recent touch, or null. */
@@ -37,6 +38,7 @@ const W = {
   revenuePer10: 1, // +1 per $10, capped
   revenueCap: 20,
   click: 8,
+  favorite: 7,    // a signed-in buyer choosing to save a track — real intent
   play: 6,
   open: 4,
   send: 0.5,      // sending is OUR effort, not their engagement — tiny weight
@@ -60,6 +62,7 @@ export function scoreLead(input: ScoreInput): LeadScore {
     input.purchases * W.purchase +
     Math.min(input.revenue / 10 * W.revenuePer10, W.revenueCap) +
     input.clicks * W.click +
+    (input.favorites ?? 0) * W.favorite +
     input.plays * W.play +
     input.opens * W.open +
     input.sends * W.send;
@@ -80,6 +83,7 @@ export function scoreLead(input: ScoreInput): LeadScore {
     reasons.push(`${input.purchases} purchase${input.purchases === 1 ? '' : 's'}${input.revenue > 0 ? ` ($${input.revenue.toLocaleString()})` : ''}`);
   }
   if (input.clicks > 0) reasons.push(`${input.clicks} link click${input.clicks === 1 ? '' : 's'}`);
+  if ((input.favorites ?? 0) > 0) reasons.push(`${input.favorites} favorite${input.favorites === 1 ? '' : 's'}`);
   if (input.plays > 0) reasons.push(`${input.plays} play${input.plays === 1 ? '' : 's'}`);
   if (input.opens > 0) reasons.push(`${input.opens} email open${input.opens === 1 ? '' : 's'}`);
   if (input.lastTouch) {

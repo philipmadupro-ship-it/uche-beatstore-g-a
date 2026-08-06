@@ -14,7 +14,7 @@ Engineering reference (stack, layout, conventions, gotchas, env vars): see **CLA
 ## Who uses it
 
 - **The producer** (single account today). Uploads tracks, organises them into projects + playlists, picks which appear on the public storefront, sets prices and licenses, sends beats to artists, watches sales come in.
-- **Guest visitors / buyers.** Browse `/store`, preview tracks, hit Buy. No account required. Email is the only identifier we capture, and only at checkout.
+- **Guest visitors / buyers.** Browse `/store`, preview tracks, hit Buy. No account required to purchase — email at checkout is still the only identifier a one-time buyer needs to give. Buyers who want a persistent library can optionally sign in (`/store/account`, magic link or Google) to get saved favorites, listening history, and custom playlists that follow them across devices — see "Buyer accounts" below.
 - **Recipients of share links.** When the producer DMs a beat to an artist, they get a `/share/[token]` or `/projects/share/[token]` URL. The page renders one of four "variants" depending on `recipient_kind`: client, producer, rapper, friend.
 
 ## The two product surfaces
@@ -54,6 +54,10 @@ Where buyers actually buy.
 | `/store/producer/[slug]` | Producer profile (Bandcamp-style). Bio, hero, all store-listed tracks, featured playlists, featured projects. Resolved by `creator_profiles.slug` or by slugifying `display_name` as fallback. |
 | `/store/checkout` | Single checkout for both cart-mode (track licenses) and project-mode (`?project_id=…`). Email entry → Stripe embedded form. Promo code input (`?promo=CODE` deep-links). Sticky mobile total bar. Accepted-cards row + trust signals on the right. |
 | `/store/download` | Post-purchase delivery for track licenses. Resolves a `license_purchases` row; signed R2 URLs for the bought files. |
+| `/store/orders` | Order lookup by email — sends a magic-link-style token so a buyer without a persistent account can still find a past purchase. |
+| `/store/account` | Buyer sign-in — email magic link (Supabase OTP) or Google OAuth. Already-signed-in buyers redirect straight to `/store/account/me`. |
+| `/store/account/[token]` | Legacy 24h signed-token delivery view (pre-dates persistent accounts) — still the link post-purchase emails point at. Looks up purchases by email only, no session. |
+| `/store/account/me` | Persistent buyer account dashboard (session-gated). Purchases, listening history, favorites, and custom playlists that follow the buyer across devices — see "Buyer accounts" below. |
 
 ### Public share (`/share/[token]`, `/projects/share/[token]`)
 
@@ -89,6 +93,9 @@ Exclusive purchases delist the track (`store_listed=false`) so it can't be sold 
 
 ### Buyer: redeem a promo code
 Either type `?promo=CODE` in any `/store/checkout*` URL, or enter it in the cart drawer / checkout page. `/api/store/promo` validates against the `promo_codes` table (active flag, `expires_at`, `max_uses` vs `uses_count`, optional `seller_user_id` scoping). On checkout, the server distributes the discount across line items (percent → uniform per-line reduction; flat → proportional split; minimum unit_amount = $0.01 so Stripe doesn't choke).
+
+### Buyer accounts (persistent, opt-in)
+A buyer can sign in at `/store/account` (Supabase magic-link OTP or Google OAuth — the same auth system the producer uses) to get a library that follows them across devices: favorited tracks, listening history (last 100 plays), and custom playlists built from anything free/previewable/licensed. All three are keyed on the buyer's **email**, not a producer-scoped `user_id` — there's exactly one producer, so no scoping is needed. Writes only ever happen through `/api/store/me`, which is the sole path into `buyer_favorites` / `buyer_listening_history` / `buyer_playlists` (RLS blocks direct PostgREST access; see migration 060). This coexists with — and is separate from — the older `/store/account/[token]` flow: a 24h signed token, no real session, used by post-purchase delivery emails to resolve "purchases for this email" without requiring sign-in. A buyer who signs in for a persistent account and a buyer using an old delivery-email token are not automatically the same "buyer" from the app's point of view today (no merge step).
 
 ### Producer: send a beat to an artist
 `/contacts` → pick a contact → Send Beat modal → choose track + license tier + custom message → `/api/share` creates a `share_links` row (nanoid token) + `beat_sends` row (status='sent') → Resend email with `/share/<token>` → recipient opens, share variant renders based on `recipient_kind` → producer sees opens / plays / interest via `share_plays` table + `/analytics`.
@@ -159,6 +166,11 @@ calendar_events(id, user_id, title, date, end_date, type, track_ids[],
 invites(email, role, token, expires_at, used_at)
 team_members(user_id, role[owner|admin|collaborator], email, name)
 rating_history(track_id, user_id, rating, rated_at)
+
+buyer_favorites(email, track_id, created_at)
+buyer_listening_history(id, email, track_id, played_at)
+buyer_playlists(id, email, name, created_at, updated_at)
+buyer_playlist_tracks(playlist_id, track_id, position, added_at)
 ```
 
 RLS on every owned table. Service-role client (`createServiceClient()`) is only used in routes that have already verified ownership via `requireRowOwnership` / `requireUser`.
@@ -200,7 +212,7 @@ Both **genre** and **mood** are surfaced as separate facets on `/store`'s left s
 
 ## What we explicitly don't do
 
-- No accounts for buyers. Email at checkout is the only identifier.
+- No *required* accounts for buyers — purchasing never demands sign-in, and email at checkout is still the only identifier a one-time buyer has to give. Persistent buyer accounts exist as an *opt-in* (see "Buyer accounts" above) for anyone who wants a saved library across devices, not as a purchase gate.
 - No multi-tenant producer model (yet). Single `creator_profiles` row drives the store.
 - No subscriptions. Every sale is a one-time payment.
 - No Radix / Headless UI / shadcn. Primitives are hand-rolled.

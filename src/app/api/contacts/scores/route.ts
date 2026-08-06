@@ -13,9 +13,9 @@ const log = createLogger('api.contacts.scores');
  * GET /api/contacts/scores
  *
  * Batched lead scores for every contact the producer owns, computed from
- * beat-send engagement (sends/opens/clicks) + purchases matched by buyer
- * email. Returns { scores: { [contactId]: { score, tier } } } in 3 queries
- * total (not N) so it scales to 500+ contacts.
+ * beat-send engagement (sends/opens/clicks) + purchases + buyer_favorites
+ * matched by buyer email. Returns { scores: { [contactId]: { score, tier } } }
+ * in 4 queries total (not N) so it scales to 500+ contacts.
  */
 export async function GET() {
   const auth = await requireUser();
@@ -46,11 +46,11 @@ export async function GET() {
       .in('contact_id', contactIds)
       .limit(20000);
 
-    type Agg = { sends: number; opens: number; clicks: number; plays: number; purchases: number; revenue: number; lastTouch: number };
+    type Agg = { sends: number; opens: number; clicks: number; plays: number; favorites: number; purchases: number; revenue: number; lastTouch: number };
     const agg = new Map<string, Agg>();
     const touch = (id: string): Agg => {
       let a = agg.get(id);
-      if (!a) { a = { sends: 0, opens: 0, clicks: 0, plays: 0, purchases: 0, revenue: 0, lastTouch: 0 }; agg.set(id, a); }
+      if (!a) { a = { sends: 0, opens: 0, clicks: 0, plays: 0, favorites: 0, purchases: 0, revenue: 0, lastTouch: 0 }; agg.set(id, a); }
       return a;
     };
     for (const s of sends ?? []) {
@@ -79,7 +79,27 @@ export async function GET() {
       if (p.created_at) a.lastTouch = Math.max(a.lastTouch, new Date(p.created_at as string).getTime());
     }
 
-    // 4. Score each contact.
+    // 4. Favorites — the buyer-account signal (AGENTS.md "Buyer accounts").
+    // Every producer's contacts share one buyer_favorites table (no
+    // seller scoping on that table — single-producer app), so this is
+    // unfiltered and mapped to contacts by email like purchases above.
+    const emails = [...emailToContact.keys()];
+    if (emails.length > 0) {
+      const { data: favorites } = await admin
+        .from('buyer_favorites')
+        .select('email, created_at')
+        .in('email', emails)
+        .limit(20000);
+      for (const f of favorites ?? []) {
+        const cid = emailToContact.get((f.email as string).toLowerCase().trim());
+        if (!cid) continue;
+        const a = touch(cid);
+        a.favorites++;
+        if (f.created_at) a.lastTouch = Math.max(a.lastTouch, new Date(f.created_at as string).getTime());
+      }
+    }
+
+    // 5. Score each contact.
     const now = Date.now();
     const scores: Record<string, { score: number; tier: LeadTier }> = {};
     for (const id of contactIds) {
@@ -89,6 +109,7 @@ export async function GET() {
         opens: a?.opens ?? 0,
         clicks: a?.clicks ?? 0,
         plays: a?.plays ?? 0,
+        favorites: a?.favorites ?? 0,
         purchases: a?.purchases ?? 0,
         revenue: a?.revenue ?? 0,
         lastTouch: a?.lastTouch ? new Date(a.lastTouch).toISOString() : null,
