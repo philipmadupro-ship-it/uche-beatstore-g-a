@@ -65,32 +65,62 @@ export function ArtworkFallback({
     return <CoverImage src={src} alt={alt} className={className} sizes={sizes} priority={priority} />;
   }
 
-  const showEmblem = !gradientOnly && !!defaultArtworkUrl;
+  const useBrandImage = !gradientOnly && !!defaultArtworkUrl;
 
   return (
     <div
       className={cn('relative grid h-full w-full place-items-center overflow-hidden', className)}
-      style={{ backgroundImage: gradient.css }}
+      // `isolation` matters: the blend layers below must composite against the
+      // artwork only. Without it they blend with whatever card, row or page
+      // background sits behind, and the same beat looks different depending on
+      // where it is rendered.
+      style={{
+        isolation: 'isolate',
+        backgroundImage: useBrandImage ? undefined : gradient.css,
+      }}
       // Decorative: the surrounding card always carries the real title, and
       // announcing "generated artwork" on every tile is pure noise.
       role="presentation"
       aria-hidden={!alt}
       aria-label={alt || undefined}
     >
-      {showEmblem ? (
-        /* The brand image sits ON the gradient rather than replacing it.
-           Used full-bleed it was the same logo repeated down a whole screen,
-           which reads as "nothing here"; dropped entirely, the artwork lost
-           the brand. As a contained emblem over a per-item gradient it does
-           both — one recognisable mark, a different background every time.
-           `object-contain` because a logo cropped to fill is a logo ruined. */
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={defaultArtworkUrl!}
-          alt=""
-          loading="lazy"
-          className="pointer-events-none absolute inset-[18%] h-[64%] w-[64%] object-contain opacity-95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)]"
-        />
+      {useBrandImage ? (
+        /* The brand image IS the artwork; the gradient is fused into it
+           rather than sitting over it.
+           
+           As a small centred emblem the two read as two things — a sticker on
+           a background — and every tile carried the identical mark. Here the
+           image is the base at full bleed and the gradient is blended through
+           it, so each cover is one surface: the same brand image, recoloured
+           per item. `soft-light` keeps the image's own structure and shadows
+           while taking the gradient's hue, which is what makes it read as
+           tinted rather than covered. */
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={defaultArtworkUrl!}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          {/* Hue and light, blended into the image. */}
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{ backgroundImage: gradient.css, mixBlendMode: 'soft-light' }}
+          />
+          {/* A second, gentler pass in `color` pulls the image toward the
+              brand hue so two covers differ by more than brightness. */}
+          <div
+            className="pointer-events-none absolute inset-0 opacity-60"
+            style={{ backgroundImage: gradient.css, mixBlendMode: 'color' }}
+          />
+          {/* Anchors the result into the app's near-black. Without it a light
+              brand image stays light and the grid glows. */}
+          <div
+            className="pointer-events-none absolute inset-0 opacity-35"
+            style={{ backgroundImage: gradient.css }}
+          />
+        </>
       ) : children ? (
         <span style={{ color: gradient.foreground }} className="opacity-90">
           {children}

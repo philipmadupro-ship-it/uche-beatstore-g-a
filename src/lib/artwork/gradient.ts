@@ -54,13 +54,27 @@ export interface GradientSpec {
  */
 export type ArtworkKind = 'track' | 'project' | 'playlist';
 
-/** Palette offset and hue shift per kind. The shifts are small on purpose:
- *  this should separate categories, not invent three brands. */
+/** Palette offset and hue shift per kind. Enough to tell a project from a
+ *  playlist at a glance, still short of inventing three brands. */
 const KIND_TREATMENT: Record<ArtworkKind, { offset: number; hue: number }> = {
   track:    { offset: 0, hue: 0 },
-  project:  { offset: 1, hue: 18 },
-  playlist: { offset: 2, hue: -16 },
+  project:  { offset: 1, hue: 34 },
+  playlist: { offset: 2, hue: -30 },
 };
+
+/**
+ * How far an individual item may drift from the brand hue, in degrees.
+ *
+ * Picking a different palette entry per item is not enough on its own: a real
+ * brand palette is usually a handful of NEARBY hues — the working one here is
+ * five oranges and mauves — so two covers built from different entries still
+ * looked like the same cover. This rotation is what actually separates them.
+ *
+ * Capped, and symmetric about the brand hue, so the set drifts around the
+ * brand rather than away from it. Push it much past this and a catalogue
+ * stops looking like one label.
+ */
+const ITEM_HUE_SPREAD = 26;
 
 /** Used when the producer has set no artwork — the theme accent, dimmed. */
 export const FALLBACK_PALETTE = ['#C4B49C', '#6C6255'];
@@ -120,13 +134,22 @@ export function generateGradient(
 
   // Pick the lead colour from the palette rather than always the dominant
   // one — otherwise every cover in a catalogue opens with the same hue.
-  const lead = colors[Math.floor(rand() * colors.length)] ?? colors[0];
+  const pickedLead = colors[Math.floor(rand() * colors.length)] ?? colors[0];
   // The second colour is a different entry when there is one, so two-colour
   // brands still produce a gradient rather than a flat wash.
-  const others = colors.filter((c) => c !== lead);
-  const support = others.length > 0
+  const others = colors.filter((c) => c !== pickedLead);
+  const pickedSupport = others.length > 0
     ? others[Math.floor(rand() * others.length)]
-    : adjustLightness(lead, 0.18);
+    : adjustLightness(pickedLead, 0.18);
+
+  // Per-item drift. Lead and support rotate together so the pair stays
+  // harmonic — rotating them independently produces clashes rather than
+  // variety. Saturation moves too, so two items with a similar hue still
+  // differ in how vivid they read.
+  const itemHue = (rand() * 2 - 1) * ITEM_HUE_SPREAD;
+  const itemSat = 0.8 + rand() * 0.55;
+  const lead = adjustSaturation(rotateHue(pickedLead, itemHue), itemSat);
+  const support = adjustSaturation(rotateHue(pickedSupport, itemHue * 0.6), itemSat);
 
   // Angle in 15° steps: arbitrary angles look accidental, and the steps keep
   // the set feeling art-directed. Biased away from exactly vertical or

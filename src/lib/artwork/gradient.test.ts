@@ -201,6 +201,33 @@ describe('generateGradient', () => {
     }
   });
 
+  it('separates items within a kind by hue, not just by brightness', () => {
+    // The failure this guards: a brand palette of nearby hues yielded covers
+    // that differed only in lightness, so a grid of projects looked like one
+    // project repeated. Measure actual hue spread across a set.
+    for (const kind of ['project', 'playlist'] as const) {
+      const hues = Array.from({ length: 12 }, (_, i) => {
+        const { stops } = generateGradient(BRAND, `item-${i}`, kind);
+        return rgbToHsl(hexToRgb(stops[1].color)!).h;
+      });
+      const spread = Math.max(...hues) - Math.min(...hues);
+      expect(spread).toBeGreaterThan(25);
+    }
+  });
+
+  it('keeps that drift bounded so a catalogue still reads as one label', () => {
+    const hues = Array.from({ length: 40 }, (_, i) => {
+      const { stops } = generateGradient(['#7F5AF0'], `item-${i}`, 'track');
+      return rgbToHsl(hexToRgb(stops[1].color)!).h;
+    });
+    const brandHue = rgbToHsl(hexToRgb('#7F5AF0')!).h;
+    for (const h of hues) {
+      // Shortest angular distance from the brand hue.
+      const d = Math.min(Math.abs(h - brandHue), 360 - Math.abs(h - brandHue));
+      expect(d).toBeLessThanOrEqual(30);
+    }
+  });
+
   it('uses the fallback palette when given none', () => {
     expect(FALLBACK_PALETTE.every(isValidHex)).toBe(true);
   });
