@@ -551,6 +551,13 @@ export default function LibraryPage() {
 
   const currentHeroTrack = currentTrack || filtered[0] || null;
   const heroCoverUrl = currentHeroTrack?.cover_url || null;
+  const heroArtworkTags = useMemo(() => {
+    const tags = (currentHeroTrack as TrackWithInlineTags | null)?.track_tags ?? [];
+    return [
+      ...tags.filter((t) => t.category === 'genre').map((t) => t.tag),
+      ...tags.filter((t) => t.category === 'mood').map((t) => t.tag),
+    ];
+  }, [currentHeroTrack]);
 
   // ── Browse mode: 'sections' (homepage-style) or 'all' (paginated list) ──
   const [browseMode, setBrowseMode] = useState<'sections' | 'all'>('sections');
@@ -930,14 +937,19 @@ export default function LibraryPage() {
           <div className="relative z-10 flex items-end gap-5 md:gap-7 p-5 sm:p-7">
             {/* Square cover tile — like Spotify playlist header */}
             <div className={`w-[100px] h-[100px] sm:w-[132px] sm:h-[132px] rounded-2xl overflow-hidden shrink-0 border border-white/[0.08] bg-white/[0.04] transition-all duration-500 ${isPlaying ? 'ring-2 ring-white/20' : ''}`}>
-              {heroCoverUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={heroCoverUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/20 to-[#1a1a3a]/30">
-                  <Disc3 size={36} className={`text-white/30 ${isPlaying ? 'animate-[spin_6s_linear_infinite]' : ''}`} strokeWidth={0.75} />
-                </div>
-              )}
+              {/* The hero is the largest cover on the page, so it was the most
+                  visible thing still falling back to a generic disc while every
+                  card below it showed generated artwork. */}
+              <ArtworkFallback
+                src={heroCoverUrl}
+                seed={currentHeroTrack?.id ?? 'library-hero'}
+                tags={heroArtworkTags}
+                kind="track"
+                className="object-cover"
+                priority
+              >
+                <Disc3 size={36} className={isPlaying ? 'animate-[spin_6s_linear_infinite]' : ''} strokeWidth={0.75} />
+              </ArtworkFallback>
             </div>
 
             <div className="flex-1 min-w-0 pb-1">

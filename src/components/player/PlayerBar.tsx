@@ -14,7 +14,7 @@ import { AsciiCoverArt } from './AsciiCoverArt';
 import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
-import { useState, useRef, useSyncExternalStore } from 'react';
+import { useState, useRef, useSyncExternalStore, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { CoverImage } from '@/components/ui/CoverImage';
@@ -24,6 +24,7 @@ import { bandsUrlFromPeaksUrl } from '@/lib/audio/sidecar-url';
 import { useNextTrackPreload } from '@/hooks/useNextTrackPreload';
 import { useAmbientCoverColor } from '@/hooks/useAmbientCoverColor';
 import { usePlayerKeyboardShortcuts } from '@/hooks/usePlayerKeyboardShortcuts';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 const subscribeToClientSnapshot = () => () => undefined;
 const getClientSnapshot = () => true;
@@ -73,6 +74,13 @@ export function PlayerBar() {
 
   // Ambient colour from the cover art, used to tint the Now Playing overlay.
   const displayAmbient = useAmbientCoverColor(currentTrack?.cover_url);
+  const playerArtworkTags = useMemo(() => {
+    const tags = (currentTrack as (typeof currentTrack & { track_tags?: Array<{ tag: string; category?: string | null }> }) | null)?.track_tags ?? [];
+    return [
+      ...tags.filter((t) => t.category === 'genre').map((t) => t.tag),
+      ...tags.filter((t) => t.category === 'mood').map((t) => t.tag),
+    ];
+  }, [currentTrack]);
 
   usePlayerKeyboardShortcuts({
     currentTrack, progress, volume, togglePlay, next, prev, seekTo, setVolume, prevVolumeRef,
@@ -150,13 +158,19 @@ export function PlayerBar() {
               className="w-10 h-10 md:w-11 md:h-11 bg-white/[0.04] rounded-xl overflow-hidden flex-shrink-0 border border-white/[0.08] relative group/cover transition-transform duration-200 active:scale-95"
               aria-label="Open Now Playing"
             >
-              {currentTrack.cover_url ? (
-                <CoverImage src={currentTrack.cover_url} alt="" sizes="44px" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-white/30 bg-white/[0.04]">
-                  <Music size={14} />
-                </div>
-              )}
+              {/* The player is on screen on every route, so a coverless beat
+                  showed a grey glyph app-wide while its own row two inches
+                  above rendered generated artwork. */}
+              <ArtworkFallback
+                src={currentTrack.cover_url}
+                seed={currentTrack.id}
+                tags={playerArtworkTags}
+                kind="track"
+                sizes="44px"
+                className="w-full h-full object-cover"
+              >
+                <Music size={14} aria-hidden />
+              </ArtworkFallback>
               <div className="absolute inset-0 bg-black/45 backdrop-blur-[1px] opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-center justify-center">
                 <ChevronDown size={15} className="text-white rotate-180" />
               </div>
@@ -404,9 +418,18 @@ export function PlayerBar() {
                     />
                   </>
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-white/25">
-                    <Music size={44} />
-                  </div>
+                  /* No cover: the generated artwork, not a glyph. The ASCII
+                     treatment above needs a real image to sample, so it is
+                     skipped here rather than fed a gradient it cannot read. */
+                  <ArtworkFallback
+                    src={null}
+                    seed={currentTrack.id}
+                    tags={playerArtworkTags}
+                    kind="track"
+                    className="h-full w-full object-cover"
+                  >
+                    <Music size={44} aria-hidden />
+                  </ArtworkFallback>
                 )}
                 {playbackError && streamStatus.canAttemptPlayback && (
                   <button

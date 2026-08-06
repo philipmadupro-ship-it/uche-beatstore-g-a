@@ -6,6 +6,7 @@ import { Play, Music, ListMusic, Trash2, Minus, History as HistoryIcon, ArrowRig
 import { usePlayer } from '@/hooks/usePlayer';
 import { Modal } from '@/components/ui/Modal';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface QueueDrawerProps {
   onClose: () => void;
@@ -241,13 +242,9 @@ function Row({
         <GripVertical size={12} className="text-white/30 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing" />
       )}
       <div className="w-9 h-9 bg-[#0D0D0A] rounded-lg overflow-hidden shrink-0 border border-white/10 relative">
-        {track.cover_url ? (
-          <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-white/30">
-            <Music size={14} />
-          </div>
-        )}
+        <ArtworkFallback src={track.cover_url} seed={track.id} kind="track" className="w-full h-full object-cover">
+          <Music size={14} aria-hidden />
+        </ArtworkFallback>
         {isCurrent && isPlaying && (
           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
             <div className="flex gap-0.5 items-end h-3">
