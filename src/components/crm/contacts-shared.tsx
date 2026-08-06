@@ -20,6 +20,24 @@ export function KindBadge({ kind }: { kind: ContactKind }) {
   );
 }
 
+// ── Buyer pipeline stage (new_lead → contacted → negotiating → purchased /
+// repeat_buyer) — set by the storefront contact form, free-download capture,
+// and the Stripe webhook. Previously only rendered on the detail page,
+// invisible in the list where a producer actually scans for it.
+export type BuyerPipelineStatus = 'new_lead' | 'contacted' | 'negotiating' | 'purchased' | 'repeat_buyer';
+export function BuyerPipelineBadge({ status }: { status: BuyerPipelineStatus }) {
+  const won = status === 'purchased' || status === 'repeat_buyer';
+  const color = won ? '#6DC6A4' : '#7aa8e8';
+  return (
+    <span
+      className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border"
+      style={{ color, background: `${color}1a`, borderColor: `${color}40` }}
+    >
+      {status.replace(/_/g, ' ')}
+    </span>
+  );
+}
+
 // ── CRM lifecycle stage metadata ──────────────────────────────────────────
 export const STAGE_META: Record<CrmStage, { label: string; dot: string; text: string }> = {
   prospect:  { label: 'Prospect',  dot: 'bg-[#7aa8e8]', text: 'text-[#7aa8e8]' },
@@ -147,34 +165,6 @@ export function relativeDays(iso: string | undefined): string {
   if (days < 30) return `${Math.floor(days / 7)}w ago`;
   if (days < 365) return `${Math.floor(days / 30)}mo ago`;
   return `${Math.floor(days / 365)}y ago`;
-}
-
-// ── Pipeline pill (send-status progress) ──────────────────────────────────
-const PIPELINE_STAGES = ['sent', 'opened', 'interested', 'negotiating', 'placed'] as const;
-type PipelineStage = (typeof PIPELINE_STAGES)[number];
-const STAGE_FILL: Record<string, string> = {
-  sent: 'bg-white/60', opened: 'bg-[#7aa8e8]', interested: 'bg-white',
-  negotiating: 'bg-[#e8a86a]', placed: 'bg-[#6DC6A4]',
-};
-function isPipelineStage(status: string): status is PipelineStage {
-  return PIPELINE_STAGES.includes(status as PipelineStage);
-}
-export function PipelinePill({ status }: { status: string | null }) {
-  if (!status) return <span className="text-[11px] text-white/30">—</span>;
-  if (status === 'pass') {
-    return <span className="text-[10px] font-medium text-red-400/80 bg-red-500/10 px-1.5 py-0.5 rounded">Pass</span>;
-  }
-  const idx = isPipelineStage(status) ? PIPELINE_STAGES.indexOf(status) : -1;
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className="flex items-center gap-0.5">
-        {PIPELINE_STAGES.map((s, i) => (
-          <span key={s} className={`w-1.5 h-1.5 rounded-full ${i <= idx ? STAGE_FILL[s] : 'bg-white/20'}`} />
-        ))}
-      </div>
-      <span className="text-[10px] font-mono uppercase tracking-wider text-white/40 capitalize">{status}</span>
-    </div>
-  );
 }
 
 // ── Skeleton loader ───────────────────────────────────────────────────────

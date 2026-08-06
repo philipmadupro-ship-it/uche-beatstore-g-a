@@ -6,7 +6,7 @@ import { Clock, Send, Mail, BellRing, ArrowUp, ArrowDown, Check, Heart } from 'l
 import type { Contact } from '@/lib/types';
 import type { CrmStage } from '@/lib/contracts';
 import type { ContactSortMode, SortDir, ContactStatusFilter } from '@/lib/contacts/filters';
-import { ContactAvatar, ContactStageCell, ActivityDot, KindBadge, relativeDays, type ActivityTone } from './contacts-shared';
+import { ContactAvatar, ContactStageCell, ActivityDot, KindBadge, BuyerPipelineBadge, relativeDays, type ActivityTone } from './contacts-shared';
 import type { ContactKind } from '@/lib/contacts/kind';
 
 interface Props {
@@ -137,7 +137,9 @@ export function ContactsTable(p: Props) {
                       just no longer the primary "what is this person" signal. */}
                   <td className="px-2 align-middle hidden md:table-cell">
                     <KindBadge kind={p.kindByContact?.get(c.id) ?? 'contact'} />
-                    {(c.role || c.label || c.category) && (
+                    {c.buyer_pipeline_status ? (
+                      <div className="mt-0.5"><BuyerPipelineBadge status={c.buyer_pipeline_status} /></div>
+                    ) : (c.role || c.label || c.category) && (
                       <p className="text-[10px] text-white/35 truncate mt-0.5">{c.role || c.label || c.category}</p>
                     )}
                   </td>
@@ -301,10 +303,11 @@ export function ContactsTable(p: Props) {
                 )}
               </div>
 
-              {/* Row 1.5 — kind badge · revenue · favorites */}
+              {/* Row 1.5 — kind badge · pipeline stage · revenue · favorites */}
               {(kind !== 'contact' || revenue > 0 || favorites > 0) && (
-                <div className="flex items-center gap-3 mt-2 pl-11">
+                <div className="flex items-center gap-3 mt-2 pl-11 flex-wrap">
                   <KindBadge kind={kind} />
+                  {c.buyer_pipeline_status && <BuyerPipelineBadge status={c.buyer_pipeline_status} />}
                   {revenue > 0 && (
                     <span className="text-[11px] font-mono tabular-nums text-white/50">{fmtMoney(revenue)}</span>
                   )}
