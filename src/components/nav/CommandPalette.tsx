@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { usePlayer } from '@/hooks/usePlayer';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import type { Track } from '@/lib/types';
 
 interface SearchTrackResult extends Pick<Track, 'id' | 'title' | 'type' | 'cover_url' | 'audio_url'> {
@@ -53,15 +54,14 @@ export function CommandPalette() {
   const [loading, setLoading] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const panelRef = useDialogBehavior({ open, onClose: () => setOpen(false) });
 
-  // Cmd-K / Ctrl-K toggle
+  // Cmd-K / Ctrl-K toggle. Escape-to-close is handled by useDialogBehavior above.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setOpen(!useCommandPalette.getState().open);
-      } else if (e.key === 'Escape' && useCommandPalette.getState().open) {
-        setOpen(false);
       }
     };
     window.addEventListener('keydown', handler);
@@ -187,7 +187,12 @@ export function CommandPalette() {
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-full max-w-xl bg-[#090907] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-200"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+        tabIndex={-1}
+        className="w-full max-w-xl bg-[#090907] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-200 focus:outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Input */}

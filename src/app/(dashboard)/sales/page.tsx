@@ -35,6 +35,7 @@ interface Sale {
   status: 'paid' | 'refunded' | 'disputed' | 'failed' | 'expired';
   download_unlocked: boolean | null;
   needs_stems_upload?: boolean;
+  needs_refund_review?: boolean;
   created_at: string;
 }
 
@@ -47,7 +48,7 @@ interface Totals {
 
 const FILTERS = ['All', 'Tracks', 'Projects'] as const;
 type Filter = (typeof FILTERS)[number];
-const STATUS_FILTERS = ['Any status', 'Paid', 'Needs stems', 'Issues'] as const;
+const STATUS_FILTERS = ['Any status', 'Paid', 'Needs stems', 'Needs refund review', 'Issues'] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 interface Offer {
@@ -101,6 +102,18 @@ export default function SalesPage() {
   const [statsExpanded, setStatsExpanded] = useState(false);
   // Client-side pagination — keeps the list fast at any catalogue size.
   const PAGE_SIZE = 50;
+
+  // Deep-link support for the Home action digest (?status=..., ?view=offers).
+  // Reads window.location directly (rather than useSearchParams) so this page
+  // doesn't need a Suspense boundary just for a one-time initial read.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('status');
+    if (status && (STATUS_FILTERS as readonly string[]).includes(status)) {
+      setStatusFilter(status as StatusFilter);
+    }
+    if (params.get('view') === 'offers') setView('offers');
+  }, []);
   const [page, setPage] = useState(0);
 
   useEffect(() => {
@@ -134,6 +147,7 @@ export default function SalesPage() {
       if (filter === 'Projects' && s.kind !== 'project') return false;
       if (statusFilter === 'Paid' && s.status !== 'paid') return false;
       if (statusFilter === 'Needs stems' && !s.needs_stems_upload) return false;
+      if (statusFilter === 'Needs refund review' && !s.needs_refund_review) return false;
       if (statusFilter === 'Issues' && !['refunded', 'disputed', 'failed', 'expired'].includes(s.status)) return false;
       if (search.trim()) {
         const q = search.toLowerCase();
@@ -623,6 +637,8 @@ function SaleRow({ sale }: { sale: Sale }) {
   const [resending, setResending] = useState(false);
   const [delivering, setDelivering] = useState(false);
   const [delivered, setDelivered] = useState(false);
+  const [resolvingRefundReview, setResolvingRefundReview] = useState(false);
+  const [refundReviewResolved, setRefundReviewResolved] = useState(false);
 
   const handleDeliverStems = async () => {
     if (delivering) return;
@@ -640,6 +656,24 @@ function SaleRow({ sale }: { sale: Sale }) {
       toast.error('Could not deliver', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setDelivering(false);
+    }
+  };
+  const handleResolveRefundReview = async () => {
+    if (resolvingRefundReview) return;
+    setResolvingRefundReview(true);
+    try {
+      const res = await fetch('/api/sales/resolve-refund-review', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purchase_id: sale.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setRefundReviewResolved(true);
+      toast.success('Marked reviewed');
+    } catch (err: unknown) {
+      toast.error('Could not update', err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setResolvingRefundReview(false);
     }
   };
   const handleResend = async () => {
@@ -661,7 +695,7 @@ function SaleRow({ sale }: { sale: Sale }) {
     }
   };
 
-  const stemsBadges = (
+  const statusBadges = (
     <>
       {sale.needs_stems_upload && !delivered && (
         <span className="shrink-0 inline-flex items-center gap-1.5">
@@ -685,6 +719,25 @@ function SaleRow({ sale }: { sale: Sale }) {
       {delivered && (
         <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-[#6DC6A4]/15 border border-[#6DC6A4]/30 text-[#6DC6A4]">
           <Check size={9} /> Delivered
+        </span>
+      )}
+      {sale.needs_refund_review && !refundReviewResolved && (
+        <span className="shrink-0 inline-flex items-center gap-1.5">
+          <span
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-red-500/15 border border-red-500/35 text-red-400"
+            title="This exclusive was already sold to someone else when this payment landed — refund the buyer via Stripe"
+          >
+            Needs refund review
+          </span>
+          <button
+            onClick={handleResolveRefundReview}
+            disabled={resolvingRefundReview}
+            title="Mark reviewed once you've refunded the buyer"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-[0.15em] bg-white/[0.06] border border-white/10 text-white/70 hover:bg-white/[0.10] hover:text-white transition-colors disabled:opacity-40"
+          >
+            {resolvingRefundReview ? <Loader2 size={9} className="animate-spin" /> : <Check size={9} />}
+            Mark reviewed
+          </button>
         </span>
       )}
     </>
@@ -730,7 +783,7 @@ function SaleRow({ sale }: { sale: Sale }) {
         <div className="min-w-0">
           <p className="text-[12px] text-white truncate flex items-center gap-2">
             <span className="truncate">{sale.item_label}</span>
-            {stemsBadges}
+            {statusBadges}
           </p>
           {sale.license_type && (
             <p className="text-[9px] font-mono text-white/40 uppercase tracking-wider mt-0.5">
@@ -773,7 +826,7 @@ function SaleRow({ sale }: { sale: Sale }) {
             <Icon size={10} />
             {sale.kind}{sale.license_type ? ` · ${sale.license_type}` : ''}
           </span>
-          {stemsBadges}
+          {statusBadges}
           <span className="ml-auto flex min-h-8 items-center gap-2.5 rounded-full border border-white/10 bg-[#090907] px-2.5">{actions}</span>
         </div>
       </div>

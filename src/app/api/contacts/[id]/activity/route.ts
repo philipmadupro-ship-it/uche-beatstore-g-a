@@ -10,6 +10,7 @@ import {
   type StoredActivityRow,
   type BeatSendRow,
   type PurchaseRow,
+  type BuyerFavoriteRow,
 } from '@/lib/contacts/activity';
 
 export const runtime = 'nodejs';
@@ -20,8 +21,8 @@ const log = createLogger('api.contacts.activity');
 /**
  * GET  /api/contacts/[id]/activity
  *   Full CRM timeline for a contact: merge of stored contact_activity rows,
- *   derived beat-send events, and matched purchases (buyer email = contact
- *   email). Returns { timeline, summary }.
+ *   derived beat-send events, matched purchases, and matched buyer_favorites
+ *   (buyer email = contact email). Returns { timeline, summary }.
  *
  * POST /api/contacts/[id]/activity
  *   Add a manual note (or other owner-authored event) to the timeline.
@@ -71,10 +72,26 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       purchases = (pur ?? []) as PurchaseRow[];
     }
 
+    // 4. Favorites matched by buyer email — a signed-in buyer saving a
+    // track before they've ever bought anything. See AGENTS.md "Buyer
+    // accounts"; this is the whole reason a contact can now exist without
+    // a purchase behind it.
+    let favorites: BuyerFavoriteRow[] = [];
+    if (contact?.email) {
+      const { data: favs } = await admin
+        .from('buyer_favorites')
+        .select('track_id, created_at')
+        .eq('email', contact.email.toLowerCase().trim())
+        .order('created_at', { ascending: false })
+        .limit(200);
+      favorites = (favs ?? []) as BuyerFavoriteRow[];
+    }
+
     // Title map for every referenced track id
     const trackIds = new Set<string>();
     (beatSends ?? []).forEach((b) => (b.track_ids ?? []).forEach((t: string) => trackIds.add(t)));
     purchases.forEach((p) => (p.track_ids ?? []).forEach((t: string) => trackIds.add(t)));
+    favorites.forEach((f) => trackIds.add(f.track_id));
     let titleMap: Record<string, string> = {};
     if (trackIds.size > 0) {
       const { data: tracks } = await admin
@@ -88,6 +105,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       stored: (stored ?? []) as StoredActivityRow[],
       beatSends: (beatSends ?? []) as BeatSendRow[],
       purchases,
+      favorites,
       titleMap,
     });
     const summary = summarizeEngagement(timeline);

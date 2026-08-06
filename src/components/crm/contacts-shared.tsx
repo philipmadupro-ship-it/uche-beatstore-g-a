@@ -5,6 +5,20 @@ import { Loader2 } from 'lucide-react';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { CRM_STAGES, type CrmStage } from '@/lib/contracts';
 import { toast } from '@/hooks/useToast';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { KIND_META, type ContactKind } from '@/lib/contacts/kind';
+
+// ── Contact kind badge (buyer/artist/lead/contact) ─────────────────────────
+// "What is this person to me?", derived from behavior — see lib/contacts/kind.ts.
+export function KindBadge({ kind }: { kind: ContactKind }) {
+  const m = KIND_META[kind];
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: m.color }} />
+      <span className="text-[11px] font-medium" style={{ color: m.color }}>{m.label}</span>
+    </span>
+  );
+}
 
 // ── CRM lifecycle stage metadata ──────────────────────────────────────────
 export const STAGE_META: Record<CrmStage, { label: string; dot: string; text: string }> = {
@@ -25,10 +39,11 @@ const ACTIVITY_META: Record<ActivityTone, { label: string; dot: string; text: st
 
 /** Compact dot + label, no big bubble. Read-only by default; clickable to filter. */
 export function ActivityDot({ tone, onClick, active }: { tone: ActivityTone; onClick?: (t: ActivityTone) => void; active?: boolean }) {
+  const reducedMotion = useReducedMotion();
   const m = ACTIVITY_META[tone];
   const inner = (
     <span className="inline-flex items-center gap-1.5">
-      <span className={`w-1.5 h-1.5 rounded-full ${m.dot} ${tone === 'active' ? 'animate-pulse' : ''}`} />
+      <span className={`w-1.5 h-1.5 rounded-full ${m.dot} ${tone === 'active' && !reducedMotion ? 'animate-pulse' : ''}`} />
       <span className={`text-[11px] font-medium ${m.text}`}>{m.label}</span>
     </span>
   );
@@ -38,7 +53,7 @@ export function ActivityDot({ tone, onClick, active }: { tone: ActivityTone; onC
       onClick={(e) => { e.stopPropagation(); onClick(tone); }}
       className={`inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md transition-colors ${active ? 'bg-[var(--accent-tint)] ring-1 ring-[var(--accent-dim)]/40' : 'hover:bg-white/[0.05]'}`}
     >
-      <span className={`w-1.5 h-1.5 rounded-full ${m.dot} ${tone === 'active' ? 'animate-pulse' : ''}`} />
+      <span className={`w-1.5 h-1.5 rounded-full ${m.dot} ${tone === 'active' && !reducedMotion ? 'animate-pulse' : ''}`} />
       <span className={`text-[11px] font-medium ${m.text}`}>{m.label}</span>
     </button>
   );

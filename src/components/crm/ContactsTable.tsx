@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Clock, Send, Mail, BellRing, ArrowUp, ArrowDown, Check } from 'lucide-react';
+import { Clock, Send, Mail, BellRing, ArrowUp, ArrowDown, Check, Heart } from 'lucide-react';
 import type { Contact } from '@/lib/types';
 import type { CrmStage } from '@/lib/contracts';
 import type { ContactSortMode, SortDir, ContactStatusFilter } from '@/lib/contacts/filters';
-import { ContactAvatar, ContactStageCell, ActivityDot, relativeDays, type ActivityTone } from './contacts-shared';
+import { ContactAvatar, ContactStageCell, ActivityDot, KindBadge, relativeDays, type ActivityTone } from './contacts-shared';
+import type { ContactKind } from '@/lib/contacts/kind';
 
 interface Props {
   contacts: Contact[];                         // paginated slice
@@ -24,6 +25,9 @@ interface Props {
   latestStatusByContact: Map<string, string>;
   leadScoreByContact?: Map<string, number>;
   leadTierByContact?: Map<string, string>;
+  kindByContact?: Map<string, ContactKind>;
+  revenueByContact?: Map<string, number>;
+  favoritesByContact?: Map<string, number>;
   toneFor: (id: string) => ActivityTone;
   statusFilter: ContactStatusFilter;
   onFilterTone: (t: ActivityTone) => void;
@@ -41,6 +45,13 @@ interface Props {
 }
 
 const LEAD_TINTS: Record<string, string> = { hot: '#E8896A', warm: 'rgba(255,255,255,0.9)', cold: '#7d92b0', new: 'rgba(255,255,255,0.5)' };
+// Text labels alongside the tint — a dot's color alone isn't an accessible
+// signal (WCAG 1.4.1 / "don't convey meaning by color alone").
+const LEAD_LABELS: Record<string, string> = { hot: 'Hot', warm: 'Warm', cold: 'Cold', new: 'New' };
+
+function fmtMoney(n: number): string {
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+}
 
 function SortHeader({ label, col, active, dir, onSort, className }: { label: string; col: ContactSortMode; active: boolean; dir: SortDir; onSort: (c: ContactSortMode) => void; className?: string }) {
   return (
@@ -67,7 +78,7 @@ export function ContactsTable(p: Props) {
                 <input type="checkbox" checked={p.allPageSelected} onChange={p.onToggleSelectPage} aria-label="Select page" className="accent-[var(--accent)] cursor-pointer" />
               </th>
               <SortHeader label="Contact" col="name" active={p.sortMode === 'name'} dir={p.sortDir} onSort={p.onSort} className="px-2" />
-              <th className="text-left font-mono uppercase tracking-wider text-[10px] text-white/60 font-normal px-2 hidden md:table-cell">Role</th>
+              <th className="text-left font-mono uppercase tracking-wider text-[10px] text-white/60 font-normal px-2 hidden md:table-cell">Kind</th>
               <th className="text-left font-mono uppercase tracking-wider text-[10px] text-white/60 font-normal px-2 w-[150px]">Stage</th>
               <SortHeader label="Last Sent" col="lastSent" active={p.sortMode === 'lastSent'} dir={p.sortDir} onSort={p.onSort} className="px-2 w-[130px] hidden sm:table-cell" />
               <th className="text-left font-mono uppercase tracking-wider text-[10px] text-white/60 font-normal px-2 hidden lg:table-cell">Tags</th>
@@ -121,9 +132,14 @@ export function ContactsTable(p: Props) {
                     </div>
                   </td>
 
-                  {/* Role / Category */}
+                  {/* Kind (derived from behavior) + the free-text role/label/category
+                      underneath, demoted rather than dropped — still real data,
+                      just no longer the primary "what is this person" signal. */}
                   <td className="px-2 align-middle hidden md:table-cell">
-                    <p className="text-[12px] text-white/80 truncate">{c.role || c.label || c.category || '—'}</p>
+                    <KindBadge kind={p.kindByContact?.get(c.id) ?? 'contact'} />
+                    {(c.role || c.label || c.category) && (
+                      <p className="text-[10px] text-white/35 truncate mt-0.5">{c.role || c.label || c.category}</p>
+                    )}
                   </td>
 
                   {/* Stage (editable) */}
@@ -159,18 +175,41 @@ export function ContactsTable(p: Props) {
                     ) : <span className="text-white/20">—</span>}
                   </td>
 
-                  {/* Lead score + tier dot */}
+                  {/* Lead tier (text label, not just a colored dot — a color alone
+                      isn't an accessible signal) + score, with revenue and
+                      favorites riding underneath when either is present. */}
                   <td className="px-2 align-middle hidden md:table-cell">
                     {(() => {
                       const tier = p.leadTierByContact?.get(c.id);
                       const score = p.leadScoreByContact?.get(c.id) ?? 0;
-                      if (!tier || tier === 'new') return <span className="text-white/20">—</span>;
-                      const clr = LEAD_TINTS[tier] ?? 'rgba(255,255,255,0.5)';
+                      const revenue = p.revenueByContact?.get(c.id) ?? 0;
+                      const favorites = p.favoritesByContact?.get(c.id) ?? 0;
+                      if ((!tier || tier === 'new') && revenue === 0 && favorites === 0) {
+                        return <span className="text-white/20">—</span>;
+                      }
+                      const clr = LEAD_TINTS[tier ?? 'new'] ?? 'rgba(255,255,255,0.5)';
                       return (
-                        <span className="inline-flex items-center gap-1.5" title={`${tier} lead · score ${score}`}>
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: clr, boxShadow: `0 0 6px ${clr}66` }} />
-                          <span className="text-[11px] font-mono tabular-nums" style={{ color: clr }}>{score}</span>
-                        </span>
+                        <div>
+                          {tier && tier !== 'new' && (
+                            <span className="inline-flex items-center gap-1.5" title={`${LEAD_LABELS[tier]} lead · score ${score}`}>
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: clr, boxShadow: `0 0 6px ${clr}66` }} />
+                              <span className="text-[11px] font-medium tabular-nums" style={{ color: clr }}>
+                                {LEAD_LABELS[tier]} · {score}
+                              </span>
+                            </span>
+                          )}
+                          {(revenue > 0 || favorites > 0) && (
+                            <p className="text-[10px] font-mono tabular-nums text-white/40 mt-0.5">
+                              {revenue > 0 && fmtMoney(revenue)}
+                              {revenue > 0 && favorites > 0 && ' · '}
+                              {favorites > 0 && (
+                                <span className="inline-flex items-center gap-0.5">
+                                  <Heart size={9} className="inline" /> {favorites}
+                                </span>
+                              )}
+                            </p>
+                          )}
+                        </div>
                       );
                     })()}
                   </td>
@@ -216,6 +255,9 @@ export function ContactsTable(p: Props) {
           const showLead = tier && tier !== 'new';
           const leadClr = showLead ? (LEAD_TINTS[tier] ?? 'rgba(255,255,255,0.5)') : 'rgba(255,255,255,0.5)';
           const tags = c.tags ?? [];
+          const revenue = p.revenueByContact?.get(c.id) ?? 0;
+          const favorites = p.favoritesByContact?.get(c.id) ?? 0;
+          const kind = p.kindByContact?.get(c.id) ?? 'contact';
 
           return (
             <div
@@ -248,14 +290,31 @@ export function ContactsTable(p: Props) {
                 {showLead && (
                   <span
                     className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-full"
-                    title={`${tier} lead · score ${score}`}
+                    title={`${LEAD_LABELS[tier]} lead · score ${score}`}
                     style={{ background: `${leadClr}1f`, border: `1px solid ${leadClr}40` }}
                   >
                     <span className="w-1.5 h-1.5 rounded-full" style={{ background: leadClr }} />
-                    <span className="text-[11px] font-mono tabular-nums" style={{ color: leadClr }}>{score}</span>
+                    <span className="text-[11px] font-medium tabular-nums" style={{ color: leadClr }}>
+                      {LEAD_LABELS[tier]} · {score}
+                    </span>
                   </span>
                 )}
               </div>
+
+              {/* Row 1.5 — kind badge · revenue · favorites */}
+              {(kind !== 'contact' || revenue > 0 || favorites > 0) && (
+                <div className="flex items-center gap-3 mt-2 pl-11">
+                  <KindBadge kind={kind} />
+                  {revenue > 0 && (
+                    <span className="text-[11px] font-mono tabular-nums text-white/50">{fmtMoney(revenue)}</span>
+                  )}
+                  {favorites > 0 && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-mono tabular-nums text-white/50">
+                      <Heart size={10} /> {favorites}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Row 2 — stage · last sent + dot */}
               <div className="flex items-center justify-between gap-2 mt-3">
@@ -299,7 +358,7 @@ export function ContactsTable(p: Props) {
                 <button
                   onClick={() => p.onSend(c)}
                   aria-label={sends > 0 ? `Send another beat to ${c.name}` : `Send beat to ${c.name}`}
-                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-bold text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/30 hover:bg-white/25 active:scale-[0.98] transition-transform shadow-sm"
+                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-bold text-black bg-white shadow-sm hover:bg-white/90 active:scale-[0.98] transition-transform"
                 >
                   {sends > 0 ? <Mail size={14} /> : <Send size={14} />}
                   {sends > 0 ? 'Again' : 'Send'}

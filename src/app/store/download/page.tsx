@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -75,6 +76,7 @@ function LoadingScreen() {
 /* ─── Main portal ───────────────────────────────────────────── */
 
 function DownloadPortal() {
+  const reducedMotion = useReducedMotion();
   const searchParams = useSearchParams();
   const sessionId = searchParams?.get('session_id');
 
@@ -271,7 +273,7 @@ function DownloadPortal() {
                         : <Play size={16} fill="currentColor" className="text-white ml-0.5" />}
                     </div>
                     {isCurrent && (
-                      <div className="absolute top-1.5 left-1.5 w-1.5 h-1.5 rounded-full bg-[#6DC6A4] animate-pulse" />
+                      <div className={`absolute top-1.5 left-1.5 w-1.5 h-1.5 rounded-full bg-[#6DC6A4] ${reducedMotion ? '' : 'animate-pulse'}`} />
                     )}
                   </button>
 

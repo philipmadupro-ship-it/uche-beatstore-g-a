@@ -4,6 +4,7 @@ import { requireUser, createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { publicError } from '@/lib/api-error';
+import { createLogger } from '@/lib/log';
 import {
   buildBuyerLibraryShape,
   collectBuyerLibraryTrackIds,
@@ -15,6 +16,51 @@ import {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const log = createLogger('api.store.me');
+
+/**
+ * A signed-in buyer favoriting a track is real, self-reported intent —
+ * unlike the anonymous localStorage wishlist, they had to actually create a
+ * persistent account first. Before this, that engagement was invisible to
+ * the producer's CRM: a contact was only ever created on a completed
+ * purchase, so a warm buyer who'd favorited three tracks looked identical
+ * to a stranger who'd never visited. Best-effort and silent on failure —
+ * a CRM nicety must never break the buyer-facing favorite toggle.
+ */
+async function upsertLeadContact(
+  admin: ReturnType<typeof createServiceClient>,
+  email: string,
+  trackId: string,
+) {
+  try {
+    const { data: track } = await admin
+      .from('tracks')
+      .select('user_id')
+      .eq('id', trackId)
+      .maybeSingle();
+    const sellerUserId = (track as { user_id?: string } | null)?.user_id;
+    if (!sellerUserId) return;
+
+    // ignoreDuplicates → INSERT ... ON CONFLICT DO NOTHING: creates a lead
+    // the first time this email is seen, never touches an existing contact
+    // (their name, tags, and pipeline stage are the producer's to manage).
+    const { error } = await admin.from('contacts').upsert(
+      {
+        user_id: sellerUserId,
+        email,
+        name: email,
+        label: 'lead',
+        crm_status: 'prospect',
+        notes: 'Created a buyer account and started favoriting tracks',
+      },
+      { onConflict: 'user_id,email', ignoreDuplicates: true },
+    );
+    if (error) log.warn('lead contact upsert failed', { email, error: error.message });
+  } catch (err) {
+    log.warn('lead contact upsert threw', { email, error: err instanceof Error ? err.message : String(err) });
+  }
+}
 
 /**
  * Buyer-side profile endpoint, gated by the magic-link token (mig 060).
@@ -188,6 +234,10 @@ export async function POST(req: NextRequest) {
           .from('buyer_favorites')
           .insert({ email, track_id: parsed.data.track_id });
         if (error) throw error;
+        // Awaited, not fire-and-forget: this route runs on Vercel serverless,
+        // where the function can freeze the instant the response is sent —
+        // an un-awaited promise has no guarantee of ever finishing.
+        await upsertLeadContact(admin, email, parsed.data.track_id);
         return NextResponse.json({ ok: true, favorited: true });
       }
       case 'create_playlist': {

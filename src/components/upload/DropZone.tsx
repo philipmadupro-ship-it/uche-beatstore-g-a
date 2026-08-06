@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useDropzone, type FileRejection } from 'react-dropzone';
 import { AlertTriangle, Upload, CheckCircle2, Loader2, FileAudio, X } from 'lucide-react';
 import { analyzeAudio } from '@/lib/audio/analyze.client';
@@ -69,6 +70,7 @@ interface FileCard {
 }
 
 export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumental', openRef, variant = 'full' }: DropZoneProps) {
+  const reducedMotion = useReducedMotion();
   const enqueue = useUploadManager((s) => s.enqueue);
   const [selectedType, setSelectedType] = useState<TrackType>(() => readUploadTypeDraft(defaultType));
   const [cards, setCards] = useState<FileCard[]>([]);
@@ -393,7 +395,7 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
                     ) : card.analysisError ? (
                       <AlertTriangle size={14} className="text-[#E2C16D]" />
                     ) : (
-                      <div className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                      <div className={`w-2 h-2 rounded-full bg-white ${reducedMotion ? '' : 'animate-pulse'}`} />
                     )}
                   </div>
                 </div>

@@ -4,12 +4,14 @@
 -- them first.
 
 DROP POLICY IF EXISTS "owner_or_legacy_null" ON public.tracks;
+DROP POLICY IF EXISTS "owner_only" ON public.tracks;
 CREATE POLICY "owner_only" ON public.tracks
   FOR ALL
   USING ((SELECT auth.uid()) = user_id)
   WITH CHECK ((SELECT auth.uid()) = user_id);
 
 DROP POLICY IF EXISTS "owner_or_legacy_null" ON public.playlists;
+DROP POLICY IF EXISTS "owner_only" ON public.playlists;
 CREATE POLICY "owner_only" ON public.playlists
   FOR ALL
   USING ((SELECT auth.uid()) = user_id)
@@ -17,6 +19,7 @@ CREATE POLICY "owner_only" ON public.playlists
 
 DROP POLICY IF EXISTS "public and team access" ON public.projects;
 DROP POLICY IF EXISTS "owner_or_legacy_null" ON public.projects;
+DROP POLICY IF EXISTS "owner_only" ON public.projects;
 CREATE POLICY "owner_only" ON public.projects
   FOR ALL
   USING ((SELECT auth.uid()) = user_id)
@@ -77,6 +80,7 @@ CREATE POLICY "owner_via_track" ON public.track_versions
   );
 
 DROP POLICY IF EXISTS "owner_or_legacy_null" ON public.contacts;
+DROP POLICY IF EXISTS "owner_only" ON public.contacts;
 CREATE POLICY "owner_only" ON public.contacts
   FOR ALL
   USING ((SELECT auth.uid()) = user_id)

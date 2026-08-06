@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   Send, MailOpen, MousePointerClick, ShoppingBag, StickyNote,
-  GitBranch, Play, Clock, Loader2, Plus,
+  GitBranch, Play, Heart, Clock, Loader2, Plus,
 } from 'lucide-react';
 import type { ContactActivity, EngagementSummary, ActivityKind } from '@/lib/contacts/activity';
 import { scoreLead, TIER_META } from '@/lib/contacts/scoring';
@@ -25,6 +25,10 @@ interface Props {
   contactId: string;
   contactName: string;
   onSendBeat?: () => void;
+  /** Fired once the engagement summary loads, so a parent page (e.g. the
+   *  contact detail header) can show a Kind badge / lifetime value without
+   *  this component's self-contained fetch being duplicated. */
+  onSummary?: (summary: EngagementSummary | null) => void;
 }
 
 const KIND_META: Record<ActivityKind, { icon: React.ComponentType<{ size?: number }>; tint: string; ring: string }> = {
@@ -32,6 +36,7 @@ const KIND_META: Record<ActivityKind, { icon: React.ComponentType<{ size?: numbe
   email_opened: { icon: MailOpen,            tint: '#6DC6A4', ring: 'rgba(109,198,164,0.25)' },
   link_clicked: { icon: MousePointerClick,   tint: '#6DC6A4', ring: 'rgba(109,198,164,0.25)' },
   track_played: { icon: Play,                tint: '#c8a47a', ring: 'rgba(200,164,122,0.25)' },
+  favorited:    { icon: Heart,               tint: '#c8a84b', ring: 'rgba(200,168,75,0.25)' },
   purchase:     { icon: ShoppingBag,         tint: 'rgba(255,255,255,0.9)', ring: 'rgba(255,255,255,0.30)' },
   note:         { icon: StickyNote,          tint: 'rgba(255,255,255,0.8)', ring: 'rgba(255,255,255,0.20)' },
   stage_change: { icon: GitBranch,           tint: 'rgba(255,255,255,0.8)', ring: 'rgba(255,255,255,0.20)' },
@@ -49,7 +54,7 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export function ContactActivityTimeline({ contactId, contactName, onSendBeat }: Props) {
+export function ContactActivityTimeline({ contactId, contactName, onSendBeat, onSummary }: Props) {
   const [timeline, setTimeline] = useState<ContactActivity[]>([]);
   const [summary, setSummary] = useState<EngagementSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,12 +68,13 @@ export function ContactActivityTimeline({ contactId, contactName, onSendBeat }: 
       const data = await res.json();
       setTimeline(data.timeline ?? []);
       setSummary(data.summary ?? null);
+      onSummary?.(data.summary ?? null);
     } catch {
       // leave empty; parent shows the rest of the page regardless
     } finally {
       setLoading(false);
     }
-  }, [contactId]);
+  }, [contactId, onSummary]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -97,6 +103,7 @@ export function ContactActivityTimeline({ contactId, contactName, onSendBeat }: 
         { label: 'Sends', value: summary.sends },
         { label: 'Opens', value: summary.opens },
         { label: 'Clicks', value: summary.clicks },
+        { label: 'Favorites', value: summary.favorites, accent: summary.favorites > 0 },
         { label: 'Purchases', value: summary.purchases, accent: summary.purchases > 0 },
         { label: 'Revenue', value: summary.revenue > 0 ? `$${summary.revenue.toLocaleString()}` : '$0', accent: summary.revenue > 0 },
       ]

@@ -5,7 +5,7 @@ const NOW = Date.parse('2026-06-04T12:00:00Z');
 const daysAgo = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
 
 function input(partial: Partial<ScoreInput>): ScoreInput {
-  return { sends: 0, opens: 0, clicks: 0, plays: 0, purchases: 0, revenue: 0, lastTouch: null, now: NOW, ...partial };
+  return { sends: 0, opens: 0, clicks: 0, plays: 0, favorites: 0, purchases: 0, revenue: 0, lastTouch: null, now: NOW, ...partial };
 }
 
 describe('recencyMultiplier', () => {
@@ -69,5 +69,19 @@ describe('scoreLead', () => {
   it('flags gone-quiet contacts in reasons', () => {
     const r = scoreLead(input({ opens: 2, lastTouch: daysAgo(120) }));
     expect(r.reasons).toContain('gone quiet (90d+)');
+  });
+
+  it('favoriting without a purchase can make a lead warm', () => {
+    const r = scoreLead(input({ favorites: 3, lastTouch: daysAgo(1) }));
+    // base = 3*7 = 21 ×1 = 21 → cold (below the 28 warm threshold)
+    expect(r.score).toBe(21);
+    expect(r.tier).toBe('cold');
+    expect(r.reasons[0]).toBe('3 favorites');
+  });
+
+  it('is unaffected when favorites is omitted (back-compat)', () => {
+    const withUndefined = scoreLead({ sends: 1, opens: 1, clicks: 1, plays: 1, purchases: 0, revenue: 0, lastTouch: daysAgo(1), now: NOW });
+    const withZero = scoreLead(input({ sends: 1, opens: 1, clicks: 1, plays: 1, lastTouch: daysAgo(1) }));
+    expect(withUndefined.score).toBe(withZero.score);
   });
 });

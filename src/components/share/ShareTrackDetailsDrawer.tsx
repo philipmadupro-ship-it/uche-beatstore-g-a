@@ -4,6 +4,7 @@ import NextImage from 'next/image';
 import { SpectralWaveform } from '@/components/player/SpectralWaveform';
 import { X, Play, Pause, Music, ShoppingCart, Info, CheckCircle, XCircle, Tag } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import type { Track as CartTrack } from '@/lib/types';
 
 interface CreatorProfile {
@@ -103,6 +104,7 @@ export function ShareTrackDetailsDrawer({
   onSeek,
 }: ShareTrackDetailsDrawerProps) {
   const { addItem, setIsOpen: setCartOpen, items: cartItems } = useCart();
+  const panelRef = useDialogBehavior({ open: true, onClose });
 
   if (!track) return null;
 
@@ -181,7 +183,14 @@ export function ShareTrackDetailsDrawer({
         onClick={onClose}
       />
 
-      <div className="fixed right-0 top-0 bottom-0 w-full sm:w-[440px] bg-[#0c0c0c] border-l border-white/10 z-50 flex flex-col shadow-[0_0_60px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-300">
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${track.title} details`}
+        tabIndex={-1}
+        className="fixed right-0 top-0 bottom-0 w-full sm:w-[440px] bg-[#0c0c0c] border-l border-white/10 z-50 flex flex-col shadow-[0_0_60px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-300 focus:outline-none"
+      >
 
         {/* Header */}
         <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between bg-[#0e0c09]">
@@ -235,9 +244,9 @@ export function ShareTrackDetailsDrawer({
                 className="glass-play glass-play-surface w-16 h-16 rounded-full flex items-center justify-center"
               >
                 {isCurrentPlaying ? (
-                  <Pause size={22} fill="currentColor" />
+                  <Pause size={30} />
                 ) : (
-                  <Play size={22} className="ml-1" fill="currentColor" />
+                  <Play size={30} className="ml-1" />
                 )}
               </button>
             </div>
@@ -251,9 +260,9 @@ export function ShareTrackDetailsDrawer({
                 className="glass-play glass-play-surface w-10 h-10 rounded-full flex items-center justify-center shrink-0"
               >
                 {isCurrentPlaying ? (
-                  <Pause size={13} fill="currentColor" />
+                  <Pause size={20} />
                 ) : (
-                  <Play size={13} className="ml-0.5" fill="currentColor" />
+                  <Play size={20} className="ml-0.5" />
                 )}
               </button>
               <div className="flex-1 min-w-0">

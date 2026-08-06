@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { Sparkles } from 'lucide-react';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { TYPE_FILTERS, type TypeFilter } from './types';
 
 /* ───────── Small atoms ───────── */
@@ -157,6 +158,7 @@ interface Props {
 }
 
 export function StoreSidebar(props: Props) {
+  const panelRef = useDialogBehavior({ open: props.open, onClose: props.onClose });
   const {
     open, onClose,
     genreFilter, setGenreFilter,
@@ -503,7 +505,14 @@ export function StoreSidebar(props: Props) {
           onClick={onClose}
         />
       )}
-      <div className={`lg:hidden fixed left-0 right-0 bottom-0 z-50 bg-white/[0.02] border-t border-white/10 rounded-t-2xl shadow-[0_-8px_40px_rgba(0,0,0,0.6)] overflow-y-auto max-h-[75vh] transition-transform duration-300 ${open ? 'translate-y-0' : 'translate-y-full'}`}>
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Filters"
+        tabIndex={-1}
+        className={`lg:hidden fixed left-0 right-0 bottom-0 z-50 bg-white/[0.02] border-t border-white/10 rounded-t-2xl shadow-[0_-8px_40px_rgba(0,0,0,0.6)] overflow-y-auto max-h-[75vh] transition-transform duration-300 focus:outline-none ${open ? 'translate-y-0' : 'translate-y-full'}`}
+      >
         <div className="flex justify-center pt-3 pb-1">
           <div className="w-10 h-1 rounded-full bg-white/20" />
         </div>

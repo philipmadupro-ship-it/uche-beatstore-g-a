@@ -22,6 +22,7 @@ import { NAV_GROUPS, ALL_GROUPS, activeGroupFor, isItemActive, type NavGroup } f
 import { Popover } from '@/components/ui/Popover';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { cn } from '@/lib/utils';
 
 interface Notification {
@@ -56,6 +57,7 @@ export function TopBar() {
   const openPalette = useCommandPalette((s) => s.setOpen);
   const [activityOpen, setActivityOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const mobilePanelRef = useDialogBehavior({ open: mobileOpen, onClose: () => setMobileOpen(false) });
 
   const group = activeGroupFor(pathname);
 
@@ -326,7 +328,12 @@ export function TopBar() {
             className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in duration-200"
           />
           <aside
-            className="md:hidden fixed top-0 right-0 bottom-0 w-[min(85vw,300px)] z-50 bg-[#090907] border-l border-white/[0.06] flex flex-col animate-in slide-in-from-right duration-300"
+            ref={mobilePanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation menu"
+            tabIndex={-1}
+            className="md:hidden fixed top-0 right-0 bottom-0 w-[min(85vw,300px)] z-50 bg-[#090907] border-l border-white/[0.06] flex flex-col animate-in slide-in-from-right duration-300 focus:outline-none"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">

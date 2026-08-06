@@ -6,6 +6,7 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { PlaylistFolderSelect } from './PlaylistFolderSelect';
 import { PlaylistTagPicker } from './PlaylistTagPicker';
 import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface PlaylistLite { id: string; name: string; pinned?: boolean; cover_url?: string | null }
 
@@ -20,6 +21,8 @@ export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'r
   const [showTags, setShowTags] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const isPinned = !!playlist.pinned;
+  const menuRef = useDialogBehavior({ open, onClose: () => setOpen(false), trapFocus: false });
+  const tagsPanelRef = useDialogBehavior({ open: showTags, onClose: () => setShowTags(false) });
 
   const patch = async (body: Record<string, unknown>, label: string) => {
     setBusy(label);
@@ -74,12 +77,12 @@ export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'r
         {open && (
           <>
             <div className="fixed inset-0 z-40" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(false); }} />
-            <div onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              className={`absolute top-full mt-1 ${align === 'right' ? 'right-0' : 'left-0'} z-50 w-52 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden py-1`}>
+            <div ref={menuRef} role="menu" tabIndex={-1} onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+              className={`absolute top-full mt-1 ${align === 'right' ? 'right-0' : 'left-0'} z-50 w-52 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden py-1 focus:outline-none`}>
               {renaming ? (
                 <div className="p-2">
                   <input autoFocus value={nameDraft} onChange={(e) => setNameDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') submitRename(); if (e.key === 'Escape') setRenaming(false); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') submitRename(); if (e.key === 'Escape') { e.stopPropagation(); setRenaming(false); } }}
                     className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2.5 py-2 text-[12px] text-white focus:outline-none focus:border-white/20" />
                   <div className="flex justify-end gap-1.5 mt-2">
                     <button onClick={() => setRenaming(false)} className="px-2 py-1 text-[10px] font-mono uppercase text-white/60 hover:text-white">Cancel</button>
@@ -104,7 +107,17 @@ export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'r
       {showFolders && createPortal(<PlaylistFolderSelect playlistId={playlist.id} onClose={() => setShowFolders(false)} onSaved={onChanged} />, document.body)}
       {showTags && createPortal(
         <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowTags(false)}>
-          <div onClick={(e) => e.stopPropagation()}><PlaylistTagPicker playlistId={playlist.id} /></div>
+          <div
+            ref={tagsPanelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Edit tags"
+            tabIndex={-1}
+            className="focus:outline-none"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <PlaylistTagPicker playlistId={playlist.id} />
+          </div>
         </div>, document.body,
       )}
     </>

@@ -2,6 +2,7 @@
 
 import { X, Scissors } from 'lucide-react';
 import { StemPlayer } from '@/components/stems/StemPlayer';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface StemData {
   vocals_url: string;
@@ -32,10 +33,19 @@ interface Props {
  * the drawer's state plumbing.
  */
 export function DrawerStemOverlay({ open, status, progress, data, onClose }: Props) {
+  const panelRef = useDialogBehavior({ open, onClose });
+
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-12 backdrop-blur-xl animate-in fade-in duration-500">
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Neural stem extraction"
+      tabIndex={-1}
+      className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-12 backdrop-blur-xl animate-in fade-in duration-500 focus:outline-none"
+    >
       <div className="w-full max-w-5xl">
         <div className="flex justify-between items-center mb-8 px-4">
           <div>

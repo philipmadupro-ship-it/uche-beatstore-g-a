@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { BeatSend, Contact } from '@/lib/types';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { Mail, CheckCircle, Clock, XCircle, ArrowUpRight, Music, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 
@@ -40,6 +41,7 @@ function relativeDays(iso: string, nowMs: number): string {
 }
 
 export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
+  const reducedMotion = useReducedMotion();
   const [nowMs] = useState(() => Date.now());
   const contactMap = new Map(contacts.map((c) => [c.id, c]));
 
@@ -113,7 +115,7 @@ export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
 
                 {/* Status pill */}
                 <div className="flex items-center gap-2">
-                  <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${cfg.dot === 'bg-white/40' ? '' : 'animate-pulse'}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot} ${cfg.dot === 'bg-white/40' || reducedMotion ? '' : 'animate-pulse'}`} />
                   <span className={`text-[10px] font-mono uppercase tracking-wider ${cfg.text}`}>
                     {cfg.label}
                   </span>

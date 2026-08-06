@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_HOME_ROWS, type HomeRowConfig } from '@/lib/dashboard/home-config';
 import { getCached, setCached } from '@/lib/client-cache';
 import { usePlayer } from '@/hooks/usePlayer';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { DropZone } from '@/components/upload/DropZone';
 import { TrackCard } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
@@ -38,6 +39,7 @@ import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
 import { SellReadinessPanel } from '@/components/library/SellReadinessPanel';
+import { ActionDigestPanel } from '@/components/library/ActionDigestPanel';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { gridTemplate, resolveColumns } from '@/lib/library/columns';
 import { useLibraryColumns } from '@/hooks/useLibraryColumns';
@@ -1284,6 +1286,11 @@ export default function LibraryPage() {
           <DropZone onUploadSuccess={fetchTracks} openRef={uploadOpenRef} variant="hidden" />
         </div>
 
+        {/* Cross-surface digest first — stuck sales, pending offers, and new
+            CRM leads are fresher/more time-sensitive than catalog readiness,
+            and otherwise require checking three other pages to notice. */}
+        <ActionDigestPanel />
+
         {/* Sits immediately after upload, which is the moment a producer would
             otherwise assume the job is done. Upload previously ended in silence:
             the beat landed untagged, unpriced and unlisted with nothing saying
@@ -1695,6 +1702,7 @@ function MiniTrackCard({
   onPlay: () => void;
   onOpen: () => void;
 }) {
+  const reducedMotion = useReducedMotion();
   // Genre first, then mood — the gradient leads on the first entry, so a
   // Browse row of one genre comes out as one colour family.
   const artworkTags = useMemo(() => {
@@ -1732,7 +1740,7 @@ function MiniTrackCard({
         >
           <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
             {isPlaying
-              ? <div className="flex items-end gap-[2px] h-4">{[3,5,7,5,3].map((h,i)=><span key={i} className="w-[3px] rounded-sm bg-white animate-bounce" style={{height:h,animationDelay:`${i*80}ms`}}/>)}</div>
+              ? <div className="flex items-end gap-[2px] h-4">{[3,5,7,5,3].map((h,i)=><span key={i} className={`w-[3px] rounded-sm bg-white ${reducedMotion ? '' : 'animate-bounce'}`} style={{height:h,animationDelay:`${i*80}ms`}}/>)}</div>
               : <PlayGlyph size={15} className="text-white ml-0.5" />}
           </div>
         </button>

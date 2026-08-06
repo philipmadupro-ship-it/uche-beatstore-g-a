@@ -383,7 +383,7 @@ function CheckoutContent() {
         {/* 1. Contact Form */}
         <div className="rounded-[20px] border border-white/10 bg-white/[0.04] p-5 transition-all duration-300 md:p-6">
           <div className="flex items-center gap-3 mb-5">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-mono font-bold ${isEmailSubmitted ? 'bg-[#6DC6A4] text-black' : 'bg-white text-black'}`}>
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-mono font-bold border ${isEmailSubmitted ? 'bg-[#6DC6A4]/15 border-[#6DC6A4]/40 text-[#6DC6A4]' : 'bg-white/[0.14] border-white/20 text-white'}`}>
               {isEmailSubmitted ? <Check size={12} /> : '1'}
             </div>
             <div>

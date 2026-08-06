@@ -30,7 +30,14 @@ interface FolderRow { id: string; name: string; color?: string | null; cover_url
 
 const RECENTLY_KEY = 'antigravity-recent-playlists';
 const MAX_RECENT = 6;
-function loadRecentIds(): string[] { try { return JSON.parse(localStorage.getItem(RECENTLY_KEY) || '[]'); } catch { return []; } }
+function loadRecentIds(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RECENTLY_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 function trackRecentOpen(id: string) { const prev = loadRecentIds().filter((x) => x !== id); localStorage.setItem(RECENTLY_KEY, JSON.stringify([id, ...prev].slice(0, MAX_RECENT))); }
 
 function fmtDuration(secs: number): string {

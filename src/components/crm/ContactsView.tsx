@@ -21,6 +21,7 @@ import { ContactsToolbar, type Segment } from '@/components/crm/ContactsToolbar'
 import { ContactsTable } from '@/components/crm/ContactsTable';
 import { ContactsPagination } from '@/components/crm/ContactsPagination';
 import { ContactsTableSkeleton, type ActivityTone } from '@/components/crm/contacts-shared';
+import { deriveContactKind, type ContactKind } from '@/lib/contacts/kind';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
@@ -163,6 +164,12 @@ export function ContactsView({
   // purchases). Drives the "Hottest" sort + the per-row tier dot.
   const [leadScoreByContact, setLeadScoreByContact] = useState<Map<string, number>>(new Map());
   const [leadTierByContact, setLeadTierByContact] = useState<Map<string, string>>(new Map());
+  // Riding along with score/tier: the raw signal counts (see kind.ts) so the
+  // list can show a Buyer/Artist/Lead badge and revenue/favorites inline
+  // without a second round-trip.
+  const [revenueByContact, setRevenueByContact] = useState<Map<string, number>>(new Map());
+  const [purchasesByContact, setPurchasesByContact] = useState<Map<string, number>>(new Map());
+  const [favoritesByContact, setFavoritesByContact] = useState<Map<string, number>>(new Map());
   useEffect(() => {
     let cancelled = false;
     fetch('/api/contacts/scores')
@@ -171,12 +178,22 @@ export function ContactsView({
         if (cancelled || !d?.scores) return;
         const sMap = new Map<string, number>();
         const tMap = new Map<string, string>();
-        for (const [id, v] of Object.entries(d.scores as Record<string, { score: number; tier: string }>)) {
+        const revMap = new Map<string, number>();
+        const purMap = new Map<string, number>();
+        const favMap = new Map<string, number>();
+        type ScoreRow = { score: number; tier: string; revenue?: number; purchases?: number; favorites?: number };
+        for (const [id, v] of Object.entries(d.scores as Record<string, ScoreRow>)) {
           sMap.set(id, v.score);
           tMap.set(id, v.tier);
+          if (v.revenue) revMap.set(id, v.revenue);
+          if (v.purchases) purMap.set(id, v.purchases);
+          if (v.favorites) favMap.set(id, v.favorites);
         }
         setLeadScoreByContact(sMap);
         setLeadTierByContact(tMap);
+        setRevenueByContact(revMap);
+        setPurchasesByContact(purMap);
+        setFavoritesByContact(favMap);
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -187,6 +204,21 @@ export function ContactsView({
     for (const s of beatSends) map.set(s.contact_id, (map.get(s.contact_id) ?? 0) + 1);
     return map;
   }, [beatSends]);
+
+  // Behavioral kind (buyer/artist/lead/contact) — see lib/contacts/kind.ts
+  // for why this outranks the free-text role/label/category fields.
+  const kindByContact = useMemo(() => {
+    const map = new Map<string, ContactKind>();
+    for (const c of contacts) {
+      map.set(c.id, deriveContactKind({
+        purchases: purchasesByContact.get(c.id) ?? 0,
+        sends: sendCountByContact.get(c.id) ?? 0,
+        favorites: favoritesByContact.get(c.id) ?? 0,
+        crmStatus: c.crm_status ?? null,
+      }));
+    }
+    return map;
+  }, [contacts, purchasesByContact, sendCountByContact, favoritesByContact]);
 
   const lastSentByContact = useMemo(() => {
     const map = new Map<string, string>();
@@ -417,6 +449,9 @@ export function ContactsView({
                 latestStatusByContact={latestStatusByContact}
                 leadScoreByContact={leadScoreByContact}
                 leadTierByContact={leadTierByContact}
+                kindByContact={kindByContact}
+                revenueByContact={revenueByContact}
+                favoritesByContact={favoritesByContact}
                 toneFor={toneFor}
                 statusFilter={statusFilter}
                 onFilterTone={(t) => setStatusFilter((cur) => (cur === t ? 'all' : t))}

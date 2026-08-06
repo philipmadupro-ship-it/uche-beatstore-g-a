@@ -8,6 +8,7 @@ import { fmtDuration } from '@/lib/audio/format';
 import { ProjectOptionsMenu } from './ProjectOptionsMenu';
 import { ProjectTagPicker } from './ProjectTagPicker';
 import { DeliveryPackButton } from './DeliveryPackButton';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface Project {
   id: string;
@@ -94,6 +95,7 @@ export function ProjectDetailHeader(props: Props) {
   } = props;
 
   const [tagsOpen, setTagsOpen] = useState(false);
+  const tagsMenuRef = useDialogBehavior({ open: tagsOpen, onClose: () => setTagsOpen(false), trapFocus: false });
 
   return (
     <div className={`flex gap-4 sm:gap-7 mb-6 sm:mb-10 ${hideCover ? '' : 'pb-6 sm:pb-8 border-b border-[#0D0D0A]'}`}>
@@ -191,7 +193,7 @@ export function ProjectDetailHeader(props: Props) {
                 {tagsOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setTagsOpen(false)} />
-                    <div className="absolute top-full left-0 mt-2 z-50">
+                    <div ref={tagsMenuRef} role="menu" tabIndex={-1} className="absolute top-full left-0 mt-2 z-50 focus:outline-none">
                       <ProjectTagPicker projectId={project.id} />
                     </div>
                   </>

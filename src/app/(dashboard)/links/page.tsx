@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { ListContainer, ListRow } from '@/components/ui/ListRow';
 import { QuickShareModal } from '@/components/share/QuickShareModal';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -602,6 +603,7 @@ function LinkPopup({
   expired: boolean;
   formatDate: (iso: string) => string;
 }) {
+  const panelRef = useDialogBehavior({ open: true, onClose });
   const tracks = link.tracks ?? [];
 
   // Edit mode: when on, the popup body swaps out for a form. Saving
@@ -644,9 +646,14 @@ function LinkPopup({
       onClick={onClose}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={link.title || 'Share link details'}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          'w-full md:max-w-[480px] rounded-t-3xl md:rounded-2xl overflow-hidden relative',
+          'w-full md:max-w-[480px] rounded-t-3xl md:rounded-2xl overflow-hidden relative focus:outline-none',
           'bg-gradient-to-b from-[#0A0A0A]/95 via-[#070707]/95 to-[#090907]/98',
           'backdrop-blur-2xl border border-white/[0.06]',
           'shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset]',
