@@ -103,21 +103,30 @@ export function ArtworkFallback({
             loading="lazy"
             className="absolute inset-0 h-full w-full object-cover"
           />
-          {/* Hue and light, blended into the image. */}
+          {/* Structure and light. Back to `soft-light`: `hard-light` crushed
+              the base image into flat colour, and the texture is what makes
+              these read as artwork rather than as a shape. */}
           <div
             className="pointer-events-none absolute inset-0"
             style={{ backgroundImage: gradient.css, mixBlendMode: 'soft-light' }}
           />
-          {/* A second, gentler pass in `color` pulls the image toward the
-              brand hue so two covers differ by more than brightness. */}
+          {/* Hue. This is the pass that decides what colour a cover IS, so it
+              still carries the most weight — but well short of replacing the
+              image's own colour entirely. */}
           <div
-            className="pointer-events-none absolute inset-0 opacity-60"
+            className="pointer-events-none absolute inset-0 opacity-70"
             style={{ backgroundImage: gradient.css, mixBlendMode: 'color' }}
+          />
+          {/* Deepens shadow without flattening the image the way a plain
+              scrim would. */}
+          <div
+            className="pointer-events-none absolute inset-0 opacity-30"
+            style={{ backgroundImage: gradient.css, mixBlendMode: 'overlay' }}
           />
           {/* Anchors the result into the app's near-black. Without it a light
               brand image stays light and the grid glows. */}
           <div
-            className="pointer-events-none absolute inset-0 opacity-35"
+            className="pointer-events-none absolute inset-0 opacity-30"
             style={{ backgroundImage: gradient.css }}
           />
         </>

@@ -1,11 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ImagePlus, Loader2, Trash2 } from 'lucide-react';
+import { ImagePlus, Loader2, Trash2, Plus, X } from 'lucide-react';
 import { uploadImageFile, getImageUploadPreflightError } from '@/lib/upload/image-upload-client';
 import { extractPaletteFromFile, extractPaletteFromUrl } from '@/lib/artwork/extract.client';
 import { generateGradient } from '@/lib/artwork/gradient';
-import { normalisePalette, type PaletteEntry } from '@/lib/artwork/palette';
+import {
+  normalisePalette, setPaletteColor, addPaletteColor, removePaletteColor,
+  MAX_PALETTE, type PaletteEntry,
+} from '@/lib/artwork/palette';
 import { useBrandArtworkStore } from '@/hooks/useBrandArtwork';
 import { toast } from '@/hooks/useToast';
 import { CoverImage } from '@/components/ui/CoverImage';
@@ -34,6 +37,20 @@ export function DefaultArtworkCard() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { load(); }, [load]);
+
+  /** Save a hand-curated palette, keeping the current artwork. */
+  const persistPalette = async (colors: string[]) => {
+    const payload = colors.map((hex) => ({ hex, weight: 1 / colors.length }));
+    // Optimistic: the swatches and previews update on the same tick as the
+    // click. A colour picker that lags a round trip feels broken.
+    applyToStore({ defaultArtworkUrl: storeUrl, palette: colors });
+    const res = await fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ default_artwork_url: storeUrl, default_artwork_palette: payload }),
+    });
+    if (!res.ok) toast.error('Could not save colours');
+  };
 
   const persist = async (url: string | null, palette: PaletteEntry[] | null) => {
     const res = await fetch('/api/profile', {
@@ -107,8 +124,9 @@ export function DefaultArtworkCard() {
     }
   };
 
-  // Three sample seeds so the producer sees the variation, not one result.
-  const samples = ['sample-one', 'sample-two', 'sample-three']
+  // Six seeds, because there are six compositions — three previews could show
+  // the same shape twice and misrepresent the range.
+  const samples = ['s-1', 's-2', 's-3', 's-4', 's-5', 's-6']
     .map((seed) => generateGradient(storePalette, seed));
 
   return (
@@ -163,21 +181,49 @@ export function DefaultArtworkCard() {
             )}
           </div>
 
-          {storePalette.length > 0 ? (
-            <div className="flex items-center gap-1.5">
-              <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40">Brand</span>
-              {storePalette.map((hex) => (
-                <span
-                  key={hex}
-                  title={hex}
-                  className="size-4 rounded-full border border-white/15"
-                  style={{ backgroundColor: hex }}
+          {/* Editable palette. Extraction is a starting point, not a verdict —
+              it reads what is most present in the image, which is not always
+              what a producer considers their colour. Each swatch is a native
+              colour input, so picking is the OS picker rather than a
+              hand-rolled one that will be worse. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-white/40">Brand</span>
+            {storePalette.map((hex, i) => (
+              <span key={`${hex}-${i}`} className="group/sw relative">
+                <input
+                  type="color"
+                  value={hex}
+                  aria-label={`Brand colour ${i + 1}`}
+                  onChange={(e) => void persistPalette(setPaletteColor(storePalette, i, e.target.value))}
+                  className="size-6 cursor-pointer rounded-full border border-white/20 bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch]:border-none"
                 />
-              ))}
-            </div>
-          ) : (
+                {storePalette.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => void persistPalette(removePaletteColor(storePalette, i))}
+                    aria-label={`Remove brand colour ${i + 1}`}
+                    className="absolute -right-1 -top-1 hidden size-3.5 place-items-center rounded-full border border-white/20 bg-[#0e0c09] text-white/70 group-hover/sw:grid hover:text-white"
+                  >
+                    <X size={8} />
+                  </button>
+                )}
+              </span>
+            ))}
+            {storePalette.length < MAX_PALETTE && (
+              <button
+                type="button"
+                onClick={() => void persistPalette(addPaletteColor(storePalette, '#7f5af0'))}
+                aria-label="Add a brand colour"
+                title="Add colour"
+                className="tap grid size-6 place-items-center rounded-full border border-dashed border-white/25 text-white/50 transition-colors hover:border-white/40 hover:text-white"
+              >
+                <Plus size={11} />
+              </button>
+            )}
+          </div>
+          {storePalette.length === 0 && (
             <p className="font-mono text-[9px] uppercase tracking-[0.15em] text-white/30">
-              No brand colours yet — gradients use the theme accent
+              Upload artwork to extract colours, or add them by hand
             </p>
           )}
         </div>
@@ -189,11 +235,12 @@ export function DefaultArtworkCard() {
         <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-white/40">
           Generated covers for beats without artwork
         </p>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
           {samples.map((g, i) => (
             <div
               key={i}
-              className="h-16 flex-1 rounded-lg border border-white/10"
+              title={g.composition}
+              className="aspect-square rounded-lg border border-white/10"
               style={{ backgroundImage: g.css }}
             />
           ))}

@@ -123,3 +123,36 @@ export function normalisePalette(raw: unknown): string[] {
   }
   return out;
 }
+
+/** Most colours a producer may curate. Past this the gradient stops being a
+ *  brand and starts being a rainbow, and the picker becomes a spreadsheet. */
+export const MAX_PALETTE = 8;
+
+/** Replace one colour by index, returning a new array. */
+export function setPaletteColor(palette: string[], index: number, hex: string): string[] {
+  if (index < 0 || index >= palette.length) return palette;
+  const next = [...palette];
+  next[index] = hex.toLowerCase();
+  return next;
+}
+
+/** Append a colour, refusing duplicates and respecting the cap. */
+export function addPaletteColor(palette: string[], hex: string): string[] {
+  const normalised = hex.trim().toLowerCase();
+  if (palette.length >= MAX_PALETTE) return palette;
+  if (palette.includes(normalised)) return palette;
+  return [...palette, normalised];
+}
+
+/**
+ * Remove a colour, but never the last one.
+ *
+ * An empty palette silently falls back to the theme accent, so allowing it
+ * would make "I removed my colours and my artwork went beige" look like a bug
+ * rather than the consequence it is.
+ */
+export function removePaletteColor(palette: string[], index: number): string[] {
+  if (palette.length <= 1) return palette;
+  if (index < 0 || index >= palette.length) return palette;
+  return palette.filter((_, i) => i !== index);
+}

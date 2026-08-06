@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
-  generateGradient, gradientCss, hashSeed, seededRandom, FALLBACK_PALETTE,
+  generateGradient, gradientCss, hashSeed, seededRandom, FALLBACK_PALETTE, COMPOSITIONS,
 } from './gradient';
-import { quantizePalette, normalisePalette } from './palette';
+import {
+  quantizePalette, normalisePalette, setPaletteColor, addPaletteColor,
+  removePaletteColor, MAX_PALETTE,
+} from './palette';
 import {
   hexToRgb, rgbToHex, rgbToHsl, hslToRgb, luminance, adjustLightness, mix, isValidHex,
 } from './color';
@@ -228,6 +231,81 @@ describe('generateGradient', () => {
     }
   });
 
+  it('survives a catalogue of a thousand beats without visual collisions', () => {
+    /* The real constraint. Colour alone does not scale: one brand palette
+       runs out of perceptibly-different hues long before it runs out of ids,
+       and past a few dozen "another slightly different purple" stops reading
+       as a different cover.
+
+       So distinctness is measured the way an eye would: quantise each cover
+       into the buckets a person could actually tell apart — its shape, its
+       hue to within 15°, its lightness, its angle, its light position — and
+       count how many covers land in the same bucket. */
+    const signature = (seed: string) => {
+      const g = generateGradient(BRAND, seed, 'track');
+      const hsl = rgbToHsl(hexToRgb(g.stops[1].color)!);
+      return [
+        g.composition,
+        Math.round(hsl.h / 15),
+        Math.round(hsl.l * 12),
+        Math.round(g.angle / 15),
+        Math.round(g.glow.x / 12),
+        Math.round(g.glow.y / 12),
+      ].join('|');
+    };
+
+    const seeds = Array.from({ length: 1000 }, (_, i) => `beat-${i}-${(i * 7919) % 104729}`);
+    const buckets = new Set(seeds.map(signature));
+
+    // Every archetype has to actually get used, or the space is a sixth of
+    // what it looks like on paper.
+    const shapes = new Set(seeds.map((s) => generateGradient(BRAND, s, 'track').composition));
+    expect(shapes.size).toBe(COMPOSITIONS.length);
+
+    // Distinct perceptual buckets across a thousand covers.
+    expect(buckets.size).toBeGreaterThan(900);
+  });
+
+  it('spreads compositions roughly evenly rather than favouring one shape', () => {
+    const counts = new Map<string, number>();
+    for (let i = 0; i < 600; i++) {
+      const c = generateGradient(BRAND, `beat-${i}`, 'track').composition;
+      counts.set(c, (counts.get(c) ?? 0) + 1);
+    }
+    for (const shape of COMPOSITIONS) {
+      const n = counts.get(shape) ?? 0;
+      // Even split would be 100; allow wide slack, catch a shape never drawn
+      // or one swallowing the set.
+      expect(n).toBeGreaterThan(45);
+      expect(n).toBeLessThan(200);
+    }
+  });
+
+  it('keeps every archetype dark and valid, not just the default one', () => {
+    for (let i = 0; i < 120; i++) {
+      const g = generateGradient(BRAND, `beat-${i}`, 'track');
+      expect(g.css).not.toContain('NaN');
+      expect(g.css).not.toContain('undefined');
+      for (const stop of g.stops) {
+        expect(luminance(hexToRgb(stop.color)!)).toBeLessThan(0.55);
+      }
+    }
+  });
+
+  it('carries film grain and an edge leak, which is what reads as artwork', () => {
+    const { css } = generateGradient(BRAND, 'seed');
+    expect(css).toContain('feTurbulence');
+    // The leak comes from an edge of the frame, not the middle — that is the
+    // difference between a light leak and a vignette.
+    expect(css).toMatch(/at (0%|100%) 50%|at 50% (0%|100%)/);
+  });
+
+  it('keeps the grain tile small — it is repeated on every card in a grid', () => {
+    const { css } = generateGradient(BRAND, 'seed');
+    const uri = /url\("([^"]+)"\)/.exec(css)?.[1] ?? '';
+    expect(uri.length).toBeLessThan(700);
+  });
+
   it('uses the fallback palette when given none', () => {
     expect(FALLBACK_PALETTE.every(isValidHex)).toBe(true);
   });
@@ -302,5 +380,34 @@ describe('normalisePalette', () => {
       .toEqual(['#fff']);
     expect(normalisePalette('not an array')).toEqual([]);
     expect(normalisePalette(null)).toEqual([]);
+  });
+});
+
+describe('palette editing', () => {
+  const p = ['#111111', '#222222'];
+
+  it('replaces a colour by index and ignores a bad one', () => {
+    expect(setPaletteColor(p, 1, '#ABCDEF')).toEqual(['#111111', '#abcdef']);
+    expect(setPaletteColor(p, 9, '#abcdef')).toEqual(p);
+  });
+
+  it('appends, refusing duplicates and respecting the cap', () => {
+    expect(addPaletteColor(p, '#333333')).toEqual(['#111111', '#222222', '#333333']);
+    expect(addPaletteColor(p, '#111111')).toEqual(p);
+    const full = Array.from({ length: MAX_PALETTE }, (_, i) => `#00000${i}`);
+    expect(addPaletteColor(full, '#ffffff')).toEqual(full);
+  });
+
+  it('never removes the last colour — an empty palette silently goes beige', () => {
+    expect(removePaletteColor(p, 0)).toEqual(['#222222']);
+    expect(removePaletteColor(['#111111'], 0)).toEqual(['#111111']);
+  });
+
+  it('does not mutate its input', () => {
+    const original = [...p];
+    setPaletteColor(p, 0, '#999999');
+    addPaletteColor(p, '#888888');
+    removePaletteColor(p, 0);
+    expect(p).toEqual(original);
   });
 });

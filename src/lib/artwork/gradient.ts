@@ -31,7 +31,28 @@ function rgba(hex: string, alpha: number): string {
   return `rgba(${Math.round(c.r)}, ${Math.round(c.g)}, ${Math.round(c.b)}, ${a.toFixed(3)})`;
 }
 
+/**
+ * How the colours are painted.
+ *
+ * Colour variation alone does not scale. A catalogue of a thousand beats
+ * drawing from one brand palette will exhaust perceptibly-different hues long
+ * before it exhausts ids — past a few dozen, "another slightly different
+ * purple" stops registering as a different cover at all.
+ *
+ * Composition is the axis that does scale, because it changes the SHAPE of the
+ * artwork rather than its tint. Six archetypes multiply the usable space by
+ * six at every hue, and two covers that differ in form read as distinct even
+ * when their colours are close.
+ */
+export type Composition = 'linear' | 'spotlight' | 'sweep' | 'dual' | 'ridge' | 'halo';
+
+export const COMPOSITIONS: Composition[] = [
+  'linear', 'spotlight', 'sweep', 'dual', 'ridge', 'halo',
+];
+
 export interface GradientSpec {
+  /** Which archetype was drawn — exposed for tests and diagnostics. */
+  composition: Composition;
   /** Ready for `background-image`. */
   css: string;
   /** Degrees, for callers that want to render their own. */
@@ -81,6 +102,32 @@ export const FALLBACK_PALETTE = ['#C4B49C', '#6C6255'];
 
 /** The page's own background; every gradient is anchored to it. */
 const BASE = '#0B0B0A';
+
+/**
+ * Film grain, as an inline SVG turbulence tile.
+ *
+ * The cover-art studio's most-used direction is "a grainy 35mm film
+ * photograph, dust and light leaks" — that texture is most of why its output
+ * reads as artwork rather than as a shape. A flat CSS gradient cannot get
+ * there no matter how the colours are tuned; it is missing the grain, not the
+ * hue. This is the cheapest honest approximation: no request, no bytes over
+ * the wire, and it composites over any of the archetypes.
+ *
+ * `baseFrequency` is seeded per item so the grain itself differs, and the tile
+ * is deliberately small — a large one is a large data URI repeated on every
+ * card in a catalogue.
+ */
+function grainLayer(frequency: number, opacity: number): string {
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='90' height='90'>` +
+    `<filter id='n'>` +
+    `<feTurbulence type='fractalNoise' baseFrequency='${frequency.toFixed(3)}' numOctaves='3' stitchTiles='stitch'/>` +
+    `<feColorMatrix type='saturate' values='0'/>` +
+    `</filter>` +
+    `<rect width='100%' height='100%' filter='url(%23n)' opacity='${opacity.toFixed(3)}'/>` +
+    `</svg>`;
+  return `url("data:image/svg+xml,${svg.replace(/</g, '%3C').replace(/>/g, '%3E').replace(/#/g, '%23')}")`;
+}
 
 /* ── deterministic randomness ─────────────────────────────────────── */
 
@@ -174,30 +221,84 @@ export function generateGradient(
     { color: highlight, position: 100 },
   ];
 
-  const linear = `linear-gradient(${angle}deg, ${stops.map((s) => `${s.color} ${s.position}%`).join(', ')})`;
-  // A soft off-centre radial over the top is what keeps these from looking
-  // like a two-stop CSS default. Position is seeded too, so the light lands
-  // differently on each cover.
+  const composition = COMPOSITIONS[Math.floor(rand() * COMPOSITIONS.length)];
+
+  const stopList = stops.map((st) => `${st.color} ${st.position}%`).join(', ');
   const glowX = 20 + Math.floor(rand() * 60);
   const glowY = 15 + Math.floor(rand() * 45);
   // Strength, spread and falloff all vary per beat, not just position. With a
   // fixed alpha every cover carried the same sheen in a different place, which
   // still read as one template — the difference registered as "moved" rather
-  // than "different". Varying the light itself is what makes two covers from
-  // the same palette feel like separate pieces of art.
+  // than "different".
   const glowAlpha = 0.07 + rand() * 0.13;
   const glowW = 95 + Math.floor(rand() * 55);
   const glowH = 70 + Math.floor(rand() * 45);
   const glowFalloff = 48 + Math.floor(rand() * 22);
-  const glow = `radial-gradient(${glowW}% ${glowH}% at ${glowX}% ${glowY}%, ${rgba(mix(highlight, '#ffffff', 0.10), glowAlpha)} 0%, transparent ${glowFalloff}%)`;
+  const lit = mix(highlight, '#ffffff', 0.10);
+  const glow = `radial-gradient(${glowW}% ${glowH}% at ${glowX}% ${glowY}%, ${rgba(lit, glowAlpha)} 0%, transparent ${glowFalloff}%)`;
+
+  // Every archetype ends on the same linear base, so all six stay anchored in
+  // the app's near-black and share a family however differently they're drawn.
+  const baseLayer = `linear-gradient(${angle}deg, ${stopList})`;
+  let css: string;
+
+  switch (composition) {
+    case 'spotlight': {
+      // A single light source from off-centre; the palette recedes to the edge.
+      const r = 70 + Math.floor(rand() * 55);
+      css = `radial-gradient(${r}% ${r}% at ${glowX}% ${glowY}%, ${body} 0%, ${anchor} 70%), ${baseLayer}`;
+      break;
+    }
+    case 'sweep': {
+      // Conic: reads as a rotation rather than a direction, which is the most
+      // distinct shape in the set at a glance.
+      const from = Math.floor(rand() * 360);
+      css = `conic-gradient(from ${from}deg at ${glowX}% ${glowY}%, ${anchor}, ${body}, ${highlight}, ${anchor}), ${baseLayer}`;
+      break;
+    }
+    case 'dual': {
+      // Two light sources, deliberately unequal so it doesn't read as symmetry.
+      const x2 = 100 - glowX;
+      const y2 = 100 - glowY;
+      css = [
+        `radial-gradient(80% 80% at ${glowX}% ${glowY}%, ${rgba(lit, glowAlpha * 1.6)} 0%, transparent 55%)`,
+        `radial-gradient(60% 60% at ${x2}% ${y2}%, ${rgba(body, 0.55)} 0%, transparent 60%)`,
+        baseLayer,
+      ].join(', ');
+      break;
+    }
+    case 'ridge': {
+      // A hard band through the middle — the only archetype with an edge in it.
+      const edge = stops[1].position;
+      css = `linear-gradient(${angle}deg, ${anchor} 0%, ${body} ${edge - 6}%, ${highlight} ${edge}%, ${body} ${edge + 8}%, ${anchor} 100%)`;
+      break;
+    }
+    case 'halo': {
+      // Light around a dark core, rather than on it.
+      const inner = 25 + Math.floor(rand() * 20);
+      css = `radial-gradient(90% 90% at ${glowX}% ${glowY}%, ${anchor} ${inner}%, ${body} ${inner + 30}%, ${highlight} 100%), ${baseLayer}`;
+      break;
+    }
+    default:
+      css = `${glow}, ${baseLayer}`;
+  }
+
+  // Grain and a light leak, over whatever archetype was drawn. The leak is a
+  // soft off-edge wash rather than another centred glow — a leak comes from
+  // the side of the frame, which is what makes it read as film rather than as
+  // a vignette.
+  const grain = grainLayer(0.55 + rand() * 0.35, 0.16 + rand() * 0.12);
+  const leakEdge = Math.floor(rand() * 4);
+  const leakPos = ['0% 50%', '100% 50%', '50% 0%', '50% 100%'][leakEdge];
+  const leakSize = 60 + Math.floor(rand() * 50);
+  const leak = `radial-gradient(${leakSize}% ${leakSize + 20}% at ${leakPos}, ${rgba(lit, 0.10 + rand() * 0.10)} 0%, transparent 65%)`;
 
   return {
-    css: `${glow}, ${linear}`,
+    css: `${grain}, ${leak}, ${css}`,
+    composition,
     angle,
     glow: { x: glowX, y: glowY, alpha: glowAlpha },
     stops,
-    // Every gradient is anchored to a near-black base, so a light foreground
-    // always clears contrast — no need to branch on the palette.
     foreground: mix('#ffffff', lead, 0.25),
   };
 }
