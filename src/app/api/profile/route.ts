@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCreatorProfile, updateCreatorProfile } from '@/lib/actions/profile';
-import { errorMessage } from '@/lib/errors';
+import { errorMessage, schemaCacheMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 const log = createLogger('api.profile');
 import { readBody } from '@/lib/validate';
@@ -116,12 +116,20 @@ export async function POST(req: NextRequest) {
     const result = await updateCreatorProfile(payload);
     if (result.error) {
       const status = result.error === 'Not authenticated' ? 401 : 500;
-      return NextResponse.json({ error: result.error }, { status });
+      // A pending migration is the most common cause of a failed profile
+      // write in this codebase, and PostgREST's own wording is written for
+      // whoever is debugging PostgREST. Say what to actually do instead.
+      const pending = schemaCacheMessage(result.error);
+      return NextResponse.json({ error: pending ?? result.error }, { status: pending ? 503 : status });
     }
     return NextResponse.json({ profile: result.profile });
   } catch (error) {
     log.error('Profile POST API error:', { error: errorMessage(error) });
-    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+    const pending = schemaCacheMessage(error);
+    return NextResponse.json(
+      { error: pending ?? errorMessage(error) },
+      { status: pending ? 503 : 500 },
+    );
   }
 }
 
