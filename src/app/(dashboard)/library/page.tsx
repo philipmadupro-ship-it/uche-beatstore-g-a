@@ -45,6 +45,7 @@ import { gridTemplate, resolveColumns } from '@/lib/library/columns';
 import { useLibraryColumns } from '@/hooks/useLibraryColumns';
 import { ColumnPicker } from '@/components/library/ColumnPicker';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import type { TrackStatsMap } from '@/lib/library/track-stats';
 
 // Sort modes — added so the library is browsable beyond "newest first."
 // `recent` reflects upload time; `recently_played` would need a history
@@ -167,6 +168,23 @@ export default function LibraryPage() {
   // layout from an older build must not be able to render an unusable table.
   const columnIds = useLibraryColumns((s) => s.columnIds);
   const activeColumns = useMemo(() => resolveColumns(columnIds), [columnIds]);
+
+  /* Plays, downloads and revenue live on three other tables, so they are
+     fetched separately and only when a column actually needs them — joining
+     them into the catalogue query would slow every load to serve the case
+     where those columns are switched on. Failure is silent: the columns show
+     a dash, the rest of the library is unaffected. */
+  const [columnStats, setColumnStats] = useState<TrackStatsMap>({});
+  const needsStats = activeColumns.some((c) => ['plays', 'downloads', 'revenue'].includes(c.id));
+  useEffect(() => {
+    if (!needsStats) return;
+    let cancelled = false;
+    fetch('/api/tracks/stats')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!cancelled && j?.stats) setColumnStats(j.stats); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [needsStats]);
   const [filters, setFilters] = useState<LibraryFilters>(() => ({
     ...DEFAULT_FILTERS,
     genres: new Set<string>(),
@@ -1411,6 +1429,7 @@ export default function LibraryPage() {
                   track={t}
                   index={absIdx + 1}
                   columns={activeColumns}
+                  columnStats={columnStats}
                   onClickDetails={(track) => setSelectedTrack(track)}
                   onPlayClick={() => playTrack(t)}
                   onDelete={(track) => handleDeleteTrack(track)}

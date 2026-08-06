@@ -11,6 +11,7 @@ import { setTrackDragData } from '@/lib/dnd';
 import { cacheTrack, getCachedMeta, removeCached } from '@/lib/offline/audio-cache';
 import { toast } from '@/hooks/useToast';
 import { gridTemplate, type LibraryColumn, type TrackWithTags } from '@/lib/library/columns';
+import type { TrackStatsMap } from '@/lib/library/track-stats';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface TrackCardProps {
@@ -19,6 +20,9 @@ interface TrackCardProps {
    *  projects keep the standard row, which is why it is optional rather
    *  than a required shape every caller has to construct. */
   columns?: LibraryColumn[];
+  /** Plays/downloads/revenue for the commerce columns. Only the library
+   *  passes it, and only once its stats fetch resolves. */
+  columnStats?: TrackStatsMap;
   track: Track;
   index: number;
   onClickDetails?: (track: Track) => void;
@@ -104,6 +108,7 @@ export function TrackCard({
   isFirstInOrder = false,
   isLastInOrder = false,
   columns,
+  columnStats,
 }: TrackCardProps) {
   void index;
   const { currentTrack, isPlaying, setTrack, togglePlay } = usePlayer();
@@ -200,6 +205,9 @@ export function TrackCard({
   const genreMoodTags = trackTags.filter((tt) => tt.category === 'genre' || tt.category === 'mood');
   // Genre first, then mood — the gradient leads on the first entry, and genre
   // is the axis a producer actually browses by.
+  const tagsForCategory = (category: string) =>
+    trackTags.filter((tt) => tt.category === category).map((tt) => tt.tag);
+
   const artworkTags = useMemo(
     () => [
       ...trackTags.filter((tt) => tt.category === 'genre').map((tt) => tt.tag),
@@ -310,9 +318,13 @@ export function TrackCard({
             are the two values a producer scans for, and a run-on line makes
             them hunt. Separators are rendered, not typed, so a missing value
             cannot leave a dangling dot. */}
-        <div className="mt-1 flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.14em] text-white/40">
+        {/* nowrap + truncate: with the table configurable the title column can
+            be narrower than it used to be, and this line was breaking "167
+            BPM" across two rows, which made the row taller and read as a
+            layout fault. Overflow should clip, not reflow. */}
+        <div className="mt-1 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden whitespace-nowrap text-[9px] font-mono uppercase tracking-[0.14em] text-white/40">
           {track.bpm ? (
-            <span className="tabular-nums text-white/55">{track.bpm}<span className="text-white/30"> BPM</span></span>
+            <span className="shrink-0 tabular-nums text-white/55">{track.bpm}<span className="text-white/30"> BPM</span></span>
           ) : null}
           {track.bpm && track.key ? <span aria-hidden className="h-2 w-px bg-white/15" /> : null}
           {track.key ? (
@@ -401,7 +413,48 @@ export function TrackCard({
               </div>
             );
           }
-          const value = col.value(track as TrackWithTags);
+          if (col.id === 'tags') {
+            /* Tags keep the presentation they had before the table became
+               configurable: the store/price marker, then genre and mood as
+               hashed pills. Flattening them to comma-joined text made the
+               busiest column in the table the hardest to scan, and lost the
+               listed/price signal entirely. Making columns configurable was
+               supposed to change WHICH data shows, not how it reads. */
+            return (
+              <div key={col.id} className="relative z-10 hidden min-w-0 items-center gap-2 md:flex">
+                {track.store_listed ? (
+                  <span
+                    title={track.lease_price_usd != null ? `Listed from $${track.lease_price_usd}` : 'Listed on the store'}
+                    className="shrink-0 rounded border border-[#D4BFA0]/25 bg-[#D4BFA0]/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[#D4BFA0]"
+                  >
+                    {track.lease_price_usd != null ? `$${track.lease_price_usd}` : 'Listed'}
+                  </span>
+                ) : null}
+                {genreMoodTags.slice(0, 2).map((tt) => (
+                  <span key={`${tt.category}-${tt.tag}`} className="truncate text-[11px] text-white/50">
+                    #{tt.tag}
+                  </span>
+                ))}
+                {genreMoodTags.length === 0 && !track.store_listed ? (
+                  <span className="text-[11px] text-white/20">—</span>
+                ) : null}
+              </div>
+            );
+          }
+          if (col.id === 'genre' || col.id === 'mood') {
+            // Same reasoning, for the single-category variants.
+            const items = tagsForCategory(col.id);
+            return (
+              <div key={col.id} className="relative z-10 hidden min-w-0 items-center gap-2 md:flex">
+                {items.length > 0
+                  ? items.slice(0, 2).map((tag) => (
+                      <span key={tag} className="truncate text-[11px] text-white/50">#{tag}</span>
+                    ))
+                  : <span className="text-[11px] text-white/20">—</span>}
+              </div>
+            );
+          }
+          const value = col.value(track as TrackWithTags, columnStats);
           return (
             <div
               key={col.id}

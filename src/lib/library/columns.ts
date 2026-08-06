@@ -14,6 +14,7 @@
  */
 
 import type { Track, TrackTag } from '@/lib/types';
+import { statsFor, formatRevenue, type TrackStatsMap } from './track-stats';
 
 export type TrackWithTags = Track & { track_tags?: TrackTag[] };
 
@@ -29,8 +30,11 @@ export interface LibraryColumn {
   sort?: 'title' | 'recent' | 'rating' | 'bpm-desc';
   /** Cannot be hidden — without it a row is unidentifiable. */
   required?: boolean;
-  /** Reads the display value for a track. Empty string renders as a dash. */
-  value: (track: TrackWithTags) => string;
+  /** Reads the display value for a track. Empty string renders as a dash.
+   *  `stats` carries plays/downloads/revenue for the commerce columns; it is
+   *  empty until the stats endpoint resolves, so those render a dash briefly
+   *  rather than a wrong zero. */
+  value: (track: TrackWithTags, stats?: TrackStatsMap) => string;
 }
 
 const fmtDuration = (seconds: number | null | undefined): string => {
@@ -50,6 +54,10 @@ const fmtDate = (iso: string | null | undefined): string => {
 /** 0..1 analysis scores are meaningless as decimals to a producer; show percent. */
 const fmtScore = (v: number | null | undefined): string =>
   v == null || !Number.isFinite(v) ? '' : `${Math.round(v * 100)}`;
+
+/** Zero renders as a dash: in a dense table a column of `0` reads as broken
+ *  data, while a dash reads as "nothing yet", which is what it means. */
+const fmtCount = (n: number): string => (n > 0 ? n.toLocaleString() : '');
 
 const tagsOf = (t: TrackWithTags, category: string): string[] =>
   (t.track_tags ?? []).filter((tt) => tt.category === category).map((tt) => tt.tag);
@@ -74,12 +82,16 @@ export function licenseLabelOf(track: TrackWithTags): string {
 /**
  * Every column the library can show.
  *
- * Deliberately excludes Artist, Producer, Plays, Downloads, Revenue and Last
- * Updated. None has a source on this payload: the app is single-producer so
- * artist/producer are constant, plays live in `share_plays`, revenue in
- * `license_purchases`, and `tracks` has no `updated_at`. Offering a column
- * that can only ever render a dash is worse than not offering it — it looks
- * like missing data rather than a missing feature.
+ * Plays, downloads and revenue are not on the track row — they come from
+ * `store_play_counts`, `store_free_downloads` and `license_purchases` via
+ * /api/tracks/stats, which the library fetches once and threads through.
+ *
+ * Still excluded, and for the same reason as before: Artist and Producer
+ * (the app is single-producer, so both are constant and a column of the same
+ * name 59 times is noise) and Last Updated (`tracks` has no `updated_at`, so
+ * it would need a migration and a trigger before it could mean anything).
+ * Offering a column that can only ever render a dash is worse than not
+ * offering it — it reads as missing data rather than a missing feature.
  */
 export const LIBRARY_COLUMNS: LibraryColumn[] = [
   { id: 'title',    label: 'Title',      width: 'minmax(0,1.45fr)', align: 'left',  sort: 'title', required: true, value: (t) => t.title },
@@ -95,6 +107,9 @@ export const LIBRARY_COLUMNS: LibraryColumn[] = [
   { id: 'license',  label: 'License',    width: '104px',            align: 'left',  value: licenseLabelOf },
   { id: 'filetype', label: 'File type',  width: '80px',             align: 'left',  value: fileTypeOf },
   { id: 'added',    label: 'Date added', width: '92px',             align: 'right', sort: 'recent', value: (t) => fmtDate(t.created_at) },
+  { id: 'plays',    label: 'Plays',      width: '72px',             align: 'right', value: (t, s) => fmtCount(statsFor(s ?? {}, t.id).plays) },
+  { id: 'downloads',label: 'Downloads',  width: '86px',             align: 'right', value: (t, s) => fmtCount(statsFor(s ?? {}, t.id).downloads) },
+  { id: 'revenue',  label: 'Revenue',    width: '92px',             align: 'right', value: (t, s) => formatRevenue(statsFor(s ?? {}, t.id).revenueUsd) },
   { id: 'rating',   label: 'Rating',     width: '148px',            align: 'right', sort: 'rating', value: (t) => (t.rating ? String(t.rating) : '') },
 ];
 
