@@ -39,6 +39,7 @@ import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
 import { SellReadinessPanel } from '@/components/library/SellReadinessPanel';
+import { ActionDigestPanel } from '@/components/library/ActionDigestPanel';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 
 // Sort modes — added so the library is browsable beyond "newest first."
@@ -1266,6 +1267,11 @@ export default function LibraryPage() {
         <div className="mb-8">
           <DropZone onUploadSuccess={fetchTracks} openRef={uploadOpenRef} />
         </div>
+
+        {/* Cross-surface digest first — stuck sales, pending offers, and new
+            CRM leads are fresher/more time-sensitive than catalog readiness,
+            and otherwise require checking three other pages to notice. */}
+        <ActionDigestPanel />
 
         {/* Sits immediately after upload, which is the moment a producer would
             otherwise assume the job is done. Upload previously ended in silence:

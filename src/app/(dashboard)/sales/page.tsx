@@ -102,6 +102,18 @@ export default function SalesPage() {
   const [statsExpanded, setStatsExpanded] = useState(false);
   // Client-side pagination — keeps the list fast at any catalogue size.
   const PAGE_SIZE = 50;
+
+  // Deep-link support for the Home action digest (?status=..., ?view=offers).
+  // Reads window.location directly (rather than useSearchParams) so this page
+  // doesn't need a Suspense boundary just for a one-time initial read.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get('status');
+    if (status && (STATUS_FILTERS as readonly string[]).includes(status)) {
+      setStatusFilter(status as StatusFilter);
+    }
+    if (params.get('view') === 'offers') setView('offers');
+  }, []);
   const [page, setPage] = useState(0);
 
   useEffect(() => {

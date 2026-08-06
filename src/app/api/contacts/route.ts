@@ -25,12 +25,15 @@ interface ContactRow {
  * POST /api/contacts → create with user_id auto-stamped from session.
  */
 export async function GET(req: NextRequest) {
-  const { limit, offset } = parsePagination(new URL(req.url).searchParams);
+  const searchParams = new URL(req.url).searchParams;
+  const { limit, offset } = parsePagination(searchParams);
+  const crmStatus = searchParams.get('crm_status');
   const rows = await scopedList<{ id: string; [k: string]: unknown }>('contacts', {
     orderBy: 'name',
     ascending: true,
     limit,
     offset,
+    ...(crmStatus ? { extraEq: { crm_status: crmStatus } } : {}),
   });
   if (isErrorResponse(rows)) return rows;
 
