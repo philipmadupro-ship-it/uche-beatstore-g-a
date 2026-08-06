@@ -117,6 +117,14 @@ export function mix(a: string, b: string, amount: number): string {
   });
 }
 
+/** Rotate hue by `degrees`, keeping saturation and lightness. */
+export function rotateHue(hex: string, degrees: number): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  const hsl = rgbToHsl(rgb);
+  return rgbToHex(hslToRgb({ ...hsl, h: hsl.h + degrees }));
+}
+
 export function isValidHex(hex: string): boolean {
   return hexToRgb(hex) !== null;
 }

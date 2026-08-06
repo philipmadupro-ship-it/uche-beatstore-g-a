@@ -42,6 +42,7 @@ import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { gridTemplate, resolveColumns } from '@/lib/library/columns';
 import { useLibraryColumns } from '@/hooks/useLibraryColumns';
 import { ColumnPicker } from '@/components/library/ColumnPicker';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 // Sort modes — added so the library is browsable beyond "newest first."
 // `recent` reflects upload time; `recently_played` would need a history
@@ -1701,10 +1702,9 @@ function MiniTrackCard({
     >
       {/* Cover art + overlays */}
       <div className={`relative w-full aspect-square rounded-xl overflow-hidden bg-white/[0.04] border mb-2 transition-all ${isCurrent ? 'border-white/60 ring-1 ring-white/30' : 'border-white/10 group-hover:border-white/20'}`}>
-        {track.cover_url
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#161616] to-[#090907]"><Music size={24} className="text-white/30" /></div>}
+        <ArtworkFallback src={track.cover_url} seed={track.id} alt={track.title} kind="track" className="object-cover">
+          <Music size={24} aria-hidden />
+        </ArtworkFallback>
         {/* State badge */}
         {track.status && track.status !== 'archived' && (
           <span className={`absolute top-1.5 left-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
@@ -1742,10 +1742,9 @@ function MiniPlaylistCard({ playlist }: { playlist: HomePlaylist }) {
   return (
     <Link href={`/playlists/${playlist.id}`} className="group relative shrink-0 w-[112px] sm:w-[132px] cursor-pointer block">
       <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-white/[0.04] border border-white/10 group-hover:border-white/20 mb-2 transition-all">
-        {playlist.cover_url
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={playlist.cover_url} alt={playlist.name} className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1f1a33] to-[#090907]"><ListMusic size={24} className="text-white/40" /></div>}
+        <ArtworkFallback src={playlist.cover_url} seed={playlist.id} alt={playlist.name} kind="playlist" className="object-cover">
+          <ListMusic size={24} aria-hidden />
+        </ArtworkFallback>
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-black/30">
           <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
             <PlayGlyph size={15} className="text-white ml-0.5" />
@@ -1763,10 +1762,9 @@ function MiniProjectCard({ project }: { project: HomeProject }) {
   return (
     <Link href={`/projects/${project.id}`} className="group relative shrink-0 w-[112px] sm:w-[132px] cursor-pointer block">
       <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-white/[0.04] border border-white/10 group-hover:border-white/20 mb-2 transition-all">
-        {project.cover_url
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img src={project.cover_url} alt={project.name} className="w-full h-full object-cover" />
-          : <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#1a1830] to-[#090907]"><FolderOpen size={24} className="text-white/30" /></div>}
+        <ArtworkFallback src={project.cover_url} seed={project.id} alt={project.name} kind="project" className="object-cover">
+          <FolderOpen size={24} aria-hidden />
+        </ArtworkFallback>
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all bg-black/30">
           <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
             <ArrowRight size={14} className="text-white" />

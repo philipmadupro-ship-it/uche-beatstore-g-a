@@ -92,7 +92,6 @@ export function TrackGridCard({
         <ArtworkFallback
           src={track.cover_url}
           seed={track.id}
-          gradientOnly
           sizes="(max-width: 640px) 50vw, 220px"
           className="object-cover transition-transform duration-500 group-hover:scale-105"
         >

@@ -280,7 +280,7 @@ export function TrackCard({
                 default artwork, then a gradient seeded by this track. The list
                 is the library's default view, so leaving it on a bare glyph
                 meant most people never saw their own artwork at all. */}
-            <ArtworkFallback src={track.cover_url} seed={track.id} sizes="40px" className="object-cover" gradientOnly>
+            <ArtworkFallback src={track.cover_url} seed={track.id} sizes="40px" className="object-cover">
               <Music size={13} aria-hidden />
             </ArtworkFallback>
             <span className={`absolute inset-0 flex items-center justify-center bg-black/55 transition-opacity ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>

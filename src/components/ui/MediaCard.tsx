@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { Check, Pin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { CSSProperties, ReactNode } from 'react';
+import { ArtworkFallback } from './ArtworkFallback';
+import type { ArtworkKind } from '@/lib/artwork/gradient';
 
 /**
  * Shared cover-art grid card for Projects + Playlists (and future
@@ -20,6 +22,11 @@ interface MediaCardProps {
   /** Fired when the card link is followed (e.g. record "recently opened"). */
   onOpen?: () => void;
   coverUrl?: string | null;
+  /** Stable id for the generated fallback. Falls back to the title, which is
+   *  less stable — a rename changes the artwork — so pass the row id. */
+  artworkSeed?: string;
+  /** Projects and playlists take different palette slices. */
+  kind?: ArtworkKind;
   /** 2–4 track covers compose a grid when there's no dedicated cover. */
   previewCovers?: (string | null)[];
   /** Icon shown when no cover at all. */
@@ -45,6 +52,8 @@ export function MediaCard({
   href,
   onOpen,
   coverUrl,
+  artworkSeed,
+  kind = 'project',
   previewCovers,
   fallbackIcon,
   fallbackStyle,
@@ -80,8 +89,13 @@ export function MediaCard({
       ) : covers.length === 1 ? (
         <img loading="lazy" src={covers[0]} alt="" className="absolute inset-0 h-full w-full object-cover" />
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center" style={fallbackStyle}>
-          <span className="text-white/15">{fallbackIcon}</span>
+        /* No cover and no track art to compose from: a brand gradient, keyed
+           to this collection's id so two projects never look alike, and
+           tinted by kind so a project reads differently from a playlist. */
+        <div className="absolute inset-0">
+          <ArtworkFallback seed={artworkSeed ?? title} kind={kind}>
+            <span className="text-white/25">{fallbackIcon}</span>
+          </ArtworkFallback>
         </div>
       )}
 

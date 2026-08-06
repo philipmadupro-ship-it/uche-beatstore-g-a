@@ -194,6 +194,8 @@ export default function PlaylistsPage() {
 
               return (
                 <MediaCard
+                  artworkSeed={playlist.id}
+                  kind="playlist"
                   key={playlist.id}
                   title={playlist.name}
                   href={`/playlists/${playlist.id}`}

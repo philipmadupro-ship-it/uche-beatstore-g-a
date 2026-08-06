@@ -290,6 +290,8 @@ export default function ProjectsPage() {
 
               return (
                 <MediaCard
+                  artworkSeed={project.id}
+                  kind="project"
                   key={project.id}
                   title={project.name}
                   href={`/projects/${project.id}`}

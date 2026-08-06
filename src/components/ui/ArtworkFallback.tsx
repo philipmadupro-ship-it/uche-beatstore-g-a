@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { generateGradient } from '@/lib/artwork/gradient';
+import { generateGradient, type ArtworkKind } from '@/lib/artwork/gradient';
 import { useBrandArtwork } from '@/hooks/useBrandArtwork';
 import { CoverImage } from './CoverImage';
 import { cn } from '@/lib/utils';
@@ -35,17 +35,12 @@ interface ArtworkFallbackProps {
   /** Rendered centred over the gradient (an initial, a glyph). */
   children?: React.ReactNode;
   /**
-   * Skip the producer's default image and go straight to a gradient.
-   *
-   * Set on the catalogue's track rows and cards. With 55 of 59 beats lacking
-   * a cover, using the default image there rendered the same logo 46 times
-   * down one screen — which reads as "nothing here" just as fast as the grey
-   * glyphs it replaced. The image is still doing its job: it is where the
-   * palette comes from. It just is not repeated as the artwork itself.
-   *
-   * Left off wherever artwork appears alone or a handful at a time, where a
-   * real image beats a generated one.
+   * What this artwork belongs to. Projects, playlists and tracks each take a
+   * different slice of the palette, so a mixed grid stays legible by category
+   * rather than looking like one undifferentiated set.
    */
+  kind?: ArtworkKind;
+  /** Render only the gradient, with no brand emblem over it. */
   gradientOnly?: boolean;
 }
 
@@ -57,20 +52,24 @@ export function ArtworkFallback({
   sizes,
   priority,
   children,
+  kind = 'track',
   gradientOnly = false,
 }: ArtworkFallbackProps) {
   const { defaultArtworkUrl, palette } = useBrandArtwork();
 
-  const gradient = useMemo(() => generateGradient(palette, seed), [palette, seed]);
+  const gradient = useMemo(() => generateGradient(palette, seed, kind), [palette, seed, kind]);
 
-  const resolved = src || (gradientOnly ? null : defaultArtworkUrl);
-  if (resolved) {
-    return <CoverImage src={resolved} alt={alt} className={className} sizes={sizes} priority={priority} />;
+  // The item's own cover always wins — a real photograph beats anything
+  // generated, and this only fills a gap.
+  if (src) {
+    return <CoverImage src={src} alt={alt} className={className} sizes={sizes} priority={priority} />;
   }
+
+  const showEmblem = !gradientOnly && !!defaultArtworkUrl;
 
   return (
     <div
-      className={cn('grid h-full w-full place-items-center', className)}
+      className={cn('relative grid h-full w-full place-items-center overflow-hidden', className)}
       style={{ backgroundImage: gradient.css }}
       // Decorative: the surrounding card always carries the real title, and
       // announcing "generated artwork" on every tile is pure noise.
@@ -78,11 +77,25 @@ export function ArtworkFallback({
       aria-hidden={!alt}
       aria-label={alt || undefined}
     >
-      {children && (
+      {showEmblem ? (
+        /* The brand image sits ON the gradient rather than replacing it.
+           Used full-bleed it was the same logo repeated down a whole screen,
+           which reads as "nothing here"; dropped entirely, the artwork lost
+           the brand. As a contained emblem over a per-item gradient it does
+           both — one recognisable mark, a different background every time.
+           `object-contain` because a logo cropped to fill is a logo ruined. */
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={defaultArtworkUrl!}
+          alt=""
+          loading="lazy"
+          className="pointer-events-none absolute inset-[18%] h-[64%] w-[64%] object-contain opacity-95 drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)]"
+        />
+      ) : children ? (
         <span style={{ color: gradient.foreground }} className="opacity-90">
           {children}
         </span>
-      )}
+      ) : null}
     </div>
   );
 }

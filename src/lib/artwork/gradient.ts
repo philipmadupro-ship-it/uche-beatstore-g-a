@@ -20,7 +20,7 @@
  *     gradient looking like default CSS
  */
 
-import { adjustLightness, adjustSaturation, hexToRgb, isValidHex, mix } from './color';
+import { adjustLightness, adjustSaturation, hexToRgb, isValidHex, mix, rotateHue } from './color';
 
 /** `#rrggbb` + alpha → `rgba(...)`. A two-digit hex suffix can only express
  *  256 steps and reads as noise in the output; this keeps the CSS legible. */
@@ -42,6 +42,25 @@ export interface GradientSpec {
   /** The colour to draw a glyph or initial in over this background. */
   foreground: string;
 }
+
+/**
+ * What the artwork belongs to.
+ *
+ * A project, a playlist and a single track should not read as the same thing
+ * in a mixed grid. Each kind takes a different slice of the palette and a
+ * small hue offset, so the three stay in one brand family while remaining
+ * distinguishable at a glance — the same logic as the per-item seed, applied
+ * one level up.
+ */
+export type ArtworkKind = 'track' | 'project' | 'playlist';
+
+/** Palette offset and hue shift per kind. The shifts are small on purpose:
+ *  this should separate categories, not invent three brands. */
+const KIND_TREATMENT: Record<ArtworkKind, { offset: number; hue: number }> = {
+  track:    { offset: 0, hue: 0 },
+  project:  { offset: 1, hue: 18 },
+  playlist: { offset: 2, hue: -16 },
+};
 
 /** Used when the producer has set no artwork — the theme accent, dimmed. */
 export const FALLBACK_PALETTE = ['#C4B49C', '#6C6255'];
@@ -82,9 +101,20 @@ export function seededRandom(seed: number): () => number {
  * empty or unusable palette falls back to the theme accent so this never
  * returns nothing — a fallback that can itself fail is not a fallback.
  */
-export function generateGradient(palette: string[], seed: string): GradientSpec {
+export function generateGradient(
+  palette: string[],
+  seed: string,
+  kind: ArtworkKind = 'track',
+): GradientSpec {
   const usable = palette.filter(isValidHex);
-  const colors = usable.length > 0 ? usable : FALLBACK_PALETTE;
+  const base = usable.length > 0 ? usable : FALLBACK_PALETTE;
+
+  const treatment = KIND_TREATMENT[kind] ?? KIND_TREATMENT.track;
+  // Rotating the palette rather than indexing from a fixed start means a
+  // project and a track with adjacent ids do not land on the same lead hue.
+  const colors = base
+    .map((_, i) => base[(i + treatment.offset) % base.length])
+    .map((c) => (treatment.hue === 0 ? c : rotateHue(c, treatment.hue)));
 
   const rand = seededRandom(hashSeed(seed));
 
@@ -155,6 +185,6 @@ export function generateGradient(palette: string[], seed: string): GradientSpec 
  * Separate because it is what JSX call sites actually want, and having them
  * reach into `.css` on a spec they otherwise ignore reads worse everywhere.
  */
-export function gradientCss(palette: string[], seed: string): string {
-  return generateGradient(palette, seed).css;
+export function gradientCss(palette: string[], seed: string, kind: ArtworkKind = 'track'): string {
+  return generateGradient(palette, seed, kind).css;
 }

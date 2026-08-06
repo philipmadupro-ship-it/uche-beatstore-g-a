@@ -166,6 +166,41 @@ describe('generateGradient', () => {
     expect(css).not.toMatch(/#[0-9a-f]{8}\b/i);
   });
 
+  it('gives a project, a playlist and a track different accents', () => {
+    // Same item id across three kinds must not produce three identical
+    // covers, or a mixed grid reads as one undifferentiated set.
+    const t = generateGradient(BRAND, 'same-id', 'track');
+    const p = generateGradient(BRAND, 'same-id', 'project');
+    const l = generateGradient(BRAND, 'same-id', 'playlist');
+    const leads = [t, p, l].map((g) => g.stops[1].color);
+    expect(new Set(leads).size).toBe(3);
+  });
+
+  it('still differentiates kinds when the brand has a single colour', () => {
+    // Rotating the palette alone cannot separate a one-entry palette, which
+    // is why each kind also carries a hue offset.
+    const one = ['#7F5AF0'];
+    const a = generateGradient(one, 'x', 'track').stops[1].color;
+    const b = generateGradient(one, 'x', 'project').stops[1].color;
+    expect(a).not.toBe(b);
+  });
+
+  it('defaults to the track treatment when no kind is given', () => {
+    expect(generateGradient(BRAND, 'x')).toEqual(generateGradient(BRAND, 'x', 'track'));
+  });
+
+  it('keeps kind variants dark and in-family', () => {
+    for (const kind of ['track', 'project', 'playlist'] as const) {
+      for (let i = 0; i < 15; i++) {
+        const { stops } = generateGradient(BRAND, `t-${i}`, kind);
+        for (const stop of stops) {
+          expect(isValidHex(stop.color)).toBe(true);
+          expect(luminance(hexToRgb(stop.color)!)).toBeLessThan(0.55);
+        }
+      }
+    }
+  });
+
   it('uses the fallback palette when given none', () => {
     expect(FALLBACK_PALETTE.every(isValidHex)).toBe(true);
   });
