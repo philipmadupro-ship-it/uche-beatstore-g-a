@@ -389,6 +389,21 @@ function StorePage() {
     },
   });
   const creator = storeQuery.data?.creator ?? null;
+
+  // Social proof — "N sold this week" per track. Independent, best-effort
+  // fetch: a failure here must never affect the catalogue itself, which is
+  // why it's a separate endpoint (see /api/store/momentum) rather than
+  // baked into the main store query.
+  const [momentumByTrack, setMomentumByTrack] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/store/momentum')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d?.counts) setMomentumByTrack(d.counts); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
   const storeViewTracked = useRef(false);
   useEffect(() => {
     if (storeViewTracked.current || !storeQuery.data) return;
@@ -1422,6 +1437,7 @@ function StorePage() {
                         accentColor={accentColor}
                         isWishlisted={wishlist.has(t.id)}
                         onToggleWishlist={() => wishlist.toggle(t.id)}
+                        recentSales={momentumByTrack[t.id]}
                       />
                       </div>
                     ) : (
@@ -1444,6 +1460,7 @@ function StorePage() {
                         accentColor={accentColor}
                         isWishlisted={wishlist.has(t.id)}
                         onToggleWishlist={() => wishlist.toggle(t.id)}
+                        recentSales={momentumByTrack[t.id]}
                       />
                       </div>
                     ),
@@ -1470,6 +1487,7 @@ function StorePage() {
                   onFreeDownload={(t) => setFreeDownloadTrack(t)}
                   isWishlisted={(id) => wishlist.has(id)}
                   onToggleWishlist={(id) => wishlist.toggle(id)}
+                  momentumByTrack={momentumByTrack}
                 />
               )}
 
