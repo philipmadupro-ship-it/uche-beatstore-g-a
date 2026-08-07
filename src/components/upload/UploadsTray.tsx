@@ -20,6 +20,7 @@ export function UploadsTray() {
   const order = useUploadManager((s) => s.order);
   const uploads = useUploadManager((s) => s.uploads);
   const hydrate = useUploadManager((s) => s.hydrate);
+  const clearFinished = useUploadManager((s) => s.clearFinished);
   const [expanded, setExpanded] = useState(true);
 
   // Hydrate persisted sessions once on mount
@@ -54,30 +55,43 @@ export function UploadsTray() {
   return (
     <div className="fixed bottom-24 right-4 z-50 w-[360px] max-w-[calc(100vw-2rem)]">
       <div className="bg-[#090907] border border-white/10 rounded-lg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden">
-        <button
-          onClick={() => setExpanded((x) => !x)}
-          className="tap w-full flex min-h-11 items-center gap-2 px-3 border-b border-[#0D0D0A] hover:bg-white/[0.04] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-          aria-expanded={expanded}
-          aria-label={expanded ? 'Collapse uploads tray' : 'Expand uploads tray'}
-        >
-          <Upload size={12} className="text-white" />
-          <span className="text-[11px] font-medium text-white">
-            Uploads
-            <span className="text-white/40 font-normal ml-1.5">
-              {active > 0 && `${active} running`}
-              {active > 0 && (errored > 0 || done > 0) && ' · '}
-              {errored > 0 && <span className="text-red-400">{errored} failed</span>}
-              {errored > 0 && done > 0 && ' · '}
-              {done > 0 && <span className="text-green-400">{done} done</span>}
+        <div className="flex items-center gap-1 border-b border-[#0D0D0A]">
+          <button
+            onClick={() => setExpanded((x) => !x)}
+            className="tap flex-1 flex min-h-11 items-center gap-2 px-3 hover:bg-white/[0.04] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            aria-expanded={expanded}
+            aria-label={expanded ? 'Collapse uploads tray' : 'Expand uploads tray'}
+          >
+            <Upload size={12} className="text-white" />
+            <span className="text-[11px] font-medium text-white">
+              Uploads
+              <span className="text-white/40 font-normal ml-1.5">
+                {active > 0 && `${active} running`}
+                {active > 0 && (errored > 0 || done > 0) && ' · '}
+                {errored > 0 && <span className="text-red-400">{errored} failed</span>}
+                {errored > 0 && done > 0 && ' · '}
+                {done > 0 && <span className="text-green-400">{done} done</span>}
+              </span>
             </span>
-          </span>
-          <div className="flex-1" />
-          {expanded ? (
-            <ChevronDown size={12} className="text-white/40" />
-          ) : (
-            <ChevronUp size={12} className="text-white/40" />
+            <div className="flex-1" />
+            {expanded ? (
+              <ChevronDown size={12} className="text-white/40" />
+            ) : (
+              <ChevronUp size={12} className="text-white/40" />
+            )}
+          </button>
+          {errored + done > 0 && (
+            <button
+              type="button"
+              onClick={clearFinished}
+              className="tap grid size-11 shrink-0 place-items-center mr-1 rounded text-white/40 hover:text-white hover:bg-white/[0.05] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+              title="Clear finished uploads"
+              aria-label="Clear finished uploads"
+            >
+              <X size={12} />
+            </button>
           )}
-        </button>
+        </div>
 
         {expanded && (
           <div className="max-h-[60vh] overflow-y-auto">

@@ -54,6 +54,34 @@ function fmtBytes(b: number): string {
   return `${(b / 1024).toFixed(0)} KB`;
 }
 
+// Caps how many files run client-side analysis (each spins up an AudioContext
+// + decode worker) at once. A 100+ file drop without this cap creates 100+
+// concurrent AudioContexts, which browsers throttle or refuse outright.
+// Module-level, not per-instance: the resource pressure is tab-wide.
+const ANALYSIS_CONCURRENCY = 6;
+let analysisActive = 0;
+const analysisQueue: (() => void)[] = [];
+
+function runNextAnalysis() {
+  if (analysisActive >= ANALYSIS_CONCURRENCY) return;
+  const next = analysisQueue.shift();
+  if (!next) return;
+  analysisActive++;
+  next();
+}
+
+function limitAnalysis<T>(fn: () => Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    analysisQueue.push(() => {
+      fn().then(resolve, reject).finally(() => {
+        analysisActive--;
+        runNextAnalysis();
+      });
+    });
+    runNextAnalysis();
+  });
+}
+
 interface FileCard {
   id: string;
   file: File;
@@ -138,7 +166,7 @@ export function DropZone({ playlistId, onUploadSuccess, defaultType = 'instrumen
       const patchCard = (patch: Partial<FileCard>) =>
         safeSetCards((prev) => prev.map((c) => (c.id === cardId ? { ...c, ...patch } : c)));
 
-      const analysis = analyzeAudio(file)
+      const analysis = limitAnalysis(() => analyzeAudio(file))
         .then((result) => {
           patchCard({
             analyzing: false,

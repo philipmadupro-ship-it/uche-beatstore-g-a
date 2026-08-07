@@ -87,6 +87,7 @@ interface ManagerState {
   retry: (id: string) => void;
   abort: (id: string) => void;
   remove: (id: string) => void;
+  clearFinished: () => void;
   hydrate: () => void;            // call once on app boot
   // internal
   _patch: (id: string, patch: Partial<UploadItem>) => void;
@@ -122,6 +123,12 @@ const ANALYSIS_GRACE_MS = 20_000;
 const FINALIZE_TIMEOUT_MS = 120_000;
 /** Progress repaints per part are coarse; per byte are a re-render storm. */
 const PROGRESS_THROTTLE_MS = 120;
+// Uploads run one file at a time up to this many in parallel; the rest sit
+// at status 'queued' until a slot frees. Without this, dropping 100+ files
+// fired 100+ simultaneous /api/upload/init requests (each doing a Supabase
+// auth check + R2 multipart init), which the platform started throttling —
+// scattered failures rather than a clean batch.
+const MAX_CONCURRENT_UPLOADS = 4;
 
 // Side-channels (not serialized, and deliberately not in the store — writing
 // per-byte progress through Zustand would re-render the tray on every packet).
@@ -453,7 +460,7 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
       persist(next);
       return { uploads, order };
     });
-    runUpload(id);
+    startQueuedUploads();
     return id;
   },
 
@@ -465,7 +472,7 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
       return;
     }
     get()._patch(id, { file, status: 'queued', error: null });
-    runUpload(id);
+    startQueuedUploads();
   },
 
   pause(id) {
@@ -482,7 +489,7 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
       return;
     }
     get()._patch(id, { status: 'queued', error: null, retries: 0 });
-    runUpload(id);
+    startQueuedUploads();
   },
 
   abort(id) {
@@ -499,6 +506,7 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
     }
     cleanupSideChannels(id);
     get()._patch(id, { status: 'aborted' });
+    startQueuedUploads();
   },
 
   remove(id) {
@@ -507,6 +515,25 @@ export const useUploadManager = create<ManagerState>((set, get) => ({
       const uploads = { ...s.uploads };
       delete uploads[id];
       const order = s.order.filter((x) => x !== id);
+      persist({ ...s, uploads, order });
+      return { uploads, order };
+    });
+  },
+
+  clearFinished() {
+    set((s) => {
+      const uploads = { ...s.uploads };
+      const order: string[] = [];
+      for (const id of s.order) {
+        const u = uploads[id];
+        if (!u) continue;
+        if (u.status === 'success' || u.status === 'error' || u.status === 'interrupted') {
+          delete uploads[id];
+          cleanupSideChannels(id);
+        } else {
+          order.push(id);
+        }
+      }
       persist({ ...s, uploads, order });
       return { uploads, order };
     });
@@ -634,6 +661,28 @@ function recompute(cur: UploadItem, id: string): UploadItem {
 }
 
 /* ─────────── per-upload runner ─────────── */
+
+// Fills open slots (up to MAX_CONCURRENT_UPLOADS active) from the front of
+// `order` (newest-first) with anything still 'queued'. Called after every
+// enqueue/resume/retry/abort and again when a running upload terminates
+// (success, error, or abort) via runUpload's finally block, so the next
+// queued file always picks up.
+function startQueuedUploads() {
+  const s = useUploadManager.getState();
+  const activeCount = Object.values(s.uploads).filter(
+    (u) => u.status === 'preparing' || u.status === 'uploading' || u.status === 'finalizing',
+  ).length;
+  let slots = MAX_CONCURRENT_UPLOADS - activeCount;
+  if (slots <= 0) return;
+  for (const id of s.order) {
+    if (slots <= 0) break;
+    const u = s.uploads[id];
+    if (u && u.status === 'queued' && u.file) {
+      slots--;
+      runUpload(id);
+    }
+  }
+}
 
 async function runUpload(id: string) {
   const m = useUploadManager.getState();
@@ -808,6 +857,7 @@ async function runUpload(id: string) {
     useUploadManager.getState()._patch(id, { status: 'error', error: errorMessage(err) || 'upload failed' });
   } finally {
     delete abortControllers[id];
+    startQueuedUploads();
   }
 }
 
