@@ -1,8 +1,8 @@
 'use client';
 
-import { ChevronDown, X, Check } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
-import { Popover } from '@/components/ui/Popover';
 import { cn } from '@/lib/utils';
 
 const CHROMATIC_KEYS = ['C', 'G', 'D', 'A', 'E', 'B', 'F#', 'C#', 'G#', 'D#', 'A#', 'F'];
@@ -134,176 +134,198 @@ const TYPE_OPTIONS: Array<{ value: LibraryTrackType; label: string }> = [
 ];
 
 export function FilterBar({ filters, onChange, embedded = false }: FilterBarProps) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const set = (partial: Partial<LibraryFilters>) => onChange({ ...filters, ...partial });
 
-  const toggleIn = (key: 'genres' | 'statuses' | 'keys', value: string) => {
-    const next = new Set(filters[key]);
-    if (next.has(value)) next.delete(value); else next.add(value);
-    set({ [key]: next } as Partial<LibraryFilters>);
+  const toggleGenre = (g: string) => {
+    const next = new Set(filters.genres);
+    if (next.has(g)) next.delete(g); else next.add(g);
+    set({ genres: next });
   };
-  const toggleGenre  = (g: string) => toggleIn('genres', g);
-  const toggleStatus = (v: string) => toggleIn('statuses', v);
-  const toggleKey    = (k: string) => toggleIn('keys', k);
 
-  const advancedCount = [
-    filters.bpmMin != null || filters.bpmMax != null,
-    filters.keys.size > 0,
-    filters.scale !== 'all',
-    filters.rating != null,
-  ].filter(Boolean).length;
+  const toggleStatus = (s: string) => {
+    const next = new Set(filters.statuses);
+    if (next.has(s)) next.delete(s); else next.add(s);
+    set({ statuses: next });
+  };
 
-  const typeLabel = TYPE_OPTIONS.find((t) => t.value === filters.type)?.label ?? 'All';
+  const toggleKey = (k: string) => {
+    const next = new Set(filters.keys);
+    if (next.has(k)) next.delete(k); else next.add(k);
+    set({ keys: next });
+  };
 
-  /* Each facet is a menu, not a permanently-open row of chips.
-     The old bar stacked Type, Genre and State as three wrapping chip rows plus
-     an Advanced disclosure — roughly 200px of chrome above the list, always,
-     even when nothing was filtered. Everything below collapses to one line and
-     opens on demand. */
-  const facets = (
-    <>
-      <FacetMenu label="Type" value={filters.type === 'all' ? null : typeLabel}>
-        {(close) => (
-          <MenuList>
-            {TYPE_OPTIONS.map(({ value, label }) => (
-              <MenuItem
+  return (
+    <div className={cn(
+      'space-y-4 animate-in fade-in slide-in-from-top-2 duration-200',
+      embedded ? 'pb-2' : 'bg-white/[0.02] border border-white/10 rounded-xl p-4 mb-4',
+    )}>
+
+      {/* ── Type + Offline ──────────────────────────────────────────
+           Previously a separate pill row above the list. Two controls
+           governing the same result set meant the "Filters" badge could read
+           "0 active" while the list was in fact filtered to Remixes — the
+           count only ever knew about its own half. */}
+      <div>
+        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-2">Type</p>
+        <div className="flex flex-wrap gap-1.5">
+          {TYPE_OPTIONS.map(({ value, label }) => {
+            const active = filters.type === value && !filters.offlineOnly;
+            return (
+              <button
                 key={value}
-                label={label}
-                selected={filters.type === value}
-                onClick={() => { set({ type: value }); close(); }}
-              />
-            ))}
-          </MenuList>
-        )}
-      </FacetMenu>
+                onClick={() => set({ type: value, offlineOnly: false })}
+                aria-pressed={active}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                  active
+                    ? 'bg-white text-black border-white/30'
+                    : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white/80 hover:border-white/20'
+                }`}
+              >{label}</button>
+            );
+          })}
+          <button
+            onClick={() => set({ offlineOnly: !filters.offlineOnly })}
+            aria-pressed={filters.offlineOnly}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+              filters.offlineOnly
+                ? 'bg-white text-black border-white/30'
+                : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white/80 hover:border-white/20'
+            }`}
+          >Offline</button>
+        </div>
+      </div>
 
-      <FacetMenu label="Genre" count={filters.genres.size}>
-        {() => (
-          <MenuList>
-            {TAG_TAXONOMY.genre.map((g) => (
-              <MenuItem key={g} label={g} selected={filters.genres.has(g)} onClick={() => toggleGenre(g)} />
-            ))}
-          </MenuList>
-        )}
-      </FacetMenu>
+      {/* ── Genre (first-class) ─────────────────────────────────── */}
+      <div>
+        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-2">Genre</p>
+        <div className="flex flex-wrap gap-1.5">
+          {TAG_TAXONOMY.genre.map((g) => {
+            const active = filters.genres.has(g);
+            return (
+              <button
+                key={g}
+                onClick={() => toggleGenre(g)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                  active
+                    ? 'bg-white text-black border-white/30'
+                    : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white/80 hover:border-white/20'
+                }`}
+              >{g}</button>
+            );
+          })}
+        </div>
+      </div>
 
-      <FacetMenu label="State" count={filters.statuses.size}>
-        {() => (
-          <MenuList>
-            {STATUS_OPTIONS.map(({ value, label }) => (
-              <MenuItem key={value} label={label} selected={filters.statuses.has(value)} onClick={() => toggleStatus(value)} />
-            ))}
-          </MenuList>
-        )}
-      </FacetMenu>
+      {/* ── State (first-class) ─────────────────────────────────── */}
+      <div>
+        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-2">State</p>
+        <div className="flex flex-wrap gap-1.5">
+          {STATUS_OPTIONS.map(({ value, label, color }) => {
+            const active = filters.statuses.has(value);
+            return (
+              <button
+                key={value}
+                onClick={() => toggleStatus(value)}
+                className={`px-3 py-1 rounded-full text-[11px] font-medium border transition-all ${
+                  active ? `${color}` : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white/80 hover:border-white/20'
+                }`}
+              >{label}</button>
+            );
+          })}
+        </div>
+      </div>
 
-      <FacetMenu label="Advanced" count={advancedCount} width={288}>
-        {() => (
-          <div className="space-y-3 p-3">
-            <div>
-              <FacetLabel>BPM range</FacetLabel>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number" placeholder="Min" min={0} max={999} aria-label="Minimum BPM"
-                  value={filters.bpmMin ?? ''}
-                  onChange={(e) => set({ bpmMin: e.target.value ? Number(e.target.value) : null })}
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[12px] tabular-nums text-white placeholder-white/30 focus:border-white/30 focus:outline-none"
-                />
-                <span className="shrink-0 text-[10px] text-white/30">–</span>
-                <input
-                  type="number" placeholder="Max" min={0} max={999} aria-label="Maximum BPM"
-                  value={filters.bpmMax ?? ''}
-                  onChange={(e) => set({ bpmMax: e.target.value ? Number(e.target.value) : null })}
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[12px] tabular-nums text-white placeholder-white/30 focus:border-white/30 focus:outline-none"
-                />
+      {/* ── Advanced section (BPM, key, scale, rating) ──────────── */}
+      <div>
+        <button
+          onClick={() => setAdvancedOpen((v) => !v)}
+          className="flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 hover:text-white/80 transition-colors"
+        >
+          {advancedOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+          Advanced filters
+          {(filters.bpmMin != null || filters.bpmMax != null || filters.keys.size > 0 || filters.scale !== 'all' || filters.rating != null) && (
+            <span className="w-4 h-4 rounded-full bg-[#3a3020] text-white/80 text-[8px] font-bold flex items-center justify-center ml-1">
+              {[filters.bpmMin != null || filters.bpmMax != null, filters.keys.size > 0, filters.scale !== 'all', filters.rating != null].filter(Boolean).length}
+            </span>
+          )}
+        </button>
+
+        {advancedOpen && (
+          <div className="mt-3 space-y-4 animate-in fade-in slide-in-from-top-1 duration-150">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* BPM range */}
+              <div>
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-2">BPM range</p>
+                <div className="flex items-center gap-2">
+                  <input type="number" placeholder="Min" min={0} max={999} value={filters.bpmMin ?? ''}
+                    onChange={(e) => set({ bpmMin: e.target.value ? Number(e.target.value) : null })}
+                    className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-2.5 py-1.5 text-[12px] text-white placeholder-white/30 focus:outline-none focus:border-white/30 tabular-nums" />
+                  <span className="text-white/30 text-[10px] shrink-0">–</span>
+                  <input type="number" placeholder="Max" min={0} max={999} value={filters.bpmMax ?? ''}
+                    onChange={(e) => set({ bpmMax: e.target.value ? Number(e.target.value) : null })}
+                    className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-2.5 py-1.5 text-[12px] text-white placeholder-white/30 focus:outline-none focus:border-white/30 tabular-nums" />
+                </div>
+              </div>
+
+              {/* Scale */}
+              <div>
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-2">Scale</p>
+                <div className="flex gap-1.5">
+                  {(['all', 'major', 'minor'] as const).map((s) => (
+                    <button key={s} onClick={() => set({ scale: s })}
+                      className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors capitalize ${
+                        filters.scale === s
+                          ? s === 'minor' ? 'bg-[#1f1a10] border border-[#3d3020]/40 text-[#c8a47a]'
+                            : s === 'major' ? 'bg-[#1f1a10] border border-[#3d3020]/60 text-[#c8a47a]'
+                            : 'bg-white text-black'
+                          : 'bg-white/[0.04] border border-white/10 text-white/60 hover:text-white/80'
+                      }`}
+                    >{s === 'all' ? 'Any' : s}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Min rating */}
+              <div>
+                <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-2">Min rating</p>
+                <div className="flex gap-0.5">
+                  {[1,2,3,4,5].map((star) => (
+                    <button key={star} onClick={() => set({ rating: filters.rating === star ? null : star })}
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center text-[14px] transition-colors ${
+                        filters.rating != null && star <= filters.rating ? 'text-white' : 'text-white/30 hover:text-white/60'
+                      }`}>★</button>
+                  ))}
+                </div>
               </div>
             </div>
 
+            {/* Key picker */}
             <div>
-              <FacetLabel>Scale</FacetLabel>
-              <div className="flex gap-1.5">
-                {(['all', 'major', 'minor'] as const).map((sc) => (
-                  <button
-                    key={sc}
-                    onClick={() => set({ scale: sc })}
-                    aria-pressed={filters.scale === sc}
-                    className={`rounded-full px-3 py-1.5 text-[11px] font-medium capitalize transition-colors ${
-                      filters.scale === sc
-                        ? 'border border-[#3d3020]/60 bg-[#1f1a10] text-[#c8a47a]'
-                        : 'border border-white/10 bg-white/[0.04] text-white/60 hover:text-white/80'
-                    }`}
-                  >{sc === 'all' ? 'Any' : sc}</button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <FacetLabel>Min rating</FacetLabel>
-              <div className="flex gap-0.5">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    onClick={() => set({ rating: filters.rating === star ? null : star })}
-                    aria-label={`Minimum rating ${star} star${star === 1 ? '' : 's'}`}
-                    aria-pressed={filters.rating != null && star <= filters.rating}
-                    className={`grid size-7 place-items-center rounded-lg text-[14px] transition-colors ${
-                      filters.rating != null && star <= filters.rating ? 'text-white' : 'text-white/30 hover:text-white/60'
-                    }`}
-                  >★</button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <FacetLabel>Key</FacetLabel>
-              <div className="flex flex-wrap gap-1.5">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-2">Key</p>
+              <div className="flex gap-1.5 flex-wrap">
                 {CHROMATIC_KEYS.map((k) => (
-                  <button
-                    key={k}
-                    onClick={() => toggleKey(k)}
-                    aria-pressed={filters.keys.has(k)}
-                    className={`size-8 rounded-lg font-mono text-[11px] font-bold transition-all ${
+                  <button key={k} onClick={() => toggleKey(k)}
+                    className={`w-9 h-9 rounded-lg text-[11px] font-mono font-bold transition-all ${
                       filters.keys.has(k)
-                        ? 'border border-white/20 bg-white/10 text-white'
-                        : 'border border-white/10 bg-white/[0.04] text-white/40 hover:border-white/20 hover:text-white/80'
-                    }`}
-                  >{k}</button>
+                        ? 'bg-white/10 border border-white/20 text-white shadow-[0_0_6px_rgba(231,215,190,0.12)]'
+                        : 'bg-white/[0.04] border border-white/10 text-white/40 hover:text-white/80 hover:border-white/20'
+                    }`}>{k}</button>
                 ))}
               </div>
             </div>
           </div>
         )}
-      </FacetMenu>
+      </div>
 
-      <button
-        onClick={() => set({ offlineOnly: !filters.offlineOnly })}
-        aria-pressed={filters.offlineOnly}
-        className={`tap min-h-8 rounded-full border px-3 py-1 text-[11px] font-medium backdrop-blur-md transition-colors ${
-          filters.offlineOnly
-            ? 'border-white/25 bg-white/[0.13] text-white'
-            : 'border-white/10 bg-white/[0.04] text-white/60 hover:border-white/20 hover:text-white/80'
-        }`}
-      >Offline</button>
-    </>
-  );
-
-  return (
-    <div className={cn(
-      'animate-in fade-in slide-in-from-top-2 duration-200',
-      embedded ? 'space-y-3 pb-2' : 'mb-4 rounded-xl border border-white/10 bg-white/[0.02] p-3',
-    )}>
-      <div className="flex flex-wrap items-center gap-1.5">{facets}</div>
-
-      {/* Active filters stay visible — a hidden facet menu must never leave the
-          list quietly filtered with no on-screen explanation. */}
+      {/* Active filter chips */}
       {hasActiveFilters(filters) && (
-        <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-white/10 pt-2">
-          <span className="font-mono text-[9px] uppercase tracking-wider text-white/40">Active:</span>
-          {filters.type !== 'all' && <Chip label={typeLabel} onRemove={() => set({ type: 'all' })} />}
-          {filters.offlineOnly && <Chip label="Offline" onRemove={() => set({ offlineOnly: false })} />}
+        <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-white/10">
+          <span className="text-[9px] font-mono uppercase tracking-wider text-white/40">Active:</span>
           {Array.from(filters.genres).map((g) => <Chip key={g} label={g} onRemove={() => toggleGenre(g)} />)}
-          {Array.from(filters.statuses).map((v) => {
-            const opt = STATUS_OPTIONS.find((o) => o.value === v);
-            return <Chip key={v} label={opt?.label ?? v} onRemove={() => toggleStatus(v)} />;
+          {Array.from(filters.statuses).map((s) => {
+            const opt = STATUS_OPTIONS.find((o) => o.value === s);
+            return <Chip key={s} label={opt?.label ?? s} onRemove={() => toggleStatus(s)} />;
           })}
           {(filters.bpmMin != null || filters.bpmMax != null) && (
             <Chip label={`BPM ${filters.bpmMin ?? '?'}–${filters.bpmMax ?? '?'}`} onRemove={() => set({ bpmMin: null, bpmMax: null })} />
@@ -313,78 +335,12 @@ export function FilterBar({ filters, onChange, embedded = false }: FilterBarProp
           {filters.rating != null && <Chip label={`★ ≥ ${filters.rating}`} onRemove={() => set({ rating: null })} />}
           <button
             onClick={() => onChange({ ...DEFAULT_FILTERS, genres: new Set(), statuses: new Set(), keys: new Set() })}
-            className="ml-1 font-mono text-[9px] text-white/60 transition-colors hover:text-white"
+            className="text-[9px] font-mono text-white/60 hover:text-white ml-1 transition-colors"
           >Clear all</button>
         </div>
       )}
     </div>
   );
-}
-
-/** One collapsed facet: a glass pill that opens its options in a popover. */
-function FacetMenu({
-  label, count, value, width = 224, children,
-}: {
-  label: string;
-  /** Number of selections, shown as a badge. */
-  count?: number;
-  /** Single-select facets show the chosen value instead of a count. */
-  value?: string | null;
-  width?: number;
-  children: (close: () => void) => React.ReactNode;
-}) {
-  const active = (count ?? 0) > 0 || !!value;
-  return (
-    <Popover
-      width={width}
-      trigger={({ open, toggle, ref }) => (
-        <button
-          ref={ref as (el: HTMLButtonElement | null) => void}
-          onClick={toggle}
-          aria-expanded={open}
-          aria-haspopup="true"
-          className={`tap inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium backdrop-blur-md transition-colors ${
-            active || open
-              ? 'border-white/25 bg-white/[0.13] text-white'
-              : 'border-white/10 bg-white/[0.04] text-white/60 hover:border-white/20 hover:text-white/80'
-          }`}
-        >
-          {label}
-          {value && <span className="text-white/70">· {value}</span>}
-          {!value && (count ?? 0) > 0 && (
-            <span className="grid size-4 place-items-center rounded-full bg-white/20 text-[9px] font-bold tabular-nums text-white">
-              {count}
-            </span>
-          )}
-          <ChevronDown size={11} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
-        </button>
-      )}
-    >
-      {(close) => children(close)}
-    </Popover>
-  );
-}
-
-function MenuList({ children }: { children: React.ReactNode }) {
-  return <div className="max-h-[min(60vh,320px)] overflow-y-auto p-1">{children}</div>;
-}
-
-function MenuItem({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      role="menuitemcheckbox"
-      aria-checked={selected}
-      className="tap flex w-full min-h-9 items-center justify-between gap-2 rounded-lg px-2.5 text-left text-[12px] text-white/75 transition-colors hover:bg-white/[0.06] hover:text-white"
-    >
-      <span className="truncate">{label}</span>
-      {selected && <Check size={12} className="shrink-0 text-[var(--accent)]" />}
-    </button>
-  );
-}
-
-function FacetLabel({ children }: { children: React.ReactNode }) {
-  return <p className="mb-2 font-mono text-[9px] uppercase tracking-[0.2em] text-white/40">{children}</p>;
 }
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
