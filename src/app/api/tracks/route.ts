@@ -250,7 +250,7 @@ async function listBoundedTracks(
 
   const BASE_COLUMNS = [
     'id', 'title', 'type', 'cover_url', 'duration_seconds', 'peaks_url',
-    'bpm', 'key', 'scale', 'rating', 'store_listed',
+    'bpm', 'key', 'scale', 'rating', 'store_listed', 'status',
     'store_featured', 'store_sort_order', 'scheduled_publish_at',
     'lease_price_usd', 'exclusive_price_usd', 'free_download_enabled',
     'exclusive_sold', 'voice_tag_enabled', 'created_at',
