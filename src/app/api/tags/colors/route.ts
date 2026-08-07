@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireUser } from '@/lib/auth/ownership';
-import { errorMessage } from '@/lib/errors';
+import { errorMessage, schemaCacheMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { readBody } from '@/lib/validate';
 
@@ -32,6 +32,11 @@ export async function GET() {
     return NextResponse.json({ colors });
   } catch (err) {
     log.error('read failed', { error: errorMessage(err) });
+    const pending = schemaCacheMessage(err);
+    // A missing table on READ degrades to "no overrides" rather than an
+    // error: the app has curated defaults for every tag, so the feature
+    // still works, just uncustomised.
+    if (pending) return NextResponse.json({ colors: {} });
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
 }
@@ -79,6 +84,10 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ ok: true, tag: key, color: color.toLowerCase() });
   } catch (err) {
     log.error('write failed', { error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    const pending = schemaCacheMessage(err);
+    return NextResponse.json(
+      { error: pending ?? errorMessage(err) },
+      { status: pending ? 503 : 500 },
+    );
   }
 }

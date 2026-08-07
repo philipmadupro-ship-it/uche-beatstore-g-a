@@ -66,7 +66,8 @@ export function ArtworkFallback({
   tags,
   gradientOnly = false,
 }: ArtworkFallbackProps) {
-  const { defaultArtworkUrl, palette } = useBrandArtwork();
+  // Per-kind: a project falls back to the project image, not the track one.
+  const { defaultArtworkUrl, palette } = useBrandArtwork(kind);
   const tagColors = useTagColors();
 
   const tagged = (tags?.length ?? 0) > 0;

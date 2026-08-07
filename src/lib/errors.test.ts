@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { errorMessage, isError } from './errors';
+import { errorMessage, isError, schemaCacheMessage, missingColumnFrom, missingTableFrom } from './errors';
 
 /**
  * Tests for the error-coercion helpers.
@@ -66,5 +66,69 @@ describe('isError', () => {
     expect(isError({ message: 'fake' })).toBe(false);
     expect(isError(null)).toBe(false);
     expect(isError(undefined)).toBe(false);
+  });
+});
+
+describe('schemaCacheMessage', () => {
+  it('names the migration for a known column', () => {
+    const msg = schemaCacheMessage({
+      message: "Could not find the 'default_artwork_playlist_palette' column of 'creator_profiles' in the schema cache",
+    });
+    expect(msg).toContain('108_brand_logo_and_kind_artwork');
+    // Says what to do, not what went wrong internally.
+    expect(msg).toMatch(/run it on supabase/i);
+    expect(msg).not.toMatch(/schema cache/i);
+  });
+
+  it('names the migration for a known table', () => {
+    const msg = schemaCacheMessage({
+      message: "Could not find the table 'public.tag_colors' in the schema cache",
+    });
+    expect(msg).toContain('107_tag_colors');
+  });
+
+  it('still helps when the column is not in the map', () => {
+    const msg = schemaCacheMessage({
+      message: "Could not find the 'something_new' column of 'tracks' in the schema cache",
+    });
+    expect(msg).toContain('something_new');
+    expect(msg).toMatch(/pending migrations/i);
+  });
+
+  it('handles the Postgres wording as well as the PostgREST one', () => {
+    expect(schemaCacheMessage({ message: 'column "logo_url" does not exist' }))
+      .toContain('108_brand_logo_and_kind_artwork');
+    expect(schemaCacheMessage({ message: 'relation "public.tag_colors" does not exist' }))
+      .toContain('107_tag_colors');
+  });
+
+  it('returns null for anything that is not a schema problem', () => {
+    // The caller must be able to tell these apart — otherwise it would tell
+    // someone to run a migration because their session expired.
+    for (const err of [
+      new Error('Not authenticated'),
+      new Error('duplicate key value violates unique constraint'),
+      'network error',
+      null,
+      undefined,
+      {},
+      42,
+    ]) {
+      expect(schemaCacheMessage(err)).toBeNull();
+    }
+  });
+});
+
+describe('missingColumnFrom / missingTableFrom', () => {
+  it('pulls the identifier out of both wordings', () => {
+    expect(missingColumnFrom("Could not find the 'logo_url' column")).toBe('logo_url');
+    expect(missingColumnFrom('column "creator_profiles.logo_url" does not exist')).toBe('logo_url');
+    expect(missingTableFrom("Could not find the table 'public.tag_colors' in the schema cache")).toBe('tag_colors');
+    expect(missingTableFrom('relation "tag_colors" does not exist')).toBe('tag_colors');
+  });
+
+  it('is null when there is no identifier to find', () => {
+    expect(missingColumnFrom('boom')).toBeNull();
+    expect(missingTableFrom('boom')).toBeNull();
   });
 });

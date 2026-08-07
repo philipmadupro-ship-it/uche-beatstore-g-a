@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCreatorProfile, updateCreatorProfile } from '@/lib/actions/profile';
-import { errorMessage } from '@/lib/errors';
+import { errorMessage, schemaCacheMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 const log = createLogger('api.profile');
 import { readBody } from '@/lib/validate';
@@ -30,6 +30,11 @@ export async function POST(req: NextRequest) {
       hero_image_url,
       default_artwork_url,
       default_artwork_palette,
+      logo_url,
+      default_artwork_project_url,
+      default_artwork_project_palette,
+      default_artwork_playlist_url,
+      default_artwork_playlist_palette,
       credits,
       license_lease_price_usd,
       license_exclusive_price_usd,
@@ -66,6 +71,13 @@ export async function POST(req: NextRequest) {
       // Clearing the artwork must clear the palette with it, or the next
       // upload inherits the previous brand's colours.
       default_artwork_palette: default_artwork_url ? (default_artwork_palette ?? null) : null,
+      logo_url: logo_url || null,
+      default_artwork_project_url: default_artwork_project_url || null,
+      // Same rule as the track palette: clearing the image clears its colours,
+      // or the next upload silently inherits the previous brand's.
+      default_artwork_project_palette: default_artwork_project_url ? (default_artwork_project_palette ?? null) : null,
+      default_artwork_playlist_url: default_artwork_playlist_url || null,
+      default_artwork_playlist_palette: default_artwork_playlist_url ? (default_artwork_playlist_palette ?? null) : null,
       credits: credits || null,
       license_lease_price_usd: license_lease_price_usd ? parseFloat(String(license_lease_price_usd)) : null,
       license_exclusive_price_usd: license_exclusive_price_usd ? parseFloat(String(license_exclusive_price_usd)) : null,
@@ -104,12 +116,20 @@ export async function POST(req: NextRequest) {
     const result = await updateCreatorProfile(payload);
     if (result.error) {
       const status = result.error === 'Not authenticated' ? 401 : 500;
-      return NextResponse.json({ error: result.error }, { status });
+      // A pending migration is the most common cause of a failed profile
+      // write in this codebase, and PostgREST's own wording is written for
+      // whoever is debugging PostgREST. Say what to actually do instead.
+      const pending = schemaCacheMessage(result.error);
+      return NextResponse.json({ error: pending ?? result.error }, { status: pending ? 503 : status });
     }
     return NextResponse.json({ profile: result.profile });
   } catch (error) {
     log.error('Profile POST API error:', { error: errorMessage(error) });
-    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+    const pending = schemaCacheMessage(error);
+    return NextResponse.json(
+      { error: pending ?? errorMessage(error) },
+      { status: pending ? 503 : 500 },
+    );
   }
 }
 
