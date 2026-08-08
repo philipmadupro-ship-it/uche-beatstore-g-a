@@ -455,15 +455,6 @@ export default function LibraryPage() {
     fetch('/api/projects').then(r => r.ok ? r.json() : null).then(d => { if (d?.projects) setProjects(d.projects); }).catch(() => undefined);
   }, []);
 
-  // ── Home filter chips (genre, state, type) ───────────────────────
-  // These are the lightweight filters shown on the Home page itself.
-  // They narrow ALL config rows at once without touching the full FilterBar.
-  const [homeGenre, setHomeGenre] = useState<string | null>(null);
-  const [homeStatus, setHomeStatus] = useState<string | null>(null);
-  const [homeType, setHomeType] = useState<string | null>(null);
-  const hasHomeFilters = homeGenre != null || homeStatus != null || homeType != null;
-  const clearHomeFilters = () => { setHomeGenre(null); setHomeStatus(null); setHomeType(null); };
-
   // Auto-refresh on track inserts/updates/deletes. Replaces the previous
   // "refresh only on user action" behavior — uploads from elsewhere or
   // analyze jobs landing now surface immediately in the library.
@@ -588,10 +579,17 @@ export default function LibraryPage() {
         if (f.storeListed && !t.store_listed) return false;
         if (f.notStoreListed && t.store_listed) return false;
         if (f.minRating != null && (t.rating ?? 0) < f.minRating) return false;
-        // Home filter chips (additive on top of row filter)
-        if (homeGenre && !getGenres(t).includes(homeGenre)) return false;
-        if (homeStatus && t.status !== homeStatus) return false;
-        if (homeType && t.type !== homeType) return false;
+        /* The library's own Filters menu governs Browse rows too.
+           
+           Browse used to carry a second, separate chip strip with its own
+           single-select state and a hardcoded subset of the vocabulary —
+           seven genres of twelve, three states of four. Two filter controls on
+           one page meant the Filters button could read "no filters" while the
+           rows were in fact narrowed to Trap, and a genre missing from the
+           strip was unreachable in this view. One control, one source. */
+        if (filters.genres.size > 0 && !getGenres(t).some((g) => filters.genres.has(g))) return false;
+        if (filters.statuses.size > 0 && (!t.status || !filters.statuses.has(t.status))) return false;
+        if (filters.type !== 'all' && t.type !== filters.type) return false;
         return true;
       });
       // Sort
@@ -629,7 +627,7 @@ export default function LibraryPage() {
         if (row.cfg.source === 'projects' && row.projects.length === 0) return false;
         return true;
       });
-  }, [tracks, playlists, projects, playsByTrack, homeGenre, homeStatus, homeType]);
+  }, [tracks, playlists, projects, playsByTrack, filters]);
 
   // Total library duration shown in the hero.
   const totalDurationLabel = useMemo(() => {
@@ -1128,42 +1126,6 @@ export default function LibraryPage() {
         {/* ── Sections view (Browse mode) ────────────────────────── */}
         {effectiveBrowseMode === 'sections' && !loading && (
           <div className="mb-6 space-y-1">
-            {/* ── Home filter chips ────────────────────────────────── */}
-            <div className="flex items-center gap-1.5 sm:gap-2 flex-nowrap sm:flex-wrap overflow-x-auto scrollbar-hide mb-4 pb-2">
-              <span className="hidden sm:inline text-[9px] font-mono uppercase tracking-wider text-white/40 shrink-0">Filter rows:</span>
-              {/* Genre chips */}
-              {['Drill','Trap','R&B','Afrobeats','Amapiano','Hip-hop','Lo-fi'].map((g) => (
-                <button key={g} onClick={() => setHomeGenre(homeGenre === g ? null : g)}
-                  className={`shrink-0 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-medium border transition-all ${
-                    homeGenre === g ? 'bg-white text-black border-white' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'
-                  }`}>{g}</button>
-              ))}
-              <div className="w-px h-4 bg-white/20 mx-1 shrink-0" />
-              {/* State chips */}
-              {[
-                { v: 'maq', l: 'MAQ', cls: 'bg-[#1f1a10] text-[#c8a47a] border-[#3d3020]/40' },
-                { v: 'needs_work', l: 'WIP', cls: 'bg-[#1f1a0a] text-white border-[#3a2f1f]' },
-                { v: 'finished', l: 'Finished', cls: 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]' },
-              ].map(({ v, l, cls }) => (
-                <button key={v} onClick={() => setHomeStatus(homeStatus === v ? null : v)}
-                  className={`shrink-0 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-medium border transition-all ${homeStatus === v ? cls : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}
-                >{l}</button>
-              ))}
-              <div className="w-px h-4 bg-white/20 mx-1 shrink-0" />
-              {/* Type chips */}
-              {[{ v: 'beat', l: 'Beats' }, { v: 'instrumental', l: 'Instr.' }].map(({ v, l }) => (
-                <button key={v} onClick={() => setHomeType(homeType === v ? null : v)}
-                  className={`shrink-0 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-medium border transition-all ${
-                    homeType === v ? 'bg-white text-black border-white' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'
-                  }`}>{l}</button>
-              ))}
-              {hasHomeFilters && (
-                <button onClick={clearHomeFilters} className="flex items-center gap-1 text-[9px] font-mono text-white/50 hover:text-white transition-colors sm:ml-auto shrink-0">
-                  <X size={10} />Clear
-                </button>
-              )}
-            </div>
-
             {/* ── Config-driven rows ───────────────────────────────── */}
             <div className="space-y-6">
               {homeRows.map((row) => (
@@ -1194,12 +1156,12 @@ export default function LibraryPage() {
 
         {/* Filter chips — Beat and Instrumental are mutually exclusive
             single-type filters. "All" resets. Only shown in 'all' list view. */}
-        {effectiveBrowseMode === 'all' && (
-          <>
-
-        {/* Secondary toolbar — search on the left, sort dropdown on the
-            right. Lives below the chips so the hero + chip strip read
-            as the identity row, and the toolbar is the actual control. */}
+        {/* Secondary toolbar — search, filters, columns, sort, view.
+            
+            Rendered in BOTH views, not just the track list. Browse used to
+            have neither control, which is why it grew its own chip strip with
+            a hardcoded subset of the vocabulary. One toolbar, both views, so
+            the filter you set in one is the filter that applies in the other. */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-6">
           <div className="relative flex-1 min-w-[160px] sm:max-w-sm">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
@@ -1231,7 +1193,14 @@ export default function LibraryPage() {
                 settings: it is a per-task adjustment, not a preference you set
                 once and forget. Only meaningful for the table, so it is hidden
                 in grid and portfolio views. */}
-            {viewMode === 'list' && <ColumnPicker />}
+            {/* Always present, in both views.
+                
+                It used to hide outside the list view on the reasoning that a
+                card grid has no columns to configure. Sound, but invisible:
+                from the producer's side the control simply vanished, which
+                reads as broken rather than inapplicable. It configures the
+                track table, which is one click away from anywhere. */}
+            <ColumnPicker />
             <Dropdown
               value={sortMode}
               onChange={(v) => setSortMode(v as SortMode)}
@@ -1282,6 +1251,9 @@ export default function LibraryPage() {
         >
           <FilterBar filters={filters} onChange={setFilters} embedded />
         </Drawer>
+
+        {effectiveBrowseMode === 'all' && (
+          <>
 
         {/* ── Smart playlists — saved auto-updating filter views ──── */}
         {(smartPlaylists.length > 0 || hasActiveFilters(filters)) && (
