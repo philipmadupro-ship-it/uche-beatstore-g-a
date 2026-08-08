@@ -257,10 +257,16 @@ function ArtworkSlot({
   onRecolour: () => void;
   onPalette: (colors: string[]) => void;
 }) {
-  // Two seeds: enough to show that covers of this kind vary, without turning
-  // the settings page into a gallery.
-  const samples = [`${slot.id}-a`, `${slot.id}-b`]
-    .map((seed) => generateGradient(value.palette, seed, { kind: slot.id }));
+  /* Six seeds, not two.
+     
+     Two was a false economy introduced when this card grew from one slot to
+     three: it fits, but two tiles cannot show the range — the whole promise
+     of this feature is that covers vary, and a pair can look coincidental.
+     Six is enough to read as a set and matches the number of compositions a
+     track can draw, so the preview reflects the real spread rather than a
+     sample of it. */
+  const samples = ['a', 'b', 'c', 'd', 'e', 'f']
+    .map((suffix) => generateGradient(value.palette, `${slot.id}-${suffix}`, { kind: slot.id }));
 
   return (
     <div className="flex flex-wrap items-start gap-3">
@@ -365,12 +371,14 @@ function ArtworkSlot({
         )}
       </div>
 
-      <div className="flex shrink-0 gap-1.5">
+      {/* Full-width beneath the controls: six tiles cannot sit beside them
+          without squeezing the palette swatches off the row. */}
+      <div className="mt-1 grid w-full grid-cols-6 gap-1.5">
         {samples.map((g, i) => (
           <div
             key={i}
             title={g.composition}
-            className="size-16 rounded-lg border border-white/10"
+            className="aspect-square rounded-lg border border-white/10"
             style={{ backgroundImage: g.css }}
           />
         ))}
