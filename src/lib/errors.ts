@@ -66,8 +66,8 @@ export function isError(x: unknown): x is Error {
 /** Columns a UI action writes, and the migration that introduces them. */
 const COLUMN_MIGRATIONS: Record<string, string> = {
   // 106 — default artwork + brand palette
-  default_artwork_url: '106_default_artwork',
-  default_artwork_palette: '106_default_artwork',
+  default_artwork_url: '109_default_artwork',
+  default_artwork_palette: '109_default_artwork',
   // 108 — logo + per-kind artwork
   logo_url: '108_brand_logo_and_kind_artwork',
   default_artwork_project_url: '108_brand_logo_and_kind_artwork',

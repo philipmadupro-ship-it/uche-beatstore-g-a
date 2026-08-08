@@ -1,3 +1,10 @@
+-- Renumbered from 106: another branch landed its own 106 concurrently
+-- (106_license_purchases_refund_review). Two files sharing a number makes a
+-- clean replay order filesystem-dependent, which is the one thing an
+-- append-only migration set must not be. Content is unchanged and both
+-- statements are idempotent, so an environment that already ran this as 106
+-- re-runs it here as a no-op.
+
 -- Default artwork + brand palette
 --
 -- Two related problems. First, most beats are uploaded without a cover, and
