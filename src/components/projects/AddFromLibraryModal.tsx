@@ -182,7 +182,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
+ <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm ui-fade-in" onClick={onClose}>
       <div
         ref={panelRef}
         role="dialog"

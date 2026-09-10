@@ -247,6 +247,10 @@ export function ActionMenu({
           onClick={(e) => e.stopPropagation()}
           style={{ position: 'fixed', top: coords.top, left: coords.left, width }}
           className={cn(
+            // Arrives off the edge it hangs from, so it reads as coming out of
+            // the trigger. Flipped menus animate the other way for the same
+            // reason.
+            coords.openUp ? 'ui-pop-up' : 'ui-pop',
             'z-[200] max-h-[70vh] overflow-y-auto rounded-xl py-1.5',
             'border border-white/[0.12] bg-[#0e0c09]/95 backdrop-blur-2xl',
             'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08),0_24px_60px_-12px_rgba(0,0,0,0.7)]',

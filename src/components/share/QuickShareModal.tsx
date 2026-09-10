@@ -241,12 +241,12 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
+ className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/70 backdrop-blur-md ui-fade-in duration-200"
       onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full md:max-w-[560px] max-h-[90vh] rounded-t-3xl md:rounded-2xl overflow-hidden flex flex-col bg-gradient-to-b from-[#121214]/95 via-[#0e0e10]/95 to-[#090907]/98 backdrop-blur-2xl border border-white/[0.06] shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset] animate-in slide-in-from-bottom-4 md:zoom-in-95 duration-300"
+ className="w-full md:max-w-[560px] max-h-[90vh] rounded-t-3xl md:rounded-2xl overflow-hidden flex flex-col bg-gradient-to-b from-[#121214]/95 via-[#0e0e10]/95 to-[#090907]/98 backdrop-blur-2xl border border-white/[0.06] shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset] ui-pop-up duration-300"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.04]">
           <div>

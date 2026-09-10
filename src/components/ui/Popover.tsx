@@ -76,7 +76,7 @@ export function Popover({
              it floats over; the blur is the house style on top of that, not
              a substitute for a background. The mix leans on a heavy blur so
              the panel can stay genuinely translucent and still read. */
-          className="z-[200] rounded-xl border border-white/[0.12] bg-[#0e0c09]/70 backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.10),0_24px_60px_-12px_rgba(0,0,0,0.7)] animate-in fade-in slide-in-from-top-1 py-1"
+ className="z-[200] rounded-xl border border-white/[0.12] bg-[#0e0c09]/70 backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.10),0_24px_60px_-12px_rgba(0,0,0,0.7)] ui-pop py-1"
         >
           {typeof children === 'function' ? children(close) : children}
         </div>,

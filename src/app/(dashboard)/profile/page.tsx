@@ -396,7 +396,7 @@ export default function ProfilePage() {
             aria-modal="true"
             aria-label="Live preview of your storefront"
             tabIndex={-1}
-            className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-white/[0.02] border-l border-white/10 z-50 flex flex-col shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] animate-in slide-in-from-right duration-300 overflow-hidden focus:outline-none"
+ className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-white/[0.02] border-l border-white/10 z-50 flex flex-col shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] ui-drawer-right duration-300 overflow-hidden focus:outline-none"
           >
             {/* Preview header */}
             <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-white/[0.04] shrink-0">

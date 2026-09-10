@@ -196,7 +196,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
 
   return (
     <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300"
+ className="fixed inset-0 bg-black/70 backdrop-blur-md z-[100] flex items-center justify-center p-4 ui-fade-in duration-300"
       onClick={onClose}
     >
       <div
@@ -205,7 +205,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
         aria-modal="true"
         aria-label={`Share — ${contentTitle}`}
         tabIndex={-1}
-        className="w-full max-w-[640px] max-h-[90vh] flex flex-col rounded-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-500 bg-gradient-to-b from-[#121214]/95 via-[#0e0e10]/95 to-[#090907]/98 backdrop-blur-2xl border border-white/[0.06] shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset] focus:outline-none"
+ className="w-full max-w-[640px] max-h-[90vh] flex flex-col rounded-2xl overflow-hidden ui-pop-up duration-500 bg-gradient-to-b from-[#121214]/95 via-[#0e0e10]/95 to-[#090907]/98 backdrop-blur-2xl border border-white/[0.06] shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset] focus:outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative p-6 border-b border-white/[0.04] overflow-hidden">

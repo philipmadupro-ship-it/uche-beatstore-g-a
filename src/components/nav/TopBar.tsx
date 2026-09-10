@@ -395,7 +395,7 @@ export function TopBar() {
         <>
           <div
             onClick={() => setMobileOpen(false)}
-            className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in duration-200"
+ className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 ui-fade-in duration-200"
           />
           <aside
             ref={mobilePanelRef}
@@ -403,7 +403,7 @@ export function TopBar() {
             aria-modal="true"
             aria-label="Navigation menu"
             tabIndex={-1}
-            className="md:hidden fixed top-0 right-0 bottom-0 w-[min(85vw,300px)] z-50 bg-[#090907] border-l border-white/[0.06] flex flex-col animate-in slide-in-from-right duration-300 focus:outline-none"
+ className="md:hidden fixed top-0 right-0 bottom-0 w-[min(85vw,300px)] z-50 bg-[#090907] border-l border-white/[0.06] flex flex-col ui-drawer-right duration-300 focus:outline-none"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">

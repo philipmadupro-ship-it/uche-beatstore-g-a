@@ -44,7 +44,7 @@ export function DrawerStemOverlay({ open, status, progress, data, onClose }: Pro
       aria-modal="true"
       aria-label="Neural stem extraction"
       tabIndex={-1}
-      className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-12 backdrop-blur-xl animate-in fade-in duration-500 focus:outline-none"
+ className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-12 backdrop-blur-xl ui-fade-in duration-500 focus:outline-none"
     >
       <div className="w-full max-w-5xl">
         <div className="flex justify-between items-center mb-8 px-4">
@@ -91,7 +91,7 @@ export function DrawerStemOverlay({ open, status, progress, data, onClose }: Pro
             </div>
           </div>
         ) : data ? (
-          <div className="animate-in zoom-in-95 duration-700">
+ <div className="ui-modal-panel duration-700">
             <StemPlayer
               vocalsUrl={data.vocals_url}
               drumsUrl={data.drums_url}

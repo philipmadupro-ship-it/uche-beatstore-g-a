@@ -275,7 +275,7 @@ export default function AnalyticsPage() {
 
           {/* Expanded filter panel */}
           {showFilters && (
-            <div className="mt-3 bg-white/[0.02] border border-white/10 rounded-xl p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+ <div className="mt-3 bg-white/[0.02] border border-white/10 rounded-xl p-4 space-y-4 ui-pop duration-200">
 
               {/* Genre — first-class */}
               <div>

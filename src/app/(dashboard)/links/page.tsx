@@ -726,7 +726,7 @@ function LinkPopup({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
+ className="fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/70 backdrop-blur-md ui-fade-in duration-200"
       onClick={onClose}
     >
       <div
@@ -741,7 +741,7 @@ function LinkPopup({
           'bg-gradient-to-b from-[#0A0A0A]/95 via-[#070707]/95 to-[#090907]/98',
           'backdrop-blur-2xl border border-white/[0.06]',
           'shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset]',
-          'animate-in slide-in-from-bottom-4 md:zoom-in-95 duration-300',
+'ui-pop-up duration-300',
         )}
       >
         {/* Radial accent wash — same lit-from-corner pattern the

@@ -144,7 +144,7 @@ export function PlayerBar() {
             'backdrop-blur-2xl border border-white/[0.10]',
             'bg-white/[0.04]',
             'shadow-[0_16px_50px_-8px_rgba(0,0,0,0.55)]',
-            'animate-in slide-in-from-bottom-4 fade-in duration-300',
+'ui-pop-up duration-300',
             // Below md: no min-width, fill the screen edges-minus-padding.
             // md+: anchor to the center column with the original
             // proportions so the pill never blows out on ultra-wide.
@@ -341,7 +341,7 @@ export function PlayerBar() {
       {/* Full-screen Now Playing overlay — portaled to body so it escapes
           the pill's stacking context and covers everything. */}
       {mounted && nowPlayingOpen && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-in fade-in duration-300">
+ <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 ui-fade-in duration-300">
           {/* Ambient backdrop — a color wash + heavily blurred copy of the
               cover (the Spotify depth treatment). Clicking it closes. */}
           <button

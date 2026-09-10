@@ -390,7 +390,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
       />
       
       <div 
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in" 
+ className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 ui-fade-in" 
         onClick={onClose}
       />
       <div
@@ -399,7 +399,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         aria-modal="true"
         aria-label={`${track.title} details`}
         tabIndex={-1}
-        className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-[#0c0b09] border-l border-white/[0.06] z-50 flex flex-col animate-in slide-in-from-right duration-300 focus:outline-none"
+ className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-[#0c0b09] border-l border-white/[0.06] z-50 flex flex-col ui-drawer-right duration-300 focus:outline-none"
       >
         <div className="relative p-6 border-b border-white/[0.06]">
           <div className="relative flex items-start justify-between w-full gap-3">
@@ -481,7 +481,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
 
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {view === 'insights' ? (
-            <div className="p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+ <div className="p-6 space-y-6 ui-pop-up duration-500">
               {/* Top stat cards — BPM + Key large */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-[#090907] border border-white/10 rounded-2xl p-4">
@@ -659,7 +659,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         {/* Replace-audio progress — panel-level overlay (the waveform block
             that used to host it was removed). */}
         {isReplacing && (
-          <div className="absolute inset-0 bg-[#090907]/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 animate-in fade-in z-10">
+ <div className="absolute inset-0 bg-[#090907]/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 ui-fade-in z-10">
             <Loader2 size={32} className="animate-spin text-white mb-4" />
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Replacing Source Asset</p>
           </div>

@@ -73,9 +73,9 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={onClose}>
+ <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 ui-fade-in duration-300" onClick={onClose}>
       <div
-        className="bg-[#090907] border border-white/10 w-full max-w-[520px] rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-500"
+ className="bg-[#090907] border border-white/10 w-full max-w-[520px] rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden ui-pop-up duration-500"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -217,7 +217,7 @@ export function ShareModal({ onClose, title, trackIds, coverUrl, projectId, kind
             </button>
           </div>
         ) : (
-          <div className="p-8 space-y-6 animate-in fade-in duration-500">
+ <div className="p-8 space-y-6 ui-fade-in duration-500">
             <div className="flex items-center justify-center w-16 h-16 mx-auto bg-white/10 rounded-full border border-white/20">
               <Check size={28} className="text-white" strokeWidth={3} />
             </div>
