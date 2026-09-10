@@ -15,6 +15,7 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { ErasureRequestSchema } from '@/lib/contracts';
 import { DefaultArtworkCard } from '@/components/settings/DefaultArtworkCard';
 import { TagColorsCard } from '@/components/settings/TagColorsCard';
+import { DesktopNotificationsRow } from '@/components/settings/DesktopNotificationsRow';
 
 interface TeamMember {
   user_id: string;
@@ -319,6 +320,9 @@ export default function SettingsPage() {
                 on={prefs.auto_tagging}
                 onToggle={(v) => savePrefs({ ...prefs, auto_tagging: v })}
               />
+              {/* Per-device, not per-account: OS permission is granted per
+                  browser, so this one does not go through savePrefs. */}
+              <DesktopNotificationsRow />
             </Card>
           </section>
 

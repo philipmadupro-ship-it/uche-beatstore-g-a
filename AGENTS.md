@@ -128,6 +128,9 @@ Finish by exporting a raster or SVG at one of the export presets, or **Upload �
 ### Producer: send a beat to an artist
 `/contacts` → pick a contact → Send Beat modal → choose track + license tier + custom message → `/api/share` creates a `share_links` row (nanoid token) + `beat_sends` row (status='sent') → Resend email with `/share/<token>` → recipient opens, share variant renders based on `recipient_kind` → producer sees opens / plays / interest via `share_plays` table + `/analytics`.
 
+### Producer: get told without watching the tab
+Settings → Preferences → **Desktop notifications**. Switching it on asks the browser for permission and immediately fires a confirmation alert, so the switch proves itself rather than staying silent until the next sale. From then on, new notifications — sales, opened links — surface as OS notifications while a dashboard tab is open. Blocked in browser settings, the row says so instead of failing quietly. The choice is per device, because notification permission is granted per browser.
+
 ### Producer: see what's selling
 `/sales` lists every completed purchase (track license + project bundle, merged chronologically). `/analytics` aggregates plays per track from `share_plays`, sales count + gross from `license_purchases` + `project_access_links`, plots a 30-day sparkline, and shows the top 25 tracks by gross.
 

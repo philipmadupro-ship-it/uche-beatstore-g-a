@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Settings,
   Store,
@@ -26,6 +26,11 @@ import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { cn } from '@/lib/utils';
 import { useBrandArtwork } from '@/hooks/useBrandArtwork';
 import { planMarkAllRead, planMarkRead } from '@/lib/notifications/read-state';
+import {
+  desktopNotificationsActive,
+  selectDesktopNotifications,
+  summarizeBurst,
+} from '@/lib/notifications/desktop';
 
 interface Notification {
   id: string;
@@ -71,14 +76,51 @@ export function TopBar() {
   const [hasMore, setHasMore] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
+  /**
+   * Ids already handed to the OS, and whether we have completed a first fetch.
+   *
+   * Refs, not state: changing them must not re-render the whole top bar, and
+   * they have to be readable by the very next poll rather than after React
+   * flushes.
+   */
+  const desktopSeen = useRef<Set<string>>(new Set());
+  const desktopPrimed = useRef(false);
+
   const fetchNotifs = async () => {
     try {
       const res = await fetch('/api/notifications');
       if (!res.ok) return;
       const j = await res.json();
-      setNotifs(j.notifications ?? []);
+      const rows: Notification[] = j.notifications ?? [];
+      setNotifs(rows);
       setUnread(j.unread ?? 0);
       setHasMore(Boolean(j.hasMore));
+
+      // Tell the operating system about anything new. The first pass through
+      // here is priming: it records what already existed without firing, so
+      // opening the app does not detonate the whole table at once.
+      const picked = selectDesktopNotifications(rows, {
+        seen: desktopSeen.current,
+        primed: desktopPrimed.current,
+      });
+      desktopSeen.current = picked.seen;
+      desktopPrimed.current = true;
+
+      if (picked.fire.length > 0 && desktopNotificationsActive()) {
+        for (const item of summarizeBurst(picked.fire)) {
+          try {
+            new window.Notification(item.title, {
+              body: item.body ?? undefined,
+              // Collapses repeats of the same row rather than stacking them.
+              tag: item.id,
+              // The only icon this project ships. Some platforms ignore SVG
+              // here and fall back to the browser's own mark, which is fine —
+              // a missing icon must not stop the alert.
+              icon: '/icon.svg',
+            });
+          } catch {/* the OS refused it; not worth breaking the poll over */}
+        }
+      }
     } catch {/* silent */}
   };
 
