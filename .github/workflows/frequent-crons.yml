@@ -1,0 +1,46 @@
+name: frequent-crons
+
+# Vercel Hobby only allows crons that run once a day, which made a drop
+# scheduled for 18:00 go live at 06:00 UTC the next morning. This triggers
+# the time-sensitive cron routes every 15 minutes instead. Both routes are
+# idempotent, so the daily Vercel schedule in vercel.json stays as a fallback.
+#
+# Setup (repo → Settings → Secrets and variables → Actions):
+#   CRON_SECRET  — same value as the Vercel env var
+#   APP_URL      — e.g. https://uche-beatstore-g.vercel.app
+# Until both exist, every run exits early and does nothing.
+#
+# GitHub may start scheduled runs a few minutes late under load, and pauses
+# schedules on repos with no activity for 60 days.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: frequent-crons
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Call cron routes
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ secrets.APP_URL }}
+        run: |
+          if [ -z "$CRON_SECRET" ] || [ -z "$APP_URL" ]; then
+            echo "CRON_SECRET or APP_URL secret not set; skipping."
+            exit 0
+          fi
+          status=0
+          for route in publish-scheduled process-uploads; do
+            code=$(curl -sS -o /tmp/out.json -w '%{http_code}' --max-time 300 \
+              -H "Authorization: Bearer $CRON_SECRET" "${APP_URL%/}/api/cron/$route" || echo 000)
+            echo "$route -> HTTP $code: $(head -c 300 /tmp/out.json 2>/dev/null)"
+            [ "$code" = "200" ] || status=1
+          done
+          exit $status

@@ -63,10 +63,14 @@ here, so treat them as unapplied until checked against the target project:
   the webhook fix only applies to future purchases — without it, existing
   customers keep rendering as cold leads.
 
+- `113_store_layout.sql` — adds `creator_profiles.store_layout` (jsonb) for the
+  Store Editor's Design mode. `/api/store` reads it in its own query, so the
+  storefront survives without it, but the builder has nowhere to save.
+
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 112. When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 113 (next new migration = 114). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch

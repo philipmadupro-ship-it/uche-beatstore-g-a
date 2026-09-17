@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { completeMultipart, listParts, readAssembledBuffer } from '@/lib/storage/multipart';
 import { getSession, markStatus, deleteSession } from '@/lib/storage/upload-sessions';
 import { analyzeAudio } from '@/lib/audio/analyze.server';
@@ -12,10 +12,12 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { titleFromFilename, nextVersionLabel } from '@/lib/naming';
 import { errorMessage } from '@/lib/errors';
 import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
-import { enqueueUploadProcessingJob } from '@/lib/upload/processing';
+import { enqueueUploadProcessingJob, processUploadProcessingJobById } from '@/lib/upload/processing';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+// Processing runs in after() once the response is sent, and shares this budget.
+// A job that still overruns is reclaimed by the process-uploads cron.
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   try {
@@ -149,13 +151,23 @@ export async function POST(req: NextRequest) {
 
         const trackId = track && typeof track.id === 'string' ? track.id : session.replaceTrackId;
         if (!trackId) throw new Error('Upload saved without a track id');
-        await enqueueUploadProcessingJob({
+        const jobId = await enqueueUploadProcessingJob({
           trackId,
           userId,
           audioUrl,
           fileName: session.fileName,
           clientAnalysis,
         });
+        // Don't make a new beat wait for the daily cron (3 jobs at 07:00 UTC).
+        if (jobId) {
+          after(async () => {
+            try {
+              await processUploadProcessingJobById(jobId);
+            } catch (err) {
+              console.error('Immediate upload processing failed; cron will retry:', err);
+            }
+          });
+        }
       } catch (err) {
         console.error('Supabase upload completion failed:', err);
         const message = errorMessage(err) || 'Database save failed';
