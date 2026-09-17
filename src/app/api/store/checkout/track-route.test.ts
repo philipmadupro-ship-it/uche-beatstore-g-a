@@ -29,6 +29,12 @@ vi.mock('@/lib/stripe/server', () => ({
   isStripeConfigured: () => mockIsStripeConfigured(),
 }));
 
+const mockRateLimit = vi.fn();
+vi.mock('@/lib/security/rate-limit', () => ({
+  rateLimitDurable: (...args: unknown[]) => mockRateLimit(...args),
+  clientIp: () => '203.0.113.7',
+}));
+
 vi.mock('@/lib/db', () => ({
   isSupabaseConfigured: () => mockIsSupabaseConfigured(),
 }));
@@ -117,6 +123,7 @@ async function loadRoute() {
 }
 
 beforeEach(() => {
+  mockRateLimit.mockResolvedValue(true);
   vi.clearAllMocks();
   mockTracks.length = 0;
   mockLicenses.length = 0;
@@ -350,5 +357,22 @@ describe('POST /api/store/checkout — track mode exclusive delivery metadata', 
     expect(args.line_items[0].price_data.unit_amount).toBe(22500);
     expect(args.metadata.promo_code).toBe('SAVE10');
     expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it('429s before creating a Stripe session when the IP is over its limit', async () => {
+    mockRateLimit.mockImplementation((key: string) => Promise.resolve(!key.startsWith('checkout:')));
+    const mod = await loadRoute();
+    const res = await mod.POST(postBody(exclusiveBody()));
+    expect(res.status).toBe(429);
+    expect(mockSessionsCreate).not.toHaveBeenCalled();
+  });
+
+  it('429s when one email address is over its hourly limit, keyed on the normalised address', async () => {
+    mockRateLimit.mockImplementation((key: string) => Promise.resolve(!key.startsWith('checkout-email:')));
+    const mod = await loadRoute();
+    const res = await mod.POST(postBody({ ...exclusiveBody(), buyer_email: 'Buyer@Example.test' }));
+    expect(res.status).toBe(429);
+    expect(mockRateLimit).toHaveBeenCalledWith('checkout-email:buyer@example.test', 10, 3_600_000);
+    expect(mockSessionsCreate).not.toHaveBeenCalled();
   });
 });
