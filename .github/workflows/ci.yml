@@ -45,6 +45,11 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit
 
+      # ESLint — errors block, warnings don't (87 pre-existing warnings as of
+      # 2026-09-17). Catches hook-rule and unused-import mistakes tsc misses.
+      - name: Lint
+        run: npm run lint -- --quiet
+
       # Vitest — pure-logic test suite. Hits the sidebar filter helper,
       # useWishlist store, /api routes, etc.
       - name: Tests
