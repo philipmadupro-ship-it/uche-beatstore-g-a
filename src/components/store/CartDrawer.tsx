@@ -108,15 +108,22 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
               <span className="text-[18px] font-bold text-white tabular-nums">${total.toLocaleString()}</span>
             )}
           </div>
+          <label htmlFor="cart-buyer-email" className="sr-only">Email for license delivery</label>
           <input
+            id="cart-buyer-email"
             type="email"
+            autoComplete="email"
+            inputMode="email"
             value={buyerEmail}
             onChange={(e) => setBuyerEmail(e.target.value)}
             placeholder="Your email for the license"
             className="w-full rounded-lg border border-white/[0.08] bg-[#090907] px-3 py-2.5 text-[11px] text-white placeholder:text-white/40 focus:border-white/[0.16] focus:outline-none"
           />
+          <label htmlFor="cart-promo-code" className="sr-only">Promo code</label>
           <input
+            id="cart-promo-code"
             type="text"
+            autoComplete="off"
             value={promoCode}
             onChange={(e) => setPromoCode(e.target.value)}
             placeholder="Promo code"
