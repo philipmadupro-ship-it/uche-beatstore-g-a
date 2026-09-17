@@ -68,7 +68,7 @@ test.describe('storefront', () => {
     await expect(checkoutBtn).toBeVisible({ timeout: 5_000 });
 
     // Checkout stays disabled until the license terms are accepted.
-    await page.getByPlaceholder('Your email for the license').fill('e2e-buyer@example.test');
+    await page.getByLabel('Email for license delivery').fill('e2e-buyer@example.test');
     await page.locator('#cart-license-terms').check();
     await expect(checkoutBtn).toBeEnabled();
     await checkoutBtn.click();

@@ -7942,3 +7942,54 @@ button + status filter to `/sales`, mirroring the existing "Awaiting stems" patt
 
 `tsc` clean · `eslint` 0 errors (95 pre-existing warnings, none introduced) · **791 tests**
 passing · `npm run build` green after every phase above.
+
+---
+
+## 2026-09-17 - Next-steps audit and its fixes (PRs #39–#45)
+
+Started from an audit of the whole app (tsc, vitest, eslint, npm audit, route coverage, migration
+ledger, cron schedule), then fixed what it found. PRs #34–#38 landed between the previous entry
+and this one without log entries.
+
+### Fixed
+- **Share-link checkout** (#39, #43). It sold exclusive rights on beats with no WAV or stems,
+  and ignored the share's own settings: revoked, expired, sales disabled, password, and which
+  tracks the share contains. All enforced now (`lib/share/checkout-access.ts`). Playlist and
+  single-track shares could never sell, because the seller was read only from `projects`.
+- **Uploads** (#39). Processed in `after()` from `/api/upload/complete` instead of waiting for the
+  daily 3-job cron. Stale `processing` locks older than 15 minutes are reclaimed.
+- **Scheduled drops** (#39). Vercel Hobby only allows daily crons, so a drop set for 18:00 went
+  live at 06:00 UTC the next day. `.github/workflows/frequent-crons.yml` runs every 15 minutes
+  once the `CRON_SECRET` and `APP_URL` repo secrets exist.
+- **Checkout abuse** (#40). Durable rate limits per IP and per email: each call queues
+  abandoned-cart emails to the typed address.
+- **Local store** (#42). `local-store.ts` and the storage modules imported bare `fs`, which the
+  Turbopack alias turns into an empty stub on the server, so no-database mode read nothing.
+  Now `node:fs`.
+- **Contact import** (#43). `xlsx` replaced by `exceljs`, which must be in
+  `serverExternalPackages`: bundled, `graceful-fs` hits the `fs` stub and the build fails. The
+  preview handler parsed uploads without authentication.
+- **Erasure** (#44). Now covers all 13 tables holding a buyer email, via `buildErasurePlan`.
+  Producer-only (`requireProducer`), because buyers share Supabase auth.
+- **Cart drawers** (#45). Email and promo inputs had no accessible label. Removed
+  `ShareModal`, `ProjectShareModal` and `BeatMatchModal`, which had no importers.
+
+### Added to CI
+Lint (errors block), and a Playwright job against `e2e/fixtures/store-db.json` in local-store
+mode: 4 pass, 2 skip, because the project and playlist detail routes need Supabase.
+
+### Corrections worth recording
+- The audit first claimed store checkout never flagged exclusive sales missing stems. Wrong:
+  it blocks them with a 409. The real gap was the share route.
+- #43 claimed the share price and discount columns didn't exist. A read-only production probe
+  showed they do, added outside migrations. Migration 114 records them; it's a no-op on prod.
+
+### Production state (read-only probe, 2026-09-17)
+107–111 in effect; **112 and 113 not applied**; 114 is a no-op. No purchase has ever gone
+through a share link. See `supabase/MIGRATIONS.md`.
+
+### Open
+- Migrations 112–114, and the `CRON_SECRET` / `APP_URL` repo secrets: waiting on the owner.
+- CSP is still Report-Only. Reports go only to Vercel logs, and enforcing needs a decision
+  on statically rendered pages.
+- `/api/store/beat-match` has no UI caller since `BeatMatchModal` was removed.

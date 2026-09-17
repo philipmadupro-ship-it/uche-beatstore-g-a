@@ -166,19 +166,24 @@ export function CartDrawer({ shareToken, sharePassword }: CartDrawerProps) {
 
             {/* Email */}
             <div className="space-y-2">
-              <label className="text-[10px] font-mono uppercase tracking-wider text-white/60 flex items-center gap-1.5">
-                <Mail size={10} />
+              <label htmlFor="share-cart-email" className="text-[10px] font-mono uppercase tracking-wider text-white/60 flex items-center gap-1.5">
+                <Mail size={10} aria-hidden="true" />
                 Email for license delivery
               </label>
               <input
+                id="share-cart-email"
                 type="email"
+                autoComplete="email"
+                inputMode="email"
+                aria-invalid={error ? 'true' : 'false'}
+                aria-describedby={error ? 'share-cart-email-error' : undefined}
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(null); }}
                 placeholder="you@example.com"
                 className="w-full bg-white/[0.02] border border-white/10 focus:border-white/20 rounded-lg py-2.5 px-3 text-[12px] text-white placeholder:text-white/30 outline-none transition-colors"
               />
               {error && (
-                <p className="text-[11px] text-red-400 leading-tight">{error}</p>
+                <p id="share-cart-email-error" role="alert" className="text-[11px] text-red-400 leading-tight">{error}</p>
               )}
             </div>
 

@@ -87,7 +87,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
   const [creating, setCreating] = useState(false);
 
   // After creation we show the URL + copy button. Mirrors the
-  // ProjectShareModal flow so the visual outcome of "I made a link"
+  // former ProjectShareModal flow so the visual outcome of "I made a link"
   // is consistent.
   const [createdUrl, setCreatedUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -261,7 +261,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
         </div>
 
         {createdUrl ? (
-          // Done-state — same glass card + copy/dismiss as ProjectShareModal.
+          // Done-state — same glass card + copy/dismiss the former ProjectShareModal used.
           <div className="p-6 space-y-4">
             <div className="flex items-center gap-2 bg-white/[0.02] border border-white/20 rounded-xl px-3 py-2.5">
               <Link2 size={12} className="text-white shrink-0" />
