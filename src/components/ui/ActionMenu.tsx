@@ -251,9 +251,8 @@ export function ActionMenu({
             // the trigger. Flipped menus animate the other way for the same
             // reason.
             coords.openUp ? 'ui-pop-up' : 'ui-pop',
-            'z-[200] max-h-[70vh] overflow-y-auto rounded-xl py-1.5',
-            'border border-white/[0.12] bg-[#0e0c09]/95 backdrop-blur-2xl',
-            'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08),0_24px_60px_-12px_rgba(0,0,0,0.7)]',
+            'overlay-surface z-[200] max-h-[70vh] overflow-y-auto rounded-xl py-1',
+            'border border-white/[0.12]',
             'focus:outline-none',
           )}
         >
@@ -264,7 +263,7 @@ export function ActionMenu({
             const before = resolved.slice(0, si).reduce((n, s) => n + s.items.length, 0);
             return (
               <div key={section.id}>
-                {si > 0 && <div className="my-1 h-px bg-white/[0.08]" />}
+                {si > 0 && <div className="mx-2 my-1 h-px bg-white/[0.08]" />}
                 {section.label && (
                   <p className="px-3 pb-1 pt-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-white/40">
                     {section.label}
@@ -286,7 +285,9 @@ export function ActionMenu({
                       onMouseEnter={() => setHighlight(idx)}
                       onClick={() => void invoke(action)}
                       className={cn(
-                        'flex w-full items-center gap-2.5 px-3 py-2 text-left text-[12px] font-medium transition-colors',
+                        // Inset, rounded highlight: the row lights up inside the
+                        // panel's edge rather than as a hard bar across it.
+                        'mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium transition-colors',
                         'disabled:cursor-not-allowed disabled:opacity-40',
                         action.danger || section.danger ? 'text-red-400' : 'text-white',
                         highlight === idx && !(action.disabled || action.busy)
