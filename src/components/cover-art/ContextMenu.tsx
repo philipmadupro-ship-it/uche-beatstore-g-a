@@ -142,14 +142,14 @@ export function ContextMenu({
         }
       }}
       style={{ left: position.x, top: position.y }}
-      className="fixed z-[1001] min-w-48 border border-white/20 bg-[#0D0D0A] py-1 shadow-[0_18px_50px_rgba(0,0,0,0.55)] focus:outline-none"
+      className="overlay-surface fixed z-[1001] min-w-48 rounded-xl border border-white/[0.12] py-1 focus:outline-none"
       // The menu owns its own clicks; the capture-phase closer above would
       // otherwise dismiss it before an item could fire.
       onPointerDown={(event) => event.stopPropagation()}
     >
       {(() => { let actionIndex = -1; return items.map((item, index) => (
         item.kind === 'separator' ? (
-          <span key={`sep-${index}`} role="separator" className="my-1 block h-px bg-white/10" />
+          <span key={`sep-${index}`} role="separator" className="mx-2 my-1 block h-px bg-white/[0.08]" />
         ) : (
           ((): React.ReactNode => {
             actionIndex += 1;
@@ -168,9 +168,11 @@ export function ContextMenu({
               onClose();
             }}
             className={cn(
-              'flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-[12px] transition-colors disabled:opacity-30',
-              item.danger ? 'text-white/90 hover:bg-[#A95235]/20' : 'text-white/60 hover:bg-white/[0.10] hover:text-white/90',
-              active && (item.danger ? 'bg-[#A95235]/20' : 'bg-white/[0.10] text-white/90'),
+              'mx-1 flex w-[calc(100%-0.5rem)] items-center justify-between gap-6 rounded-lg px-2.5 py-1.5 text-left text-[12px] transition-colors disabled:opacity-30',
+              // Danger matches ActionMenu's red rather than the rust #A95235,
+              // which appears nowhere else in the app's palette.
+              item.danger ? 'text-red-400 hover:bg-red-500/10' : 'text-white/60 hover:bg-white/[0.08] hover:text-white/90',
+              active && (item.danger ? 'bg-red-500/10' : 'bg-white/[0.08] text-white/90'),
               'disabled:hover:bg-transparent',
             )}
           >
