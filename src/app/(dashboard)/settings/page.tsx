@@ -103,7 +103,7 @@ export default function SettingsPage() {
     }
     const ok = await confirmToast(
       `Erase ${email}?`,
-      'Their email + Stripe details are permanently anonymised on all purchase records. Sale amounts and dates are kept. This cannot be undone.',
+      'Their email and Stripe details are anonymised on sales, offers, delivery emails, their contact and comments, and their favourites, history, playlists, follows and carts are deleted. Sale amounts and dates are kept. This cannot be undone.',
       { confirmLabel: 'Erase data', cancelLabel: 'Cancel', danger: true },
     );
     if (!ok) return;
@@ -116,8 +116,8 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Erasure failed');
-      const total = (data.licensePurchases ?? 0) + (data.projectAccessLinks ?? 0);
-      toast.success(total > 0 ? `Erased buyer data on ${total} record${total === 1 ? '' : 's'}` : 'No purchase records found for that email');
+      const total = typeof data.total === 'number' ? data.total : 0;
+      toast.success(total > 0 ? `Erased buyer data on ${total} record${total === 1 ? '' : 's'}` : 'No records found for that email');
       setEraseEmail('');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erasure failed');
@@ -334,9 +334,10 @@ export default function SettingsPage() {
             </div>
             <Card className="p-6">
               <p className="text-[13px] text-white/40 mb-4 max-w-prose">
-                Honour a buyer&apos;s data-deletion request. Their email and Stripe details are
-                permanently anonymised across every purchase record; sale amounts and dates are
-                kept for your accounting.
+                Honour a buyer&apos;s data-deletion request. Their email is anonymised on sales,
+                offers, delivery emails, their contact and comments; their favourites, listening
+                history, playlists, follows and abandoned carts are deleted. Sale amounts and dates
+                are kept for your accounting.
               </p>
               <form onSubmit={handleErase} className="flex flex-col sm:flex-row gap-3 sm:items-end">
                 <Field
