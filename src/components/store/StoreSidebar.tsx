@@ -455,7 +455,7 @@ export function StoreSidebar(props: Props) {
       <button
         onClick={() => setFavoritesOnly(!favoritesOnly)}
         className={`tap flex min-h-11 items-center justify-between rounded-lg border px-3 py-2.5 transition-all ${favoritesOnly
-            ? 'border-white/20 text-black bg-white font-semibold shadow-md hover:bg-white/90/[0.08]'
+            ? 'border-white/20 text-black bg-white font-semibold shadow-md hover:bg-white/90'
             : 'bg-transparent border-white/10 text-white/60 hover:border-white/20'
           }`}
       >

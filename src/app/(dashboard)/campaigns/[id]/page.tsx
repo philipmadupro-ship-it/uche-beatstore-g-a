@@ -353,6 +353,7 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
                   <ListRow
                     key={t.id}
                     href={t.contact ? `/contacts/${t.contact.id}` : undefined}
+                    label={t.contact ? `Open ${t.contact.name}` : undefined}
                     media={
                       <div className="grid size-9 place-items-center rounded-full bg-white/15 text-[12px] font-bold text-white">
                         {(t.contact?.name ?? '?').charAt(0).toUpperCase()}

@@ -48,11 +48,14 @@ export function TrackVersionsPanel({
     }
   }, [trackId]);
 
-  // Lazy-load when first opened, refetch when refreshKey changes (after replace)
-  useEffect(() => {
-    if (open && versions === null) fetchVersions();
-  }, [fetchVersions, open, versions]);
-
+  /**
+   * Lazy-load on first open, and refetch when `refreshKey` changes after a
+   * replace.
+   *
+   * One effect, not two: the previous pair both fired on the first open — one
+   * on `versions === null`, the other on `open` — so opening the panel sent
+   * two identical requests.
+   */
   useEffect(() => {
     if (open) fetchVersions();
   }, [fetchVersions, open, refreshKey]);
@@ -158,7 +161,10 @@ export function TrackVersionsPanel({
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* focus-within, not hover alone: these are real buttons,
+                      and revealing them on hover only means a keyboard user
+                      tabs onto a control they cannot see. */}
+                  <div className="flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
                     <button
                       onClick={() => handleDownload(v)}
                       className="p-1.5 rounded text-white/60 hover:text-white hover:bg-white/[0.05]"

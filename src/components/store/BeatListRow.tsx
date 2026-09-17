@@ -176,7 +176,7 @@ export function BeatListRow({
           )}
           <button
             onClick={onPreview}
-            className="hidden sm:flex w-8 h-8 rounded-md items-center justify-center text-white/40 hover:text-black bg-white font-semibold shadow-md hover:bg-white/90/[0.03] hover:bg-white/[0.07] border border-white/[0.04] transition-all"
+            className="hidden sm:flex w-8 h-8 rounded-md items-center justify-center text-white/40 hover:text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/[0.04] transition-all"
             title="Preview"
           >
             <ExternalLink size={11} />

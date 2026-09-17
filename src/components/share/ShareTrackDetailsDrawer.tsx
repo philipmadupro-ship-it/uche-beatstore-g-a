@@ -179,7 +179,7 @@ export function ShareTrackDetailsDrawer({
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/75 backdrop-blur-sm z-40 animate-in fade-in duration-300"
+ className="fixed inset-0 bg-black/75 backdrop-blur-sm z-40 ui-fade-in duration-300"
         onClick={onClose}
       />
 
@@ -189,7 +189,7 @@ export function ShareTrackDetailsDrawer({
         aria-modal="true"
         aria-label={`${track.title} details`}
         tabIndex={-1}
-        className="fixed right-0 top-0 bottom-0 w-full sm:w-[440px] bg-[#0c0c0c] border-l border-white/10 z-50 flex flex-col shadow-[0_0_60px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-300 focus:outline-none"
+ className="fixed right-0 top-0 bottom-0 w-full sm:w-[440px] bg-[#0c0c0c] border-l border-white/10 z-50 flex flex-col shadow-[0_0_60px_rgba(0,0,0,0.8)] ui-drawer-right duration-300 focus:outline-none"
       >
 
         {/* Header */}

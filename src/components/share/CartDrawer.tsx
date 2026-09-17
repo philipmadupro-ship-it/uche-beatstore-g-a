@@ -54,7 +54,7 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 animate-in fade-in duration-200"
+ className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 ui-fade-in duration-200"
         onClick={() => setIsOpen(false)}
       />
 
@@ -65,7 +65,7 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
         aria-modal="true"
         aria-label="Cart"
         tabIndex={-1}
-        className="fixed right-0 top-0 bottom-0 w-full sm:w-[400px] bg-white/[0.02] border-l border-white/10 z-50 flex flex-col shadow-[0_0_80px_rgba(0,0,0,0.9)] animate-in slide-in-from-right duration-300 focus:outline-none"
+ className="fixed right-0 top-0 bottom-0 w-full sm:w-[400px] bg-white/[0.02] border-l border-white/10 z-50 flex flex-col shadow-[0_0_80px_rgba(0,0,0,0.9)] ui-drawer-right duration-300 focus:outline-none"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-white/10 bg-[#0e0c09]">

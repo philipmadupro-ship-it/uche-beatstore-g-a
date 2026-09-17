@@ -203,7 +203,7 @@ export function Dropdown<T extends string = string>({
             'fixed z-[200] py-1 rounded-lg overflow-y-auto max-h-[60vh]',
             'bg-[#090907]/95 backdrop-blur-xl border border-white/[0.08]',
             'shadow-[0_4px_24px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset]',
-            'animate-in fade-in zoom-in-95 duration-100',
+'ui-pop',
           )}
           style={{
             top: coords.top,

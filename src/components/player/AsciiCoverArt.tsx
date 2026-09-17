@@ -235,7 +235,7 @@ export function AsciiCoverArt({ src, level, bass = 0, playing, className }: Prop
     // This used to be `if (!resize()) return;` — a one-shot call that gave up
     // for good if the canvas measured zero size on the very first effect run.
     // That is a real, common case here: the parent is a Drawer that animates
-    // open (`animate-in fade-in duration-300`), so on mount the hero can still
+ // open (`ui-fade-in duration-300`), so on mount the hero can still
     // be mid-transition and report a zero-size rect. Bailing out at that point
     // meant the ResizeObserver was never created, so nothing ever re-measured
     // it and the canvas stayed blank for the rest of its life — confirmed live:

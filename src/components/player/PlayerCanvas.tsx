@@ -407,7 +407,7 @@ export function PlayerCanvas({
 
       {/* Inline Comment Composer */}
       {showComposer && (
-        <div className="p-4 rounded-lg border border-white/20 bg-white/[0.02] backdrop-blur-md space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+ <div className="p-4 rounded-lg border border-white/20 bg-white/[0.02] backdrop-blur-md space-y-3 ui-pop duration-200">
           <div className="flex items-center justify-between">
             <h4 className="text-[10px] font-bold uppercase tracking-widest text-white">
               Add pinned comment at <span className="font-mono text-white">{fmt(currentTime)}</span>

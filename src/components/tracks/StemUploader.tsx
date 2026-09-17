@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Upload, Check, Loader2, X, AudioLines, Plus, Trash2 } from 'lucide-react';
-import { toast } from '@/hooks/useToast';
+import { toast, confirmToast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
+import { Dropdown } from '@/components/ui/Dropdown';
+import { InlineText } from '@/components/ui/InlineText';
 
 const STEMS = [
   { key: 'vocals', label: 'Vocals', color: 'text-[#E0A555]' },
@@ -150,7 +152,7 @@ export function StemUploader({ trackId, initial, onChange }: Props) {
         {filesLoaded && files.length > 0 && (
           <div className="space-y-1.5 mb-3">
             {files.map((f) => (
-              <ExtraStemRow key={f.id} trackId={trackId} file={f} onRemoved={loadFiles} />
+              <ExtraStemRow key={f.id} trackId={trackId} file={f} onRemoved={loadFiles} onChanged={loadFiles} />
             ))}
           </div>
         )}
@@ -218,10 +220,47 @@ function StemSlot({
   );
 }
 
-function ExtraStemRow({ trackId, file, onRemoved }: { trackId: string; file: StemFile; onRemoved: () => void }) {
+/**
+ * One additional stem file.
+ *
+ * Label and category are edited in place. Before, the row was read-only with a
+ * single Remove button, so fixing a typo in "Adlibs" meant deleting the file
+ * and uploading it again — a destructive round trip on assets that are often
+ * the only copy outside the producer's DAW. Removal now confirms for the same
+ * reason: unlike the offline cache, a deleted stem does not come back.
+ */
+function ExtraStemRow({ trackId, file, onRemoved, onChanged }: {
+  trackId: string; file: StemFile; onRemoved: () => void; onChanged: () => void;
+}) {
   const [removing, setRemoving] = useState(false);
+
+  const patch = async (body: Record<string, unknown>) => {
+    try {
+      const res = await fetch(`/api/tracks/${trackId}/stem-files`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_id: file.id, ...body }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || `HTTP ${res.status}`);
+      }
+      onChanged();
+      return true;
+    } catch (err) {
+      toast.error('Could not save', err instanceof Error ? err.message : 'Try again');
+      return false;
+    }
+  };
+
   const remove = async () => {
     if (removing) return;
+    const ok = await confirmToast(
+      `Remove "${file.label}"?`,
+      'The stem file is deleted permanently. This cannot be undone.',
+      { confirmLabel: 'Remove', cancelLabel: 'Keep', danger: true },
+    );
+    if (!ok) return;
     setRemoving(true);
     try {
       const res = await fetch(`/api/tracks/${trackId}/stem-files?file_id=${file.id}`, { method: 'DELETE' });
@@ -232,18 +271,34 @@ function ExtraStemRow({ trackId, file, onRemoved }: { trackId: string; file: Ste
       setRemoving(false);
     }
   };
+
   return (
     <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-white/10 bg-white/[0.05]">
       <Check size={12} className="text-[#6DC6A4] shrink-0" />
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-medium text-white truncate">{file.label}</p>
-        <p className="text-[9px] font-mono uppercase tracking-wider text-white/60">{file.category}</p>
+        <InlineText
+          label={`Label for ${file.label}`}
+          value={file.label}
+          onSave={(next) => patch({ label: next })}
+          maxLength={120}
+          className="-mx-1 px-1 text-[11px] font-medium text-white"
+          inputClassName="text-[11px] font-medium"
+        />
       </div>
+      <Dropdown
+        value={file.category}
+        onChange={(next) => { void patch({ category: next }); }}
+        options={CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
+        menuWidth={150}
+        align="right"
+        aria-label={`Category for ${file.label}`}
+        className="min-h-9 w-[104px] shrink-0 font-mono text-[10px] uppercase tracking-wider"
+      />
       <button
         onClick={remove}
         disabled={removing}
         className="tap grid size-11 shrink-0 place-items-center rounded-full text-white/40 transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
-        aria-label="Remove stem"
+        aria-label={`Remove stem ${file.label}`}
       >
         {removing ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
       </button>
@@ -254,7 +309,6 @@ function ExtraStemRow({ trackId, file, onRemoved }: { trackId: string; file: Ste
 function AddStemRow({ trackId, onAdded }: { trackId: string; onAdded: () => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const labelId = useId();
-  const categoryId = useId();
   const [label, setLabel] = useState('');
   const [category, setCategory] = useState('other');
   const [uploading, setUploading] = useState(false);
@@ -298,18 +352,20 @@ function AddStemRow({ trackId, onAdded }: { trackId: string; onAdded: () => void
         />
       </div>
       <div>
-        <label htmlFor={categoryId} className="mb-1 block text-[8px] font-mono uppercase tracking-[0.18em] text-white/40">
+        <span className="mb-1 block text-[8px] font-mono uppercase tracking-[0.18em] text-white/40">
           Category
-        </label>
-        <select
-          id={categoryId}
-          name="stem-category"
+        </span>
+        {/* `Dropdown` over `<select>` is a documented convention — a native
+            select renders the OS menu, which ignores the app's palette and
+            cannot be styled to match the fields beside it. */}
+        <Dropdown
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="min-h-11 rounded-md border border-white/10 bg-white/[0.02] px-2 py-2 font-mono text-[11px] text-white transition-colors focus:outline-none focus:border-white/50"
-        >
-          {CATEGORIES.map((c) => <option key={c.value} value={c.value} className="bg-[#090907]">{c.label}</option>)}
-        </select>
+          onChange={setCategory}
+          options={CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
+          menuWidth={150}
+          aria-label="Stem category"
+          className="min-h-11 w-[130px] font-mono text-[11px]"
+        />
       </div>
       <input
         ref={inputRef}

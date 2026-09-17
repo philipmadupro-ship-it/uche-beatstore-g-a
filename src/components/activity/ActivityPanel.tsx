@@ -92,7 +92,7 @@ export function ActivityPanel({ open, onClose }: Props) {
       {/* Backdrop — click to dismiss. Lighter than a modal because the
           panel is informational, not a focus-trap. */}
       <div
-        className="fixed inset-0 z-[80] bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
+ className="fixed inset-0 z-[80] bg-black/40 backdrop-blur-sm ui-fade-in duration-200"
         onClick={onClose}
       />
 
@@ -108,7 +108,7 @@ export function ActivityPanel({ open, onClose }: Props) {
                    bg-gradient-to-b from-[#101012]/95 via-[#090907]/95 to-[#090907]/95
                    backdrop-blur-2xl border-l border-white/[0.06]
                    shadow-[-12px_0_40px_rgba(0,0,0,0.5)]
-                   animate-in slide-in-from-right duration-300 focus:outline-none"
+ ui-drawer-right duration-300 focus:outline-none"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
           <div className="flex items-center gap-2">

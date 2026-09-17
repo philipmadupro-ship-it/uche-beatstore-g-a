@@ -104,25 +104,33 @@ describe('StoreBeatRow', () => {
     expect(screen.getByRole('button', { name: 'Change cover for Midnight' })).toBeTruthy();
   });
 
+  /**
+   * A menu row is `menuitem` or, when it carries a check mark, `menuitemcheckbox`.
+   * Asserting on one role alone makes a `queryBy…().toBeNull()` pass for the
+   * wrong reason — the row is there, just under the other role.
+   */
+  const menuRow = (name: RegExp | string) =>
+    screen.queryByRole('menuitem', { name }) ?? screen.queryByRole('menuitemcheckbox', { name });
+
   it('hides listing-only actions on a draft, and offers scheduling instead', () => {
     renderRow({ store_listed: false });
     openMenu();
-    expect(screen.queryByRole('menuitem', { name: /Producer's Picks/ })).toBeNull();
-    expect(screen.queryByRole('menuitem', { name: /free download/i })).toBeNull();
-    expect(screen.getByRole('menuitem', { name: /Schedule auto-publish/ })).toBeTruthy();
+    expect(menuRow(/Producer's Picks/)).toBeNull();
+    expect(menuRow(/free download/i)).toBeNull();
+    expect(menuRow(/Schedule auto-publish/)).toBeTruthy();
   });
 
   it('offers listing actions on a live beat, and no scheduling', () => {
     renderRow();
     openMenu();
-    expect(screen.getByRole('menuitem', { name: /Producer's Picks/ })).toBeTruthy();
-    expect(screen.queryByRole('menuitem', { name: /auto-publish/i })).toBeNull();
+    expect(menuRow(/Producer's Picks/)).toBeTruthy();
+    expect(menuRow(/auto-publish/i)).toBeNull();
   });
 
   it('disables the voice tag item until a voice tag exists', () => {
     renderRow({}, { voiceTagConfigured: false });
     openMenu();
-    const item = screen.getByRole('menuitem', { name: /voice tag/i });
+    const item = menuRow(/voice tag/i)!;
     expect(item.hasAttribute('disabled')).toBe(true);
     expect(item.textContent).toContain('Upload a voice tag first');
   });

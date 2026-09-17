@@ -35,7 +35,7 @@ export function BatchActionBar({ count, noun, onClear, actions, busy }: Props) {
   if (count === 0) return null;
   const label = count === 1 ? noun[0] : noun[1];
   return (
-    <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-2 fade-in duration-200 max-w-[calc(100vw-1rem)]">
+ <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-40 ui-pop-up duration-200 max-w-[calc(100vw-1rem)]">
       {/* Inner pill scrolls horizontally so a long action row is never clipped
           off a phone's edge (the whole bar is content-width + centered). */}
       <div className="flex items-center gap-2 px-3 py-2 rounded-full backdrop-blur-2xl bg-[#090907]/90 border border-white/[0.08] shadow-[0_10px_40px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.04)_inset] overflow-x-auto scrollbar-hide">

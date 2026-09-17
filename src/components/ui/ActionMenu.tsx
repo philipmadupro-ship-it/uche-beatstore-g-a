@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Loader2, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -66,17 +66,49 @@ export function ActionMenu({
   const resolved = resolveSections(sections);
   const flat = flattenActions(sections);
 
+  /**
+   * Stable per-item DOM ids, so the panel can point `aria-activedescendant` at
+   * the highlighted row.
+   *
+   * The keyboard cursor is a `highlight` index painted as a background class,
+   * and DOM focus deliberately stays on the panel (moving it per item fights
+   * the outside-click and restore-focus logic). Visually that reads fine; to a
+   * screen reader it read as nothing at all — the menu announced itself as a
+   * menu, arrow keys changed the picture, and no item was ever announced.
+   * That is the same broken promise `role="menu"` makes when it has no arrow
+   * keys, one level further in.
+   */
+  const menuId = useId();
+  const itemId = (action: MenuAction) => `${menuId}-${action.id}`;
+
   const close = useCallback(() => {
     setOpen(false);
     setHighlight(-1);
     setCoords(null);
   }, []);
 
-  /** Close and hand focus back to the trigger — the dismissal path for Escape
-   *  and for any item that does not ask to keep the menu open. */
+  /**
+   * Close, and hand focus back to the trigger — but only if the item did not
+   * move focus somewhere deliberate.
+   *
+   * `invoke` awaits `onSelect`, so by the time this runs React has already
+   * flushed whatever the item did. An item that opens an inline editor (the
+   * "Edit title" pattern, where the menu focuses the page's real field rather
+   * than growing its own) has therefore already focused that field. Taking
+   * focus back would blur it — and since `ui/InlineText` saves on blur and a
+   * no-op save closes the editor, the field opened and shut in the same frame
+   * and the menu item looked like it did nothing at all.
+   *
+   * Focus still on the menu (or nowhere) means the item was a plain command,
+   * and the trigger is the right place to land.
+   */
   const closeAndRestore = useCallback(() => {
+    const active = document.activeElement;
+    const focusUnclaimed = active === null
+      || active === document.body
+      || (menuRef.current?.contains(active) ?? false);
     close();
-    triggerRef.current?.focus();
+    if (focusUnclaimed) triggerRef.current?.focus();
   }, [close]);
 
   /**
@@ -208,10 +240,17 @@ export function ActionMenu({
           role="menu"
           tabIndex={-1}
           aria-label={label}
+          aria-activedescendant={
+            highlight >= 0 && flat[highlight] ? itemId(flat[highlight]) : undefined
+          }
           onKeyDown={onKeyDown}
           onClick={(e) => e.stopPropagation()}
           style={{ position: 'fixed', top: coords.top, left: coords.left, width }}
           className={cn(
+            // Arrives off the edge it hangs from, so it reads as coming out of
+            // the trigger. Flipped menus animate the other way for the same
+            // reason.
+            coords.openUp ? 'ui-pop-up' : 'ui-pop',
             'z-[200] max-h-[70vh] overflow-y-auto rounded-xl py-1.5',
             'border border-white/[0.12] bg-[#0e0c09]/95 backdrop-blur-2xl',
             'shadow-[inset_0_1px_0_0_rgba(255,255,255,0.08),0_24px_60px_-12px_rgba(0,0,0,0.7)]',
@@ -236,8 +275,13 @@ export function ActionMenu({
                   return (
                     <button
                       key={action.id}
+                      id={itemId(action)}
                       type="button"
-                      role="menuitem"
+                      // A row that carries a check mark is a toggle, and
+                      // `menuitem` has nowhere to put that state — the mark
+                      // would be visual only.
+                      role={action.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+                      aria-checked={action.checked}
                       disabled={action.disabled || action.busy}
                       onMouseEnter={() => setHighlight(idx)}
                       onClick={() => void invoke(action)}

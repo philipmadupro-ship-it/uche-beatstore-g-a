@@ -4,6 +4,8 @@ import { isSupabaseConfigured, requireRowOwnership } from '@/lib/db';
 import { requireUser } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { readBody } from '@/lib/validate';
+import { StemFilePatchBodySchema } from '@/lib/contracts';
 
 const log = createLogger('api.tracks.stem-files');
 export const runtime = 'nodejs';
@@ -18,6 +20,7 @@ interface LastStemFileRow {
  *
  *   GET    /api/tracks/[id]/stem-files            → { files: [...] }
  *   POST   /api/tracks/[id]/stem-files (multipart: file, label?, category?)
+ *   PATCH  /api/tracks/[id]/stem-files (json: file_id, label?, category?)
  *   DELETE /api/tracks/[id]/stem-files?file_id=…
  *
  * Unlike the four fixed columns on the legacy `stems` table, this holds an
@@ -117,6 +120,41 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ file: data });
   } catch (err) {
     log.error('stem-file upload failed', { trackId, error: errorMessage(err) });
+    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+  }
+}
+
+/**
+ * Rename or recategorise one stem file.
+ *
+ * Added because the only way to fix a stem's label was to delete the file and
+ * upload it again — a destructive round trip for a typo, on assets that are
+ * often the only copy outside the producer's DAW.
+ *
+ * Scoped by `track_id` as well as `id` so a file_id belonging to someone
+ * else's track cannot be renamed through a track this user does own.
+ */
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id: trackId } = await params;
+  const parsed = await readBody(req, StemFilePatchBodySchema);
+  if (!parsed.ok) return parsed.res;
+  const { file_id, ...patch } = parsed.data;
+  try {
+    if (!isSupabaseConfigured()) return NextResponse.json({ ok: true });
+    const owner = await requireRowOwnership('tracks', trackId);
+    if (!owner.ok) return owner.res;
+    const { data, error } = await owner.admin
+      .from('track_stem_files')
+      .update(patch)
+      .eq('id', file_id)
+      .eq('track_id', trackId)
+      .select('id, label, category, url, position, created_at')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return NextResponse.json({ error: 'Stem file not found' }, { status: 404 });
+    return NextResponse.json({ file: data });
+  } catch (err) {
+    log.error('stem file patch failed', { trackId, err: errorMessage(err) });
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }
 }

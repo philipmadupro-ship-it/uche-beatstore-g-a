@@ -334,7 +334,7 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
 
   return (
     <div className={cn(
-      'animate-in fade-in slide-in-from-top-2 duration-200',
+'ui-pop duration-200',
       embedded ? 'space-y-3 pb-2' : 'mb-4 rounded-xl border border-white/10 bg-white/[0.02] p-3',
     )}>
       <div className="flex flex-wrap items-center gap-1.5">{facets}</div>

@@ -8,7 +8,7 @@
  * must NOT be added here.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { firstEnabledIndex, nextEnabledIndex, type MenuAction } from '@/lib/ui/action-menu';
 
@@ -34,6 +34,14 @@ export function ContextMenu({
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x, y });
   const [highlight, setHighlight] = useState(-1);
+
+  /**
+   * Ids for `aria-activedescendant`. Focus stays on the panel and the cursor
+   * is a painted highlight, so without these the arrow keys move something a
+   * screen reader cannot see — same gap `ui/ActionMenu` had.
+   */
+  const menuId = useId();
+  const itemId = (index: number) => `${menuId}-item-${index}`;
 
   /**
    * The actionable rows, in render order.
@@ -96,6 +104,7 @@ export function ContextMenu({
       ref={ref}
       role="menu"
       aria-label="Layer actions"
+      aria-activedescendant={highlight >= 0 ? itemId(highlight) : undefined}
       tabIndex={-1}
       onKeyDown={(event) => {
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -132,6 +141,7 @@ export function ContextMenu({
             return (
           <button
             key={item.label}
+            id={itemId(myIndex)}
             type="button"
             role="menuitem"
             disabled={item.disabled}

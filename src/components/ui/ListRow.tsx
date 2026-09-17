@@ -38,6 +38,18 @@ export function ListContainer({ children, header, className }: ListContainerProp
 }
 
 interface ListRowProps {
+  /**
+   * Accessible name for the row's own activation target. Required in practice
+   * whenever `href`/`onClick` is set, because the activator is an overlay with
+   * no text of its own.
+   */
+  label?: string;
+  /**
+   * Set when the title slot contains its own control — an inline rename field,
+   * say. The title then takes its own clicks instead of passing them to the
+   * row.
+   */
+  titleInteractive?: boolean;
   /** Leading control — play button, checkbox, index number. shrink-0. */
   leading?: ReactNode;
   /** Cover art / avatar. shrink-0. */
@@ -57,6 +69,8 @@ interface ListRowProps {
 }
 
 export function ListRow({
+  label,
+  titleInteractive,
   leading,
   media,
   title,
@@ -68,44 +82,67 @@ export function ListRow({
   active,
   className,
 }: ListRowProps) {
+  /**
+   * The row's own click target is an OVERLAY, not the row element.
+   *
+   * This used to render the whole row as a `<button>` (or `<Link>`) wrapping
+   * every slot, so anything interactive inside it was nested inside a button:
+   * the trailing "open in new tab" anchor always was, and adding an inline
+   * rename field and a ⋯ menu to the title made it three. `<button>` inside
+   * `<button>` is invalid HTML — React reports it as a hydration error and the
+   * inner control's behaviour is up to the browser.
+   *
+   * So the row is a plain element, the activator is stretched across it
+   * underneath the content, and only the slots that hold controls take pointer
+   * events. Empty space and the metadata line still activate the row.
+   */
   const inner = (
-    <>
-      {leading && <div className="shrink-0">{leading}</div>}
+    <div className="pointer-events-none relative z-10 flex w-full items-center gap-3">
+      {leading && <div className="pointer-events-auto shrink-0">{leading}</div>}
       {media && <div className="shrink-0">{media}</div>}
-      <div className="min-w-0 flex-1">
+      <div className={cn('min-w-0 flex-1', titleInteractive && 'pointer-events-auto')}>
         <div className="truncate text-row-title">{title}</div>
         {meta && <div className="mt-0.5 truncate text-meta">{meta}</div>}
       </div>
       {columns && <div className="hidden shrink-0 items-center gap-4 md:flex">{columns}</div>}
       {trailing && (
-        <div className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="pointer-events-auto flex shrink-0 items-center gap-2"
+          onClick={(e) => e.stopPropagation()}
+        >
           {trailing}
         </div>
       )}
-    </>
+    </div>
   );
 
   const rowClass = cn(
-    'flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors sm:px-4',
+    'group relative flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors sm:px-4',
     active ? 'bg-[#0D0D0A]' : 'hover:bg-[#0D0D0A]/60',
     className,
   );
 
+  // Stretched activator. `rounded-inherit` keeps the focus ring on the row's
+  // own shape rather than a rectangle over a rounded container.
+  const overlayClass = 'absolute inset-0 z-0 rounded-[inherit] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40';
+
   if (href) {
     return (
-      <Link href={href} onClick={onClick} className={cn(rowClass, 'group')}>
+      <div className={rowClass}>
+        <Link href={href} onClick={onClick} aria-label={label} className={overlayClass} />
         {inner}
-      </Link>
+      </div>
     );
   }
 
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className={cn(rowClass, 'group')}>
+      <div className={rowClass}>
+        <button type="button" onClick={onClick} aria-label={label} className={overlayClass} />
         {inner}
-      </button>
+      </div>
     );
   }
 
-  return <div className={cn(rowClass, 'group')}>{inner}</div>;
+  return <div className={rowClass}>{inner}</div>;
 }

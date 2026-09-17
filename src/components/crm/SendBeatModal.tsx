@@ -645,7 +645,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
             <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 custom-scrollbar">
               {/* Similar Beats AI Suggestions Strip */}
               {mode === 'tracks' && baselineTrack && suggestedTracks.length > 0 && (
-                <div className="mb-4 p-3 rounded-lg border border-[#c8a47a]/25 bg-[#100e1f]/90 backdrop-blur-md space-y-2 animate-in fade-in duration-300">
+ <div className="mb-4 p-3 rounded-lg border border-[#c8a47a]/25 bg-[#100e1f]/90 backdrop-blur-md space-y-2 ui-fade-in duration-300">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-[#c8a47a]">
                       <Sparkles size={11} className={`text-[#c8a47a] ${reducedMotion ? '' : 'animate-pulse'}`} />

@@ -210,7 +210,7 @@ export default function LoginPage() {
           </div>
 
           {isSignUp && (
-            <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+ <div className="ui-pop duration-300">
               <label htmlFor="confirmPassword" className="block text-xs font-medium uppercase text-white/40 mb-1">
                 Confirm Password
               </label>

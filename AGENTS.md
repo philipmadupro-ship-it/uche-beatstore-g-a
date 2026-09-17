@@ -108,6 +108,8 @@ The ⋯ menu holds only what is left, grouped by frequency and keyboard-navigabl
 
 The same rules apply to playlists, to the project and playlist grid cards (rename edits the card's own title), and to the track details drawer, where the title and tags are now editable rather than sending the producer to `/library/[id]`.
 
+`/links` follows them as well. A share row's title is its rename field and its ⋯ menu copies, shares, toggles downloads and deletes — copying a URL, the thing done most on that page, no longer starts by opening a detail popup. The popup is where the full URL, the track list, and the expiry/password settings live.
+
 `/store-editor` follows them too. Its Beat Listing rows previously carried seven icon-only buttons and a line of copy telling the producer to open the beat in the Library to set a price — the one screen for deciding what sells could not set a price. Cover, title and lease price are now edited in the row; the on/off toggle stays visible because it is what the section is for; everything else is in the row's ⋯ menu. A blank price still means "inherit the profile default", which is not the same as free.
 
 ### Producer: make cover art
@@ -137,6 +139,9 @@ Work autosaves. A producer who never opens Design gets exactly the storefront th
 
 ### Producer: send a beat to an artist
 `/contacts` → pick a contact → Send Beat modal → choose track + license tier + custom message → `/api/share` creates a `share_links` row (nanoid token) + `beat_sends` row (status='sent') → Resend email with `/share/<token>` → recipient opens, share variant renders based on `recipient_kind` → producer sees opens / plays / interest via `share_plays` table + `/analytics`.
+
+### Producer: get told without watching the tab
+Settings → Preferences → **Desktop notifications**. Switching it on asks the browser for permission and immediately fires a confirmation alert, so the switch proves itself rather than staying silent until the next sale. From then on, new notifications — sales, opened links — surface as OS notifications while a dashboard tab is open. Blocked in browser settings, the row says so instead of failing quietly. The choice is per device, because notification permission is granted per browser.
 
 ### Producer: see what's selling
 `/sales` lists every completed purchase (track license + project bundle, merged chronologically). `/analytics` aggregates plays per track from `share_plays`, sales count + gross from `license_purchases` + `project_access_links`, plots a 30-day sparkline, and shows the top 25 tracks by gross.

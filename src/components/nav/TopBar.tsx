@@ -25,6 +25,12 @@ import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { cn } from '@/lib/utils';
 import { useBrandArtwork } from '@/hooks/useBrandArtwork';
+import { planMarkAllRead, planMarkRead } from '@/lib/notifications/read-state';
+import {
+  desktopNotificationsActive,
+  selectDesktopNotifications,
+  summarizeBurst,
+} from '@/lib/notifications/desktop';
 
 interface Notification {
   id: string;
@@ -66,16 +72,55 @@ export function TopBar() {
   // ── Notifications ──────────────────────────────────────────────
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
+  /** The panel renders a page of rows; the badge counts every unread row. */
+  const [hasMore, setHasMore] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const notifRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Ids already handed to the OS, and whether we have completed a first fetch.
+   *
+   * Refs, not state: changing them must not re-render the whole top bar, and
+   * they have to be readable by the very next poll rather than after React
+   * flushes.
+   */
+  const desktopSeen = useRef<Set<string>>(new Set());
+  const desktopPrimed = useRef(false);
 
   const fetchNotifs = async () => {
     try {
       const res = await fetch('/api/notifications');
       if (!res.ok) return;
       const j = await res.json();
-      setNotifs(j.notifications ?? []);
+      const rows: Notification[] = j.notifications ?? [];
+      setNotifs(rows);
       setUnread(j.unread ?? 0);
+      setHasMore(Boolean(j.hasMore));
+
+      // Tell the operating system about anything new. The first pass through
+      // here is priming: it records what already existed without firing, so
+      // opening the app does not detonate the whole table at once.
+      const picked = selectDesktopNotifications(rows, {
+        seen: desktopSeen.current,
+        primed: desktopPrimed.current,
+      });
+      desktopSeen.current = picked.seen;
+      desktopPrimed.current = true;
+
+      if (picked.fire.length > 0 && desktopNotificationsActive()) {
+        for (const item of summarizeBurst(picked.fire)) {
+          try {
+            new window.Notification(item.title, {
+              body: item.body ?? undefined,
+              // Collapses repeats of the same row rather than stacking them.
+              tag: item.id,
+              // The only icon this project ships. Some platforms ignore SVG
+              // here and fall back to the browser's own mark, which is fine —
+              // a missing icon must not stop the alert.
+              icon: '/icon.svg',
+            });
+          } catch {/* the OS refused it; not worth breaking the poll over */}
+        }
+      }
     } catch {/* silent */}
   };
 
@@ -122,26 +167,35 @@ export function TopBar() {
     onChange: fetchNotifs,
   });
 
-  const openNotifs = async () => {
-    setNotifOpen(true);
-    if (unread > 0) {
-      setUnread(0);
-      setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
-      fetch('/api/notifications?action=read_all', { method: 'PATCH' }).catch(() => undefined);
-    }
+  /**
+   * Reading is something the producer does to a notification, not something
+   * that happens because a panel rendered.
+   *
+   * Opening the bell used to fire `read_all`, so glancing at the panel cleared
+   * everything in it — open it to check one sale and the other nineteen rows
+   * were silently marked read and gone from the badge, whether or not they had
+   * been scrolled to. Now nothing changes on open; a row is marked when it is
+   * clicked, and clearing the lot is a button you press on purpose.
+   */
+  const markRead = (ids: string[]) => {
+    const plan = planMarkRead(notifs, unread, ids);
+    if (!plan.changed) return;
+    setNotifs(plan.next);
+    setUnread(plan.unread);
+    fetch('/api/notifications?action=read', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: plan.ids }),
+    }).catch(() => undefined);
   };
 
-  // Close on outside click
-  useEffect(() => {
-    if (!notifOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
-        setNotifOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [notifOpen]);
+  const markAllRead = () => {
+    const plan = planMarkAllRead(notifs, unread);
+    if (!plan.changed) return;
+    setNotifs(plan.next);
+    setUnread(plan.unread);
+    fetch('/api/notifications?action=read_all', { method: 'PATCH' }).catch(() => undefined);
+  };
 
   return (
     <>
@@ -202,32 +256,54 @@ export function TopBar() {
             <Search size={19} />
           </button>
 
-          {/* Notifications */}
-          <div className="relative shrink-0" ref={notifRef}>
-            <button
-              onClick={openNotifs}
-              className="tap w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors relative"
-              aria-label="Notifications"
-              title="Notifications"
-            >
-              <Bell size={18} />
-              {unread > 0 && (
-                <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-[#6DC6A4] text-black text-[9px] font-black flex items-center justify-center leading-none">
-                  {unread > 9 ? '9+' : unread}
-                </span>
-              )}
-            </button>
-
-            {notifOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-white/10 rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] z-50 overflow-hidden">
-                <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+          {/* Notifications — the panel was `absolute`, alone among the app's
+              overlays, so it clipped inside any ancestor with overflow or a
+              backdrop-blur stacking context. `ui/Popover` portals to <body>,
+              positions with viewport rect coords, clamps to the screen, and
+              already closes on Escape and outside click. */}
+          <Popover
+            width={320}
+            align="right"
+            open={notifOpen}
+            onOpenChange={setNotifOpen}
+            trigger={({ open, toggle, ref }) => (
+              <button
+                ref={ref as (el: HTMLButtonElement | null) => void}
+                onClick={toggle}
+                aria-expanded={open}
+                aria-haspopup="dialog"
+                className="tap w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors relative shrink-0"
+                aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+                title="Notifications"
+              >
+                <Bell size={18} />
+                {unread > 0 && (
+                  <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-[#6DC6A4] text-black text-[9px] font-black flex items-center justify-center leading-none">
+                    {unread > 9 ? '9+' : unread}
+                  </span>
+                )}
+              </button>
+            )}
+          >
+              <div className="overflow-hidden rounded-xl">
+                <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between gap-2">
                   <span className="text-[11px] font-mono uppercase tracking-wider text-white">Notifications</span>
-                  <button
-                    onClick={() => setActivityOpen(true)}
-                    className="text-[9px] font-mono uppercase tracking-wider text-white/50 hover:text-white transition-colors"
-                  >
-                    Activity log →
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {unread > 0 && (
+                      <button
+                        onClick={markAllRead}
+                        className="text-[9px] font-mono uppercase tracking-wider text-white/50 hover:text-white transition-colors"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setActivityOpen(true)}
+                      className="text-[9px] font-mono uppercase tracking-wider text-white/50 hover:text-white transition-colors"
+                    >
+                      Activity log →
+                    </button>
+                  </div>
                 </div>
                 <div className="max-h-80 overflow-y-auto">
                   {attention > 0 && (
@@ -254,27 +330,49 @@ export function TopBar() {
                       No notifications yet
                     </div>
                   ) : (
-                    notifs.map((n) => (
-                      <div
-                        key={n.id}
-                        className={`flex items-start gap-3 px-4 py-3 border-b border-white/20 last:border-0 transition-colors ${n.read ? 'opacity-60' : 'bg-white/[0.04]'}`}
-                      >
-                        <div className="w-6 h-6 rounded-lg bg-white/[0.05] border border-white/20 flex items-center justify-center shrink-0 mt-0.5">
-                          {notifIcon(n.kind)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-medium text-white leading-tight">{n.title}</p>
-                          {n.body && <p className="text-[10px] text-white/60 mt-0.5 leading-snug">{n.body}</p>}
-                          <p className="text-[9px] font-mono text-white/40 mt-1">{timeAgo(n.created_at)}</p>
-                        </div>
-                        {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shrink-0 mt-1.5" />}
-                      </div>
-                    ))
+                    notifs.map((n) => {
+                      // An unread row is the button that reads it; a read one
+                      // has nothing left to do, so it stays inert rather than
+                      // offering a click that changes nothing.
+                      const Row = n.read ? 'div' : 'button';
+                      return (
+                        <Row
+                          key={n.id}
+                          {...(n.read
+                            ? {}
+                            : {
+                                type: 'button' as const,
+                                onClick: () => markRead([n.id]),
+                                'aria-label': `Mark "${n.title}" read`,
+                              })}
+                          className={`flex w-full items-start gap-3 px-4 py-3 text-left border-b border-white/20 last:border-0 transition-colors ${
+                            n.read ? 'opacity-60' : 'bg-white/[0.04] hover:bg-white/[0.07]'
+                          }`}
+                        >
+                          <div className="w-6 h-6 rounded-lg bg-white/[0.05] border border-white/20 flex items-center justify-center shrink-0 mt-0.5">
+                            {notifIcon(n.kind)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-medium text-white leading-tight">{n.title}</p>
+                            {n.body && <p className="text-[10px] text-white/60 mt-0.5 leading-snug">{n.body}</p>}
+                            <p className="text-[9px] font-mono text-white/40 mt-1">{timeAgo(n.created_at)}</p>
+                          </div>
+                          {!n.read && <div className="w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shrink-0 mt-1.5" />}
+                        </Row>
+                      );
+                    })
                   )}
                 </div>
+                {hasMore && (
+                  <button
+                    onClick={() => { setNotifOpen(false); setActivityOpen(true); }}
+                    className="block w-full border-t border-white/10 px-4 py-2.5 text-center text-[9px] font-mono uppercase tracking-wider text-white/50 transition-colors hover:bg-white/[0.04] hover:text-white"
+                  >
+                    Showing the latest 20 — open activity log →
+                  </button>
+                )}
               </div>
-            )}
-          </div>
+          </Popover>
 
           {/* View public storefront */}
           <Link
@@ -339,7 +437,7 @@ export function TopBar() {
         <>
           <div
             onClick={() => setMobileOpen(false)}
-            className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in duration-200"
+ className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40 ui-fade-in duration-200"
           />
           <aside
             ref={mobilePanelRef}
@@ -347,7 +445,7 @@ export function TopBar() {
             aria-modal="true"
             aria-label="Navigation menu"
             tabIndex={-1}
-            className="md:hidden fixed top-0 right-0 bottom-0 w-[min(85vw,300px)] z-50 bg-[#090907] border-l border-white/[0.06] flex flex-col animate-in slide-in-from-right duration-300 focus:outline-none"
+ className="md:hidden fixed top-0 right-0 bottom-0 w-[min(85vw,300px)] z-50 bg-[#090907] border-l border-white/[0.06] flex flex-col ui-drawer-right duration-300 focus:outline-none"
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
           >
             <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">

@@ -183,7 +183,7 @@ export function CommandPalette() {
 
   return (
     <div
-      className="fixed inset-0 z-[200] flex items-start justify-center pt-32 px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150"
+ className="fixed inset-0 z-[200] flex items-start justify-center pt-32 px-4 bg-black/70 backdrop-blur-sm ui-fade-in duration-150"
       onClick={() => setOpen(false)}
     >
       <div
@@ -192,7 +192,7 @@ export function CommandPalette() {
         aria-modal="true"
         aria-label="Command palette"
         tabIndex={-1}
-        className="w-full max-w-xl bg-[#090907] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-200 focus:outline-none"
+ className="w-full max-w-xl bg-[#090907] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden ui-pop duration-200 focus:outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Input */}

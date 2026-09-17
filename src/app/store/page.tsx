@@ -1252,7 +1252,7 @@ function StorePage() {
               <div
                 id="store-search-suggestions"
                 role="listbox"
-                className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02]/[0.98] shadow-[0_18px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] shadow-[0_18px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl"
               >
                 <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
                   <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-white/40">

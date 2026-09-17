@@ -92,7 +92,7 @@ export function ProjectFolderSelect({
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+ <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm ui-fade-in duration-200" onClick={onClose}>
       <div
         ref={panelRef}
         role="dialog"
