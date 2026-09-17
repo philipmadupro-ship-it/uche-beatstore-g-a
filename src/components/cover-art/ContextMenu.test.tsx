@@ -21,6 +21,50 @@ const action = (label: string, over: Partial<Extract<ContextMenuItem, { kind: 'a
   ({ kind: 'action', label, onSelect: vi.fn(), ...over });
 
 describe('ContextMenu', () => {
+  it('hands focus back to what was focused before it opened', () => {
+    // It used to take focus and never return it, so every close left focus on
+    // <body>. The studio's window-level shortcuts hid that; a screen reader
+    // lost its place on every use.
+    const layer = document.createElement('div');
+    layer.tabIndex = -1;
+    document.body.appendChild(layer);
+    layer.focus();
+
+    const { unmount } = render(<ContextMenu x={10} y={10} items={[action('Hide')]} onClose={vi.fn()} />);
+    expect(document.activeElement).toBe(screen.getByRole('menu'));
+    unmount();
+    expect(document.activeElement).toBe(layer);
+    layer.remove();
+  });
+
+  it('does not steal focus back from a field that claimed it while closing', () => {
+    const layer = document.createElement('div');
+    layer.tabIndex = -1;
+    const field = document.createElement('input');
+    document.body.append(layer, field);
+    layer.focus();
+
+    const { unmount } = render(<ContextMenu x={10} y={10} items={[action('Hide')]} onClose={vi.fn()} />);
+    field.focus();
+    unmount();
+    expect(document.activeElement).toBe(field);
+    layer.remove();
+    field.remove();
+  });
+
+  it('does not throw or refocus when the previous element is gone', () => {
+    const layer = document.createElement('div');
+    layer.tabIndex = -1;
+    document.body.appendChild(layer);
+    layer.focus();
+
+    const { unmount } = render(<ContextMenu x={10} y={10} items={[action('Delete')]} onClose={vi.fn()} />);
+    // Delete removes the very layer the menu was opened on.
+    layer.remove();
+    expect(() => unmount()).not.toThrow();
+    expect(document.activeElement).toBe(document.body);
+  });
+
   it('takes focus on mount so the keyboard can reach it', () => {
     renderMenu([action('Duplicate')]);
     expect(document.activeElement).toBe(screen.getByRole('menu'));

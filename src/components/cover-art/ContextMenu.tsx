@@ -81,7 +81,24 @@ export function ContextMenu({
 
   // Focus the panel so it is reachable at all from the keyboard. Without
   // this the menu announced itself as a menu and then took no key but Escape.
-  useEffect(() => { ref.current?.focus(); }, []);
+  //
+  // And hand focus back when it goes. The menu took focus and never returned
+  // it, so closing it — Escape, or running Duplicate or Hide — dropped focus
+  // on <body>. The studio's shortcuts listen on window and kept working, which
+  // is why it went unnoticed; a screen reader lost its place on every use.
+  // Same rule as ui/ActionMenu: only restore if nothing else claimed focus in
+  // the meantime, so clicking into a field to dismiss the menu keeps that
+  // field focused.
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = ref.current;
+    panel?.focus();
+    return () => {
+      const active = document.activeElement;
+      const unclaimed = !active || active === document.body || !active.isConnected || !!panel?.contains(active);
+      if (unclaimed && previous?.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
