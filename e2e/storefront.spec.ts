@@ -57,14 +57,20 @@ test.describe('storefront', () => {
     // Click the button ancestor that wraps the label
     await leaseLabel.locator('xpath=ancestor::button[1]').first().click();
 
-    // Either a toast appears and the FloatingCartButton becomes visible
-    // (it only renders when items > 0). Use a forgiving cart-icon match.
-    const cartPill = page.locator('button:has-text("$"):has-text("·")').first();
-    await expect(cartPill).toBeVisible({ timeout: 5_000 });
-    await cartPill.click();
-
+    // Adding to cart opens the cart drawer on its own, and its scrim then
+    // covers the header cart button. Only click the button if the drawer
+    // didn't open. (The old `button:has-text("$"):has-text("·")` match
+    // resolved to the hidden install-app pill, so this step never passed.)
     const checkoutBtn = page.getByRole('button', { name: /^checkout$/i });
-    await expect(checkoutBtn).toBeVisible();
+    if (!(await checkoutBtn.isVisible().catch(() => false))) {
+      await page.getByRole('button', { name: /^Cart \(1\)$/ }).click();
+    }
+    await expect(checkoutBtn).toBeVisible({ timeout: 5_000 });
+
+    // Checkout stays disabled until the license terms are accepted.
+    await page.getByPlaceholder('Your email for the license').fill('e2e-buyer@example.test');
+    await page.locator('#cart-license-terms').check();
+    await expect(checkoutBtn).toBeEnabled();
     await checkoutBtn.click();
 
     await page.waitForURL(/\/store\/checkout/);

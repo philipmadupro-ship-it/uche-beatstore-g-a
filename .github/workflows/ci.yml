@@ -78,6 +78,50 @@ jobs:
           NEXT_PUBLIC_R2_PUBLIC_URL: https://stub.r2.dev
           CRON_SECRET: stub
 
+  # Playwright smoke against a dev server in local-store mode: no Supabase,
+  # Stripe or R2, and data comes from e2e/fixtures/store-db.json (two listed,
+  # priced beats). Covers /store rendering, the preview drawer and cart →
+  # /store/checkout. The project and playlist detail tests skip here, because
+  # those routes need Supabase.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Load storefront fixture
+        run: cp e2e/fixtures/store-db.json data/db.json
+
+      - name: Playwright
+        run: npm run e2e
+        env:
+          CI: 'true'
+          ENABLE_LOCAL_STORE: 'true'
+          # Public values the browser Supabase client needs in order to
+          # construct at all. The server still uses the local store, because
+          # there's no service-role key.
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: stub-anon-key
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_stub
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7
+
   # Secret scanning — catch an accidentally committed key/token before it
   # ships. Runs in parallel with build-and-test; full history on push.
   secret-scan:
