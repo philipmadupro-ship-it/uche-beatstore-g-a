@@ -93,4 +93,19 @@ describe('UploadsTray', () => {
     renderTray(item({ status: 'interrupted', bytesUploaded: 400 }));
     expect(screen.getByRole('button', { name: /Choose original file to resume/ })).toBeTruthy();
   });
+
+  it('says what it read from the filename on a finished upload', () => {
+    renderTray(item({ fileName: 'Night Shift 140 Fm.wav' }));
+    expect(screen.getByText('140 BPM · F minor from the filename')).toBeTruthy();
+  });
+
+  it('says nothing when the filename carries no BPM or key', () => {
+    renderTray(item({ fileName: 'plain beat.wav' }));
+    expect(screen.queryByText(/from the filename/)).toBeNull();
+  });
+
+  it('does not claim metadata before the upload finishes', () => {
+    renderTray(item({ fileName: 'Night Shift 140 Fm.wav', status: 'uploading' as UploadStatus, track: undefined }));
+    expect(screen.queryByText(/from the filename/)).toBeNull();
+  });
 });

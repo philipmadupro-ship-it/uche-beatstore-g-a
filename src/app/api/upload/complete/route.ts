@@ -9,7 +9,8 @@ import { uploadPublicPreview } from '@/lib/storage/upload';
 import { buildAndUploadSidecars } from '@/lib/audio/sidecars';
 import { isSupabaseConfigured, insert, update, getAll } from '@/lib/local-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { titleFromFilename, nextVersionLabel } from '@/lib/naming';
+import { nextVersionLabel } from '@/lib/naming';
+import { parseTitleMetadata } from '@/lib/upload/title-metadata';
 import { errorMessage } from '@/lib/errors';
 import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
 import { enqueueUploadProcessingJob, processUploadProcessingJobById } from '@/lib/upload/processing';
@@ -50,6 +51,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // What the producer wrote in the filename: "Night Shift 140 Fm.wav" is a
+    // title, a tempo and a key. Read once, used for the title and as the
+    // highest-precedence source in mergeFeatures.
+    const titleMeta = parseTitleMetadata(session.fileName);
+
     // 1. Finalize the multipart upload
     let audioUrl = '';
     try {
@@ -70,9 +76,9 @@ export async function POST(req: NextRequest) {
     await markStatus(sessionId, 'completed');
 
     if (isSupabaseConfigured()) {
-      const merged = mergeFeatures({ client: clientAnalysis, server: null, audd: null });
+      const merged = mergeFeatures({ title: titleMeta, client: clientAnalysis, server: null, audd: null });
       const trackData = {
-        title: titleFromFilename(session.fileName),
+        title: titleMeta.title,
         type: session.type,
         audio_url: audioUrl,
         preview_url: null,
@@ -242,9 +248,9 @@ export async function POST(req: NextRequest) {
       console.warn('Preview generation/upload failed, track remains private:', err);
     }
 
-    const merged = mergeFeatures({ client: clientAnalysis, server: serverAnalysis, audd });
+    const merged = mergeFeatures({ title: titleMeta, client: clientAnalysis, server: serverAnalysis, audd });
     const trackData = {
-      title: titleFromFilename(session.fileName),
+      title: titleMeta.title,
       type: session.type,
       audio_url: audioUrl,
       preview_url: previewUrl,

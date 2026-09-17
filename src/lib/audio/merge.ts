@@ -6,7 +6,13 @@ import type { AuddFeatures } from './audd';
 /**
  * Source-of-truth precedence for the analysis fields written to `tracks`.
  *
- * Three potential sources, in order of preference:
+ * Four potential sources, in order of preference:
+ *
+ *   0. **The filename** (`lib/upload/title-metadata`) — when the producer
+ *      wrote `140 Fm` in the name, that is a statement, not a guess. It wins
+ *      over every detector for `bpm`, `key` and `scale`, because a detector
+ *      working from audio routinely halves or doubles a tempo and picks the
+ *      relative major. It never supplies the other fields.
  *
  *   1. **Client (Essentia.js, browser)** — most accurate for `bpm`, `key`,
  *      `scale`, `loudness`. When the client uploads with a `features` payload
@@ -36,12 +42,20 @@ export interface MergedFeatures {
   acousticness: number | null;
 }
 
+/** What the filename claimed; see `lib/upload/title-metadata`. */
+export interface TitleFeatures {
+  bpm?: number | null;
+  key?: string | null;
+  scale?: string | null;
+}
+
 export function mergeFeatures(opts: {
+  title?: TitleFeatures | null;
   client?: Partial<AudioFeatures> | null;
   server?: AudioFeatures | null;
   audd?: AuddFeatures | null;
 }): MergedFeatures {
-  const { client, server, audd } = opts;
+  const { title, client, server, audd } = opts;
 
   const auddHasSignal = !!(
     audd &&
@@ -53,14 +67,14 @@ export function mergeFeatures(opts: {
     return null;
   };
 
-  const bpm = pick(client?.bpm, server?.bpm);
+  const bpm = pick(title?.bpm, client?.bpm, server?.bpm);
   const duration = pick(client?.duration, server?.duration);
 
   return {
-    // Tempo + harmony: client wins, server fills in.
+    // Tempo + harmony: the filename wins, then client, then server.
     bpm: bpm != null ? Math.round(bpm) : null,
-    key: pick(client?.key, server?.key),
-    scale: pick(client?.scale, server?.scale),
+    key: pick(title?.key, client?.key, server?.key),
+    scale: pick(title?.scale, client?.scale, server?.scale),
     loudness: pick(client?.loudness, server?.loudness),
     duration_seconds: duration != null ? Math.round(duration) : null,
 

@@ -38,9 +38,9 @@ const nextConfig: NextConfig = {
   // server bundle requires them at runtime; analyze.client.ts (browser) does
   // not import them, so client builds are unaffected.
   experimental: {
-    // Bump multipart body limit so the buyer beat-match upload (vocal
-    // clip up to ~25MB) makes it through Next's parser instead of being
-    // truncated at the default 10MB.
+    // Multipart body limit for server actions. Raised for the buyer
+    // beat-match upload, which has since been removed; kept because the
+    // default 10MB is low for any audio-bearing action.
     serverActions: { bodySizeLimit: '25mb' },
   },
   // Cover art lives in Cloudflare R2's public bucket. Allowlist it so

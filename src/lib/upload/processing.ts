@@ -8,6 +8,7 @@ import { mergeFeatures } from '@/lib/audio/merge';
 import { extractPeaks } from '@/lib/audio/peaks';
 import { readStoredObject, uploadPeaksSidecar, uploadPublicPreview } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
+import { parseTitleMetadata } from '@/lib/upload/title-metadata';
 
 type UploadProcessingJob = {
   id: string;
@@ -193,7 +194,11 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
       console.warn('Upload processing preview failed:', err);
     }
 
+    // Re-read the filename here too: this update runs after the track row
+    // exists, so without it a detected tempo would overwrite the one the
+    // producer wrote in the name.
     const merged = mergeFeatures({
+      title: parseTitleMetadata(job.file_name),
       client: job.client_analysis,
       server: serverAnalysis,
       audd,
