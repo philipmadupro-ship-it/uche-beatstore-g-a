@@ -270,15 +270,14 @@ export function StorefrontBuilder({
       }
       if (meta && event.key.toLowerCase() === 'd' && selectedIds.length > 0) {
         event.preventDefault();
-        let created: string[] = [];
-        commit((current) => {
-          const result = duplicateSections(current, selectedIds);
-          created = result.ids;
-          return result.layout;
-        });
+        // Computed BEFORE commit, not inside its updater: React does not promise
+        // to run an updater before the next line, so reading ids assigned in
+        // one selected nothing. Discrete actions can use the rendered layout.
+        const result = duplicateSections(layout, selectedIds);
+        commit(() => result.layout);
         // Select the copies, not the originals: the thing you just made is the
         // thing you are about to move.
-        if (created.length > 0) setSelectedIds(created);
+        if (result.ids.length > 0) setSelectedIds(result.ids);
         return;
       }
       if ((event.key === 'Delete' || event.key === 'Backspace') && selectedIds.length > 0) {
@@ -286,11 +285,8 @@ export function StorefrontBuilder({
         // Pruned against the layout the delete PRODUCED, not the one it
         // started from: a locked section refuses deletion, and clearing the
         // selection outright would drop it from the selection anyway.
-        let next = layout;
-        commit((current) => {
-          next = removeSections(current, selectedIds);
-          return next;
-        });
+        const next = removeSections(layout, selectedIds);
+        commit(() => next);
         setSelectedIds(pruneSelection(next, selectedIds));
         return;
       }
@@ -357,13 +353,9 @@ export function StorefrontBuilder({
         label: `Duplicate${suffix}`,
         shortcut: '⌘D',
         onSelect: () => {
-          let created: string[] = [];
-          commit((current) => {
-            const result = duplicateSections(current, ids);
-            created = result.ids;
-            return result.layout;
-          });
-          if (created.length > 0) setSelectedIds(created);
+          const result = duplicateSections(layout, ids);
+          commit(() => result.layout);
+          if (result.ids.length > 0) setSelectedIds(result.ids);
           setMenu(null);
         },
       },
@@ -418,11 +410,8 @@ export function StorefrontBuilder({
         danger: true,
         disabled: anyLocked && ids.length === 1,
         onSelect: () => {
-          let next = layout;
-          commit((current) => {
-            next = removeSections(current, ids);
-            return next;
-          });
+          const next = removeSections(layout, ids);
+          commit(() => next);
           setSelectedIds(pruneSelection(next, ids));
           setMenu(null);
         },
