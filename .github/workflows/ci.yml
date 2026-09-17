@@ -78,6 +78,11 @@ jobs:
           NEXT_PUBLIC_R2_PUBLIC_URL: https://stub.r2.dev
           CRON_SECRET: stub
 
+      # /store/* runs an ENFORCED CSP (src/lib/security/csp.ts); a
+      # prerendered /store page would render blank. Fail instead.
+      - name: Store routes stay dynamic
+        run: node scripts/ci/check-store-dynamic.mjs
+
   # Playwright smoke against a dev server in local-store mode: no Supabase,
   # Stripe or R2, and data comes from e2e/fixtures/store-db.json (two listed,
   # priced beats). Covers /store rendering, the preview drawer and cart →
