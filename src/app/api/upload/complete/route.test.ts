@@ -6,6 +6,7 @@
  * - destination attach failures return errors instead of falling back to local-store success
  * - owned project destinations attach the new track and complete successfully
  * - the queued job is processed straight away via after(), not left for the daily cron
+ * - BPM and key written in the filename are applied, and cut from the title
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -274,5 +275,31 @@ describe('POST /api/upload/complete', () => {
     expect(afterCallbacks).toHaveLength(1);
     await expect(Promise.resolve(afterCallbacks[0]())).resolves.toBeUndefined();
     spy.mockRestore();
+  });
+
+  it('applies the BPM and key written in the filename, and cuts them from the title', async () => {
+    const inserted: Array<Record<string, unknown>> = [];
+    mockGetSession.mockReturnValueOnce(session({ fileName: 'Night Shift 140 Fm.wav' }));
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'tracks') {
+        return {
+          insert: (row: Record<string, unknown>) => {
+            inserted.push(row);
+            return { select: () => ({ single: () => Promise.resolve({ data: { id: 'track-1' }, error: null }) }) };
+          },
+        };
+      }
+      return supabaseTable(table);
+    });
+
+    const mod = await loadRoute();
+    const res = await mod.POST(post({ sessionId: 'sess-1' }));
+
+    expect(res.status).toBe(200);
+    expect(inserted[0]).toMatchObject({ title: 'Night Shift' });
+    // The filename is handed to the merge as the highest-precedence source.
+    expect(mockMergeFeatures).toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.objectContaining({ bpm: 140, key: 'F', scale: 'minor' }) }),
+    );
   });
 });

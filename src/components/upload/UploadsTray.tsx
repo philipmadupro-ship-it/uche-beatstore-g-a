@@ -15,6 +15,7 @@ import {
   type UploadRowAction,
 } from '@/lib/upload/row-actions';
 import { InlineText } from '@/components/ui/InlineText';
+import { parseTitleMetadata, describeTitleMetadata } from '@/lib/upload/title-metadata';
 import { InlineTagStrip, type TagGroup } from '@/components/ui/InlineTagStrip';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { useTags } from '@/hooks/useTags';
@@ -135,6 +136,7 @@ function UploadRow({ u }: { u: UploadItem }) {
   const editable = canEditUploadedTrack(u);
   const trackId = (u.track?.id as string | undefined) ?? '';
   const trackTitle = (u.track?.title as string | undefined) ?? u.fileName.replace(/\.[^.]+$/, '');
+  const filenameMeta = describeTitleMetadata(parseTitleMetadata(u.fileName));
 
   /**
    * Rename the track this row created.
@@ -241,6 +243,13 @@ function UploadRow({ u }: { u: UploadItem }) {
           <span className="text-white/60">{Math.round(pct)}% · paused</span>
         )}
       </div>
+
+      {/* What the filename said. Shown on success, so the producer can see the
+          BPM and key were taken from the name rather than guessed — and spot
+          it if the name lied. */}
+      {u.status === 'success' && filenameMeta && (
+        <p className="mt-1 text-[10px] text-white/40">{filenameMeta}</p>
+      )}
 
       {/* error/info detail */}
       {u.error && u.status !== 'success' && (

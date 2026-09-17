@@ -8,7 +8,8 @@ import { mergeFeatures } from '@/lib/audio/merge';
 import { isSupabaseConfigured, insert, update, getAll } from '@/lib/local-store';
 import { requireRowOwnership } from '@/lib/db';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { titleFromFilename, nextVersionLabel } from '@/lib/naming';
+import { nextVersionLabel } from '@/lib/naming';
+import { parseTitleMetadata } from '@/lib/upload/title-metadata';
 import { errorMessage } from '@/lib/errors';
 import { enqueueUploadProcessingJob } from '@/lib/upload/processing';
 
@@ -150,7 +151,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const titleFromName = titleFromFilename(file.name);
+    // "Night Shift 140 Fm.wav" -> title "Night Shift", bpm 140, key F minor.
+    const titleMeta = parseTitleMetadata(file.name);
+    const titleFromName = titleMeta.title;
 
     // Waveform peaks (best-effort sidecar). Failures don't block upload.
     let peaksUrl: string | null = null;
@@ -174,7 +177,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const merged = mergeFeatures({ client: clientAnalysis, server: serverAnalysis, audd });
+    const merged = mergeFeatures({ title: titleMeta, client: clientAnalysis, server: serverAnalysis, audd });
     const trackData = {
       title: titleFromName,
       type,

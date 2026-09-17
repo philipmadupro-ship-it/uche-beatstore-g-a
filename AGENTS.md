@@ -78,6 +78,8 @@ Each variant lives in `src/components/share/variants/*` and consumes the same `/
 ### Producer: upload a track
 Drag/drop file in `/library` → R2 multipart upload (`/api/upload/{init,part,complete,abort}`) → Essentia.js BPM + key extraction → AudD danceability + energy → row written to `tracks` with `audio_url`, peaks JSON, computed metadata → realtime channel (`useRealtimeTable`) refreshes the library.
 
+The filename is read as metadata, not just a title: `Night Shift 140 Fm.wav` becomes the track *Night Shift* at 140 BPM in F minor. What the producer wrote wins over what the analyser detected, because a detector regularly halves a tempo or names the relative major. A name that says nothing is left alone, and the tray shows what was read so a wrong name is visible immediately.
+
 Uploads run in the persistent **Uploads tray**, which is mounted globally and survives navigation. Once a file finishes, its row **names and tags the track it just created, in the tray** — the moment the producer still knows what the file is. Without that, a beat lands in the library titled `beat_final_v3_140.wav` and fixing it means finding it again later. A row that finished without a track id (a `/complete` that returned nothing) shows no editor rather than one bound to nothing.
 
 ### Producer: list a track for sale
