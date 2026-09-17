@@ -81,6 +81,10 @@ export function InlineTagStrip({
         width={300}
         open={open}
         onOpenChange={onOpenChange}
+        // Opened from the ⋯ menu as well as its own button, so it has to take
+        // focus itself — see Popover's `initialFocus`.
+        initialFocus
+        label={`${subject.charAt(0).toUpperCase()}${subject.slice(1)} tags`}
         trigger={({ open: isOpen, toggle: toggleOpen, ref }) => (
           <button
             type="button"
