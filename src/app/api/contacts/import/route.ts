@@ -10,6 +10,7 @@ import {
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { ContactImportBodySchema } from '@/lib/contracts';
+import { parseXlsx } from '@/lib/contacts/spreadsheet';
 
 const log = createLogger('api.contacts.import');
 
@@ -34,18 +35,27 @@ async function parseFile(file: File): Promise<{ headers: string[]; rows: string[
     const [headers = [], ...rest] = all;
     return { headers, rows: rest };
   }
-  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
-    const XLSX = await import('xlsx');
-    const wb = XLSX.read(buf, { type: 'buffer' });
-    const sheet = wb.Sheets[wb.SheetNames[0]];
-    // XLSX returns mixed-type cells (number | string | Date | null); coerce
-    // to string here so the downstream parser doesn't have to.
-    const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' });
-    const headers = (aoa[0] || []).map((c) => String(c ?? ''));
-    const rows = aoa.slice(1).map((r) => r.map((c) => (c == null ? '' : String(c))));
-    return { headers, rows };
+  if (name.endsWith('.xlsx')) {
+    return parseXlsx(buf);
   }
-  throw new Error('Unsupported file. Use .csv, .xlsx, or .xls');
+  if (name.endsWith('.xls')) {
+    throw new Error('Old .xls files are not supported. In Excel, choose File → Save As → .xlsx, then import that.');
+  }
+  throw new Error('Unsupported file. Use .csv or .xlsx');
+}
+
+/**
+ * Both handlers parse an uploaded file, so both authenticate first. /api/* is
+ * outside the proxy's redirect list, and the preview (PUT) used to parse for
+ * anyone. Local-store dev mode has no Supabase auth and is exempt.
+ * Returns the user id, null in local-store mode, or a 401 response.
+ */
+async function authenticate(): Promise<string | null | NextResponse> {
+  if (!isSupabaseConfigured()) return null;
+  const cookieClient = await createServerClient();
+  const { data: { user } } = await cookieClient.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+  return user.id;
 }
 
 /**
@@ -54,6 +64,9 @@ async function parseFile(file: File): Promise<{ headers: string[]; rows: string[
  */
 export async function PUT(req: NextRequest) {
   try {
+    const auth = await authenticate();
+    if (auth instanceof NextResponse) return auth;
+
     const form = await req.formData();
     const file = form.get('file');
     if (!(file instanceof File)) {
@@ -89,21 +102,10 @@ export async function PUT(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    // Authenticate BEFORE touching the uploaded file. parseFile() runs the
-    // xlsx parser (a dependency with known ReDoS/prototype-pollution advisories
-    // and no upstream fix), so we must never let an unauthenticated request
-    // reach it in production — otherwise it's an anonymous DoS surface. Only
-    // the signed-in producer can trigger a parse. (Local-store dev mode has no
-    // Supabase auth and is localhost-only, so it's exempt.)
-    let userId: string | null = null;
-    if (isSupabaseConfigured()) {
-      const cookieClient = await createServerClient();
-      const { data: { user } } = await cookieClient.auth.getUser();
-      if (!user) {
-        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-      }
-      userId = user.id;
-    }
+    // Authenticate before touching the uploaded file.
+    const auth = await authenticate();
+    if (auth instanceof NextResponse) return auth;
+    const userId: string | null = auth;
 
     const ct = req.headers.get('content-type') || '';
     let parsed: ParsedContact[] = [];

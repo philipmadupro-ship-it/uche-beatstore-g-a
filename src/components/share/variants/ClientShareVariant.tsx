@@ -93,6 +93,8 @@ interface Props {
   /** Custom license tiers from the producer's /api/licenses. Empty array = use fallback */
   licenses: LicenseTier[];
   shareToken?: string;
+  /** Password the share was unlocked with, forwarded to checkout. */
+  sharePassword?: string | null;
   shareLeasePrice?: number | null;
   shareExclusivePrice?: number | null;
   shareDiscountPercent?: number | null;
@@ -158,6 +160,7 @@ export function ClientShareVariant({
   creator,
   licenses,
   shareToken,
+  sharePassword,
   shareLeasePrice,
   shareExclusivePrice,
   shareDiscountPercent,
@@ -735,7 +738,7 @@ export function ClientShareVariant({
         />
       )}
 
-      {shareToken && cartOpen && <CartDrawer shareToken={shareToken} />}
+      {shareToken && cartOpen && <CartDrawer shareToken={shareToken} sharePassword={sharePassword} />}
     </div>
   );
 }

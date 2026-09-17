@@ -208,12 +208,12 @@ export function ImportContactsModal({ onClose, onSuccess }: Props) {
                   <>
                     <Upload size={22} className="text-white/50 mx-auto mb-3" />
                     <p className="text-[13px] text-white mb-1">Drop a file or click to upload</p>
-                    <p className="text-[11px] text-white/60">.csv, .xlsx, .xls — columns auto-detected</p>
+                    <p className="text-[11px] text-white/60">.csv or .xlsx — columns auto-detected</p>
                   </>
                 )}
                 <input
                   ref={fileRef} type="file"
-                  accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                  accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   onChange={onPick}
                   className="hidden"
                 />

@@ -432,6 +432,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
           creator={creator}
           licenses={[]}
           shareToken={share?.sales_enabled ? params.token : undefined}
+          sharePassword={password || null}
           shareLeasePrice={share?.lease_price_usd ?? null}
           shareExclusivePrice={share?.exclusive_price_usd ?? null}
           shareDiscountPercent={share?.discount_percent ?? null}

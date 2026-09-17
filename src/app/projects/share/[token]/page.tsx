@@ -657,6 +657,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           creator={creator}
           licenses={licenses}
           shareToken={share.sales_enabled ? token : undefined}
+          sharePassword={passwordRef.current}
           playingId={activeTrack?.id ?? null}
           isPlaying={isPlaying}
           onPlay={(t) => {
