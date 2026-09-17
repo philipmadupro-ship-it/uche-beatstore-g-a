@@ -35,7 +35,7 @@ The producer's workspace. Surfaces:
 | `/campaigns` | Outreach batches. Bulk-send a beat to a contact list. |
 | `/calendar` | Releases, sessions, deadlines, meetings. |
 | `/links` | Every share link you've ever generated (track + project). |
-| `/store-editor` | Storefront WYSIWYG: hero image, bio, accent color, social links, license tiers, default prices, **featured playlists + projects** (drag to reorder, max 5 each), **beat listing** (which tracks appear on `/store`). Each beat row edits its cover, title and lease price in place, keeps the on/off toggle visible, and puts picks / free download / voice tag / license tiers / reorder / scheduling in one ⋯ menu. The **Needs attention** panel (listed beats missing a cover / price / BPM+key) filters the list to the affected beats so they can be fixed there. |
+| `/store-editor` | Two modes. **Design** is the visual storefront builder — a live multi-device canvas (desktop / tablet / mobile) showing the real storefront components with real data, plus a section stack, a per-section inspector with per-breakpoint overrides, a global theme panel, undo/redo and autosave. **Content** is the settings surface: hero image, bio, accent color, social links, license tiers, default prices, **featured playlists + projects** (drag to reorder, max 5 each), **beat listing** (which tracks appear on `/store`), promo codes, voice tags. Each beat row edits its cover, title and lease price in place, keeps the on/off toggle visible, and puts picks / free download / voice tag / license tiers / reorder / scheduling in one ⋯ menu. The **Needs attention** panel (listed beats missing a cover / price / BPM+key) filters the list to the affected beats so they can be fixed there. See "Arranging the storefront" below. |
 | `/sales` | Completed purchases — track licenses + project bundles merged. Stripe session deep-links, status pipeline. |
 | `/analytics` | Plays, sales count, gross USD, 30-day sparkline, top-25 tracks leaderboard, recent activity feed. |
 | `/profile` | The producer's identity. |
@@ -125,6 +125,18 @@ Artwork is a stack of **layers** — `text`, `image`, `shape`, `texture`, `wavef
 
 Finish by exporting a raster or SVG at one of the export presets, or **Upload → Set as cover** to attach the artwork to a track, project, playlist, or the producer profile.
 
+### Producer: arrange the storefront
+
+`/store-editor` → **Design**. The storefront is an ordered list of **sections** — hero, next-drop countdown, featured projects, featured playlists, spotlight, producer's picks, catalogue, trust badges — plus text / image / video / links / free-form canvas blocks you can add. Each section can be reordered, renamed, duplicated, locked, and shown or hidden **per device**.
+
+The canvas is the real thing, not a mockup: it renders the same `ArtistBioBlock` and `BeatCard` components buyers see, at real device widths, with your real data. Sections with nothing in them say so rather than inventing placeholder content.
+
+Responsive editing is genuine. Desktop is the base and changes there flow everywhere; switching to tablet or mobile and changing something writes an override for that device only, badged in the inspector with a one-click reset. The default layout ships one already — the hero draws the producer name as an animated particle canvas on desktop and as plain type on a phone, because the canvas is expensive and reads worse at 390px.
+
+Two things are deliberately fixed. The **catalogue** and the **trust rail** are pinned to the bottom: the catalogue owns the sticky filter toolbar directly above it, and separating them produces a broken page. And a control only appears where the live storefront will honour it — the featured strips own their own responsive grids, so no column control is offered for them.
+
+Work autosaves. A producer who never opens Design gets exactly the storefront they have today.
+
 ### Producer: send a beat to an artist
 `/contacts` → pick a contact → Send Beat modal → choose track + license tier + custom message → `/api/share` creates a `share_links` row (nanoid token) + `beat_sends` row (status='sent') → Resend email with `/share/<token>` → recipient opens, share variant renders based on `recipient_kind` → producer sees opens / plays / interest via `share_plays` table + `/analytics`.
 
@@ -158,6 +170,7 @@ playlists(id, user_id, name, cover_url, store_featured, store_order,
 playlist_tracks(playlist_id, track_id, position)
 
 creator_profiles(user_id, display_name, slug, bio, hero_image_url, credits,
+                 store_layout,  -- section layout + theme; NULL = default layout
                  license_lease_price_usd, license_exclusive_price_usd,
                  license_notes, accent_color, font_style, text_color_primary,
                  instagram_handle, twitter_handle, spotify_url,

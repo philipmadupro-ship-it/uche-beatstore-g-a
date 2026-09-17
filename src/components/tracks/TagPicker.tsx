@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { useTags } from '@/hooks/useTags';
+import { useTagVocabulary } from '@/hooks/useTagVocabulary';
+import { vocabularyWithApplied, tagKey } from '@/lib/tags/vocabulary';
 import { Plus, Sparkles, X } from 'lucide-react';
 import { suggestTags, type TrackFeatures } from '@/lib/audio/feature-tags';
 
@@ -19,7 +21,16 @@ interface TagPickerProps {
 
 export function TagPicker({ trackId, features }: TagPickerProps) {
   const { tags, toggleTag } = useTags(trackId);
+  const { vocabulary } = useTagVocabulary();
   const [customTag, setCustomTag] = useState('');
+
+  // The producer's own tags, plus anything applied to this track that the
+  // vocabulary hasn't caught up with yet. Without the second half, a tag used
+  // on exactly one track disappears from the workspace the moment it's removed.
+  const myTags = useMemo(
+    () => vocabularyWithApplied(vocabulary, tags),
+    [vocabulary, tags],
+  );
 
   const handleToggle = (tag: string, category: string) => {
     const active = tags.includes(tag);
@@ -28,9 +39,16 @@ export function TagPicker({ trackId, features }: TagPickerProps) {
 
   const handleAddCustom = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customTag.trim()) return;
-    if (tags.includes(customTag.trim())) return;
-    toggleTag.mutate({ tag: customTag.trim(), category: 'custom', active: false });
+    const next = customTag.trim();
+    if (!next) return;
+    // Case-insensitive, matching how the vocabulary and tag_colors (mig 107)
+    // decide two spellings are one tag. An exact-match check let "Drill" in
+    // alongside "drill" as a second, separately-coloured chip.
+    if (tags.some((t) => tagKey(t) === tagKey(next))) {
+      setCustomTag('');
+      return;
+    }
+    toggleTag.mutate({ tag: next, category: 'custom', active: false });
     setCustomTag('');
   };
 
@@ -96,6 +114,39 @@ export function TagPicker({ trackId, features }: TagPickerProps) {
           <p className="text-[8px] font-mono uppercase tracking-widest text-white/40 ml-1">
             From audio analysis · click to apply
           </p>
+        </div>
+      )}
+
+      {/* The producer's own vocabulary. Custom tags used to exist only in the
+          "Applied" row above, so one created here was saved to the track and
+          then never offered again — on this track after removal, or on any
+          other track at all. This is where they live now. */}
+      {myTags.length > 0 && (
+        <div className="space-y-2">
+          <label className="ml-1 text-[9px] font-bold uppercase tracking-widest text-white/40">
+            Your tags
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {myTags.map(({ tag, category, count }) => {
+              const active = tags.some((t) => tagKey(t) === tagKey(tag));
+              return (
+                <button
+                  key={tagKey(tag)}
+                  onClick={() => toggleTag.mutate({ tag, category, active })}
+                  title={count > 1 ? `Used on ${count} tracks` : 'Used on 1 track'}
+                  aria-pressed={active}
+                  className={`
+                    px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-300 border
+                    ${active
+                      ? 'bg-white/10 text-white border-white/50 shadow-lg shadow-white/10'
+                      : 'bg-transparent text-white/40 border-white/20 hover:border-white/30 hover:text-white/80'}
+                  `}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 

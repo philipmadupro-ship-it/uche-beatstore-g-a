@@ -17,22 +17,22 @@
  * only inside a component here has been silently reverted before.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Download, Grid3x3, Image as ImageIcon, Layers as LayersIcon, Maximize2,
-  Music2, Pause, Play, Redo2, Sparkles, SquareStack, Undo2, FolderOpen, Check, Loader2, PanelLeft,
+  Music2, Pause, Play, Redo2, Ruler, Sparkles, SquareStack, Undo2, FolderOpen, Check, Loader2, PanelLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  coverArtExportPresets, getCoverArtRasterFilename, svgToRasterBlob,
-  type CoverArtExportPresetId,
-} from '@/design-system';
+import { svgToRasterBlob } from '@/design-system';
 import { readCoverArtFile, coverArtImportErrorMessage, type CoverArtImportError } from '@/design-system/presets/cover-art-import';
 import { uploadGeneratedCoverArt } from '@/lib/upload/generated-cover-upload';
 import { attachCoverUrl, type CoverAttachTarget } from '@/lib/upload/cover-attachment';
 import { fetchCoverAttachOptions, type CoverAttachOption, type CoverAttachTargetKind } from '@/lib/upload/cover-attach-options';
 import { buildCollage, collageFrame, type CollageLayoutId } from '@/lib/cover/collage';
 import { fitRectInside } from '@/lib/cover/geometry';
+import { resizeArtboard } from '@/lib/cover/artboard';
+import { restyleDocument } from '@/lib/cover/restyle';
+import { resolveExport, type ExportSettings } from '@/lib/cover/export-settings';
 import { embedFontsInSvg } from '@/lib/cover/font-embed';
 import {
   deleteCoverDocument, getLastOpenedId, listCoverDocuments, loadCoverDocument,
@@ -48,7 +48,8 @@ import type { Track } from '@/lib/types';
 import {
   addLayer, alignLayers, coverArtDirections, createArtworkDocument, createImageLayer,
   createShapeLayer, createTextLayer, createTextureLayer, createWaveformLayer,
-  distributeLayers, duplicateLayers, removeLayers, renderArtworkDocumentSvg, reorderLayer,
+  distributeLayers, duplicateLayers, groupLayers, removeLayers, renderArtworkDocumentSvg, reorderLayer,
+  ungroupLayers,
   updateWaveformLayerPeaks,
   type ArtworkDocument, type ArtworkLayer, type ArtworkSource, type ArtworkTextureKind,
   type CoverArtDirectionId, type ImageArtworkLayer, type LayerAlignment, type LayerReorder,
@@ -63,6 +64,7 @@ import { CoverGeneratorPanel } from './CoverGeneratorPanel';
 import { StudioButton } from './StudioControls';
 import { ShortcutSheet } from './ShortcutSheet';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
+import { ContextualToolbar } from './ContextualToolbar';
 
 type Surface = 'dev-lab' | 'cover-art-studio';
 type ToolTab = 'documents' | 'source' | 'add' | 'collage' | 'ai' | 'export';
@@ -116,6 +118,7 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
   const [tab, setTab] = useState<ToolTab>('add');
   const [zoom, setZoom] = useState(0.22);
   const [showGuides, setShowGuides] = useState(true);
+  const [showRulers, setShowRulers] = useState(false);
   const [showLayers, setShowLayers] = useState(true);
   const [showShortcuts, setShowShortcuts] = useState(false);
   /**
@@ -137,7 +140,21 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
   const [selectedSourceId, setSelectedSourceId] = useState('');
   const [directionId, setDirectionId] = useState<CoverArtDirectionId>('de-roche-mineral');
 
-  const [exportPresetId, setExportPresetId] = useState<CoverArtExportPresetId>('square-cover');
+  /**
+   * Export settings, not just a preset id.
+   *
+   * A preset now WRITES these values rather than being a mode, so picking
+   * "Streaming cover" and then nudging the quality down is one continuous
+   * action instead of leaving a preset behind.
+   */
+  const [exportSettings, setExportSettings] = useState<ExportSettings>({
+    width: 3000,
+    height: 3000,
+    format: 'png',
+    quality: 0.92,
+    transparent: false,
+    filename: 'cover-art',
+  });
   const [exportState, setExportState] = useState<'idle' | 'exporting' | 'failed'>('idle');
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'uploaded' | 'failed'>('idle');
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
@@ -166,11 +183,9 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
   const imageLayers = document.layers.filter((layer): layer is ImageArtworkLayer => layer.type === 'image' && Boolean(layer.src));
   const selectedImageLayers = imageLayers.filter((layer) => selectedIds.includes(layer.id));
 
-  const renderedSvg = useMemo(() => renderArtworkDocumentSvg(document), [document]);
   const safeName = document.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cover-art';
   const svgFilename = `beatstor-${safeName}.svg`;
-  const exportPreset = coverArtExportPresets[exportPresetId];
-  const rasterFilename = getCoverArtRasterFilename(svgFilename, exportPreset);
+  const resolvedExport = resolveExport({ ...exportSettings, filename: exportSettings.filename || safeName });
 
   /* ── Audio-reactive preview (unchanged behaviour, preserved) ─────────── */
 
@@ -770,32 +785,46 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
    *
    * Rasterising loads the SVG through an <img>, which renders in an isolated
    * context with no access to the page's @font-face rules — so an export built
-   * from `renderedSvg` alone came out in a fallback system font while the
+   * from the raw markup alone came out in a fallback system font while the
    * canvas showed Synkopy. Every path that hands the artwork to the outside
    * world goes through here.
+   *
+   * The markup is built HERE, on demand, rather than in a `useMemo` keyed on
+   * the document. That memo recomputed the whole SVG string on every render —
+   * and `patchLayers` writes a new document on every pointermove, so dragging a
+   * layer serialised the entire artwork sixty times a second to produce a
+   * string only this function ever read. Effects made that worse, since the
+   * markup now carries a filter chain per layer too.
    */
-  async function exportReadySvg() {
-    return embedFontsInSvg(renderedSvg, document);
+  async function exportReadySvg(transparent = false) {
+    return embedFontsInSvg(renderArtworkDocumentSvg(document, { transparent }), document);
   }
 
-  async function downloadSvg() {
+  /**
+   * One download path for every format.
+   *
+   * SVG skips rasterisation entirely — it is already the thing being produced —
+   * while the raster formats go through the canvas. Transparency is taken from
+   * the RESOLVED settings rather than the raw ones, so a transparent JPEG never
+   * reaches the renderer and cannot come back with a black plate.
+   */
+  async function downloadArtwork() {
     setExportState('exporting');
     try {
-      downloadBlob(await exportReadySvg(), svgFilename, 'image/svg+xml');
+      const svg = await exportReadySvg(resolvedExport.transparent);
+      if (resolvedExport.format === 'svg') {
+        downloadBlob(svg, resolvedExport.filename, 'image/svg+xml');
+      } else {
+        const blob = await svgToRasterBlob(svg, {
+          width: resolvedExport.width,
+          height: resolvedExport.height,
+          mimeType: resolvedExport.mimeType as 'image/png' | 'image/jpeg' | 'image/webp',
+          quality: resolvedExport.quality,
+        });
+        downloadBlob(blob, resolvedExport.filename, resolvedExport.mimeType);
+      }
       setExportState('idle');
-    } catch (error) {
-      setExportState('failed');
-      toast.error(error instanceof Error ? error.message : 'Export failed.');
-      window.setTimeout(() => setExportState('idle'), 2200);
-    }
-  }
-
-  async function downloadRaster() {
-    setExportState('exporting');
-    try {
-      downloadBlob(await svgToRasterBlob(await exportReadySvg(), exportPreset), rasterFilename, exportPreset.mimeType);
-      setExportState('idle');
-      toast.success(`Exported ${rasterFilename}`);
+      toast.success(`Exported ${resolvedExport.filename}`);
     } catch (error) {
       setExportState('failed');
       toast.error(error instanceof Error ? error.message : 'Export failed.');
@@ -807,7 +836,15 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
     setUploadState('uploading');
     setUploadedUrl(null);
     try {
-      const url = await uploadGeneratedCoverArt(await exportReadySvg(), svgFilename, exportPreset);
+      const url = await uploadGeneratedCoverArt(await exportReadySvg(), svgFilename, {
+        width: resolvedExport.width,
+        height: resolvedExport.height,
+        // A cover attached to a track is displayed on an opaque surface, so
+        // it always uploads as a solid JPEG regardless of the download
+        // settings — a transparent PNG cover would show the page through it.
+        mimeType: 'image/jpeg',
+        quality: 0.92,
+      });
       setUploadedUrl(url);
       setUploadState('uploaded');
       toast.success('Artwork uploaded');
@@ -915,6 +952,29 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
         if (event.shiftKey) redo(); else undo();
         return;
       }
+      if (meta && event.key.toLowerCase() === 'g') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          // Ungroup every selected group. Selecting a group and a loose layer
+          // and pressing ⇧⌘G should dissolve the group and leave the layer be,
+          // rather than refusing because the selection is mixed.
+          const groupIds = document.layers
+            .filter((layer) => selectedIds.includes(layer.id) && layer.type === 'group')
+            .map((layer) => layer.id);
+          if (groupIds.length === 0) return;
+          updateDocument((current) => groupIds.reduce(ungroupLayers, current));
+          return;
+        }
+        if (selectedIds.length === 0) return;
+        updateDocument((current) => {
+          const result = groupLayers(current, selectedIds);
+          // Select the new group, not its contents: the next drag should move
+          // the group as a unit, which is the whole point of having made it.
+          if (result.id) setSelectedIds([result.id]);
+          return result.document;
+        });
+        return;
+      }
       if (meta && event.key.toLowerCase() === 'd') {
         event.preventDefault();
         if (selectedIds.length === 0) return;
@@ -981,6 +1041,10 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
         const key = event.key.toLowerCase();
         if (key === 'v') { setSelectedIds([]); return; }
         if (key === 't') { addText(); return; }
+        // Must precede the plain-r rectangle shortcut, which returns early and
+        // would otherwise swallow the shifted variant. Shift+R rather than R
+        // (taken) or Cmd+R (reloads the page).
+        if (key === 'r' && event.shiftKey) { setShowRulers((value) => !value); return; }
         if (key === 'r') { addShape('rect'); return; }
         if (key === 'o') { addShape('circle'); return; }
         if (key === 'g') { setShowGuides((value) => !value); return; }
@@ -1043,6 +1107,13 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
   };
 
   /** Right-click actions, built from the current selection. */
+  /** Selected layers that are groups — what Ungroup acts on. */
+  function selectedGroupIds(): string[] {
+    return document.layers
+      .filter((layer) => selectedIds.includes(layer.id) && layer.type === 'group')
+      .map((layer) => layer.id);
+  }
+
   function contextMenuItems(): ContextMenuItem[] {
     const has = selectedIds.length > 0;
     const one = selectedIds.length === 1;
@@ -1064,6 +1135,25 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
           setSelectedIds(result.ids);
           return result.document;
         }),
+      },
+      { kind: 'separator' },
+      {
+        kind: 'action',
+        label: 'Group',
+        shortcut: '⌘G',
+        disabled: !has,
+        onSelect: () => updateDocument((current) => {
+          const result = groupLayers(current, selectedIds);
+          if (result.id) setSelectedIds([result.id]);
+          return result.document;
+        }),
+      },
+      {
+        kind: 'action',
+        label: 'Ungroup',
+        shortcut: 'Shift ⌘G',
+        disabled: !selectedGroupIds().length,
+        onSelect: () => updateDocument((current) => selectedGroupIds().reduce(ungroupLayers, current)),
       },
       { kind: 'separator' },
       { kind: 'action', label: 'Bring to front', shortcut: 'Shift ]', disabled: !one, onSelect: () => reorder('front') },
@@ -1106,7 +1196,12 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
     // short — so the studio overflowed the viewport, the PAGE scrolled instead
     // of the panels, and the bottom of the inspector was unreachable. If either
     // padding in `(dashboard)/layout.tsx` changes, this has to change with it.
-    <div ref={rootRef} className="relative grid h-[calc(100vh-10.5rem)] grid-rows-[3.25rem_minmax(0,1fr)] overflow-hidden bg-[#090907] text-white/90">
+    // The contextual toolbar is a THIRD fixed row (2.5rem) rather than extra
+    // height on the studio: the outer height is pinned to the dashboard shell,
+    // so a new row has to come out of the canvas's share, not out of the
+    // viewport. Growing the container instead is what made the page scroll
+    // rather than the panels the last time this layout was touched.
+    <div ref={rootRef} className="relative grid h-[calc(100vh-10.5rem)] grid-rows-[3.25rem_2.5rem_minmax(0,1fr)] overflow-hidden bg-[#090907] text-white/90">
       {showShortcuts ? <ShortcutSheet onClose={() => setShowShortcuts(false)} /> : null}
       {menu ? (
         <ContextMenu x={menu.x} y={menu.y} items={contextMenuItems()} onClose={() => setMenu(null)} />
@@ -1182,6 +1277,14 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
             <Grid3x3 size={13} />
           </button>
           <button
+            type="button" onClick={() => setShowRulers((value) => !value)}
+            aria-pressed={showRulers} aria-label="Toggle rulers" title="Rulers (Shift R) — drag from a ruler to place a guide"
+            className={cn('grid h-7 w-7 place-items-center transition-colors',
+              showRulers ? 'text-white' : 'text-white/40 hover:text-white/90')}
+          >
+            <Ruler size={13} />
+          </button>
+          <button
             type="button"
             onClick={() => { userZoomed.current = false; fitToWindow(); }}
             aria-label="Fit to window" title="Fit to window"
@@ -1224,11 +1327,25 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
           >
             ?
           </button>
-          <StudioButton variant="accent" onClick={downloadRaster} disabled={exportState === 'exporting'}>
+          <StudioButton variant="accent" onClick={() => { void downloadArtwork(); }} disabled={exportState === 'exporting'}>
             <Download size={12} /> {exportState === 'exporting' ? 'Rendering…' : 'Export'}
           </StudioButton>
         </div>
       </header>
+
+      {/* Selection-driven controls. Sits between the global header and the work
+          area because that is where it is glanced at: the header is about the
+          document, this is about what you are holding. */}
+      <ContextualToolbar
+        selected={document.layers.filter((layer) => selectedIds.includes(layer.id))}
+        onPatch={patchSelected}
+        onAlign={(alignment) => updateDocument((current) => alignLayers(current, selectedIds, alignment))}
+        onDistribute={(axis) => updateDocument((current) => distributeLayers(current, selectedIds, axis))}
+        onRemoveSelected={() => {
+          updateDocument((current) => removeLayers(current, selectedIds));
+          setSelectedIds([]);
+        }}
+      />
 
       {/* Column template. In compact the panels leave the grid entirely and
           float over the canvas instead, so the artboard always keeps the full
@@ -1337,7 +1454,7 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
           {tab === 'export' ? (
             <ExportPanel
               document={document}
-              exportPresetId={exportPresetId}
+              settings={exportSettings}
               exportState={exportState}
               uploadState={uploadState}
               attachState={attachState}
@@ -1346,9 +1463,8 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
               attachTargetKind={attachTargetKind}
               attachTargetId={attachTargetId}
               attachOptions={attachOptions}
-              onExportPreset={setExportPresetId}
-              onDownloadSvg={() => { void downloadSvg(); }}
-              onDownloadRaster={downloadRaster}
+              onSettings={(patch) => setExportSettings((current) => ({ ...current, ...patch }))}
+              onDownload={() => { void downloadArtwork(); }}
               onUpload={uploadArtwork}
               onAttachTargetKind={setAttachTargetKind}
               onAttachTargetId={setAttachTargetId}
@@ -1365,7 +1481,16 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
             selectedIds={selectedIds}
             editingId={editingId}
             showGuides={showGuides}
+            showRulers={showRulers}
             reactive={reactive}
+            onGuidesChange={(guides, commit) => {
+              // Same shape as a layer drag: intermediate positions mutate the
+              // document without touching history, and the release commits one
+              // entry — otherwise dragging a guide across the artboard would
+              // fill the undo stack with a hundred near-identical steps.
+              if (commit) updateDocument((current) => ({ ...current, guides }));
+              else setDocumentQuietly((current) => ({ ...current, guides }));
+            }}
             onSelect={setSelectedIds}
             onPatchLayers={patchLayers}
             onEditText={setEditingId}
@@ -1390,10 +1515,19 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
                 onReorder={(id, move: LayerReorder) => updateDocument((current) => ({
                   ...current, layers: reorderLayer(current.layers, id, move),
                 }))}
-                onToggle={(id, patch) => updateDocument((current) => ({
-                  ...current,
-                  layers: current.layers.map((layer) => (layer.id === id ? { ...layer, ...patch } : layer)),
-                }))}
+                onToggle={(id, patch) => {
+                  // Folding a group shut is a way of LOOKING at the stack, not
+                  // a change to the artwork — putting it in the undo history
+                  // would mean ⌘Z sometimes just unfolds a group instead of
+                  // taking back the edit the producer meant to undo.
+                  const apply = (current: ArtworkDocument) => ({
+                    ...current,
+                    layers: current.layers.map((layer) => (layer.id === id ? { ...layer, ...patch } : layer)),
+                  });
+                  const viewOnly = Object.keys(patch).every((key) => key === 'collapsed');
+                  if (viewOnly) setDocumentQuietly(apply);
+                  else updateDocument(apply);
+                }}
                 onRename={(id, name) => updateDocument((current) => ({
                   ...current,
                   layers: current.layers.map((layer) => (layer.id === id ? { ...layer, name } : layer)),
@@ -1416,6 +1550,18 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
               onPatchDocument={(patch) => updateDocument((current) => ({ ...current, ...patch }))}
               onAlign={(alignment: LayerAlignment) => updateDocument((current) => alignLayers(current, selectedIds, alignment))}
               onDistribute={(axis) => updateDocument((current) => distributeLayers(current, selectedIds, axis))}
+              // Through `updateDocument`, so a reformat is one undo step —
+              // resizing the board can move every layer at once and is exactly
+              // the kind of change someone tries and then wants to take back.
+              onResizeArtboard={(width, height, mode) => updateDocument(
+                (current) => resizeArtboard(current, width, height, mode),
+              )}
+              // One undo step, and scoped to the selection when there is one —
+              // trying a mood on the title before committing the whole cover is
+              // how a designer actually works.
+              onRestyle={(moodId) => updateDocument(
+                (current) => restyleDocument(current, moodId, selectedIds),
+              )}
               onRemoveSelected={() => {
                 updateDocument((current) => removeLayers(current, selectedIds));
                 setSelectedIds([]);

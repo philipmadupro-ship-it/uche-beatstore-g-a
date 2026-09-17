@@ -106,7 +106,7 @@ function findViolations(pattern: RegExp, opts?: ScanOptions): string[] {
  * assumed: a probe element carrying them computes to `animation: none`.
  *
  * The real utilities are in globals.css: `ui-pop`, `ui-pop-up`, `ui-fade-in`,
- * `ui-toast`, `ui-modal-panel`, `ui-scrim`, `ui-drawer-*`. They use the app's
+ * `ui-modal-panel`, `ui-scrim`, `ui-drawer-*`. They use the app's
  * own `--dur-*`/`--ease-*` tokens and are switched off under
  * `prefers-reduced-motion`, which the plugin classes never were either.
  *
@@ -141,7 +141,7 @@ describe('tailwindcss-animate utilities', () => {
     });
     expect(
       violations,
-      `Found ${violations.length} tailwindcss-animate class(es). The plugin is not installed, so these render no animation at all. Use ui-pop / ui-pop-up / ui-fade-in / ui-toast / ui-modal-panel / ui-drawer-* from globals.css:\n${violations.join('\n')}`,
+      `Found ${violations.length} tailwindcss-animate class(es). The plugin is not installed, so these render no animation at all. Use ui-pop / ui-pop-up / ui-fade-in / ui-modal-panel / ui-drawer-* from globals.css:\n${violations.join('\n')}`,
     ).toEqual([]);
   });
 });

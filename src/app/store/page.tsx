@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, useCallback, Suspense } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, useCallback, Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -42,6 +42,11 @@ import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 import { FreeDownloadModal } from '@/components/store/FreeDownloadModal';
 import { StoreContactForm } from '@/components/store/StoreContactForm';
 import { ArtistBioBlock } from '@/components/store/ArtistBioBlock';
+import {
+  isFullyHidden, isPinnedSection, normalizeLayout, resolveSection, visibilityClasses,
+  type SectionSettings, type StoreSectionKind,
+} from '@/lib/store-editor/layout';
+import { useStoreBreakpoint } from '@/hooks/useStoreBreakpoint';
 import { FeaturedPlaylistsStrip } from '@/components/store/FeaturedPlaylistsStrip';
 import {
   StoreSidebar, BeatCardSkeleton, BeatListRowSkeleton,
@@ -969,8 +974,151 @@ function StorePage() {
   }
 
   const accentColor = normalizeThemeColor(creator?.accent_color);
+  /**
+   * The producer's storefront layout.
+   *
+   * `normalizeLayout` turns a missing, older or malformed document into the
+   * default layout, which is this page's original section order — so a
+   * storefront that has never been arranged renders exactly as it always has.
+   */
+  const storeLayout = normalizeLayout(creator?.store_layout);
+  /**
+   * The viewer's device, for the one thing CSS cannot express: the hero's
+   * particle-vs-plain title picks a different COMPONENT, and hiding one with
+   * CSS would still run the canvas the plain variant exists to avoid.
+   * Visibility stays CSS-driven so the cached HTML serves every device.
+   */
+  const viewerBreakpoint = useStoreBreakpoint();
   const textColor = creator?.text_color_primary || '#FFFFFF';
   const fontFamily = FONT_FAMILY_MAP[creator?.font_style ?? 'default'] ?? FONT_FAMILY_MAP.default;
+
+  /**
+   * Storefront sections, drawn in the order the producer arranged them.
+   *
+   * Each case is the SAME JSX this page rendered inline before — the layout
+   * document decides order and visibility, it does not re-implement the store.
+   * The catalogue and the trust rail are absent on purpose: they are pinned
+   * (`isPinnedSection`) because the catalogue owns the sticky filter toolbar
+   * directly above it, so they stay where they are further down this file.
+   */
+  function renderStoreSection(kind: StoreSectionKind, settings: SectionSettings) {
+    switch (kind) {
+      case 'hero':
+        return (
+          <ArtistBioBlock
+            creator={creator}
+            accentColor={accentColor}
+            plainTitle={settings.variant === 'plain'}
+          />
+        );
+      case 'countdown':
+        return <DropCountdown accentColor={accentColor} />;
+      case 'featured-projects':
+        return featuredProjects.length > 0 ? (
+          <FeaturedPlaylistsStrip
+            label="Projects"
+            playlists={featuredProjects}
+            detailHrefBase="/store/projects"
+            projectMode
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            onPlay={(t, playlist) => {
+              setQueue((playlist?.tracks ?? []) as unknown as Track[]);
+              setTrack(t as unknown as Track);
+            }}
+            priceFor={(t, type) => {
+              const override = type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd;
+              if (override != null && Number(override) > 0) return Number(override);
+              const def = type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd;
+              return def != null && Number(def) > 0 ? Number(def) : null;
+            }}
+            onAddToCart={(t, type) => {
+              const price = (type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd)
+                ?? (type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd);
+              if (!price) { toast.error(`No ${type} price set`); return; }
+              const added = addItem({ ...t, user_id: '', stems_status: t.stems_status ?? 'none', created_at: '' } as Track, {
+                id: `${type}-${t.id}`,
+                name: type === 'lease' ? 'Lease' : 'Exclusive',
+                price_usd: Number(price),
+                file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
+                is_exclusive: type === 'exclusive',
+                stems_included: type === 'exclusive',
+              });
+              if (added) toast.success(`Added: ${t.title} (${type})`);
+            }}
+            onAddAllToCart={addAllToCart}
+            onBuyProject={handleBuyProject}
+          />
+        ) : null;
+      case 'featured-playlists':
+        return featuredPlaylists.length > 0 ? (
+          <FeaturedPlaylistsStrip
+            label="Playlists"
+            playlists={featuredPlaylists}
+            detailHrefBase="/store/playlists"
+            currentTrack={currentTrack}
+            isPlaying={isPlaying}
+            onPlay={(t, playlist) => {
+              setQueue((playlist?.tracks ?? []) as unknown as Track[]);
+              setTrack(t as unknown as Track);
+            }}
+            priceFor={(t, type) => {
+              const override = type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd;
+              if (override != null && Number(override) > 0) return Number(override);
+              const def = type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd;
+              return def != null && Number(def) > 0 ? Number(def) : null;
+            }}
+            onAddToCart={(t, type) => {
+              const price = (type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd)
+                ?? (type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd);
+              if (!price) { toast.error(`No ${type} price set`); return; }
+              const added = addItem({ ...t, user_id: '', stems_status: t.stems_status ?? 'none', created_at: '' } as Track, {
+                id: `${type}-${t.id}`,
+                name: type === 'lease' ? 'Lease' : 'Exclusive',
+                price_usd: Number(price),
+                file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
+                is_exclusive: type === 'exclusive',
+                stems_included: type === 'exclusive',
+              });
+              if (added) toast.success(`Added: ${t.title} (${type})`);
+            }}
+            onAddAllToCart={addAllToCart}
+          />
+        ) : null;
+      case 'spotlight':
+        return (
+        <StoreSalesSpotlight
+          track={spotlightTrack}
+          project={spotlightProject}
+          accentColor={accentColor}
+          currentTrackId={currentTrack?.id ?? null}
+          isPlaying={isPlaying}
+          licenseCount={licenses.length}
+          lowestLicensePrice={lowestLicensePrice}
+          priceFor={priceFor}
+          onPlay={handlePlay}
+          onPreview={(t) => setPreviewTrack(t)}
+          onBuyProject={handleBuyProject}
+        />
+        );
+      case 'producer-picks':
+        return producerPicks.length > 0 ? (
+          <RecommendationsStrip
+            label="Producer's Picks"
+            tracks={producerPicks}
+            accentColor={accentColor}
+            currentTrackId={currentTrack?.id ?? null}
+            isPlaying={isPlaying}
+            compact
+            priceFor={(t, k) => priceFor(t, k)}
+            onPlay={(t) => handlePlay(t)}
+            onPreview={(t) => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
+          />
+        ) : null;
+      default:
+        return null;
+    }
+  }
 
   return (
     // Every card below draws its own artwork when a beat has no cover. The
@@ -1009,123 +1157,32 @@ function StorePage() {
         </div>
       )}
 
-      {/* ── Artist bio block ──────────────────────────────────── */}
-      <ArtistBioBlock creator={creator} accentColor={accentColor} />
+      {/* ── Producer-arranged sections ──────────────────────────
+          Order, per-breakpoint visibility and the hero variant come from the
+          storefront layout the producer built in the Store Editor. A producer
+          who has never opened the builder gets `defaultStoreLayout()`, which
+          is this exact run in this exact order — so this is a no-op until
+          somebody deliberately rearranges something.
 
-      {/* ── Next-drop countdown (only renders when there's an
-          upcoming scheduled_publish_at on a draft track) ──────── */}
-      <DropCountdown accentColor={accentColor} />
-
-      {/* ── Featured projects (first) + playlists ──────────────── */}
-      {(featuredProjects.length > 0 || featuredPlaylists.length > 0) && (
-        <div>
-          {/* Projects — album-style larger cards, direct navigation */}
-          {featuredProjects.length > 0 && (
-            <FeaturedPlaylistsStrip
-              label="Projects"
-              playlists={featuredProjects}
-              detailHrefBase="/store/projects"
-              projectMode
-              currentTrack={currentTrack}
-              isPlaying={isPlaying}
-              onPlay={(t, playlist) => {
-                setQueue((playlist?.tracks ?? []) as unknown as Track[]);
-                setTrack(t as unknown as Track);
-              }}
-              priceFor={(t, type) => {
-                const override = type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd;
-                if (override != null && Number(override) > 0) return Number(override);
-                const def = type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd;
-                return def != null && Number(def) > 0 ? Number(def) : null;
-              }}
-              onAddToCart={(t, type) => {
-                const price = (type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd)
-                  ?? (type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd);
-                if (!price) { toast.error(`No ${type} price set`); return; }
-                const added = addItem({ ...t, user_id: '', stems_status: t.stems_status ?? 'none', created_at: '' } as Track, {
-                  id: `${type}-${t.id}`,
-                  name: type === 'lease' ? 'Lease' : 'Exclusive',
-                  price_usd: Number(price),
-                  file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
-                  is_exclusive: type === 'exclusive',
-                  stems_included: type === 'exclusive',
-                });
-                if (added) toast.success(`Added: ${t.title} (${type})`);
-              }}
-              onAddAllToCart={addAllToCart}
-              onBuyProject={handleBuyProject}
-            />
-          )}
-          {/* Playlists — compact thumbnail strip below projects */}
-          {featuredPlaylists.length > 0 && (
-            <FeaturedPlaylistsStrip
-              label="Playlists"
-              playlists={featuredPlaylists}
-              detailHrefBase="/store/playlists"
-              currentTrack={currentTrack}
-              isPlaying={isPlaying}
-              onPlay={(t, playlist) => {
-                setQueue((playlist?.tracks ?? []) as unknown as Track[]);
-                setTrack(t as unknown as Track);
-              }}
-              priceFor={(t, type) => {
-                const override = type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd;
-                if (override != null && Number(override) > 0) return Number(override);
-                const def = type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd;
-                return def != null && Number(def) > 0 ? Number(def) : null;
-              }}
-              onAddToCart={(t, type) => {
-                const price = (type === 'lease' ? t.lease_price_usd : t.exclusive_price_usd)
-                  ?? (type === 'lease' ? creator?.license_lease_price_usd : creator?.license_exclusive_price_usd);
-                if (!price) { toast.error(`No ${type} price set`); return; }
-                const added = addItem({ ...t, user_id: '', stems_status: t.stems_status ?? 'none', created_at: '' } as Track, {
-                  id: `${type}-${t.id}`,
-                  name: type === 'lease' ? 'Lease' : 'Exclusive',
-                  price_usd: Number(price),
-                  file_types: type === 'lease' ? ['MP3'] : ['WAV', 'MP3', 'STEMS'],
-                  is_exclusive: type === 'exclusive',
-                  stems_included: type === 'exclusive',
-                });
-                if (added) toast.success(`Added: ${t.title} (${type})`);
-              }}
-              onAddAllToCart={addAllToCart}
-            />
-          )}
-        </div>
-      )}
-
-      <StoreSalesSpotlight
-        track={spotlightTrack}
-        project={spotlightProject}
-        accentColor={accentColor}
-        currentTrackId={currentTrack?.id ?? null}
-        isPlaying={isPlaying}
-        licenseCount={licenses.length}
-        lowestLicensePrice={lowestLicensePrice}
-        priceFor={priceFor}
-        onPlay={handlePlay}
-        onPreview={(t) => setPreviewTrack(t)}
-        onBuyProject={handleBuyProject}
-      />
-
-      {producerPicks.length > 0 && (
-        <RecommendationsStrip
-          label="Producer's Picks"
-          tracks={producerPicks}
-          accentColor={accentColor}
-          currentTrackId={currentTrack?.id ?? null}
-          isPlaying={isPlaying}
-          compact
-          priceFor={(t, k) => priceFor(t, k)}
-          onPlay={(t) => handlePlay(t)}
-          onPreview={(t) => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
-        />
-      )}
+          Visibility is CSS rather than a JS branch because this page is
+          server-rendered and edge-cached: branching here would bake one
+          device's layout into the cached HTML for every device. */}
+      {storeLayout.sections.map((section) => {
+        if (isPinnedSection(section.kind)) return null;
+        if (isFullyHidden(section)) return null;
+        const node = renderStoreSection(section.kind, resolveSection(section, viewerBreakpoint));
+        if (!node) return null;
+        const hidden = visibilityClasses(section);
+        return hidden ? <div key={section.id} className={hidden}>{node}</div> : <Fragment key={section.id}>{node}</Fragment>;
+      })}
 
       {/* ── Toolbar — sticky glass header ──────────────────────── */}
       <div className="sticky top-0 z-30" style={{ backdropFilter: 'blur(24px)', background: 'rgba(10,9,7,0.88)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-2.5 flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
-          {/* Mobile filters toggle */}
+          {/* Mobile filters toggle — hidden with the sidebar it opens when the
+              catalogue is empty, so the control can't open an absent panel.
+              Kept mounted while loading to avoid a toolbar reflow. */}
+          {(loading || tracks.length > 0) && (
           <button
             onClick={() => setSidebarOpen((o) => !o)}
             className={`tap lg:hidden flex min-h-11 items-center gap-1.5 rounded-full border px-4 py-2 text-[10px] font-mono uppercase tracking-wider transition-colors ${sidebarOpen || hasActiveFilters
@@ -1142,6 +1199,7 @@ function StorePage() {
               </span>
             )}
           </button>
+          )}
 
           {/* Search */}
           <div className="relative order-2 min-w-0 basis-full sm:order-none sm:basis-auto sm:flex-1 sm:min-w-[160px] sm:max-w-sm">
@@ -1333,7 +1391,17 @@ function StorePage() {
           standard laptops. Sidebar stays sticky on the left. */}
       <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-10 md:py-14 flex gap-6 md:gap-8 items-start">
 
-        {/* Left sidebar — sticky, visible on lg+ */}
+        {/* Left sidebar — sticky, visible on lg+.
+            Suppressed entirely when the catalogue has nothing in it: six
+            filter groups (sort, type, genre, mood, key, scale, BPM) offering
+            to narrow zero results is noise, and it pushed the "no beats yet"
+            message off-centre. Keyed on the unfiltered catalogue, not on
+            `filtered`, so a search that legitimately returns nothing still
+            keeps the controls needed to undo it. Gated on `!loading` too, so
+            the sidebar isn't yanked out and popped back in while the first
+            fetch is still in flight — that would be a layout shift on every
+            visit, which is worse than the noise it removes. */}
+        {(loading || tracks.length > 0) && (
         <StoreSidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
@@ -1381,6 +1449,7 @@ function StorePage() {
           availableKeys={availableKeys}
           accentColor={accentColor}
         />
+        )}
 
         {/* Main content */}
         <div className="flex-1 min-w-0">

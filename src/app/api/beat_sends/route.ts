@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll, createServiceClient } from '@/lib/db';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { errorMessage } from '@/lib/errors';
+import { selectInChunks } from '@/lib/db-in-chunks';
 
 /**
  * GET /api/beat_sends
@@ -28,13 +29,13 @@ export async function GET() {
       const ids = (ownContacts ?? []).map((c: { id: string }) => c.id);
       if (ids.length === 0) return NextResponse.json({ sends: [] });
 
-      const { data, error } = await supabase
-        .from('beat_sends')
-        .select('*')
-        .in('contact_id', ids)
-        .order('sent_at', { ascending: false });
-      if (error) throw new Error(error.message);
-      return NextResponse.json({ sends: data });
+      // Chunked, then sorted here: the id list is one entry per contact, which
+      // overflows the PostgREST request URL as a CRM grows. Ordering has to
+      // move client-side because it must span batches.
+      const rows = await selectInChunks<{ sent_at?: string | null }>(ids, (batch) =>
+        supabase.from('beat_sends').select('*').in('contact_id', batch));
+      rows.sort((a, b) => String(b.sent_at ?? '').localeCompare(String(a.sent_at ?? '')));
+      return NextResponse.json({ sends: rows });
     }
     return NextResponse.json({ sends: getAll('beat_sends') });
   } catch (error) {

@@ -160,10 +160,18 @@ export function collectSnapTargets(
   artboard: { width: number; height: number },
   layers: Array<Rect & { id: string; visible: boolean }>,
   excludeIds: string[] = [],
+  /**
+   * Ruler guides. A guide the producer placed deliberately is a stronger
+   * intention than an incidental alignment with another layer, so they join
+   * the same target set rather than living in a separate pass — `snapRect`
+   * already picks the nearest line, and a guide that only snapped when no
+   * layer edge was nearby would feel unreliable.
+   */
+  guides: { x: number[]; y: number[] } = { x: [], y: [] },
 ): SnapTargets {
   const excluded = new Set(excludeIds);
-  const vertical = [0, artboard.width / 2, artboard.width];
-  const horizontal = [0, artboard.height / 2, artboard.height];
+  const vertical = [0, artboard.width / 2, artboard.width, ...guides.x];
+  const horizontal = [0, artboard.height / 2, artboard.height, ...guides.y];
 
   layers.forEach((layer) => {
     if (excluded.has(layer.id) || !layer.visible) return;

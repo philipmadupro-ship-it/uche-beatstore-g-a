@@ -17,8 +17,16 @@
  * this file is only responsible for turning events into calls.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { cn } from '@/lib/utils';
+import {
+  buildFxFilterDef, fxDefaults, fxFilterRef, vignetteCssGradient,
+} from '@/lib/cover/effects';
+import {
+  addGuide, moveGuide, removeGuide,
+  type DocumentGuides, type GuideAxis,
+} from '@/lib/cover/rulers';
+import { RulerBar, RulerCorner, RULER_SIZE } from './RulerBar';
 import {
   clampToArtboard,
   collectSnapTargets,
@@ -35,7 +43,10 @@ import {
   type ResizeHandle,
 } from '@/lib/cover/geometry';
 import { LayerView } from './LayerView';
-import { sortArtworkLayers, type ArtworkDocument, type ArtworkLayer } from './cover-art-document';
+import {
+  childrenOf, documentGuides, expandToLeaves, isDescendantOf, sortArtworkLayers, topLevelLayers,
+  type ArtworkDocument, type ArtworkLayer,
+} from './cover-art-document';
 
 export type LayerPatch = { id: string; patch: Partial<ArtworkLayer> };
 
@@ -55,7 +66,39 @@ type Interaction =
   }
   | { kind: 'rotate'; id: string; center: { x: number; y: number } }
   | { kind: 'marquee'; origin: { x: number; y: number }; additive: boolean }
-  | { kind: 'pan'; startX: number; startY: number; scrollLeft: number; scrollTop: number };
+  | { kind: 'pan'; startX: number; startY: number; scrollLeft: number; scrollTop: number }
+  /**
+   * Dragging a ruler guide. `origin` is where the guide currently sits, so a
+   * move is expressed as "from here to there" and dropping it back on the
+   * ruler can delete the original rather than leaving a duplicate behind.
+   */
+  | {
+    kind: 'guide';
+    axis: GuideAxis;
+    origin: number;
+    /** Where the guide sat when the drag began — the key into `snapshot`. */
+    start: number;
+    position: number;
+    created: boolean;
+    /**
+     * The guide list as it was when the drag began.
+     *
+     * Every move is computed from THIS rather than from the live document.
+     * `onGuidesChange` is a state update, and two pointermove events can fire
+     * before React re-renders — so reading `documentGuides(doc)` mid-drag can
+     * return the pre-move list, fail to find the guide at its updated origin,
+     * and leave a duplicate behind at every position the pointer passed.
+     */
+    snapshot: DocumentGuides;
+  };
+
+/**
+ * How far past the artboard edge, in document units, a guide has to be dragged
+ * before releasing throws it away. Generous on purpose: an accidental delete
+ * costs more than an accidental keep, and the guide is clamped to the edge
+ * visually the whole time so there is no doubt about what will happen.
+ */
+const GUIDE_DISCARD = 24;
 
 const handleCursor: Record<ResizeHandle, string> = {
   nw: 'nwse-resize', n: 'ns-resize', ne: 'nesw-resize', e: 'ew-resize',
@@ -74,8 +117,10 @@ export function StudioCanvas({
   selectedIds,
   editingId,
   showGuides,
+  showRulers,
   reactive,
   onSelect,
+  onGuidesChange,
   onPatchLayers,
   onEditText,
   onDropFiles,
@@ -87,9 +132,12 @@ export function StudioCanvas({
   selectedIds: string[];
   editingId: string | null;
   showGuides: boolean;
+  showRulers: boolean;
   /** 0..1 loudness and bass at the playhead, for the audio-reactive preview. */
   reactive: { level: number; bass: number };
   onSelect: (ids: string[]) => void;
+  /** Ruler guides. `commit` false while dragging, true on release. */
+  onGuidesChange: (guides: DocumentGuides, commit: boolean) => void;
   /** `commit` false during a drag, true once on release, so undo gets one entry. */
   onPatchLayers: (patches: LayerPatch[], commit: boolean) => void;
   onEditText: (id: string | null) => void;
@@ -106,12 +154,66 @@ export function StudioCanvas({
   const zoomAnchor = useRef<{ docX: number; docY: number; clientX: number; clientY: number } | null>(null);
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [guides, setGuides] = useState<{ vertical: number[]; horizontal: number[] }>({ vertical: [], horizontal: [] });
+  /**
+   * Where the artboard sits inside the scroller's viewport, and how big that
+   * viewport is — the two things a ruler pinned to the viewport edge needs in
+   * order to line its ticks up with the artboard scrolling underneath it.
+   *
+   * Measured rather than derived: the artboard is centred with `place-items`
+   * and padded, so its offset is a layout result, not something this component
+   * decides. Re-measured on scroll, resize and zoom because all three move it.
+   */
+  const [frame, setFrame] = useState({ left: 0, top: 0, width: 0, height: 0 });
+  /** Pointer position in document units, mirrored onto both rulers. */
+  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
   const [marquee, setMarquee] = useState<Rect | null>(null);
   const [dropping, setDropping] = useState(false);
 
-  const sorted = sortArtworkLayers(doc.layers);
   const selectedLayers = doc.layers.filter((layer) => selectedIds.includes(layer.id));
-  const bounds = selectionBounds(selectedLayers);
+  /**
+   * Selected groups expanded to the layers that actually draw something.
+   *
+   * Every geometry operation runs on these rather than on the raw selection,
+   * which is what lets `lib/cover/geometry.ts` stay unaware that groups exist.
+   * A group also contributes no rect of its own to the bounding box, so the
+   * selection frame is exactly its contents' extent without anyone having to
+   * keep the group's stored rect up to date.
+   */
+  const geometryIds = expandToLeaves(doc.layers, selectedIds);
+  const geometryLayers = doc.layers.filter((layer) => geometryIds.includes(layer.id));
+  const bounds = selectionBounds(geometryLayers);
+
+  /**
+   * Effect filters for the canvas.
+   *
+   * Built by the same `buildFxFilterDef` the exporter uses — the only
+   * difference is the scale argument, which is `zoom` here because a layer is
+   * laid out in CSS pixels, and 1 there because a document unit is the unit.
+   * Referencing an inline `<defs>` from CSS `filter: url(#id)` is what lets one
+   * definition drive both surfaces, so there is no parallel CSS-filter string
+   * to fall out of step with the export.
+   *
+   * Keyed on the layers' effect state and zoom so a plain drag does not rebuild
+   * every filter on every pointermove.
+   */
+  const fxSignature = doc.layers
+    .map((layer) => `${layer.id}:${layer.visible}:${layer.width}x${layer.height}:${JSON.stringify(layer.fx ?? null)}`)
+    .join('|');
+  const fxDefs = useMemo(
+    () => sortArtworkLayers(doc.layers)
+      .filter((layer) => layer.visible)
+      .map((layer) => buildFxFilterDef(
+        layer.fx, `fx-canvas-${layer.id}`, zoom, Math.min(layer.width, layer.height) * zoom,
+      ))
+      .filter(Boolean)
+      .join(''),
+    // Deliberately keyed on a signature string rather than `doc.layers`: the
+    // array identity changes on every pointermove of a drag, and rebuilding
+    // every filter at 60fps while moving a layer that has no effects at all is
+    // exactly the kind of waste that makes an editor feel heavy.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fxSignature, zoom],
+  );
 
   /** Client coordinates to artboard/document coordinates. */
   const toDoc = useCallback((clientX: number, clientY: number) => {
@@ -149,7 +251,7 @@ export function StudioCanvas({
         let offsetY = dy;
 
         if (primaryOrigin && !event.altKey) {
-          const targets = collectSnapTargets(doc, doc.layers, selectedIds);
+          const targets = collectSnapTargets(doc, doc.layers, selectedIds, documentGuides(doc));
           const snapped = snapRect(
             { ...primaryOrigin, x: primaryOrigin.x + dx, y: primaryOrigin.y + dy },
             targets,
@@ -225,6 +327,24 @@ export function StudioCanvas({
         return;
       }
 
+      if (active.kind === 'guide') {
+        const max = active.axis === 'x' ? doc.width : doc.height;
+        const raw = active.axis === 'x' ? point.x : point.y;
+        const next = Math.round(Math.min(max, Math.max(0, raw)));
+        // `position` keeps the UNCLAMPED value because that is what says
+        // whether the pointer has left the artboard — the guide itself is
+        // clamped to the edge, so it could never report being dragged off.
+        active.position = raw;
+        if (next !== active.origin) {
+          // Rebuilt from the drag-start snapshot every time, so the result
+          // depends only on where the pointer is now — not on whether React
+          // has flushed the previous move yet.
+          onGuidesChange(moveGuide(active.snapshot, active.axis, active.start, next, max), false);
+          active.origin = next;
+        }
+        return;
+      }
+
       if (active.kind === 'marquee') {
         setMarquee(rectFromPoints(active.origin, point));
       }
@@ -246,6 +366,20 @@ export function StudioCanvas({
         } else if (!active.additive) {
           onSelect([]);
         }
+        return;
+      }
+
+      if (active?.kind === 'guide') {
+        const max = active.axis === 'x' ? doc.width : doc.height;
+        // Dragging a guide off the artboard throws it away, which is how every
+        // design tool deletes one and the only discoverable way to do it.
+        const dropped = active.position < -GUIDE_DISCARD || active.position > max + GUIDE_DISCARD;
+        onGuidesChange(
+          dropped
+            ? removeGuide(active.snapshot, active.axis, active.start)
+            : moveGuide(active.snapshot, active.axis, active.start, active.origin, max),
+          true,
+        );
         return;
       }
 
@@ -352,14 +486,24 @@ export function StudioCanvas({
     if (layer.locked || editingId) return;
     event.stopPropagation();
 
-    const ids = selectedIds.includes(layer.id)
+    // Pressing a layer that lives inside an already-selected group keeps the
+    // GROUP selected. Without this, grabbing a group's contents silently
+    // replaced the selection with the single child under the cursor, so a
+    // selected group could never actually be dragged.
+    const insideSelectedGroup = selectedIds.some(
+      (id) => id !== layer.id && isDescendantOf(doc.layers, layer.id, id),
+    );
+    const ids = selectedIds.includes(layer.id) || insideSelectedGroup
       ? selectedIds
       : event.shiftKey ? [...selectedIds, layer.id] : [layer.id];
     if (ids !== selectedIds) onSelect(ids);
 
+    // Expanded, so dragging a selected group drags its contents. The group
+    // layer itself has no meaningful rect to move.
+    const moving = expandToLeaves(doc.layers, ids);
     const origins = new Map<string, Rect>();
     doc.layers.forEach((item) => {
-      if (!ids.includes(item.id) || item.locked) return;
+      if (!moving.includes(item.id) || item.locked) return;
       origins.set(item.id, { x: item.x, y: item.y, width: item.width, height: item.height });
     });
     interaction.current = { kind: 'move', startX: event.clientX, startY: event.clientY, origins, moved: false };
@@ -367,7 +511,9 @@ export function StudioCanvas({
   }
 
   function beginResize(event: ReactPointerEvent, handle: ResizeHandle) {
-    const movable = selectedLayers.filter((layer) => !layer.locked);
+    // Expanded to leaves for the same reason as the move: resizing a group
+    // scales what is inside it, through the existing group-scaling maths.
+    const movable = geometryLayers.filter((layer) => !layer.locked);
     const box = selectionBounds(movable);
     if (!box) return;
     event.stopPropagation();
@@ -426,19 +572,214 @@ export function StudioCanvas({
     if (!event.shiftKey) setMarquee(null);
   }
 
+  /**
+   * Keep the ruler frame in step with the artboard.
+   *
+   * Watches scroll AND resize AND zoom because each moves the artboard
+   * independently, and keeps watching rather than measuring once: a one-shot
+   * read races the grid's own layout and returns a near-zero box on first
+   * paint, which is how a ruler ends up permanently offset from the thing it
+   * is measuring.
+   */
+  useEffect(() => {
+    if (!showRulers) return;
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    const measure = () => {
+      const board = artboardRef.current?.getBoundingClientRect();
+      const view = scroller.getBoundingClientRect();
+      if (!board || !view) return;
+      setFrame({
+        left: board.left - view.left,
+        top: board.top - view.top,
+        width: view.width,
+        height: view.height,
+      });
+    };
+
+    measure();
+    scroller.addEventListener('scroll', measure, { passive: true });
+    const observer = new ResizeObserver(measure);
+    observer.observe(scroller);
+    if (artboardRef.current) observer.observe(artboardRef.current);
+    return () => {
+      scroller.removeEventListener('scroll', measure);
+      observer.disconnect();
+    };
+  }, [showRulers, zoom, doc.width, doc.height]);
+
+  /** Start dragging a guide — from a ruler press, or from the guide itself. */
+  const beginGuide = useCallback((axis: GuideAxis, position: number, created: boolean) => {
+    const max = axis === 'x' ? doc.width : doc.height;
+    const clamped = Math.round(Math.min(max, Math.max(0, position)));
+    // Pulling a new guide out of the ruler adds it to the snapshot directly,
+    // so the drag has one consistent starting list whether the guide already
+    // existed or was created by this very gesture.
+    const snapshot = created
+      ? addGuide(documentGuides(doc), axis, clamped, max)
+      : documentGuides(doc);
+    if (created) onGuidesChange(snapshot, false);
+    interaction.current = {
+      kind: 'guide', axis, origin: clamped, start: clamped, position: clamped, created, snapshot,
+    };
+  }, [doc, onGuidesChange]);
+
   const singleSelection = selectedLayers.length === 1 ? selectedLayers[0] : null;
 
+  /**
+   * Draw one layer, recursing into groups.
+   *
+   * A group renders as a full-artboard wrapper carrying its opacity, blend and
+   * effect filter, with its children absolutely positioned inside it. Because
+   * the wrapper spans the whole artboard, children keep their absolute document
+   * coordinates and no nested coordinate space is created — which is what lets
+   * the geometry module stay unaware of groups entirely.
+   *
+   * The wrapper is `pointer-events: none` and every leaf restores `auto`:
+   * without that, a group would blanket the artboard and swallow every click
+   * meant for the layers underneath it.
+   */
+  function renderLayerNode(layer: ArtworkLayer): React.ReactNode {
+    if (!layer.visible) return null;
+
+    if (layer.type === 'group') {
+      return (
+        <div
+          key={layer.id}
+          className="absolute inset-0"
+          style={{
+            opacity: layer.opacity,
+            mixBlendMode: layer.blendMode,
+            zIndex: layer.zIndex,
+            pointerEvents: 'none',
+            filter: fxFilterRef(layer.fx, `fx-canvas-${layer.id}`),
+          }}
+        >
+          {childrenOf(doc.layers, layer.id).map(renderLayerNode)}
+        </div>
+      );
+    }
+
+    return renderLeafNode(layer);
+  }
+
+  function renderLeafNode(layer: ArtworkLayer): React.ReactNode {
+    const selected = selectedIds.includes(layer.id);
+
+    // Audio-reactive PREVIEW ONLY — never written to the document, so it
+    // cannot leak into an export. Multipliers stay small on purpose: a
+    // layer that jumps around cannot be positioned accurately.
+    const reactScale = layer.type === 'image' ? 1 + reactive.level * 0.045 : 1;
+    const reactStretch = layer.type === 'waveform' ? 1 + reactive.bass * 0.5 : 1;
+    const opacity = layer.type === 'waveform'
+      ? Math.min(1, layer.opacity * (0.75 + reactive.level * 0.45))
+      : layer.opacity;
+
+    const { vignette } = fxDefaults(layer.fx);
+
+    const style: CSSProperties = {
+      left: layer.x * zoom,
+      top: layer.y * zoom,
+      width: layer.width * zoom,
+      height: layer.height * zoom,
+      opacity,
+      transform: `rotate(${layer.rotation}deg) scale(${reactScale}) scaleY(${reactStretch})`,
+      transformOrigin: 'center',
+      mixBlendMode: layer.blendMode,
+      zIndex: layer.zIndex,
+      // Explicit 'auto' rather than undefined: a leaf inside a group sits in a
+      // wrapper that is `pointer-events: none`, and `undefined` would inherit
+      // that, making every grouped layer unclickable.
+      pointerEvents: layer.type === 'texture' || layer.locked ? 'none' : 'auto',
+    };
+
+    return (
+      <div
+        key={layer.id}
+        role="button"
+        tabIndex={-1}
+        aria-label={`${layer.name} layer`}
+        aria-pressed={selected}
+        onPointerDown={(event) => beginMove(event, layer)}
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+          if (layer.type === 'text') onEditText(layer.id);
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          // Right-clicking outside the current selection moves it, so the
+          // menu always acts on what the producer actually pointed at.
+          if (!selectedIds.includes(layer.id)) onSelect([layer.id]);
+          onContextMenu({ x: event.clientX, y: event.clientY }, layer.id);
+        }}
+        className={cn(
+          'absolute select-none outline-none',
+          !selected && !layer.locked && 'hover:ring-1 hover:ring-white/20',
+          layer.locked ? 'cursor-default' : 'cursor-move',
+        )}
+        style={style}
+      >
+        {/* The filter lives on an inner element, INSIDE the rotation on
+            the wrapper, mirroring how the exporter nests <g filter> inside
+            the transform. Both surfaces therefore rotate a layer's shadow
+            with the layer instead of one doing it and the other not. */}
+        <div
+          className="h-full w-full"
+          style={{ filter: fxFilterRef(layer.fx, `fx-canvas-${layer.id}`) }}
+        >
+          <LayerView
+            layer={layer}
+            zoom={zoom}
+            palette={doc.palette}
+            editing={editingId === layer.id}
+            onEditDone={() => onEditText(null)}
+            onUpdateText={(text) => onPatchLayers([{ id: layer.id, patch: { text } as Partial<ArtworkLayer> }], true)}
+          />
+        </div>
+        {/* Vignette is painted, not filtered, and sits outside the
+            filtered element so the layer's own blur or grain does not
+            smear it — same reason the exporter puts it after </g>. */}
+        {vignette > 0 ? (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{ background: vignetteCssGradient(vignette) }}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  const docGuides = documentGuides(doc);
+
   return (
+    // Wrapper exists so the rulers can pin to the VIEWPORT's edges while the
+    // artboard scrolls underneath. Rendered inside the scroller they would
+    // scroll away with the content, which is the opposite of what a ruler is.
+    <div className="relative h-full min-h-0">
     <div
       ref={scrollerRef}
       // `place-items: safe center` rather than plain centring: when the artboard
       // is zoomed larger than the viewport, ordinary centring pushes its top and
       // left edges outside the scroll range and they become unreachable.
-      style={{ placeItems: 'safe center' }}
+      style={{
+        placeItems: 'safe center',
+        paddingTop: showRulers ? RULER_SIZE + 40 : undefined,
+        paddingLeft: showRulers ? RULER_SIZE + 40 : undefined,
+      }}
       className={cn(
         'relative grid h-full min-h-0 overflow-auto bg-[#090907] p-10',
         spaceHeld && 'cursor-grab',
       )}
+      onPointerMove={(event) => {
+        // Only for the ruler read-out; every drag is handled by the window
+        // listeners so a gesture that leaves the element still ends cleanly.
+        if (!showRulers) return;
+        setPointer(toDoc(event.clientX, event.clientY));
+      }}
+      onPointerLeave={() => setPointer(null)}
       onPointerDown={beginCanvasPress}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -474,6 +815,23 @@ export function StudioCanvas({
           </>
         ) : null}
 
+        {/* The effect filters every layer references by `url(#fx-canvas-…)`.
+            Hidden, zero-sized and aria-hidden: it is a definition block, not a
+            picture. These are produced by the same builder the exporter uses,
+            which is what keeps an on-canvas blur and an exported blur the same
+            blur. */}
+        {fxDefs ? (
+          <svg
+            aria-hidden
+            focusable="false"
+            width="0"
+            height="0"
+            className="pointer-events-none absolute"
+            style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}
+            dangerouslySetInnerHTML={{ __html: `<defs>${fxDefs}</defs>` }}
+          />
+        ) : null}
+
         {/* Layers are clipped to the artboard. Without this a layer dragged
             past the edge kept painting over the app chrome, while the exported
             SVG clipped it at the viewBox — the canvas and the export disagreed
@@ -481,70 +839,7 @@ export function StudioCanvas({
             guides sit OUTSIDE this container so handles stay grabbable when a
             layer hangs over the edge. */}
         <div className="absolute inset-0 overflow-hidden">
-        {sorted.map((layer) => {
-          if (!layer.visible) return null;
-          const selected = selectedIds.includes(layer.id);
-
-          // Audio-reactive PREVIEW ONLY — never written to the document, so it
-          // cannot leak into an export. Multipliers stay small on purpose: a
-          // layer that jumps around cannot be positioned accurately.
-          const reactScale = layer.type === 'image' ? 1 + reactive.level * 0.045 : 1;
-          const reactStretch = layer.type === 'waveform' ? 1 + reactive.bass * 0.5 : 1;
-          const opacity = layer.type === 'waveform'
-            ? Math.min(1, layer.opacity * (0.75 + reactive.level * 0.45))
-            : layer.opacity;
-
-          const style: CSSProperties = {
-            left: layer.x * zoom,
-            top: layer.y * zoom,
-            width: layer.width * zoom,
-            height: layer.height * zoom,
-            opacity,
-            transform: `rotate(${layer.rotation}deg) scale(${reactScale}) scaleY(${reactStretch})`,
-            transformOrigin: 'center',
-            mixBlendMode: layer.blendMode,
-            zIndex: layer.zIndex,
-            pointerEvents: layer.type === 'texture' || layer.locked ? 'none' : undefined,
-          };
-
-          return (
-            <div
-              key={layer.id}
-              role="button"
-              tabIndex={-1}
-              aria-label={`${layer.name} layer`}
-              aria-pressed={selected}
-              onPointerDown={(event) => beginMove(event, layer)}
-              onDoubleClick={(event) => {
-                event.stopPropagation();
-                if (layer.type === 'text') onEditText(layer.id);
-              }}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                // Right-clicking outside the current selection moves it, so the
-                // menu always acts on what the producer actually pointed at.
-                if (!selectedIds.includes(layer.id)) onSelect([layer.id]);
-                onContextMenu({ x: event.clientX, y: event.clientY }, layer.id);
-              }}
-              className={cn(
-                'absolute select-none outline-none',
-                !selected && !layer.locked && 'hover:ring-1 hover:ring-white/20',
-                layer.locked ? 'cursor-default' : 'cursor-move',
-              )}
-              style={style}
-            >
-              <LayerView
-                layer={layer}
-                zoom={zoom}
-                palette={doc.palette}
-                editing={editingId === layer.id}
-                onEditDone={() => onEditText(null)}
-                onUpdateText={(text) => onPatchLayers([{ id: layer.id, patch: { text } as Partial<ArtworkLayer> }], true)}
-              />
-            </div>
-          );
-        })}
+        {topLevelLayers(doc.layers).map(renderLayerNode)}
         </div>
 
         {/* Selection frame sits above every layer so its handles stay grabbable
@@ -615,7 +910,76 @@ export function StudioCanvas({
             }}
           />
         ) : null}
+
+        {/* Ruler guides. Rendered on the artboard so they scroll and zoom with
+            the artwork, and each one is its own grab target — a guide you can
+            place but not move afterwards is barely a guide. The generous hit
+            area sits behind a hairline so the line stays a hairline. */}
+        {showRulers ? (
+          <>
+            {docGuides.x.map((line) => (
+              <span
+                key={`gx-${line}`}
+                role="presentation"
+                title={`Vertical guide at ${line} — drag off the artboard to remove`}
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  event.stopPropagation();
+                  beginGuide('x', line, false);
+                }}
+                className="absolute top-0 z-[996] h-full w-[9px] -translate-x-1/2 cursor-ew-resize"
+                style={{ left: line * zoom }}
+              >
+                <span aria-hidden className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-[#6DC6A4]/70" />
+              </span>
+            ))}
+            {docGuides.y.map((line) => (
+              <span
+                key={`gy-${line}`}
+                role="presentation"
+                title={`Horizontal guide at ${line} — drag off the artboard to remove`}
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  event.stopPropagation();
+                  beginGuide('y', line, false);
+                }}
+                className="absolute left-0 z-[996] h-[9px] w-full -translate-y-1/2 cursor-ns-resize"
+                style={{ top: line * zoom }}
+              >
+                <span aria-hidden className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-[#6DC6A4]/70" />
+              </span>
+            ))}
+          </>
+        ) : null}
       </div>
+    </div>
+
+    {showRulers ? (
+      <>
+        <RulerBar
+          orientation="horizontal"
+          documentLength={doc.width}
+          zoom={zoom}
+          offset={frame.left}
+          extent={frame.width}
+          cursor={pointer?.x ?? null}
+          onPressRuler={(position) => beginGuide('x', position, true)}
+        />
+        <RulerBar
+          orientation="vertical"
+          documentLength={doc.height}
+          zoom={zoom}
+          offset={frame.top}
+          extent={frame.height}
+          cursor={pointer?.y ?? null}
+          onPressRuler={(position) => beginGuide('y', position, true)}
+        />
+        <RulerCorner
+          hasGuides={docGuides.x.length + docGuides.y.length > 0}
+          onClear={() => onGuidesChange({ x: [], y: [] }, true)}
+        />
+      </>
+    ) : null}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { createLogger } from '@/lib/log';
 const log = createLogger('api.store.contact');
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 import { isValidEmail } from '@/lib/validate';
+import { normalizeEmail } from '@/lib/contacts/email';
 
 /**
  * POST /api/store/contact
@@ -42,16 +43,21 @@ export async function POST(req: NextRequest) {
 
     // Resolve the creator's contact_email (if configured)
     let toEmail: string = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+    // Also the seller the CRM lead belongs to. Single-producer app, so the one
+    // creator_profiles row is the owner — but contacts.user_id must be set
+    // either way: mig 097 made null-owner contact rows unreadable.
+    let sellerUserId: string | null = null;
     if (isSupabaseConfigured()) {
       try {
         const admin = createServiceClient();
         const { data: profile } = await admin
           .from('creator_profiles')
-          .select('contact_email, display_name')
+          .select('contact_email, display_name, user_id')
           .not('contact_email', 'is', null)
           .limit(1)
           .maybeSingle();
         if (profile?.contact_email) toEmail = profile.contact_email;
+        sellerUserId = (profile as { user_id?: string | null } | null)?.user_id ?? null;
       } catch {
         // Non-fatal: fall back to env
       }
@@ -98,24 +104,36 @@ export async function POST(req: NextRequest) {
 
     if (resendError) throw resendError;
 
-    // Upsert buyer contact in CRM (non-fatal — DB may not have migration 038 yet)
-    if (isSupabaseConfigured()) {
-      try {
-        const admin = createServiceClient();
-        await admin
-          .from('contacts')
-          .upsert(
-            {
-              email,
-              name: String(name).trim(),
-              category: 'buyer',
-              buyer_pipeline_status: 'new_lead',
-            },
-            { onConflict: 'email', ignoreDuplicates: false },
-          );
-      } catch {
-        // non-fatal
+    // Upsert the enquiry into the producer's CRM. Non-fatal, but no longer
+    // silent — this was inert for the same three reasons as the free-download
+    // path: onConflict named a nonexistent 'email' constraint (the real index
+    // is contacts_user_email_uniq (user_id, email), mig 096), no user_id was
+    // set so the row was invisible under mig 097's owner-only RLS, and
+    // supabase-js resolves with { error } instead of throwing so the catch
+    // never fired. Store contact-form enquiries never reached the CRM.
+    if (isSupabaseConfigured() && sellerUserId) {
+      const admin = createServiceClient();
+      const { error: contactError } = await admin.from('contacts').upsert(
+        {
+          user_id: sellerUserId,
+          email: normalizeEmail(String(email)),
+          name: String(name).trim(),
+          category: 'buyer',
+          buyer_pipeline_status: 'new_lead',
+          // Seed the visible stage too — /api/store/me's lead upsert already
+          // does this, and a contact with no crm_status falls back to the
+          // derived activity tone, which reads as nothing at all for a new lead.
+          crm_status: 'prospect',
+        },
+        // ignoreDuplicates: never overwrite the producer's curated name or
+        // pipeline stage for someone who has messaged before.
+        { onConflict: 'user_id,email', ignoreDuplicates: true },
+      );
+      if (contactError) {
+        log.warn('store contact CRM upsert failed', { error: contactError.message });
       }
+    } else if (isSupabaseConfigured()) {
+      log.warn('store contact CRM upsert skipped — no creator profile owner');
     }
 
     return NextResponse.json({ ok: true });

@@ -89,6 +89,19 @@
   font-display: swap;
 }
 
+/* La Bruja — script display face. Shipped in /public/fonts since the start but
+ * never registered, so nothing could reach it. Declared here so the Cover Art
+ * Studio's type library can offer it; `font-display: swap` plus the browser's
+ * own "only download a face something actually uses" rule means declaring it
+ * costs the rest of the app nothing. */
+@font-face {
+  font-family: 'La Bruja';
+  src: url('/fonts/LaBruja.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Design tokens — luxury beige revision.
  * The interface keeps its private-studio darkness, but the old coffee /
  * brown undertone has been cooled into graphite, parchment, and champagne.
@@ -198,6 +211,11 @@
   --z-popover: 200;
   --z-drawer: 220;
   --z-modal: 240;
+  /* Above --z-modal on purpose. `confirmToast` is called from inside
+   * modals, and a confirm dialog rendered *behind* the surface that
+   * triggered it is unreachable. A transient notification is always
+   * the topmost thing on screen. */
+  --z-toast: 260;
   --dur-fast: 160ms;
   --dur-med: 260ms;
   --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
@@ -537,6 +555,69 @@ body {
   }
 }
 
+/* ── Toast: iOS-style top-center notification banner ───────────────────
+
+   Positioning note: the centering translate lives on the *container*
+   (flex justify-center), never on the card. The entrance keyframe animates
+   `transform`, so a `-translate-x-1/2` on the same element would be
+   overwritten mid-animation and the card would fly in off-centre.
+
+   The glass recipe is spelled out here rather than in Tailwind utilities
+   because the utility form of it would stack a second opacity modifier onto
+   an arbitrary one, match no utility, and compile to nothing — the defect
+   `lib/ui/tailwind-classes.test.ts` exists to catch. (The example is not
+   written out literally here: that test scans source text, and a comment
+   quoting the bad pattern fails it.) It silently drops the translucent base
+   and leaves the blur sitting on top of nothing. */
+.toast-surface {
+  /* Deliberately sets no `border`. This rule is unlayered and Tailwind's
+     utilities live in @layer utilities, so an unlayered `border:` shorthand
+     would beat the per-kind `border-emerald-900/40` / `border-red-900/40`
+     classes on the card and flatten every toast to one colour. The border
+     width comes from the card's own `border` utility. */
+  /* The card surface at 72% — #0D0D0A with the page showing through. The
+     first cut used rgba(20, 17, 13, …), the old warm #14110d, which reads
+     brown against the neutral near-black every other panel in the app uses. */
+  background: rgba(13, 13, 10, 0.72);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
+    0 20px 50px -12px rgba(0, 0, 0, 0.7);
+}
+
+/* Drop, overshoot, settle — the iOS banner arc. The 60% keyframe carries it
+   6% past its resting place so the stop reads as physical rather than as an
+   animation ending. `--ease-spring` is already the iOS curve. */
+@keyframes toast-drop-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -140%, 0) scale(0.92);
+  }
+  60% {
+    opacity: 1;
+    transform: translate3d(0, 6%, 0) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.toast-enter {
+  animation: toast-drop-in 420ms var(--ease-spring) both;
+}
+
+/* The overshoot is the part that has to go — a card that travels past its
+   mark and springs back is exactly the vestibular trigger this query exists
+   for. Fade in place instead; the notification still announces itself. */
+@media (prefers-reduced-motion: reduce) {
+  .toast-enter {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 /* ── /store grid: Pinterest-style masonry ──────────────────────────────
    CSS columns + break-inside avoid lets cards stack vertically per column
    without needing JS for a masonry library. Cards keep their natural
@@ -782,17 +863,6 @@ html {
   animation: uiFadeIn var(--dur-med) var(--ease-decelerate) both;
 }
 
-/* Toasts nudge in from the right edge they are stacked against — a short
-   travel, not the full-width sweep a drawer makes. */
-@keyframes uiToastIn {
-  from { opacity: 0; transform: translateX(12px) scale(0.98); }
-  to   { opacity: 1; transform: translateX(0) scale(1); }
-}
-
-.ui-toast {
-  animation: uiToastIn var(--dur-med) var(--ease-spring) both;
-}
-
 @media (prefers-reduced-motion: reduce) {
   [style*="drawerSlide"] { animation: none !important; }
   .ui-scrim,
@@ -802,8 +872,7 @@ html {
   .ui-drawer-bottom,
   .ui-pop,
   .ui-pop-up,
-  .ui-fade-in,
-  .ui-toast {
+  .ui-fade-in {
     animation: none !important;
   }
 }

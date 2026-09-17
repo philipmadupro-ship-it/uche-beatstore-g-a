@@ -9,6 +9,8 @@ import { DEFAULT_TEMPLATE_MD, fillTemplate } from '@/lib/contracts/license-templ
 import { renderContractPdf } from '@/lib/contracts/pdf';
 import { uploadContractPdf } from '@/lib/storage/upload';
 import { deliverFulfillmentEmail } from '@/lib/fulfillment/email-outbox';
+import { normalizeEmail, normalizeEmailOrNull } from '@/lib/contacts/email';
+import { linkBuyerToCrm } from '@/lib/contacts/link-buyer';
 import {
   legacyLicenseFileTypes,
   normalizeLicenseFileTypes,
@@ -244,38 +246,16 @@ async function runFulfillment(params: {
   const admin = createServiceClient();
   const APP_URL = getAppUrl();
 
-  // 1. CRM — upsert buyer into the seller's contacts list, then log the
+  // 1. CRM — link buyer into the seller's contacts list, then log the
   // purchase to the contact's activity timeline (the buyer → contact link).
   if (meta.seller_user_id && meta.buyer_email) {
     try {
-      const { data: existing } = await admin
-        .from('contacts')
-        .select('id')
-        .eq('user_id', meta.seller_user_id)
-        .eq('email', meta.buyer_email)
-        .maybeSingle();
-
-      let contactId = existing?.id as string | undefined;
-
-      if (!existing) {
-        const { data: inserted } = await admin.from('contacts').insert({
-          user_id: meta.seller_user_id,
-          name: session.customer_details?.name || 'Customer',
-          email: meta.buyer_email,
-          role: 'artist',
-          label: 'buyer',
-          notes: `Purchased via ${meta.source_surface === 'store' ? 'store' : 'share link'}`,
-          buyer_pipeline_status: 'purchased',
-        }).select('id').single();
-        contactId = inserted?.id;
-      } else {
-        // Ensure pipeline status is updated even for returning buyers
-        await admin
-          .from('contacts')
-          .update({ buyer_pipeline_status: 'purchased' })
-          .eq('user_id', meta.seller_user_id)
-          .eq('email', meta.buyer_email);
-      }
+      const contactId = await linkBuyerToCrm(admin, {
+        sellerUserId: meta.seller_user_id,
+        email: meta.buyer_email,
+        name: session.customer_details?.name || 'Customer',
+        notes: `Purchased via ${meta.source_surface === 'store' ? 'store' : 'share link'}`,
+      });
 
       // Activity timeline entry. dedupe_key = stripe session id so retries
       // and the timeline's derived-purchase path don't double-log. Title is
@@ -672,35 +652,52 @@ async function runProjectFulfillment(params: {
   const admin = createServiceClient();
   const APP_URL = getAppUrl();
 
-  // 1. CRM — upsert buyer (reuse pattern)
+  // 1. CRM — link buyer, then log the bundle purchase to their timeline.
+  // The timeline entry is new: project purchases previously created/updated
+  // the contact but logged nothing, so a bundle sale was invisible in the CRM.
   if (meta.seller_user_id && meta.buyer_email) {
     try {
-      const { data: existing } = await admin
-        .from('contacts')
-        .select('id')
-        .eq('user_id', meta.seller_user_id)
-        .eq('email', meta.buyer_email)
-        .maybeSingle();
+      const contactId = await linkBuyerToCrm(admin, {
+        sellerUserId: meta.seller_user_id,
+        email: meta.buyer_email,
+        name: session.customer_details?.name || 'Customer',
+        notes: 'Purchased project via store',
+      });
 
-      if (!existing) {
-        await admin.from('contacts').insert({
-          user_id: meta.seller_user_id,
-          name: session.customer_details?.name || 'Customer',
-          email: meta.buyer_email,
-          role: 'artist',
-          label: 'buyer',
-          notes: `Purchased project via store`,
-          buyer_pipeline_status: 'purchased',
-        });
-      } else {
-        await admin
-          .from('contacts')
-          .update({ buyer_pipeline_status: 'purchased' })
-          .eq('user_id', meta.seller_user_id)
-          .eq('email', meta.buyer_email);
+      if (contactId) {
+        try {
+          const amountUsd = session.amount_total != null ? Number(session.amount_total) / 100 : null;
+          const { data: proj } = await admin
+            .from('projects')
+            .select('name')
+            .eq('id', projectId)
+            .maybeSingle();
+          const projName = (proj as { name?: string } | null)?.name || 'a project';
+          const amtLabel = amountUsd != null
+            ? ` — $${amountUsd.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+            : '';
+          // dedupe_key = stripe session id, matching the track-license path
+          // so mig 094's partial unique index blocks double-logging on retry.
+          await admin.from('contact_activity').insert({
+            contact_id: contactId,
+            user_id: meta.seller_user_id,
+            kind: 'purchase',
+            title: `Bought ${projName}${amtLabel}`,
+            body: 'Project bundle',
+            metadata: {
+              stripe_session_id: session.id,
+              dedupe_key: session.id,
+              project_id: projectId,
+              amount_usd: amountUsd,
+              access_id: accessId,
+            },
+          });
+        } catch (err) {
+          log.warn('project activity purchase log failed', { error: errorMessage(err) });
+        }
       }
     } catch (err) {
-      log.warn('project CRM upsert failed', { error: errorMessage(err) });
+      log.warn('project CRM link failed', { error: errorMessage(err) });
     }
   }
 
@@ -786,7 +783,18 @@ export async function POST(req: NextRequest) {
       // ── checkout.session.completed ─────────────────────────────────────────
       case 'checkout.session.completed': {
         const session = event.data.object as WebhookCheckoutSession;
-        const meta: Record<string, string> = session.metadata ?? {};
+        // Canonicalise the buyer email once, here, so every downstream write
+        // (contacts, license_purchases, project_access_links, delivery email)
+        // agrees with the readers that look up by lowercased email —
+        // /api/store/orders and the contact activity timeline both do.
+        const rawMeta: Record<string, string> = session.metadata ?? {};
+        const meta: Record<string, string> = rawMeta.buyer_email
+          ? { ...rawMeta, buyer_email: normalizeEmail(rawMeta.buyer_email) }
+          : rawMeta;
+        // Stripe's own customer_email is the fallback when metadata carried
+        // none; normalise it on the same terms rather than storing raw casing.
+        const buyerEmail =
+          meta.buyer_email || normalizeEmailOrNull(session.customer_email) || 'unknown@invalid';
 
         // ── Layer 1 idempotency: event-level ──────────────────────────────
         // Lookup first so a failed durable write never leaves the event marked
@@ -856,7 +864,7 @@ export async function POST(req: NextRequest) {
             .from('project_access_links')
             .insert({
               project_id: projectId,
-              buyer_email: meta.buyer_email || session.customer_email || 'unknown@invalid',
+              buyer_email: buyerEmail,
               stripe_session_id: session.id,
               amount_usd: (session.amount_total ?? 0) / 100,
               seller_user_id: sellerForAccess,
@@ -993,7 +1001,7 @@ export async function POST(req: NextRequest) {
             .upsert(
               {
                 seller_user_id: meta.seller_user_id || null,
-                buyer_email: meta.buyer_email || session.customer_email || 'unknown@invalid',
+                buyer_email: buyerEmail,
                 buyer_stripe_customer: session.customer || null,
                 share_token: meta.share_token || null,
                 track_ids: trackIds,

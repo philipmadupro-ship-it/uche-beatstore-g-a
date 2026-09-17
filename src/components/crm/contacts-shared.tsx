@@ -43,6 +43,8 @@ export const STAGE_META: Record<CrmStage, { label: string; dot: string; text: st
   prospect:  { label: 'Prospect',  dot: 'bg-[#7aa8e8]', text: 'text-[#7aa8e8]' },
   active:    { label: 'Active',    dot: 'bg-[#6DC6A4]', text: 'text-[#6DC6A4]' },
   engaged:   { label: 'Engaged',   dot: 'bg-white', text: 'text-white' },
+  // Brand accent — the one stage that means money changed hands.
+  customer:  { label: 'Customer',  dot: 'bg-[#D4BFA0]', text: 'text-[#D4BFA0]' },
   cold:      { label: 'Cold',      dot: 'bg-white/60', text: 'text-white/60' },
   archived:  { label: 'Archived',  dot: 'bg-white/40', text: 'text-white/40' },
 };

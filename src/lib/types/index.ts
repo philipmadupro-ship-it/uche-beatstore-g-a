@@ -1,3 +1,5 @@
+import type { CrmStage } from '@/lib/contracts';
+
 export type TrackType = 'beat' | 'instrumental' | 'song' | 'remix';
 export type TrackStatus = 'finished' | 'needs_work' | 'archived' | 'maq';
 export type StemsStatus = 'none' | 'pending' | 'done' | 'failed';
@@ -126,8 +128,10 @@ export interface Contact {
   /** Buyer pipeline stage — set when contact was created via store
    *  free-download or contact form (category = 'buyer'). */
   buyer_pipeline_status?: 'new_lead' | 'contacted' | 'negotiating' | 'purchased' | 'repeat_buyer' | null;
-  /** Editable CRM lifecycle stage (mig 092). null → display falls back to derived activity tone. */
-  crm_status?: 'prospect' | 'active' | 'engaged' | 'cold' | 'archived' | null;
+  /** Editable CRM lifecycle stage (mig 092). null → display falls back to derived activity tone.
+   *  Derived from CRM_STAGES rather than restated, so adding a stage can't
+   *  leave this union silently behind. */
+  crm_status?: CrmStage | null;
   /** Free-form CRM tags (mig 091). Attached by GET /api/contacts. */
   tags?: { tag: string; category?: string | null }[];
   created_at: string;

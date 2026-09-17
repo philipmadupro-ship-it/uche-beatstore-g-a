@@ -46,8 +46,14 @@ export function PageHeader({ eyebrow, title, description, actions, meta, childre
           )}
         </div>
 
+        {/* Actions row wraps below sm. `shrink-0` + nowrap meant it kept its
+            full intrinsic width inside a narrower parent, pushing trailing
+            controls past the viewport edge — at 375px the contacts header's
+            "Import" sat at x=484 and was clipped rather than scrollable, so it
+            could not be reached at all. Shared by every dashboard page that
+            passes `actions`, so this was never a contacts-only problem. */}
         {(meta || actions) && (
-          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 sm:shrink-0">
             {meta && (
               <span className="text-[11px] font-mono text-white/50 uppercase tracking-wider whitespace-nowrap">{meta}</span>
             )}

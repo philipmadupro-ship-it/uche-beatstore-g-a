@@ -15,28 +15,22 @@ import { ImageIcon } from 'lucide-react';
 import {
   imageCropDefaults,
   imageFrameRect,
+  textWeightFor,
   waveformDefaults,
   waveformSeriesFor,
   type ArtworkLayer,
   type ArtworkTextureKind,
   type ImageArtworkLayer,
-  type TextArtworkLayer,
   type WaveformArtworkLayer,
   type ArtworkPalette,
 } from './cover-art-document';
 import {
   barRect, barSlots, capRadius, circularSegments, pointsAttribute, waveformPathPoints,
 } from '@/lib/cover/waveform';
-
-export const fontStacks: Record<TextArtworkLayer['fontFamily'], string> = {
-  display: 'Synkopy, Akira Expanded, sans-serif',
-  artwork: 'Synkopy, Akira Expanded, sans-serif',
-  ui: 'Inter, system-ui, sans-serif',
-  mono: 'Panchang, ui-monospace, monospace',
-  // Akira first, with nothing in front of it to win the cascade — the whole
-  // point of this role is that it renders as the app's brand mark does.
-  brand: '"Akira Expanded", sans-serif',
-};
+import { fontStackFor } from '@/lib/cover/fonts';
+import {
+  flattenForPath, textPathD, textPathDefaults, textPathPlacement,
+} from '@/lib/cover/text-path';
 
 /** CSS `filter` matching each SVG treatment filter, so preview equals export. */
 function treatmentFilter(layer: ImageArtworkLayer, palette: ArtworkPalette): string | undefined {
@@ -200,6 +194,11 @@ export function LayerView({
   onEditDone?: () => void;
   onUpdateText?: (text: string) => void;
 }) {
+  // A group draws nothing itself — `StudioCanvas` nests its children inside a
+  // wrapper that carries the group's opacity and blend. Returning null here
+  // rather than handling groups is what keeps this component about CONTENT.
+  if (layer.type === 'group') return null;
+
   if (layer.type === 'shape') {
     if (layer.shape === 'triangle') {
       return (
@@ -285,7 +284,13 @@ export function LayerView({
   const text = layer.uppercase ? layer.text.toUpperCase() : layer.text;
   const typeStyle = {
     color: layer.color,
-    fontFamily: fontStacks[layer.fontFamily],
+    fontFamily: fontStackFor(layer.fontFamily),
+    // Both renderers go through `textWeightFor`. Setting no weight here at all
+    // — which is what this did — while the exporter hardcoded 700 meant the
+    // canvas drew Synkopy Regular and the file asked for a bold that only
+    // exists as the Flipside cut on the page and as a synthesised fake inside
+    // an exported SVG. Three different results for one layer.
+    fontWeight: textWeightFor(layer),
     fontSize: layer.fontSize * zoom,
     letterSpacing: layer.tracking * zoom,
     lineHeight: layer.lineHeight,
@@ -310,6 +315,49 @@ export function LayerView({
         className="h-full w-full resize-none bg-[#090907]/90 p-1 outline outline-1 outline-[#F2F2F0]"
         style={typeStyle}
       />
+    );
+  }
+
+  /**
+   * Type on a curve.
+   *
+   * Rendered as an inline SVG in DOCUMENT units, the same trick the waveform
+   * layers use: the viewBox absorbs the zoom, so the path and the font size are
+   * the raw layer values and this element receives byte-for-byte the same `d`
+   * string the exporter writes. There is no DOM equivalent of `<textPath>` to
+   * approximate, and no approximation to drift.
+   */
+  const curve = textPathD(textPathDefaults(layer.path), layer.width, layer.height);
+  if (curve) {
+    const place = textPathPlacement(layer.align);
+    const outlined = Boolean(layer.stroke) && (layer.strokeWidth ?? 0) > 0;
+    return (
+      <svg
+        viewBox={`0 0 ${layer.width} ${layer.height}`}
+        preserveAspectRatio="none"
+        className="h-full w-full overflow-visible"
+      >
+        <defs>
+          {/* Prefixed differently from the exporter's `tp-`, so a canvas def
+              and an export def can never collide in one document. */}
+          <path id={`tpc-${layer.id}`} d={curve} fill="none" />
+        </defs>
+        <text
+          textAnchor={place.anchor}
+          fill={layer.color}
+          fontSize={layer.fontSize}
+          fontFamily={fontStackFor(layer.fontFamily)}
+          fontWeight={textWeightFor(layer)}
+          letterSpacing={layer.tracking}
+          stroke={outlined ? layer.stroke : undefined}
+          strokeWidth={outlined ? layer.strokeWidth : undefined}
+          paintOrder={outlined ? 'stroke' : undefined}
+        >
+          <textPath href={`#tpc-${layer.id}`} startOffset={place.startOffset}>
+            {flattenForPath(text)}
+          </textPath>
+        </text>
+      </svg>
     );
   }
 

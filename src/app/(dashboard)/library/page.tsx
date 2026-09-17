@@ -1186,7 +1186,12 @@ export default function LibraryPage() {
               className="w-full bg-white/[0.03] border border-white/[0.06] rounded-full pl-8 pr-3 py-2 text-[11px] text-white placeholder-white/40 focus:outline-none focus:border-white/[0.12] transition-colors"
             />
           </div>
-          <div className="flex items-center gap-2 ml-auto">
+          {/* Wraps below sm — same trap as the contacts toolbar: an `ml-auto` group
+              with nowrap keeps its full intrinsic width inside a wrapping
+              parent, so trailing controls (here the sort Dropdown, at x=420
+              on a 375px screen) fall outside the viewport with nothing to
+              scroll, making them unreachable rather than merely off-screen. */}
+          <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
             <button
               onClick={() => setShowFilters((v) => !v)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-medium transition-colors ${

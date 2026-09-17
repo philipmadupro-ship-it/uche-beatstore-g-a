@@ -3,8 +3,24 @@ import {
   barRect, barSlots, buildWaveformSeries, capRadius, circularSegments, isBarMode,
   pointsAttribute, suggestedBarCount, waveformPathPoints, type WaveformMode,
 } from '@/lib/cover/waveform';
+import {
+  buildFxFilterDef, fxDefaults, vignetteSvgGradientDef,
+  type ArtworkBlendMode, type ArtworkLayerFx,
+} from '@/lib/cover/effects';
+import {
+  fontStackFor, resolveWeight, type CoverFontId, type LegacyFontRole,
+} from '@/lib/cover/fonts';
+import { guidesDefaults, type DocumentGuides } from '@/lib/cover/rulers';
+import {
+  flattenForPath, hasTextPath, textPathD, textPathDefaults, textPathPlacement,
+  type TextPathSettings,
+} from '@/lib/cover/text-path';
 
 export type { WaveformMode } from '@/lib/cover/waveform';
+export type { ArtworkLayerFx, ArtworkBlendMode } from '@/lib/cover/effects';
+export type { CoverFontId, LegacyFontRole } from '@/lib/cover/fonts';
+export type { DocumentGuides } from '@/lib/cover/rulers';
+export type { TextPathSettings, TextPathShape } from '@/lib/cover/text-path';
 
 export type CoverArtTool =
   | 'source'
@@ -17,7 +33,7 @@ export type CoverArtTool =
   | 'brand'
   | 'history';
 
-export type ArtworkLayerType = 'text' | 'shape' | 'waveform' | 'texture' | 'image';
+export type ArtworkLayerType = 'text' | 'shape' | 'waveform' | 'texture' | 'image' | 'group';
 
 export type ArtworkLayerBase = {
   id: string;
@@ -32,18 +48,45 @@ export type ArtworkLayerBase = {
   visible: boolean;
   locked: boolean;
   zIndex: number;
-  blendMode: 'normal' | 'multiply' | 'screen' | 'overlay' | 'soft-light';
+  /**
+   * The group this layer belongs to, if any.
+   *
+   * Nesting is expressed as a parent POINTER on a flat array rather than as
+   * nested `children`, so every existing consumer that walks `document.layers`
+   * still sees every layer. The alternative — a real tree — would have meant
+   * rewriting selection, snapping, alignment and both renderers at once.
+   *
+   * Children keep ABSOLUTE document coordinates. A group is a wrapper for
+   * opacity, blend and organisation, not a coordinate space, which is what
+   * lets `lib/cover/geometry.ts` stay entirely unaware that groups exist.
+   */
+  parentId?: string;
+  blendMode: ArtworkBlendMode;
+  /**
+   * Adjustments and effects. Optional so every document saved before effects
+   * existed keeps opening; every read goes through `fxDefaults`, and both
+   * renderers consume the same `<filter>` this produces rather than each
+   * writing their own — see `lib/cover/effects.ts`.
+   */
+  fx?: ArtworkLayerFx;
 };
 
 export type TextArtworkLayer = ArtworkLayerBase & {
   type: 'text';
   text: string;
   /**
-   * `brand` is Akira Expanded — the face the app's own "U2C Beatstore" mark is
-   * set in. It needed its own role because Akira only ever appeared as a
-   * fallback behind Synkopy in the other stacks, so it never actually rendered.
+   * A font id from `lib/cover/fonts.ts`, or one of the five legacy role names
+   * documents used to store (`display`/`artwork`/`ui`/`mono`/`brand`). Both
+   * resolve through `resolveFont`, so covers saved before the type library
+   * existed keep opening in the face they were designed in.
    */
-  fontFamily: 'display' | 'artwork' | 'ui' | 'mono' | 'brand';
+  fontFamily: CoverFontId | LegacyFontRole;
+  /**
+   * Requested weight. Snapped to a cut the family actually ships before it
+   * reaches either renderer — see `nearestFace`. Optional so older documents
+   * load; they resolve to 400.
+   */
+  fontWeight?: number;
   fontSize: number;
   tracking: number;
   lineHeight: number;
@@ -53,7 +96,23 @@ export type TextArtworkLayer = ArtworkLayerBase & {
   /** Outline colour. Undefined means no outline, which is the common case. */
   stroke?: string;
   strokeWidth?: number;
+  /**
+   * Curve the text sits on. Absent means ordinary flat text, which keeps
+   * wrapping and multi-line support that `<textPath>` has no concept of.
+   */
+  path?: TextPathSettings;
 };
+
+/**
+ * The weight a text layer actually renders at.
+ *
+ * Both renderers call this rather than reading `fontWeight` directly, because
+ * an unsnapped weight is drawn by two different synthesisers — the page's font
+ * engine on the canvas, an isolated SVG's on export — and they do not agree.
+ */
+export function textWeightFor(layer: TextArtworkLayer): number {
+  return resolveWeight(layer.fontFamily, layer.fontWeight);
+}
 
 export type ShapeArtworkLayer = ArtworkLayerBase & {
   type: 'shape';
@@ -231,7 +290,22 @@ export function imageObjectFit(fit: 'cover' | 'contain' | 'fill'): 'cover' | 'co
   return fit;
 }
 
+/**
+ * A group.
+ *
+ * Carries no geometry of its own worth reading — its bounds are whatever its
+ * descendants occupy, derived on demand by `groupBounds`. The stored rect is
+ * set once at creation and left alone; nothing depends on it, because every
+ * geometry operation expands a selected group into its leaves first.
+ */
+export type GroupArtworkLayer = ArtworkLayerBase & {
+  type: 'group';
+  /** Folded shut in the layers panel. Purely a panel affordance. */
+  collapsed?: boolean;
+};
+
 export type ArtworkLayer =
+  | GroupArtworkLayer
   | TextArtworkLayer
   | ShapeArtworkLayer
   | WaveformArtworkLayer
@@ -268,9 +342,23 @@ export type ArtworkDocument = {
   directionId: CoverArtDirectionId;
   source: ArtworkSource;
   layers: ArtworkLayer[];
+  /**
+   * Ruler guides, in document units.
+   *
+   * Optional so covers saved before rulers existed keep opening; read through
+   * `documentGuides`. Deliberately NOT read by `renderArtworkDocumentSvg` —
+   * guides are a working aid, and the exporter never seeing them is what makes
+   * it impossible to bake one into a finished cover.
+   */
+  guides?: DocumentGuides;
   createdAt: string;
   updatedAt: string;
 };
+
+/** The guides on a document, with the unset case resolved in one place. */
+export function documentGuides(document: ArtworkDocument): DocumentGuides {
+  return guidesDefaults(document.guides);
+}
 
 export type CoverArtDirectionId =
   | 'brutalist-archive'
@@ -539,19 +627,284 @@ export function createArtworkDocument(
   } satisfies ArtworkDocument;
 }
 
+/* ── Grouping ──────────────────────────────────────────────────────────────
+ *
+ * Nesting is a parent pointer on a flat array (see `ArtworkLayerBase.parentId`).
+ * Everything below is pure and tested; per CLAUDE.md this is exactly the kind
+ * of logic that gets silently reverted when it hides inside a component, and
+ * the cycle guards in particular are impossible to exercise from the UI.
+ */
+
+/** Layers with no parent, in stacking order. */
+export function topLevelLayers(layers: ArtworkLayer[]): ArtworkLayer[] {
+  return sortArtworkLayers(layers.filter((layer) => !layer.parentId));
+}
+
+/** Direct children of a group, in stacking order. */
+export function childrenOf(layers: ArtworkLayer[], parentId: string): ArtworkLayer[] {
+  return sortArtworkLayers(layers.filter((layer) => layer.parentId === parentId));
+}
+
+/**
+ * Every layer beneath a group, at any depth.
+ *
+ * Guarded against cycles. A hand-edited document — or a future bug in a move
+ * operation — can point a group at its own descendant, and without the visited
+ * set this recurses until the stack blows, taking the whole studio down rather
+ * than degrading.
+ */
+export function descendantIds(layers: ArtworkLayer[], groupId: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>([groupId]);
+  const walk = (id: string) => {
+    for (const child of layers.filter((layer) => layer.parentId === id)) {
+      if (seen.has(child.id)) continue;
+      seen.add(child.id);
+      out.push(child.id);
+      if (child.type === 'group') walk(child.id);
+    }
+  };
+  walk(groupId);
+  return out;
+}
+
+/** True when `id` sits anywhere beneath `ancestorId`. */
+export function isDescendantOf(layers: ArtworkLayer[], id: string, ancestorId: string): boolean {
+  const seen = new Set<string>();
+  let current = layers.find((layer) => layer.id === id)?.parentId;
+  while (current) {
+    if (current === ancestorId) return true;
+    if (seen.has(current)) return false;
+    seen.add(current);
+    current = layers.find((layer) => layer.id === current)?.parentId;
+  }
+  return false;
+}
+
+/**
+ * Replace any selected group with the drawable layers inside it.
+ *
+ * THE function that lets groups exist without touching `lib/cover/geometry.ts`.
+ * Move, resize, align and snapping all operate on leaves, so selecting a group
+ * and dragging it moves its contents — and a group contributes no rect of its
+ * own to a selection's bounding box, which is what keeps those bounds correct
+ * without anyone having to keep a group's stored rect up to date.
+ */
+export function expandToLeaves(layers: ArtworkLayer[], ids: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const layer = layers.find((item) => item.id === id);
+    if (!layer) continue;
+    if (layer.type === 'group') {
+      for (const descendant of descendantIds(layers, id)) {
+        const child = layers.find((item) => item.id === descendant);
+        if (child && child.type !== 'group' && !seen.has(descendant)) {
+          seen.add(descendant);
+          out.push(descendant);
+        }
+      }
+      continue;
+    }
+    if (!seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+/** The box a group's contents occupy, or null when it is empty. */
+export function groupBounds(
+  layers: ArtworkLayer[],
+  groupId: string,
+): { x: number; y: number; width: number; height: number } | null {
+  const leaves = expandToLeaves(layers, [groupId])
+    .map((id) => layers.find((layer) => layer.id === id))
+    .filter((layer): layer is ArtworkLayer => Boolean(layer));
+  if (leaves.length === 0) return null;
+  const minX = Math.min(...leaves.map((layer) => layer.x));
+  const minY = Math.min(...leaves.map((layer) => layer.y));
+  const maxX = Math.max(...leaves.map((layer) => layer.x + layer.width));
+  const maxY = Math.max(...leaves.map((layer) => layer.y + layer.height));
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+/**
+ * Renumber one sibling set so its z values are 0..n-1 in their current order.
+ *
+ * z only has to be meaningful WITHIN a sibling set, but ungrouping drops a
+ * group's children into a set where their old values can collide with existing
+ * siblings — and two layers sharing a z index stack in whatever order the sort
+ * happens to be stable in, which is not a decision anyone made.
+ */
+function renumberSiblings(layers: ArtworkLayer[], parentId: string | undefined): ArtworkLayer[] {
+  const siblings = sortArtworkLayers(layers.filter((layer) => layer.parentId === parentId));
+  const order = new Map(siblings.map((layer, index) => [layer.id, index]));
+  return layers.map((layer) => (
+    order.has(layer.id) ? { ...layer, zIndex: order.get(layer.id)! } : layer
+  ));
+}
+
+/**
+ * Wrap the given layers in a new group.
+ *
+ * Members are taken from wherever they were, so grouping a mixed selection is
+ * allowed and pulls everything into one place — which is what the gesture
+ * means. Locked layers are left where they are, matching `removeLayers`:
+ * the lock is there to stop exactly this kind of bulk change.
+ */
+export function groupLayers(
+  document: ArtworkDocument,
+  ids: string[],
+  name = 'Group',
+): { document: ArtworkDocument; id: string | null } {
+  const members = document.layers.filter((layer) => ids.includes(layer.id) && !layer.locked);
+  if (members.length === 0) return { document, id: null };
+
+  const groupId = freshId('group');
+  // The group lands where its topmost member was, so grouping does not change
+  // what is in front of what.
+  const zIndex = Math.max(...members.map((layer) => layer.zIndex));
+  // A group nested inside another group keeps that parent, but only when every
+  // member shares it — a mixed selection is flattened to the top level rather
+  // than being guessed at.
+  const parents = new Set(members.map((layer) => layer.parentId));
+  const parentId = parents.size === 1 ? [...parents][0] : undefined;
+
+  const memberIds = new Set(members.map((layer) => layer.id));
+
+  const minX = Math.min(...members.map((layer) => layer.x));
+  const minY = Math.min(...members.map((layer) => layer.y));
+  const maxX = Math.max(...members.map((layer) => layer.x + layer.width));
+  const maxY = Math.max(...members.map((layer) => layer.y + layer.height));
+
+  const group: GroupArtworkLayer = {
+    id: groupId,
+    name,
+    type: 'group',
+    x: minX,
+    y: minY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY),
+    rotation: 0,
+    opacity: 1,
+    visible: true,
+    locked: false,
+    zIndex,
+    parentId,
+    blendMode: 'normal',
+  };
+
+  let layers: ArtworkLayer[] = document.layers.map((layer) => (
+    memberIds.has(layer.id) ? { ...layer, parentId: groupId } : layer
+  ));
+  layers = [...layers, group];
+  // Members keep their relative order inside the new group; the sets they left
+  // close up behind them.
+  layers = renumberSiblings(layers, groupId);
+  layers = renumberSiblings(layers, parentId);
+
+  return {
+    document: { ...document, layers, updatedAt: new Date().toISOString() },
+    id: groupId,
+  };
+}
+
+/**
+ * Dissolve a group, promoting its children into the group's own parent.
+ *
+ * The children take the group's place in the stack rather than being appended,
+ * so ungrouping never changes what is drawn in front of what.
+ */
+export function ungroupLayers(document: ArtworkDocument, groupId: string): ArtworkDocument {
+  const group = document.layers.find((layer) => layer.id === groupId);
+  if (!group || group.type !== 'group' || group.locked) return document;
+
+  const children = childrenOf(document.layers, groupId);
+  const siblings = sortArtworkLayers(
+    document.layers.filter((layer) => layer.parentId === group.parentId && layer.id !== groupId),
+  );
+
+  // Rebuild the destination sibling order with the children spliced in where
+  // the group sat.
+  const rebuilt: ArtworkLayer[] = [];
+  let inserted = false;
+  for (const sibling of siblings) {
+    if (!inserted && sibling.zIndex > group.zIndex) {
+      rebuilt.push(...children);
+      inserted = true;
+    }
+    rebuilt.push(sibling);
+  }
+  if (!inserted) rebuilt.push(...children);
+
+  const order = new Map(rebuilt.map((layer, index) => [layer.id, index]));
+  const childIds = new Set(children.map((layer) => layer.id));
+
+  const layers = document.layers
+    .filter((layer) => layer.id !== groupId)
+    .map((layer) => {
+      const next = childIds.has(layer.id) ? { ...layer, parentId: group.parentId } : layer;
+      return order.has(next.id) ? { ...next, zIndex: order.get(next.id)! } : next;
+    });
+
+  return { ...document, layers, updatedAt: new Date().toISOString() };
+}
+
+export type LayerRow = { layer: ArtworkLayer; depth: number; hasChildren: boolean };
+
+/**
+ * The layer stack flattened for the panel, deepest-first within each group.
+ *
+ * Collapsed groups omit their children entirely rather than hiding them with
+ * CSS, so a folded group of forty layers costs nothing to render.
+ */
+export function layerRows(layers: ArtworkLayer[]): LayerRow[] {
+  const rows: LayerRow[] = [];
+  const seen = new Set<string>();
+
+  const walk = (siblings: ArtworkLayer[], depth: number) => {
+    // Reversed: the panel reads top-down as front-to-back, matching every
+    // layers panel, while `zIndex` counts up from the back.
+    for (const layer of [...siblings].reverse()) {
+      if (seen.has(layer.id)) continue;
+      seen.add(layer.id);
+      const children = layer.type === 'group' ? childrenOf(layers, layer.id) : [];
+      rows.push({ layer, depth, hasChildren: children.length > 0 });
+      if (layer.type === 'group' && !layer.collapsed && children.length > 0) {
+        walk(children, depth + 1);
+      }
+    }
+  };
+
+  walk(topLevelLayers(layers), 0);
+  return rows;
+}
+
 export function sortArtworkLayers(layers: ArtworkLayer[]) {
   return [...layers].sort((a, b) => a.zIndex - b.zIndex);
 }
 
 export function moveLayer(layers: ArtworkLayer[], id: string, delta: -1 | 1) {
-  const sorted = sortArtworkLayers(layers);
+  // Reordering happens WITHIN a sibling set. A layer inside a group that swapped
+  // with whatever happened to be adjacent in the flat array would jump out of
+  // its group, or silently reorder something in a different group entirely.
+  const target = layers.find((layer) => layer.id === id);
+  if (!target) return layers;
+  const sorted = sortArtworkLayers(layers.filter((layer) => layer.parentId === target.parentId));
   const index = sorted.findIndex((layer) => layer.id === id);
   const nextIndex = index + delta;
   if (index < 0 || nextIndex < 0 || nextIndex >= sorted.length) return layers;
 
   const next = [...sorted];
   [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
-  return next.map((layer, zIndex) => ({ ...layer, zIndex }));
+  // Renumber only this sibling set and merge back into the full list. Returning
+  // `next` alone would drop every layer outside the set from the document.
+  const order = new Map(next.map((layer, zIndex) => [layer.id, zIndex]));
+  return layers.map((layer) => (
+    order.has(layer.id) ? { ...layer, zIndex: order.get(layer.id)! } : layer
+  ));
 }
 
 /**
@@ -675,13 +1028,26 @@ function textureFill(texture: ArtworkTextureKind): string {
   }
 }
 
-export function renderArtworkDocumentSvg(document: ArtworkDocument) {
-  const fontFor = (layer: TextArtworkLayer) => {
-    if (layer.fontFamily === 'mono') return 'Panchang, monospace';
-    if (layer.fontFamily === 'ui') return 'Inter, sans-serif';
-    if (layer.fontFamily === 'brand') return 'Akira Expanded, sans-serif';
-    return 'Synkopy, Akira Expanded, sans-serif';
-  };
+export type RenderArtworkOptions = {
+  /**
+   * Omit the background plate entirely.
+   *
+   * Only meaningful for formats that carry an alpha channel — `resolveExport`
+   * in `lib/cover/export-settings.ts` decides that and never asks for this on a
+   * JPEG, because a canvas handed a transparent JPEG produces a BLACK plate
+   * rather than a white one.
+   */
+  transparent?: boolean;
+};
+
+export function renderArtworkDocumentSvg(
+  document: ArtworkDocument,
+  options: RenderArtworkOptions = {},
+) {
+  // Reads the same registry the canvas does, so a stack cannot be listed in one
+  // order here and another order there — which is how Akira ended up sitting
+  // behind Synkopy in every role and never actually rendering.
+  const fontFor = (layer: TextArtworkLayer) => fontStackFor(layer.fontFamily);
 
   const escape = (value: string) => value
     .replaceAll('&', '&amp;')
@@ -689,117 +1055,198 @@ export function renderArtworkDocumentSvg(document: ArtworkDocument) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
 
-  const visibleLayers = sortArtworkLayers(document.layers).filter((layer) => layer.visible);
+  /**
+   * Rendering walks the layer TREE, not the flat array.
+   *
+   * A group emits a wrapper carrying its opacity and blend, and its children
+   * are drawn inside it — which is what makes group opacity mean "fade these
+   * as one thing" rather than "fade each of them", and what isolates a blend
+   * mode to the group's own contents.
+   */
+  const renderList = (list: ArtworkLayer[]): string => list
+    .filter((layer) => layer.visible)
+    .map((layer) => renderOne(layer))
+    .join('');
 
   // Clip paths are collected while rendering and emitted into <defs>, because
   // each image layer needs its own frame-shaped clip.
   const clipDefs: string[] = [];
+  /** One `<path>` per text layer that curves, referenced by its `<textPath>`. */
+  const textPathDefs: string[] = [];
+  /**
+   * Effect filters and vignette ramps, built by `lib/cover/effects.ts` at
+   * scale 1 because a document unit is the unit here. The canvas builds the
+   * very same defs at its current zoom and references them the same way, so
+   * there is no second effects implementation that can fall out of step.
+   */
+  const fxDefs: string[] = [];
 
-  const layerMarkup = visibleLayers
-    .map((layer) => {
+  function renderOne(layer: ArtworkLayer): string {
+    {
       const transform = `translate(${layer.x} ${layer.y}) rotate(${layer.rotation} ${layer.width / 2} ${layer.height / 2})`;
+
       /**
-       * Shared presentation attributes.
+       * The layer's own drawing, carrying no presentation attributes.
        *
-       * Takes any extra CSS as an argument rather than letting callers append a
-       * second `style=` attribute. Doing that produced `<text style="..."
-       * ... style="font-weight:700">`, which is a duplicate attribute and makes
-       * the whole SVG invalid XML — so it failed to load as an image and every
-       * export of a cover containing text died with "Unable to load rendered
-       * cover SVG for raster export."
+       * Opacity, blend mode and the transform moved onto a wrapping <g> so an
+       * effect filter can sit between them and the content. Two reasons it has
+       * to nest that way rather than landing on the same element:
+       *
+       *   - A filter and a clip-path on one element clip the drop shadow away
+       *     along with the crop, so the shadow silently disappears on exactly
+       *     the layers most likely to want one.
+       *   - The filter goes INSIDE the transform, which is what CSS does
+       *     natively on the canvas. Matching it means a rotated layer's shadow
+       *     rotates with the layer in the export too.
+       *
+       * Presentation attributes are also why `attrs()` used to exist: callers
+       * appending a second `style=` produced `<text style="…" style="…">`,
+       * which is invalid XML, so the whole export failed to load as an image.
+       * Content elements no longer write `style` at all, which removes the
+       * opportunity entirely.
        */
-      const attrs = (extraStyle = '') => {
-        const style = extraStyle ? `mix-blend-mode:${layer.blendMode};${extraStyle}` : `mix-blend-mode:${layer.blendMode}`;
-        return `opacity="${layer.opacity}" style="${style}" transform="${transform}"`;
+      const content = (): string => {
+        // A group has nothing of its own to draw; it IS its children.
+        if (layer.type === 'group') {
+          return renderList(childrenOf(document.layers, layer.id));
+        }
+
+        if (layer.type === 'shape') {
+          if (layer.shape === 'circle') {
+            return `<ellipse cx="${layer.width / 2}" cy="${layer.height / 2}" rx="${layer.width / 2}" ry="${layer.height / 2}" fill="${layer.fill}" stroke="${layer.stroke ?? 'none'}" stroke-width="${layer.strokeWidth ?? 0}" />`;
+          }
+          if (layer.shape === 'triangle') {
+            const points = `${layer.width / 2},0 ${layer.width},${layer.height} 0,${layer.height}`;
+            return `<polygon points="${points}" fill="${layer.fill}" stroke="${layer.stroke ?? 'none'}" stroke-width="${layer.strokeWidth ?? 0}" />`;
+          }
+          const radius = layer.cornerRadius ?? 0;
+          return `<rect width="${layer.width}" height="${layer.height}" rx="${radius}" ry="${radius}" fill="${layer.fill}" stroke="${layer.stroke ?? 'none'}" stroke-width="${layer.strokeWidth ?? 0}" />`;
+        }
+
+        if (layer.type === 'image') {
+          // Render the actual artwork when the layer has one. `src` existed on
+          // the type but was never read here, so every image layer — including
+          // a generated or uploaded cover — drew as the grey placeholder box
+          // forever.
+          if (layer.src) {
+            const { fit } = imageCropDefaults(layer);
+            const rect = imageFrameRect(layer);
+            const clipId = `clip-${layer.id}`;
+            clipDefs.push(`<clipPath id="${clipId}">${imageClipShape(layer)}</clipPath>`);
+            return `<g clip-path="url(#${clipId})">`
+              + `<image x="${rect.x.toFixed(2)}" y="${rect.y.toFixed(2)}" width="${rect.width.toFixed(2)}" height="${rect.height.toFixed(2)}" href="${escape(layer.src)}" preserveAspectRatio="${imagePreserveAspectRatio(fit)}"${imageTreatmentFilter(layer.treatment)} />`
+              + `</g>`;
+          }
+          return `<rect width="${layer.width}" height="${layer.height}" fill="${document.palette.panel}" stroke="${document.palette.accent}" stroke-width="4" /><text x="${layer.width / 2}" y="${layer.height / 2}" text-anchor="middle" dominant-baseline="middle" fill="${document.palette.muted}" font-size="64" font-family="Panchang, monospace">${escape(layer.label)}</text>`;
+        }
+
+        if (layer.type === 'waveform') {
+          const { barGap, cap, mirror } = waveformDefaults(layer);
+          const values = waveformSeriesFor(layer);
+
+          if (layer.mode === 'circular') {
+            const size = Math.min(layer.width, layer.height);
+            const spokes = circularSegments(values, size)
+              .map((segment) => `<line x1="${segment.x1.toFixed(2)}" y1="${segment.y1.toFixed(2)}" x2="${segment.x2.toFixed(2)}" y2="${segment.y2.toFixed(2)}" stroke="${layer.color}" stroke-width="${Math.max(1, layer.strokeWidth / 3)}" stroke-linecap="${cap === 'round' ? 'round' : 'butt'}" />`)
+              .join('');
+            // Centred so a non-square layer still puts the disc in the middle.
+            const offsetX = (layer.width - size) / 2;
+            const offsetY = (layer.height - size) / 2;
+            return `<g transform="translate(${offsetX.toFixed(2)} ${offsetY.toFixed(2)})">${spokes}</g>`;
+          }
+
+          if (layer.mode === 'contour') {
+            const points = pointsAttribute(waveformPathPoints(values, layer.width, layer.height, true));
+            return `<polygon points="${points}" fill="${layer.color}" />`;
+          }
+
+          if (layer.mode === 'line') {
+            const points = pointsAttribute(waveformPathPoints(values, layer.width, layer.height, false));
+            return `<polyline points="${points}" fill="none" stroke="${layer.color}" stroke-width="${Math.max(1, layer.strokeWidth / 2)}" stroke-linejoin="round" stroke-linecap="round" />`;
+          }
+
+          // Every remaining mode draws bars. `blocks` squares them off and
+          // drops the gap for a solid, printed-block look.
+          const blocks = layer.mode === 'blocks';
+          const slots = barSlots(layer.width, values.length, blocks ? 0.08 : barGap);
+          return slots.map((slot, index) => {
+            const rect = barRect(slot, values[index], layer.height, mirror);
+            const radius = blocks ? 0 : capRadius(rect, cap);
+            return `<rect x="${rect.x.toFixed(2)}" y="${rect.y.toFixed(2)}" width="${rect.width.toFixed(2)}" height="${rect.height.toFixed(2)}" rx="${radius.toFixed(2)}" ry="${radius.toFixed(2)}" fill="${layer.color}" />`;
+          }).join('');
+        }
+
+        if (layer.type === 'texture') {
+          return `<rect width="${layer.width}" height="${layer.height}" fill="${textureFill(layer.texture)}" />`;
+        }
+
+        const text = layer.uppercase ? layer.text.toUpperCase() : layer.text;
+        const anchor = layer.align === 'center' ? 'middle' : layer.align === 'right' ? 'end' : 'start';
+        const x = layer.align === 'center' ? layer.width / 2 : layer.align === 'right' ? layer.width : 0;
+
+        /**
+         * Type on a curve.
+         *
+         * The `d` comes from `lib/cover/text-path.ts`, which the canvas calls
+         * with the same arguments — so both surfaces run an identical path
+         * through an identical `<textPath>` rather than one approximating the
+         * other. Fonts still embed normally: this is a `<text>` element, so
+         * `collectUsedFontAssets` already accounts for it.
+         */
+        const curve = textPathD(textPathDefaults(layer.path), layer.width, layer.height);
+        if (curve) {
+          const place = textPathPlacement(layer.align);
+          const strokeAttrs = layer.stroke && (layer.strokeWidth ?? 0) > 0
+            ? ` stroke="${layer.stroke}" stroke-width="${layer.strokeWidth}" paint-order="stroke"`
+            : '';
+          textPathDefs.push(`<path id="tp-${layer.id}" d="${curve}" fill="none" />`);
+          return `<text style="font-weight:${textWeightFor(layer)}" text-anchor="${place.anchor}"`
+            + ` fill="${layer.color}"${strokeAttrs} font-size="${layer.fontSize}"`
+            + ` font-family="${fontFor(layer)}" letter-spacing="${layer.tracking}">`
+            + `<textPath href="#tp-${layer.id}" startOffset="${place.startOffset}">`
+            + `${escape(flattenForPath(text))}</textPath></text>`;
+        }
+        // Multi-line text: SVG has no wrapping, so explicit newlines become
+        // <tspan> rows. Without this a two-line title rendered as one long line
+        // in the export while the canvas showed two.
+        const lines = text.split('\n');
+        const stroke = layer.stroke && (layer.strokeWidth ?? 0) > 0
+          ? ` stroke="${layer.stroke}" stroke-width="${layer.strokeWidth}" paint-order="stroke"`
+          : '';
+        const tspans = lines
+          .map((line, index) => `<tspan x="${x}" dy="${index === 0 ? 0 : layer.fontSize * layer.lineHeight}">${escape(line)}</tspan>`)
+          .join('');
+        return `<text style="font-weight:${textWeightFor(layer)}" y="${layer.fontSize}" text-anchor="${anchor}" fill="${layer.color}"${stroke} font-size="${layer.fontSize}" font-family="${fontFor(layer)}" letter-spacing="${layer.tracking}">${tspans}</text>`;
       };
-      const common = attrs();
 
-      if (layer.type === 'shape') {
-        if (layer.shape === 'circle') {
-          return `<ellipse ${common} cx="${layer.width / 2}" cy="${layer.height / 2}" rx="${layer.width / 2}" ry="${layer.height / 2}" fill="${layer.fill}" stroke="${layer.stroke ?? 'none'}" stroke-width="${layer.strokeWidth ?? 0}" />`;
-        }
-        if (layer.shape === 'triangle') {
-          const points = `${layer.width / 2},0 ${layer.width},${layer.height} 0,${layer.height}`;
-          return `<polygon ${common} points="${points}" fill="${layer.fill}" stroke="${layer.stroke ?? 'none'}" stroke-width="${layer.strokeWidth ?? 0}" />`;
-        }
-        const radius = layer.cornerRadius ?? 0;
-        return `<rect ${common} width="${layer.width}" height="${layer.height}" rx="${radius}" ry="${radius}" fill="${layer.fill}" stroke="${layer.stroke ?? 'none'}" stroke-width="${layer.strokeWidth ?? 0}" />`;
+      const fxId = `fx-${layer.id}`;
+      const filterDef = buildFxFilterDef(layer.fx, fxId, 1, Math.min(layer.width, layer.height));
+      if (filterDef) fxDefs.push(filterDef);
+      const body = filterDef ? `<g filter="url(#${fxId})">${content()}</g>` : content();
+
+      /**
+       * Vignette sits OUTSIDE the filter group on purpose. Inside it, the
+       * layer's own blur or grain would smear the vignette too, so the corner
+       * falloff would soften as you raised an unrelated slider.
+       */
+      const { vignette } = fxDefaults(layer.fx);
+      let vignetteMarkup = '';
+      if (vignette > 0) {
+        const vignetteId = `vig-${layer.id}`;
+        fxDefs.push(vignetteSvgGradientDef(vignette, vignetteId));
+        // Follow the image's crop so a circular photo gets a circular vignette.
+        const clip = layer.type === 'image' && layer.src ? ` clip-path="url(#clip-${layer.id})"` : '';
+        vignetteMarkup = `<rect width="${layer.width}" height="${layer.height}" fill="url(#${vignetteId})"${clip} />`;
       }
 
-      if (layer.type === 'image') {
-        // Render the actual artwork when the layer has one. `src` existed on
-        // the type but was never read here, so every image layer — including a
-        // generated or uploaded cover — drew as the grey placeholder box
-        // forever.
-        if (layer.src) {
-          const { fit } = imageCropDefaults(layer);
-          const rect = imageFrameRect(layer);
-          const clipId = `clip-${layer.id}`;
-          clipDefs.push(`<clipPath id="${clipId}">${imageClipShape(layer)}</clipPath>`);
-          return `<g ${common} clip-path="url(#${clipId})">`
-            + `<image x="${rect.x.toFixed(2)}" y="${rect.y.toFixed(2)}" width="${rect.width.toFixed(2)}" height="${rect.height.toFixed(2)}" href="${escape(layer.src)}" preserveAspectRatio="${imagePreserveAspectRatio(fit)}"${imageTreatmentFilter(layer.treatment)} />`
-            + `</g>`;
-        }
-        return `<rect ${common} width="${layer.width}" height="${layer.height}" fill="${document.palette.panel}" stroke="${document.palette.accent}" stroke-width="4" /><text ${common} x="${layer.width / 2}" y="${layer.height / 2}" text-anchor="middle" dominant-baseline="middle" fill="${document.palette.muted}" font-size="64" font-family="Panchang, monospace">${escape(layer.label)}</text>`;
-      }
+      // A group gets NO transform: its children hold absolute document
+      // coordinates, so transforming the wrapper would move them twice.
+      const placement = layer.type === 'group' ? '' : ` transform="${transform}"`;
+      return `<g opacity="${layer.opacity}" style="mix-blend-mode:${layer.blendMode}"${placement}>${body}${vignetteMarkup}</g>`;
+    }
+  }
 
-      if (layer.type === 'waveform') {
-        const { barGap, cap, mirror } = waveformDefaults(layer);
-        const values = waveformSeriesFor(layer);
-
-        if (layer.mode === 'circular') {
-          const size = Math.min(layer.width, layer.height);
-          const spokes = circularSegments(values, size)
-            .map((segment) => `<line x1="${segment.x1.toFixed(2)}" y1="${segment.y1.toFixed(2)}" x2="${segment.x2.toFixed(2)}" y2="${segment.y2.toFixed(2)}" stroke="${layer.color}" stroke-width="${Math.max(1, layer.strokeWidth / 3)}" stroke-linecap="${cap === 'round' ? 'round' : 'butt'}" />`)
-            .join('');
-          // Centred so a non-square layer still puts the disc in the middle.
-          const offsetX = (layer.width - size) / 2;
-          const offsetY = (layer.height - size) / 2;
-          return `<g ${common}><g transform="translate(${offsetX.toFixed(2)} ${offsetY.toFixed(2)})">${spokes}</g></g>`;
-        }
-
-        if (layer.mode === 'contour') {
-          const points = pointsAttribute(waveformPathPoints(values, layer.width, layer.height, true));
-          return `<g ${common}><polygon points="${points}" fill="${layer.color}" /></g>`;
-        }
-
-        if (layer.mode === 'line') {
-          const points = pointsAttribute(waveformPathPoints(values, layer.width, layer.height, false));
-          return `<g ${common}><polyline points="${points}" fill="none" stroke="${layer.color}" stroke-width="${Math.max(1, layer.strokeWidth / 2)}" stroke-linejoin="round" stroke-linecap="round" /></g>`;
-        }
-
-        // Every remaining mode draws bars. `blocks` squares them off and drops
-        // the gap for a solid, printed-block look.
-        const blocks = layer.mode === 'blocks';
-        const slots = barSlots(layer.width, values.length, blocks ? 0.08 : barGap);
-        const bars = slots.map((slot, index) => {
-          const rect = barRect(slot, values[index], layer.height, mirror);
-          const radius = blocks ? 0 : capRadius(rect, cap);
-          return `<rect x="${rect.x.toFixed(2)}" y="${rect.y.toFixed(2)}" width="${rect.width.toFixed(2)}" height="${rect.height.toFixed(2)}" rx="${radius.toFixed(2)}" ry="${radius.toFixed(2)}" fill="${layer.color}" />`;
-        }).join('');
-        return `<g ${common}>${bars}</g>`;
-      }
-
-      if (layer.type === 'texture') {
-        return `<rect ${common} width="${layer.width}" height="${layer.height}" fill="${textureFill(layer.texture)}" />`;
-      }
-
-      const text = layer.uppercase ? layer.text.toUpperCase() : layer.text;
-      const anchor = layer.align === 'center' ? 'middle' : layer.align === 'right' ? 'end' : 'start';
-      const x = layer.align === 'center' ? layer.width / 2 : layer.align === 'right' ? layer.width : 0;
-      // Multi-line text: SVG has no wrapping, so explicit newlines become
-      // <tspan> rows. Without this a two-line title rendered as one long line
-      // in the export while the canvas showed two.
-      const lines = text.split('\n');
-      const stroke = layer.stroke && (layer.strokeWidth ?? 0) > 0
-        ? ` stroke="${layer.stroke}" stroke-width="${layer.strokeWidth}" paint-order="stroke"`
-        : '';
-      const tspans = lines
-        .map((line, index) => `<tspan x="${x}" dy="${index === 0 ? 0 : layer.fontSize * layer.lineHeight}">${escape(line)}</tspan>`)
-        .join('');
-      return `<text ${attrs('font-weight:700')} y="${layer.fontSize}" text-anchor="${anchor}" fill="${layer.color}"${stroke} font-size="${layer.fontSize}" font-family="${fontFor(layer)}" letter-spacing="${layer.tracking}">${tspans}</text>`;
-    })
-    .join('');
+  const layerMarkup = renderList(topLevelLayers(document.layers));
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${document.width}" height="${document.height}" viewBox="0 0 ${document.width} ${document.height}">
   <defs>
@@ -837,8 +1284,10 @@ export function renderArtworkDocumentSvg(document: ArtworkDocument) {
         <feFuncB type="linear" slope="1.15" intercept="0.10" />
       </feComponentTransfer>
     </filter>
+    ${textPathDefs.join('\n    ')}
+    ${fxDefs.join('\n    ')}
   </defs>
-  <rect width="${document.width}" height="${document.height}" fill="${document.background}" />
+  ${options.transparent ? '' : `<rect width="${document.width}" height="${document.height}" fill="${document.background}" />`}
   ${layerMarkup}
 </svg>`;
 }
@@ -999,12 +1448,29 @@ export function addLayer(document: ArtworkDocument, layer: ArtworkLayer): Artwor
   return { ...document, layers: [...document.layers, layer], updatedAt: new Date().toISOString() };
 }
 
-/** Locked layers are skipped rather than deleted — that is what the lock is for. */
+/**
+ * Locked layers are skipped rather than deleted — that is what the lock is for.
+ *
+ * Deleting a group takes its contents with it. Leaving orphaned children behind
+ * with a `parentId` pointing at nothing would make them invisible: every render
+ * path walks down from the top level, so a layer whose parent no longer exists
+ * is never reached and simply vanishes without being gone.
+ */
 export function removeLayers(document: ArtworkDocument, ids: string[]): ArtworkDocument {
   const removable = new Set(
     document.layers.filter((layer) => ids.includes(layer.id) && !layer.locked).map((layer) => layer.id),
   );
   if (removable.size === 0) return document;
+
+  for (const id of [...removable]) {
+    const layer = document.layers.find((item) => item.id === id);
+    if (layer?.type === 'group') {
+      // A locked child inside a deleted group still goes: the group it lived
+      // in is being removed, and there is nowhere for it to remain.
+      for (const descendant of descendantIds(document.layers, id)) removable.add(descendant);
+    }
+  }
+
   return {
     ...document,
     layers: document.layers.filter((layer) => !removable.has(layer.id)),
@@ -1018,27 +1484,52 @@ export function duplicateLayers(
   ids: string[],
   offset = 80,
 ): { document: ArtworkDocument; ids: string[] } {
-  const originals = document.layers.filter((layer) => ids.includes(layer.id));
-  if (originals.length === 0) return { document, ids: [] };
+  // Duplicating a group duplicates what is inside it. The descendants are
+  // added to the copy set but NOT returned as separate selections — selecting
+  // both a copied group and its copied children would make the next drag move
+  // everything twice.
+  const roots = document.layers.filter((layer) => ids.includes(layer.id));
+  if (roots.length === 0) return { document, ids: [] };
 
+  const wanted = new Set(roots.map((layer) => layer.id));
+  for (const root of roots) {
+    if (root.type === 'group') {
+      for (const descendant of descendantIds(document.layers, root.id)) wanted.add(descendant);
+    }
+  }
+  const originals = document.layers.filter((layer) => wanted.has(layer.id));
+
+  // Old id → new id, so a copied child can be re-pointed at the copied group
+  // rather than at the original one it came from.
+  const remap = new Map<string, string>();
+  originals.forEach((layer) => remap.set(layer.id, freshId(`${layer.type}-copy`)));
+
+  const rootIds = new Set(roots.map((layer) => layer.id));
   let z = nextZIndex(document.layers);
   const clones = originals.map((layer) => {
     const clone = {
       ...structuredClone(layer),
-      id: freshId(`${layer.type}-copy`),
+      id: remap.get(layer.id)!,
       name: `${layer.name} copy`,
+      // EVERY copied layer is offset, descendants included. A group draws
+      // nothing itself — its children are the visual — so offsetting only the
+      // group would leave the duplicate sitting exactly on top of the original
+      // and looking like nothing happened. Each layer is offset once, so a
+      // subtree moves as a unit rather than accumulating.
       x: layer.x + offset,
       y: layer.y + offset,
       locked: false,
-      zIndex: z,
+      parentId: layer.parentId && remap.has(layer.parentId)
+        ? remap.get(layer.parentId)
+        : layer.parentId,
+      zIndex: rootIds.has(layer.id) ? z++ : layer.zIndex,
     } as ArtworkLayer;
-    z += 1;
     return clone;
   });
 
   return {
     document: { ...document, layers: [...document.layers, ...clones], updatedAt: new Date().toISOString() },
-    ids: clones.map((layer) => layer.id),
+    ids: roots.map((layer) => remap.get(layer.id)!),
   };
 }
 
@@ -1048,12 +1539,18 @@ export function reorderLayer(layers: ArtworkLayer[], id: string, move: LayerReor
   if (move === 'forward') return moveLayer(layers, id, 1);
   if (move === 'backward') return moveLayer(layers, id, -1);
 
-  const sorted = sortArtworkLayers(layers);
-  const target = sorted.find((layer) => layer.id === id);
+  const target = layers.find((layer) => layer.id === id);
   if (!target) return layers;
-  const rest = sorted.filter((layer) => layer.id !== id);
+  // Front and back mean "of my siblings", for the same reason as `moveLayer`:
+  // sending a layer inside a group to the front should put it in front of the
+  // group's other contents, not rip it out to the front of the document.
+  const siblings = sortArtworkLayers(layers.filter((layer) => layer.parentId === target.parentId));
+  const rest = siblings.filter((layer) => layer.id !== id);
   const next = move === 'front' ? [...rest, target] : [target, ...rest];
-  return next.map((layer, zIndex) => ({ ...layer, zIndex }));
+  const order = new Map(next.map((layer, zIndex) => [layer.id, zIndex]));
+  return layers.map((layer) => (
+    order.has(layer.id) ? { ...layer, zIndex: order.get(layer.id)! } : layer
+  ));
 }
 
 export type LayerAlignment = 'left' | 'center-x' | 'right' | 'top' | 'center-y' | 'bottom';

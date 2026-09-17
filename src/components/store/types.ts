@@ -30,6 +30,16 @@ export interface CreatorProfile {
   accent_color?: string | null;
   font_style?: string | null;
   text_color_primary?: string | null;
+  /**
+   * Storefront section layout, as saved by the Store Editor's builder.
+   *
+   * `unknown` rather than the `StoreLayout` type on purpose: this arrives as
+   * untrusted JSON from the database and every consumer must put it through
+   * `normalizeLayout` first, which drops unknown section kinds and fills in
+   * theme keys added since it was saved. Typing it as a valid layout here
+   * would invite reading it directly and skipping that step.
+   */
+  store_layout?: unknown;
   bundle_discount_threshold?: number | null;
   bundle_discount_percent?: number | null;
 }

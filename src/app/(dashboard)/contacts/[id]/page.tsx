@@ -36,6 +36,7 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { cn } from '@/lib/utils';
 import type { Contact, BeatSend } from '@/lib/types';
+import { deriveActivityTone, type ActivityTone } from '@/lib/contacts/tone';
 
 const PIPELINE_TONES: Record<string, { dot: string; text: string; ring: string; label: string }> = {
   sent:        { dot: 'bg-white/40', text: 'text-white/60', ring: 'ring-white/20',    label: 'Sent' },
@@ -87,12 +88,13 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
   useEffect(() => { fetchAll(); }, [params.id]);
 
   // ── Engagement + pipeline derived state ─────────────────────────────
-  const engagementTone = useMemo<'active' | 'engaged' | 'cold'>(() => {
-    if (sends.length === 0) return 'cold';
-    const latest = sends.reduce((m, s) => (s.sent_at > m ? s.sent_at : m), '');
-    const days = (Date.now() - Date.parse(latest)) / 86_400_000;
-    return days <= 30 ? 'active' : 'engaged';
-  }, [sends]);
+  const engagementTone = useMemo<ActivityTone>(() => {
+    const latest = sends.length
+      ? sends.reduce((m, s) => (s.sent_at > m ? s.sent_at : m), '')
+      : null;
+    // Purchases count: a customer who was never sent a beat is not "cold".
+    return deriveActivityTone({ lastSentAt: latest, purchases: activitySummary?.purchases ?? 0 });
+  }, [sends, activitySummary]);
 
   const latestStatus = useMemo(() => {
     if (sends.length === 0) return null;
@@ -329,6 +331,9 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                 <DetailField icon={<Globe size={11} />}   label="Twitter"   value={contact.twitter}   onSave={(v) => patchField('twitter', v)} prefix="@" />
                 <DetailField icon={<MapPin size={11} />}  label="City"      value={contact.city}      onSave={(v) => patchField('city', v)} />
                 <DetailField icon={<MapPin size={11} />}  label="Country"   value={contact.country}   onSave={(v) => patchField('country', v)} />
+                {/* `website` has existed on the row and the Contact type all
+                    along with no UI anywhere and no route that accepted it. */}
+                <DetailField icon={<Globe size={11} />}   label="Website"   value={contact.website}   onSave={(v) => patchField('website', v)} />
               </div>
             </section>
 

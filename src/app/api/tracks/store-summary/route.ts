@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isSupabaseConfigured, query, requireUser } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
-import { selectIn } from '@/lib/db/chunked-in';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -173,8 +172,11 @@ export async function GET() {
     if (error) throw error;
 
     const rows = (data ?? []) as unknown as SummaryTrack[];
-    const trackIds = rows.map((track) => track.id);
-    const [{ data: profileData, error: profileError }, { data: licenseData, error: licenseError }, trackLicenseRows] = await Promise.all([
+    const [
+      { data: profileData, error: profileError },
+      { data: licenseData, error: licenseError },
+      { data: trackLicenseData, error: trackLicenseError },
+    ] = await Promise.all([
       owner.admin
         .from('creator_profiles')
         .select('license_lease_price_usd, license_exclusive_price_usd')
@@ -184,25 +186,34 @@ export async function GET() {
         .from('licenses')
         .select('id, price_usd, is_free')
         .eq('user_id', owner.userId),
-      // Chunked: this is every owned track, and one `.in()` over a full
-      // catalogue is rejected as "Bad Request", which surfaced as an empty
-      // "needs attention" panel rather than as an error.
-      selectIn<SummaryTrackLicense>(
-        (ids) => owner.admin
-          .from('track_licenses')
-          .select('track_id, license_id, price_override_usd, enabled')
-          .in('track_id', ids),
-        trackIds,
-      ),
+      // Scoped by joining tracks, NOT by .in('track_id', <every track id>).
+      //
+      // PostgREST serialises .in() into the query string, so a producer with
+      // ~650 tracks produced a ~24KB URL and the server rejected the whole
+      // request with a bare "Bad Request". That 500 took the entire store
+      // editor down, which is why a catalogue could sit with 0 tracks listed:
+      // the only UI for listing them could not open. Chunking the .in() also
+      // fixes the URL length, but it costs a round trip per chunk; the inner
+      // join pushes the filter into SQL and stays one constant-size request
+      // at any catalogue size.
+      owner.admin
+        .from('track_licenses')
+        .select('track_id, license_id, price_override_usd, enabled, tracks!inner(user_id)')
+        .eq('tracks.user_id', owner.userId),
     ]);
     if (profileError) throw profileError;
     if (licenseError) throw licenseError;
+    if (trackLicenseError) throw trackLicenseError;
 
     return NextResponse.json(summarize(rows, {
       defaultLeasePriceUsd: profileData?.license_lease_price_usd ?? null,
       defaultExclusivePriceUsd: profileData?.license_exclusive_price_usd ?? null,
       licenses: (licenseData ?? []) as unknown as SummaryLicense[],
-      trackLicenses: trackLicenseRows,
+      // Drop the joined `tracks` relation — it exists only to scope the query.
+      trackLicenses: ((trackLicenseData ?? []) as unknown as (SummaryTrackLicense & { tracks?: unknown })[])
+        .map(({ track_id, license_id, price_override_usd, enabled }) => ({
+          track_id, license_id, price_override_usd, enabled,
+        })),
     }));
   } catch (err) {
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });

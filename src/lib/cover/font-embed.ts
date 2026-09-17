@@ -18,13 +18,11 @@
  * for a cover whose type is entirely Panchang.
  */
 
-import type { ArtworkDocument, TextArtworkLayer } from '@/components/cover-art/cover-art-document';
-
-/** The font roles a text layer can carry, mapped to real families and files. */
-export type CoverFontFamily = 'Synkopy' | 'Akira Expanded' | 'Panchang';
+import type { ArtworkDocument } from '@/components/cover-art/cover-art-document';
+import { facesFor } from './fonts';
 
 export type CoverFontAsset = {
-  family: CoverFontFamily;
+  family: string;
   /** Public path, served from /public/fonts. */
   url: string;
   weight: number;
@@ -32,58 +30,31 @@ export type CoverFontAsset = {
 };
 
 /**
- * Files backing each family.
+ * The exact faces a document needs inlined.
  *
- * One weight per family on purpose: the SVG renderer writes
- * `style="font-weight:700"` on every text node, and shipping six Panchang cuts
- * to satisfy one bold would bloat the export for no visible gain. The chosen
- * cuts are the ones the artwork actually renders with.
- */
-export const coverFontAssets: CoverFontAsset[] = [
-  { family: 'Synkopy', url: '/fonts/Synkopy-Regular.otf', weight: 400, format: 'opentype' },
-  { family: 'Akira Expanded', url: '/fonts/AkiraExpanded.otf', weight: 400, format: 'opentype' },
-  { family: 'Panchang', url: '/fonts/Panchang-Bold.otf', weight: 700, format: 'opentype' },
-];
-
-/**
- * Families a font-role resolves to, in the order the SVG lists them.
+ * Weight matters as much as family. This used to embed one hardcoded cut per
+ * family — Panchang-Bold and nothing else — while the renderer wrote
+ * `font-weight:700` on every text node regardless of what the layer asked for.
+ * A Panchang Extralight title therefore left the studio as a Bold, and a
+ * Synkopy title asked for a 700 that was never embedded at all, so the isolated
+ * SVG synthesised a fake bold of the 400 file.
  *
- * Mirrors `fontFor()` in the document renderer. Kept as data rather than parsed
- * out of the SVG string so the two cannot drift silently.
- */
-export const fontRoleFamilies: Record<TextArtworkLayer['fontFamily'], CoverFontFamily[]> = {
-  display: ['Synkopy', 'Akira Expanded'],
-  artwork: ['Synkopy', 'Akira Expanded'],
-  mono: ['Panchang'],
-  brand: ['Akira Expanded'],
-  // 'ui' resolves to Inter/sans-serif, which is a system stack — nothing to embed.
-  ui: [],
-};
-
-/**
- * Which families a document needs embedded.
- *
- * Only *visible* text layers count, and only layers with text in them: a hidden
+ * `facesFor` snaps each request to a cut the family actually ships and
+ * deduplicates by family+weight, so a cover using two sizes of the same cut
+ * still inlines it once. Only *visible* layers with real text count: a hidden
  * or empty title should not drag 1.3 MB of Synkopy into the export.
  */
-export function collectUsedFontFamilies(document: ArtworkDocument): CoverFontFamily[] {
-  const used = new Set<CoverFontFamily>();
-  document.layers.forEach((layer) => {
-    if (layer.type !== 'text' || !layer.visible) return;
-    if (layer.text.trim().length === 0) return;
-    fontRoleFamilies[layer.fontFamily].forEach((family) => used.add(family));
-  });
-  return coverFontAssets
-    .map((asset) => asset.family)
-    .filter((family) => used.has(family));
+export function collectUsedFontAssets(document: ArtworkDocument): CoverFontAsset[] {
+  const requests = document.layers
+    .filter((layer) => layer.type === 'text' && layer.visible && layer.text.trim().length > 0)
+    .map((layer) => {
+      const text = layer as Extract<ArtworkDocument['layers'][number], { type: 'text' }>;
+      return { font: text.fontFamily, weight: text.fontWeight };
+    });
+  return facesFor(requests).map((face) => ({ ...face, format: 'opentype' }));
 }
 
-/** Assets needed for a set of families, in a stable order. */
-export function assetsForFamilies(families: CoverFontFamily[]): CoverFontAsset[] {
-  return coverFontAssets.filter((asset) => families.includes(asset.family));
-}
-
-export type EmbeddedFont = { family: CoverFontFamily; dataUrl: string; weight: number; format: string };
+export type EmbeddedFont = { family: string; dataUrl: string; weight: number; format: string };
 
 /** Build the `@font-face` block that goes inside the SVG. */
 export function buildFontFaceCss(fonts: EmbeddedFont[]): string {
@@ -160,7 +131,7 @@ async function fetchFontDataUrl(url: string): Promise<string> {
  * no way to fix it mid-export either way.
  */
 export async function embedFontsInSvg(svg: string, document: ArtworkDocument): Promise<string> {
-  const assets = assetsForFamilies(collectUsedFontFamilies(document));
+  const assets = collectUsedFontAssets(document);
   if (assets.length === 0) return svg;
 
   const settled = await Promise.allSettled(

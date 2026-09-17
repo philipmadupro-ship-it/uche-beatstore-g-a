@@ -6,6 +6,7 @@ import { createLogger } from '@/lib/log';
 import { z } from 'zod';
 import { streamAudioSource } from '@/lib/audio/stream-source';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
+import { normalizeEmail } from '@/lib/contacts/email';
 
 const log = createLogger('api.store.free-download');
 export const runtime = 'nodejs';
@@ -37,7 +38,11 @@ export async function POST(req: NextRequest) {
       const msg = parsed.error.issues[0]?.message ?? 'Invalid request';
       return NextResponse.json({ error: msg }, { status: 400 });
     }
-    const { email, track_id, name } = parsed.data;
+    const { track_id, name } = parsed.data;
+    // Canonical form — store_free_downloads.email and contacts.email are both
+    // matched case-insensitively downstream (and the contacts unique index is
+    // case-sensitive), so normalise before either write.
+    const email = normalizeEmail(parsed.data.email);
 
     if (!isSupabaseConfigured()) {
       return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
@@ -47,7 +52,7 @@ export async function POST(req: NextRequest) {
 
     const { data: track } = await admin
       .from('tracks')
-      .select('id, title, audio_url, store_listed, free_download_enabled')
+      .select('id, title, audio_url, store_listed, free_download_enabled, user_id')
       .eq('id', track_id)
       .maybeSingle();
 
@@ -75,22 +80,43 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Upsert buyer contact (migration 038 — non-fatal if column doesn't exist)
-    try {
+    // Upsert the lead into the seller's CRM. Non-fatal — a CRM failure must
+    // never block the visitor's download — but no longer SILENT.
+    //
+    // This upsert was inert until now, for three compounding reasons:
+    //   1. onConflict: 'email' names a constraint that does not exist. The
+    //      only unique index is contacts_user_email_uniq (user_id, email)
+    //      (mig 096), so Postgres raised 42P10 on every call.
+    //   2. No user_id was supplied, so even a successful insert produced a
+    //      null-owner row — invisible under mig 097's owner-only RLS.
+    //   3. supabase-js resolves with { error } rather than throwing (the same
+    //      trap called out on the store_free_downloads insert above), so the
+    //      try/catch could never fire and nothing inspected the result.
+    // Net effect: free-download leads never reached the CRM at all.
+    const sellerUserId = (track as { user_id?: string | null }).user_id;
+    if (sellerUserId) {
       const contactName = name?.trim() || email.split('@')[0];
-      await admin
-        .from('contacts')
-        .upsert(
-          {
-            email,
-            name: contactName,
-            category: 'buyer',
-            buyer_pipeline_status: 'new_lead',
-          },
-          { onConflict: 'email', ignoreDuplicates: false },
-        );
-    } catch {
-      // non-fatal
+      const { error: contactError } = await admin.from('contacts').upsert(
+        {
+          user_id: sellerUserId,
+          email,
+          name: contactName,
+          category: 'buyer',
+          buyer_pipeline_status: 'new_lead',
+          // Seed the visible stage too — /api/store/me's lead upsert already
+          // does this, and a contact with no crm_status falls back to the
+          // derived activity tone, which reads as nothing at all for a new lead.
+          crm_status: 'prospect',
+        },
+        // ignoreDuplicates: a returning lead must not have the producer's
+        // curated name/stage overwritten by an auto-generated one.
+        { onConflict: 'user_id,email', ignoreDuplicates: true },
+      );
+      if (contactError) {
+        log.warn('free download lead contact upsert failed', { email, error: contactError.message });
+      }
+    } else {
+      log.warn('free download lead contact skipped — track has no owner', { trackId: track_id });
     }
 
     log.info('free download', { track_id, email });

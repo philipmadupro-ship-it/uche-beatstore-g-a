@@ -227,7 +227,13 @@ export function TrackCard({
 
   const displayTitle = titleOverride ?? track.title;
   const uploadDate = new Date(track.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const { rate: rateTrack } = useRating(track.id, track.rating || 0);
+  // `currentRating` — NOT `track.rating` — is what the stars render from.
+  // Parents that fetch with plain useState (the project and playlist pages)
+  // never see React Query's ['tracks'] invalidate, so their `track` prop stays
+  // stale after a successful rate and the star visibly did nothing. The hook's
+  // value carries the optimistic write and falls back to the prop, so it is
+  // correct for React Query parents and plain-fetch parents alike.
+  const { rate: rateTrack, rating: currentRating } = useRating(track.id, track.rating || 0);
   const durationLabel = formatDuration(track.duration_seconds ?? null);
   const genreMoodTags = trackTags.filter((tt) => tt.category === 'genre' || tt.category === 'mood');
   // Genre first, then mood — the gradient leads on the first entry, and genre
@@ -462,12 +468,12 @@ export function TrackCard({
           <span className="tabular-nums">{durationLabel}</span>
           <span aria-hidden className="h-2 w-px bg-white/15" />
           <span className="tabular-nums">{uploadDate}</span>
-          {track.rating ? (
+          {currentRating ? (
             <>
               <span aria-hidden className="h-2 w-px bg-white/15" />
               <span className="flex items-center gap-0.5 text-[#c8a84b]">
                 <Star size={8} fill="#c8a84b" strokeWidth={0} aria-hidden />
-                <span className="tabular-nums">{track.rating}</span>
+                <span className="tabular-nums">{currentRating}</span>
               </span>
             </>
           ) : null}
@@ -503,10 +509,10 @@ export function TrackCard({
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className={`flex shrink-0 items-center gap-0.5 transition-opacity ${
-                  track.rating ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+                  currentRating ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
                 }`}>
                   {[1, 2, 3, 4, 5].map((star) => {
-                    const on = Boolean(track.rating && track.rating >= star);
+                    const on = Boolean(currentRating && currentRating >= star);
                     return (
                       <button
                         key={star}
@@ -622,11 +628,11 @@ export function TrackCard({
       <div className="relative z-10 hidden items-center justify-end gap-2 md:flex" onClick={(e) => e.stopPropagation()}>
         <div
           className={`flex shrink-0 items-center gap-0.5 transition-opacity ${
-            track.rating ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+            currentRating ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
           }`}
         >
           {[1, 2, 3, 4, 5].map((star) => {
-            const on = Boolean(track.rating && track.rating >= star);
+            const on = Boolean(currentRating && currentRating >= star);
             return (
               <button
                 key={star}

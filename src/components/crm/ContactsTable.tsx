@@ -25,6 +25,8 @@ interface Props {
   latestStatusByContact: Map<string, string>;
   leadScoreByContact?: Map<string, number>;
   leadTierByContact?: Map<string, string>;
+  /** Score drivers per contact, strongest first — shown as the tier tooltip. */
+  leadReasonsByContact?: Map<string, string[]>;
   kindByContact?: Map<string, ContactKind>;
   revenueByContact?: Map<string, number>;
   favoritesByContact?: Map<string, number>;
@@ -48,6 +50,16 @@ const LEAD_TINTS: Record<string, string> = { hot: '#E8896A', warm: 'rgba(255,255
 // Text labels alongside the tint — a dot's color alone isn't an accessible
 // signal (WCAG 1.4.1 / "don't convey meaning by color alone").
 const LEAD_LABELS: Record<string, string> = { hot: 'Hot', warm: 'Warm', cold: 'Cold', new: 'New' };
+
+/**
+ * Tooltip for the lead-tier chip: the tier and score, then the drivers behind
+ * them. scoreLead has always returned `reasons` (strongest first) but the
+ * scores route used to drop them, leaving a label with nothing to justify it.
+ */
+function leadTitle(tier: string, score: number, reasons?: string[]): string {
+  const head = `${LEAD_LABELS[tier]} lead · score ${score}`;
+  return reasons?.length ? `${head} · ${reasons.join(' · ')}` : head;
+}
 
 function fmtMoney(n: number): string {
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -75,7 +87,7 @@ export function ContactsTable(p: Props) {
           <thead className="sticky top-0 z-10 bg-[#0a0907]">
             <tr className="border-b border-[var(--border)] h-9">
               <th className="w-10 px-3">
-                <input type="checkbox" checked={p.allPageSelected} onChange={p.onToggleSelectPage} aria-label="Select page" className="accent-[var(--accent)] cursor-pointer" />
+                <input type="checkbox" checked={p.allPageSelected} onChange={p.onToggleSelectPage} aria-label="Select page" className="accent-[var(--accent)] cursor-pointer relative after:absolute after:left-1/2 after:top-1/2 after:h-11 after:w-11 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']" />
               </th>
               <SortHeader label="Contact" col="name" active={p.sortMode === 'name'} dir={p.sortDir} onSort={p.onSort} className="px-2" />
               <th className="text-left font-mono uppercase tracking-wider text-[10px] text-white/60 font-normal px-2 hidden md:table-cell">Kind</th>
@@ -109,7 +121,7 @@ export function ContactsTable(p: Props) {
                 >
                   {/* Checkbox */}
                   <td className="px-3 align-middle">
-                    <input type="checkbox" checked={sel} onChange={() => p.onToggleSelect(c.id)} className="accent-[var(--accent)] cursor-pointer" aria-label={`Select ${c.name}`} />
+                    <input type="checkbox" checked={sel} onChange={() => p.onToggleSelect(c.id)} className="accent-[var(--accent)] cursor-pointer relative after:absolute after:left-1/2 after:top-1/2 after:h-11 after:w-11 after:-translate-x-1/2 after:-translate-y-1/2 after:content-['']" aria-label={`Select ${c.name}`} />
                   </td>
 
                   {/* Contact: avatar + name + sent ✓ */}
@@ -193,7 +205,7 @@ export function ContactsTable(p: Props) {
                       return (
                         <div>
                           {tier && tier !== 'new' && (
-                            <span className="inline-flex items-center gap-1.5" title={`${LEAD_LABELS[tier]} lead · score ${score}`}>
+                            <span className="inline-flex items-center gap-1.5" title={leadTitle(tier, score, p.leadReasonsByContact?.get(c.id))}>
                               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: clr, boxShadow: `0 0 6px ${clr}66` }} />
                               <span className="text-[11px] font-medium tabular-nums" style={{ color: clr }}>
                                 {LEAD_LABELS[tier]} · {score}
@@ -201,7 +213,7 @@ export function ContactsTable(p: Props) {
                             </span>
                           )}
                           {(revenue > 0 || favorites > 0) && (
-                            <p className="text-[10px] font-mono tabular-nums text-white/40 mt-0.5">
+                            <p className="text-[10px] font-mono tabular-nums text-white/60 mt-0.5">
                               {revenue > 0 && fmtMoney(revenue)}
                               {revenue > 0 && favorites > 0 && ' · '}
                               {favorites > 0 && (
@@ -292,7 +304,7 @@ export function ContactsTable(p: Props) {
                 {showLead && (
                   <span
                     className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-full"
-                    title={`${LEAD_LABELS[tier]} lead · score ${score}`}
+                    title={leadTitle(tier, score, p.leadReasonsByContact?.get(c.id))}
                     style={{ background: `${leadClr}1f`, border: `1px solid ${leadClr}40` }}
                   >
                     <span className="w-1.5 h-1.5 rounded-full" style={{ background: leadClr }} />
@@ -354,14 +366,14 @@ export function ContactsTable(p: Props) {
                 <button
                   onClick={() => p.onOpenHistory(c)}
                   aria-label={`History for ${c.name}`}
-                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-medium text-white/80 bg-white/[0.03] border border-[var(--border)] hover:bg-white/[0.08] active:scale-[0.98] transition-transform"
+                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-medium text-white/80 bg-white/[0.03] border border-[var(--border)] hover:bg-white/[0.08] motion-safe:active:scale-[0.98] transition-[background-color,transform]"
                 >
                   <Clock size={14} /> History
                 </button>
                 <button
                   onClick={() => p.onSend(c)}
                   aria-label={sends > 0 ? `Send another beat to ${c.name}` : `Send beat to ${c.name}`}
-                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-bold text-black bg-white shadow-sm hover:bg-white/90 active:scale-[0.98] transition-transform"
+                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-semibold text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_32%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] motion-safe:active:scale-[0.98] transition-[background-color,transform]"
                 >
                   {sends > 0 ? <Mail size={14} /> : <Send size={14} />}
                   {sends > 0 ? 'Again' : 'Send'}

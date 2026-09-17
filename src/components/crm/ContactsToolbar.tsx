@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, ChevronDown, Plus, Download, RefreshCw, Bookmark, BookmarkPlus, X, Check } from 'lucide-react';
+import { Search, ChevronDown, Plus, Download, RefreshCw, Bookmark, BookmarkPlus, X, Check, Pencil, Save } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 
@@ -23,6 +23,7 @@ interface Props {
   categoryCount: (seg: string) => number;
   segments: Segment[]; activeSegmentId: string | null;
   onApplySegment: (s: Segment) => void; onSaveSegment: () => void; onDeleteSegment: (s: Segment) => void;
+  onRenameSegment: (s: Segment) => void; onUpdateSegmentFilters: (s: Segment) => void;
   onExport: () => void; onAddContact: () => void; onRefresh: () => void; refreshing: boolean;
 }
 
@@ -121,7 +122,13 @@ export function ContactsToolbar(p: Props) {
       )}
 
       {/* Right cluster */}
-      <div className="flex items-center gap-2 ml-auto">
+      {/* Wraps on narrow screens. Without flex-wrap this group measured 419px
+          inside a 343px parent at 375px wide, pushing "Add Contact" (right
+          edge 435px) and "Import" (484px) outside the viewport — and because
+          nothing scrolls horizontally they were clipped, not merely off-screen,
+          making both actions unreachable on a phone. ml-auto only applies once
+          there is room to right-align. */}
+      <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
         {/* Segments */}
         <Popover
           align="right" width={240}
@@ -142,7 +149,12 @@ export function ContactsToolbar(p: Props) {
                     className={`flex-1 text-left px-3 py-1.5 text-[12px] transition-colors ${p.activeSegmentId === seg.id ? 'text-black bg-white font-semibold shadow-md hover:bg-white/90' : 'text-white/80 hover:bg-white/5'}`}>
                     {seg.name}
                   </button>
-                  <button onClick={() => p.onDeleteSegment(seg)} className="px-2 text-white/40 hover:text-red-400 opacity-0 group-hover:opacity-100"><X size={11} /></button>
+                  <button onClick={() => p.onRenameSegment(seg)} title="Rename segment"
+                    className="px-1.5 text-white/40 hover:text-white opacity-0 group-hover:opacity-100"><Pencil size={11} /></button>
+                  <button onClick={() => { p.onUpdateSegmentFilters(seg); close(); }} title="Update to current filters"
+                    className="px-1.5 text-white/40 hover:text-white opacity-0 group-hover:opacity-100"><Save size={11} /></button>
+                  <button onClick={() => p.onDeleteSegment(seg)} title="Delete segment"
+                    className="px-1.5 text-white/40 hover:text-red-400 opacity-0 group-hover:opacity-100"><X size={11} /></button>
                 </div>
               ))}
               <div className="border-t border-[var(--border)] mt-1 pt-1">

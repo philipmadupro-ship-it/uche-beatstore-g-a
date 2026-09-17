@@ -11,9 +11,20 @@ import type { CreatorProfile } from './types';
 interface Props {
   creator: CreatorProfile | null;
   accentColor?: string;
+  /**
+   * Draw the producer name as real text instead of the particle canvas.
+   *
+   * `ParticleText` runs an animation loop over a canvas sized to the container.
+   * That is the signature of the storefront on a desktop, and it is the wrong
+   * trade on a phone — it costs battery, it is the largest paint on the page,
+   * and the name reads worse at 390px than plain type does. The Store Editor's
+   * hero section exposes this per breakpoint, so the choice is the producer's
+   * rather than a hardcoded media query.
+   */
+  plainTitle?: boolean;
 }
 
-export function ArtistBioBlock({ creator, accentColor }: Props) {
+export function ArtistBioBlock({ creator, accentColor, plainTitle = false }: Props) {
   const [licenseExpanded, setLicenseExpanded] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
   const bioIsLong = (creator?.bio?.length ?? 0) > 160;
@@ -83,11 +94,21 @@ export function ArtistBioBlock({ creator, accentColor }: Props) {
         {/* ParticleText sits outside the horizontal padding so the canvas
             gets the full max-w container width. Akira Expanded is extremely
             wide — every pixel counts before the font-scale-down kicks in. */}
-        <ParticleText
-          text={creator?.display_name || 'Producer'}
-          color={accentColor || '#FFFFFF'}
-          className="relative w-full h-[100px] md:h-[160px]"
-        />
+        {plainTitle ? (
+          <p
+            aria-hidden
+            className="px-4 font-heading text-[34px] leading-[1.05] md:px-8 md:text-[56px]"
+            style={{ color: accentColor || '#FFFFFF' }}
+          >
+            {creator?.display_name || 'Producer'}
+          </p>
+        ) : (
+          <ParticleText
+            text={creator?.display_name || 'Producer'}
+            color={accentColor || '#FFFFFF'}
+            className="relative w-full h-[100px] md:h-[160px]"
+          />
+        )}
         <div className="px-4 md:px-8">
         {creator?.bio && (
           <div className="mt-4">

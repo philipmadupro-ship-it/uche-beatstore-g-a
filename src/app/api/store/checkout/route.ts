@@ -6,6 +6,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { licenseAvailability } from '@/lib/store/license-availability';
+import { normalizeEmail } from '@/lib/contacts/email';
 
 const log = createLogger('api.store.checkout');
 export const runtime = 'nodejs';
@@ -202,7 +203,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({})) as CheckoutBody;
-    const buyerEmail = typeof body.buyer_email === 'string' ? body.buyer_email.trim() : '';
+    // Normalised (not just trimmed): this value lands in
+    // license_purchases.buyer_email and Stripe metadata, and every reader
+    // — /api/store/orders, the contact activity timeline — looks it up
+    // lowercased. Trim-only meant a buyer who typed capitals could not
+    // find their own order.
+    const buyerEmail = typeof body.buyer_email === 'string' ? normalizeEmail(body.buyer_email) : '';
     const candidateItems = Array.isArray(body.items) ? body.items : [];
     const projectId = typeof body.project_id === 'string' ? body.project_id.trim() : '';
     const promoCode = typeof body.promo_code === 'string' ? body.promo_code.trim().toUpperCase() : '';

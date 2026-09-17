@@ -24,6 +24,7 @@ export const shortcutGroups: Array<{ title: string; items: Array<[string, string
       ['R', 'Add rectangle'],
       ['O', 'Add circle'],
       ['G', 'Toggle guides'],
+      ['Shift R', 'Toggle rulers'],
       ['?', 'This sheet'],
     ],
   },
@@ -43,6 +44,7 @@ export const shortcutGroups: Array<{ title: string; items: Array<[string, string
     items: [
       ['Arrows', 'Nudge 8'],
       ['Shift Arrows', 'Nudge 40'],
+      ['⌘G / Shift ⌘G', 'Group / ungroup'],
       ['] / [', 'Forward / backward'],
       ['Shift ] / Shift [', 'To front / to back'],
       ['Shift drag', 'Lock aspect ratio'],

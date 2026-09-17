@@ -85,7 +85,13 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           prData.project.price_usd != null ? String(prData.project.price_usd) : '',
         );
       }
-      const tracksRes = await fetch(`/api/tracks?project_id=${params.id}`);
+      // `no-store` is load-bearing. /api/tracks answers with
+      // `stale-while-revalidate=60`, so a plain fetch after a write resolves
+      // with the PRE-write body while the fresh copy arrives only as a
+      // background revalidation this promise never sees. That is why a rating
+      // set on this page reappeared as empty stars after a reload — the write
+      // had persisted, the screen was reading a cached response.
+      const tracksRes = await fetch(`/api/tracks?project_id=${params.id}`, { cache: 'no-store' });
       const tracksData = await tracksRes.json();
       setTracks(Array.isArray(tracksData) ? tracksData : tracksData.tracks || []);
     } catch (err) {

@@ -9,6 +9,7 @@
  * separate tool, so editing one layer meant moving between panels.
  */
 
+import { useState } from 'react';
 import {
   AlignEndHorizontal, AlignHorizontalJustifyCenter, AlignLeft, AlignRight,
   AlignStartHorizontal, AlignVerticalJustifyCenter, EyeOff, MoveHorizontal, MoveVertical, Trash2,
@@ -24,8 +25,64 @@ import {
 import {
   ColorField, FieldLabel, NumberField, PanelSection, SegmentedField, SliderField, StudioButton,
 } from './StudioControls';
+import { AdjustSection, EffectsSection, MoodSection } from './FxInspector';
+import { FontPicker } from './FontPicker';
+import { Dropdown, type DropdownOption } from '@/components/ui/Dropdown';
+import { cn } from '@/lib/utils';
+import { type ArtworkLayerFx } from '@/lib/cover/effects';
+import { textPathDefaults, type TextPathShape } from '@/lib/cover/text-path';
+import {
+  ARTBOARD_MAX, ARTBOARD_MIN, artboardPresets, aspectLabel, matchArtboardPreset,
+  type ArtboardResizeMode,
+} from '@/lib/cover/artboard';
 
-const blendModes: ArtworkLayer['blendMode'][] = ['normal', 'multiply', 'screen', 'overlay', 'soft-light'];
+/**
+ * The full CSS/SVG blend set rather than the five that used to be offered.
+ * `difference`, `exclusion` and the component modes are the ones that make a
+ * duotone or a knocked-out title work, and both renderers already pass the
+ * value straight through — the short list was the only thing withholding them.
+ *
+ * Grouped the way every image editor groups them (darkening, lightening,
+ * contrast, comparative, component) because that ordering is what makes a list
+ * this long scannable. A segmented grid was tried first and is genuinely worse
+ * here: sixteen labels in three columns truncate, and `color-dodge` and
+ * `color-burn` both render as "COLOR…", so two different modes look identical.
+ */
+export const blendModeOptions: DropdownOption<ArtworkLayer['blendMode']>[] = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'darken', label: 'Darken', separator: true },
+  { value: 'multiply', label: 'Multiply' },
+  { value: 'color-burn', label: 'Color burn' },
+  { value: 'lighten', label: 'Lighten', separator: true },
+  { value: 'screen', label: 'Screen' },
+  { value: 'color-dodge', label: 'Color dodge' },
+  { value: 'overlay', label: 'Overlay', separator: true },
+  { value: 'soft-light', label: 'Soft light' },
+  { value: 'hard-light', label: 'Hard light' },
+  { value: 'difference', label: 'Difference', separator: true },
+  { value: 'exclusion', label: 'Exclusion' },
+  { value: 'hue', label: 'Hue', separator: true },
+  { value: 'saturation', label: 'Saturation' },
+  { value: 'color', label: 'Color' },
+  { value: 'luminosity', label: 'Luminosity' },
+];
+
+/**
+ * The effect state to show for a multi-selection.
+ *
+ * Identical across the selection means the panel can show it. Anything else
+ * shows neutral rather than picking one layer's settings to display, which
+ * would misreport the other layers — and because a patch here writes to every
+ * selected layer, showing one layer's values would invite flattening the rest
+ * onto it by touching an unrelated slider.
+ */
+function sharedFx(layers: ArtworkLayer[]): ArtworkLayerFx | undefined {
+  if (layers.length === 0) return undefined;
+  const first = JSON.stringify(layers[0].fx ?? null);
+  return layers.every((layer) => JSON.stringify(layer.fx ?? null) === first)
+    ? layers[0].fx
+    : undefined;
+}
 
 const alignActions: Array<{ id: LayerAlignment; label: string; icon: React.ComponentType<{ size?: number }> }> = [
   { id: 'left', label: 'Align left', icon: AlignLeft },
@@ -44,6 +101,8 @@ export function InspectorPanel({
   onAlign,
   onDistribute,
   onRemoveSelected,
+  onResizeArtboard,
+  onRestyle,
 }: {
   document: ArtworkDocument;
   selectedIds: string[];
@@ -52,6 +111,8 @@ export function InspectorPanel({
   onAlign: (alignment: LayerAlignment) => void;
   onDistribute: (axis: 'x' | 'y') => void;
   onRemoveSelected: () => void;
+  onResizeArtboard: (width: number, height: number, mode: ArtboardResizeMode) => void;
+  onRestyle: (moodId: string) => void;
 }) {
   const selected = doc.layers.filter((layer) => selectedIds.includes(layer.id));
   const layer = selected.length === 1 ? selected[0] : null;
@@ -106,13 +167,15 @@ export function InspectorPanel({
               format={(value) => `${Math.round(value * 100)}%`}
               onChange={(opacity) => onPatch({ opacity })}
             />
-            <SegmentedField
-              label="Blend"
-              columns={3}
-              value={layer.blendMode}
-              options={blendModes.map((mode) => ({ value: mode, label: mode.replace('-', ' ') }))}
-              onChange={(blendMode) => onPatch({ blendMode })}
-            />
+            <div className="grid gap-1.5">
+              <FieldLabel>Blend</FieldLabel>
+              <Dropdown
+                aria-label="Blend mode"
+                value={layer.blendMode}
+                options={blendModeOptions}
+                onChange={(blendMode) => onPatch({ blendMode })}
+              />
+            </div>
           </PanelSection>
 
           {layer.type === 'text' ? <TextInspector layer={layer} onPatch={onPatch} /> : null}
@@ -127,11 +190,29 @@ export function InspectorPanel({
               onRemove={() => onRemoveSelected()}
             />
           ) : null}
+
+          {/* Effects live on the layer base, so every type gets them — a drop
+              shadow on a title and a blur on a photograph go through the same
+              code path rather than each being a special case. */}
+          <MoodSection scope="selection" onRestyle={onRestyle} />
+          <AdjustSection fx={layer.fx} onPatchFx={(fx) => onPatch({ fx } as Partial<ArtworkLayer>)} />
+          <EffectsSection fx={layer.fx} onPatchFx={(fx) => onPatch({ fx } as Partial<ArtworkLayer>)} />
+        </>
+      ) : null}
+
+      {/* Effects on a multi-selection: applied to every selected layer at once,
+          which is how you give six collage tiles one consistent treatment. */}
+      {!layer && selected.length > 1 ? (
+        <>
+          <AdjustSection fx={sharedFx(selected)} onPatchFx={(fx) => onPatch({ fx } as Partial<ArtworkLayer>)} />
+          <EffectsSection fx={sharedFx(selected)} onPatchFx={(fx) => onPatch({ fx } as Partial<ArtworkLayer>)} />
         </>
       ) : null}
 
       {selected.length === 0 ? (
         <>
+          <ArtboardSection doc={doc} onResizeArtboard={onResizeArtboard} />
+          <MoodSection scope="document" onRestyle={onRestyle} />
           <PanelSection title="Canvas">
             <ColorField
               label="Background"
@@ -174,17 +255,10 @@ function TextInspector({ layer, onPatch }: { layer: TextArtworkLayer; onPatch: (
           className="min-h-20 border border-white/10 bg-[#090907] p-2 text-sm text-white/90 outline-none focus:border-white/40"
         />
       </label>
-      <SegmentedField
-        label="Font"
+      <FontPicker
         value={layer.fontFamily}
-        columns={2}
-        options={[
-          { value: 'artwork', label: 'Display' },
-          { value: 'brand', label: 'Brand' },
-          { value: 'mono', label: 'Mono' },
-          { value: 'ui', label: 'Sans' },
-        ]}
-        onChange={(fontFamily) => onPatch({ fontFamily })}
+        weight={layer.fontWeight}
+        onChange={(patch) => onPatch(patch)}
       />
       <div className="grid grid-cols-2 gap-2">
         <NumberField label="Size" value={layer.fontSize} min={8} max={900} onChange={(fontSize) => onPatch({ fontSize })} />
@@ -201,6 +275,33 @@ function TextInspector({ layer, onPatch }: { layer: TextArtworkLayer; onPatch: (
         options={[{ value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }]}
         onChange={(align) => onPatch({ align })}
       />
+      {/* Type on a curve. `<textPath>` has no concept of lines, so the note
+          below is the honest warning that multi-line text becomes one run. */}
+      <SegmentedField
+        label="Curve"
+        value={textPathDefaults(layer.path).shape}
+        columns={4}
+        options={[
+          { value: 'none' as TextPathShape, label: 'Flat' },
+          { value: 'arc' as TextPathShape, label: 'Arc' },
+          { value: 'circle' as TextPathShape, label: 'Circle' },
+          { value: 'wave' as TextPathShape, label: 'Wave' },
+        ]}
+        onChange={(shape) => onPatch({ path: { ...textPathDefaults(layer.path), shape } })}
+      />
+      {textPathDefaults(layer.path).shape === 'arc' || textPathDefaults(layer.path).shape === 'wave' ? (
+        <SliderField
+          label="Curvature" value={textPathDefaults(layer.path).curvature} min={-1} max={1} step={0.01}
+          format={(value) => `${Math.round(value * 100)}%`}
+          onChange={(curvature) => onPatch({ path: { ...textPathDefaults(layer.path), curvature } })}
+        />
+      ) : null}
+      {textPathDefaults(layer.path).shape !== 'none' && layer.text.includes('\n') ? (
+        <p className="text-[11px] leading-relaxed text-white/40">
+          A curve is a single run — your line breaks become spaces.
+        </p>
+      ) : null}
+
       <ColorField label="Colour" value={layer.color} onChange={(color) => onPatch({ color })} />
       <ColorField label="Outline" value={layer.stroke ?? '#000000'} onChange={(stroke) => onPatch({ stroke })} />
       <SliderField
@@ -410,6 +511,82 @@ function WaveformInspector({ layer, onPatch, onRemove, onHide }: {
           <Trash2 size={12} /> Remove
         </StudioButton>
       </div>
+    </PanelSection>
+  );
+}
+
+/**
+ * Artboard size.
+ *
+ * Sits at the top of the no-selection inspector because it is a property of the
+ * whole piece, not of anything in it. The resize MODE is exposed rather than
+ * chosen for you: reformatting a square cover into a story and extending a
+ * canvas to make room are different intentions, and guessing wrong silently
+ * rearranges someone's finished artwork.
+ */
+function ArtboardSection({ doc, onResizeArtboard }: {
+  doc: ArtworkDocument;
+  onResizeArtboard: (width: number, height: number, mode: ArtboardResizeMode) => void;
+}) {
+  const active = matchArtboardPreset(doc.width, doc.height);
+  const [mode, setMode] = useState<ArtboardResizeMode>('scale');
+
+  return (
+    <PanelSection title="Artboard">
+      <div className="grid grid-cols-2 gap-1">
+        {artboardPresets.map((preset) => {
+          const selected = active?.id === preset.id;
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              title={`${preset.width} × ${preset.height} — ${preset.hint}`}
+              aria-pressed={selected}
+              onClick={() => onResizeArtboard(preset.width, preset.height, mode)}
+              className={cn(
+                'border px-2 py-1.5 text-left transition-colors',
+                selected
+                  ? 'border-white/40 bg-white/[0.12]'
+                  : 'border-white/10 hover:border-white/25',
+              )}
+            >
+              <span className={cn('block truncate text-[11px]', selected ? 'text-white/90' : 'text-white/60')}>
+                {preset.name}
+              </span>
+              <span className="block font-mono text-[9px] uppercase tracking-[0.14em] text-white/30">
+                {aspectLabel(preset.width, preset.height)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <NumberField
+          label="Width" value={doc.width} min={ARTBOARD_MIN} max={ARTBOARD_MAX}
+          onChange={(width) => onResizeArtboard(width, doc.height, mode)}
+        />
+        <NumberField
+          label="Height" value={doc.height} min={ARTBOARD_MIN} max={ARTBOARD_MAX}
+          onChange={(height) => onResizeArtboard(doc.width, height, mode)}
+        />
+      </div>
+
+      <SegmentedField
+        label="On resize"
+        value={mode}
+        columns={2}
+        options={[
+          { value: 'scale', label: 'Scale art' },
+          { value: 'keep', label: 'Keep sizes' },
+        ]}
+        onChange={setMode}
+      />
+      <p className="text-[10px] leading-relaxed text-white/40">
+        {mode === 'scale'
+          ? 'Layers are rescaled to fit the new board, keeping the composition.'
+          : 'Layers stay exactly where they are. The board changes around them.'}
+      </p>
     </PanelSection>
   );
 }

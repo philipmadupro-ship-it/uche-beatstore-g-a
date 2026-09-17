@@ -318,6 +318,16 @@ export const ContactSegmentCreateBodySchema = z.object({
 }).strict();
 export type ContactSegmentCreateBody = z.infer<typeof ContactSegmentCreateBodySchema>;
 
+// Rename a saved segment, retarget its filters, or reorder it. Every field is
+// optional so a rename doesn't have to resend the filter payload; the route
+// rejects a body that would change nothing.
+export const ContactSegmentUpdateBodySchema = z.object({
+  name: z.string().min(1).max(60).optional(),
+  filters: ContactSegmentFiltersSchema.optional(),
+  position: z.number().int().min(0).max(1000).optional(),
+}).strict();
+export type ContactSegmentUpdateBody = z.infer<typeof ContactSegmentUpdateBodySchema>;
+
 // ── Find-or-create a contact by email (ad-hoc send) ───────────────────────
 export const ContactResolveBodySchema = z.object({
   email: z.string().email().max(200),
@@ -327,8 +337,50 @@ export type ContactResolveBody = z.infer<typeof ContactResolveBodySchema>;
 
 // ── CRM lifecycle stage (mig 092) ─────────────────────────────────────────
 // Editable, stored. Distinct from the auto-computed activity tone.
-export const CRM_STAGES = ['prospect', 'active', 'engaged', 'cold', 'archived'] as const;
+//
+// Ordered as the pipeline reads, because this array drives the dropdown.
+// `customer` is terminal-positive and set automatically by the Stripe webhook
+// on any completed purchase — before it existed the stage the producer
+// actually manages never moved on a sale (only the parallel
+// `buyer_pipeline_status` column did, which the stage cell doesn't read).
+// Mig 092 enforces the allowed values in Zod rather than a CHECK constraint,
+// so adding a stage needs no schema change.
+export const CRM_STAGES = ['prospect', 'active', 'engaged', 'customer', 'cold', 'archived'] as const;
 export type CrmStage = (typeof CRM_STAGES)[number];
+
+// ── Contact create / edit ─────────────────────────────────────────────────
+// One field list shared by POST /api/contacts and PATCH /api/contacts/[id],
+// so the two can't drift. They did: the create route hand-destructured seven
+// keys and silently dropped everything else, including `phone` and `category`
+// — both of which AddContactModal has always collected, and `category` drives
+// the CRM filters. A hand-added contact lost them on every save.
+const ContactWritableFields = {
+  email: z.string().email().max(200).nullable().optional(),
+  phone: z.string().max(60).nullable().optional(),
+  role: z.string().max(120).nullable().optional(),
+  label: z.string().max(120).nullable().optional(),
+  category: z.string().max(60).nullable().optional(),
+  genre: z.string().max(120).nullable().optional(),
+  country: z.string().max(120).nullable().optional(),
+  city: z.string().max(120).nullable().optional(),
+  instagram: z.string().max(120).nullable().optional(),
+  twitter: z.string().max(120).nullable().optional(),
+  website: z.string().max(300).nullable().optional(),
+  notes: z.string().max(10000).nullable().optional(),
+  crm_status: z.enum(CRM_STAGES).nullable().optional(),
+} as const;
+
+export const ContactCreateBodySchema = z.object({
+  name: z.string().min(1).max(200),
+  ...ContactWritableFields,
+}).strict();
+export type ContactCreateBody = z.infer<typeof ContactCreateBodySchema>;
+
+export const ContactPatchBodySchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  ...ContactWritableFields,
+}).strict();
+export type ContactPatchBody = z.infer<typeof ContactPatchBodySchema>;
 
 // Batch edit a set of contacts (stage and/or category).
 export const ContactsBatchPatchBodySchema = z.object({
@@ -419,6 +471,36 @@ export type ShareCreateBody = z.infer<typeof ShareCreateBodySchema>;
 // number here. All fields optional; unknown keys are dropped (not .strict) so
 // the route's existing whitelist-by-destructure stays the source of truth.
 const numericLike = z.union([z.number(), z.string()]).nullish();
+/**
+ * A storefront layout, bounded rather than exhaustively typed.
+ *
+ * `passthrough` on the section object is deliberate: section settings grow, and
+ * a producer's saved storefront must keep round-tripping when they do. The
+ * caps are the actual protection — an unbounded sections array or an
+ * unbounded string is what would let a hand-rolled request bloat a row that is
+ * read on every storefront render. The DB carries a hard 256KB check too.
+ */
+const StoreLayoutSchema = z.object({
+  version: z.number().int().min(1).max(1000),
+  sections: z
+    .array(
+      z
+        .object({
+          id: z.string().min(1).max(120),
+          kind: z.string().min(1).max(60),
+          name: z.string().max(200).optional(),
+          locked: z.boolean().optional(),
+          base: z.record(z.string(), z.unknown()),
+          overrides: z.record(z.string(), z.unknown()).optional(),
+          content: z.record(z.string(), z.unknown()).optional(),
+        })
+        .passthrough(),
+    )
+    .max(60),
+  theme: z.record(z.string(), z.unknown()),
+  updatedAt: z.string().max(40).optional(),
+});
+
 export const CreatorProfilePatchSchema = z.object({
   display_name: z.string().max(200).nullish(),
   bio: z.string().max(10000).nullish(),
@@ -468,6 +550,19 @@ export const CreatorProfilePatchSchema = z.object({
   voice_tag_interval_seconds: numericLike,
   bundle_discount_threshold: numericLike,
   bundle_discount_percent: numericLike,
+  /**
+   * Storefront section layout + theme.
+   *
+   * Structure is checked here only far enough to reject something that is not
+   * a layout at all and to bound the size — the same posture as
+   * `default_artwork_palette`. The real coercion happens on READ, in
+   * `normalizeLayout`, which drops unknown section kinds and fills in theme
+   * keys added since the document was saved. Validating exhaustively here
+   * instead would mean a layout saved today stops being accepted the moment a
+   * new section kind ships, which is the wrong failure for a producer's
+   * existing storefront.
+   */
+  store_layout: StoreLayoutSchema.nullish(),
 });
 export type CreatorProfilePatch = z.infer<typeof CreatorProfilePatchSchema>;
 

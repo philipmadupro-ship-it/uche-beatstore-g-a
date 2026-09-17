@@ -14,14 +14,19 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { collageLayouts, type CollageLayoutId } from '@/lib/cover/collage';
-import { coverArtExportPresets, type CoverArtExportPresetId } from '@/design-system';
+import { coverArtExportPresets } from '@/design-system';
 import type { CoverAttachOption, CoverAttachTargetKind } from '@/lib/upload/cover-attach-options';
 import {
   artworkTextureKinds, coverArtDirections,
   type ArtworkDocument, type ArtworkSource, type ArtworkTextureKind,
   type CoverArtDirectionId, type ShapeArtworkLayer,
 } from './cover-art-document';
-import { FieldLabel, PanelSection, SegmentedField, StudioButton } from './StudioControls';
+import { FieldLabel, NumberField, PanelSection, SegmentedField, SliderField, StudioButton } from './StudioControls';
+import { Dropdown } from '@/components/ui/Dropdown';
+import {
+  EXPORT_MAX, EXPORT_MIN, describeExport, exportFormats, resolveExport,
+  supportsQuality, supportsTransparency, type ExportSettings,
+} from '@/lib/cover/export-settings';
 
 /* ── Add ───────────────────────────────────────────────────────────────── */
 
@@ -275,13 +280,13 @@ export function SourcePanel({
 const attachTargetKinds: CoverAttachTargetKind[] = ['track', 'project', 'playlist', 'profile'];
 
 export function ExportPanel({
-  document: doc, exportPresetId, exportState, uploadState, attachState, attachError,
+  document: doc, settings, exportState, uploadState, attachState, attachError,
   uploadedUrl, attachTargetKind, attachTargetId, attachOptions,
-  onExportPreset, onDownloadSvg, onDownloadRaster, onUpload,
+  onSettings, onDownload, onUpload,
   onAttachTargetKind, onAttachTargetId, onAttach,
 }: {
   document: ArtworkDocument;
-  exportPresetId: CoverArtExportPresetId;
+  settings: ExportSettings;
   exportState: 'idle' | 'exporting' | 'failed';
   uploadState: 'idle' | 'uploading' | 'uploaded' | 'failed';
   attachState: 'idle' | 'attaching' | 'attached' | 'failed';
@@ -290,9 +295,8 @@ export function ExportPanel({
   attachTargetKind: CoverAttachTargetKind;
   attachTargetId: string;
   attachOptions: CoverAttachOption[];
-  onExportPreset: (id: CoverArtExportPresetId) => void;
-  onDownloadSvg: () => void;
-  onDownloadRaster: () => void;
+  onSettings: (patch: Partial<ExportSettings>) => void;
+  onDownload: () => void;
   onUpload: () => void;
   onAttachTargetKind: (kind: CoverAttachTargetKind) => void;
   onAttachTargetId: (id: string) => void;
@@ -300,32 +304,127 @@ export function ExportPanel({
 }) {
   // `coverArtExportPresets` is keyed by id, not an array.
   const presets = Object.values(coverArtExportPresets);
-  const preset = presets.find((item) => item.id === exportPresetId);
+  const resolved = resolveExport(settings);
+  const matchesBoard = settings.width === doc.width && settings.height === doc.height;
 
   return (
     <>
       <PanelSection title="Export">
-        <label className="grid gap-1.5">
+        {/* Presets first, because most exports are one of these. Each writes
+            plain settings, so any preset can then be adjusted rather than
+            being a mode you have to leave. */}
+        <div className="grid gap-1.5">
           <FieldLabel>Preset</FieldLabel>
-          <select
-            value={exportPresetId}
-            onChange={(event) => onExportPreset(event.target.value as CoverArtExportPresetId)}
-            className="h-9 w-full border border-white/10 bg-[#090907] px-2 text-[12px] text-white/90 outline-none focus:border-white/40"
-          >
-            {presets.map((item) => (
-              <option key={item.id} value={item.id}>{item.name} — {item.width}×{item.height}</option>
-            ))}
-          </select>
-        </label>
-        {preset ? (
-          <p className="text-[11px] leading-relaxed text-white/40">{preset.intendedUse}</p>
-        ) : null}
-        <div className="grid grid-cols-2 gap-1">
-          <StudioButton onClick={onDownloadRaster} variant="accent" disabled={exportState === 'exporting'}>
-            {exportState === 'exporting' ? 'Rendering…' : exportState === 'failed' ? 'Failed' : 'Download'}
-          </StudioButton>
-          <StudioButton onClick={onDownloadSvg}>SVG</StudioButton>
+          <div className="grid grid-cols-2 gap-1">
+            {presets.map((item) => {
+              const active = settings.width === item.width && settings.height === item.height;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  title={`${item.width} × ${item.height} — ${item.intendedUse}`}
+                  aria-pressed={active}
+                  onClick={() => onSettings({
+                    width: item.width,
+                    height: item.height,
+                    format: item.mimeType === 'image/jpeg' ? 'jpeg'
+                      : item.mimeType === 'image/webp' ? 'webp' : 'png',
+                    quality: item.quality,
+                  })}
+                  className={cn(
+                    'border px-2 py-1.5 text-left transition-colors',
+                    active ? 'border-white/40 bg-white/[0.12]' : 'border-white/10 hover:border-white/25',
+                  )}
+                >
+                  <span className={cn('block truncate text-[11px]', active ? 'text-white/90' : 'text-white/60')}>
+                    {item.name}
+                  </span>
+                  <span className="block font-mono text-[9px] tracking-[0.12em] text-white/30">
+                    {item.width}×{item.height}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <NumberField
+            label="Width" value={settings.width} min={EXPORT_MIN} max={EXPORT_MAX}
+            onChange={(width) => onSettings({ width })}
+          />
+          <NumberField
+            label="Height" value={settings.height} min={EXPORT_MIN} max={EXPORT_MAX}
+            onChange={(height) => onSettings({ height })}
+          />
+        </div>
+        {!matchesBoard ? (
+          <StudioButton
+            onClick={() => onSettings({ width: doc.width, height: doc.height })}
+            title={`Match the ${doc.width}×${doc.height} artboard`}
+          >
+            Match artboard ({doc.width}×{doc.height})
+          </StudioButton>
+        ) : null}
+
+        <SegmentedField
+          label="Format"
+          value={settings.format}
+          columns={4}
+          options={exportFormats.map((format) => ({ value: format.id, label: format.label }))}
+          onChange={(format) => onSettings({ format })}
+        />
+
+        {/* Quality and transparency appear only where they do something. A
+            slider that visibly has no effect is worse than no slider. */}
+        {supportsQuality(settings.format) ? (
+          <SliderField
+            label="Quality" value={settings.quality} min={0.1} max={1} step={0.01}
+            format={(value) => `${Math.round(value * 100)}%`}
+            onChange={(quality) => onSettings({ quality })}
+          />
+        ) : null}
+
+        {supportsTransparency(settings.format) ? (
+          <SegmentedField
+            label="Background"
+            value={settings.transparent ? 'transparent' : 'opaque'}
+            columns={2}
+            options={[
+              { value: 'opaque', label: 'Solid' },
+              { value: 'transparent', label: 'Transparent' },
+            ]}
+            onChange={(value) => onSettings({ transparent: value === 'transparent' })}
+          />
+        ) : null}
+
+        <label className="grid gap-1.5">
+          <FieldLabel>Filename</FieldLabel>
+          <input
+            value={settings.filename}
+            onChange={(event) => onSettings({ filename: event.target.value })}
+            aria-label="Export filename"
+            className="h-9 w-full border border-white/10 bg-[#090907] px-2 text-[12px] text-white/90 outline-none focus:border-white/40"
+          />
+        </label>
+
+        {/* Says exactly what will land on disk, including anything the chosen
+            format silently cannot do. */}
+        <div className="border border-white/10 px-2.5 py-2">
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/60">
+            {describeExport(resolved)}
+          </p>
+          <p className="mt-1 truncate font-mono text-[10px] text-white/30">{resolved.filename}</p>
+          {resolved.notes.map((note) => (
+            <p key={note} className="mt-1.5 text-[10px] leading-relaxed text-[#c8a84b]">{note}</p>
+          ))}
+        </div>
+
+        <StudioButton onClick={onDownload} variant="accent" disabled={exportState === 'exporting'} className="w-full">
+          {exportState === 'exporting' ? 'Rendering…'
+            : exportState === 'failed' ? 'Failed — retry'
+              : `Download ${settings.format.toUpperCase()}`}
+        </StudioButton>
       </PanelSection>
 
       <PanelSection title="Use as cover">
@@ -344,16 +443,15 @@ export function ExportPanel({
         />
 
         {attachTargetKind !== 'profile' && attachOptions.length > 0 ? (
-          <select
-            value={attachTargetId}
-            aria-label={`Choose ${attachTargetKind}`}
-            onChange={(event) => onAttachTargetId(event.target.value)}
-            className="h-9 w-full border border-white/10 bg-[#090907] px-2 text-[12px] text-white/90 outline-none focus:border-white/40"
-          >
-            {attachOptions.map((option) => (
-              <option key={option.id} value={option.id}>{option.label}</option>
-            ))}
-          </select>
+          <div className="grid gap-1.5">
+            <FieldLabel>{attachTargetKind}</FieldLabel>
+            <Dropdown
+              aria-label={`Choose ${attachTargetKind}`}
+              value={attachTargetId}
+              options={attachOptions.map((option) => ({ value: option.id, label: option.label }))}
+              onChange={onAttachTargetId}
+            />
+          </div>
         ) : null}
 
         <StudioButton

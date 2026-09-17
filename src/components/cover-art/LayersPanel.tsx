@@ -15,17 +15,18 @@
 
 import { useState } from 'react';
 import {
-  ChevronDown, ChevronUp, Copy, Eye, EyeOff, GripVertical, Lock, Trash2, Unlock,
+  ChevronDown, ChevronRight, ChevronUp, Copy, Eye, EyeOff, FolderOpen, GripVertical, Lock, Trash2, Unlock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LayerView } from './LayerView';
-import { sortArtworkLayers, type ArtworkDocument, type ArtworkLayer, type LayerReorder } from './cover-art-document';
+import { layerRows, sortArtworkLayers, type ArtworkDocument, type ArtworkLayer, type LayerReorder } from './cover-art-document';
 
 function layerKindLabel(layer: ArtworkLayer) {
   if (layer.type === 'text') return layer.text.slice(0, 28) || 'Empty text';
   if (layer.type === 'image') return layer.src ? layer.label : 'Empty image frame';
   if (layer.type === 'shape') return layer.shape;
   if (layer.type === 'texture') return layer.texture;
+  if (layer.type === 'group') return 'Group';
   return `${layer.mode} waveform`;
 }
 
@@ -59,18 +60,22 @@ export function LayersPanel({
   selectedIds: string[];
   onSelect: (ids: string[]) => void;
   onReorder: (id: string, move: LayerReorder) => void;
-  onToggle: (id: string, patch: { visible?: boolean; locked?: boolean }) => void;
+  onToggle: (id: string, patch: { visible?: boolean; locked?: boolean; collapsed?: boolean }) => void;
   onRename: (id: string, name: string) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
 }) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
-  const stack = sortArtworkLayers(doc.layers).reverse();
+  // The flattened tree, front-to-back, with collapsed groups omitting their
+  // contents entirely rather than hiding them with CSS — a folded group of
+  // forty layers should cost nothing to render.
+  const stack = layerRows(doc.layers);
 
   return (
     <ul className="grid gap-1">
-      {stack.map((layer, index) => {
+      {stack.map(({ layer, depth, hasChildren }, index) => {
         const selected = selectedIds.includes(layer.id);
+        const isGroup = layer.type === 'group';
         return (
           <li
             key={layer.id}
@@ -79,8 +84,34 @@ export function LayersPanel({
               selected ? 'border-white/40 bg-white/[0.08]' : 'border-transparent hover:border-white/10 hover:bg-white/[0.03]',
             )}
           >
-            <GripVertical aria-hidden size={12} className="text-white/25" />
-            <LayerThumb layer={layer} palette={doc.palette} />
+            {/* Depth is an inline indent rather than a class, because nesting
+                is unbounded and Tailwind cannot generate a class per level. */}
+            <span className="flex items-center" style={{ paddingLeft: depth * 10 }}>
+              {isGroup && hasChildren ? (
+                <button
+                  type="button"
+                  onClick={() => onToggle(layer.id, { collapsed: !layer.collapsed })}
+                  aria-expanded={!layer.collapsed}
+                  aria-label={layer.collapsed ? `Expand ${layer.name}` : `Collapse ${layer.name}`}
+                  title={layer.collapsed ? 'Expand' : 'Collapse'}
+                  className="grid size-3.5 place-items-center text-white/40 transition-colors hover:text-white/90"
+                >
+                  <ChevronRight size={11} className={cn('transition-transform', !layer.collapsed && 'rotate-90')} />
+                </button>
+              ) : (
+                <GripVertical aria-hidden size={12} className="text-white/25" />
+              )}
+            </span>
+            {isGroup ? (
+              <span
+                aria-hidden
+                className="grid size-9 place-items-center border border-white/10 bg-white/[0.03] text-white/40"
+              >
+                <FolderOpen size={13} />
+              </span>
+            ) : (
+              <LayerThumb layer={layer} palette={doc.palette} />
+            )}
 
             {renamingId === layer.id ? (
               <input

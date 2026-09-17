@@ -33,11 +33,40 @@ After applying, wait ~10s for the PostgREST schema cache to reload (the
 re-run `NOTIFY pgrst, 'reload schema';` and wait.
 
 ## ⚠️ Currently UNAPPLIED
-None — all 106 migrations were confirmed applied via a full clean replay
-(2026-08-05). If you add a new one, list it here until it's confirmed applied.
+Confirmed applied: **001–106**, via a full clean replay (2026-08-05).
+
+Status **unverified** — these landed after that replay and were never listed
+here, so treat them as unapplied until checked against the target project:
+
+- `107_tag_colors.sql`
+- `108_brand_logo_and_kind_artwork.sql`
+- `109_default_artwork.sql` (renumbered from 106 to clear a duplicate)
+- `110_normalize_contact_emails.sql` — **backfill**. Lowercases every CRM-linking
+  email (contacts, license_purchases, project_access_links,
+  store_free_downloads, buyer_*) and deduplicates the contacts the
+  case-sensitive `contacts_user_email_uniq` index had forked. Apply together
+  with the write-side normalisation in `lib/contacts/email.ts`, or past orders
+  stay unfindable via `/store/orders`.
+
+- `111_adopt_orphan_contacts.sql` — **data migration**. Adopts legacy
+  `user_id IS NULL` contacts onto the single producer (guarded: runs only when
+  exactly one `creator_profiles` owner exists), merging any that collide on
+  email. Required by the owner-only scoping now used in `/api/contacts`,
+  `/api/contacts/scores` and `/(dashboard)/contacts` — without it those legacy
+  rows disappear from the CRM instead of being adopted.
+
+- `112_backfill_buyer_contacts.sql` — **data migration**. Reconciles past
+  purchases with the CRM: creates a contact for any paid buyer email that has
+  none, and marks every contact with a paid purchase as `crm_status='customer'`
+  / `buyer_pipeline_status='purchased'`. Only fills NULLs, so a hand-set stage
+  is never overwritten. Excludes the `unknown@invalid` sentinel. Needed because
+  the webhook fix only applies to future purchases — without it, existing
+  customers keep rendering as cold leads.
+
+If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106. When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 112. When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch

@@ -156,7 +156,12 @@ export function ContactActivityTimeline({ contactId, contactName, onSendBeat, on
           value={noteText}
           onChange={(e) => setNoteText(e.target.value)}
           placeholder="Add a note to the timeline…"
-          className="flex-1 bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20"
+          /* min-w-0 is load-bearing: a flex item defaults to min-width:auto, so
+             `flex-1` alone will not shrink below the placeholder's intrinsic
+             width. At 375px that pushed the shrink-0 "Note" button to x=390 —
+             past the viewport, with nothing to scroll, so a note could not be
+             added on a phone at all. */
+          className="min-w-0 flex-1 bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20"
         />
         <button
           type="submit"

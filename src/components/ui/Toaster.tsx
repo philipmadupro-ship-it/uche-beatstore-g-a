@@ -24,7 +24,17 @@ export function Toaster() {
 
   return (
     <div
-      className="fixed bottom-32 right-6 z-[100] flex flex-col gap-2 pointer-events-none"
+      // Centring lives here, on the container, so the card's transform stays
+      // free for the entrance keyframe. `inset-x-0` + `items-center` rather
+      // than `left-1/2 -translate-x-1/2` for exactly that reason.
+      className="fixed top-0 inset-x-0 flex flex-col items-center gap-2 px-4 pointer-events-none"
+      style={{
+        zIndex: 'var(--z-toast)',
+        // Clears the Dynamic Island / notch. Without the inset the banner
+        // tucks under the status bar on a notched iPhone, which is the
+        // opposite of the effect.
+        paddingTop: 'calc(env(safe-area-inset-top) + 0.75rem)',
+      }}
       aria-live="polite"
       // NOT aria-atomic. With `true` the entire region is re-announced on any
       // change, so adding a third toast makes a screen reader read all three
@@ -61,7 +71,10 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
       onBlurCapture={() => setPaused(false)}
- className={`pointer-events-auto w-80 bg-[#14110d] border ${accent} rounded-xl shadow-[0_16px_40px_-8px_rgba(0,0,0,0.6)] ui-toast`}
+      // `animate-in slide-in-from-right-4 fade-in` used to sit here and did
+      // nothing at all: this project has no tailwindcss-animate plugin, so
+      // those utilities compile away. The motion is real CSS now.
+      className={`toast-surface toast-enter pointer-events-auto w-full max-w-[420px] border ${accent} rounded-[22px]`}
     >
       <div className="flex items-start gap-3 p-4">
         <Icon size={16} className={`shrink-0 mt-0.5 ${accent.split(' ').pop()}`} />

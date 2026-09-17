@@ -1,4 +1,5 @@
 import { createHash } from 'crypto';
+import { normalizeEmail } from '@/lib/contacts/email';
 
 /**
  * Buyer data erasure (GDPR / CCPA "right to be forgotten").
@@ -17,10 +18,9 @@ import { createHash } from 'crypto';
 
 export const ERASED_DOMAIN = 'erased.invalid';
 
-/** Canonicalise an email for matching (Stripe stores lowercased). */
-export function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
+/** Canonicalise an email for matching. Re-exported from the shared helper so
+ * erasure and the CRM link can never drift apart on what "same buyer" means. */
+export { normalizeEmail };
 
 /** Deterministic, irreversible pseudonym for an erased buyer email. */
 export function redactedEmailFor(email: string): string {

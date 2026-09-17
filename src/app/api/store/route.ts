@@ -574,6 +574,29 @@ export async function GET(req: NextRequest) {
         creator = { ...creator, hero_image_url: sanitizeUrl(creator.hero_image_url as string) };
       }
 
+      /**
+       * Storefront layout, fetched on its own and allowed to fail.
+       *
+       * Deliberately NOT added to the selects above. Those are already a
+       * newer-columns-then-fallback pair, and a missing column fails the whole
+       * select — so folding `store_layout` in would silently drop accent
+       * colour, socials and voice tags from every storefront on any deployment
+       * where migration 113 has not been applied yet.
+       *
+       * Its own query means the worst case is a null layout, and a null layout
+       * is already the meaningful "use the default" value. The storefront
+       * renders exactly as it does today either way.
+       */
+      if (creator) {
+        const layoutRow = await admin
+          .from('creator_profiles')
+          .select('store_layout')
+          .eq('user_id', sellerId)
+          .maybeSingle();
+        if (!layoutRow.error && layoutRow.data) {
+          creator = { ...creator, store_layout: (layoutRow.data as { store_layout?: unknown }).store_layout ?? null };
+        }
+      }
     }
 
     // ── Featured playlists + their tracks (migration 035) ──────────────

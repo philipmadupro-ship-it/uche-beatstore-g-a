@@ -47,6 +47,9 @@ import {
   type AttentionFilter,
 } from '@/lib/store-editor/beat-row';
 import type { StoreTrack, CreatorProfile } from '@/components/store/types';
+import { StorefrontBuilder } from '@/components/store-editor/StorefrontBuilder';
+import type { StorefrontData } from '@/components/store-editor/SectionRenderer';
+import type { StoreLayout } from '@/lib/store-editor/layout';
 import { uploadImageFile } from '@/lib/upload/image-upload-client';
 import { getStoreEditorAttentionIssues } from '@/lib/store-editor/attention-issues';
 
@@ -768,6 +771,31 @@ export default function StoreEditorPage() {
   // opens the exact area they mean to edit, starting with Hero.
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [previewOpen, setPreviewOpen] = useState(false);
+  /**
+   * Which surface the producer is on.
+   *
+   * `design` is the visual builder — arranging the storefront itself. `content`
+   * is the long-standing settings accordion: prices, licences, promo codes,
+   * beat listing, voice tags. They are different jobs and neither replaces the
+   * other, so this is a mode switch rather than the builder swallowing the
+   * settings or vice versa.
+   */
+  const [editorMode, setEditorMode] = useState<'design' | 'content'>('content');
+  /**
+   * The saved storefront layout, or null for a producer who has never opened
+   * the builder. Null is meaningful: `normalizeLayout` turns it into the
+   * default layout, which reproduces `/store` exactly as it renders today.
+   */
+  const [storeLayout, setStoreLayout] = useState<unknown>(null);
+  /**
+   * Did the profile actually load?
+   *
+   * `setLoading(false)` runs in a `finally`, so a failed fetch still renders
+   * the page — and the builder would then mount with a NULL layout, resolve it
+   * to the default, and autosave that over the producer's real arrangement on
+   * the first slider drag. The builder is gated on this instead.
+   */
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   const heroFileRef = useRef<HTMLInputElement>(null);
 
@@ -815,6 +843,86 @@ export default function StoreEditorPage() {
       document.getElementById(`section-${id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
     });
     return () => cancelAnimationFrame(frame);
+  }, []);
+
+  /* ── Builder plumbing ─────────────────────────────────────────────────── */
+
+  /**
+   * Real data for the visual builder.
+   *
+   * The builder renders the actual storefront components, so it needs the
+   * actual shapes those components take. Mapping here rather than inside the
+   * builder keeps the builder ignorant of this page's internal row types.
+   */
+  const builderData = useMemo<StorefrontData>(() => {
+    const accent = normalizeThemeColor(form.accent_color);
+    const toStoreTrack = (t: TrackRow): StoreTrack => ({
+      id: t.id,
+      user_id: '',
+      title: t.title,
+      type: t.type as StoreTrack['type'],
+      audio_url: '',
+      peaks_url: t.peaks_url,
+      cover_url: t.cover_url,
+      bpm: t.bpm,
+      key: t.key,
+      scale: t.scale,
+      duration_seconds: null,
+      lease_price_usd: t.lease_price_usd,
+      exclusive_price_usd: t.exclusive_price_usd,
+      store_listed: t.store_listed,
+      free_download_enabled: t.free_download_enabled,
+      exclusive_sold: t.exclusive_sold,
+      stems_status: 'none' as const,
+      tags: [],
+      store_sort_order: t.store_sort_order,
+      created_at: '',
+    });
+    return {
+      creator: {
+        display_name: form.display_name || null,
+        bio: form.bio || null,
+        credits: form.credits || null,
+        hero_image_url: form.hero_image_url || null,
+        instagram_handle: form.instagram_handle || null,
+        twitter_handle: form.twitter_handle || null,
+        spotify_url: form.spotify_url || null,
+        soundcloud_url: form.soundcloud_url || null,
+        website_url: form.website_url || null,
+        contact_email: form.contact_email || null,
+        accent_color: accent,
+        font_style: form.font_style || 'default',
+        text_color_primary: form.text_color_primary || '#FFFFFF',
+      },
+      tracks: allTracks.filter((t) => t.store_listed).map(toStoreTrack),
+      picks: (trackSummary?.producerPicks ?? []).map(toStoreTrack),
+      playlists: featured.map((pl) => ({ id: pl.id, name: pl.name, cover_url: pl.cover_url })),
+      projects: featuredProjects.map((pr) => ({
+        id: pr.id, name: pr.name, cover_url: pr.cover_url, price_usd: pr.price_usd,
+      })),
+    };
+  }, [form, allTracks, trackSummary, featured, featuredProjects]);
+
+  /**
+   * Persist the layout.
+   *
+   * Goes straight to the profile rather than waiting for "Save changes": the
+   * builder autosaves, and a visual editor that silently discards an
+   * afternoon's arranging because you never pressed a button elsewhere on the
+   * page would be indefensible. Local state is updated from the same value so
+   * a later profile save cannot round-trip a stale layout back over it.
+   */
+  const persistStoreLayout = useCallback(async (layout: StoreLayout) => {
+    const res = await fetch('/api/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ store_layout: layout }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body?.error || 'Could not save the storefront layout.');
+    }
+    setStoreLayout(layout);
   }, []);
 
   useEffect(() => {
@@ -1035,14 +1143,27 @@ export default function StoreEditorPage() {
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
         setGlobalLicenses(loadedGlobalLicenses);
         setPromoCodes(promod.codes ?? []);
-        setTrackSummary({
-          ...summaryData,
-          producerPicks: ((summaryData.producerPicks ?? []) as ApiTrackRow[]).map(mapTrackRow),
-        });
+        // Only store the summary if the request actually succeeded. A failed
+        // response still parses as JSON ({ error: '…' }), and spreading that
+        // made trackSummary truthy while `issues` / `producerPicks` stayed
+        // undefined — so every `trackSummary?.x.y` below dereferenced undefined
+        // and took the whole page down with it. Leaving it null instead lets
+        // the `?? allTracks…` fallbacks that already exist do their job.
+        if (trackSummaryRes.ok) {
+          setTrackSummary({
+            ...summaryData,
+            producerPicks: ((summaryData.producerPicks ?? []) as ApiTrackRow[]).map(mapTrackRow),
+          });
+        } else {
+          console.error('store-summary failed; falling back to client-side counts', summaryData);
+          setTrackSummary(null);
+        }
         const firstTrackPage = await loadTrackPage({ search: '' });
         void loadTrackLicenseLinks(firstTrackPage.filter((t) => t.store_listed).map((t) => t.id));
-        setPreviewTracks((summaryData.producerPicks ?? []).slice(0, 3).map(mapTrackRow));
+        setPreviewTracks(((summaryData.producerPicks ?? []) as ApiTrackRow[]).slice(0, 3).map(mapTrackRow));
         const p = pd.profile ?? {};
+        setStoreLayout(p.store_layout ?? null);
+        setProfileLoaded(true);
         setForm({
           display_name: p.display_name ?? '',
           bio: p.bio ?? '',
@@ -1323,14 +1444,14 @@ export default function StoreEditorPage() {
   /* ── Track featured toggle (migration 054) ── */
   const toggleTrackFeatured = async (trackId: string, currentlyFeatured: boolean) => {
     const nextState = !currentlyFeatured;
-    const currentPickCount = trackSummary?.producerPicks.length ?? allTracks.filter((t) => t.store_listed && t.store_featured).length;
+    const currentPickCount = trackSummary?.producerPicks?.length ?? allTracks.filter((t) => t.store_listed && t.store_featured).length;
     if (nextState && currentPickCount >= 12) {
       toast.error("Producer's Picks is full", 'Remove one pick before adding another.');
       return;
     }
     const before = allTracks.find((track) => track.id === trackId)
       ?? producerPickCandidates.find((track) => track.id === trackId)
-      ?? trackSummary?.producerPicks.find((track) => track.id === trackId);
+      ?? trackSummary?.producerPicks?.find((track) => track.id === trackId);
     const after = before ? { ...before, store_featured: nextState } : null;
     if (before && after) patchTrackSummaryVisibility(before, after);
     if (before) {
@@ -1654,7 +1775,7 @@ export default function StoreEditorPage() {
   const producerPicks = trackSummary?.producerPicks ?? allTracks.filter((t) => t.store_listed && t.store_featured).slice(0, 12);
   const producerPickIds = new Set(producerPicks.map((track) => track.id));
   const availableProducerPicks = producerPickCandidates.filter((track) => !producerPickIds.has(track.id));
-  const listedMissingPeaksCount = trackSummary?.issues.missingPeaks.count
+  const listedMissingPeaksCount = trackSummary?.issues?.missingPeaks?.count
     ?? allTracks.filter((t) => t.store_listed && !t.peaks_url).length;
 
   if (loading) {
@@ -1683,6 +1804,21 @@ export default function StoreEditorPage() {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2 overflow-x-auto pb-1 sm:mt-1 sm:justify-end sm:pb-0">
+            <div className="flex shrink-0 items-center rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
+              {(['design', 'content'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={editorMode === mode}
+                  onClick={() => setEditorMode(mode)}
+                  className={`rounded-full px-3 py-1.5 text-[11px] capitalize transition-colors ${
+                    editorMode === mode ? 'bg-white/[0.12] text-white' : 'text-white/60 hover:text-white'
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
             {/* Mobile preview toggle */}
             <button
               onClick={() => setPreviewOpen((v) => !v)}
@@ -1710,8 +1846,29 @@ export default function StoreEditorPage() {
           </div>
         </div>
 
+        {/* ── Design mode: the visual storefront builder ── */}
+        {editorMode === 'design' ? (
+          profileLoaded ? (
+            <StorefrontBuilder
+              initialLayout={storeLayout}
+              data={builderData}
+              onPersist={persistStoreLayout}
+            />
+          ) : (
+            /* Never offer the builder on a failed load: it would start from the
+               default layout and autosave it over whatever the producer had. */
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-6">
+              <p className="text-[12px] text-white/80">Could not load your storefront settings.</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-white/50">
+                The builder stays closed until they load, so it cannot overwrite your saved
+                layout with a blank one. Reload the page to try again.
+              </p>
+            </div>
+          )
+        ) : null}
+
         {/* ── Two-column layout ── */}
-        <div className="flex gap-6 lg:gap-8 items-start">
+        <div className={`flex gap-6 lg:gap-8 items-start ${editorMode === 'design' ? 'hidden' : ''}`}>
 
           {/* ── Left: editor panels ── */}
           <div className={`flex-1 min-w-0 space-y-3 ${previewOpen ? 'hidden lg:block' : ''}`}>
