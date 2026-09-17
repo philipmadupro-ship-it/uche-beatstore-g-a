@@ -10,9 +10,9 @@ export const dynamic = 'force-dynamic';
  *
  * Browser CSP violation sink (the `report-uri` target). Public by necessity —
  * the browser posts here directly. We sample + log violations so the team can
- * see what an *enforcing* CSP would block BEFORE flipping CSP_ENFORCE in
- * src/proxy.ts. Dev-mode HMR trips lots of false positives, so this is most
- * useful against production traffic.
+ * see what the policy blocks (enforced on /store) or would block (report-only
+ * everywhere else); see src/lib/security/csp.ts. Dev-mode HMR trips lots of
+ * false positives, so this is most useful against production traffic.
  *
  * Always 204 and never throws — a report sink must not become a failure point.
  */
