@@ -8,6 +8,7 @@ import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 import { isValidEmail, isUUID } from '@/lib/validate';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
+import { licenseAvailability } from '@/lib/store/license-availability';
 
 const log = createLogger('api.share.checkout');
 export const runtime = 'nodejs';
@@ -52,6 +53,9 @@ interface CheckoutTrackRow {
   title: string;
   lease_price_usd?: number | null;
   exclusive_price_usd?: number | null;
+  exclusive_sold?: boolean | null;
+  wav_url?: string | null;
+  stems_status?: string | null;
 }
 
 interface CheckoutLicenseRow {
@@ -60,6 +64,7 @@ interface CheckoutLicenseRow {
   price_usd?: number | null;
   is_exclusive?: boolean | null;
   is_free?: boolean | null;
+  stems_included?: boolean | null;
 }
 
 interface TrackLicenseOverrideRow {
@@ -208,7 +213,7 @@ export async function POST(
     const trackIds = [...new Set(rawItems.map((i) => i.track_id))];
     const { data: tracks } = await admin
       .from('tracks')
-      .select('id, title, lease_price_usd, exclusive_price_usd')
+      .select('id, title, lease_price_usd, exclusive_price_usd, exclusive_sold, wav_url, stems_status')
       .in('id', trackIds);
 
     if (!tracks || tracks.length === 0) {
@@ -226,7 +231,7 @@ export async function POST(
     if (customLicenseIds.length > 0) {
       const { data: licenseRows } = await admin
         .from('licenses')
-        .select('id, name, price_usd, is_exclusive, is_free')
+        .select('id, name, price_usd, is_exclusive, is_free, stems_included')
         .eq('user_id', sellerUserId)
         .in('id', customLicenseIds);
       for (const row of (licenseRows ?? []) as CheckoutLicenseRow[]) licenseById.set(row.id, row);
@@ -306,6 +311,18 @@ export async function POST(
       if (basePrice == null || basePrice <= 0) {
         unpriced.push(track.title);
         continue;
+      }
+
+      // Same gate as /api/store/checkout: exclusive rights that already sold,
+      // or an exclusive / stems-included tier on a beat with neither a WAV nor
+      // ready stems, cannot be bought. Without this a share link sold what the
+      // store refuses, and the buyer paid for files that don't exist.
+      const availability = licenseAvailability(track, {
+        is_exclusive: resolvedType === 'exclusive',
+        stems_included: customLicense?.stems_included,
+      });
+      if (!availability.available) {
+        return NextResponse.json({ error: availability.message }, { status: 409 });
       }
 
       // Apply discount (share-level; only for legacy path — custom tiers use their own pricing)

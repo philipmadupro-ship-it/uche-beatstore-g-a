@@ -19,7 +19,9 @@ interface DueTrackRow {
 /**
  * GET /api/cron/publish-scheduled
  *
- * Wakes up every minute (Vercel cron) and flips any draft track
+ * Runs every 15 minutes via .github/workflows/frequent-crons.yml (Vercel
+ * Hobby only permits daily crons; vercel.json keeps a 06:00 UTC fallback).
+ * Flips any draft track
  * whose scheduled_publish_at has passed to store_listed=true. Once
  * flipped, the scheduled timestamp is cleared so a re-run doesn't
  * fight a producer who unlists the track again.

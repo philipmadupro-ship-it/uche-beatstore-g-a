@@ -25,7 +25,7 @@ interface AbandonedCartRow {
 /**
  * Abandoned-cart recovery cron (mig 071).
  *
- * Schedule: hourly (vercel.json). Vercel signs cron requests with
+ * Schedule: daily at 16:00 UTC (vercel.json). Vercel signs cron requests with
  * `Authorization: Bearer <CRON_SECRET>`; reject anything else.
  *
  * Finds carts that are unrecovered + never reminded + older than 1h (and
