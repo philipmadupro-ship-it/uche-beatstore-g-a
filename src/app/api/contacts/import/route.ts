@@ -54,6 +54,18 @@ async function parseFile(file: File): Promise<{ headers: string[]; rows: string[
  */
 export async function PUT(req: NextRequest) {
   try {
+    // Same auth gate as POST below: parseFile() runs the xlsx parser (a
+    // dependency with known ReDoS/prototype-pollution advisories and no
+    // upstream fix), so an unauthenticated caller must never reach it —
+    // preview is not exempt just because it doesn't write anything.
+    if (isSupabaseConfigured()) {
+      const cookieClient = await createServerClient();
+      const { data: { user } } = await cookieClient.auth.getUser();
+      if (!user) {
+        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+      }
+    }
+
     const form = await req.formData();
     const file = form.get('file');
     if (!(file instanceof File)) {
