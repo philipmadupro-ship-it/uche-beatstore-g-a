@@ -9,6 +9,8 @@ import { createLogger } from '@/lib/log';
 import { isValidEmail, isUUID } from '@/lib/validate';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 import { licenseAvailability } from '@/lib/store/license-availability';
+import { shareCheckoutBlock, tracksOutsideShare, type ShareSaleState } from '@/lib/share/checkout-access';
+import bcrypt from 'bcryptjs';
 
 const log = createLogger('api.share.checkout');
 export const runtime = 'nodejs';
@@ -24,24 +26,35 @@ interface ShareCheckoutItem {
   license_id: string;
 }
 
-interface ProjectShareCheckoutRow {
-  project_id: string;
-  lease_price_usd?: number | null;
-  exclusive_price_usd?: number | null;
-  discount_percent?: number | null;
-  projects?: {
-    user_id?: string | null;
-    name?: string | null;
-  } | null;
+/**
+ * Both share tables are read with `select('*')`, like the share GET routes.
+ * The optional price and discount columns aren't created by any migration,
+ * and naming them in a select made PostgREST reject the whole query, so
+ * every share checkout came back "Share not found".
+ */
+interface ShareRowBase extends ShareSaleState {
+  password_hash?: string | null;
+  lease_price_usd?: number | string | null;
+  exclusive_price_usd?: number | string | null;
+  discount_percent?: number | string | null;
 }
 
-interface LinkShareCheckoutRow {
-  user_id: string;
-  title?: string | null;
-  lease_price_usd?: number | null;
-  exclusive_price_usd?: number | null;
-  discount_percent?: number | null;
+interface ProjectShareCheckoutRow extends ShareRowBase {
+  content_type?: 'project' | 'playlist' | 'track' | null;
+  project_id?: string | null;
+  playlist_id?: string | null;
+  track_id?: string | null;
 }
+
+interface LinkShareCheckoutRow extends ShareRowBase {
+  user_id?: string | null;
+  title?: string | null;
+  track_ids?: string[] | null;
+}
+
+type OwnedNamedRow = { user_id?: string | null; name?: string | null; title?: string | null };
+
+const numberOrNull = (v: number | string | null | undefined) => (v != null && v !== '' ? Number(v) : null);
 
 interface CreatorPriceProfile {
   license_lease_price_usd?: number | null;
@@ -159,47 +172,87 @@ export async function POST(
     const admin = createServiceClient();
 
     // ── Resolve the share token ──────────────────────────────────────────────
+    let share: ShareRowBase | null = null;
     let sellerUserId: string | null = null;
     let projectName: string | null = null;
     let isProjectShare = true;
-    let shareLeasePrice: number | null = null;
-    let shareExclusivePrice: number | null = null;
-    let shareDiscountPercent: number | null = null;
+    let shareTrackIds: string[] = [];
 
     const { data: projShare } = await admin
       .from('project_shares')
-      .select('project_id, lease_price_usd, exclusive_price_usd, discount_percent, projects(user_id, name)')
+      .select('*')
       .eq('token', token)
       .maybeSingle();
 
     if (projShare) {
-      const projectShare = projShare as ProjectShareCheckoutRow;
-      sellerUserId = projectShare.projects?.user_id ?? null;
-      projectName = projectShare.projects?.name ?? null;
-      shareLeasePrice = projShare.lease_price_usd != null ? Number(projShare.lease_price_usd) : null;
-      shareExclusivePrice = projShare.exclusive_price_usd != null ? Number(projShare.exclusive_price_usd) : null;
-      shareDiscountPercent = projShare.discount_percent != null ? Number(projShare.discount_percent) : null;
+      const row = projShare as ProjectShareCheckoutRow;
+      share = row;
+      const kind = row.content_type ?? 'project';
+      // project_shares has no user_id: the seller is whoever owns the thing
+      // shared. Reading it only from `projects` returned null for playlist
+      // and single-track shares, so those could never sell.
+      if (kind === 'playlist' && row.playlist_id) {
+        const [{ data: owner }, { data: junction }] = await Promise.all([
+          admin.from('playlists').select('user_id, name').eq('id', row.playlist_id).maybeSingle(),
+          admin.from('playlist_tracks').select('track_id').eq('playlist_id', row.playlist_id),
+        ]);
+        sellerUserId = (owner as OwnedNamedRow | null)?.user_id ?? null;
+        projectName = (owner as OwnedNamedRow | null)?.name ?? null;
+        shareTrackIds = ((junction ?? []) as Array<{ track_id: string }>).map((j) => j.track_id);
+      } else if (kind === 'track' && row.track_id) {
+        const { data: owner } = await admin.from('tracks').select('user_id, title').eq('id', row.track_id).maybeSingle();
+        sellerUserId = (owner as OwnedNamedRow | null)?.user_id ?? null;
+        projectName = (owner as OwnedNamedRow | null)?.title ?? null;
+        shareTrackIds = [row.track_id];
+      } else if (row.project_id) {
+        const [{ data: owner }, { data: junction }] = await Promise.all([
+          admin.from('projects').select('user_id, name').eq('id', row.project_id).maybeSingle(),
+          admin.from('project_tracks').select('track_id').eq('project_id', row.project_id),
+        ]);
+        sellerUserId = (owner as OwnedNamedRow | null)?.user_id ?? null;
+        projectName = (owner as OwnedNamedRow | null)?.name ?? null;
+        shareTrackIds = ((junction ?? []) as Array<{ track_id: string }>).map((j) => j.track_id);
+      }
     } else {
       const { data: linkShare } = await admin
         .from('share_links')
-        .select('user_id, title, lease_price_usd, exclusive_price_usd, discount_percent')
+        .select('*')
         .eq('token', token)
         .maybeSingle();
 
       if (linkShare) {
-        const linkShareRow = linkShare as LinkShareCheckoutRow;
-        sellerUserId = linkShareRow.user_id;
-        projectName = linkShareRow.title ?? null;
-        shareLeasePrice = linkShareRow.lease_price_usd != null ? Number(linkShareRow.lease_price_usd) : null;
-        shareExclusivePrice = linkShareRow.exclusive_price_usd != null ? Number(linkShareRow.exclusive_price_usd) : null;
-        shareDiscountPercent = linkShareRow.discount_percent != null ? Number(linkShareRow.discount_percent) : null;
+        const row = linkShare as LinkShareCheckoutRow;
+        share = row;
+        sellerUserId = row.user_id ?? null;
+        projectName = row.title ?? null;
+        shareTrackIds = row.track_ids ?? [];
         isProjectShare = false;
       }
     }
 
-    if (!sellerUserId) {
+    if (!share || !sellerUserId) {
       return NextResponse.json({ error: 'Share not found' }, { status: 404 });
     }
+
+    // ── Enforce the share's own settings ─────────────────────────────────────
+    const block = shareCheckoutBlock(share, Date.now());
+    if (block) {
+      return NextResponse.json({ error: block.error }, { status: block.status });
+    }
+    if (share.password_hash) {
+      const submitted = req.headers.get('x-share-password') ?? '';
+      if (!submitted || !(await bcrypt.compare(submitted, share.password_hash))) {
+        return NextResponse.json({ requiresPassword: true, error: 'This link needs its password.' }, { status: 401 });
+      }
+    }
+    const foreign = tracksOutsideShare(rawItems.map((i) => i.track_id), shareTrackIds);
+    if (foreign.length) {
+      return NextResponse.json({ error: 'Your cart has beats that are not part of this link.' }, { status: 400 });
+    }
+
+    const shareLeasePrice = numberOrNull(share.lease_price_usd);
+    const shareExclusivePrice = numberOrNull(share.exclusive_price_usd);
+    const shareDiscountPercent = numberOrNull(share.discount_percent);
 
     // ── Creator profile fallback prices ─────────────────────────────────────
     const { data: profile } = await admin

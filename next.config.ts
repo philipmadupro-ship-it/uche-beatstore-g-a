@@ -61,6 +61,10 @@ const nextConfig: NextConfig = {
     })),
   },
   serverExternalPackages: [
+    // exceljs pulls in graceful-fs, which patches `fs` at load. Bundled, it
+    // gets the empty `fs` stub from resolveAlias below and throws while the
+    // build collects route config. Loaded from node_modules it sees real fs.
+    'exceljs',
     'audio-decode',
     '@wasm-audio-decoders/opus-ml',
     '@wasm-audio-decoders/common',

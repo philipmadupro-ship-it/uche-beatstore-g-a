@@ -8,9 +8,11 @@ import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface CartDrawerProps {
   shareToken: string;
+  /** Password the recipient unlocked the share with; checkout re-checks it. */
+  sharePassword?: string | null;
 }
 
-export function CartDrawer({ shareToken }: CartDrawerProps) {
+export function CartDrawer({ shareToken, sharePassword }: CartDrawerProps) {
   const { items, removeItem, clearCart, cartTotal, isOpen, setIsOpen } = useCart();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,7 +30,10 @@ export function CartDrawer({ shareToken }: CartDrawerProps) {
     try {
       const res = await fetch(`/api/share/${shareToken}/checkout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sharePassword ? { 'x-share-password': sharePassword } : {}),
+        },
         body: JSON.stringify({
           buyer_email: email.trim(),
           cart_items: items.map((i) => ({
