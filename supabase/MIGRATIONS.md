@@ -35,42 +35,37 @@ re-run `NOTIFY pgrst, 'reload schema';` and wait.
 ## ⚠️ Currently UNAPPLIED
 Confirmed applied: **001–106**, via a full clean replay (2026-08-05).
 
-Status **unverified** — these landed after that replay and were never listed
-here, so treat them as unapplied until checked against the target project:
+Checked against production on **2026-09-17** with read-only probes (the
+service-role key can read the schema's effects but cannot run DDL):
 
-- `107_tag_colors.sql`
-- `108_brand_logo_and_kind_artwork.sql`
-- `109_default_artwork.sql` (renumbered from 106 to clear a duplicate)
-- `110_normalize_contact_emails.sql` — **backfill**. Lowercases every CRM-linking
-  email (contacts, license_purchases, project_access_links,
-  store_free_downloads, buyer_*) and deduplicates the contacts the
-  case-sensitive `contacts_user_email_uniq` index had forked. Apply together
-  with the write-side normalisation in `lib/contacts/email.ts`, or past orders
-  stay unfindable via `/store/orders`.
+| Migration | Status on prod | Evidence |
+|---|---|---|
+| `107_tag_colors.sql` | applied | `tag_colors` exists |
+| `108_brand_logo_and_kind_artwork.sql` | applied | `creator_profiles.logo_url` exists |
+| `109_default_artwork.sql` | applied | `creator_profiles.default_artwork_url` exists |
+| `110_normalize_contact_emails.sql` | effect present | no contact emails with uppercase letters found |
+| `111_adopt_orphan_contacts.sql` | effect present | 0 contacts with `user_id IS NULL` |
+| `112_backfill_buyer_contacts.sql` | **not applied** | 1 paid buyer email has no contact |
+| `113_store_layout.sql` | **not applied** | `creator_profiles.store_layout` missing |
+| `114_share_price_overrides.sql` | no-op on prod | columns already exist, added outside migrations |
 
-- `111_adopt_orphan_contacts.sql` — **data migration**. Adopts legacy
-  `user_id IS NULL` contacts onto the single producer (guarded: runs only when
-  exactly one `creator_profiles` owner exists), merging any that collide on
-  email. Required by the owner-only scoping now used in `/api/contacts`,
-  `/api/contacts/scores` and `/(dashboard)/contacts` — without it those legacy
-  rows disappear from the CRM instead of being adopted.
+What each still-pending one does:
 
-- `112_backfill_buyer_contacts.sql` — **data migration**. Reconciles past
-  purchases with the CRM: creates a contact for any paid buyer email that has
-  none, and marks every contact with a paid purchase as `crm_status='customer'`
-  / `buyer_pipeline_status='purchased'`. Only fills NULLs, so a hand-set stage
-  is never overwritten. Excludes the `unknown@invalid` sentinel. Needed because
-  the webhook fix only applies to future purchases — without it, existing
-  customers keep rendering as cold leads.
-
+- `112_backfill_buyer_contacts.sql` — **data migration**. Creates a contact
+  for any paid buyer email that has none, and marks every contact with a paid
+  purchase `crm_status='customer'` / `buyer_pipeline_status='purchased'`. Only
+  fills NULLs. Excludes the `unknown@invalid` sentinel.
 - `113_store_layout.sql` — adds `creator_profiles.store_layout` (jsonb) for the
   Store Editor's Design mode. `/api/store` reads it in its own query, so the
   storefront survives without it, but the builder has nowhere to save.
 
+All are idempotent, so running the full set (`npm run db:migrate`) is safe.
+Update this table when a run is confirmed.
+
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 113 (next new migration = 114). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 114 (next new migration = 115). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch
