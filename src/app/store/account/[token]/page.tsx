@@ -291,10 +291,11 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
 
         <footer className="mt-10 pt-6 border-t border-white/10">
           <p className="text-[10px] font-mono text-white/40 leading-relaxed">
-            This link expires 24h after you requested it. If it stops working,{' '}
+            This link expires 24h after you requested it.{' '}
             <Link href="/store/account" className="text-white/60 hover:text-white underline underline-offset-2">
-              request a fresh one
-            </Link>.
+              Sign in with this email
+            </Link>{' '}
+            to keep the same purchases, favourites and playlists without a link that expires.
           </p>
         </footer>
       </div>
