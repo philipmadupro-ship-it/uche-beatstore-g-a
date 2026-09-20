@@ -899,6 +899,12 @@ export default function LibraryPage() {
   // exposes its own onExit chip to come back to list view).
   const effectiveViewMode = isMobileViewport ? 'list' : viewMode;
   const effectiveBrowseMode = isMobileViewport ? 'all' : browseMode;
+  // Home content — the four hub tiles, the cross-surface digest and the sell
+  // readiness panel — belongs to Browse, not to the catalogue list. Mobile has
+  // no Browse mode (the toggle is hidden and the mode is forced to 'all'), so
+  // it keeps them rather than losing them outright; deciding where they live on
+  // a phone is a separate question from unclogging the desktop list.
+  const showHomeContent = effectiveBrowseMode === 'sections' || isMobileViewport;
 
   if (effectiveViewMode === 'portfolio') {
     return (
@@ -1053,7 +1059,11 @@ export default function LibraryPage() {
           </div>
         </div>
 
-        {/* ── Dashboard — Spotify-style home content ────────────── */}
+        {/* ── Dashboard — Spotify-style home content ──────────────
+            Browse only. These four tiles go to other pages; in All tracks
+            they were a row of exits standing between the producer and the
+            catalogue they came here to work through. */}
+        {showHomeContent && (
         <div className="mb-6 space-y-4">
 
           {/* Row A: Spotify pinned-style grid — 2 per row on mobile, 4 on md */}
@@ -1115,7 +1125,19 @@ export default function LibraryPage() {
           {/* "Beats need attention" now lives in the notifications center
               (TopBar), alongside everything else demanding the producer's
               attention, rather than competing for space on the homepage. */}
+
+          {/* Cross-surface digest first — stuck sales, pending offers, and new
+              CRM leads are fresher/more time-sensitive than catalog readiness,
+              and otherwise require checking three other pages to notice. */}
+          <ActionDigestPanel />
+
+          {/* Upload previously ended in silence: the beat landed untagged,
+              unpriced and unlisted with nothing saying so, and the store
+              editor's own "needs attention" panel only inspects beats that are
+              ALREADY listed — so these were invisible everywhere. */}
+          <SellReadinessPanel tracks={tracks} hasDefaultPrice={hasDefaultPrice} />
         </div>
+        )}
 
         {/* ── Library section header + browse toggle ─────────────── */}
         <div className="flex items-center justify-between mb-3">
@@ -1306,18 +1328,6 @@ export default function LibraryPage() {
         <div className="mb-8">
           <DropZone onUploadSuccess={fetchTracks} openRef={uploadOpenRef} variant="hidden" />
         </div>
-
-        {/* Cross-surface digest first — stuck sales, pending offers, and new
-            CRM leads are fresher/more time-sensitive than catalog readiness,
-            and otherwise require checking three other pages to notice. */}
-        <ActionDigestPanel />
-
-        {/* Sits immediately after upload, which is the moment a producer would
-            otherwise assume the job is done. Upload previously ended in silence:
-            the beat landed untagged, unpriced and unlisted with nothing saying
-            so, and the store editor's own "needs attention" panel only inspects
-            beats that are ALREADY listed — so these were invisible everywhere. */}
-        <SellReadinessPanel tracks={tracks} hasDefaultPrice={hasDefaultPrice} />
 
         {loading ? (
           <div className="flex items-center justify-center py-16">

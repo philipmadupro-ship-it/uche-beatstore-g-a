@@ -7993,3 +7993,32 @@ through a share link. See `supabase/MIGRATIONS.md`.
 - CSP is still Report-Only. Reports go only to Vercel logs, and enforcing needs a decision
   on statically rendered pages.
 - `/api/store/beat-match` has no UI caller since `BeatMatchModal` was removed.
+
+## Library page — home content out of the catalogue list (2026-09-20)
+
+`/library` is two surfaces behind one toggle: **Browse** (a home page) and **All tracks**
+(the vault list). The home content was rendered in both, so in All tracks the producer
+scrolled past a hero, a quick-action row, four tiles linking to other pages, the section
+header, the toolbar, the smart-playlist strip, the cross-surface digest and the sell
+readiness panel before reaching the first track. On a laptop that is the whole fold spent
+on things that are not the catalogue.
+
+The four hub tiles, `ActionDigestPanel` and `SellReadinessPanel` now render only as home
+content, under one `showHomeContent` flag. Nothing was deleted and nothing moved page.
+
+`showHomeContent` is `effectiveBrowseMode === 'sections' || isMobileViewport`, not just the
+former: mobile has no Browse mode (the toggle is `hidden sm:flex` and the mode is forced to
+`'all'` at line 901), so gating on Browse alone would have dropped the digest and the
+readiness panel from phones entirely. Where that content belongs on a phone is a separate
+question; this change does not answer it and does not regress it.
+
+The hero, the quick actions (Upload / New release) and the toolbar stay in both views —
+they are how work starts, not where it is reported.
+
+Verified with `tsc --noEmit`, `next build` and `vitest` (193 files, 2075 tests). The
+dashboard is auth-gated, so there is no preview screenshot.
+
+### Note for the next agent
+`npm run build` fails in a fresh worktree with `Missing API key … new Resend(...)` from
+`/api/email`, which is module-scope construction, not a code defect — the worktree has no
+`.env.local`. Copy it from the main checkout.
