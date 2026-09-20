@@ -9,7 +9,7 @@ import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
-import { setTrackDragData } from '@/lib/dnd';
+import { isInteractiveDragStartTarget, setTrackDragData } from '@/lib/dnd';
 import { SessionFitMarkers } from './SessionFitMarkers';
 import { cacheTrack, getCachedMeta, removeCached } from '@/lib/offline/audio-cache';
 import { toast } from '@/hooks/useToast';
@@ -332,18 +332,32 @@ export function TrackCard({
     <div
       onClick={handleRowPress}
       // Native HTML5 draggable so the user can drop tracks onto contact
-      // rows (or future drop targets — playlists, projects). We don't
+      // rows (or future drop targets — playlists, projects), or drag them
+      // straight out of the browser onto the desktop / a DAW. We don't
       // mount a heavy DnD library; the dataTransfer payload is encoded
       // through lib/dnd.ts and decoded on the target.
       draggable={draggableTrack}
       onDragStart={(e) => {
         if (!draggableTrack) return;
+        // A press on the ⋯ menu, the rename field, or a control button can
+        // still land on this ancestor's `draggable`, since the browser
+        // walks up to the nearest draggable element regardless of which
+        // child was pressed. Bail out so the click keeps working instead
+        // of being swallowed by a one-pixel drag.
+        if (isInteractiveDragStartTarget(e.target)) {
+          e.preventDefault();
+          return;
+        }
         e.stopPropagation();
-        setTrackDragData(e, {
-          id: track.id,
-          title: track.title,
-          cover_url: track.cover_url ?? null,
-        });
+        setTrackDragData(
+          e,
+          {
+            id: track.id,
+            title: track.title,
+            cover_url: track.cover_url ?? null,
+          },
+          track.audio_url,
+        );
       }}
       style={columns ? ({ '--track-row-cols': gridTemplate(columns) } as React.CSSProperties) : undefined}
       className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-lg border px-2.5 py-2 transition-colors cursor-pointer ${columns ? 'track-row-dynamic' : TRACK_ROW_GRID} md:gap-4 md:px-3 ${

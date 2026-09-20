@@ -8,7 +8,7 @@ import { ActionMenu } from '@/components/ui/ActionMenu';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { setTrackDragData } from '@/lib/dnd';
+import { isInteractiveDragStartTarget, setTrackDragData } from '@/lib/dnd';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface TrackGridCardProps {
@@ -82,10 +82,24 @@ export function TrackGridCard({
     <div
       className={`group relative flex flex-col cursor-pointer ${selected ? 'ring-2 ring-white/60 rounded-xl' : ''}`}
       onClick={handleCardClick}
+      // Native HTML5 draggable — also carries a `DownloadURL` entry (see
+      // lib/dnd.ts) so dropping the card onto the desktop or a DAW window
+      // saves the real audio file, not just the title as text.
       draggable
       onDragStart={(e) => {
+        // The star rating buttons and the ⋯ menu trigger live inside this
+        // draggable card; a press-and-drag starting on one of them would
+        // otherwise still be picked up by this ancestor's `draggable`.
+        if (isInteractiveDragStartTarget(e.target)) {
+          e.preventDefault();
+          return;
+        }
         e.stopPropagation();
-        setTrackDragData(e, { id: track.id, title: track.title, cover_url: track.cover_url ?? null });
+        setTrackDragData(
+          e,
+          { id: track.id, title: track.title, cover_url: track.cover_url ?? null },
+          track.audio_url,
+        );
       }}
     >
       {/* Cover art */}
