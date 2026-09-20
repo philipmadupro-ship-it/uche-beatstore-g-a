@@ -118,7 +118,7 @@ export function Drawer({
 
   const sideClasses =
     side === 'bottom'
-      ? 'ui-drawer-bottom inset-x-0 bottom-0 max-h-[88dvh] rounded-t-3xl border-t'
+      ? 'ui-drawer-bottom inset-x-0 bottom-0 max-h-[88dvh] rounded-t-[20px] border-t'
       : side === 'left'
         ? cn('ui-drawer-left left-0 top-0 h-dvh w-full border-r', widthClasses[size])
         : cn('ui-drawer-right right-0 top-0 h-dvh w-full border-l', widthClasses[size]);

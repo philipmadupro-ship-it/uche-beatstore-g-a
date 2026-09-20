@@ -8073,3 +8073,42 @@ Running the storefront locally needs `ENABLE_LOCAL_STORE=true` and the fixture c
 `data/db.json`; a `.env.local` pointing at real Supabase makes the e2e storefront tests skip
 rather than fail, which looks like passing. `data/db.json` and `.claude/launch.json` are both
 tracked — restore them afterwards. `next dev` re-adds its block to AGENTS.md; revert it.
+
+## Radii vocabulary in the UI primitives (2026-09-20)
+
+`docs/design-direction.md` item 3, which is explicitly ordered: fix the primitives *before*
+the pages, "or the drift comes back". That ordering is the whole point here — a `Card` at
+16px is not one wrong component, it is the wrong radius arriving on every page that adopts
+it. `Card`, `ListRow`, `MediaCard` and `ProductList` are imported by only 2–6 files each
+today, so this cost almost nothing now and would have cost a sweep later.
+
+- 16px → **12px** (cards): `Card`, `ListRow`, `CoverEditor`, `Skeleton`, and `MediaCard`'s
+  `sm:` bump, which took the cover to 16px only above the `sm` breakpoint.
+- 6px → **8px** (controls): `Dropdown`'s trigger, `ColorPicker`'s swatch and hex field,
+  `Slider`'s value tooltip, `Toaster`'s action button, `MediaCard`'s corner badge,
+  `Skeleton`'s avatar.
+- 24px/22px → **20px** (modals, heroes): `ProductList`, `Toaster`, and `Drawer`'s bottom
+  sheet. `Card`'s outer wrapper said `rounded-[1.25rem]`, which is 20px already — respelled
+  so the vocabulary is greppable.
+
+The doc claimed `Modal.tsx` was 16px. It is already `rounded-[20px]`; someone fixed it and
+the doc kept the stale claim. Corrected there.
+
+`lib/ui/radii.test.ts` guards the primitives. Tailwind's near-misses are what make this
+invisible in review: `rounded-md` is 6px, `rounded-2xl` 16px, `rounded-3xl` 24px — each one
+degree off a real token. Allowlisted, with the reason written next to each: `rounded-full`
+(a pill's radius is its height, not a step on the surface scale), `rounded-t-full` (the
+gloss gradient inside the glass buttons), `rounded-[inherit]` (overlays taking their
+parent's shape), and `rounded-[3px]` (the 15px colour swatch — at 8px it reads as a circle,
+which is the one shape a swatch must not be).
+
+The guard scans quoted class strings, not lines: "rounded" appears in these files' prose
+too, and the first draft reported `ActionMenu`'s "inset, rounded highlight" comment and
+`ListRow`'s "rounded container" comment as violations. It was also checked in the other
+direction — reverting `Card` to `rounded-2xl` makes it fail with that exact class named,
+because a guard that has never failed is not known to work.
+
+**Scoped to `src/components/ui/` on purpose.** The pages still hold many off-vocabulary
+radii; a guard that fails on day one is a guard people skip.
+
+Verified with `tsc`, `next build` and `vitest` (194 files, 2078).

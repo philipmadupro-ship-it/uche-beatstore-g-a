@@ -137,9 +137,20 @@ consistent tree-wide.
    4 carrying two hover fills at once; `lib/ui/tailwind-classes.test.ts` now guards both,
    so that population cannot regrow.
 2. **Preview player rebuild** — per "The beat preview player" above.
-3. **`src/components/ui/` radii** — the primitives violate the 8/12/20 rule themselves
-   (`Modal.tsx` is 16px while 16 hand-rolled surfaces write the correct 20px). Fix the
+3. **`src/components/ui/` radii** — ~~the primitives violate the 8/12/20 rule themselves
+   (`Modal.tsx` is 16px while 16 hand-rolled surfaces write the correct 20px)~~. Fix the
    primitives *before* the pages, or the drift comes back.
+
+   *2026-09-20 — done, and `Modal.tsx` was already 20px by the time this was picked up.*
+   The primitives now use only 8px controls, 12px cards and 20px modals/heroes: `Card`,
+   `ListRow`, `CoverEditor`, `Skeleton` and `MediaCard` dropped from 16px to 12px,
+   `Dropdown`, `ColorPicker`, `Slider`, `Toaster` and `MediaCard`'s badge from 6px to 8px,
+   `ProductList` 24px and `Toaster` 22px to 20px, and `Drawer`'s bottom sheet from 24px to
+   20px. `lib/ui/radii.test.ts` guards it, with `rounded-full`, the inherited-shape
+   overlays and the 15px colour swatch allowlisted and each reason written down.
+   **The pages are not covered** — they still hold plenty of off-vocabulary radii, and
+   widening the guard before the rollout reaches them would just produce a test people
+   skip. Widen it surface by surface.
 4. **Type scale** — worst offenders `store/[id]/page.tsx` and `sales/page.tsx` (9 distinct
    sizes each). Collapsing `12px → 11px` is the single highest-leverage change.
 5. **Modal consolidation** — 21 hand-rolled overlays; 19 lack Escape, 20 lack focus trap, all

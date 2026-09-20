@@ -156,7 +156,7 @@ export function ColorPicker({ value, onChange, recent = [], className }: ColorPi
       <div className="flex items-center gap-1.5">
         <span
           aria-hidden
-          className="size-6 shrink-0 rounded-md border border-white/20"
+          className="size-6 shrink-0 rounded-lg border border-white/20"
           style={{ backgroundColor: current }}
         />
         <input
@@ -169,7 +169,7 @@ export function ColorPicker({ value, onChange, recent = [], className }: ColorPi
             // flash the swatch through nonsense.
             if (isValidHex(e.target.value)) onChange(e.target.value.toLowerCase());
           }}
-          className="min-w-0 flex-1 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1.5 font-mono text-[11px] uppercase text-white focus:border-white/30 focus:outline-none"
+          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 font-mono text-[11px] uppercase text-white focus:border-white/30 focus:outline-none"
         />
       </div>
     </div>
