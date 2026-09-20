@@ -10,6 +10,7 @@ import { useRating } from '@/hooks/useRating';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { isInteractiveDragStartTarget, setTrackDragData } from '@/lib/dnd';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { SessionFitMarkers } from './SessionFitMarkers';
 
 interface TrackGridCardProps {
   track: Track;
@@ -187,6 +188,10 @@ export function TrackGridCard({
               {track.key}{isMinor ? 'm' : ''}
             </span>
           )}
+          {/* Whether this fits the session the producer set in the TopBar.
+              Renders nothing at all when no session is set, so the card is
+              unchanged for anyone not using it. */}
+          <SessionFitMarkers track={track} />
         </div>
 
         {/* More button — top right on hover. Portaled via Popover so the menu

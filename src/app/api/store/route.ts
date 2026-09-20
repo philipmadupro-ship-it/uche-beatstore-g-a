@@ -5,6 +5,7 @@ import { errorMessage } from '@/lib/errors';
 import { artworkThemeFromProfile, loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
 import { resolveStoreOwner } from '@/lib/store/owner';
 import { redactPublicTrackMedia } from '@/lib/store/public-media';
+import { POPULAR_ORDER_COLUMNS, comparePopularity } from '@/lib/store/popularity';
 import {
   bpmFilterExpression,
   bpmInRange,
@@ -231,7 +232,8 @@ function localFilterAndSortTracks(
       sorted.sort((a, b) => String(a.title ?? '').localeCompare(String(b.title ?? '')));
       break;
     case 'popular':
-      sorted.sort((a, b) => Number(b.rating ?? 0) - Number(a.rating ?? 0));
+      // Same rule as the browser and the Supabase path — lib/store/popularity.
+      sorted.sort(comparePopularity);
       break;
     case 'newest':
     default:
@@ -474,8 +476,18 @@ export async function GET(req: NextRequest) {
           return query.order('lease_price_usd', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
         case 'title':
           return query.order('title', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
-        case 'popular':
-          return query.order('rating', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+        case 'popular': {
+          // The columns come from lib/store/popularity so SQL and the JS
+          // comparator cannot drift into two different meanings of "popular".
+          // The `id` key is what makes the order total: without it two beats
+          // rated the same in the same second can swap between requests, and a
+          // row then shows up on two pages or on none as the offset passes it.
+          let ordered = query;
+          for (const { column, ascending, nullsFirst } of POPULAR_ORDER_COLUMNS) {
+            ordered = ordered.order(column, { ascending, nullsFirst });
+          }
+          return ordered;
+        }
         case 'newest':
         default:
           return includeStoreOrder

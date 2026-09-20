@@ -9,6 +9,8 @@
  * blob: URL when present, falling back to the network proxy URL otherwise.
  */
 
+import { planOfflineEviction } from './eviction';
+
 const DB_NAME = 'antigravity-offline';
 const DB_VERSION = 1;
 const STORE_BLOBS = 'blobs';
@@ -66,7 +68,11 @@ export async function cacheTrack(
   trackId: string,
   url: string,
   title: string,
-  onProgress?: (loaded: number, total: number) => void
+  onProgress?: (loaded: number, total: number) => void,
+  /** Called with the metas of any explicit downloads dropped to make room for
+   *  this one — see `lib/offline/eviction.ts` for the policy. Best-effort UI
+   *  hook; callers that don't care (e.g. bulk playlist sync) can omit it. */
+  onEvicted?: (evicted: OfflineMeta[]) => void
 ): Promise<OfflineMeta> {
   // Inactivity guard: if the download stalls (a hung fetch or a reader that
   // never delivers another chunk), abort so the promise REJECTS instead of
@@ -115,10 +121,24 @@ export async function cacheTrack(
       cached_at: Date.now(),
     };
 
+    // Explicit-save cap: never evict this track's own prior copy to make room
+    // for itself, and only drop as many of the OLDEST other saves as needed —
+    // see lib/offline/eviction.ts for why "oldest saved" rather than an
+    // LRU-by-use policy.
+    const existing = (await listCached()).filter((m) => m.id !== trackId);
+    const evictIds = planOfflineEviction(existing, blob.size);
+    const evictedMetas = existing.filter((m) => evictIds.includes(m.id));
+
     await tx([STORE_BLOBS, STORE_META], 'readwrite', (t) => {
+      for (const id of evictIds) {
+        t.objectStore(STORE_BLOBS).delete(id);
+        t.objectStore(STORE_META).delete(id);
+      }
       t.objectStore(STORE_BLOBS).put(blob, trackId);
       t.objectStore(STORE_META).put(meta);
     });
+    for (const id of evictIds) revokeOfflineSrc(id);
+    if (evictedMetas.length) onEvicted?.(evictedMetas);
 
     return meta;
   } finally {

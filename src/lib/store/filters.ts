@@ -1,4 +1,5 @@
 import { normalizeKey } from '@/lib/audio/key-normalize';
+import { comparePopularity } from './popularity';
 import type { Track } from '@/lib/types';
 
 export interface StoreTrack extends Track {
@@ -167,18 +168,13 @@ export function filterAndSortTracks(
     case 'title':
       sorted.sort((a, b) => a.title.localeCompare(b.title));
       break;
-    case 'popular': {
-      // If play_count is populated (from store_plays), sort by real plays.
-      // Fall back to a quality proxy (rating × 100 + bpm) for stores
-      // that haven't accumulated play data yet.
-      const score = (t: StoreTrack) =>
-        (t.play_count != null ? t.play_count * 10 : 0) + (t.rating ?? 0) * 100;
-      sorted.sort((a, b) => {
-        const diff = score(b) - score(a);
-        return diff !== 0 ? diff : a.title.localeCompare(b.title);
-      });
+    case 'popular':
+      // One rule, shared with both server paths — see lib/store/popularity.
+      // This used to score `play_count * 10 + rating * 100` here, which the
+      // server could not express, so re-ranking a server-ordered page
+      // produced an order that was neither rule's.
+      sorted.sort(comparePopularity);
       break;
-    }
     case 'newest':
     default:
       sorted.sort(

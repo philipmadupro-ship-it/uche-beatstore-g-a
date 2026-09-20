@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Track } from '@/lib/types';
 import { Star, Music, ChevronUp, ChevronDown, Check } from 'lucide-react';
 import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
@@ -11,7 +11,8 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { isInteractiveDragStartTarget, setTrackDragData } from '@/lib/dnd';
 import { SessionFitMarkers } from './SessionFitMarkers';
-import { cacheTrack, getCachedMeta, removeCached } from '@/lib/offline/audio-cache';
+import { useOfflineTrack } from '@/hooks/useOfflineCache';
+import { offlineActionLabel } from '@/lib/offline/status';
 import { toast } from '@/hooks/useToast';
 import { gridTemplate, type LibraryColumn, type TrackWithTags } from '@/lib/library/columns';
 import type { TrackStatsMap } from '@/lib/library/track-stats';
@@ -127,59 +128,54 @@ export function TrackCard({
   // Optimistic title so the row updates the instant the field closes, without
   // waiting for the page's refetch to come back.
   const [titleOverride, setTitleOverride] = useState<string | null>(null);
-  const trackTags = (track as TrackWithInlineTags).track_tags ?? [];
+  // Memoized so `?? []` doesn't hand downstream `useMemo`s (artworkTags) a
+  // fresh array identity on every render.
+  const trackTags = useMemo(
+    () => (track as TrackWithInlineTags).track_tags ?? [],
+    [track],
+  );
   const stemStatus = track.stems_status as string | null | undefined;
   const hasCompletedStems = stemStatus === 'done' || stemStatus === 'completed';
 
-  // Offline Caching integration
-  const [isCached, setIsCached] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<number | null>(null);
+  // Offline caching — single implementation shared with `OfflineToggle`, see
+  // `useOfflineTrack` (hooks/useOfflineCache.ts) and `lib/offline/status.ts`.
+  // This row previously kept a parallel copy of this whole state machine
+  // (isCached/syncProgress + its own cacheTrack/removeCached calls); now both
+  // surfaces read the same status and label so they can't drift.
+  const {
+    isCached,
+    downloading: offlineDownloading,
+    progress: offlineProgress,
+    status: offlineStatus,
+    announcement: offlineAnnouncement,
+    download: downloadOffline,
+    remove: removeOffline,
+  } = useOfflineTrack(track.id);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const meta = await getCachedMeta(track.id);
-        setIsCached(!!meta);
-      } catch (err) {
-        console.error('IndexedDB read failed:', err);
-      }
-    })();
-  }, [track.id]);
-
-  const syncToDevice = async () => {
+  const toggleOffline = async () => {
+    if (isCached) {
+      await removeOffline();
+      return;
+    }
     if (!track.audio_url) return;
-    setSyncProgress(0);
-    try {
-      const url = track.audio_url.startsWith('http')
-        ? track.audio_url
-        : `${window.location.origin}${track.audio_url}`;
-
-      await cacheTrack(track.id, url, track.title, (loaded, total) => {
-        setSyncProgress(loaded / total);
-      });
-      setIsCached(true);
-      toast.success(`"${track.title.toUpperCase()}" cached for offline playback!`);
-    } catch (err) {
-      console.error('Offline caching failed:', err);
-      toast.error('Sync failed', err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setSyncProgress(null);
-    }
-  };
-
-  const removeFromCache = async () => {
-    try {
-      await removeCached(track.id);
-      setIsCached(false);
-      toast.success(`"${track.title.toUpperCase()}" removed from local storage.`);
-    } catch (err) {
-      console.error('Failed to remove cache:', err);
-      toast.error('Failed to delete cache');
-    }
+    const url = track.audio_url.startsWith('http')
+      ? track.audio_url
+      : `${window.location.origin}${track.audio_url}`;
+    // Errors surface through `offlineStatus`/the row's live region — see
+    // useOfflineTrack, which sets its own `error` state rather than throwing.
+    await downloadOffline(url, track.title);
   };
 
   // A refetch that brings back a different title means the override is stale.
-  useEffect(() => { setTitleOverride(null); }, [track.title]);
+  // Adjusted during render (React's documented pattern for resetting state
+  // when a prop changes) rather than in a `useEffect` — a synchronous
+  // setState inside an effect schedules an extra render pass; this way the
+  // reset lands in the same render as the prop change.
+  const [prevTrackTitle, setPrevTrackTitle] = useState(track.title);
+  if (track.title !== prevTrackTitle) {
+    setPrevTrackTitle(track.title);
+    setTitleOverride(null);
+  }
 
   const renameTrack = async (next: string) => {
     if (!next) return false;
@@ -299,14 +295,17 @@ export function TrackCard({
       items: [
         { id: 'share', label: 'Share track', hidden: !onShare, onSelect: () => onShare?.(track) },
         {
-          id: 'uncache', label: 'Remove offline cache', hidden: !isCached,
-          onSelect: () => { void removeFromCache(); },
-        },
-        {
-          id: 'cache',
-          label: syncProgress !== null ? `Syncing (${Math.round(syncProgress * 100)}%)` : 'Sync to device',
-          hidden: isCached, busy: syncProgress !== null,
-          onSelect: () => { void syncToDevice(); return 'keep-open' as const; },
+          id: 'offline',
+          label: offlineActionLabel(offlineStatus, offlineProgress),
+          busy: offlineDownloading,
+          onSelect: () => {
+            const startingDownload = !isCached;
+            void toggleOffline();
+            // Stay open while a download starts so the row keeps showing
+            // progress; a removal closes the menu immediately like any other
+            // one-shot action.
+            return startingDownload ? ('keep-open' as const) : undefined;
+          },
         },
       ],
     },
@@ -368,6 +367,13 @@ export function TrackCard({
             : 'border-white/[0.07] hover:border-white/[0.16] hover:bg-white/[0.04]'
       }`}
     >
+      {/* Offline save/remove status, announced on transitions only — see
+          useOfflineTrack / lib/offline/status.ts. Visually hidden: the row's
+          badge and the ⋯ menu label already show this sighted. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {offlineAnnouncement}
+      </span>
+
       {/* Cover/play cell — mirrors the Store list row. In select or store
           order mode this cell becomes the control, keeping actions left. */}
       <div

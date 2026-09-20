@@ -6,6 +6,7 @@ import { fmtDur } from './helpers';
 import type { StoreTrack } from './types';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
+import { SessionFitMarkers } from '@/components/tracks/SessionFitMarkers';
 
 interface Props {
   track: StoreTrack;
@@ -120,6 +121,14 @@ export function BeatListRow({
             </p>
           </div>
         )}
+
+        {/* Only ever renders for the producer's own browser — the session
+            context is a localStorage preference, never a buyer's, so this
+            is invisible on every visit but the producer's own. Renders
+            nothing at all when no session is set. */}
+        <div className="hidden md:flex shrink-0 items-center">
+          <SessionFitMarkers track={track} />
+        </div>
 
         {track.has_wav && (
           <div className="hidden md:flex shrink-0 items-center">
