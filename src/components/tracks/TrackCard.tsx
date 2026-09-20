@@ -10,6 +10,7 @@ import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { setTrackDragData } from '@/lib/dnd';
+import { SessionFitMarkers } from './SessionFitMarkers';
 import { cacheTrack, getCachedMeta, removeCached } from '@/lib/offline/audio-cache';
 import { toast } from '@/hooks/useToast';
 import { gridTemplate, type LibraryColumn, type TrackWithTags } from '@/lib/library/columns';
@@ -451,6 +452,10 @@ export function TrackCard({
           {track.key ? (
             <span className="text-white/55">{track.key}{track.scale === 'minor' ? 'm' : ''}</span>
           ) : null}
+          {/* Whether this fits the session the producer set in the TopBar.
+              Renders nothing at all when no session is set, so the row is
+              unchanged for anyone not using it. */}
+          <SessionFitMarkers track={track} />
           {(track.bpm || track.key) && track.type ? <span aria-hidden className="h-2 w-px bg-white/15" /> : null}
           {track.type ? <span className="truncate">{track.type}</span> : null}
           {!track.bpm && !track.key && !track.type ? <span>—</span> : null}

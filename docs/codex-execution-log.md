@@ -8064,3 +8064,52 @@ migration costs the credits, not the upload.
   `supabase/MIGRATIONS.md`.
 - Nothing reads `track_collaborators` yet — no UI, no API route.
 - `lib/audio/session-match.ts` has no consumer yet.
+
+### Phase 3 — the session context, wired
+
+`lib/audio/session-match.ts` now has consumers.
+
+- **`hooks/useSessionContext.ts`** — Zustand + persist, `antigravity-session-context`.
+  localStorage rather than `creator_profiles`, for the reason
+  `lib/notifications/desktop.ts` gives for its own preference: this describes
+  the machine the producer is sitting at, and the session open on the studio
+  Mac is not the one open on the laptop.
+  Deliberately **not** a filter. Setting a tempo marks what fits and leaves the
+  catalogue intact; `matchTolerance` only widens what counts. A session that
+  silently hid two thirds of the library would be abandoned in a day.
+  `clear()` resets tempo and key but keeps tolerance and `previewInSession`:
+  "stop matching this session" is not "forget how I like matching to behave".
+- **`components/nav/SessionContextControl.tsx`** — the TopBar pill. That is the
+  only always-visible chrome available: a second TopBar row is not, since the
+  hub dropdowns replaced one. Tap tempo (`lib/audio/tap-tempo.ts`, pure and
+  tested — span over interval count, not a running mean of gaps, so one late
+  tap barely moves it), ½ / 2×, a piano-octave key picker, Make relative,
+  tolerance, and the preview toggle. The pill narrows to its icon on a phone
+  rather than disappearing.
+- **`components/tracks/SessionFitMarkers.tsx`** — per-row ✓ / ⇄ / ½× / 2×.
+  Renders nothing at all when no session is set, so the row is untouched for
+  anyone not using it. Every marker carries a label; none depends on colour.
+- **Player** — `SimpleAudioEngine` applies `previewAdjustment` as
+  `playbackRate` with `preservesPitch`, in its own effect AFTER the source
+  effect, because loading a source resets both to their defaults; setting them
+  beside the `src` assignment silently does nothing.
+  `SessionTempoBadge` says so whenever the preview is not at the track's own
+  tempo — otherwise a 92 BPM beat auditioned in a 140 BPM session reads as a
+  140 BPM beat, and the catalogue the producer thinks they have is not the one
+  they have.
+
+Two defects the tests caught, both invisible to `tsc` and a green build:
+- The pill's accessible name was the session value alone ("140 BPM · F minor"),
+  which says what the value is and never what the control is. Named explicitly.
+- The tempo field mirrored the store into state and corrected it in an effect —
+  the cascading-render pattern React's lint rule exists to catch, and a lint
+  **error**, which blocks CI. It keeps a draft only while being edited; the
+  rest of the time the store is the value, so a tap or ½ / 2× needs no syncing.
+
+### Still open after Phase 3
+- Migration 115 unapplied (with 112/113). Nothing reads `track_collaborators`.
+- No keyboard auditioning: ↑/↓ are already bound globally to volume
+  (`usePlayerKeyboardShortcuts.ts:49`), so it needs arbitration between the two
+  owners rather than a second window listener.
+- `SessionFitMarkers` is on the library row only — not the store's
+  `BeatListRow`, and not `TrackGridCard`.

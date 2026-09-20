@@ -25,6 +25,7 @@ import { useNextTrackPreload } from '@/hooks/useNextTrackPreload';
 import { useAmbientCoverColor } from '@/hooks/useAmbientCoverColor';
 import { usePlayerKeyboardShortcuts } from '@/hooks/usePlayerKeyboardShortcuts';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { SessionTempoBadge } from './SessionTempoBadge';
 
 const subscribeToClientSnapshot = () => () => undefined;
 const getClientSnapshot = () => true;
@@ -458,6 +459,9 @@ export function PlayerBar() {
                 {currentTrack.bpm && (
                   <span className="text-[10px] font-mono text-white/60 tabular-nums">· {currentTrack.bpm} BPM</span>
                 )}
+                {/* Only when the preview is being stretched — otherwise the
+                    tempo shown above is the tempo you are hearing. */}
+                <SessionTempoBadge bpm={currentTrack.bpm} />
                 {currentTrack.key && (
                   <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded text-[#c8a47a] bg-[#1f1a10]/70 border border-[#3d3020]/40">
                     {currentTrack.key}{currentTrack.scale === 'minor' ? 'm' : ''}

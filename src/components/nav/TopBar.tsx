@@ -20,6 +20,7 @@ import {
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { NAV_GROUPS, ALL_GROUPS, activeGroupFor, isItemActive, type NavGroup } from './model';
 import { Popover } from '@/components/ui/Popover';
+import { SessionContextControl } from './SessionContextControl';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
 import { useRealtimeTable } from '@/hooks/useRealtimeTable';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
@@ -246,6 +247,13 @@ export function TopBar() {
             <span className="flex-1 text-left">Search</span>
             <kbd className="text-[9px] font-mono border border-white/10 rounded px-1 py-0.5">⌘K</kbd>
           </button>
+
+          {/* Session tempo + key. The only always-visible chrome that can host
+              it: a second TopBar row is not available (the hub dropdowns
+              replaced one), so it is a pill that states the session and opens
+              a popover to change it. The pill narrows to its icon on a phone
+              rather than disappearing — mobile mirrors web. */}
+          <SessionContextControl />
 
           {/* Search icon — mobile (opens ⌘K palette) */}
           <button
