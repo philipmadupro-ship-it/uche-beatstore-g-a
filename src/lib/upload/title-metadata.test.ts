@@ -120,3 +120,120 @@ describe('the Fm shorthand is case-sensitive on purpose', () => {
     expect(parse('Dm7 loop.wav').key).toBeNull();
   });
 });
+
+describe('collaborators', () => {
+  const names = (filename: string) =>
+    parseTitleMetadata(filename).collaborators.map((c) => `${c.role}:${c.name}`);
+
+  it('reads a bracketed producer credit and strips it from the title', () => {
+    const meta = parseTitleMetadata('Night Shift (prod. by Metro Boomin).wav');
+    expect(meta.collaborators).toEqual([{ name: 'Metro Boomin', role: 'producer' }]);
+    expect(meta.title).toBe('Night Shift');
+    expect(meta.matched).toContain('collaborators');
+  });
+
+  it('accepts the common spellings of a production credit', () => {
+    expect(names('A (prod. by X).wav')).toEqual(['producer:X']);
+    expect(names('A (prod by X).wav')).toEqual(['producer:X']);
+    expect(names('A (prod. X).wav')).toEqual(['producer:X']);
+    expect(names('A (produced by X).wav')).toEqual(['producer:X']);
+    expect(names('A [PROD. BY X].wav')).toEqual(['producer:X']);
+  });
+
+  it('accepts the common spellings of a feature credit', () => {
+    expect(names('A (feat. X).wav')).toEqual(['feature:X']);
+    expect(names('A (ft. X).wav')).toEqual(['feature:X']);
+    expect(names('A (ft X).wav')).toEqual(['feature:X']);
+    expect(names('A (featuring X).wav')).toEqual(['feature:X']);
+  });
+
+  it('reads w/ and with as a plain collaboration', () => {
+    expect(names('Cold Front w/ Jules.wav')).toEqual(['collaborator:Jules']);
+    expect(names('Cold Front with Jules.wav')).toEqual(['collaborator:Jules']);
+  });
+
+  it('splits several names inside one credit', () => {
+    expect(names('A (prod. by X & Y).wav')).toEqual(['producer:X', 'producer:Y']);
+    expect(names('A (feat. X, Y and Z).wav')).toEqual(['feature:X', 'feature:Y', 'feature:Z']);
+    expect(names('A (prod. by X x Y).wav')).toEqual(['producer:X', 'producer:Y']);
+  });
+
+  it('reads more than one credit group, keeping each name its own role', () => {
+    const meta = parseTitleMetadata('Night Shift (feat. Ayo) [prod. by Metro].wav');
+    expect(meta.collaborators).toEqual([
+      { name: 'Ayo', role: 'feature' },
+      { name: 'Metro', role: 'producer' },
+    ]);
+    expect(meta.title).toBe('Night Shift');
+  });
+
+  it('reads credits with no brackets at all', () => {
+    const meta = parseTitleMetadata('Night Shift prod. by Metro feat. Ayo.wav');
+    expect(meta.collaborators).toEqual([
+      { name: 'Metro', role: 'producer' },
+      { name: 'Ayo', role: 'feature' },
+    ]);
+    expect(meta.title).toBe('Night Shift');
+  });
+
+  it('does NOT read the type-beat x convention as a collaboration', () => {
+    // `Cardo x Metro type beat` names who it should SOUND like. Crediting
+    // them would put strangers on the producer's own catalogue.
+    const meta = parseTitleMetadata('Cardo x Metro Boomin type beat 140 Fm.wav');
+    expect(meta.collaborators).toEqual([]);
+    expect(meta.title).toBe('Cardo x Metro Boomin type beat');
+    expect(meta.bpm).toBe(140);
+    expect(meta.key).toBe('F');
+  });
+
+  it('keeps a name from being misread as musical metadata', () => {
+    // Without credits being taken out first, `Gm` here is a key and `140` a tempo.
+    const meta = parseTitleMetadata('Drift (prod. by Gm) 92.wav');
+    expect(meta.collaborators).toEqual([{ name: 'Gm', role: 'producer' }]);
+    expect(meta.key).toBe(null);
+    expect(meta.bpm).toBe(92);
+  });
+
+  it('coexists with BPM and key in any order', () => {
+    const meta = parseTitleMetadata('COLD FRONT (Bb maj) 92 BPM (feat. Ayo).wav');
+    expect(meta.bpm).toBe(92);
+    expect(meta.key).toBe('Bb');
+    expect(meta.scale).toBe('major');
+    expect(meta.collaborators).toEqual([{ name: 'Ayo', role: 'feature' }]);
+    expect(meta.title).toBe('COLD FRONT');
+  });
+
+  it('de-duplicates a name credited twice in the same role', () => {
+    expect(names('A (prod. by X) (prod by X).wav')).toEqual(['producer:X']);
+  });
+
+  it('keeps the same person under two different roles', () => {
+    // Being both the producer and a feature is a real credit, not a duplicate.
+    expect(names('A (prod. by X) (feat. X).wav')).toEqual(['producer:X', 'feature:X']);
+  });
+
+  it('is empty when nothing is credited', () => {
+    const meta = parseTitleMetadata('Night Shift 140 Fm.wav');
+    expect(meta.collaborators).toEqual([]);
+    expect(meta.matched).not.toContain('collaborators');
+  });
+
+  it('ignores a marker with no name after it', () => {
+    expect(names('Night Shift (prod.).wav')).toEqual([]);
+    expect(names('Night Shift feat..wav')).toEqual([]);
+  });
+
+  it('refuses a name long enough to be a sentence', () => {
+    expect(names(`A (feat. ${'n'.repeat(80)}).wav`)).toEqual([]);
+  });
+
+  it('never leaves the title empty', () => {
+    // The whole name was one credit; falling back beats naming a track "".
+    expect(parseTitleMetadata('(prod. by Metro).wav').title).not.toBe('');
+  });
+
+  it('describes what it found, credits included', () => {
+    const meta = parseTitleMetadata('Night Shift 140 Fm (feat. Ayo).wav');
+    expect(describeTitleMetadata(meta)).toBe('140 BPM · F minor · with Ayo from the filename');
+  });
+});

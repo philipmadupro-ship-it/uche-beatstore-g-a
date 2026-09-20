@@ -1,5 +1,5 @@
 /**
- * Read BPM and key out of a beat's filename.
+ * Read BPM, key and credited collaborators out of a beat's filename.
  *
  * Producers name files the way they think: `Night Shift 140 Fm.wav`,
  * `drill_type_beat_142bpm_Gmin.mp3`, `COLD FRONT (Bb maj) 92 BPM.wav`. That is
@@ -18,17 +18,30 @@
  *     longer token.
  *   - A key needs a real accidental or a major/minor suffix. A lone `F` or a
  *     word like `Am` is left alone.
+ *   - A collaborator needs an explicit credit marker (`prod. by`, `feat.`,
+ *     `w/`). See `COLLAB_MARKERS` for why the `A x B` convention is not one.
  */
 
+/** How someone named in a filename was credited. */
+export type CollaboratorRole = 'producer' | 'feature' | 'collaborator';
+
+export interface Collaborator {
+  /** The name as written, tidied — `Metro Boomin`, not `metro boomin`. */
+  name: string;
+  role: CollaboratorRole;
+}
+
 export interface TitleMetadata {
-  /** Filename with extension, separators and any matched BPM/key removed. */
+  /** Filename with extension, separators and any matched credits/BPM/key removed. */
   title: string;
   bpm: number | null;
   /** Tonic, normalised to sharps-or-flats as written, e.g. `F#`, `Bb`, `C`. */
   key: string | null;
   scale: 'major' | 'minor' | null;
+  /** Everyone credited in the name, in the order they appeared. */
+  collaborators: Collaborator[];
   /** Which fields came from the name. Useful for telling the producer. */
-  matched: Array<'bpm' | 'key'>;
+  matched: Array<'bpm' | 'key' | 'collaborators'>;
 }
 
 /** Tempos outside this stay unmatched when the number is bare. */
@@ -73,6 +86,115 @@ function normaliseScale(raw: string | undefined): 'major' | 'minor' | null {
   return /^m(in(or)?)?$/i.test(raw.trim()) ? 'minor' : 'major';
 }
 
+/**
+ * The credit markers that introduce a name, and the role each implies.
+ *
+ * Every one of these is an EXPLICIT credit. The `A x B` convention common in
+ * beat filenames is deliberately absent: in this corpus `Cardo x Metro type
+ * beat` names the producers the beat is meant to sound LIKE, not the people
+ * who made it. Reading those as collaborators would credit strangers on the
+ * producer's own catalogue, which is worse than reading nothing — so `x` is
+ * only ever treated as a separator BETWEEN names already inside a credit
+ * group (`prod. by A x B`), never as a marker that starts one.
+ */
+const COLLAB_MARKERS: Array<{ re: string; role: CollaboratorRole }> = [
+  { re: 'prod(?:uced)?\\.?\\s*(?:by)?', role: 'producer' },
+  { re: 'feat(?:uring)?\\.?', role: 'feature' },
+  { re: 'ft\\.?', role: 'feature' },
+  { re: 'w\\/', role: 'collaborator' },
+  { re: 'with', role: 'collaborator' },
+];
+
+const MARKER_ALTERNATION = COLLAB_MARKERS.map((m) => m.re).join('|');
+
+/** Which role a matched marker belongs to. */
+function roleForMarker(marker: string): CollaboratorRole {
+  const cleaned = marker.trim().toLowerCase();
+  for (const { re, role } of COLLAB_MARKERS) {
+    if (new RegExp(`^(?:${re})$`, 'i').test(cleaned)) return role;
+  }
+  return 'collaborator';
+}
+
+/** A credit inside brackets: `(prod. by X)`, `[feat. Y & Z]`. */
+const BRACKETED_CREDIT = new RegExp(
+  `[([{]\\s*(${MARKER_ALTERNATION})\\s+([^)\\]}]+)[)\\]}]`,
+  'gi',
+);
+
+/**
+ * A credit with no brackets, running to the end of the name or to the next
+ * bracket or credit marker — `Night Shift prod. by X feat. Y`.
+ */
+const BARE_CREDIT = new RegExp(
+  `\\b(${MARKER_ALTERNATION})\\s+([^([{]*?)` +
+    `(?=$|[([{]|\\s+(?:${MARKER_ALTERNATION})\\s)`,
+  'gi',
+);
+
+/** Longer than this and it is a sentence, not a name. */
+const MAX_NAME_LENGTH = 60;
+
+/**
+ * Split one credit group into names. `&`, `,`, `x` and `and` all separate
+ * collaborators inside a group that a marker has already opened.
+ *
+ * The word separators need whitespace on both sides; the punctuation ones do
+ * not. Without that, a name that IS one of the words — an artist called `X`,
+ * or `Alex` under a word-boundary match — gets split into nothing and the
+ * credit silently disappears.
+ */
+function splitNames(group: string): string[] {
+  return group
+    .split(/\s*(?:&|\+|,)\s*|\s+(?:x|and)\s+/i)
+    .map((n) =>
+      n
+        .replace(/[\s._\-–—|]+$/g, '')
+        .replace(/^[\s._\-–—|]+/g, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim(),
+    )
+    .filter((n) => n !== '' && n.length <= MAX_NAME_LENGTH);
+}
+
+/**
+ * Pull every credit out of the name, returning the names found and the text
+ * with those credits removed.
+ *
+ * Bracketed credits are taken first: their closing bracket says exactly where
+ * the credit ends, so they cannot swallow the rest of the name the way an
+ * unbracketed one has to be guarded against.
+ */
+function extractCollaborators(input: string): {
+  collaborators: Collaborator[];
+  rest: string;
+} {
+  const collaborators: Collaborator[] = [];
+  const seen = new Set<string>();
+
+  const take = (marker: string, group: string) => {
+    const role = roleForMarker(marker);
+    for (const name of splitNames(group)) {
+      const dedupeKey = `${role}\u0000${name.toLowerCase()}`;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      collaborators.push({ name, role });
+    }
+  };
+
+  let rest = input.replace(BRACKETED_CREDIT, (_m, marker: string, group: string) => {
+    take(marker, group);
+    return ' ';
+  });
+
+  rest = rest.replace(BARE_CREDIT, (_m, marker: string, group: string) => {
+    take(marker, group);
+    return ' ';
+  });
+
+  return { collaborators, rest };
+}
+
 /** Strip the extension and turn separators into spaces. */
 function cleanBase(filename: string): string {
   return filename
@@ -101,6 +223,16 @@ export function parseTitleMetadata(filename: string): TitleMetadata {
   const base = cleanBase(filename);
   let working = base;
   const matched: TitleMetadata['matched'] = [];
+
+  // Credits come out first. A name can contain something that would otherwise
+  // read as musical metadata — `feat. Gm`, `prod. by 140` — and removing the
+  // credit before the BPM and key passes run means it never can.
+  const credits = extractCollaborators(working);
+  const collaborators = credits.collaborators;
+  if (collaborators.length > 0) {
+    working = credits.rest;
+    matched.push('collaborators');
+  }
 
   let bpm: number | null = null;
   const markedBpm = working.match(MARKED_BPM);
@@ -143,14 +275,17 @@ export function parseTitleMetadata(filename: string): TitleMetadata {
   }
 
   const title = tidy(working.replace(/[\-–—]+/g, ' ')) || tidy(base.replace(/[\-–—]+/g, ' ')) || 'Untagged Track';
-  return { title, bpm, key, scale, matched };
+  return { title, bpm, key, scale, collaborators, matched };
 }
 
-/** One-line summary for the UI: "BPM 140 · F minor from the filename". */
+/** One-line summary for the UI: "140 BPM · F minor · with Metro from the filename". */
 export function describeTitleMetadata(meta: TitleMetadata): string | null {
   if (!meta.matched.length) return null;
   const parts: string[] = [];
   if (meta.bpm != null) parts.push(`${meta.bpm} BPM`);
   if (meta.key) parts.push(`${meta.key}${meta.scale ? ` ${meta.scale}` : ''}`);
+  if (meta.collaborators.length > 0) {
+    parts.push(`with ${meta.collaborators.map((c) => c.name).join(', ')}`);
+  }
   return parts.length ? `${parts.join(' · ')} from the filename` : null;
 }

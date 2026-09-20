@@ -223,6 +223,38 @@ describe('filterAndSortTracks', () => {
     expect(filterAndSortTracks(tracks, { ...DEFAULT_FILTERS, searchQuery: 'lo-fi' }).map((t) => t.id)).toEqual(['tag']);
   });
 
+  it('matches a key filter across enharmonic spellings', () => {
+    // The column holds whatever each analysis source spelled it as, and the
+    // facet sidebar offers both, so either spelling must find both tracks.
+    const tracks = [
+      makeTrack({ id: 'flat', key: 'Bb', scale: 'minor' }),
+      makeTrack({ id: 'sharp', key: 'A#', scale: 'minor' }),
+      makeTrack({ id: 'other', key: 'C', scale: 'minor' }),
+    ];
+    const sharp = filterAndSortTracks(tracks, { ...DEFAULT_FILTERS, keyFilter: 'A#' });
+    const flat = filterAndSortTracks(tracks, { ...DEFAULT_FILTERS, keyFilter: 'Bb' });
+    expect(sharp.map((t) => t.id).sort()).toEqual(['flat', 'sharp']);
+    expect(flat.map((t) => t.id).sort()).toEqual(['flat', 'sharp']);
+  });
+
+  it('reads a scale written into the key itself', () => {
+    const tracks = [
+      makeTrack({ id: 'glued', key: 'F#m', scale: null }),
+      makeTrack({ id: 'major', key: 'F#', scale: 'major' }),
+    ];
+    const minor = filterAndSortTracks(tracks, { ...DEFAULT_FILTERS, scaleFilter: 'minor' });
+    expect(minor.map((t) => t.id)).toEqual(['glued']);
+  });
+
+  it('still selects an unreadable stored key by its own facet value', () => {
+    const tracks = [
+      makeTrack({ id: 'odd', key: 'unknown', scale: null }),
+      makeTrack({ id: 'normal', key: 'C', scale: 'minor' }),
+    ];
+    const odd = filterAndSortTracks(tracks, { ...DEFAULT_FILTERS, keyFilter: 'unknown' });
+    expect(odd.map((t) => t.id)).toEqual(['odd']);
+  });
+
   it('sorts newest by created_at descending', () => {
     const tracks = [
       makeTrack({ id: 'old', created_at: '2023-01-01T00:00:00Z' }),

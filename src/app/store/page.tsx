@@ -310,6 +310,13 @@ function StorePage() {
   const [priceMax, setPriceMax] = useState(99999);
   const [sortBy, setSortBy] = useState<'newest' | 'popular' | 'bpm-asc' | 'bpm-desc' | 'price-asc' | 'price-desc' | 'title'>('newest');
   const wishlist = useWishlist();
+  // `useWishlist` builds a fresh Set every render, so the ids are flattened to
+  // a sorted, stable array before anything depends on their identity.
+  const wishlistKey = [...wishlist.ids].sort().join(',');
+  const wishlistIds = useMemo(
+    () => (wishlistKey === '' ? [] : wishlistKey.split(',')),
+    [wishlistKey],
+  );
 
   // Debounced search
   const [search, setSearch] = useState('');
@@ -357,18 +364,44 @@ function StorePage() {
     if (freeOnly) params.set('free', '1');
     if (newThisWeek) params.set('new', '1');
     if (sortBy !== 'newest') params.set('sort', sortBy);
+
+    // BPM, price and favourites now go to the server too. They used to be
+    // applied only below, over `tracks` — the pages fetched so far — so on a
+    // catalogue larger than one page they searched a slice and presented the
+    // result as the whole thing. The client pass is kept: it is the same
+    // predicate, so it changes nothing, and it keeps working if a deploy ever
+    // serves an older API that ignores these parameters.
+    //
+    // The sentinels (0 / 999 / 99999) mean "the user has not touched this",
+    // which is exactly when the filter should not be sent. Resolving them
+    // against the catalogue's real range happens further down, and depends on
+    // the very fetch this query drives.
+    if (bpmMin !== 0) params.set('bpmMin', String(bpmMin));
+    if (bpmMax !== 999) params.set('bpmMax', String(bpmMax));
+    if (priceMin !== 0) params.set('priceMin', String(priceMin));
+    if (priceMax !== 99999) params.set('priceMax', String(priceMax));
+    // An empty wishlist still sends `ids=`, because "only my favourites" with
+    // none saved matches nothing — not everything.
+    if (favoritesOnly) params.set('ids', wishlistIds.join(','));
+
     return params.toString();
   }, [
+    bpmMax,
+    bpmMin,
     debouncedSearch,
     durationBucket,
+    favoritesOnly,
     freeOnly,
     genreFilter,
     keyFilter,
     moodFilter,
     newThisWeek,
+    priceMax,
+    priceMin,
     scaleFilter,
     sortBy,
     typeFilter,
+    wishlistIds,
   ]);
 
   const storeQuery = useQuery({

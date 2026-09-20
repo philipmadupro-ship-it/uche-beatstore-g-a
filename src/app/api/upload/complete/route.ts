@@ -11,6 +11,7 @@ import { isSupabaseConfigured, insert, update, getAll } from '@/lib/local-store'
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { nextVersionLabel } from '@/lib/naming';
 import { parseTitleMetadata } from '@/lib/upload/title-metadata';
+import { persistTrackCollaborators } from '@/lib/upload/collaborators';
 import { errorMessage } from '@/lib/errors';
 import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
 import { enqueueUploadProcessingJob, processUploadProcessingJobById } from '@/lib/upload/processing';
@@ -157,6 +158,12 @@ export async function POST(req: NextRequest) {
 
         const trackId = track && typeof track.id === 'string' ? track.id : session.replaceTrackId;
         if (!trackId) throw new Error('Upload saved without a track id');
+
+        // Credits the producer wrote into the filename. Best-effort: see
+        // `persistTrackCollaborators` for why a failure here never fails the
+        // upload.
+        await persistTrackCollaborators(supabase, trackId, titleMeta.collaborators);
+
         const jobId = await enqueueUploadProcessingJob({
           trackId,
           userId,
