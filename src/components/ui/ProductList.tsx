@@ -14,7 +14,7 @@ interface ProductListProps {
 
 export function ProductList({ children, className }: ProductListProps) {
   return (
-    <div className={cn('relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#14110d]/80 shadow-[0_18px_52px_rgba(0,0,0,0.42)]', className)}>
+    <div className={cn('relative overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#14110d]/80 shadow-[0_18px_52px_rgba(0,0,0,0.42)]', className)}>
       {children}
     </div>
   );

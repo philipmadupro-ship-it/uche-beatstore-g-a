@@ -74,7 +74,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       // `animate-in slide-in-from-right-4 fade-in` used to sit here and did
       // nothing at all: this project has no tailwindcss-animate plugin, so
       // those utilities compile away. The motion is real CSS now.
-      className={`toast-surface toast-enter pointer-events-auto w-full max-w-[420px] border ${accent} rounded-[22px]`}
+      className={`toast-surface toast-enter pointer-events-auto w-full max-w-[420px] border ${accent} rounded-[20px]`}
     >
       <div className="flex items-start gap-3 p-4">
         <Icon size={16} className={`shrink-0 mt-0.5 ${accent.split(' ').pop()}`} />
@@ -98,7 +98,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
                 <button
                   key={i}
                   onClick={a.onClick}
-                  className={`text-[10px] font-medium uppercase tracking-wider px-3 py-1.5 rounded-md transition-colors ${
+                  className={`text-[10px] font-medium uppercase tracking-wider px-3 py-1.5 rounded-lg transition-colors ${
                     a.variant === 'danger'
                       ? 'bg-red-500 text-white hover:bg-red-600'
                       : a.variant === 'ghost'

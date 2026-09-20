@@ -11,7 +11,7 @@ import type { ArtworkKind } from '@/lib/artwork/gradient';
 
 /**
  * Shared cover-art grid card for Projects + Playlists (and future
- * media collections). One visual language: bordered rounded-2xl cover,
+ * media collections). One visual language: bordered 12px cover,
  * bottom scrim, title-first hierarchy, single quiet metadata line.
  *
  * Slots over flags: pin / options / play / badge render whatever the
@@ -81,7 +81,7 @@ export function MediaCard({
   const coverBlock = (
     <div
       className={cn(
-        'relative mb-2.5 aspect-square overflow-hidden rounded-xl border bg-white/[0.02] transition-all duration-200 group-hover:-translate-y-0.5 sm:rounded-2xl',
+        'relative mb-2.5 aspect-square overflow-hidden rounded-xl border bg-white/[0.02] transition-all duration-200 group-hover:-translate-y-0.5',
         selected ? 'border-white/40' : 'border-white/10 group-hover:border-white/20',
       )}
     >
@@ -133,7 +133,7 @@ export function MediaCard({
       {selectMode && (
         <div
           className={cn(
-            'absolute right-2 top-2 grid size-6 place-items-center rounded-md border backdrop-blur-md',
+            'absolute right-2 top-2 grid size-6 place-items-center rounded-lg border backdrop-blur-md',
             selected ? 'border-white/30 bg-white' : 'border-white/20 bg-black/50',
           )}
         >

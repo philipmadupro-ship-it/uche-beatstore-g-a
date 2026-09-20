@@ -84,7 +84,7 @@ export function CoverEditor({
   return (
     <div
       className={cn(
-        'group relative aspect-square w-full cursor-pointer overflow-hidden rounded-2xl border border-white/[0.05] bg-white/[0.04]',
+        'group relative aspect-square w-full cursor-pointer overflow-hidden rounded-xl border border-white/[0.05] bg-white/[0.04]',
         className,
       )}
       onClick={() => fileRef.current?.click()}
