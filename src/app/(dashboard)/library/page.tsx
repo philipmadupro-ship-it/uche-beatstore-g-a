@@ -1150,11 +1150,11 @@ export default function LibraryPage() {
           <div className="hidden sm:flex items-center bg-white/[0.04] border border-white/[0.06] rounded-full p-0.5">
             <button
               onClick={() => setBrowseMode('sections')}
-              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${effectiveBrowseMode === 'sections' ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}
+              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${effectiveBrowseMode === 'sections' ? 'bg-white/[0.14] text-white' : 'text-white/60 hover:text-white'}`}
             >Browse</button>
             <button
               onClick={() => setBrowseMode('all')}
-              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${effectiveBrowseMode === 'all' ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}
+              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${effectiveBrowseMode === 'all' ? 'bg-white/[0.14] text-white' : 'text-white/60 hover:text-white'}`}
             >All tracks</button>
           </div>
         </div>
@@ -1225,7 +1225,7 @@ export default function LibraryPage() {
               <SlidersHorizontal size={11} />
               Filters
               {hasActiveFilters(filters) && (
-                <span className="w-4 h-4 rounded-full bg-white text-black text-[9px] font-bold flex items-center justify-center leading-none">
+                <span className="w-4 h-4 rounded-full border border-white/20 text-white/70 text-[9px] font-bold flex items-center justify-center leading-none">
                   {activeFilterCount(filters)}
                 </span>
               )}
@@ -1253,7 +1253,7 @@ export default function LibraryPage() {
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-1.5 rounded-full transition-colors ${
-                  effectiveViewMode === 'list' ? 'bg-white text-black' : 'text-white/60 hover:text-white/80'
+                  effectiveViewMode === 'list' ? 'bg-white/[0.14] text-white' : 'text-white/60 hover:text-white/80'
                 }`}
                 title="List view"
               >
@@ -1262,7 +1262,7 @@ export default function LibraryPage() {
               <button
                 onClick={() => setViewMode('grid')}
                 className={`p-1.5 rounded-full transition-colors ${
-                  effectiveViewMode === 'grid' ? 'bg-white text-black' : 'text-white/60 hover:text-white/80'
+                  effectiveViewMode === 'grid' ? 'bg-white/[0.14] text-white' : 'text-white/60 hover:text-white/80'
                 }`}
                 title="Grid view"
               >
@@ -1302,7 +1302,7 @@ export default function LibraryPage() {
             <span className="text-[9px] font-mono uppercase tracking-wider text-white/40 shrink-0">Smart playlists:</span>
             {smartPlaylists.map((sp) => (
               <span key={sp.id} className={`group inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-[10px] font-medium border transition-all ${
-                activeSmartId === sp.id ? 'bg-white text-black border-white' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'
+                activeSmartId === sp.id ? 'bg-white/[0.14] text-white border-white/30' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'
               }`}>
                 <button onClick={() => applySmartPlaylist(sp)} className="flex items-center gap-1.5">
                   <Sparkles size={9} />{sp.name}
@@ -1509,7 +1509,7 @@ export default function LibraryPage() {
                     onClick={() => setCurrentPage(page)}
                     className={`w-7 h-7 rounded-full text-[11px] font-mono tabular-nums transition-colors ${
                       page === currentPage
-                        ? 'bg-white text-black font-bold'
+                        ? 'bg-white/[0.14] text-white font-bold'
                         : 'text-white/60 hover:text-white hover:bg-white/[0.06]'
                     }`}
                   >{page + 1}</button>

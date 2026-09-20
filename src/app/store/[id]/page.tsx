@@ -131,7 +131,7 @@ function mapToUiTier(t: ApiLicenseTier): LicenseTier {
       ? 'border-white/20 bg-gradient-to-b from-white/10 to-[#0D0D0A]'
       : 'border-white/20 hover:border-white/20',
     buttonClass: t.is_exclusive
-      ? 'bg-white hover:bg-white text-black'
+      ? 'bg-white hover:bg-white/90 text-black'
       : 'bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08]',
   };
 }

@@ -350,19 +350,19 @@ export default function SalesPage() {
             type="button"
             onClick={() => setView('sales')}
             className={`px-4 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider border transition-colors ${
-              view === 'sales' ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+              view === 'sales' ? 'bg-white/[0.14] text-white border-white/30' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
             }`}
           >Sales</button>
           <button
             type="button"
             onClick={() => setView('offers')}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider border transition-colors ${
-              view === 'offers' ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+              view === 'offers' ? 'bg-white/[0.14] text-white border-white/30' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
             }`}
           >
             Offers
             {pendingOffers > 0 && (
-              <span className={`w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center leading-none ${view === 'offers' ? 'bg-black text-white' : 'bg-white text-black'}`}>{pendingOffers}</span>
+              <span className={`w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center leading-none ${view === 'offers' ? 'border border-white/30 text-white' : 'border border-white/20 text-white/70'}`}>{pendingOffers}</span>
             )}
           </button>
         </div>
@@ -601,7 +601,7 @@ function OfferRow({ offer, onStatusChange }: { offer: Offer; onStatusChange: (id
                   className="w-24 bg-[#090907] border border-white/10 rounded-full pl-6 pr-2 py-1.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 tabular-nums" />
               </div>
               <button onClick={() => respond('counter')} disabled={!!busy}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white text-black hover:bg-white transition-colors disabled:opacity-40">
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-40">
                 {busy === 'counter' ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}Send
               </button>
               <button onClick={() => { setCounterOpen(false); setCounterPrice(''); }} className="text-white/40 hover:text-white"><X size={13} /></button>

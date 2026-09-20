@@ -145,7 +145,7 @@ export function FeaturedPlaylistsStrip({
                 {onBuyProject && pl.price_usd != null && Number(pl.price_usd) > 0 && (
                   <button
                     onClick={() => onBuyProject(pl)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-black text-[9px] font-mono uppercase tracking-widest hover:bg-white transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-black text-[9px] font-mono uppercase tracking-widest hover:bg-white/90 transition-colors"
                   >
                     <ShoppingBag size={11} />
                     Buy project — ${pl.price_usd}
@@ -163,7 +163,7 @@ export function FeaturedPlaylistsStrip({
                 {onAddAllToCart && pl.tracks.some((t) => priceFor(t, 'exclusive') != null) && (
                   <button
                     onClick={() => onAddAllToCart(pl.tracks, 'exclusive')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-black text-[9px] font-mono uppercase tracking-widest hover:bg-white transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white text-black text-[9px] font-mono uppercase tracking-widest hover:bg-white/90 transition-colors"
                   >
                     <ShoppingBag size={11} />
                     Add All — Exclusive
@@ -214,7 +214,7 @@ export function FeaturedPlaylistsStrip({
                           )}
                           {ep != null && (
                             <button onClick={() => onAddToCart(t, 'exclusive')}
-                              className="px-2 py-1 rounded bg-white text-black text-[10px] font-bold hover:bg-white transition-colors">
+                              className="px-2 py-1 rounded bg-white text-black text-[10px] font-bold hover:bg-white/90 transition-colors">
                               ${ep}
                             </button>
                           )}

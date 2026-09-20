@@ -132,7 +132,7 @@ export default function OrdersPage() {
               <button
                 type="submit"
                 disabled={!emailValid || submitting}
-                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 text-[11px] font-bold uppercase tracking-wider text-black transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 text-[11px] font-bold uppercase tracking-wider text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
                 {submitting ? 'Sending...' : 'Send secure link'}

@@ -114,7 +114,7 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
           <p className="text-[11px] text-white/80 mb-5">{error || 'Unknown error.'}</p>
           <Link
             href="/store/account"
-            className="inline-block text-[10px] font-mono uppercase tracking-wider px-4 py-2 rounded-md bg-white text-black hover:bg-white transition-colors"
+            className="inline-block text-[10px] font-mono uppercase tracking-wider px-4 py-2 rounded-md bg-white text-black hover:bg-white/90 transition-colors"
           >
             Request a new link
           </Link>
@@ -170,7 +170,7 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
             </p>
             <Link
               href="/store"
-              className="inline-block text-[10px] font-mono uppercase tracking-wider px-4 py-2 rounded-md bg-white text-black hover:bg-white transition-colors"
+              className="inline-block text-[10px] font-mono uppercase tracking-wider px-4 py-2 rounded-md bg-white text-black hover:bg-white/90 transition-colors"
             >
               Browse beats
             </Link>
@@ -203,7 +203,7 @@ export default function AccountPage({ params }: { params: Promise<{ token: strin
                       {b.download_url && (
                         <a
                           href={b.download_url}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white text-black hover:bg-white transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white text-black hover:bg-white/90 transition-colors"
                         >
                           <Download size={11} />
                           Open
@@ -431,7 +431,7 @@ function BuyerLibrary({ token }: { token: string }) {
             type="button"
             onClick={() => createMut.mutate(newPlaylistName.trim())}
             disabled={!newPlaylistName.trim() || createMut.isPending}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-white text-black text-[11px] font-bold uppercase tracking-wider hover:bg-white transition-colors disabled:opacity-40"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-white text-black text-[11px] font-bold uppercase tracking-wider hover:bg-white/90 transition-colors disabled:opacity-40"
           >
             {createMut.isPending ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
             Create

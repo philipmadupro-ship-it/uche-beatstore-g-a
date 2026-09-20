@@ -179,7 +179,7 @@ export default function ProfilePage() {
                 className={`flex h-9 items-center gap-2 rounded-full px-4 text-[11px] font-medium transition-all ${
                   saved
                     ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                    : 'bg-white text-black hover:bg-white disabled:opacity-50'
+                    : 'bg-white text-black hover:bg-white/90 disabled:opacity-50'
                 }`}
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : saved ? <CheckCircle2 size={13} /> : <Save size={13} />}

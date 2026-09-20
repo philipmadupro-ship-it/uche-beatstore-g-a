@@ -206,7 +206,7 @@ export default function CalendarPage() {
                         eye to "now" without shouting. */}
                     <div className="flex items-center gap-1.5">
                       {isToday ? (
-                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white text-black text-[10px] font-bold tabular-nums">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-white/20 text-white/70 text-[10px] font-bold tabular-nums">
                           {day.date}
                         </span>
                       ) : (

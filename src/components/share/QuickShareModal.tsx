@@ -275,7 +275,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
             <div className="flex items-center gap-2">
               <button
                 onClick={doCopy}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-white transition-all active:scale-[0.98]"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-white/90 transition-all active:scale-[0.98]"
               >
                 {copied ? <Check size={13} /> : <Copy size={13} />}
                 {copied ? 'Copied' : 'Copy link'}
@@ -650,7 +650,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
               <button
                 onClick={generateLink}
                 disabled={creating || !canSubmit}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black hover:bg-white disabled:opacity-40 text-[12px] font-medium transition-all active:scale-[0.98]"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black hover:bg-white/90 disabled:opacity-40 text-[12px] font-medium transition-all active:scale-[0.98]"
               >
                 {creating ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
                 {tab === 'tracks'

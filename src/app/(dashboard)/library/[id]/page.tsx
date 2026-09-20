@@ -446,7 +446,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <button
                 onClick={() => setGlobalTrack(track)}
-                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-black transition-colors hover:bg-white sm:gap-2 sm:px-4 sm:text-[12px]"
+                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-black transition-colors hover:bg-white/90 sm:gap-2 sm:px-4 sm:text-[12px]"
               >
                 <PlayGlyph size={13} className="ml-0.5" />
                 Play

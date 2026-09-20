@@ -164,7 +164,7 @@ export function ProjectTrackList({
             return (
               <button key={tag} onClick={() => toggleTag(tag)}
                 className={`px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${
-                  on ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+                  on ? 'bg-white/[0.14] text-white border-white/30' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
                 }`}>
                 {tag}
               </button>

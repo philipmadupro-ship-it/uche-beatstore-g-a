@@ -459,7 +459,7 @@ function LicenseCard({
           onClick={onBuy}
           className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors ${
             isExclusive
-              ? 'bg-white text-black hover:bg-white'
+              ? 'bg-white text-black hover:bg-white/90'
               : 'bg-white/[0.05] border border-white/[0.10] hover:bg-white/[0.10] text-white'
           }`}
         >

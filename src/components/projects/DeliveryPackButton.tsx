@@ -113,7 +113,7 @@ export function DeliveryPackButton({ projectId, projectName }: Props) {
                 <div className="px-4 py-3 border-t border-white/10 flex items-center justify-end gap-2">
                   <button onClick={() => setOpen(false)} className="px-3 py-2 text-[11px] font-mono uppercase tracking-wider text-white/60 hover:text-white">Cancel</button>
                   <button onClick={downloadAll}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white text-black text-[11px] font-bold hover:bg-white transition-colors">
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white text-black text-[11px] font-bold hover:bg-white/90 transition-colors">
                     <Download size={12} /> Download all ({files.length})
                   </button>
                 </div>

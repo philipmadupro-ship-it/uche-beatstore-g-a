@@ -387,7 +387,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => doCopy(generatedUrl)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-white active:scale-[0.98] transition-all"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-white/90 active:scale-[0.98] transition-all"
                   >
                     {copied ? <Check size={13} /> : <Copy size={13} />}
                     {copied ? 'Copied' : 'Copy link'}
@@ -404,7 +404,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
               <button
                 onClick={generateLink}
                 disabled={generating}
-                className="w-full bg-white hover:bg-white disabled:opacity-40 text-black text-[12px] font-medium py-3 rounded-full transition-all active:scale-[0.99] flex items-center justify-center gap-2"
+                className="w-full bg-white hover:bg-white/90 disabled:opacity-40 text-black text-[12px] font-medium py-3 rounded-full transition-all active:scale-[0.99] flex items-center justify-center gap-2"
               >
                 {generating ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
                 Generate link

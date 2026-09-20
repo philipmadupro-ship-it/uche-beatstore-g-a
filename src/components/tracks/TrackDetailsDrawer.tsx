@@ -408,13 +408,13 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
               <div className="flex items-center gap-2 mb-3">
                 <button
                   onClick={() => setView('details')}
-                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-colors ${view === 'details' ? 'bg-white text-black' : 'bg-white/[0.05] text-white/40 hover:text-white/80'}`}
+                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-colors ${view === 'details' ? 'bg-white/[0.14] text-white' : 'bg-white/[0.05] text-white/40 hover:text-white/80'}`}
                 >
                   Details
                 </button>
                 <button
                   onClick={() => setView('insights')}
-                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-colors ${view === 'insights' ? 'bg-white text-black' : 'bg-white/[0.05] text-white/40 hover:text-white/80'}`}
+                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-colors ${view === 'insights' ? 'bg-white/[0.14] text-white' : 'bg-white/[0.05] text-white/40 hover:text-white/80'}`}
                 >
                   Insights
                 </button>

@@ -75,7 +75,7 @@ export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
             {error && <p className="text-red-500 text-[10px] font-black uppercase tracking-widest">{error}</p>}
             <button
               type="submit"
-              className="w-full bg-white text-[#090907] rounded-xl py-4 text-[10px] font-black uppercase tracking-[0.3em] hover:bg-white hover:text-white transition-all duration-300"
+              className="w-full bg-white text-[#090907] rounded-xl py-4 text-[10px] font-black uppercase tracking-[0.3em] hover:bg-white/90 hover:text-white transition-all duration-300"
             >
               Unlock Transmission
             </button>
@@ -117,7 +117,7 @@ export function PublicPlayer({ shareLink, tracks }: PublicPlayerProps) {
         
         <div className="flex items-center justify-between pt-4">
           <div className="flex gap-2">
-            <button className="bg-white text-[#090907] px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-white hover:text-white transition-all">
+            <button className="bg-white text-[#090907] px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-white/90 hover:text-white transition-all">
               <Download size={14} /> Download
             </button>
           </div>

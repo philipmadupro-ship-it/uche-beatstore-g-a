@@ -8022,3 +8022,54 @@ dashboard is auth-gated, so there is no preview screenshot.
 `npm run build` fails in a fresh worktree with `Missing API key … new Resend(...)` from
 `/api/email`, which is module-scope construction, not a code defect — the worktree has no
 `.env.local`. Copy it from the main checkout.
+
+## Control language — chips, badges and dead hovers (2026-09-20)
+
+First real slice of `docs/design-direction.md` item 1. Solid `bg-white` went from **288
+across 100 files** to **169 across 78**, and what was converted was chosen by category,
+not by grep count.
+
+**Converted.** Every tab, toggle, filter chip and pagination control now uses the spec's
+active treatment (`bg-white/[0.14] border-white/30`, text at full white) instead of a solid
+white fill: library browse/view toggles and pagination, sales and analytics tabs, analytics
+date presets and genre chips, project and playlist filter bars, the tag pickers, the track
+details drawer tabs, contacts pagination, and the `/store` mobile Filters button and
+Favorites-only toggle — the last two carried the exact `text-black bg-white font-semibold
+shadow-md` migration signature the spec names as residue. Count badges are now hairline
+pills (`border-white/20 text-white/70`) per "status badges are text + hairline border":
+library and analytics filter counts, the calendar day count, the contacts toolbar badge,
+the sales pending-offers badge and three share cart badges.
+
+**Deliberately not converted.** Primary-action buttons. "One solid-white action per view"
+cannot be decided by grep, and several views legitimately have one — checkout, the floating
+cart pill, Google sign-in, Save profile, the exclusive-license Buy button. That half needs
+a view-at-a-time pass and is called out as such in the doc.
+
+**Out of scope, and worth knowing before the next pass.** The `/store` type chips and the
+applied-filter cluster set `background-color` inline from the *producer's* storefront accent,
+which defaults to white. They look like violations in a screenshot and in a computed-style
+dump. `design-direction.md` principle 3 exempts the accent picker explicitly. Leave them.
+
+### Two defects found on the way
+- **45 controls whose hover fill equalled their rest fill** (`bg-white … hover:bg-white`),
+  including the storefront Checkout and Add-to-cart buttons. Valid Tailwind, compiles fine,
+  and the `transition-colors` beside it transitions nothing — the control is simply dead to
+  the pointer. Same migration residue: the rule rewrote rest and hover to the same white.
+- **4 elements with two hover fills at once** (`hover:bg-white/90 hover:bg-white/80`), on the
+  three auth pages and `BatchActionBar`. Tailwind emits both rules, so the winner is decided
+  by stylesheet order rather than class order and the author's intent is unrecoverable.
+
+Both are now guarded in `lib/ui/tailwind-classes.test.ts`, which scans quoted class strings
+rather than whole lines — a line may hold a ternary whose two branches legitimately name the
+same colour. The guard was written and watched fail on all 45 BEFORE the fix, because the
+repo bans scripted styling migrations except behind a guard test.
+
+Verified with `tsc`, `next build`, `vitest` (2077), and by running the storefront against
+`e2e/fixtures/store-db.json` in the browser: the Favorites-only toggle computes to
+`bg white/0.14` + `border white/0.3` when active.
+
+### Note
+Running the storefront locally needs `ENABLE_LOCAL_STORE=true` and the fixture copied to
+`data/db.json`; a `.env.local` pointing at real Supabase makes the e2e storefront tests skip
+rather than fail, which looks like passing. `data/db.json` and `.claude/launch.json` are both
+tracked — restore them afterwards. `next dev` re-adds its block to AGENTS.md; revert it.

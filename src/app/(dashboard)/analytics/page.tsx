@@ -252,7 +252,7 @@ export default function AnalyticsPage() {
                 onClick={() => setDatePreset(value)}
                 className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors ${
                   datePreset === value
-                    ? 'bg-white text-black'
+                    ? 'bg-white/[0.14] text-white'
                     : 'bg-white/[0.04] border border-white/[0.06] text-white/60 hover:text-white hover:bg-white/[0.08]'
                 }`}
               >{label}</button>
@@ -268,7 +268,7 @@ export default function AnalyticsPage() {
               <SlidersHorizontal size={12} />
               Filters
               {activeFilterCount > 0 && (
-                <span className="w-4 h-4 rounded-full bg-white text-black text-[8px] font-bold flex items-center justify-center leading-none">{activeFilterCount}</span>
+                <span className="w-4 h-4 rounded-full border border-white/20 text-white/70 text-[8px] font-bold flex items-center justify-center leading-none">{activeFilterCount}</span>
               )}
             </button>
           </div>
@@ -284,7 +284,7 @@ export default function AnalyticsPage() {
                   {TAG_TAXONOMY.genre.map((g) => (
                     <button key={g} onClick={() => toggleGenre(g)}
                       className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                        selectedGenres.has(g) ? 'bg-white text-black border-white font-bold' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'
+                        selectedGenres.has(g) ? 'bg-white/[0.14] text-white border-white/30 font-bold' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'
                       }`}>{g}</button>
                   ))}
                 </div>
@@ -316,7 +316,7 @@ export default function AnalyticsPage() {
                       <div className="flex flex-wrap gap-1.5">
                         {TYPE_OPTIONS.map(({ value, label }) => (
                           <button key={value} onClick={() => setTypeFilter(value)}
-                            className={`px-2.5 py-1 rounded-md text-[10px] font-medium border transition-colors ${typeFilter === value ? 'bg-white text-black border-white font-bold' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}
+                            className={`px-2.5 py-1 rounded-md text-[10px] font-medium border transition-colors ${typeFilter === value ? 'bg-white/[0.14] text-white border-white/30 font-bold' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}
                           >{label}</button>
                         ))}
                       </div>
