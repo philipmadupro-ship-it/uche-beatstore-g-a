@@ -163,3 +163,66 @@ describe('Tailwind opacity modifiers', () => {
     ).toEqual([]);
   });
 });
+
+/**
+ * A hover state identical to its rest state.
+ *
+ * `bg-white … hover:bg-white` is valid Tailwind and compiles fine, so nothing
+ * upstream of this test objects — but the element has no hover feedback at all.
+ * Both halves paint the same pixel, and the `transition-colors` sitting beside
+ * them transitions nothing. It reads as a dead control, which on Checkout and
+ * Add to cart is the worst place to read as dead.
+ *
+ * There were 45 of these, including the storefront checkout and cart buttons.
+ * They are residue of the same beige→white migration that produced the
+ * solid-white wall (docs/design-direction.md): the rule rewrote both the rest
+ * colour and its hover to the same white and left the pair sitting there.
+ *
+ * The sibling defect is two hover fills on ONE element —
+ * `hover:bg-white/90 hover:bg-white/80`. Tailwind emits both rules, so which
+ * one wins is decided by their order in the generated stylesheet rather than
+ * in the class string, and the author's intent is unrecoverable by reading the
+ * source. There were 4, on the three auth pages and the batch action bar.
+ *
+ * This scans quoted class strings rather than whole lines, because a line may
+ * hold a ternary whose two branches are different states and must be allowed
+ * to name the same colour twice.
+ */
+function classStrings(): Array<{ file: string; line: number; value: string }> {
+  const out: Array<{ file: string; line: number; value: string }> = [];
+  for (const file of sourceFiles()) {
+    if (!file.endsWith('.tsx') && !file.endsWith('.ts')) continue;
+    const src = readFileSync(file, 'utf8');
+    for (const m of src.matchAll(/[`'"]([^`'"\n]*\bbg-white\b[^`'"\n]*)[`'"]/g)) {
+      out.push({ file, line: src.slice(0, m.index).split('\n').length, value: m[1] });
+    }
+  }
+  return out;
+}
+
+/** Solid `bg-white`, i.e. not `bg-white/40` and not `bg-white-ish` name. */
+const SOLID_REST = /(?<![/\w-])bg-white(?![/\w-])/;
+const SOLID_HOVER = /hover:bg-white(?![/\w-])/;
+const DOUBLE_HOVER = /hover:bg-white\/(?:\[[^\]]+\]|\d+)\s+hover:bg-white\/(?:\[[^\]]+\]|\d+)/;
+
+describe('white hover states', () => {
+  it('never repeats the rest colour as the hover colour', () => {
+    const violations = classStrings()
+      .filter((c) => SOLID_REST.test(c.value) && SOLID_HOVER.test(c.value))
+      .map((c) => `${c.file}:${c.line}`);
+    expect(
+      violations,
+      `Found ${violations.length} element(s) whose hover fill equals their rest fill, so hovering does nothing. Use hover:bg-white/90 (or the translucent control scale) instead:\n${violations.join('\n')}`,
+    ).toEqual([]);
+  });
+
+  it('never puts two hover fills on one element', () => {
+    const violations = classStrings()
+      .filter((c) => DOUBLE_HOVER.test(c.value))
+      .map((c) => `${c.file}:${c.line}`);
+    expect(
+      violations,
+      `Found ${violations.length} element(s) with two hover fills. Which one wins depends on stylesheet order, not class order:\n${violations.join('\n')}`,
+    ).toEqual([]);
+  });
+});

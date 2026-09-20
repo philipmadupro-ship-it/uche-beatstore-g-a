@@ -1186,7 +1186,7 @@ function StorePage() {
           <button
             onClick={() => setSidebarOpen((o) => !o)}
             className={`tap lg:hidden flex min-h-11 items-center gap-1.5 rounded-full border px-4 py-2 text-[10px] font-mono uppercase tracking-wider transition-colors ${sidebarOpen || hasActiveFilters
-                ? 'border-white/20 text-black bg-white font-semibold shadow-md hover:bg-white/90'
+                ? 'border-white/30 text-white bg-white/[0.14]'
                 : 'border-white/10 text-white/60 hover:text-white'
               }`}
           >

@@ -164,7 +164,7 @@ function DownloadPortal() {
           </div>
           <Link
             href="/store"
-            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-black transition-all hover:bg-white active:scale-[0.98]"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-black transition-all hover:bg-white/90 active:scale-[0.98]"
           >
             <ArrowLeft size={13} />
             Back to store
@@ -416,7 +416,7 @@ function FileDownloadRow({
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shrink-0 ${
           downloading
             ? 'bg-white/10 text-white cursor-wait'
-            : 'bg-white text-black hover:bg-white active:scale-95'
+            : 'bg-white text-black hover:bg-white/90 active:scale-95'
         }`}
       >
         {downloading ? (

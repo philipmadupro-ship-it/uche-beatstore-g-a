@@ -103,7 +103,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
                       ? 'bg-red-500 text-white hover:bg-red-600'
                       : a.variant === 'ghost'
                         ? 'text-white/80 hover:text-white hover:bg-white/[0.05]'
-                        : 'bg-white text-black hover:bg-white'
+                        : 'bg-white text-black hover:bg-white/90'
                   }`}
                 >
                   {a.label}

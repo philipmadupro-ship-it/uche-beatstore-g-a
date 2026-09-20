@@ -303,7 +303,7 @@ export function ClientShareVariant({
                   <span className="text-[11px] font-mono font-bold text-white tabular-nums">
                     ${cartTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </span>
-                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white text-black text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 border border-white/20 text-white/70 text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
                     {cartCount}
                   </span>
                 </>
@@ -363,7 +363,7 @@ export function ClientShareVariant({
             {cartCount > 0 ? (
               <>
                 <span className="text-[11px] font-mono font-bold text-white">${cartTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white text-black text-[8px] font-bold rounded-full flex items-center justify-center">
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 border border-white/20 text-white/70 text-[8px] font-bold rounded-full flex items-center justify-center">
                   {cartCount}
                 </span>
               </>
@@ -707,7 +707,7 @@ export function ClientShareVariant({
               >
                 <ShoppingCart size={15} />
                 {cartCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-white text-black text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 border border-white/20 text-white/70 text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
                     {cartCount}
                   </span>
                 )}

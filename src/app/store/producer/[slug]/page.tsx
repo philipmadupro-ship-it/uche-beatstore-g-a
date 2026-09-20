@@ -234,7 +234,7 @@ export default function ProducerPage({
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all border ${
                   isFollowing
                     ? 'bg-transparent border-white/40 text-white/40 hover:border-white/30 hover:text-white'
-                    : 'bg-white border-white/30 text-black hover:bg-white'
+                    : 'bg-white border-white/30 text-black hover:bg-white/90'
                 }`}
               >
                 {isFollowing ? <Heart size={12} fill="currentColor" /> : <UserPlus size={12} />}

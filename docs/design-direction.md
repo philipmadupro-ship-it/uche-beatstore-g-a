@@ -126,6 +126,16 @@ consistent tree-wide.
    migration signature. Target: one solid-white action per view, so the great majority of
    those become translucent. Measure with
    `grep -rEho "bg-white([^/a-zA-Z0-9_-]|$)" src/ | wc -l`.
+
+   *2026-09-20 — chips and badges done: **169 across 78 files**.* Every tab, toggle,
+   filter chip and pagination control now uses the `bg-white/[0.14] border-white/30`
+   active state, and every count badge is a hairline pill. What remains is almost
+   entirely **primary-action buttons**, which is the half needing judgement rather than
+   a rule: "one per view" cannot be decided by grep, and several views legitimately have
+   one (checkout, the cart pill, Google sign-in, Save profile). Take them a view at a
+   time. The same pass fixed 45 controls whose hover fill equalled their rest fill and
+   4 carrying two hover fills at once; `lib/ui/tailwind-classes.test.ts` now guards both,
+   so that population cannot regrow.
 2. **Preview player rebuild** — per "The beat preview player" above.
 3. **`src/components/ui/` radii** — the primitives violate the 8/12/20 rule themselves
    (`Modal.tsx` is 16px while 16 hand-rolled surfaces write the correct 20px). Fix the

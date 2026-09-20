@@ -568,7 +568,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                         else n.add(tag);
                         return n;
                       })}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-white text-black border-white' : 'bg-transparent border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}>
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-white/[0.14] text-white border-white/30' : 'bg-transparent border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}>
                         {tag}
                       </button>
                     );

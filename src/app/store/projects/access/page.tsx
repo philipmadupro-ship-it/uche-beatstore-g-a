@@ -98,7 +98,7 @@ function Inner() {
         <div className="flex flex-wrap items-center justify-center gap-2">
           <button
             onClick={() => window.location.reload()}
-            className="flex min-h-11 items-center gap-1.5 rounded-full bg-white px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-black transition-all hover:bg-white active:scale-[0.98]"
+            className="flex min-h-11 items-center gap-1.5 rounded-full bg-white px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-black transition-all hover:bg-white/90 active:scale-[0.98]"
           >
             <RefreshCw size={11} />
             Refresh

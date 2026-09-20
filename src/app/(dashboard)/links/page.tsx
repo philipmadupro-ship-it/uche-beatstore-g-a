@@ -897,7 +897,7 @@ function LinkPopup({
                 <button
                   onClick={handleSave}
                   disabled={savingEdit}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-white hover:bg-white disabled:opacity-40 text-black text-[11px] font-bold uppercase tracking-wider transition-colors"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-white hover:bg-white/90 disabled:opacity-40 text-black text-[11px] font-bold uppercase tracking-wider transition-colors"
                 >
                   {savingEdit ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
                   Save
@@ -917,7 +917,7 @@ function LinkPopup({
           <div className="flex items-center gap-2 mb-3">
             <button
               onClick={() => onCopy(link)}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-white active:scale-[0.98] transition-all"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-white/90 active:scale-[0.98] transition-all"
             >
               {copied ? <Check size={13} /> : <Copy size={13} />}
               {copied ? 'Copied' : 'Copy link'}

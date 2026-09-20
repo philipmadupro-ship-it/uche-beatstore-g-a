@@ -64,7 +64,7 @@ export function BatchActionBar({ count, noun, onClear, actions, busy }: Props) {
               className={cn(
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0',
                 a.intent === 'danger'   && 'bg-red-500/10 text-red-300 border border-red-500/20 hover:bg-red-500/15 hover:border-red-500/40',
-                a.intent === 'primary'  && 'bg-white text-black font-semibold shadow-md hover:bg-white/90 hover:bg-white/80',
+                a.intent === 'primary'  && 'bg-white text-black font-semibold shadow-md hover:bg-white/90',
                 (!a.intent || a.intent === 'default') && 'bg-white/[0.04] text-white border border-white/[0.06] hover:bg-white/[0.08] hover:border-white/[0.12]',
               )}
             >

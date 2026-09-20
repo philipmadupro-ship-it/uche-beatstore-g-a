@@ -89,7 +89,7 @@ export function PlaylistFilterBar({
             {opts.map((tag) => {
               const active = value.tags.has(tag);
               return (
-                <button key={tag} onClick={() => toggleTag(tag)} className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${active ? 'bg-white text-black border-white font-bold' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}>
+                <button key={tag} onClick={() => toggleTag(tag)} className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${active ? 'bg-white/[0.14] text-white border-white/30 font-bold' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}>
                   {tag}
                 </button>
               );

@@ -131,7 +131,7 @@ export function ProjectFilterBar({
         {STATUS_PILLS.map((s) => (
           <button key={s.value} onClick={() => set({ status: s.value })}
             className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-              value.status === s.value ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+              value.status === s.value ? 'bg-white/[0.14] text-white border-white/30' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
             }`}>{s.label}</button>
         ))}
       </div>
@@ -145,7 +145,7 @@ export function ProjectFilterBar({
               return (
                 <button key={tag} onClick={() => toggleTag(tag)}
                   className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                    active ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+                    active ? 'bg-white/[0.14] text-white border-white/30' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
                   }`}>{tag}</button>
               );
             })}
@@ -209,7 +209,7 @@ export function ProjectFilterBar({
           {busy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
         </button>
         {folders.length > 0 && (
-          <button onClick={() => setManage((v) => !v)} className={`grid size-10 shrink-0 place-items-center rounded-full transition-colors ${manage ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`} aria-label="Manage folders" title="Manage folders">
+          <button onClick={() => setManage((v) => !v)} className={`grid size-10 shrink-0 place-items-center rounded-full transition-colors ${manage ? 'bg-white/[0.14] text-white' : 'text-white/50 hover:text-white'}`} aria-label="Manage folders" title="Manage folders">
             {manage ? <Check size={12} /> : <Pencil size={12} />}
           </button>
         )}
@@ -226,7 +226,7 @@ export function ProjectFilterBar({
             onClick={() => isMobile ? setFolderDrawerOpen(true) : setFolderMenuOpen((v) => !v)}
             className={`flex min-h-10 items-center gap-2 rounded-full border px-3.5 py-2 text-[11px] font-medium transition-colors ${
               folderMenuOpen || folderDrawerOpen || value.folder !== 'all'
-                ? 'bg-white text-black border-white'
+                ? 'bg-white/[0.14] text-white border-white/30'
                 : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
             }`}
           >
@@ -253,7 +253,7 @@ export function ProjectFilterBar({
         <button
           onClick={() => isMobile ? setMobileFilters(true) : setOpen((v) => !v)}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[11px] font-medium border transition-colors min-h-10 ${
-            open || mobileFilters || activeCount > 0 ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+            open || mobileFilters || activeCount > 0 ? 'bg-white/[0.14] text-white border-white/30' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
           }`}
         >
           <SlidersHorizontal size={12} /> Filters{activeCount > 0 ? ` · ${activeCount}` : ''}

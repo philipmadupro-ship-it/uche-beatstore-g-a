@@ -191,7 +191,7 @@ export function CartDrawer({ shareToken, sharePassword }: CartDrawerProps) {
             <button
               onClick={handleCheckout}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-white text-black text-[12px] font-bold uppercase tracking-widest hover:bg-white active:scale-[0.98] transition-all disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-white text-black text-[12px] font-bold uppercase tracking-widest hover:bg-white/90 active:scale-[0.98] transition-all disabled:opacity-50"
             >
               {loading ? (
                 <Loader2 size={14} className="animate-spin" />

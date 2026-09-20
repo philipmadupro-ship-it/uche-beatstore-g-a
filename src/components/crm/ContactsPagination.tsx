@@ -64,7 +64,7 @@ export function ContactsPagination({
               key={n}
               onClick={() => onPage(n)}
               className={`h-8 min-w-8 px-2 rounded-md text-[11px] font-medium tabular-nums transition-colors ${
-                n === page ? 'bg-white text-black font-bold' : 'text-white/80 hover:text-white hover:bg-white/10'
+                n === page ? 'bg-white/[0.14] text-white font-bold' : 'text-white/80 hover:text-white hover:bg-white/10'
               }`}
             >
               {n}

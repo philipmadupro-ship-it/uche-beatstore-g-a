@@ -148,7 +148,7 @@ export function ProjectFolderSelect({
         <div className="px-5 py-3 border-t border-white/10 flex items-center justify-end gap-2">
           <button onClick={onClose} className="px-3 py-2 rounded-lg text-[11px] font-mono uppercase tracking-wider text-white/60 hover:text-white transition-colors">Cancel</button>
           <button onClick={save} disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-white text-black hover:bg-white transition-colors disabled:opacity-40">
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-40">
             {saving ? <Loader2 size={12} className="animate-spin" /> : null}Save
           </button>
         </div>

@@ -41,7 +41,7 @@ function FilterButton({ label, badge, children, align = 'left' }: { label: strin
           }`}
         >
           {label}
-          {badge ? <span className="text-[9px] font-mono bg-white text-black rounded-full px-1.5 py-0.5 leading-none">{badge}</span> : null}
+          {badge ? <span className="text-[9px] font-mono border border-white/20 text-white/70 rounded-full px-1.5 py-0.5 leading-none">{badge}</span> : null}
           <ChevronDown size={11} className={open ? 'rotate-180' : ''} />
         </button>
       )}

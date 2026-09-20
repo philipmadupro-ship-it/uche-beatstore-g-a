@@ -110,7 +110,7 @@ export function ProjectChecklist({ projectId, items, onChanged }: Props) {
             className="flex-1 bg-white/[0.02] border border-white/10 rounded-md px-3 py-1.5 text-[12px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20"
           />
           <button onClick={addItem} disabled={!draft.trim()}
-            className="px-3 py-1.5 rounded-md bg-white text-black text-[11px] font-bold hover:bg-white disabled:opacity-40">Add</button>
+            className="px-3 py-1.5 rounded-md bg-white text-black text-[11px] font-bold hover:bg-white/90 disabled:opacity-40">Add</button>
         </div>
       )}
 

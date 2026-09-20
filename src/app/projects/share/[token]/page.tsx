@@ -576,7 +576,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         {passwordError && <p className="text-[11px] text-red-400 mb-3">{passwordError}</p>}
         <button
           type="submit" disabled={unlocking || !password}
-          className="w-full bg-white text-black py-3 rounded-lg text-[12px] font-medium hover:bg-white disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+          className="w-full bg-white text-black py-3 rounded-lg text-[12px] font-medium hover:bg-white/90 disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
         >
           {unlocking ? <Loader2 size={13} className="animate-spin" /> : null}
           Unlock
