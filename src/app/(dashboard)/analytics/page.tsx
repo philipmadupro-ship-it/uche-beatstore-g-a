@@ -366,7 +366,7 @@ export default function AnalyticsPage() {
         ) : error ? (
           <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-6 flex items-start gap-3">
             <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
-            <p className="text-[12px] text-red-300 font-medium">{error}</p>
+            <p className="text-[11px] text-red-300 font-medium">{error}</p>
           </div>
         ) : isEmpty ? (
           <EmptyState
@@ -504,7 +504,7 @@ export default function AnalyticsPage() {
                         <span className="text-[10px] font-mono text-white/40 tabular-nums w-5 shrink-0">{rank + 1}</span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1.5 gap-2">
-                            <Link href={`/library/${t.track_id}`} className="text-[12px] text-white truncate hover:text-white/80 transition-colors flex-1">
+                            <Link href={`/library/${t.track_id}`} className="text-[11px] text-white truncate hover:text-white/80 transition-colors flex-1">
                               {t.title}
                             </Link>
                             <div className="flex items-center gap-3 shrink-0">
@@ -557,7 +557,7 @@ export default function AnalyticsPage() {
                           href={`/share/${s.token}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[12px] text-white hover:text-white/80 transition-colors font-mono truncate inline-flex items-center gap-1.5"
+                          className="text-[11px] text-white hover:text-white/80 transition-colors font-mono truncate inline-flex items-center gap-1.5"
                           title={s.token}
                         >
                           /{s.token.slice(0, 12)}{s.token.length > 12 ? '…' : ''}

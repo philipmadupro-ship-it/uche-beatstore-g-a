@@ -123,7 +123,7 @@ export default function OrdersPage() {
               </div>
 
               {error && (
-                <div className="flex items-center gap-2 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-[12px] text-red-300">
+                <div className="flex items-center gap-2 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-[11px] text-red-300">
                   <AlertCircle size={14} className="shrink-0" />
                   {error}
                 </div>

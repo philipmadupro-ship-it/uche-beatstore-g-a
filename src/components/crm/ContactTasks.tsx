@@ -81,13 +81,13 @@ export function ContactTasks({ contactId }: { contactId: string }) {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Follow up about…"
-          className="flex-1 min-w-[160px] bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/30"
+          className="flex-1 min-w-[160px] bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/30"
         />
         <input
           type="date"
           value={due}
           onChange={(e) => setDue(e.target.value)}
-          className="bg-white/[0.02] border border-white/10 rounded-lg px-2.5 py-2 text-[12px] text-white/80 focus:outline-none focus:border-white/30 [color-scheme:dark]"
+          className="bg-white/[0.02] border border-white/10 rounded-lg px-2.5 py-2 text-[11px] text-white/80 focus:outline-none focus:border-white/30 [color-scheme:dark]"
         />
         <button
           type="submit"
@@ -120,7 +120,7 @@ export function ContactTasks({ contactId }: { contactId: string }) {
                 >
                   {isDone && <Check size={11} className="text-black" strokeWidth={3} />}
                 </button>
-                <span className={`flex-1 text-[12px] leading-snug ${isDone ? 'text-white/40 line-through' : 'text-white'}`}>
+                <span className={`flex-1 text-[11px] leading-snug ${isDone ? 'text-white/40 line-through' : 'text-white'}`}>
                   {task.title}
                 </span>
                 {!isDone && task.due_at && (

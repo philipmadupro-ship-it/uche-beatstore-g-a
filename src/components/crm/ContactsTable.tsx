@@ -299,7 +299,7 @@ export function ContactsTable(p: Props) {
                       </span>
                     )}
                   </div>
-                  {c.email && <p className="text-[12px] text-[var(--text-readable)] truncate">{c.email}</p>}
+                  {c.email && <p className="text-[11px] text-[var(--text-readable)] truncate">{c.email}</p>}
                 </div>
                 {showLead && (
                   <span
@@ -366,14 +366,14 @@ export function ContactsTable(p: Props) {
                 <button
                   onClick={() => p.onOpenHistory(c)}
                   aria-label={`History for ${c.name}`}
-                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-medium text-white/80 bg-white/[0.03] border border-[var(--border)] hover:bg-white/[0.08] motion-safe:active:scale-[0.98] transition-[background-color,transform]"
+                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[11px] font-medium text-white/80 bg-white/[0.03] border border-[var(--border)] hover:bg-white/[0.08] motion-safe:active:scale-[0.98] transition-[background-color,transform]"
                 >
                   <Clock size={14} /> History
                 </button>
                 <button
                   onClick={() => p.onSend(c)}
                   aria-label={sends > 0 ? `Send another beat to ${c.name}` : `Send beat to ${c.name}`}
-                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[12px] font-semibold text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_32%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] motion-safe:active:scale-[0.98] transition-[background-color,transform]"
+                  className="min-h-[44px] flex-1 rounded-xl flex items-center justify-center gap-2 text-[11px] font-semibold text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_10%,transparent)] border border-[color-mix(in_srgb,var(--accent)_32%,transparent)] hover:bg-[color-mix(in_srgb,var(--accent)_18%,transparent)] motion-safe:active:scale-[0.98] transition-[background-color,transform]"
                 >
                   {sends > 0 ? <Mail size={14} /> : <Send size={14} />}
                   {sends > 0 ? 'Again' : 'Send'}

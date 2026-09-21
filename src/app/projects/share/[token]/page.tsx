@@ -565,7 +565,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
             <Lock size={16} className="text-white/40" />
           </div>
           <h1 className="text-[18px] font-medium text-white mb-1">Password required</h1>
-          <p className="text-[12px] text-white/40">This shared project is protected</p>
+          <p className="text-[11px] text-white/40">This shared project is protected</p>
         </div>
         <input
           type="password" value={password} onChange={(e) => setPassword(e.target.value)}
@@ -576,7 +576,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         {passwordError && <p className="text-[11px] text-red-400 mb-3">{passwordError}</p>}
         <button
           type="submit" disabled={unlocking || !password}
-          className="w-full bg-white text-black py-3 rounded-lg text-[12px] font-medium hover:bg-white/90 disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+          className="w-full bg-white text-black py-3 rounded-lg text-[11px] font-medium hover:bg-white/90 disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
         >
           {unlocking ? <Loader2 size={13} className="animate-spin" /> : null}
           Unlock
@@ -590,7 +590,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
       <div className="text-center max-w-sm">
         <Shield size={28} className="text-red-400 mx-auto mb-4" />
         <h1 className="text-[18px] font-medium text-white mb-2">Link unavailable</h1>
-        <p className="text-[12px] text-white/40">{error}</p>
+        <p className="text-[11px] text-white/40">{error}</p>
       </div>
     </div>
   );
@@ -612,14 +612,14 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           {purchaseBanner === 'success' ? (
             <>
               <Check size={14} className="text-[#6DC6A4] shrink-0" />
-              <span className="text-[12px] font-medium">
+              <span className="text-[11px] font-medium">
                 Purchase complete — receipt + access sent to your email.
               </span>
             </>
           ) : (
             <>
               <XIcon size={14} className="text-white/80 shrink-0" />
-              <span className="text-[12px] font-medium">Checkout cancelled.</span>
+              <span className="text-[11px] font-medium">Checkout cancelled.</span>
             </>
           )}
           <button
@@ -813,7 +813,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                     onChange={(e) => setDescDraft(e.target.value)}
                     placeholder="Project description (what is this, where is it going, what feedback are you after…)"
                     rows={3}
-                    className="w-full bg-[#090907] border border-white/10 rounded-md px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50 resize-none"
+                    className="w-full bg-[#090907] border border-white/10 rounded-md px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50 resize-none"
                   />
                   <div className="flex items-center gap-2">
                     <button
@@ -836,7 +836,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                 </div>
               ) : (
                 project.description && (
-                  <p className="text-[12px] text-white/80 mt-2 max-w-prose whitespace-pre-wrap">{project.description}</p>
+                  <p className="text-[11px] text-white/80 mt-2 max-w-prose whitespace-pre-wrap">{project.description}</p>
                 )
               )}
             </div>
@@ -1033,7 +1033,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                     }
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-[12px] font-medium truncate ${active ? 'text-white' : 'text-white'}`}>{t.title}</p>
+                    <p className={`text-[11px] font-medium truncate ${active ? 'text-white' : 'text-white'}`}>{t.title}</p>
                     <p className="text-[9px] font-mono text-white/40 mt-0.5">{t.type}{t.bpm ? ` · ${t.bpm}` : ''}</p>
                   </div>
                   {t.duration_seconds && (
@@ -1104,7 +1104,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                         </button>
                       )}
                     </div>
-                    <p className="text-[12px] text-[#bbb] leading-relaxed whitespace-pre-wrap">{c.body}</p>
+                    <p className="text-[11px] text-[#bbb] leading-relaxed whitespace-pre-wrap">{c.body}</p>
                   </div>
                 );
               })}
@@ -1124,7 +1124,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder={`Leave feedback${activeTrack ? ` on ${activeTrack.title}` : ''}…`}
                 rows={3}
-                className="w-full bg-[#090907] border border-white/10 rounded px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50 resize-none"
+                className="w-full bg-[#090907] border border-white/10 rounded px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50 resize-none"
               />
               {pinnedRegion && (
                 // Drag-to-create on the waveform sets a region pin for

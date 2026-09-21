@@ -272,7 +272,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
           {loading ? (
             <div className="flex items-center justify-center py-20"><Loader2 size={18} className="animate-spin text-white/40" /></div>
           ) : error ? (
-            <div className="text-center py-12 text-[12px] text-red-400">{error}</div>
+            <div className="text-center py-12 text-[11px] text-red-400">{error}</div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16">
               <Music size={20} className="mx-auto text-white/30 mb-3" />
@@ -346,9 +346,9 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
           </div>
           <div className="flex items-center gap-2">
             {error && <p className="text-[10px] text-red-400 mr-2 max-w-[200px] truncate">{error}</p>}
-            <button onClick={onClose} className="text-[12px] text-white/80 hover:text-white px-3 py-1.5 rounded-lg transition-colors">Cancel</button>
+            <button onClick={onClose} className="text-[11px] text-white/80 hover:text-white px-3 py-1.5 rounded-lg transition-colors">Cancel</button>
             <button onClick={submit} disabled={selected.size === 0 || submitting}
-              className="flex items-center gap-2 bg-white hover:bg-white/90 disabled:opacity-40 text-black px-5 py-2 rounded-lg text-[12px] font-semibold transition-colors">
+              className="flex items-center gap-2 bg-white hover:bg-white/90 disabled:opacity-40 text-black px-5 py-2 rounded-lg text-[11px] font-semibold transition-colors">
               {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
               Add {selected.size > 0 ? `${selected.size} track${selected.size !== 1 ? 's' : ''}` : ''}
             </button>

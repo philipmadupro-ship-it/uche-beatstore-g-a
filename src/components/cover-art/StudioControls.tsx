@@ -180,7 +180,7 @@ export function StudioButton({
       disabled={disabled}
       title={title}
       className={cn(
-        'flex h-9 items-center justify-center gap-2 px-3 text-[12px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+        'flex h-9 items-center justify-center gap-2 px-3 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
         variant === 'accent'
           ? 'border border-white/25 bg-white/[0.10] text-white/90 hover:border-white/40 hover:bg-white/[0.18]'
           : 'border border-white/10 text-white/60 hover:border-white/20 hover:text-white/90',

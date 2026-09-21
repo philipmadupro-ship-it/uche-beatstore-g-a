@@ -161,7 +161,7 @@ export function ContactActivityTimeline({ contactId, contactName, onSendBeat, on
              width. At 375px that pushed the shrink-0 "Note" button to x=390 —
              past the viewport, with nothing to scroll, so a note could not be
              added on a phone at all. */
-          className="min-w-0 flex-1 bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20"
+          className="min-w-0 flex-1 bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20"
         />
         <button
           type="submit"

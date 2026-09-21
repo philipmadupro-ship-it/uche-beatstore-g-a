@@ -164,13 +164,13 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
                   onChange={(e) => setSessionNotes(e.target.value)}
                   autoFocus
                   placeholder={"Hook:\n\nVerse 1:\n\nBridge:"}
-                  className="flex-1 bg-[#090907] px-3 pt-3 pb-3 text-[12px] text-white placeholder:text-white/30 focus:outline-none resize-none leading-6 tracking-wide"
+                  className="flex-1 bg-[#090907] px-3 pt-3 pb-3 text-[11px] text-white placeholder:text-white/30 focus:outline-none resize-none leading-6 tracking-wide"
                   style={{ fontFamily: 'monospace' }}
                 />
               ) : (
                 <div
                   onClick={() => setEditingNotepad(true)}
-                  className="flex-1 px-3 pt-3 pb-3 text-[12px] leading-6 cursor-pointer whitespace-pre-wrap select-text tracking-wide"
+                  className="flex-1 px-3 pt-3 pb-3 text-[11px] leading-6 cursor-pointer whitespace-pre-wrap select-text tracking-wide"
                   style={{ fontFamily: 'monospace' }}
                 >
                   {sessionNotes

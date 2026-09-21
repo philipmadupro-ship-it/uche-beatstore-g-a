@@ -113,7 +113,7 @@ export function PlaylistOfflineSync({ tracks }: Props) {
     return (
       <button
         disabled
-        className="flex items-center gap-2 bg-white/[0.04] border border-white/20 text-white px-4 py-2 rounded-md text-[12px] font-medium"
+        className="flex items-center gap-2 bg-white/[0.04] border border-white/20 text-white px-4 py-2 rounded-md text-[11px] font-medium"
       >
         <Loader2 size={12} className="animate-spin" />
         Syncing {progress.done}/{progress.total}
@@ -125,7 +125,7 @@ export function PlaylistOfflineSync({ tracks }: Props) {
     return (
       <button
         onClick={handleClear}
-        className="group flex items-center gap-2 bg-[#0e1f17] border border-[#6DC6A4]/30 text-[#6DC6A4] hover:bg-red-950/30 hover:text-red-400 hover:border-red-900/50 px-4 py-2 rounded-md text-[12px] font-medium transition-colors"
+        className="group flex items-center gap-2 bg-[#0e1f17] border border-[#6DC6A4]/30 text-[#6DC6A4] hover:bg-red-950/30 hover:text-red-400 hover:border-red-900/50 px-4 py-2 rounded-md text-[11px] font-medium transition-colors"
         title={`${cachedIds.size} tracks cached offline — click to clear`}
       >
         <CloudCheck size={12} className="group-hover:hidden" />
@@ -138,7 +138,7 @@ export function PlaylistOfflineSync({ tracks }: Props) {
   return (
     <button
       onClick={handleSync}
-      className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 transition-colors"
+      className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[11px] font-medium hover:border-white/20 transition-colors"
       title={cachedIds.size > 0 ? `${cachedIds.size}/${tracks.length} already cached` : 'Cache for offline playback'}
     >
       <CloudDownload size={12} />

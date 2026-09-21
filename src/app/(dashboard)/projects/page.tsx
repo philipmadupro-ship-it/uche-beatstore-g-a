@@ -224,7 +224,7 @@ export default function ProjectsPage() {
             <p className="text-[11px] text-white/60 mb-6 font-mono">{fetchError}</p>
             <button
               onClick={fetchProjects}
-              className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 transition-colors"
+              className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[11px] font-medium hover:border-white/20 transition-colors"
             >
               Try again
             </button>
@@ -247,7 +247,7 @@ export default function ProjectsPage() {
                     </p>
                     <button
                       onClick={() => setFilters({ ...DEFAULT_PROJECT_FILTERS, tags: new Set() })}
-                      className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 transition-colors"
+                      className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[11px] font-medium hover:border-white/20 transition-colors"
                     >
                       Clear filters
                     </button>

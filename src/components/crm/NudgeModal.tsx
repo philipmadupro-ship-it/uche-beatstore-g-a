@@ -124,7 +124,7 @@ export function NudgeModal({ contact, latestSend, onClose, onSuccess }: NudgeMod
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           rows={8}
-          inputClassName="text-[12px] leading-relaxed normal-case tracking-normal"
+          inputClassName="text-[11px] leading-relaxed normal-case tracking-normal"
         />
 
         {/* Footer Actions */}

@@ -156,7 +156,7 @@ function Hero({
           </div>
         )}
         {meta && (
-          <div className="mt-1.5 flex items-center gap-2 text-[12px] text-white/55 flex-wrap">
+          <div className="mt-1.5 flex items-center gap-2 text-[11px] text-white/55 flex-wrap">
             {meta}
           </div>
         )}

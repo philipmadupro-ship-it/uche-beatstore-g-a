@@ -446,7 +446,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <button
                 onClick={() => setGlobalTrack(track)}
-                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-black transition-colors hover:bg-white/90 sm:gap-2 sm:px-4 sm:text-[12px]"
+                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-black transition-colors hover:bg-white/90 sm:gap-2 sm:px-4 sm:text-[11px]"
               >
                 <PlayGlyph size={13} className="ml-0.5" />
                 Play
@@ -455,14 +455,14 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 onClick={handleReanalyze}
                 disabled={reanalyzing || !track.audio_url}
                 title={track.audio_url ? 'Re-extract BPM, key and loudness' : 'Upload source audio before analyzing'}
-                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-[#090907] transition-colors hover:bg-[#E2CDA8] disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-[12px]"
+                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-[#090907] transition-colors hover:bg-[#E2CDA8] disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-[11px]"
               >
                 {reanalyzing ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}
                 {reanalyzing ? 'Analyzing…' : 'Analyze'}
               </button>
               <button
                 onClick={() => setShareOpen(true)}
-                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-[11px] font-medium text-white transition-colors hover:border-white/20 sm:gap-2 sm:px-4 sm:text-[12px]"
+                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-[11px] font-medium text-white transition-colors hover:border-white/20 sm:gap-2 sm:px-4 sm:text-[11px]"
               >
                 <Share2 size={12} />
                 Share
@@ -470,7 +470,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
               <button
                 onClick={() => router.push(`/studio?track=${track.id}`)}
                 title="Open this track in the studio (loop / pitch / stems / record)"
-                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[12px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/20 hover:bg-white/10"
+                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[11px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/20 hover:bg-white/10"
               >
                 <Sliders size={12} />
                 Studio
@@ -479,7 +479,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 <a
                   href={audioSrc(track.audio_url)}
                   download={`${track.title || 'track'}.wav`}
-                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[12px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/20"
+                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[11px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/20"
                 >
                   <Download size={12} />
                   Download

@@ -151,7 +151,7 @@ export default function StoreProjectPage({
       <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-white/40">
         <Layers size={36} />
         <p className="text-[14px]">Project not found or not listed.</p>
-        <Link href="/store" className="text-[12px] underline hover:text-white">← Back to store</Link>
+        <Link href="/store" className="text-[11px] underline hover:text-white">← Back to store</Link>
       </div>
     );
   }
@@ -176,7 +176,7 @@ export default function StoreProjectPage({
       {buyable && (
         <button
           onClick={handleBuy}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full text-black text-[12px] font-bold tracking-wide transition-transform hover:scale-[1.02] active:scale-[0.98]"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-full text-black text-[11px] font-bold tracking-wide transition-transform hover:scale-[1.02] active:scale-[0.98]"
           style={{ backgroundColor: accent }}
         >
           <ShoppingCart size={13} />
@@ -186,7 +186,7 @@ export default function StoreProjectPage({
       <button
         onClick={playAll}
         disabled={tracks.length === 0}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/[0.08] border border-white/[0.10] text-white text-[12px] hover:bg-white/[0.14] transition-colors disabled:opacity-40"
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/[0.08] border border-white/[0.10] text-white text-[11px] hover:bg-white/[0.14] transition-colors disabled:opacity-40"
       >
         {anyOurTrackPlaying ? <Pause size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" className="ml-0.5" />}
         Preview
@@ -297,7 +297,7 @@ function TrackList({
     return (
       <div className="px-6 md:px-10 py-10 text-center">
         <Music size={20} className="text-white/40 mx-auto mb-2" />
-        <p className="text-[12px] text-white/60">No tracks in this project yet.</p>
+        <p className="text-[11px] text-white/60">No tracks in this project yet.</p>
       </div>
     );
   }

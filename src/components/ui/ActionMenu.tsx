@@ -287,7 +287,7 @@ export function ActionMenu({
                       className={cn(
                         // Inset, rounded highlight: the row lights up inside the
                         // panel's edge rather than as a hard bar across it.
-                        'mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[12px] font-medium transition-colors',
+                        'mx-1 flex w-[calc(100%-0.5rem)] items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[11px] font-medium transition-colors',
                         'disabled:cursor-not-allowed disabled:opacity-40',
                         action.danger || section.danger ? 'text-red-400' : 'text-white',
                         highlight === idx && !(action.disabled || action.busy)

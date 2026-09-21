@@ -45,7 +45,7 @@ export function TagColorsCard() {
 
   return (
     <section className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-      <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Tag colours</h2>
+      <h2 className="text-[11px] font-bold uppercase tracking-wider text-white">Tag colours</h2>
       <p className="mt-1 text-[11px] leading-snug text-white/50">
         Generated covers lead on the colour of a beat&apos;s first tag, so everything
         tagged the same shares a hue. Tags you haven&apos;t set use a sensible default.
@@ -90,7 +90,7 @@ export function TagColorsCard() {
                 className="size-8 shrink-0 rounded-md border border-white/10"
                 style={{ backgroundImage: preview.css }}
               />
-              <span className="min-w-0 flex-1 truncate text-[12px] text-white/85">{tag}</span>
+              <span className="min-w-0 flex-1 truncate text-[11px] text-white/85">{tag}</span>
 
               {overridden && (
                 <button

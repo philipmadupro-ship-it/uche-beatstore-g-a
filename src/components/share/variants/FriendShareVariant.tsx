@@ -128,7 +128,7 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
                     }`}
                   >
                     <span className="font-mono text-[9px] text-white/40 w-5 shrink-0 tabular-nums">{i + 1}</span>
-                    <span className={`flex-1 text-[12px] font-medium truncate ${active ? 'text-white' : 'text-white/80'}`}>
+                    <span className={`flex-1 text-[11px] font-medium truncate ${active ? 'text-white' : 'text-white/80'}`}>
                       {t.title}
                     </span>
                     {dur > 0 && (

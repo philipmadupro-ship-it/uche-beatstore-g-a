@@ -324,7 +324,7 @@ export function ClientShareVariant({
         }`}>
           <div className="max-w-5xl mx-auto flex items-center gap-3">
             {purchaseStatus === 'success' ? <CheckCircle2 size={16} className="shrink-0" /> : <XCircle size={16} className="shrink-0" />}
-            <p className="text-[12px] font-medium flex-1">
+            <p className="text-[11px] font-medium flex-1">
               {purchaseStatus === 'success'
                 ? 'Purchase complete — check your inbox for the receipt and download link.'
                 : 'Checkout cancelled. No payment was taken.'}
@@ -423,7 +423,7 @@ export function ClientShareVariant({
             </div>
 
             {tracks.length === 0 ? (
-              <div className="px-5 py-12 text-center text-[12px] text-white/60">
+              <div className="px-5 py-12 text-center text-[11px] text-white/60">
                 No tracks in this selection yet.
               </div>
             ) : (
@@ -584,7 +584,7 @@ export function ClientShareVariant({
               onSelect={setSelectedLicenseId}
             />
             {creator?.license_notes && (
-              <p className="text-[12px] text-white/80 mt-4 leading-relaxed">
+              <p className="text-[11px] text-white/80 mt-4 leading-relaxed">
                 {creator.license_notes}
               </p>
             )}
@@ -664,7 +664,7 @@ export function ClientShareVariant({
 
             {/* Track info */}
             <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-medium text-white truncate">{playingTrack.title}</p>
+              <p className="text-[11px] font-medium text-white truncate">{playingTrack.title}</p>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-[9px] font-mono text-white/40 tabular-nums">
                   {fmt(currentTime)}
@@ -751,7 +751,7 @@ function SocialPill({ href, icon, label }: { href: string; icon: React.ReactNode
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-[12px] text-white hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors"
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-white hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors"
     >
       {icon}
       <span className="truncate max-w-[200px]">{label}</span>

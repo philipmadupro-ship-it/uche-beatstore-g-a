@@ -103,7 +103,7 @@ export default function OfflinePage() {
                   <div className="flex size-8 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--bg-page)]">
                     <Music2 size={12} className="text-white" />
                   </div>
-                  <p className="truncate text-[12px] text-[var(--text-primary)]">{m.title || m.id}</p>
+                  <p className="truncate text-[11px] text-[var(--text-primary)]">{m.title || m.id}</p>
                   <p className="font-mono text-[10px] text-[var(--text-readable)]">{formatMB(m.size)}</p>
                   <p className="hidden font-mono text-[10px] text-[var(--text-readable)] sm:block">
                     {new Date(m.cached_at).toLocaleDateString()}

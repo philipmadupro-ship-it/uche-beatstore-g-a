@@ -128,7 +128,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
         <div className="flex gap-2 border border-[#A9523566] bg-[#A952351A] p-3">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#A95235]" />
           <div className="space-y-1">
-            <p className="text-[12px] text-white/90">No image provider configured.</p>
+            <p className="text-[11px] text-white/90">No image provider configured.</p>
             <p className="text-[11px] leading-relaxed text-white/40">
               Set <code className="text-white">OPENAI_API_KEY</code> or{' '}
               <code className="text-white">GEMINI_API_KEY</code> in the server environment
@@ -171,7 +171,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
           onChange={(e) => setPrompt(e.target.value)}
           rows={3}
           placeholder="Describe the artwork — subject, texture, light…"
-          className="w-full resize-y border border-white/10 bg-[#090907] p-2.5 text-[12px] text-white/90 placeholder:text-white/25 focus-visible:border-white/70 focus-visible:outline-none"
+          className="w-full resize-y border border-white/10 bg-[#090907] p-2.5 text-[11px] text-white/90 placeholder:text-white/25 focus-visible:border-white/70 focus-visible:outline-none"
         />
         <div className="flex flex-wrap gap-1.5">
           {PRESETS.map((p) => (
@@ -226,7 +226,7 @@ export function CoverGeneratorPanel({ palette, styleName, tags, onGenerated }: P
           value={avoid}
           onChange={(e) => setAvoid(e.target.value)}
           placeholder="faces, people, clutter…"
-          className="w-full border border-white/10 bg-[#090907] p-2 text-[12px] text-white/90 placeholder:text-white/25 focus-visible:border-white/70 focus-visible:outline-none"
+          className="w-full border border-white/10 bg-[#090907] p-2 text-[11px] text-white/90 placeholder:text-white/25 focus-visible:border-white/70 focus-visible:outline-none"
         />
       </div>
 

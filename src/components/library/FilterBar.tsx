@@ -252,14 +252,14 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
                   type="number" placeholder="Min" min={0} max={999} aria-label="Minimum BPM"
                   value={filters.bpmMin ?? ''}
                   onChange={(e) => set({ bpmMin: e.target.value ? Number(e.target.value) : null })}
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[12px] tabular-nums text-white placeholder-white/30 focus:border-white/30 focus:outline-none"
+                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] tabular-nums text-white placeholder-white/30 focus:border-white/30 focus:outline-none"
                 />
                 <span className="shrink-0 text-[10px] text-white/30">–</span>
                 <input
                   type="number" placeholder="Max" min={0} max={999} aria-label="Maximum BPM"
                   value={filters.bpmMax ?? ''}
                   onChange={(e) => set({ bpmMax: e.target.value ? Number(e.target.value) : null })}
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[12px] tabular-nums text-white placeholder-white/30 focus:border-white/30 focus:outline-none"
+                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11px] tabular-nums text-white placeholder-white/30 focus:border-white/30 focus:outline-none"
                 />
               </div>
             </div>
@@ -421,7 +421,7 @@ function MenuItem({ label, selected, onClick }: { label: string; selected: boole
       onClick={onClick}
       role="menuitemcheckbox"
       aria-checked={selected}
-      className="tap flex w-full min-h-9 items-center justify-between gap-2 rounded-lg px-2.5 text-left text-[12px] text-white/75 transition-colors hover:bg-white/[0.06] hover:text-white"
+      className="tap flex w-full min-h-9 items-center justify-between gap-2 rounded-lg px-2.5 text-left text-[11px] text-white/75 transition-colors hover:bg-white/[0.06] hover:text-white"
     >
       <span className="truncate">{label}</span>
       {selected && <Check size={12} className="shrink-0 text-[var(--accent)]" />}

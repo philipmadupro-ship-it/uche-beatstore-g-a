@@ -200,8 +200,8 @@ export function ProjectDetailHeader(props: Props) {
         maxLength={10000}
         placeholder="Describe this project…"
         emptyLabel="Add a description"
-        className="-mx-2 max-w-2xl px-2 py-1 text-[12px] leading-relaxed text-white/60"
-        inputClassName="text-[12px] max-w-2xl"
+        className="-mx-2 max-w-2xl px-2 py-1 text-[11px] leading-relaxed text-white/60"
+        inputClassName="text-[11px] max-w-2xl"
       />
 
       {/* Action buttons — the four things that are not property edits. */}
@@ -209,7 +209,7 @@ export function ProjectDetailHeader(props: Props) {
         <button
           onClick={onPlay}
           disabled={playDisabled}
-          className="glass-play grid size-9 place-items-center rounded-full border border-white/[0.14] bg-white/[0.07] text-white backdrop-blur-md shadow-[inset_0_1px_0_0_rgba(255,255,255,0.18),0_2px_10px_rgba(0,0,0,0.28)] transition-[transform,background-color,border-color] duration-[var(--dur-fast)] ease-[var(--ease-spring)] hover:border-white/25 hover:bg-white/[0.13] disabled:opacity-30 sm:inline-flex sm:size-auto sm:gap-2 sm:px-4 sm:py-2 sm:text-[12px] sm:font-medium"
+          className="glass-play grid size-9 place-items-center rounded-full border border-white/[0.14] bg-white/[0.07] text-white backdrop-blur-md shadow-[inset_0_1px_0_0_rgba(255,255,255,0.18),0_2px_10px_rgba(0,0,0,0.28)] transition-[transform,background-color,border-color] duration-[var(--dur-fast)] ease-[var(--ease-spring)] hover:border-white/25 hover:bg-white/[0.13] disabled:opacity-30 sm:inline-flex sm:size-auto sm:gap-2 sm:px-4 sm:py-2 sm:text-[11px] sm:font-medium"
           title="Play project"
         >
           <Play size={12} fill="currentColor" className="ml-0.5" />
@@ -218,21 +218,21 @@ export function ProjectDetailHeader(props: Props) {
         <button
           onClick={onShare}
           disabled={shareDisabled}
-          className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-[11px] font-medium text-white transition-all hover:border-white/[0.12] hover:bg-white/[0.08] disabled:opacity-30 sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[12px]"
+          className="flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-[11px] font-medium text-white transition-all hover:border-white/[0.12] hover:bg-white/[0.08] disabled:opacity-30 sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[11px]"
         >
           <Share2 size={12} />
           Share
         </button>
         <button
           onClick={onAddFromLibrary}
-          className="flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-transparent px-3 py-2 text-[11px] font-medium text-white/60 transition-all hover:border-white/[0.1] hover:text-white sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[12px]"
+          className="flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-transparent px-3 py-2 text-[11px] font-medium text-white/60 transition-all hover:border-white/[0.1] hover:text-white sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[11px]"
         >
           <Library size={12} />
           Library
         </button>
         <button
           onClick={onToggleUpload}
-          className="flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-transparent px-3 py-2 text-[11px] font-medium text-white/60 transition-all hover:border-white/[0.1] hover:text-white sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[12px]"
+          className="flex items-center gap-1.5 rounded-full border border-white/[0.06] bg-transparent px-3 py-2 text-[11px] font-medium text-white/60 transition-all hover:border-white/[0.1] hover:text-white sm:gap-2 sm:px-4 sm:py-2.5 sm:text-[11px]"
         >
           <Plus size={12} />
           Upload

@@ -63,7 +63,7 @@ export function StoreContactForm({ creator, accentColor }: Props) {
           <h2 className="text-xl font-medium text-white">
             Work with {creator?.display_name || 'the producer'}
           </h2>
-          <p className="mt-2 text-[12px] text-white/40">
+          <p className="mt-2 text-[11px] text-white/40">
             Licensing inquiries, custom beats, features — drop a message.
           </p>
         </div>
@@ -72,7 +72,7 @@ export function StoreContactForm({ creator, accentColor }: Props) {
           <div className="text-center py-10 px-6 rounded-2xl bg-white/[0.04] border border-white/10">
             <CheckCircle2 size={28} className="text-[#6DC6A4] mx-auto mb-3" />
             <p className="text-[14px] font-medium text-white mb-1">Message sent!</p>
-            <p className="text-[12px] text-white/40">You&apos;ll hear back soon.</p>
+            <p className="text-[11px] text-white/40">You&apos;ll hear back soon.</p>
             <button onClick={() => setSent(false)} className="mt-4 text-[10px] font-mono uppercase tracking-wider text-white/60 hover:text-white transition-colors">
               Send another
             </button>
@@ -94,7 +94,7 @@ export function StoreContactForm({ creator, accentColor }: Props) {
                   aria-invalid={nameErr ? 'true' : 'false'}
                   aria-describedby={nameErr ? 'store-contact-name-error' : undefined}
                   placeholder="Artist or real name"
-                  className={`w-full bg-white/[0.04] border rounded-lg px-3 py-2.5 text-[12px] text-white placeholder:text-white/40 focus:outline-none transition-colors ${nameErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-white/10 focus:border-white/20'}`}
+                  className={`w-full bg-white/[0.04] border rounded-lg px-3 py-2.5 text-[11px] text-white placeholder:text-white/40 focus:outline-none transition-colors ${nameErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-white/10 focus:border-white/20'}`}
                 />
                 {nameErr && <p id="store-contact-name-error" role="alert" className="mt-1 text-[10px] text-red-400">{nameErr}</p>}
               </div>
@@ -112,7 +112,7 @@ export function StoreContactForm({ creator, accentColor }: Props) {
                   aria-invalid={emailErr ? 'true' : 'false'}
                   aria-describedby={emailErr ? 'store-contact-email-error' : undefined}
                   placeholder="your@email.com"
-                  className={`w-full bg-white/[0.04] border rounded-lg px-3 py-2.5 text-[12px] text-white placeholder:text-white/40 focus:outline-none transition-colors ${emailErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-white/10 focus:border-white/20'}`}
+                  className={`w-full bg-white/[0.04] border rounded-lg px-3 py-2.5 text-[11px] text-white placeholder:text-white/40 focus:outline-none transition-colors ${emailErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-white/10 focus:border-white/20'}`}
                 />
                 {emailErr && <p id="store-contact-email-error" role="alert" className="mt-1 text-[10px] text-red-400">{emailErr}</p>}
               </div>
@@ -126,7 +126,7 @@ export function StoreContactForm({ creator, accentColor }: Props) {
                 value={subject}
                 onChange={(e) => setSubject(e.target.value)}
                 placeholder="Beat licensing, custom request, feature…"
-                className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2.5 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 transition-colors"
+                className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2.5 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 transition-colors"
               />
             </div>
             <div>
@@ -143,7 +143,7 @@ export function StoreContactForm({ creator, accentColor }: Props) {
                 rows={5}
                 maxLength={2000}
                 placeholder="Tell me about your project or what you're looking for…"
-                className={`w-full bg-white/[0.04] border rounded-lg px-3 py-2.5 text-[12px] text-white placeholder:text-white/40 focus:outline-none transition-colors resize-none leading-relaxed ${msgErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-white/10 focus:border-white/20'}`}
+                className={`w-full bg-white/[0.04] border rounded-lg px-3 py-2.5 text-[11px] text-white placeholder:text-white/40 focus:outline-none transition-colors resize-none leading-relaxed ${msgErr ? 'border-red-500/50 focus:border-red-500/70' : 'border-white/10 focus:border-white/20'}`}
               />
               <div className="flex items-center justify-between mt-1">
                 {msgErr
@@ -158,7 +158,7 @@ export function StoreContactForm({ creator, accentColor }: Props) {
             <button
               type="submit"
               disabled={!canSubmit}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-black font-bold text-[12px] uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-40"
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-black font-bold text-[11px] uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-40"
               style={{ backgroundColor: accentColor }}
             >
               {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}

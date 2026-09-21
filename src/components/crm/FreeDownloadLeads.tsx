@@ -111,7 +111,7 @@ export function FreeDownloadLeads() {
         {shown.map((lead) => (
           <li key={lead.email} className="flex items-center justify-between gap-3 py-2">
             <div className="min-w-0">
-              <p className="truncate text-[12px] text-white/85">{lead.email}</p>
+              <p className="truncate text-[11px] text-white/85">{lead.email}</p>
               {lead.tracks.length > 0 ? (
                 <p className="truncate text-[10px] text-white/35">{lead.tracks.slice(0, 3).join(' · ')}</p>
               ) : null}

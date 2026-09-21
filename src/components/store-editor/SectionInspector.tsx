@@ -289,7 +289,7 @@ export function SectionInspector({
               <input
                 value={section.content?.heading ?? ''}
                 onChange={(event) => onContent({ heading: event.target.value })}
-                className="h-9 border border-white/10 bg-[#090907] px-2 text-[12px] text-white/90 outline-none focus:border-white/40"
+                className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
               />
             </label>
             {section.kind === 'text' ? (
@@ -299,7 +299,7 @@ export function SectionInspector({
                   <textarea
                     value={section.content?.body ?? ''}
                     onChange={(event) => onContent({ body: event.target.value })}
-                    className="min-h-24 border border-white/10 bg-[#090907] p-2 text-[12px] leading-relaxed text-white/90 outline-none focus:border-white/40"
+                    className="min-h-24 border border-white/10 bg-[#090907] p-2 text-[11px] leading-relaxed text-white/90 outline-none focus:border-white/40"
                   />
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -308,7 +308,7 @@ export function SectionInspector({
                     <input
                       value={section.content?.ctaLabel ?? ''}
                       onChange={(event) => onContent({ ctaLabel: event.target.value })}
-                      className="h-9 border border-white/10 bg-[#090907] px-2 text-[12px] text-white/90 outline-none focus:border-white/40"
+                      className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
                     />
                   </label>
                   <label className="grid gap-1.5">
@@ -316,7 +316,7 @@ export function SectionInspector({
                     <input
                       value={section.content?.ctaHref ?? ''}
                       onChange={(event) => onContent({ ctaHref: event.target.value })}
-                      className="h-9 border border-white/10 bg-[#090907] px-2 text-[12px] text-white/90 outline-none focus:border-white/40"
+                      className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
                     />
                   </label>
                 </div>
@@ -328,7 +328,7 @@ export function SectionInspector({
                 <input
                   value={section.content?.imageUrl ?? ''}
                   onChange={(event) => onContent({ imageUrl: event.target.value })}
-                  className="h-9 border border-white/10 bg-[#090907] px-2 text-[12px] text-white/90 outline-none focus:border-white/40"
+                  className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
                 />
               </label>
             ) : null}
@@ -339,7 +339,7 @@ export function SectionInspector({
                   value={section.content?.videoUrl ?? ''}
                   onChange={(event) => onContent({ videoUrl: event.target.value })}
                   placeholder="https://www.youtube.com/embed/…"
-                  className="h-9 border border-white/10 bg-[#090907] px-2 text-[12px] text-white/90 outline-none placeholder:text-white/25 focus:border-white/40"
+                  className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none placeholder:text-white/25 focus:border-white/40"
                 />
               </label>
             ) : null}
@@ -426,7 +426,7 @@ export function SectionInspector({
                             <textarea
                               value={block.text ?? ''}
                               onChange={(event) => onBlocks(updateCanvasBlock(blocks, block.id, { text: event.target.value }))}
-                              className="min-h-16 border border-white/10 bg-[#090907] p-2 text-[12px] text-white/90 outline-none focus:border-white/40"
+                              className="min-h-16 border border-white/10 bg-[#090907] p-2 text-[11px] text-white/90 outline-none focus:border-white/40"
                             />
                           </label>
                           <label className="grid gap-1.5">
@@ -450,7 +450,7 @@ export function SectionInspector({
                           <input
                             value={block.imageUrl ?? ''}
                             onChange={(event) => onBlocks(updateCanvasBlock(blocks, block.id, { imageUrl: event.target.value }))}
-                            className="h-9 border border-white/10 bg-[#090907] px-2 text-[12px] text-white/90 outline-none focus:border-white/40"
+                            className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
                           />
                         </label>
                       ) : null}

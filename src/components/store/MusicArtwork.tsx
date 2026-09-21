@@ -87,7 +87,7 @@ export function MusicArtwork({
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[12%] h-[12%] rounded-full bg-[#090907] border border-white/10" />
           {/* Label text — tiny artist credit visible on the vinyl center */}
           {artist && (
-            <div className="absolute bottom-1 left-0 right-0 px-1 text-[7px] font-mono uppercase tracking-[0.1em] text-white/70 text-center truncate">
+            <div className="absolute bottom-1 left-0 right-0 px-1 text-[8px] font-mono uppercase tracking-[0.1em] text-white/70 text-center truncate">
               {isSong ? 'A · ' : ''}{artist}
             </div>
           )}

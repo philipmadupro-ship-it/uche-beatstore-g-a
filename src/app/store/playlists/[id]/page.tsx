@@ -260,7 +260,7 @@ export default function PlaylistPage({
       <button
         onClick={playAll}
         disabled={tracks.length === 0}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/[0.08] border border-white/[0.10] text-white text-[12px] hover:bg-white/[0.14] transition-colors disabled:opacity-40"
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/[0.08] border border-white/[0.10] text-white text-[11px] hover:bg-white/[0.14] transition-colors disabled:opacity-40"
       >
         {anyOurTrackPlaying ? <Pause size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" className="ml-0.5" />}
         {anyOurTrackPlaying ? 'Pause' : 'Play all'}
@@ -268,7 +268,7 @@ export default function PlaylistPage({
       <button
         onClick={() => addBulk('lease', 'all')}
         disabled={tracks.length === 0}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-white/[0.10] bg-white/[0.04] text-white text-[12px] hover:bg-white/[0.08] transition-colors disabled:opacity-40"
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-white/[0.10] bg-white/[0.04] text-white text-[11px] hover:bg-white/[0.08] transition-colors disabled:opacity-40"
       >
         <ShoppingBag size={11} />
         Add all — Lease
@@ -276,7 +276,7 @@ export default function PlaylistPage({
       <button
         onClick={() => addBulk('exclusive', 'all')}
         disabled={tracks.length === 0}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-full text-black text-[12px] font-medium transition-opacity hover:opacity-90 disabled:opacity-40"
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full text-black text-[11px] font-medium transition-opacity hover:opacity-90 disabled:opacity-40"
         style={{ backgroundColor: accent }}
       >
         <ShoppingBag size={11} />
@@ -343,7 +343,7 @@ export default function PlaylistPage({
               {tracks.length === 0 ? (
                 <div className="px-6 md:px-10 py-10 text-center">
                   <Music size={20} className="text-white/40 mx-auto mb-2" />
-                  <p className="text-[12px] text-white/60">No tracks listed for sale in this playlist yet.</p>
+                  <p className="text-[11px] text-white/60">No tracks listed for sale in this playlist yet.</p>
                 </div>
               ) : (
                 <ul>
@@ -444,19 +444,19 @@ export default function PlaylistPage({
                               <button
                                 onClick={() => addOne(t, 'lease')}
                                 disabled={lp == null}
-                                className="flex flex-col items-center px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/[0.10] text-white text-[12px] font-bold hover:bg-white/[0.12] transition-colors disabled:opacity-30 leading-none"
+                                className="flex flex-col items-center px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/[0.10] text-white text-[11px] font-bold hover:bg-white/[0.12] transition-colors disabled:opacity-30 leading-none"
                               >
                                 <span className="tabular-nums">{lp != null ? `$${lp}` : '—'}</span>
-                                <span className="text-[7px] font-mono text-white/45 mt-0.5 uppercase tracking-wider">Lease</span>
+                                <span className="text-[8px] font-mono text-white/45 mt-0.5 uppercase tracking-wider">Lease</span>
                               </button>
                               <button
                                 onClick={() => addOne(t, 'exclusive')}
                                 disabled={ep == null}
-                                className="flex flex-col items-center px-2.5 py-1.5 rounded-md text-black text-[12px] font-bold hover:opacity-90 transition-opacity disabled:opacity-30 leading-none"
+                                className="flex flex-col items-center px-2.5 py-1.5 rounded-md text-black text-[11px] font-bold hover:opacity-90 transition-opacity disabled:opacity-30 leading-none"
                                 style={{ backgroundColor: accent }}
                               >
                                 <span className="tabular-nums">{ep != null ? `$${ep}` : '—'}</span>
-                                <span className="text-[7px] font-mono text-black/60 mt-0.5 uppercase tracking-wider">Excl.</span>
+                                <span className="text-[8px] font-mono text-black/60 mt-0.5 uppercase tracking-wider">Excl.</span>
                               </button>
                             </>
                           )}
@@ -487,7 +487,7 @@ export default function PlaylistPage({
                               <button
                                 onClick={() => { addOne(t, 'lease'); setMenuFor(null); }}
                                 disabled={lp == null}
-                                className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] w-full text-left disabled:opacity-40"
+                                className="flex items-center gap-2 px-3 py-2 text-[11px] text-white hover:bg-white/[0.06] w-full text-left disabled:opacity-40"
                               >
                                 <Plus size={12} className="text-white/60" />
                                 Add lease {lp != null ? `($${lp})` : ''}
@@ -495,7 +495,7 @@ export default function PlaylistPage({
                               <button
                                 onClick={() => { addOne(t, 'exclusive'); setMenuFor(null); }}
                                 disabled={ep == null}
-                                className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] w-full text-left disabled:opacity-40"
+                                className="flex items-center gap-2 px-3 py-2 text-[11px] text-white hover:bg-white/[0.06] w-full text-left disabled:opacity-40"
                               >
                                 <Plus size={12} style={{ color: accent }} />
                                 Add exclusive {ep != null ? `($${ep})` : ''}
@@ -506,7 +506,7 @@ export default function PlaylistPage({
                                   try { navigator.clipboard.writeText(t.title); toast.success('Copied'); } catch {/* noop */}
                                   setMenuFor(null);
                                 }}
-                                className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] w-full text-left"
+                                className="flex items-center gap-2 px-3 py-2 text-[11px] text-white hover:bg-white/[0.06] w-full text-left"
                               >
                                 <Copy size={12} className="text-white/60" />
                                 Copy title
@@ -533,7 +533,7 @@ export default function PlaylistPage({
       {stickyVisible && (
         <div className="fixed left-1/2 -translate-x-1/2 bottom-24 sm:bottom-28 z-40 bg-white/[0.02] border border-white/[0.10] rounded-2xl shadow-[0_16px_60px_rgba(0,0,0,0.7)] backdrop-blur-2xl px-4 py-3 w-[min(620px,calc(100vw-32px))]">
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="text-[12px] text-white flex items-center gap-2">
+            <div className="text-[11px] text-white flex items-center gap-2">
               <span className="font-bold tabular-nums">{selected.size}</span>
               <span className="text-white/60">selected</span>
             </div>

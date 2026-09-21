@@ -130,7 +130,7 @@ export function TrackMetadataEditor({ track, onPatch, onRatingChange }: Props) {
               const v = Number(bpmDraft);
               if (v > 20) { const n = v - 1; setBpmDraft(String(n)); onPatch({ bpm: n }); }
             }}
-            className="w-6 h-6 rounded border border-white/10 text-white/40 hover:text-white hover:border-white/20 flex items-center justify-center text-[12px] leading-none transition-colors"
+            className="w-6 h-6 rounded border border-white/10 text-white/40 hover:text-white hover:border-white/20 flex items-center justify-center text-[11px] leading-none transition-colors"
           >−</button>
           <input
             type="number"
@@ -148,7 +148,7 @@ export function TrackMetadataEditor({ track, onPatch, onRatingChange }: Props) {
               const v = Number(bpmDraft);
               if (v < 300) { const n = v + 1; setBpmDraft(String(n)); onPatch({ bpm: n }); }
             }}
-            className="w-6 h-6 rounded border border-white/10 text-white/40 hover:text-white hover:border-white/20 flex items-center justify-center text-[12px] leading-none transition-colors"
+            className="w-6 h-6 rounded border border-white/10 text-white/40 hover:text-white hover:border-white/20 flex items-center justify-center text-[11px] leading-none transition-colors"
           >+</button>
         </div>
       </div>

@@ -25,7 +25,7 @@ function Metric({ color, value, label }: { color: string; value: string | number
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
-      <span className="text-[12px] text-white font-medium tabular-nums">{value}</span>
+      <span className="text-[11px] text-white font-medium tabular-nums">{value}</span>
       <span className="text-[11px] text-white/40">{label}</span>
     </span>
   );

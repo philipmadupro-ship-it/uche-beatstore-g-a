@@ -130,7 +130,7 @@ export function PlaylistFilterBar({
                 onChange={(e) => setEditName(e.target.value)}
                 onBlur={() => renameFolder(f.id)}
                 onKeyDown={(e) => { if (e.key === 'Enter') renameFolder(f.id); if (e.key === 'Escape') setEditingId(null); }}
-                className="h-10 w-full rounded-xl border border-white/30 bg-white/[0.04] px-3 text-[12px] text-white focus:outline-none"
+                className="h-10 w-full rounded-xl border border-white/30 bg-white/[0.04] px-3 text-[11px] text-white focus:outline-none"
               />
             ) : (
               <FolderContainerCard
@@ -157,7 +157,7 @@ export function PlaylistFilterBar({
           onChange={(e) => setNewFolder(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') createFolder(); }}
           placeholder="New folder"
-          className="min-h-10 flex-1 rounded-full border border-white/10 bg-white/[0.02] px-3 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
+          className="min-h-10 flex-1 rounded-full border border-white/10 bg-white/[0.02] px-3 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
         />
         <button onClick={createFolder} disabled={!newFolder.trim() || busy} className="grid size-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-white/60 hover:text-white hover:border-white/20 disabled:opacity-40" aria-label="Create folder">
           {busy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
@@ -203,7 +203,7 @@ export function PlaylistFilterBar({
         <div className="relative flex-1 min-w-[160px] max-w-sm">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
           <input value={value.search} onChange={(e) => set({ search: e.target.value })} placeholder="Search playlists + tags…"
-            className="w-full bg-white/[0.02] border border-white/10 rounded-full py-2 pl-9 pr-3 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20" />
+            className="w-full bg-white/[0.02] border border-white/10 rounded-full py-2 pl-9 pr-3 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20" />
         </div>
         <button onClick={() => isMobile ? setMobileFilters(true) : setOpen((v) => !v)} className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[11px] font-medium border transition-colors min-h-10 ${open || mobileFilters || activeCount > 0 ? 'bg-white/15 text-white border-white/40 font-bold' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}>
           <SlidersHorizontal size={12} /> Filters{activeCount > 0 ? ` · ${activeCount}` : ''}

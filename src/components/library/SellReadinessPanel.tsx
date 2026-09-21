@@ -92,7 +92,7 @@ export function SellReadinessPanel({ tracks, hasDefaultPrice }: Props) {
                 href={`/library/${track.id}`}
                 className="flex items-baseline justify-between gap-3 rounded py-1 transition-colors hover:bg-white/[0.03]"
               >
-                <span className="min-w-0 truncate text-[12px] text-white/80">{track.title}</span>
+                <span className="min-w-0 truncate text-[11px] text-white/80">{track.title}</span>
                 <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.12em] text-white/35">
                   {track.blockers.map((b) => BLOCKER_LABELS[b]).join(' · ')}
                 </span>

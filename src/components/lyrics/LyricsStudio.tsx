@@ -425,7 +425,7 @@ Everything autosaves.`}
                 value={lookupWord}
                 onChange={(e) => setLookupWord(e.target.value.trim().toLowerCase())}
                 placeholder="word"
-                className="flex-1 bg-transparent text-[12px] text-white placeholder:text-white/40 focus:outline-none border-b border-white/10 focus:border-white/20 py-1"
+                className="flex-1 bg-transparent text-[11px] text-white placeholder:text-white/40 focus:outline-none border-b border-white/10 focus:border-white/20 py-1"
               />
               {lookupWord && (
                 <button onClick={() => setLookupWord('')} className="text-white/40 hover:text-white">

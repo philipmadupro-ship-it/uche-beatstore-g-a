@@ -75,7 +75,7 @@ function Inner() {
         <p className="mb-1 text-[22px] font-bold leading-tight text-white">
           Missing session
         </p>
-        <p className="mx-auto max-w-sm text-[12px] leading-relaxed text-white/80">
+        <p className="mx-auto max-w-sm text-[11px] leading-relaxed text-white/80">
           We could not find your purchase from this URL. Check your email for the secure link.
         </p>
       </Centered>
@@ -92,7 +92,7 @@ function Inner() {
         <p className="mb-2 text-[22px] font-bold leading-tight text-white">
           Still preparing your bundle
         </p>
-        <p className="mx-auto mb-5 max-w-sm text-[12px] leading-relaxed text-white/80">
+        <p className="mx-auto mb-5 max-w-sm text-[11px] leading-relaxed text-white/80">
           Your payment went through, but we have not received the confirmation from Stripe yet. The bundle link is also in the confirmation email, or you can refresh in a few seconds.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-2">
@@ -126,7 +126,7 @@ function Inner() {
       <p className="mb-2 text-[24px] font-bold leading-tight text-white">
         Preparing your bundle
       </p>
-      <p className="mx-auto max-w-sm text-[12px] leading-relaxed text-white/80">
+      <p className="mx-auto max-w-sm text-[11px] leading-relaxed text-white/80">
         Finalising your purchase. This usually takes a couple of seconds.
       </p>
       <div className="mx-auto mt-5 flex w-fit items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[10px] font-mono text-white/40">
