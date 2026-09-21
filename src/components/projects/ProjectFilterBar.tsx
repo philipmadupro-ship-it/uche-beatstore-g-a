@@ -7,6 +7,7 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { Drawer } from '@/components/ui/Drawer';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { FolderContainerCard } from '@/components/ui/ProductList';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import {
   type ProjectFilterState,
   type ProjectSortMode,
@@ -51,6 +52,16 @@ export function ProjectFilterBar({
   const [open, setOpen] = useState(false);
   const [mobileFilters, setMobileFilters] = useState(false);
   const [folderMenuOpen, setFolderMenuOpen] = useState(false);
+  // Escape and focus restoration for the folder popover. `trapFocus: false`
+  // on purpose — this is an anchored popover, and trapping one strands a
+  // keyboard user inside a panel they expect to Tab out of. Before this it
+  // closed only on an outside click, so a keyboard user who opened it had no
+  // way to dismiss it at all.
+  const folderPanelRef = useDialogBehavior<HTMLDivElement>({
+    open: folderMenuOpen,
+    onClose: () => setFolderMenuOpen(false),
+    trapFocus: false,
+  });
   const [folderDrawerOpen, setFolderDrawerOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [manage, setManage] = useState(false);
@@ -235,7 +246,12 @@ export function ProjectFilterBar({
           {folderMenuOpen && (
             <>
               <div className="fixed inset-0 z-30" onClick={() => setFolderMenuOpen(false)} />
-              <div className="absolute left-0 top-full z-40 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#0E0C09] p-3 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
+              <div
+                ref={folderPanelRef}
+                role="dialog"
+                aria-label="Filter by project folder"
+                className="absolute left-0 top-full z-40 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#0E0C09] p-3 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
+              >
                 {folderPanel}
               </div>
             </>

@@ -44,6 +44,7 @@ import { ActionDigestPanel } from '@/components/library/ActionDigestPanel';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { gridTemplate, resolveColumns } from '@/lib/library/columns';
 import { useLibraryColumns } from '@/hooks/useLibraryColumns';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { ColumnPicker } from '@/components/library/ColumnPicker';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import type { TrackStatsMap } from '@/lib/library/track-stats';
@@ -285,6 +286,15 @@ export default function LibraryPage() {
   // ── New Release dropdown ─────────────────────────────────────────
   const [creatingRelease, setCreatingRelease] = useState(false);
   const [releaseDropdownOpen, setReleaseDropdownOpen] = useState(false);
+  // Escape and focus restoration for the New-release menu. `trapFocus: false`
+  // because it is an anchored menu, not a dialog — trapping one strands a
+  // keyboard user inside a popup they expect to Tab out of. It previously
+  // closed only on an outside click, so there was no keyboard dismissal at all.
+  const releaseMenuRef = useDialogBehavior<HTMLDivElement>({
+    open: releaseDropdownOpen,
+    onClose: () => setReleaseDropdownOpen(false),
+    trapFocus: false,
+  });
 
   const handleNewRelease = async (mode: 'both' | 'project' | 'playlist') => {
     if (creatingRelease) return;
@@ -1038,7 +1048,10 @@ export default function LibraryPage() {
             {releaseDropdownOpen && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setReleaseDropdownOpen(false)} />
- <div className="absolute left-0 top-full mt-1.5 z-40 w-48 bg-white/[0.04] border border-white/10 rounded-xl overflow-hidden ui-pop duration-150">
+ <div
+                  ref={releaseMenuRef}
+                  className="absolute left-0 top-full mt-1.5 z-40 w-48 bg-white/[0.04] border border-white/10 rounded-xl overflow-hidden ui-pop duration-150"
+                >
                   {[
                     { mode: 'both' as const, label: 'Project + Playlist', sub: 'Full release flow' },
                     { mode: 'project' as const, label: 'Project only', sub: 'Production session' },

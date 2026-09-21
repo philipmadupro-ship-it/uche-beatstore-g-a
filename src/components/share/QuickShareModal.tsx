@@ -9,6 +9,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { cn } from '@/lib/utils';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import {
   EMPTY_PICKER_FILTERS,
   filterPickerTracks,
@@ -63,6 +64,9 @@ const PAGE_SIZE = 120;
  * filter logic itself lives in `lib/share/track-picker` so it is testable.
  */
 export function QuickShareModal({ onClose, onCreated }: Props) {
+  // Mounted only while open, so `open` is constant. Escape, focus trap and
+  // focus restoration come from the hook rather than being hand-rolled here.
+  const panelRef = useDialogBehavior<HTMLDivElement>({ open: true, onClose });
   const [tab, setTab] = useState<ShareTab>('tracks');
 
   const [tracks, setTracks] = useState<PickerTrack[]>([]);
@@ -245,6 +249,10 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
       onClick={onClose}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Quick share"
         onClick={(e) => e.stopPropagation()}
  className="w-full md:max-w-[560px] max-h-[90vh] rounded-t-3xl md:rounded-2xl overflow-hidden flex flex-col bg-gradient-to-b from-[#121214]/95 via-[#0e0e10]/95 to-[#090907]/98 backdrop-blur-2xl border border-white/[0.06] shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset] ui-pop-up duration-300"
       >

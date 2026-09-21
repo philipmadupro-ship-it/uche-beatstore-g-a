@@ -153,9 +153,21 @@ consistent tree-wide.
    skip. Widen it surface by surface.
 4. **Type scale** — worst offenders `store/[id]/page.tsx` and `sales/page.tsx` (9 distinct
    sizes each). Collapsing `12px → 11px` is the single highest-leverage change.
-5. **Modal consolidation** — 21 hand-rolled overlays; 19 lack Escape, 20 lack focus trap, all
-   21 lack `role="dialog"`. `ui/Modal` already implements all of it. Behaviour change: needs
-   sign-off.
+5. **Modal consolidation** — ~~21 hand-rolled overlays; 19 lack Escape, 20 lack focus trap,
+   all 21 lack `role="dialog"`~~. `ui/Modal` already implements all of it.
+
+   *2026-09-21 — done, and the counts above were badly stale by the time it was picked up.*
+   27 components already carried `role="dialog"`; `ContactHistoryDrawer` had been rebuilt on
+   `ui/Drawer` and only matched a scan because it *describes* the old pattern in a comment.
+   Four genuine gaps remained: `QuickShareModal` (a real dialog — now `role="dialog"`,
+   `aria-modal`, focus trap), and the folder popovers in `PlaylistFilterBar` /
+   `ProjectFilterBar` plus the New-release menu on `/library`, which are anchored popovers
+   and menus, so they take Escape and focus restoration with `trapFocus: false` — trapping
+   one strands a keyboard user in a popup they expect to Tab out of. All three previously
+   closed **only** on an outside click, so a keyboard user could not dismiss them at all.
+   `lib/ui/overlay-behavior.test.ts` guards the population, with `DropZone` (a drop target)
+   and `GlassPage` (decorative `aria-hidden` washes) allowlisted and their reasons written
+   down.
 6. **Tokenisation** — 175 files hardcode hex against a 114-property token layer that is
    essentially unused. This is the root cause of repeated colour drift.
 
