@@ -444,8 +444,8 @@ export default function MusicPortfolio({
                                             <div className="flex items-center gap-1.5">
                                                 {track.priceLease != null && (
                                                     <span className="flex flex-col items-center px-2 py-1 rounded-md bg-white/[0.06] border border-white/[0.10] backdrop-blur-sm leading-none">
-                                                        <span className="text-[12px] font-bold text-white tabular-nums">${track.priceLease}</span>
-                                                        <span className="text-[7px] font-mono uppercase tracking-wider text-white/60 mt-0.5">Lease</span>
+                                                        <span className="text-[11px] font-bold text-white tabular-nums">${track.priceLease}</span>
+                                                        <span className="text-[8px] font-mono uppercase tracking-wider text-white/60 mt-0.5">Lease</span>
                                                     </span>
                                                 )}
                                                 {track.priceExclusive != null && (
@@ -453,8 +453,8 @@ export default function MusicPortfolio({
                                                         className="flex flex-col items-center px-2 py-1 rounded-md leading-none"
                                                         style={{ backgroundColor: '#FFFFFF', color: '#000' }}
                                                     >
-                                                        <span className="text-[12px] font-bold tabular-nums">${track.priceExclusive}</span>
-                                                        <span className="text-[7px] font-mono uppercase tracking-wider text-black/55 mt-0.5">Excl.</span>
+                                                        <span className="text-[11px] font-bold tabular-nums">${track.priceExclusive}</span>
+                                                        <span className="text-[8px] font-mono uppercase tracking-wider text-black/55 mt-0.5">Excl.</span>
                                                     </span>
                                                 )}
                                                 {track.priceLease == null && track.priceExclusive == null && (

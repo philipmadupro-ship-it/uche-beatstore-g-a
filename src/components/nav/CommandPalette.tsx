@@ -233,7 +233,7 @@ export function CommandPalette() {
                     }`}
                   >
                     <Icon size={13} className={active ? 'text-white' : 'text-white/60'} />
-                    <span className="flex-1 text-[12px] text-white truncate">{item.label}</span>
+                    <span className="flex-1 text-[11px] text-white truncate">{item.label}</span>
                     {item.sub && (
                       <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider">{item.sub}</span>
                     )}

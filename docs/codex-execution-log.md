@@ -8284,3 +8284,39 @@ It did surface something real, though. `e2e/storefront.spec.ts` asserts
 tests `test.skip` when no cards are present. So a genuine catalogue regression would leave CI
 green with 2 passed and 4 skipped. That is worth tightening, but it is a change to the test's
 contract and belongs in its own pass, not smuggled into a verification note.
+
+## Type scale: the small end collapsed (2026-09-21)
+
+`design-direction.md` item 4. Principle 2 asks for fewer sizes per screen; app-wide there
+were **28 distinct** `text-[Npx]` values, most of the mass between 7px and 13px. A one-pixel
+step is invisible in isolation and obvious in aggregate — two labels a pixel apart in the
+same panel read as a rendering bug, not a hierarchy.
+
+Did exactly what the doc named as highest-leverage, and no more:
+
+- **`12px → 11px`**, 295 occurrences across 108 files. 11px was already the dominant body
+  size (626 uses against 295), so this moves the minority onto the majority rather than
+  inventing a value.
+- **`7px → 8px`**, 11 occurrences — below the smallest real step.
+
+The 7–13px band is now five steps: 8, 9, 10, 11 (body), 13. `lib/ui/type-scale.test.ts`
+guards it, written and watched fail on all 112 files first, per the ban on unguarded scripted
+styling migrations.
+
+### The doc's own numbers were off
+It named `store/[id]` and `sales` at "9 distinct sizes each". `sales` was 9 and is now 8.
+`store/[id]` was **8**, and the count overstates it either way: three of those are
+`text-[28px] sm:text-[36px] md:text-[48px]` **on one line** — a single responsive heading
+counted as three styles. Its remaining `32px` is the price figure on a licence tier, which is
+deliberately distinct from the track title. Nothing to collapse there; corrected in the doc
+so the next pass does not chase it.
+
+Verified by rendering `/store/track-demo-002` against the fixture and measuring computed
+`fontSize` on every leaf text node: **seven distinct sizes**, dominated by 11px and 9px, no
+12px. Plus `tsc`, `next build` and `vitest` (197 files, 2091).
+
+### Deliberately not done
+Headings above 13px — 14, 15, 16, 17, 18, 20, 22, 24, 28 and up. Collapsing those is a visual
+judgement per surface rather than a rule, so the guard stops at 13px rather than banning
+sizes nobody has agreed a replacement for. A guard that encodes an unmade decision is how you
+get a test people skip.

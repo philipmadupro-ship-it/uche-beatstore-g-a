@@ -176,7 +176,7 @@ export function SimilarTracks({ trackId, onPick }: Props) {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search matches by title…"
-              className="flex-1 bg-transparent text-[12px] text-white placeholder:text-white/40 focus:outline-none"
+              className="flex-1 bg-transparent text-[11px] text-white placeholder:text-white/40 focus:outline-none"
             />
             {activeFilters > 0 && (
               <button onClick={clearAll} className="text-[9px] font-mono uppercase tracking-wider text-white/60 hover:text-white flex items-center gap-1">
@@ -227,7 +227,7 @@ export function SimilarTracks({ trackId, onPick }: Props) {
                   </ArtworkFallback>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[12px] font-medium text-white truncate">{r.track.title}</p>
+                  <p className="text-[11px] font-medium text-white truncate">{r.track.title}</p>
                   <p className="text-[9px] font-mono text-white/60 uppercase tracking-wider mt-0.5 truncate">
                     {r.track.type}
                     {r.track.bpm ? ` · ${r.track.bpm} bpm` : ''}

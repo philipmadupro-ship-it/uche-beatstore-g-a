@@ -132,7 +132,7 @@ export default function CampaignsPage() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search campaigns…"
-                    className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-white transition-colors placeholder:text-white/40 focus:border-white/60 focus:outline-none"
+                    className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[11px] text-white transition-colors placeholder:text-white/40 focus:border-white/60 focus:outline-none"
                   />
                 </div>
                 <div className="flex overflow-x-auto rounded-full border border-white/10 bg-[#090907] p-1">
@@ -262,7 +262,7 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
           </p>
           <h3 className="truncate text-[15px] font-semibold text-white">{campaign.name}</h3>
           {campaign.description && (
-            <p className="text-[12px] text-white/70 mt-1 line-clamp-2 leading-relaxed">
+            <p className="text-[11px] text-white/70 mt-1 line-clamp-2 leading-relaxed">
               {campaign.description}
             </p>
           )}

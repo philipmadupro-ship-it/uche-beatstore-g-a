@@ -294,7 +294,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                 <div className="mt-4 flex items-center gap-2">
                   <button
                     onClick={() => setSendModalOpen(true)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-white text-black text-[12px] font-medium hover:bg-white/90 active:scale-[0.98] transition-all"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-white text-black text-[11px] font-medium hover:bg-white/90 active:scale-[0.98] transition-all"
                   >
                     <Send size={12} />
                     Send beat
@@ -307,7 +307,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                   )}
                   <button
                     onClick={deleteContact}
-                    className="px-3 py-2.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-white/60 hover:text-red-400 hover:border-red-500/30 text-[12px] font-medium transition-colors"
+                    className="px-3 py-2.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-white/60 hover:text-red-400 hover:border-red-500/30 text-[11px] font-medium transition-colors"
                     title="Delete contact"
                   >
                     <Trash2 size={12} />
@@ -499,11 +499,11 @@ function DetailField({
             if (e.key === 'Enter') commit();
             else if (e.key === 'Escape') { setDraft(value ?? ''); setEditing(false); }
           }}
-          className="w-full bg-transparent outline-none text-[12px] text-white border-b border-white/40"
+          className="w-full bg-transparent outline-none text-[11px] text-white border-b border-white/40"
           placeholder={`Add ${label.toLowerCase()}`}
         />
       ) : (
-        <button onClick={() => { setDraft(value ?? ''); setEditing(true); }} className="block text-left text-[12px] w-full">
+        <button onClick={() => { setDraft(value ?? ''); setEditing(true); }} className="block text-left text-[11px] w-full">
           {value ? (
             <span className="text-white">{prefix}{value}</span>
           ) : (

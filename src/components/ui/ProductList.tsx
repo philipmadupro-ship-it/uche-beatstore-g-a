@@ -213,7 +213,7 @@ export function FolderContainerCard({
             </div>
           )}
         </div>
-        <p className="truncate text-[12px] font-bold text-white sm:text-[13px]">{label}</p>
+        <p className="truncate text-[11px] font-bold text-white sm:text-[13px]">{label}</p>
         {count != null && <p className="mt-0.5 text-[10px] text-white/40">{count} item{count === 1 ? '' : 's'}</p>}
       </button>
       {actions && <div className="absolute right-2 top-2 flex items-center gap-1">{actions}</div>}

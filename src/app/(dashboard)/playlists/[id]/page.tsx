@@ -476,7 +476,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               <button
                 onClick={handlePlayAll}
                 disabled={!tracks.length}
-                className="glass-play-surface flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-medium disabled:opacity-30"
+                className="glass-play-surface flex items-center gap-2 px-4 py-2 rounded-md text-[11px] font-medium disabled:opacity-30"
               >
                 <Play size={12} fill="currentColor" className="ml-0.5" />
                 Play
@@ -484,14 +484,14 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               <button
                 onClick={() => setShowShareModal(true)}
                 disabled={!tracks.length}
-                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 disabled:opacity-30 transition-colors"
+                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[11px] font-medium hover:border-white/20 disabled:opacity-30 transition-colors"
               >
                 <Share2 size={12} />
                 Share
               </button>
               <button
                 onClick={openAddTracks}
-                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 transition-colors"
+                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[11px] font-medium hover:border-white/20 transition-colors"
               >
                 <Plus size={12} />
                 Add tracks
@@ -500,7 +500,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                 type="button"
                 onClick={() => setShowUpload((value) => !value)}
                 aria-expanded={showUpload}
-                className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-4 py-2 text-[12px] font-medium text-white transition-colors hover:border-white/20"
+                className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-4 py-2 text-[11px] font-medium text-white transition-colors hover:border-white/20"
               >
                 <UploadCloud size={12} />
                 Upload

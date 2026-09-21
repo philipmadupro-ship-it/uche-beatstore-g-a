@@ -42,7 +42,7 @@ export function PageHeader({ eyebrow, title, description, actions, meta, childre
             {title}
           </h1>
           {description && (
-            <p className="text-[12px] text-white/70 max-w-xl mt-2 leading-relaxed">{description}</p>
+            <p className="text-[11px] text-white/70 max-w-xl mt-2 leading-relaxed">{description}</p>
           )}
         </div>
 

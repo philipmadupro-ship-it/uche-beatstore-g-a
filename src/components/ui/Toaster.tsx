@@ -79,7 +79,7 @@ function ToastCard({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
       <div className="flex items-start gap-3 p-4">
         <Icon size={16} className={`shrink-0 mt-0.5 ${accent.split(' ').pop()}`} />
         <div className="flex-1 min-w-0">
-          <p className="text-[12px] font-semibold text-white leading-snug">
+          <p className="text-[11px] font-semibold text-white leading-snug">
             {toast.title}
             {/* Repeats collapse into a count rather than stacking identical
                 cards down the screen. */}

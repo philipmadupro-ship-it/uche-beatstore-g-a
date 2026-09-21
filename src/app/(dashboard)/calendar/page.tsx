@@ -142,7 +142,7 @@ export default function CalendarPage() {
                 <button onClick={prevMonth} className="tap px-3 py-2 text-[var(--text-readable)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-primary)]" aria-label="Previous month">
                   <ChevronLeft size={13} aria-hidden="true" />
                 </button>
-                <span className="min-w-[150px] px-3 text-center text-[12px] font-medium tabular-nums text-[var(--text-primary)]">
+                <span className="min-w-[150px] px-3 text-center text-[11px] font-medium tabular-nums text-[var(--text-primary)]">
                   {monthName}
                 </span>
                 <button onClick={nextMonth} className="tap px-3 py-2 text-[var(--text-readable)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-primary)]" aria-label="Next month">

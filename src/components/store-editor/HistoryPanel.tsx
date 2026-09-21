@@ -89,7 +89,7 @@ export function HistoryPanel({ refreshKey, onRestore }: {
           >
             <span className="min-w-0 flex-1">
               <span className="flex items-baseline gap-2">
-                <span className="text-[12px] text-white/80">
+                <span className="text-[11px] text-white/80">
                   {formatSnapshotAge(snapshot.takenAt)}
                 </span>
                 {index === 0 ? (

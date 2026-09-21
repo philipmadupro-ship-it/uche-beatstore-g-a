@@ -162,8 +162,25 @@ consistent tree-wide.
    **The pages are not covered** — they still hold plenty of off-vocabulary radii, and
    widening the guard before the rollout reaches them would just produce a test people
    skip. Widen it surface by surface.
-4. **Type scale** — worst offenders `store/[id]/page.tsx` and `sales/page.tsx` (9 distinct
-   sizes each). Collapsing `12px → 11px` is the single highest-leverage change.
+4. **Type scale** — ~~worst offenders `store/[id]/page.tsx` and `sales/page.tsx` (9 distinct
+   sizes each). Collapsing `12px → 11px` is the single highest-leverage change.~~
+
+   *2026-09-21 — the small end is done.* `12px → 11px` app-wide (295 occurrences across
+   108 files) and `7px → 8px` (11), leaving the 7–13px band at five steps: 8, 9, 10, 11
+   (body), 13. 11px was already the dominant body size at 626 uses against 295, so the
+   merge moved the minority onto the majority rather than inventing a value.
+   `lib/ui/type-scale.test.ts` guards the band.
+
+   Two corrections to the note above. `sales` was 9 distinct sizes and is now 8.
+   `store/[id]` was **8, not 9**, and the count overstated it either way: three of those
+   are `text-[28px] sm:text-[36px] md:text-[48px]` on one line — a single responsive
+   heading, not three styles. Its remaining `32px` is the price figure on a licence tier,
+   deliberately distinct from the title. Rendered, the page now shows seven distinct sizes
+   across all its text, dominated by 11px and 9px.
+
+   **Still open:** the headings above 13px (14, 15, 16, 17, 18, 20, 22, 24, 28…). Collapsing
+   those is a visual judgement per surface rather than a rule, which is why the guard stops
+   at 13px instead of banning sizes with no agreed replacement.
 5. **Modal consolidation** — ~~21 hand-rolled overlays; 19 lack Escape, 20 lack focus trap,
    all 21 lack `role="dialog"`~~. `ui/Modal` already implements all of it.
 

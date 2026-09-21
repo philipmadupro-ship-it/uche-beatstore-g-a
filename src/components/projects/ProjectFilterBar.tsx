@@ -187,7 +187,7 @@ export function ProjectFilterBar({
                 onChange={(e) => setEditName(e.target.value)}
                 onBlur={() => renameFolder(f.id)}
                 onKeyDown={(e) => { if (e.key === 'Enter') renameFolder(f.id); if (e.key === 'Escape') setEditingId(null); }}
-                className="h-10 w-full rounded-xl border border-white/30 bg-white/[0.04] px-3 text-[12px] text-white focus:outline-none"
+                className="h-10 w-full rounded-xl border border-white/30 bg-white/[0.04] px-3 text-[11px] text-white focus:outline-none"
               />
             ) : (
               <FolderContainerCard
@@ -214,7 +214,7 @@ export function ProjectFilterBar({
           onChange={(e) => setNewFolder(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') createFolder(); }}
           placeholder="New folder"
-          className="min-h-10 flex-1 rounded-full border border-white/10 bg-white/[0.02] px-3 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
+          className="min-h-10 flex-1 rounded-full border border-white/10 bg-white/[0.02] px-3 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
         />
         <button onClick={createFolder} disabled={!newFolder.trim() || busy} className="grid size-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-white/60 hover:text-white hover:border-white/20 disabled:opacity-40" aria-label="Create folder">
           {busy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
@@ -263,7 +263,7 @@ export function ProjectFilterBar({
             value={value.search}
             onChange={(e) => set({ search: e.target.value })}
             placeholder="Search projects + tags…"
-            className="w-full bg-white/[0.02] border border-white/10 rounded-full py-2 pl-9 pr-3 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
+            className="w-full bg-white/[0.02] border border-white/10 rounded-full py-2 pl-9 pr-3 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
           />
         </div>
         <button

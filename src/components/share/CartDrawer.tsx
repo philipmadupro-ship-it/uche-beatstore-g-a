@@ -100,7 +100,7 @@ export function CartDrawer({ shareToken, sharePassword }: CartDrawerProps) {
               <div className="w-16 h-16 rounded-full bg-white/[0.04] border border-white/10 flex items-center justify-center">
                 <ShoppingCart size={22} className="text-white/30" />
               </div>
-              <p className="text-[12px] text-white/40 leading-relaxed">
+              <p className="text-[11px] text-white/40 leading-relaxed">
                 No beats in your cart yet.<br />Click a price to add one.
               </p>
             </div>
@@ -120,7 +120,7 @@ export function CartDrawer({ shareToken, sharePassword }: CartDrawerProps) {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-medium text-white truncate">{item.track.title}</p>
+                    <p className="text-[11px] font-medium text-white truncate">{item.track.title}</p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded font-bold ${
                         item.license.is_exclusive
@@ -180,7 +180,7 @@ export function CartDrawer({ shareToken, sharePassword }: CartDrawerProps) {
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(null); }}
                 placeholder="you@example.com"
-                className="w-full bg-white/[0.02] border border-white/10 focus:border-white/20 rounded-lg py-2.5 px-3 text-[12px] text-white placeholder:text-white/30 outline-none transition-colors"
+                className="w-full bg-white/[0.02] border border-white/10 focus:border-white/20 rounded-lg py-2.5 px-3 text-[11px] text-white placeholder:text-white/30 outline-none transition-colors"
               />
               {error && (
                 <p id="share-cart-email-error" role="alert" className="text-[11px] text-red-400 leading-tight">{error}</p>
@@ -191,7 +191,7 @@ export function CartDrawer({ shareToken, sharePassword }: CartDrawerProps) {
             <button
               onClick={handleCheckout}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-white text-black text-[12px] font-bold uppercase tracking-widest hover:bg-white/90 active:scale-[0.98] transition-all disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-white text-black text-[11px] font-bold uppercase tracking-widest hover:bg-white/90 active:scale-[0.98] transition-all disabled:opacity-50"
             >
               {loading ? (
                 <Loader2 size={14} className="animate-spin" />

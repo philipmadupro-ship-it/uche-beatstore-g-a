@@ -90,7 +90,7 @@ export function ColumnPicker() {
                   )}
                 >
                   <GripVertical size={12} className="shrink-0 cursor-grab text-white/25" aria-hidden />
-                  <span className="min-w-0 flex-1 truncate text-[12px] text-white/85">{col!.label}</span>
+                  <span className="min-w-0 flex-1 truncate text-[11px] text-white/85">{col!.label}</span>
 
                   {/* Keyboard path for reordering. */}
                   <button
@@ -129,7 +129,7 @@ export function ColumnPicker() {
                   <li key={col.id}>
                     <button
                       onClick={() => toggle(col.id)}
-                      className="tap flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left text-[12px] text-white/50 transition-colors hover:bg-white/[0.05] hover:text-white"
+                      className="tap flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-left text-[11px] text-white/50 transition-colors hover:bg-white/[0.05] hover:text-white"
                     >
                       <span className="size-3 shrink-0 rounded-[3px] border border-white/20" aria-hidden />
                       <span className="truncate">{col.label}</span>
@@ -151,7 +151,7 @@ export function ColumnPicker() {
                   <li key={l.name} className="flex items-center gap-1">
                     <button
                       onClick={() => applyLayout(l.name)}
-                      className="tap min-w-0 flex-1 truncate rounded-lg px-1.5 py-1.5 text-left text-[12px] text-white/75 transition-colors hover:bg-white/[0.05] hover:text-white"
+                      className="tap min-w-0 flex-1 truncate rounded-lg px-1.5 py-1.5 text-left text-[11px] text-white/75 transition-colors hover:bg-white/[0.05] hover:text-white"
                     >
                       {l.name}
                       <span className="ml-1.5 font-mono text-[9px] text-white/30">{l.columnIds.length}</span>

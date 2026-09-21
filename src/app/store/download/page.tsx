@@ -205,7 +205,7 @@ function DownloadPortal() {
               <div>
                 <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6DC6A4]">Purchase confirmed</p>
                 <h1 className="text-[28px] font-bold leading-tight text-white md:text-[34px]">Your files are ready</h1>
-                <p className="mt-2 max-w-xl text-[12px] leading-relaxed text-white/60">
+                <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-white/60">
                   Receipt sent to <span className="text-white/80">{purchase.buyer_email}</span>. Keep this private link for future downloads.
                 </p>
               </div>
@@ -403,7 +403,7 @@ function FileDownloadRow({
           <span className={meta.accent}>{meta.icon}</span>
         </div>
         <div>
-          <p className="text-[12px] font-medium text-white">{file.label}</p>
+          <p className="text-[11px] font-medium text-white">{file.label}</p>
           <p className="text-[9px] font-mono text-white/40 uppercase tracking-wider">
             {['vocals', 'drums', 'bass', 'other'].includes(file.format) ? 'Stem · WAV' : file.format.replace('-main', '').toUpperCase()}
           </p>

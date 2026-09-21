@@ -535,7 +535,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                     Price (USD)
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-white/50">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-white/50">$</span>
                     <input
                       id="project-price"
                       type="number"
@@ -546,7 +546,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                       onBlur={savePrice}
                       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                       placeholder="0.00"
-                      className="w-full bg-white/[0.02] border border-white/10 rounded-lg pl-7 pr-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 transition-colors"
+                      className="w-full bg-white/[0.02] border border-white/10 rounded-lg pl-7 pr-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 transition-colors"
                     />
                   </div>
                   <p className="text-[9px] font-mono text-white/40 mt-1.5">

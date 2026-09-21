@@ -202,7 +202,7 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
             title="Campaign unavailable"
             description={error ?? 'Not found.'}
             action={
-              <Link href="/campaigns" className="text-[12px] text-white/60 underline underline-offset-2 hover:text-white">
+              <Link href="/campaigns" className="text-[11px] text-white/60 underline underline-offset-2 hover:text-white">
                 Back to campaigns
               </Link>
             }
@@ -301,7 +301,7 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
                     value={targetSearch}
                     onChange={(e) => setTargetSearch(e.target.value)}
                     placeholder="Search contacts in this campaign…"
-                    className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-white transition-colors placeholder:text-white/40 focus:border-white/60 focus:outline-none"
+                    className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[11px] text-white transition-colors placeholder:text-white/40 focus:border-white/60 focus:outline-none"
                   />
                 </div>
                 <div className="flex overflow-x-auto rounded-full border border-white/10 bg-[#090907] p-1">
@@ -355,7 +355,7 @@ export default function CampaignDetailPage({ params: paramsPromise }: { params: 
                     href={t.contact ? `/contacts/${t.contact.id}` : undefined}
                     label={t.contact ? `Open ${t.contact.name}` : undefined}
                     media={
-                      <div className="grid size-9 place-items-center rounded-full bg-white/15 text-[12px] font-bold text-white">
+                      <div className="grid size-9 place-items-center rounded-full bg-white/15 text-[11px] font-bold text-white">
                         {(t.contact?.name ?? '?').charAt(0).toUpperCase()}
                       </div>
                     }
@@ -509,7 +509,7 @@ function AddContactsModal({
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name or email…"
             autoFocus
-            className="w-full rounded-full border border-white/10 bg-white/[0.02] py-2 pl-9 pr-3 text-[12px] text-white placeholder:text-white/40 focus:border-white/20 focus:outline-none"
+            className="w-full rounded-full border border-white/10 bg-white/[0.02] py-2 pl-9 pr-3 text-[11px] text-white placeholder:text-white/40 focus:border-white/20 focus:outline-none"
           />
         </div>
 
@@ -538,7 +538,7 @@ function AddContactsModal({
                     {sel && <Check size={11} className="text-black" strokeWidth={3} />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[12px] font-medium text-white">{c.name}</p>
+                    <p className="truncate text-[11px] font-medium text-white">{c.name}</p>
                     <p className="truncate text-[10px] text-white/50">{c.email ?? 'no email'}</p>
                   </div>
                   {c.role && <span className="shrink-0 text-[9px] font-mono uppercase tracking-wider text-white/40">{c.role}</span>}

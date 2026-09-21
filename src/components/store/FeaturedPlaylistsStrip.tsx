@@ -76,7 +76,7 @@ export function FeaturedPlaylistsStrip({
                     )}
                   </div>
                 </div>
-                <p className="text-[12px] font-semibold text-white truncate group-hover:text-white transition-colors leading-tight">
+                <p className="text-[11px] font-semibold text-white truncate group-hover:text-white transition-colors leading-tight">
                   {pl.name}
                 </p>
                 <p className="text-[9px] font-mono text-white/40 mt-1">
@@ -196,7 +196,7 @@ export function FeaturedPlaylistsStrip({
                       </ArtworkFallback>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`text-[12px] font-medium truncate ${isCur ? 'text-white' : 'text-white'}`}>{t.title}</p>
+                      <p className={`text-[11px] font-medium truncate ${isCur ? 'text-white' : 'text-white'}`}>{t.title}</p>
                       <p className="text-[9px] font-mono text-white/40 uppercase tracking-wider">
                         {t.type}{t.bpm ? ` · ${t.bpm}` : ''}{t.key ? ` · ${t.key}` : ''}
                       </p>

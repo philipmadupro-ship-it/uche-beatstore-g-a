@@ -60,7 +60,7 @@ export function DeliveryPackButton({ projectId, projectName }: Props) {
       <button
         onClick={() => (open ? setOpen(false) : files ? setOpen(true) : fetchManifest())}
         disabled={loading}
-        className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/[0.06] bg-transparent text-white/80 text-[12px] font-medium hover:text-white hover:border-white/[0.1] transition-all disabled:opacity-50"
+        className="flex items-center gap-2 px-4 py-2.5 rounded-full border border-white/[0.06] bg-transparent text-white/80 text-[11px] font-medium hover:text-white hover:border-white/[0.1] transition-all disabled:opacity-50"
         title="Export delivery pack (WAVs + stems)"
       >
         {loading ? <Loader2 size={13} className="animate-spin" /> : <PackageOpen size={13} />}
@@ -88,7 +88,7 @@ export function DeliveryPackButton({ projectId, projectName }: Props) {
 
             {files.length === 0 ? (
               <div className="px-5 py-8 text-center">
-                <p className="text-[12px] text-white/40">No downloadable files yet — upload WAV masters or stems to the tracks in this project.</p>
+                <p className="text-[11px] text-white/40">No downloadable files yet — upload WAV masters or stems to the tracks in this project.</p>
               </div>
             ) : (
               <>

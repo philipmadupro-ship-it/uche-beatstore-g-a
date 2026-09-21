@@ -265,7 +265,7 @@ export function ShareTrackDetailsDrawer({
                 <p className="text-[10px] font-mono text-white/80 uppercase tracking-wider">
                   {isActive ? (isCurrentPlaying ? 'Now playing' : 'Paused') : 'Preview'}
                 </p>
-                <p className="text-[12px] font-medium text-white truncate mt-0.5">{track.title}</p>
+                <p className="text-[11px] font-medium text-white truncate mt-0.5">{track.title}</p>
               </div>
             </div>
             {/* Spectral waveform — same DAW-style low/mid/high colouring as the
@@ -312,7 +312,7 @@ export function ShareTrackDetailsDrawer({
           {track.description && (
             <div className="space-y-2">
               <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/80">Description</p>
-              <p className="text-[12px] text-white/80 leading-relaxed bg-white/[0.04] border border-white/[0.02] p-3.5 rounded-xl whitespace-pre-wrap">
+              <p className="text-[11px] text-white/80 leading-relaxed bg-white/[0.04] border border-white/[0.02] p-3.5 rounded-xl whitespace-pre-wrap">
                 {track.description}
               </p>
             </div>
@@ -426,7 +426,7 @@ function LicenseCard({
               ${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </span>
             {originalPrice && (
-              <span className="text-[12px] font-mono text-white/30 line-through tabular-nums">
+              <span className="text-[11px] font-mono text-white/30 line-through tabular-nums">
                 ${Math.round(originalPrice).toLocaleString()}
               </span>
             )}

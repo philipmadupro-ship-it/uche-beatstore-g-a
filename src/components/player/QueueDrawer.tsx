@@ -257,7 +257,7 @@ function Row({
       </div>
 
       <div className="flex-1 min-w-0">
-        <h4 className={`text-[12px] font-medium truncate tracking-tight ${
+        <h4 className={`text-[11px] font-medium truncate tracking-tight ${
           isCurrent ? 'text-white' : muted ? 'text-white/80' : 'text-white'
         }`}>
           {track.title}

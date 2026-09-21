@@ -161,7 +161,7 @@ export function BeatListRow({
                 className="hidden sm:flex px-3 py-2 rounded-md bg-white/[0.06] border border-white/[0.10] text-white text-[11px] font-bold hover:bg-white/[0.12] hover:border-white/[0.18] transition-colors disabled:opacity-30 flex-col items-center leading-none"
               >
                 <span>{priceLease != null ? `$${priceLease}` : '—'}</span>
-                <span className="text-[7px] font-mono text-white/60 mt-0.5 uppercase tracking-wider">Lease</span>
+                <span className="text-[8px] font-mono text-white/60 mt-0.5 uppercase tracking-wider">Lease</span>
               </button>
               <button
                 onClick={onAddExclusive}
@@ -170,7 +170,7 @@ export function BeatListRow({
                 style={{ backgroundColor: accentColor }}
               >
                 <span>{priceExclusive != null ? `$${priceExclusive}` : '—'}</span>
-                <span className="text-[7px] font-mono text-black/60 mt-0.5 uppercase tracking-wider">Excl.</span>
+                <span className="text-[8px] font-mono text-black/60 mt-0.5 uppercase tracking-wider">Excl.</span>
               </button>
             </>
           )}

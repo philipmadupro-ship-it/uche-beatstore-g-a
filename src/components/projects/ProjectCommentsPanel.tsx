@@ -337,7 +337,7 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
                     )}
                   </button>
                 </div>
-                <p className="text-[12px] text-[#bbb] leading-relaxed whitespace-pre-wrap">
+                <p className="text-[11px] text-[#bbb] leading-relaxed whitespace-pre-wrap">
                   {c.body}
                 </p>
               </div>
@@ -352,7 +352,7 @@ export function ProjectCommentsPanel({ projectId, tracks = [], pinnedTrackId = n
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Reply or post a note for collaborators…"
             rows={2}
-            className="w-full bg-[#090907] border border-white/10 rounded px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50 resize-none"
+            className="w-full bg-[#090907] border border-white/10 rounded px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50 resize-none"
           />
           <div className="flex items-center justify-between mt-2">
             <p className="text-[9px] text-white/40">

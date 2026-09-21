@@ -251,7 +251,7 @@ export default function LinksPage() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search title, token, kind…"
-                    className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-white transition-colors placeholder:text-white/30 focus:border-white/50 focus:outline-none"
+                    className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[11px] text-white transition-colors placeholder:text-white/30 focus:border-white/50 focus:outline-none"
                   />
                 </div>
                 <div className="flex overflow-x-auto rounded-full border border-white/10 bg-[#090907] p-1">
@@ -917,14 +917,14 @@ function LinkPopup({
           <div className="flex items-center gap-2 mb-3">
             <button
               onClick={() => onCopy(link)}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-white/90 active:scale-[0.98] transition-all"
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[11px] font-medium hover:bg-white/90 active:scale-[0.98] transition-all"
             >
               {copied ? <Check size={13} /> : <Copy size={13} />}
               {copied ? 'Copied' : 'Copy link'}
             </button>
             <button
               onClick={() => onShare(link)}
-              className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-white text-[12px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors flex items-center gap-2"
+              className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-white text-[11px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors flex items-center gap-2"
             >
               <Share2 size={13} />
               <span className="hidden sm:inline">Share</span>

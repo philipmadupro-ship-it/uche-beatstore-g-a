@@ -202,7 +202,7 @@ export function ImportContactsModal({ onClose, onSuccess }: Props) {
                 {parsing ? (
                   <div className="flex flex-col items-center gap-3">
                     <Loader2 size={20} className="animate-spin text-white" />
-                    <p className="text-[12px] text-white/80">Parsing {filename}…</p>
+                    <p className="text-[11px] text-white/80">Parsing {filename}…</p>
                   </div>
                 ) : (
                   <>

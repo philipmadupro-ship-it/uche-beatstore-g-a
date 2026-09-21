@@ -107,7 +107,7 @@ export function ProjectChecklist({ projectId, items, onChanged }: Props) {
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') addItem(); if (e.key === 'Escape') { setAdding(false); setDraft(''); } }}
             placeholder="Checklist item…"
-            className="flex-1 bg-white/[0.02] border border-white/10 rounded-md px-3 py-1.5 text-[12px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20"
+            className="flex-1 bg-white/[0.02] border border-white/10 rounded-md px-3 py-1.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20"
           />
           <button onClick={addItem} disabled={!draft.trim()}
             className="px-3 py-1.5 rounded-md bg-white text-black text-[11px] font-bold hover:bg-white/90 disabled:opacity-40">Add</button>
@@ -123,7 +123,7 @@ export function ProjectChecklist({ projectId, items, onChanged }: Props) {
               }`}>
               {it.done && <Check size={10} className="text-black" />}
             </button>
-            <span className={`text-[12px] flex-1 ${it.done ? 'line-through text-white/40' : 'text-white'}`}>{it.label}</span>
+            <span className={`text-[11px] flex-1 ${it.done ? 'line-through text-white/40' : 'text-white'}`}>{it.label}</span>
             <button onClick={() => remove(it.id)}
               className="opacity-0 group-hover:opacity-100 text-white/40 hover:text-red-400 transition-all">
               <Trash2 size={11} />

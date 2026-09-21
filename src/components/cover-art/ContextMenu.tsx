@@ -168,7 +168,7 @@ export function ContextMenu({
               onClose();
             }}
             className={cn(
-              'mx-1 flex w-[calc(100%-0.5rem)] items-center justify-between gap-6 rounded-lg px-2.5 py-1.5 text-left text-[12px] transition-colors disabled:opacity-30',
+              'mx-1 flex w-[calc(100%-0.5rem)] items-center justify-between gap-6 rounded-lg px-2.5 py-1.5 text-left text-[11px] transition-colors disabled:opacity-30',
               // Danger matches ActionMenu's red rather than the rust #A95235,
               // which appears nowhere else in the app's palette.
               item.danger ? 'text-red-400 hover:bg-red-500/10' : 'text-white/60 hover:bg-white/[0.08] hover:text-white/90',

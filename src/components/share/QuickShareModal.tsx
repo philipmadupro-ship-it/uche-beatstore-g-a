@@ -283,14 +283,14 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
             <div className="flex items-center gap-2">
               <button
                 onClick={doCopy}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-white/90 transition-all active:scale-[0.98]"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[11px] font-medium hover:bg-white/90 transition-all active:scale-[0.98]"
               >
                 {copied ? <Check size={13} /> : <Copy size={13} />}
                 {copied ? 'Copied' : 'Copy link'}
               </button>
               <button
                 onClick={onClose}
-                className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-white text-[12px] hover:bg-white/[0.08] transition-colors"
+                className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-white text-[11px] hover:bg-white/[0.08] transition-colors"
               >
                 Done
               </button>
@@ -524,7 +524,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
                                   </ArtworkFallback>
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-[12px] text-white truncate">{t.title}</p>
+                                  <p className="text-[11px] text-white truncate">{t.title}</p>
                                   <p className="text-[9px] font-mono uppercase tracking-wider text-white/40 mt-0.5 truncate">
                                     {t.type}{t.bpm ? ` · ${t.bpm} bpm` : ''}{t.key ? ` · ${t.key}${t.scale ? ' ' + t.scale : ''}` : ''}{tags.length > 0 ? ` · ${tags[0]}` : ''}
                                   </p>
@@ -608,7 +608,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
                                 </ArtworkFallback>
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="text-[12px] text-white truncate">{c.name}</p>
+                                <p className="text-[11px] text-white truncate">{c.name}</p>
                                 <p className="text-[9px] font-mono uppercase tracking-wider text-white/40 mt-0.5">
                                   {c.track_count ?? 0} track{(c.track_count ?? 0) === 1 ? '' : 's'}
                                 </p>
@@ -658,7 +658,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
               <button
                 onClick={generateLink}
                 disabled={creating || !canSubmit}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black hover:bg-white/90 disabled:opacity-40 text-[12px] font-medium transition-all active:scale-[0.98]"
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black hover:bg-white/90 disabled:opacity-40 text-[11px] font-medium transition-all active:scale-[0.98]"
               >
                 {creating ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
                 {tab === 'tracks'

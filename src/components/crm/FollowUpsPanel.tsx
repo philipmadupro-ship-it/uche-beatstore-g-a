@@ -64,7 +64,7 @@ export function FollowUpsPanel() {
                 >
                   {dueLabel(t.due_at)}
                 </span>
-                <span className="text-[12px] text-white truncate flex-1">{t.title}</span>
+                <span className="text-[11px] text-white truncate flex-1">{t.title}</span>
                 <span className="text-[11px] text-white/60 shrink-0 hidden sm:inline">{t.contact_name}</span>
                 <ChevronRight size={12} className="text-white/40 group-hover:text-white/80 shrink-0 transition-colors" />
               </Link>
