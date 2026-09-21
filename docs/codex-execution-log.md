@@ -8251,3 +8251,36 @@ The release menu is now dismissable but is still a hand-rolled menu, not `ui/Act
 it has no arrow-key navigation. Converting it is a separate change — `ActionMenu` brings its
 own grouping model and keyboard indices, and it deserves its own pass rather than riding
 along with an accessibility fix.
+
+## Preview player: verified, not rebuilt (2026-09-21)
+
+`design-direction.md` item 2. Like item 5, the open-work list was behind the code — the
+rebuild had already happened. `player/SpectralWaveform.tsx` renders the spec'd player on a
+canvas, backed by `useSpectralPeaks` and `lib/audio/spectral-peaks.ts`, and is wired into all
+three surfaces the section names: `PlayerBar`, `store/BeatPreviewDrawer` and
+`share/ShareTrackDetailsDrawer`.
+
+Checked against each spec bullet in a browser, on `/store` with `e2e/fixtures/store-db.json`,
+rather than by reading the source: cover art anchors the panel with the waveform below it and
+never painted over it; the waveform is continuous and mirrored, not discrete bars; the
+playhead is a thin line; elapsed sits left with remaining (`−3:30`) right; transport is plain
+glyphs with no filled play disc; and the drawer carries exactly one solid-white primary
+action (Lease $30), which is what the control language asks for.
+
+One deliberate divergence from the written spec, already documented in the component: the
+playhead is fixed at centre and the waveform scrolls past it, rather than a line travelling
+across a static waveform. The reason given is that over a three-minute beat a travelling
+playhead is a progress bar, not a transport. Left alone — the code's argument is better than
+the doc's bullet, and the doc now records the divergence instead of implying a defect.
+
+### A false alarm worth recording
+The storefront first rendered "No beats in the store yet" while `/api/store` returned two
+listed tracks, which looked like a serious public-storefront regression. It was not: the dev
+server was still compiling, and the page populated fully a few seconds later. Worth knowing
+before someone else chases it.
+
+It did surface something real, though. `e2e/storefront.spec.ts` asserts
+`cards.first().or(empty).first()` — **the empty state passes** — and the other two storefront
+tests `test.skip` when no cards are present. So a genuine catalogue regression would leave CI
+green with 2 passed and 4 skipped. That is worth tightening, but it is a change to the test's
+contract and belongs in its own pass, not smuggled into a verification note.

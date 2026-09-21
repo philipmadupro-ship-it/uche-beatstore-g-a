@@ -136,7 +136,18 @@ consistent tree-wide.
    time. The same pass fixed 45 controls whose hover fill equalled their rest fill and
    4 carrying two hover fills at once; `lib/ui/tailwind-classes.test.ts` now guards both,
    so that population cannot regrow.
-2. **Preview player rebuild** — per "The beat preview player" above.
+2. **Preview player rebuild** — ~~per "The beat preview player" above.~~
+
+   *2026-09-21 — already built; verified rather than rebuilt.* `player/SpectralWaveform.tsx`
+   (canvas, `useSpectralPeaks` + `lib/audio/spectral-peaks.ts`) is wired into all three
+   surfaces the section names: `PlayerBar`, `store/BeatPreviewDrawer` and
+   `share/ShareTrackDetailsDrawer`. Checked against the spec bullets in a browser on the
+   `/store` fixture: cover art anchors the panel with the waveform **below** it, the
+   waveform is continuous and mirrored rather than discrete bars, the playhead is a thin
+   line, elapsed sits left with **remaining** (`−3:30`) right, and transport is plain
+   glyphs with no filled play disc. One deliberate divergence, documented in the component:
+   the playhead is FIXED at centre and the waveform scrolls past it, because a travelling
+   playhead over a three-minute beat is a progress bar, not a transport.
 3. **`src/components/ui/` radii** — ~~the primitives violate the 8/12/20 rule themselves
    (`Modal.tsx` is 16px while 16 hand-rolled surfaces write the correct 20px)~~. Fix the
    primitives *before* the pages, or the drift comes back.
