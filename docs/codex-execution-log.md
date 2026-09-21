@@ -8112,3 +8112,49 @@ because a guard that has never failed is not known to work.
 radii; a guard that fails on day one is a guard people skip.
 
 Verified with `tsc`, `next build` and `vitest` (194 files, 2078).
+
+## Notifications verified end to end (2026-09-21)
+
+Asked to confirm the notifications feature works. It mostly does — the route, the badge
+arithmetic and the OS-notification selection rule are all sound and already covered by 23
+unit tests. Three things were wrong, and the first had been wrong since the feature shipped.
+
+**1. Realtime was inert.** `TopBar` has always run
+`useRealtimeTable({ table: 'notifications' })`, but `notifications` was never added to the
+`supabase_realtime` publication — migration 064 created the table and no migration ever made
+it a publication member. Postgres therefore never broadcast its changes and that subscription
+has done nothing since day one. The bell only ever updated on the 60-second poll sitting
+beside it, so a sale could go unseen for up to a minute and its OS notification was late by
+the same amount. It degraded quietly instead of breaking, which is exactly why nobody caught
+it: the poll is a deliberate fallback and `desktop.ts` fires from whatever the poll returns,
+so everything still arrived, just slowly. `116_notifications_realtime.sql` fixes it, mirroring
+`012_realtime_comments.sql`.
+
+**Numbered 116, not 115** — `115_track_collaborators.sql` already exists on branch
+`claude/code-review-agent-integration-cdf964`. The house rule to run
+`git log --all -- supabase/migrations/` before naming is what caught it.
+
+**2. "Opened links" notifications do not exist.** Both AGENTS.md and CLAUDE.md said opened
+share links surface as notifications. Nothing writes one: the Resend webhook records
+`beat_sends.opened_at` / `link_clicked_at` and stops there. Exactly three things create a
+notification row — a completed purchase, a buyer offer, and a fulfilment alert. Both docs
+corrected; the feature was not invented to match them, because nobody asked for it.
+
+**3. `PATCH` validated the body before authenticating.** A signed-out caller got a 400 about
+their payload instead of a 401, and untrusted JSON was parsed for callers with no business
+there. Reordered.
+
+### Route tests added
+`api/notifications/route.test.ts`, 11 cases, pinning the two regressions this endpoint has
+already suffered — the badge counted from the rendered page (so it undercounted past 20 while
+the unbounded "Mark all read" cleared rows the producer never saw), and opening the panel
+firing `read_all` (so glancing at one sale read every other). Neither is visible in a
+screenshot. The auth-ordering test was checked against the pre-fix route and fails there, so
+it is known to test what it claims.
+
+Verified with `tsc`, `next build` and `vitest` (195 files, 2089).
+
+### Not done
+Migration 116 is written but **not applied** — still waiting on `SUPABASE_DB_URL`. Merging is
+safe without it: the poll is the existing behaviour, so the code does not depend on the
+migration, it is just slower until applied.

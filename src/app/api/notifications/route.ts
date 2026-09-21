@@ -89,6 +89,14 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }
 
+    // Authenticate BEFORE reading the body. Validating first meant a signed-out
+    // caller got a 400 about their payload instead of a 401, which reads as
+    // "your request was malformed" when the real answer is "you are not signed
+    // in" — and it parsed untrusted JSON for callers with no business here.
+    const result = await requireUser();
+    if (!result.ok) return result.res;
+    const { userId } = result;
+
     let ids: string[] = [];
     if (action === 'read') {
       const parsed = NotificationReadBodySchema.safeParse(await req.json().catch(() => null));
@@ -97,10 +105,6 @@ export async function PATCH(req: NextRequest) {
       }
       ids = parsed.data.ids;
     }
-
-    const result = await requireUser();
-    if (!result.ok) return result.res;
-    const { userId } = result;
 
     if (!isSupabaseConfigured()) return NextResponse.json({ ok: true });
 
