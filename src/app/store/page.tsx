@@ -54,6 +54,7 @@ import {
 import { DropCountdown } from '@/components/store/DropCountdown';
 import { logPlay } from '@/lib/buyer-session';
 import { BeatCard } from '@/components/store/BeatCard';
+import { RowCallbackCache } from '@/lib/ui/stable-row-callbacks';
 import { BeatPreviewDrawer } from '@/components/store/BeatPreviewDrawer';
 import { trackStoreEvent } from '@/lib/store/track-event';
 
@@ -944,6 +945,51 @@ function StorePage() {
     if (added) toast.success(`Added: ${t.title} (${type})`);
   };
 
+  // ── Stable row callbacks for the grid's BeatCard ─────────────────────────
+  // `BeatCard` is `memo`-wrapped, but every callback prop below used to be a
+  // fresh arrow built inline in the `.map()` (`onPlay={() => handlePlay(t)}`),
+  // which defeats memoisation for every card whenever ANY unrelated state
+  // changes — previewing a different track, adding one item to cart, "load
+  // more" appending a page. `handlePlay` / `addToCart` close over
+  // `filtered`/`currentTrack`/etc. and are redefined every render, so a ref
+  // holds the latest implementation while the callback identity itself stays
+  // fixed per row (see `lib/ui/stable-row-callbacks.ts`).
+  const handlePlayRef = useRef(handlePlay);
+  handlePlayRef.current = handlePlay;
+  const addToCartRef = useRef(addToCart);
+  addToCartRef.current = addToCart;
+    // Lazy `useState` rather than `useRef`: the cache must be READ during
+  // render to build the rows, which the React Compiler rule forbids for a
+  // ref, and `useRef(new X())` also constructs a fresh cache on every
+  // render only to discard it. The initialiser runs once.
+  const [gridCallbackCache] = useState(() => new RowCallbackCache<StoreTrack>());
+  const getGridPlayHandler = useCallback(
+    (t: StoreTrack) => gridCallbackCache.get(t.id, 'play', t, (track) => () => handlePlayRef.current(track)),
+    [gridCallbackCache],
+  );
+  const getGridPreviewHandler = useCallback(
+    (t: StoreTrack) => gridCallbackCache.get(t.id, 'preview', t, (track) => (
+      () => setPreviewTrack((current) => (current?.id === track.id ? null : track))
+    )),
+    [gridCallbackCache],
+  );
+  const getGridAddLeaseHandler = useCallback(
+    (t: StoreTrack) => gridCallbackCache.get(t.id, 'addLease', t, (track) => () => addToCartRef.current(track, 'lease')),
+    [gridCallbackCache],
+  );
+  const getGridAddExclusiveHandler = useCallback(
+    (t: StoreTrack) => gridCallbackCache.get(t.id, 'addExclusive', t, (track) => () => addToCartRef.current(track, 'exclusive')),
+    [gridCallbackCache],
+  );
+  const getGridFreeDownloadHandler = useCallback(
+    (t: StoreTrack) => gridCallbackCache.get(t.id, 'freeDownload', t, (track) => () => setFreeDownloadTrack(track)),
+    [gridCallbackCache],
+  );
+  const getGridWishlistHandler = useCallback(
+    (t: StoreTrack) => gridCallbackCache.get(t.id, 'wishlist', t, (track) => () => wishlist.toggle(track.id)),
+    [gridCallbackCache, wishlist],
+  );
+
   const addLicenseToCart = (t: StoreTrack, license: LicenseTier) => {
     const added = addItem(t as Track, {
       id: license.id,
@@ -1567,14 +1613,14 @@ function StorePage() {
                         isCurrent={currentTrack?.id === t.id}
                         isPlaying={isPlaying && currentTrack?.id === t.id}
                         isPreview={previewTrack?.id === t.id}
-                        onPlay={() => handlePlay(t)}
-                        onPreview={() => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
-                        onAddLease={() => addToCart(t, 'lease')}
-                        onAddExclusive={() => addToCart(t, 'exclusive')}
-                        onFreeDownload={() => setFreeDownloadTrack(t)}
+                        onPlay={getGridPlayHandler(t)}
+                        onPreview={getGridPreviewHandler(t)}
+                        onAddLease={getGridAddLeaseHandler(t)}
+                        onAddExclusive={getGridAddExclusiveHandler(t)}
+                        onFreeDownload={getGridFreeDownloadHandler(t)}
                         accentColor={accentColor}
                         isWishlisted={wishlist.has(t.id)}
-                        onToggleWishlist={() => wishlist.toggle(t.id)}
+                        onToggleWishlist={getGridWishlistHandler(t)}
                         recentSales={momentumByTrack[t.id]}
                       />
                       </div>

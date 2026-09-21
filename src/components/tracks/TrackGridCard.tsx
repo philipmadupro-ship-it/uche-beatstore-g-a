@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Track } from '@/lib/types';
 import { Music, Star } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
@@ -32,7 +32,9 @@ const TYPE_COLOR: Record<string, string> = {
   remix: 'text-[#eca9a9]',
 };
 
-export function TrackGridCard({
+/** See the same note on `TrackCard` — memoised, but only effective when the
+ *  parent (library page) hands it stable callback props. */
+function TrackGridCardImpl({
   track,
   onClickDetails,
   onPlayClick,
@@ -267,3 +269,5 @@ export function TrackGridCard({
     </div>
   );
 }
+
+export const TrackGridCard = memo(TrackGridCardImpl);

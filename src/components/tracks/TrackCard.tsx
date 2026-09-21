@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Track } from '@/lib/types';
 import { Star, Music, ChevronUp, ChevronDown, Check } from 'lucide-react';
 import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
@@ -97,7 +97,20 @@ type TrackWithInlineTags = Track & {
   track_tags?: TrackTag[];
 };
 
-export function TrackCard({
+/**
+ * Wrapped in `memo` below and exported as `TrackCard`. Zero components in
+ * this app were memoised before this change — a single parent state update
+ * (selecting one row, an unrelated poll tick) re-rendered every visible row
+ * and everything inside it (waveform peaks, offline status, session-fit
+ * markers, each subscribing to its own store). `memo` only pays off when the
+ * parent hands this component STABLE prop references; see
+ * `lib/ui/stable-row-callbacks.ts`, which is what the library and store
+ * pages now use to build `onPlayClick` et al. without a fresh closure per
+ * render. Memoising the child without stabilising the parent's props is a
+ * no-op that looks like a fix — see the render-count assertions in
+ * `TrackCard.scale.test.tsx`.
+ */
+function TrackCardImpl({
   track,
   index,
   onClickDetails,
@@ -706,6 +719,8 @@ export function TrackCard({
     </div>
   );
 }
+
+export const TrackCard = memo(TrackCardImpl);
 
 function formatDuration(seconds: number | null): string {
   if (!seconds || !Number.isFinite(seconds)) return '—';

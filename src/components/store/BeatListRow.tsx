@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Music, ExternalLink } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { fmtDur } from './helpers';
@@ -24,7 +25,9 @@ interface Props {
   accentColor: string;
 }
 
-export function BeatListRow({
+/** Memoised — see the equivalent note on `BeatCard`. Effective only when the
+ *  caller (currently `StoreListView`) passes stable callback references. */
+function BeatListRowImpl({
   track, index, priceLease, priceExclusive, isCurrent, isPlaying, isPreview,
   onPlay, onPreview, onAddLease, onAddExclusive, onFreeDownload, accentColor,
 }: Props) {
@@ -195,3 +198,5 @@ export function BeatListRow({
     </div>
   );
 }
+
+export const BeatListRow = memo(BeatListRowImpl);
