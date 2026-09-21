@@ -8320,3 +8320,34 @@ Headings above 13px — 14, 15, 16, 17, 18, 20, 22, 24, 28 and up. Collapsing th
 judgement per surface rather than a rule, so the guard stops at 13px rather than banning
 sizes nobody has agreed a replacement for. A guard that encodes an unmade decision is how you
 get a test people skip.
+
+## The storefront e2e spec could not fail (2026-09-21)
+
+Flagged while verifying the preview player and fixed here.
+
+`e2e/storefront.spec.ts` was written to skip cleanly on an empty store, so that a dev
+pointing it at a fresh Supabase still passed. Reasonable — except the leniency also applied
+in **CI, where the store is not unknown**: the workflow copies `e2e/fixtures/store-db.json`
+over `data/db.json` and runs with `ENABLE_LOCAL_STORE=true`, guaranteeing two listed, priced
+beats.
+
+So in CI the first test accepted `cards.first().or(empty).first()` — **the empty state
+passed** — and the other two called `test.skip()` when no card appeared. A regression that
+emptied the catalogue (a broken query, a bad filter default, a crashed render) reported
+"2 passed, 4 skipped" and went green. **The suite could not fail for the one reason it
+exists.**
+
+Now the spec knows whether it is seeded, from the same env var the server reads, so the two
+cannot disagree about which data is loaded. When seeded it asserts the fixture — producer
+name, exactly 2 cards, empty state absent — and `missingPrecondition()` throws with a message
+naming the fixture instead of skipping. When not seeded, every previous escape hatch is
+intact, so a brand-new Supabase still passes.
+
+Checked in both directions, which is the only way this claim means anything:
+- seeded, healthy fixture → **4 passed / 2 skipped** (was 2 passed / 4 skipped)
+- seeded, all tracks unlisted → **all 3 storefront tests fail**, with the count assertion
+  reporting `Expected 2, Received 0` and the other two naming the fixture
+
+The 2 remaining skips are the project and playlist detail tests, which need real Supabase.
+That skip is legitimate and already documented in `ci.yml`; the expected counts are now
+written there too, so "green with extra skips" is recognisable as the failure it is.
