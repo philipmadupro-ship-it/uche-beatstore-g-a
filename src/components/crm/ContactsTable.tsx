@@ -290,7 +290,7 @@ export function ContactsTable(p: Props) {
                 <ContactAvatar name={c.name} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <Link href={`/contacts/${c.id}`} className="text-[15px] font-semibold text-[var(--text-primary)] truncate hover:text-white transition-colors">
+                    <Link href={`/contacts/${c.id}`} className="text-[14px] font-semibold text-[var(--text-primary)] truncate hover:text-white transition-colors">
                       {c.name}
                     </Link>
                     {sends > 0 && (

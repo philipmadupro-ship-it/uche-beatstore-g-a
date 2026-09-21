@@ -433,7 +433,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                     rows={4}
                     maxLength={2000}
                     placeholder="What's this playlist about? Late-night drives, gospel chops, etc."
-                    className="w-full bg-[#090907] border border-white/20 rounded-lg px-3 py-2.5 text-[15px] font-light leading-[1.7] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 resize-none"
+                    className="w-full bg-[#090907] border border-white/20 rounded-lg px-3 py-2.5 text-[14px] font-light leading-[1.7] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 resize-none"
                   />
                   <p className="mt-1 text-[9px] font-mono text-white/40">
                     {tempDescription.length}/2000 · ⌘/Ctrl+Enter to save
@@ -445,7 +445,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                   className="group mt-2 block w-full text-left sm:mt-4"
                 >
                   {playlist?.description ? (
-                    <p className="text-[15px] text-white/60 leading-[1.7] whitespace-pre-line group-hover:text-white transition-colors font-light tracking-wide">
+                    <p className="text-[14px] text-white/60 leading-[1.7] whitespace-pre-line group-hover:text-white transition-colors font-light tracking-wide">
                       {playlist.description}
                     </p>
                   ) : (

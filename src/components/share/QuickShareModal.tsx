@@ -259,7 +259,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.04]">
           <div>
             <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white mb-1">Quick share</p>
-            <h2 className="text-[15px] font-medium text-white">
+            <h2 className="text-[14px] font-medium text-white">
               {tab === 'tracks' ? 'Pick tracks · send a link' : `Pick a ${tab.slice(0, -1)} · send a link`}
             </h2>
           </div>

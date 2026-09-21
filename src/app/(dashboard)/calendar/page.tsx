@@ -329,7 +329,7 @@ function ActivityPanel({
           <ActivityIcon size={11} className="text-white" />
           <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">Activity</p>
         </div>
-        <h3 className="text-[15px] font-medium text-white tracking-tight">{heading}</h3>
+        <h3 className="text-[14px] font-medium text-white tracking-tight">{heading}</h3>
         <p className="text-[10px] font-mono uppercase tracking-wider text-white/60 mt-1">
           {items.length} action{items.length === 1 ? '' : 's'} on this day
         </p>

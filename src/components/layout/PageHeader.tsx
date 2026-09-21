@@ -38,7 +38,7 @@ export function PageHeader({ eyebrow, title, description, actions, meta, childre
           {eyebrow && (
             <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-white/60 mb-2">{eyebrow}</p>
           )}
-          <h1 className="text-[28px] sm:text-[34px] md:text-[40px] font-bold tracking-tight text-white leading-[1.05] font-heading">
+          <h1 className="text-[28px] sm:text-[32px] md:text-[40px] font-bold tracking-tight text-white leading-[1.05] font-heading">
             {title}
           </h1>
           {description && (

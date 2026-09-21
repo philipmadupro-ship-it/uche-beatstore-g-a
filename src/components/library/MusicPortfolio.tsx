@@ -390,7 +390,7 @@ export default function MusicPortfolio({
                                                 titleRefs.current.delete(track.id);
                                             }
                                         }}
-                                        className={`block text-[13px] md:text-[15px] font-medium tracking-wide truncate ${isEmbedded ? '' : 'font-heading'}`}
+                                        className={`block text-[13px] md:text-[14px] font-medium tracking-wide truncate ${isEmbedded ? '' : 'font-heading'}`}
                                         data-original-text={track.title}
                                     >
                                         {track.title}

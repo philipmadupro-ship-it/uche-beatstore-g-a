@@ -204,7 +204,7 @@ function DownloadPortal() {
               </div>
               <div>
                 <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6DC6A4]">Purchase confirmed</p>
-                <h1 className="text-[28px] font-bold leading-tight text-white md:text-[34px]">Your files are ready</h1>
+                <h1 className="text-[28px] font-bold leading-tight text-white md:text-[32px]">Your files are ready</h1>
                 <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-white/60">
                   Receipt sent to <span className="text-white/80">{purchase.buyer_email}</span>. Keep this private link for future downloads.
                 </p>
@@ -280,7 +280,7 @@ function DownloadPortal() {
 
                   {/* Meta */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-white truncate">{track.title}</p>
+                    <p className="text-[14px] font-semibold text-white truncate">{track.title}</p>
                     <div className="flex items-center flex-wrap gap-2 mt-1.5">
                       <span className={`text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                         track.license_type === 'exclusive'

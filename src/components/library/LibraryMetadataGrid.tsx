@@ -69,7 +69,7 @@ export function LibraryMetadataGrid({ track }: Props) {
             {cell.label}
           </p>
           <p className={`font-mono font-bold leading-none ${cell.accent ?? 'text-white'} ${
-            cell.large ? 'text-[22px]' : 'text-[16px]'
+            cell.large ? 'text-[20px]' : 'text-[16px]'
           }`}>
             {cell.value}
           </p>

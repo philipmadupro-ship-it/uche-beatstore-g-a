@@ -149,7 +149,7 @@ function Hero({
           <div className="mt-3 min-w-0">
             <Link
               href={`/store/producer/${slugify(producer.display_name)}`}
-              className="inline-block max-w-full text-[15px] md:text-[16px] text-white/90 font-medium hover:text-white transition-colors break-all"
+              className="inline-block max-w-full text-[14px] md:text-[16px] text-white/90 font-medium hover:text-white transition-colors break-all"
             >
               {producer.display_name}
             </Link>

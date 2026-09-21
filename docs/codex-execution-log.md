@@ -8351,3 +8351,38 @@ Checked in both directions, which is the only way this claim means anything:
 The 2 remaining skips are the project and playlist detail tests, which need real Supabase.
 That skip is legitimate and already documented in `ci.yml`; the expected counts are now
 written there too, so "green with extra skips" is recognisable as the failure it is.
+
+## Type scale: the headings (2026-09-21)
+
+The other half of item 4. Base heading sizes went from **13 distinct to 9** — 14, 16, 18,
+20, 24, 28, 32, 40 (the H1 named in CLAUDE.md), 48, plus one 88px display glyph.
+
+Merged `15 → 14` (23 occurrences), `22 → 20` (7), `34 → 32` (4), and the singletons
+`17 → 16`, `30 → 28`, `46 → 48`. 36 occurrences across 29 files. Each merged size sat within
+two pixels of a neighbour, which reads as inconsistency rather than hierarchy.
+
+`22px` was worth checking rather than assuming: every use is a stat figure
+(`font-bold tabular-nums`) or a panel title, so 20px is the same role one step down. `15px`
+was ordinary body-level headings across a dozen pages.
+
+### Responsive ladders are exempt, and that is the whole design of the guard
+`text-[28px] sm:text-[36px] md:text-[48px]` is **one heading at three widths**. The reader
+never sees two of them at once, so it does not offend principle 2 at all — and flattening it
+would either break the ladder or leave two breakpoints painting the same size. Principle 2 is
+about sizes visible *together*.
+
+So the guard enforces the scale on **base** sizes and allows a *named* list of intermediate
+rungs only when they carry a responsive prefix: 36, 56, and the 112/120 of
+`text-[88px] sm:text-[112px] lg:text-[120px]` — the single initial letter on a project page,
+which is the clearest case for the exemption there is. They are listed rather than
+blanket-allowing anything prefixed, or "add a `sm:`" becomes the way around the scale.
+
+Checked in both directions. Injecting `text-[22px]` into `sales` makes the guard fail naming
+that file and size; restoring it passes. Worth noting the first attempt at that check used
+`sed '0,/re/s//repl/'`, which silently matched nothing on BSD sed and produced a false "still
+passes" — the guard looked verified when nothing had been injected. Confirm the injection
+landed before trusting the result.
+
+Verified by rendering `/store` against the fixture and measuring computed `fontSize` on every
+leaf text node: 8 distinct sizes, all on the scale (8, 9, 10, 11, 14, 16, 20, 24), two beat
+cards present, layout intact. Plus `tsc`, `next build`, `vitest` (2092).

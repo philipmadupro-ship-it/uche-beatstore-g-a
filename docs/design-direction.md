@@ -178,9 +178,19 @@ consistent tree-wide.
    deliberately distinct from the title. Rendered, the page now shows seven distinct sizes
    across all its text, dominated by 11px and 9px.
 
-   **Still open:** the headings above 13px (14, 15, 16, 17, 18, 20, 22, 24, 28…). Collapsing
-   those is a visual judgement per surface rather than a rule, which is why the guard stops
-   at 13px instead of banning sizes with no agreed replacement.
+   *2026-09-21 — the headings are done too.* Base heading sizes went from **13 distinct to
+   9**: 14, 16, 18, 20, 24, 28, 32, 40 (the H1 named in CLAUDE.md), 48, plus a single 88px
+   display. Merged `15 → 14` (23), `22 → 20` (7), `34 → 32` (4), and the singletons
+   `17 → 16`, `30 → 28`, `46 → 48`. Each was within two pixels of a neighbour, which reads
+   as inconsistency rather than hierarchy.
+
+   **Responsive ladders are exempt, and that is the load-bearing distinction.**
+   `text-[28px] sm:text-[36px] md:text-[48px]` is ONE heading at three widths — the reader
+   never sees two of them at once, so it does not offend principle 2, and flattening it
+   would either break the ladder or leave two breakpoints painting the same size. The guard
+   enforces the scale on **base** sizes and permits a named list of intermediate rungs
+   (36, 56, and the 112/120 of the project-initial glyph) only when prefixed. They are
+   listed rather than blanket-allowed, or "add a `sm:`" becomes the way around the scale.
 5. **Modal consolidation** — ~~21 hand-rolled overlays; 19 lack Escape, 20 lack focus trap,
    all 21 lack `role="dialog"`~~. `ui/Modal` already implements all of it.
 

@@ -411,7 +411,7 @@ Drop a section like [Verse] or [Hook] from the bar above.
 Click any word to find rhymes, synonyms, definitions.
 Everything autosaves.`}
               spellCheck
-              className="w-full h-full bg-transparent text-[13px] sm:text-[15px] leading-[24px] sm:leading-[28px] text-white placeholder:text-white/30 pl-1 pr-4 sm:pr-5 py-3 sm:py-4 resize-none focus:outline-none font-mono"
+              className="w-full h-full bg-transparent text-[13px] sm:text-[14px] leading-[24px] sm:leading-[28px] text-white placeholder:text-white/30 pl-1 pr-4 sm:pr-5 py-3 sm:py-4 resize-none focus:outline-none font-mono"
             />
           </div>
         </div>

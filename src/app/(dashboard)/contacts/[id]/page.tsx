@@ -225,7 +225,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                 <EditableLine
                   value={contact.name}
                   onSave={(v) => patchField('name', v)}
-                  className="text-[22px] font-medium text-white leading-tight tracking-tight"
+                  className="text-[20px] font-medium text-white leading-tight tracking-tight"
                   placeholder="Name"
                 />
 

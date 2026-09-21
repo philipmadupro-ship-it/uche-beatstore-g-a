@@ -30,7 +30,7 @@ export default function StorePrivacyPage() {
           <ArrowLeft size={13} /> Back to store
         </Link>
 
-        <h1 className="font-heading text-[34px] md:text-[40px] mt-6 leading-tight">Privacy Policy</h1>
+        <h1 className="font-heading text-[32px] md:text-[40px] mt-6 leading-tight">Privacy Policy</h1>
         <p className="mt-2 text-[11px] font-mono uppercase tracking-[0.2em] text-white/40">Last updated · {UPDATED}</p>
 
         <p className="mt-6 text-[14px] leading-relaxed text-white/60">

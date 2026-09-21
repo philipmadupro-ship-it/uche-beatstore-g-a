@@ -85,7 +85,7 @@ export function ProductListRow({
   const titleContent = (
     <>
       {eyebrow && <div className="mb-1 flex min-h-4 items-center gap-2 text-[9px] font-mono uppercase tracking-[0.18em] text-white/40">{eyebrow}</div>}
-      <h3 className="truncate text-[15px] font-bold leading-tight text-white transition-colors group-hover:text-[#fff7ea] sm:text-[16px]">
+      <h3 className="truncate text-[14px] font-bold leading-tight text-white transition-colors group-hover:text-[#fff7ea] sm:text-[16px]">
         {title}
       </h3>
       {meta && <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-mono text-white/40">{meta}</div>}
