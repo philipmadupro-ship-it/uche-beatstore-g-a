@@ -88,6 +88,12 @@ jobs:
   # priced beats). Covers /store rendering, the preview drawer and cart →
   # /store/checkout. The project and playlist detail tests skip here, because
   # those routes need Supabase.
+  #
+  # ENABLE_LOCAL_STORE is what tells the SPEC the store is seeded, not just the
+  # server: with it set, storefront.spec.ts asserts the fixture's two beats and
+  # FAILS on an empty catalogue instead of skipping. Expect 4 passed / 2
+  # skipped here. If it ever reports more skips than that, the catalogue broke
+  # — do not treat a green-with-skips run as a pass.
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 15
