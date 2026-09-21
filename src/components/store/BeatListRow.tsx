@@ -79,7 +79,7 @@ export function BeatListRow({
 
         <div className="flex-1 min-w-0">
           <button onClick={onPreview} className="text-left w-full" title={track.title}>
-            <p className={`text-[15px] font-bold leading-tight truncate transition-colors ${isPreview || isCurrent ? '' : 'text-[#FFF8EE] hover:text-white'}`}
+            <p className={`text-[14px] font-bold leading-tight truncate transition-colors ${isPreview || isCurrent ? '' : 'text-[#FFF8EE] hover:text-white'}`}
               style={isPreview || isCurrent ? { color: accentColor } : {}}
             >
               {track.title}

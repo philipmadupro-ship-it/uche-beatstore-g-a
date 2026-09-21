@@ -594,7 +594,7 @@ function EngagementCard({ label, value, icon, accent }: { label: string; value: 
         {icon}
         <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/50 truncate">{label}</span>
       </div>
-      <p className="text-[22px] font-bold text-white tabular-nums leading-none">{value}</p>
+      <p className="text-[20px] font-bold text-white tabular-nums leading-none">{value}</p>
     </Card>
   );
 }

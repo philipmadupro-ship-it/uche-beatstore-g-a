@@ -47,7 +47,7 @@ export function FontPicker({ value, weight, onChange }: {
       >
         <span className="min-w-0">
           <span
-            className="block truncate text-[15px] leading-tight text-white/90"
+            className="block truncate text-[14px] leading-tight text-white/90"
             style={{ fontFamily: font.stack, fontWeight: activeFace.weight }}
           >
             {font.name}
@@ -89,7 +89,7 @@ export function FontPicker({ value, weight, onChange }: {
                   >
                     <span className="min-w-0">
                       <span
-                        className="block truncate text-[15px] leading-tight text-white/90"
+                        className="block truncate text-[14px] leading-tight text-white/90"
                         style={{ fontFamily: option.stack }}
                       >
                         {option.name}

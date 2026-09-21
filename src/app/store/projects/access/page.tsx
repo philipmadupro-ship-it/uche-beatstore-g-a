@@ -72,7 +72,7 @@ function Inner() {
           <AlertCircle size={28} className="text-red-400" />
         </div>
         <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-white/40">Project delivery</p>
-        <p className="mb-1 text-[22px] font-bold leading-tight text-white">
+        <p className="mb-1 text-[20px] font-bold leading-tight text-white">
           Missing session
         </p>
         <p className="mx-auto max-w-sm text-[11px] leading-relaxed text-white/80">
@@ -89,7 +89,7 @@ function Inner() {
           <AlertCircle size={28} className="text-amber-400" />
         </div>
         <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-white/40">Project delivery</p>
-        <p className="mb-2 text-[22px] font-bold leading-tight text-white">
+        <p className="mb-2 text-[20px] font-bold leading-tight text-white">
           Still preparing your bundle
         </p>
         <p className="mx-auto mb-5 max-w-sm text-[11px] leading-relaxed text-white/80">

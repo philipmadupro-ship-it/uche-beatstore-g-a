@@ -394,7 +394,7 @@ export function ClientShareVariant({
         {hasBio && (
           <section className="mb-14 max-w-2xl">
             <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/80 mb-3">About</p>
-            <p className="text-[15px] text-white/85 leading-[1.75] whitespace-pre-wrap">
+            <p className="text-[14px] text-white/85 leading-[1.75] whitespace-pre-wrap">
               {creator!.bio}
             </p>
           </section>

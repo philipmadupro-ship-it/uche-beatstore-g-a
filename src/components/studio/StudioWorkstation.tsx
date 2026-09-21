@@ -555,7 +555,7 @@ export function StudioWorkstation() {
       <div className="mb-5 sm:mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">Sketchpad</p>
-          <h1 className="font-heading text-[30px] leading-none text-white">Studio</h1>
+          <h1 className="font-heading text-[28px] leading-none text-white">Studio</h1>
         </div>
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
           <span className="hidden rounded-full border border-white/10 bg-white/[0.02] px-3 py-2 text-[10px] font-mono uppercase tracking-[0.18em] text-white/40 sm:inline-flex">
@@ -633,7 +633,7 @@ export function StudioWorkstation() {
                     <p className="mb-1 text-[9px] font-mono uppercase tracking-[0.18em] text-white/40 sm:text-[10px] sm:tracking-[0.2em]">
                       Now in studio
                     </p>
-                    <h2 className="truncate text-[15px] font-medium text-white sm:text-[17px]">{active.title}</h2>
+                    <h2 className="truncate text-[14px] font-medium text-white sm:text-[16px]">{active.title}</h2>
                     <p className="mt-1 truncate text-[10px] font-mono uppercase tracking-wider text-white/40 sm:text-[11px]">
                       {active.bpm ? `${Math.round(active.bpm * effectiveRate)} BPM` : '— BPM'}
                       {active.key && ` · ${active.key}${active.scale ? ' ' + active.scale : ''}`}

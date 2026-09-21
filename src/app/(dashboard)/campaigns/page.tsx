@@ -260,7 +260,7 @@ function CampaignCard({ campaign }: { campaign: Campaign }) {
           <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 mb-1">
             {new Date(campaign.created_at).toLocaleDateString()}
           </p>
-          <h3 className="truncate text-[15px] font-semibold text-white">{campaign.name}</h3>
+          <h3 className="truncate text-[14px] font-semibold text-white">{campaign.name}</h3>
           {campaign.description && (
             <p className="text-[11px] text-white/70 mt-1 line-clamp-2 leading-relaxed">
               {campaign.description}

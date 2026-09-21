@@ -578,7 +578,7 @@ function OfferRow({ offer, onStatusChange }: { offer: Offer; onStatusChange: (id
         </div>
         <div className="text-right shrink-0">
           <p className="text-[9px] font-mono uppercase tracking-wider text-white/40">Offer</p>
-          <p className="text-[22px] font-bold text-white tabular-nums leading-none">{fmtMoney(offer.offered_price_usd)}</p>
+          <p className="text-[20px] font-bold text-white tabular-nums leading-none">{fmtMoney(offer.offered_price_usd)}</p>
         </div>
       </div>
 

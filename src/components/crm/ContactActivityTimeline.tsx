@@ -141,7 +141,7 @@ export function ContactActivityTimeline({ contactId, contactName, onSendBeat, on
                 borderColor: c.accent ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
               }}
             >
-              <span className="text-[15px] font-bold tabular-nums" style={{ color: c.accent ? '#fff' : 'rgba(255,255,255,0.9)' }}>
+              <span className="text-[14px] font-bold tabular-nums" style={{ color: c.accent ? '#fff' : 'rgba(255,255,255,0.9)' }}>
                 {c.value}
               </span>
               <span className="text-[8px] font-mono uppercase tracking-[0.15em] text-white/40 mt-0.5">{c.label}</span>

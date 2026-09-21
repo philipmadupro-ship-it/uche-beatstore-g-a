@@ -984,7 +984,7 @@ export default function LibraryPage() {
               <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/50 mb-1.5">
                 {currentTrack ? 'Now playing' : 'Your workspace'}
               </p>
-              <h1 className="text-[24px] sm:text-[36px] md:text-[46px] font-bold tracking-tight text-white leading-none font-heading mb-2">
+              <h1 className="text-[24px] sm:text-[36px] md:text-[48px] font-bold tracking-tight text-white leading-none font-heading mb-2">
                 {currentTrack?.title ?? 'Home'}
               </h1>
               <p className="text-[11px] font-mono text-white/50 mb-4">
@@ -2010,7 +2010,7 @@ function PackBuilderModal({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium text-white">Pack price</span>
-                <span className="text-[22px] font-bold text-white tabular-nums">${computed.toLocaleString()}</span>
+                <span className="text-[20px] font-bold text-white tabular-nums">${computed.toLocaleString()}</span>
               </div>
               {savings > 0 && (
                 <p className="text-[9px] font-mono text-[#6DC6A4]">Buyer saves ${savings.toLocaleString()}</p>

@@ -305,7 +305,7 @@ function TrackList({
   return (
     <div className="px-2 md:px-4 pt-4 pb-2">
       <div className="px-4 md:px-6 mb-1 flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold text-white">{heading}</h2>
+        <h2 className="text-[14px] font-semibold text-white">{heading}</h2>
       </div>
 
       <ul>

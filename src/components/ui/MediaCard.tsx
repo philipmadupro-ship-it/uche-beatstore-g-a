@@ -155,12 +155,12 @@ export function MediaCard({
           onEditingChange={setRenaming}
           onSave={onRename!}
           maxLength={200}
-          inputClassName="text-[13px] sm:text-[15px] font-bold"
+          inputClassName="text-[13px] sm:text-[14px] font-bold"
         />
       ) : (
       <h3
         className={cn(
-          'truncate text-[13px] font-bold leading-tight transition-colors sm:text-[15px]',
+          'truncate text-[13px] font-bold leading-tight transition-colors sm:text-[14px]',
           selected ? 'text-white' : 'text-white group-hover:text-white',
         )}
       >

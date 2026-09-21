@@ -177,7 +177,7 @@ export default function BandcampRemixCard({
               <span className={`block w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] mb-1.5 ${reducedMotion ? '' : 'animate-pulse'}`} />
             )}
             <p
-              className="text-[15px] sm:text-base font-bold text-[#FFF8EE] truncate leading-tight [text-shadow:0_2px_8px_rgba(0,0,0,0.95)]"
+              className="text-[14px] sm:text-base font-bold text-[#FFF8EE] truncate leading-tight [text-shadow:0_2px_8px_rgba(0,0,0,0.95)]"
               style={isCurrent ? { color: accentColor } : {}}
             >
               {track.title}
