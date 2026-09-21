@@ -8210,3 +8210,44 @@ Verified with `tsc`, `next build` and `vitest` (195 files, 2089).
 Migration 116 is written but **not applied** — still waiting on `SUPABASE_DB_URL`. Merging is
 safe without it: the poll is the existing behaviour, so the code does not depend on the
 migration, it is just slower until applied.
+
+## Overlay keyboard behaviour (2026-09-21)
+
+`design-direction.md` item 5. The doc said 21 hand-rolled overlays, 19 without Escape, 20
+without a focus trap, all 21 without `role="dialog"`, and flagged it as a behaviour change
+needing sign-off. **Those numbers were badly stale.** 27 components already carry
+`role="dialog"`, and `ContactHistoryDrawer` had been rebuilt on `ui/Drawer` — it only
+appeared in a scan because it *describes* the old `fixed inset-0` pattern in a comment.
+
+Four real gaps, and the interesting part is that they are not all the same kind of thing:
+
+- `QuickShareModal` is a genuine dialog. It now has `role="dialog"`, `aria-modal`, a focus
+  trap and focus restoration via `useDialogBehavior`.
+- The folder popovers in `PlaylistFilterBar` and `ProjectFilterBar`, and the New-release menu
+  on `/library`, are anchored popovers and menus. They get Escape and focus restoration with
+  **`trapFocus: false`** — trapping an anchored menu strands a keyboard user inside a popup
+  they expect to Tab out of, which is the rule `useDialogBehavior` states in its own header.
+
+All three of those closed **only** on an outside click. A keyboard user who opened one had no
+way to dismiss it.
+
+### The guard caught its own false negative
+`lib/ui/overlay-behavior.test.ts` flags a `fixed inset-0` scrim carrying a dismiss handler
+when the file has no dialog behaviour. The first version also accepted a `ui/Modal` /
+`ui/Drawer` / `ui/Popover` **import** as proof — and passed, because `/library` imports
+`Drawer` for its filter sheet while separately hand-rolling the release menu with a bare
+scrim. A file-level import proves nothing about the particular overlay being scanned, so the
+check was narrowed to the hook alone; it then failed on `/library`, which is how that fourth
+gap was found at all.
+
+It strips comments first, for the `ContactHistoryDrawer` reason above. `DropZone` (a drop
+target with no focusable content, `aria-hidden` when inactive) and `GlassPage` (two `-z-10
+aria-hidden` background washes) are allowlisted with their reasons.
+
+Verified with `tsc`, `next build` and `vitest` (196 files, 2090).
+
+### Still open on item 5
+The release menu is now dismissable but is still a hand-rolled menu, not `ui/ActionMenu`, so
+it has no arrow-key navigation. Converting it is a separate change — `ActionMenu` brings its
+own grouping model and keyboard indices, and it deserves its own pass rather than riding
+along with an accessibility fix.
