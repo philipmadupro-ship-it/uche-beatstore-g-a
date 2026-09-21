@@ -159,6 +159,23 @@ consistent tree-wide.
 6. **Tokenisation** — 175 files hardcode hex against a 114-property token layer that is
    essentially unused. This is the root cause of repeated colour drift.
 
+   *2026-09-20 — the blocker under this item is fixed; the migration itself is not done.*
+   Tokenising the literals was **not safe to do**, because the token layer did not describe
+   the app: `--bg-card` resolved to `#181815` while 135 components hardcode `#0D0D0A`, and
+   `--bg-page` to `#0B0B0A` against 300 uses of `#090907`. Converting a literal would have
+   *changed its colour*. That was also live, not theoretical — the ~34 sites that already
+   used the tokens (`ui/Card`, `Modal`, `Drawer`, `Field`, and the sales / analytics /
+   calendar / contacts pages) rendered a full shade lighter than their neighbours, and one
+   page painted three different near-blacks at once.
+
+   The surface tokens now hold the measured values, so `#090907` ⇄ `var(--bg-page)` and
+   `#0D0D0A` ⇄ `var(--bg-card)` are genuine no-ops and the migration can proceed surface by
+   surface. Two things to know first: **text, border and accent tokens are still off**
+   (`--text-primary` `#E6DED1` vs `text-white/80`; `--border-default` `#282722` vs
+   `border-white/10`), so only surfaces are safe today; and many literals carry an opacity
+   modifier (`bg-[#090907]/90`), so check how `bg-[var(--bg-page)]/90` compiles here before
+   converting that population.
+
 ## Definition of done per surface
 
 - Visually: fewer borders/colors/type-sizes than before (count them), one hero moment, calm.

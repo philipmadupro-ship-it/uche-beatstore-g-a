@@ -133,14 +133,28 @@
 
   /* De Roche semantic layer. These intentionally coexist with the
    * legacy app tokens while components migrate incrementally. */
-  --background-primary: var(--dr-black-950);
+  /* The three surface steps are the app's MEASURED values, not De Roche
+   * primitives. The primitives stay below as the source scale and still drive
+   * the light [data-theme="de-roche-archive"] inversion, but pointing the dark
+   * surfaces at them put the token layer a full shade away from the app:
+   * --surface-primary resolved to #181815 while 135 components hardcode
+   * #0D0D0A, so every ui/Card, Modal and Drawer rendered a visibly lighter
+   * panel than the hand-rolled panels beside it. Three different near-blacks
+   * painted on one page. CLAUDE.md's measured table is the reference — a value
+   * copied from the variables used to land off-palette against its neighbours,
+   * which is the whole reason components kept reaching for literals instead.
+   * Ramp: #090907 page -> #0D0D0A card -> #11110F hover, R=G with B two lower. */
+  --background-primary: #090907;
   --background-secondary: var(--dr-black-900);
   --background-elevated: var(--dr-charcoal-850);
   --background-recessed: #070706;
   --background-inverse: var(--dr-paper-100);
-  --surface-primary: var(--dr-charcoal-850);
+  --surface-primary: #0D0D0A;
   --surface-secondary: var(--dr-charcoal-800);
-  --surface-hover: var(--dr-basalt-750);
+  /* #11110F — the next step on the ramp, and an existing primitive rather than
+   * a fourth invented near-black. The old value (--dr-basalt-750 #282722) was
+   * four steps up and read as a grey flash on hover. */
+  --surface-hover: var(--dr-black-900);
   --surface-active: var(--dr-stone-700);
   --surface-selected: #2F2C25;
   --surface-disabled: #201F1B;
@@ -168,9 +182,12 @@
   --information: #71A4B5;
 
   /* HSL base values for high-fidelity dynamic opacity blending */
+  /* Nothing consumes these today. They are kept in step with the surfaces
+   * above anyway: an unused declaration that disagrees with reality is exactly
+   * how the token layer drifted a shade away from the app in the first place. */
   --bg-page-hsl: 60 10% 3%;
-  --bg-card-hsl: 40 15% 8%;
-  --bg-hover-hsl: 40 16% 9%;
+  --bg-card-hsl: 60 13% 5%;
+  --bg-hover-hsl: 60 9% 6%;
   --text-primary-hsl: 34 62% 92%;
   --text-secondary-hsl: 36 27% 75%;
   --accent-hsl: 37 46% 83%;

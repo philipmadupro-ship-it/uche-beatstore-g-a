@@ -8113,6 +8113,58 @@ radii; a guard that fails on day one is a guard people skip.
 
 Verified with `tsc`, `next build` and `vitest` (194 files, 2078).
 
+## Token layer realigned to the app's measured palette (2026-09-20)
+
+Groundwork for `design-direction.md` item 6. The migration it asks for — tokenise 175 files
+of hardcoded hex — **was not safe to perform**, and finding out why was the work.
+
+The token layer did not describe the app. `--bg-card` resolved to `#181815` while 135
+components hardcode `#0D0D0A`; `--bg-page` resolved to `#0B0B0A` against 300 uses of
+`#090907`. Converting a literal to its "equivalent" token would therefore have *changed
+that surface's colour*, app-wide, while looking like a no-op refactor in review.
+
+It was already shipped, not hypothetical. About 34 sites use the tokens today — `ui/Card`,
+`Modal`, `Drawer`, `Field`, `EmptyState`, and the sales / analytics / calendar / contacts
+pages — so every one of those panels rendered a full shade lighter than the hand-rolled
+panels beside it. Measured on `/dev/design-system` in the browser: **three different
+near-blacks painting at once** — `rgb(9,9,7)` and `rgb(13,13,10)` from literals, and
+`rgb(11,11,10)` from the token-driven `<body>`, which was lighter than the panels sitting on
+it and darker than the cards.
+
+**Decision (the producer's, asked explicitly): the literals are the palette, the tokens were
+wrong.** CLAUDE.md's measured table and AGENTS.md's design-system table both already declare
+`#090907` / `#0D0D0A`, and CLAUDE.md warns that a value copied from the variables "lands
+off-palette against its neighbours" — which is precisely what was measured. The alternative
+(keep De Roche graphite, convert 435 literals) is a whole-app restyle, not a refactor.
+
+Changed in `:root` only, at the semantic layer rather than the `--dr-*` primitives, so the
+source scale survives and `[data-theme="de-roche-archive"]` keeps its own overrides:
+
+- `--background-primary` → `#090907`
+- `--surface-primary` → `#0D0D0A`
+- `--surface-hover` → `var(--dr-black-900)` `#11110F`, the next step on the ramp and an
+  existing primitive rather than a fourth invented near-black. The old value
+  (`--dr-basalt-750` `#282722`) was four steps up and read as a grey flash on hover.
+
+The unused `--bg-*-hsl` triples were brought into step too. Nothing consumes them, but an
+unused declaration that disagrees with reality is how this drifted in the first place.
+
+Verified in the browser: dark resolves to `#090907` / `#0d0d0a` / `#11110f` with the body at
+`rgb(9,9,7)`, the third near-black is gone, and toggling `data-theme="de-roche-archive"`
+still inverts to paper `#eee8dd` — the light theme was not touched. Plus `tsc`,
+`next build`, `vitest` (2078).
+
+### The migration is unblocked, not done
+`#090907` ⇄ `var(--bg-page)` is now a genuine no-op, so tokenising can go surface by surface.
+Two things the next pass needs:
+- **Only surfaces are safe.** `--text-primary` is `#E6DED1` where components write
+  `text-white/80`, and `--border-default` is a warm `#282722` against `border-white/10`.
+  Those tokens are still a shade away from the app and need the same treatment first.
+- **Opacity modifiers on hex literals** (`bg-[#090907]/90`, `bg-[#0D0D0A]/60`) are a separate
+  population. Check how `bg-[var(--bg-page)]/90` compiles in this Tailwind version before
+  converting them; the plain literals are the safe ones. Six live in `components/ui` alone,
+  two of them modified, which is why the primitives were left on literals this pass rather
+  than half-converted.
 ## Notifications verified end to end (2026-09-21)
 
 Asked to confirm the notifications feature works. It mostly does — the route, the badge
