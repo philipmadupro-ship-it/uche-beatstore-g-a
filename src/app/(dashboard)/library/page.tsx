@@ -44,6 +44,7 @@ import { ActionDigestPanel } from '@/components/library/ActionDigestPanel';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { gridTemplate, resolveColumns } from '@/lib/library/columns';
 import { useLibraryColumns } from '@/hooks/useLibraryColumns';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { ColumnPicker } from '@/components/library/ColumnPicker';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import type { TrackStatsMap } from '@/lib/library/track-stats';
@@ -289,6 +290,15 @@ export default function LibraryPage() {
   // ── New Release dropdown ─────────────────────────────────────────
   const [creatingRelease, setCreatingRelease] = useState(false);
   const [releaseDropdownOpen, setReleaseDropdownOpen] = useState(false);
+  // Escape and focus restoration for the New-release menu. `trapFocus: false`
+  // because it is an anchored menu, not a dialog — trapping one strands a
+  // keyboard user inside a popup they expect to Tab out of. It previously
+  // closed only on an outside click, so there was no keyboard dismissal at all.
+  const releaseMenuRef = useDialogBehavior<HTMLDivElement>({
+    open: releaseDropdownOpen,
+    onClose: () => setReleaseDropdownOpen(false),
+    trapFocus: false,
+  });
 
   const handleNewRelease = async (mode: 'both' | 'project' | 'playlist') => {
     if (creatingRelease) return;
@@ -976,6 +986,12 @@ export default function LibraryPage() {
   // exposes its own onExit chip to come back to list view).
   const effectiveViewMode = isMobileViewport ? 'list' : viewMode;
   const effectiveBrowseMode = isMobileViewport ? 'all' : browseMode;
+  // Home content — the four hub tiles, the cross-surface digest and the sell
+  // readiness panel — belongs to Browse, not to the catalogue list. Mobile has
+  // no Browse mode (the toggle is hidden and the mode is forced to 'all'), so
+  // it keeps them rather than losing them outright; deciding where they live on
+  // a phone is a separate question from unclogging the desktop list.
+  const showHomeContent = effectiveBrowseMode === 'sections' || isMobileViewport;
 
   if (effectiveViewMode === 'portfolio') {
     return (
@@ -1045,7 +1061,7 @@ export default function LibraryPage() {
               <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/50 mb-1.5">
                 {currentTrack ? 'Now playing' : 'Your workspace'}
               </p>
-              <h1 className="text-[24px] sm:text-[36px] md:text-[46px] font-bold tracking-tight text-white leading-none font-heading mb-2">
+              <h1 className="text-[24px] sm:text-[36px] md:text-[48px] font-bold tracking-tight text-white leading-none font-heading mb-2">
                 {currentTrack?.title ?? 'Home'}
               </h1>
               <p className="text-[11px] font-mono text-white/50 mb-4">
@@ -1109,7 +1125,10 @@ export default function LibraryPage() {
             {releaseDropdownOpen && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setReleaseDropdownOpen(false)} />
- <div className="absolute left-0 top-full mt-1.5 z-40 w-48 bg-white/[0.04] border border-white/10 rounded-xl overflow-hidden ui-pop duration-150">
+ <div
+                  ref={releaseMenuRef}
+                  className="absolute left-0 top-full mt-1.5 z-40 w-48 bg-white/[0.04] border border-white/10 rounded-xl overflow-hidden ui-pop duration-150"
+                >
                   {[
                     { mode: 'both' as const, label: 'Project + Playlist', sub: 'Full release flow' },
                     { mode: 'project' as const, label: 'Project only', sub: 'Production session' },
@@ -1130,7 +1149,11 @@ export default function LibraryPage() {
           </div>
         </div>
 
-        {/* ── Dashboard — Spotify-style home content ────────────── */}
+        {/* ── Dashboard — Spotify-style home content ──────────────
+            Browse only. These four tiles go to other pages; in All tracks
+            they were a row of exits standing between the producer and the
+            catalogue they came here to work through. */}
+        {showHomeContent && (
         <div className="mb-6 space-y-4">
 
           {/* Row A: Spotify pinned-style grid — 2 per row on mobile, 4 on md */}
@@ -1192,7 +1215,19 @@ export default function LibraryPage() {
           {/* "Beats need attention" now lives in the notifications center
               (TopBar), alongside everything else demanding the producer's
               attention, rather than competing for space on the homepage. */}
+
+          {/* Cross-surface digest first — stuck sales, pending offers, and new
+              CRM leads are fresher/more time-sensitive than catalog readiness,
+              and otherwise require checking three other pages to notice. */}
+          <ActionDigestPanel />
+
+          {/* Upload previously ended in silence: the beat landed untagged,
+              unpriced and unlisted with nothing saying so, and the store
+              editor's own "needs attention" panel only inspects beats that are
+              ALREADY listed — so these were invisible everywhere. */}
+          <SellReadinessPanel tracks={tracks} hasDefaultPrice={hasDefaultPrice} />
         </div>
+        )}
 
         {/* ── Library section header + browse toggle ─────────────── */}
         <div className="flex items-center justify-between mb-3">
@@ -1205,11 +1240,11 @@ export default function LibraryPage() {
           <div className="hidden sm:flex items-center bg-white/[0.04] border border-white/[0.06] rounded-full p-0.5">
             <button
               onClick={() => setBrowseMode('sections')}
-              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${effectiveBrowseMode === 'sections' ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}
+              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${effectiveBrowseMode === 'sections' ? 'bg-white/[0.14] text-white' : 'text-white/60 hover:text-white'}`}
             >Browse</button>
             <button
               onClick={() => setBrowseMode('all')}
-              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${effectiveBrowseMode === 'all' ? 'bg-white text-black' : 'text-white/60 hover:text-white'}`}
+              className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${effectiveBrowseMode === 'all' ? 'bg-white/[0.14] text-white' : 'text-white/60 hover:text-white'}`}
             >All tracks</button>
           </div>
         </div>
@@ -1280,7 +1315,7 @@ export default function LibraryPage() {
               <SlidersHorizontal size={11} />
               Filters
               {hasActiveFilters(filters) && (
-                <span className="w-4 h-4 rounded-full bg-white text-black text-[9px] font-bold flex items-center justify-center leading-none">
+                <span className="w-4 h-4 rounded-full border border-white/20 text-white/70 text-[9px] font-bold flex items-center justify-center leading-none">
                   {activeFilterCount(filters)}
                 </span>
               )}
@@ -1308,7 +1343,7 @@ export default function LibraryPage() {
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-1.5 rounded-full transition-colors ${
-                  effectiveViewMode === 'list' ? 'bg-white text-black' : 'text-white/60 hover:text-white/80'
+                  effectiveViewMode === 'list' ? 'bg-white/[0.14] text-white' : 'text-white/60 hover:text-white/80'
                 }`}
                 title="List view"
               >
@@ -1317,7 +1352,7 @@ export default function LibraryPage() {
               <button
                 onClick={() => setViewMode('grid')}
                 className={`p-1.5 rounded-full transition-colors ${
-                  effectiveViewMode === 'grid' ? 'bg-white text-black' : 'text-white/60 hover:text-white/80'
+                  effectiveViewMode === 'grid' ? 'bg-white/[0.14] text-white' : 'text-white/60 hover:text-white/80'
                 }`}
                 title="Grid view"
               >
@@ -1357,7 +1392,7 @@ export default function LibraryPage() {
             <span className="text-[9px] font-mono uppercase tracking-wider text-white/40 shrink-0">Smart playlists:</span>
             {smartPlaylists.map((sp) => (
               <span key={sp.id} className={`group inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full text-[10px] font-medium border transition-all ${
-                activeSmartId === sp.id ? 'bg-white text-black border-white' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'
+                activeSmartId === sp.id ? 'bg-white/[0.14] text-white border-white/30' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'
               }`}>
                 <button onClick={() => applySmartPlaylist(sp)} className="flex items-center gap-1.5">
                   <Sparkles size={9} />{sp.name}
@@ -1383,18 +1418,6 @@ export default function LibraryPage() {
         <div className="mb-8">
           <DropZone onUploadSuccess={fetchTracks} openRef={uploadOpenRef} variant="hidden" />
         </div>
-
-        {/* Cross-surface digest first — stuck sales, pending offers, and new
-            CRM leads are fresher/more time-sensitive than catalog readiness,
-            and otherwise require checking three other pages to notice. */}
-        <ActionDigestPanel />
-
-        {/* Sits immediately after upload, which is the moment a producer would
-            otherwise assume the job is done. Upload previously ended in silence:
-            the beat landed untagged, unpriced and unlisted with nothing saying
-            so, and the store editor's own "needs attention" panel only inspects
-            beats that are ALREADY listed — so these were invisible everywhere. */}
-        <SellReadinessPanel tracks={tracks} hasDefaultPrice={hasDefaultPrice} />
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
@@ -1589,7 +1612,7 @@ export default function LibraryPage() {
                     onClick={() => setCurrentPage(page)}
                     className={`w-7 h-7 rounded-full text-[11px] font-mono tabular-nums transition-colors ${
                       page === currentPage
-                        ? 'bg-white text-black font-bold'
+                        ? 'bg-white/[0.14] text-white font-bold'
                         : 'text-white/60 hover:text-white hover:bg-white/[0.06]'
                     }`}
                   >{page + 1}</button>
@@ -2077,7 +2100,7 @@ function PackBuilderModal({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium text-white">Pack price</span>
-                <span className="text-[22px] font-bold text-white tabular-nums">${computed.toLocaleString()}</span>
+                <span className="text-[20px] font-bold text-white tabular-nums">${computed.toLocaleString()}</span>
               </div>
               {savings > 0 && (
                 <p className="text-[9px] font-mono text-[#6DC6A4]">Buyer saves ${savings.toLocaleString()}</p>

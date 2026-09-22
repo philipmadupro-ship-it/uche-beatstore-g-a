@@ -173,7 +173,7 @@ export default function ProducerPage({
       <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-white/40">
         <Music size={36} />
         <p className="text-[14px]">Producer not found.</p>
-        <Link href="/store" className="text-[12px] underline hover:text-white">← Back to store</Link>
+        <Link href="/store" className="text-[11px] underline hover:text-white">← Back to store</Link>
       </div>
     );
   }
@@ -224,7 +224,7 @@ export default function ProducerPage({
                 {creator.display_name || 'Producer'}
               </h1>
               {creator.credits && (
-                <p className="text-[12px] text-white/60 mt-1">{creator.credits}</p>
+                <p className="text-[11px] text-white/60 mt-1">{creator.credits}</p>
               )}
             </div>
 
@@ -234,7 +234,7 @@ export default function ProducerPage({
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all border ${
                   isFollowing
                     ? 'bg-transparent border-white/40 text-white/40 hover:border-white/30 hover:text-white'
-                    : 'bg-white border-white/30 text-black hover:bg-white'
+                    : 'bg-white border-white/30 text-black hover:bg-white/90'
                 }`}
               >
                 {isFollowing ? <Heart size={12} fill="currentColor" /> : <UserPlus size={12} />}
@@ -254,7 +254,7 @@ export default function ProducerPage({
             {creator.bio && (
               <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
                 <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-2">Bio</p>
-                <p className="text-[12px] text-white/80 leading-relaxed">{creator.bio}</p>
+                <p className="text-[11px] text-white/80 leading-relaxed">{creator.bio}</p>
               </div>
             )}
 
@@ -386,7 +386,7 @@ export default function ProducerPage({
             )}
 
             {tracks.length === 0 && playlists.length === 0 && projects.length === 0 && (
-              <div className="text-center py-16 text-white/40 text-[12px]">
+              <div className="text-center py-16 text-white/40 text-[11px]">
                 No public releases yet.
               </div>
             )}

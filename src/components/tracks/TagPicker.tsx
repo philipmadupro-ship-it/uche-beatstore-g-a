@@ -192,7 +192,7 @@ export function TagPicker({ trackId, features }: TagPickerProps) {
           <button
             type="submit"
             disabled={!customTag.trim() || toggleTag.isPending}
-            className="shrink-0 rounded-xl bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-black transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-30"
+            className="shrink-0 rounded-xl bg-white px-4 py-3 text-[10px] font-black uppercase tracking-widest text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-30"
           >
             Add
           </button>

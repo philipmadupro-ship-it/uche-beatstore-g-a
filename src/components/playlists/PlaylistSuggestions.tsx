@@ -156,7 +156,7 @@ export function PlaylistSuggestions({
                       </ArtworkFallback>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[12px] font-medium text-white truncate">{r.track.title}</p>
+                      <p className="text-[11px] font-medium text-white truncate">{r.track.title}</p>
                       <p className="text-[9px] font-mono text-white/60 uppercase tracking-wider mt-0.5 truncate">
                         {r.track.type}
                         {r.track.bpm ? ` · ${r.track.bpm} bpm` : ''}

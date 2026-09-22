@@ -248,7 +248,7 @@ function TextTools({ layer, onPatch }: {
         {/* The face itself, set IN the face — the picker proper lives in the
             panel, but knowing what you are looking at should not require it. */}
         <span
-          className="flex h-7 shrink-0 items-center gap-1.5 border border-white/10 px-2 text-[12px] text-white/90"
+          className="flex h-7 shrink-0 items-center gap-1.5 border border-white/10 px-2 text-[11px] text-white/90"
           title={`${font.name} ${face.label}`}
         >
           <TypeIcon size={11} className="shrink-0 text-white/40" />

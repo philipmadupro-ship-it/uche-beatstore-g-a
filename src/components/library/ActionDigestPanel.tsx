@@ -96,7 +96,7 @@ export function ActionDigestPanel() {
                 >
                   {item.label}
                 </span>
-                <span className="min-w-0 truncate text-[12px] text-white/70">{item.detail}</span>
+                <span className="min-w-0 truncate text-[11px] text-white/70">{item.detail}</span>
               </Link>
             </li>
           );

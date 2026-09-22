@@ -425,7 +425,7 @@ export function PlayerCanvas({
             onChange={(e) => setComposerText(e.target.value)}
             placeholder="Type your feedback here..."
             rows={2}
-            className="w-full bg-[#090907] border border-white/10 rounded px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-[#c8a47a] resize-none"
+            className="w-full bg-[#090907] border border-white/10 rounded px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-[#c8a47a] resize-none"
           />
           
           <div className="flex items-center justify-between gap-3">

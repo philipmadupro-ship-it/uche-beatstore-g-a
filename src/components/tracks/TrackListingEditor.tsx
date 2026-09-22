@@ -466,7 +466,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
             summary={priceLabel} open={openSections.has('pricing')} onToggle={() => toggleSection('pricing')}>
             <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 rounded-lg bg-[#100d09] border border-white/10">
               <span className="text-[9px] font-mono uppercase tracking-wider text-white/40">Buyers see</span>
-              <span className="text-[12px] font-mono font-bold text-white">{priceLabel}</span>
+              <span className="text-[11px] font-mono font-bold text-white">{priceLabel}</span>
               {bundleNote && <span className="text-[9px] font-mono text-[#6DC6A4]">{bundleNote}</span>}
             </div>
 
@@ -512,7 +512,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
               rows={3}
               maxLength={5000}
               placeholder="Describe the vibe, mood, references, usage terms…"
-              className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2.5 text-[12px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 transition-colors resize-none leading-relaxed"
+              className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/50 transition-colors resize-none leading-relaxed"
             />
           </Section>
 

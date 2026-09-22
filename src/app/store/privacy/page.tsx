@@ -13,7 +13,7 @@ const UPDATED = 'June 2026';
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mt-8">
-      <h2 className="text-[12px] font-mono uppercase tracking-[0.2em] text-white/80 mb-3">{title}</h2>
+      <h2 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/80 mb-3">{title}</h2>
       <div className="space-y-3 text-[14px] leading-relaxed text-white/60">{children}</div>
     </section>
   );
@@ -30,8 +30,8 @@ export default function StorePrivacyPage() {
           <ArrowLeft size={13} /> Back to store
         </Link>
 
-        <h1 className="font-heading text-[34px] md:text-[40px] mt-6 leading-tight">Privacy Policy</h1>
-        <p className="mt-2 text-[12px] font-mono uppercase tracking-[0.2em] text-white/40">Last updated · {UPDATED}</p>
+        <h1 className="font-heading text-[32px] md:text-[40px] mt-6 leading-tight">Privacy Policy</h1>
+        <p className="mt-2 text-[11px] font-mono uppercase tracking-[0.2em] text-white/40">Last updated · {UPDATED}</p>
 
         <p className="mt-6 text-[14px] leading-relaxed text-white/60">
           This is a single-producer beat store. You can browse and preview without an account; we only

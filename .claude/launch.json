@@ -11,16 +11,6 @@
       "autoPort": true
     },
     {
-      "name": "worktree",
-      "runtimeExecutable": "bash",
-      "runtimeArgs": [
-        "-c",
-        "cd /Users/philipmadu/antigravity/.claude/worktrees/wizardly-mendeleev-89e9c0 && exec node_modules/.bin/next dev --webpack -p 3100"
-      ],
-      "port": 3100,
-      "autoPort": true
-    },
-    {
       "name": "recursing-sinoussi",
       "runtimeExecutable": "bash",
       "runtimeArgs": [

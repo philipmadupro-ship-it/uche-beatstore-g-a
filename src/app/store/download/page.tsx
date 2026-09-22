@@ -164,7 +164,7 @@ function DownloadPortal() {
           </div>
           <Link
             href="/store"
-            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-black transition-all hover:bg-white active:scale-[0.98]"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-black transition-all hover:bg-white/90 active:scale-[0.98]"
           >
             <ArrowLeft size={13} />
             Back to store
@@ -204,8 +204,8 @@ function DownloadPortal() {
               </div>
               <div>
                 <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6DC6A4]">Purchase confirmed</p>
-                <h1 className="text-[28px] font-bold leading-tight text-white md:text-[34px]">Your files are ready</h1>
-                <p className="mt-2 max-w-xl text-[12px] leading-relaxed text-white/60">
+                <h1 className="text-[28px] font-bold leading-tight text-white md:text-[32px]">Your files are ready</h1>
+                <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-white/60">
                   Receipt sent to <span className="text-white/80">{purchase.buyer_email}</span>. Keep this private link for future downloads.
                 </p>
               </div>
@@ -280,7 +280,7 @@ function DownloadPortal() {
 
                   {/* Meta */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-white truncate">{track.title}</p>
+                    <p className="text-[14px] font-semibold text-white truncate">{track.title}</p>
                     <div className="flex items-center flex-wrap gap-2 mt-1.5">
                       <span className={`text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                         track.license_type === 'exclusive'
@@ -403,7 +403,7 @@ function FileDownloadRow({
           <span className={meta.accent}>{meta.icon}</span>
         </div>
         <div>
-          <p className="text-[12px] font-medium text-white">{file.label}</p>
+          <p className="text-[11px] font-medium text-white">{file.label}</p>
           <p className="text-[9px] font-mono text-white/40 uppercase tracking-wider">
             {['vocals', 'drums', 'bass', 'other'].includes(file.format) ? 'Stem · WAV' : file.format.replace('-main', '').toUpperCase()}
           </p>
@@ -416,7 +416,7 @@ function FileDownloadRow({
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shrink-0 ${
           downloading
             ? 'bg-white/10 text-white cursor-wait'
-            : 'bg-white text-black hover:bg-white active:scale-95'
+            : 'bg-white text-black hover:bg-white/90 active:scale-95'
         }`}
       >
         {downloading ? (

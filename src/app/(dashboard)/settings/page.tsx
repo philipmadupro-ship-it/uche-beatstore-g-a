@@ -220,7 +220,7 @@ export default function SettingsPage() {
           <section>
             <div className="flex items-center gap-2 mb-4">
               <Shield size={14} className="text-white/40" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Team members</h2>
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-white">Team members</h2>
             </div>
             {loading ? (
               <div className="py-12 flex justify-center"><Loader2 size={16} className="animate-spin text-white/40" /></div>
@@ -239,7 +239,7 @@ export default function SettingsPage() {
                         {m.name?.[0] || m.email[0]}
                       </div>
                       <div>
-                        <p className="text-[12px] font-medium text-white">{m.name || m.email}</p>
+                        <p className="text-[11px] font-medium text-white">{m.name || m.email}</p>
                         {m.name && <p className="text-[10px] font-mono text-white/40">{m.email}</p>}
                       </div>
                     </div>
@@ -256,7 +256,7 @@ export default function SettingsPage() {
           <section>
             <div className="flex items-center gap-2 mb-4">
               <UserPlus size={14} className="text-white/40" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Invite collaborator</h2>
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-white">Invite collaborator</h2>
             </div>
             <Card>
               <form onSubmit={handleInvite} className="space-y-4 p-6">
@@ -305,7 +305,7 @@ export default function SettingsPage() {
           <section>
             <div className="flex items-center gap-2 mb-4">
               <SettingsIcon size={14} className="text-white/40" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Preferences</h2>
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-white">Preferences</h2>
             </div>
             <Card className="divide-y divide-white/10 overflow-hidden">
               <ToggleRow
@@ -330,7 +330,7 @@ export default function SettingsPage() {
           <section>
             <div className="flex items-center gap-2 mb-4">
               <Shield size={14} className="text-white/40" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Buyer privacy</h2>
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-white">Buyer privacy</h2>
             </div>
             <Card className="p-6">
               <p className="text-[13px] text-white/40 mb-4 max-w-prose">
@@ -372,7 +372,7 @@ function ToggleRow({ title, description, on, onToggle }: { title: string; descri
       onClick={() => onToggle(!on)}
     >
       <div>
-        <p className="text-[12px] font-medium text-white">{title}</p>
+        <p className="text-[11px] font-medium text-white">{title}</p>
         <p className="mt-0.5 text-[10px] text-[var(--text-readable)]">{description}</p>
       </div>
       {/* The knob was `bg-white` on a `bg-white` track when on — a solid white

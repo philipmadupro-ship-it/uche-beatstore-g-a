@@ -7,6 +7,7 @@ import { type PlaylistFilterState, type PlaylistSortMode, activePlaylistFilterCo
 import { Drawer } from '@/components/ui/Drawer';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { FolderContainerCard } from '@/components/ui/ProductList';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 
 interface FolderRow { id: string; name: string; color?: string | null; cover_urls?: string[] }
 
@@ -22,6 +23,16 @@ export function PlaylistFilterBar({
   const [open, setOpen] = useState(false);
   const [mobileFilters, setMobileFilters] = useState(false);
   const [folderMenuOpen, setFolderMenuOpen] = useState(false);
+  // Escape and focus restoration for the folder popover. `trapFocus: false`
+  // on purpose — this is an anchored popover, and trapping one strands a
+  // keyboard user inside a panel they expect to Tab out of. Before this it
+  // closed only on an outside click, so a keyboard user who opened it had no
+  // way to dismiss it at all.
+  const folderPanelRef = useDialogBehavior<HTMLDivElement>({
+    open: folderMenuOpen,
+    onClose: () => setFolderMenuOpen(false),
+    trapFocus: false,
+  });
   const [folderDrawerOpen, setFolderDrawerOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [manage, setManage] = useState(false);
@@ -89,7 +100,7 @@ export function PlaylistFilterBar({
             {opts.map((tag) => {
               const active = value.tags.has(tag);
               return (
-                <button key={tag} onClick={() => toggleTag(tag)} className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${active ? 'bg-white text-black border-white font-bold' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}>
+                <button key={tag} onClick={() => toggleTag(tag)} className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${active ? 'bg-white/[0.14] text-white border-white/30 font-bold' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}>
                   {tag}
                 </button>
               );
@@ -119,7 +130,7 @@ export function PlaylistFilterBar({
                 onChange={(e) => setEditName(e.target.value)}
                 onBlur={() => renameFolder(f.id)}
                 onKeyDown={(e) => { if (e.key === 'Enter') renameFolder(f.id); if (e.key === 'Escape') setEditingId(null); }}
-                className="h-10 w-full rounded-xl border border-white/30 bg-white/[0.04] px-3 text-[12px] text-white focus:outline-none"
+                className="h-10 w-full rounded-xl border border-white/30 bg-white/[0.04] px-3 text-[11px] text-white focus:outline-none"
               />
             ) : (
               <FolderContainerCard
@@ -146,7 +157,7 @@ export function PlaylistFilterBar({
           onChange={(e) => setNewFolder(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') createFolder(); }}
           placeholder="New folder"
-          className="min-h-10 flex-1 rounded-full border border-white/10 bg-white/[0.02] px-3 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
+          className="min-h-10 flex-1 rounded-full border border-white/10 bg-white/[0.02] px-3 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
         />
         <button onClick={createFolder} disabled={!newFolder.trim() || busy} className="grid size-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-white/60 hover:text-white hover:border-white/20 disabled:opacity-40" aria-label="Create folder">
           {busy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
@@ -178,7 +189,12 @@ export function PlaylistFilterBar({
           {folderMenuOpen && (
             <>
               <div className="fixed inset-0 z-30" onClick={() => setFolderMenuOpen(false)} />
-              <div className="absolute left-0 top-full z-40 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#0E0C09] p-3 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
+              <div
+                ref={folderPanelRef}
+                role="dialog"
+                aria-label="Filter by playlist folder"
+                className="absolute left-0 top-full z-40 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#0E0C09] p-3 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
+              >
                 {folderPanel}
               </div>
             </>
@@ -187,7 +203,7 @@ export function PlaylistFilterBar({
         <div className="relative flex-1 min-w-[160px] max-w-sm">
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
           <input value={value.search} onChange={(e) => set({ search: e.target.value })} placeholder="Search playlists + tags…"
-            className="w-full bg-white/[0.02] border border-white/10 rounded-full py-2 pl-9 pr-3 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20" />
+            className="w-full bg-white/[0.02] border border-white/10 rounded-full py-2 pl-9 pr-3 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20" />
         </div>
         <button onClick={() => isMobile ? setMobileFilters(true) : setOpen((v) => !v)} className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[11px] font-medium border transition-colors min-h-10 ${open || mobileFilters || activeCount > 0 ? 'bg-white/15 text-white border-white/40 font-bold' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}>
           <SlidersHorizontal size={12} /> Filters{activeCount > 0 ? ` · ${activeCount}` : ''}

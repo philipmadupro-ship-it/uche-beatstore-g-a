@@ -1858,7 +1858,7 @@ export default function StoreEditorPage() {
             /* Never offer the builder on a failed load: it would start from the
                default layout and autosave it over whatever the producer had. */
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-6">
-              <p className="text-[12px] text-white/80">Could not load your storefront settings.</p>
+              <p className="text-[11px] text-white/80">Could not load your storefront settings.</p>
               <p className="mt-1 text-[11px] leading-relaxed text-white/50">
                 The builder stays closed until they load, so it cannot overwrite your saved
                 layout with a blank one. Reload the page to try again.

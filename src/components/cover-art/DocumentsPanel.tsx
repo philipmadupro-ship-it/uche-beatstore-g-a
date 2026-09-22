@@ -76,7 +76,7 @@ export function DocumentsPanel({
                 aria-current={active}
                 className="block w-full p-2 pr-14 text-left"
               >
-                <span className="block truncate text-[12px] text-white/90">{item.name}</span>
+                <span className="block truncate text-[11px] text-white/90">{item.name}</span>
                 <span className="block truncate font-mono text-[10px] uppercase tracking-[0.12em] text-white/40">
                   {formatRelativeTime(item.updatedAt)} · {item.layerCount} layers
                   {item.imageCount > 0 ? ` · ${item.imageCount} img` : ''}

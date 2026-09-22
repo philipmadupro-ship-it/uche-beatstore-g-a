@@ -433,7 +433,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                     rows={4}
                     maxLength={2000}
                     placeholder="What's this playlist about? Late-night drives, gospel chops, etc."
-                    className="w-full bg-[#090907] border border-white/20 rounded-lg px-3 py-2.5 text-[15px] font-light leading-[1.7] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 resize-none"
+                    className="w-full bg-[#090907] border border-white/20 rounded-lg px-3 py-2.5 text-[14px] font-light leading-[1.7] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 resize-none"
                   />
                   <p className="mt-1 text-[9px] font-mono text-white/40">
                     {tempDescription.length}/2000 · ⌘/Ctrl+Enter to save
@@ -445,7 +445,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                   className="group mt-2 block w-full text-left sm:mt-4"
                 >
                   {playlist?.description ? (
-                    <p className="text-[15px] text-white/60 leading-[1.7] whitespace-pre-line group-hover:text-white transition-colors font-light tracking-wide">
+                    <p className="text-[14px] text-white/60 leading-[1.7] whitespace-pre-line group-hover:text-white transition-colors font-light tracking-wide">
                       {playlist.description}
                     </p>
                   ) : (
@@ -476,7 +476,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               <button
                 onClick={handlePlayAll}
                 disabled={!tracks.length}
-                className="glass-play-surface flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-medium disabled:opacity-30"
+                className="glass-play-surface flex items-center gap-2 px-4 py-2 rounded-md text-[11px] font-medium disabled:opacity-30"
               >
                 <Play size={12} fill="currentColor" className="ml-0.5" />
                 Play
@@ -484,14 +484,14 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               <button
                 onClick={() => setShowShareModal(true)}
                 disabled={!tracks.length}
-                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 disabled:opacity-30 transition-colors"
+                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[11px] font-medium hover:border-white/20 disabled:opacity-30 transition-colors"
               >
                 <Share2 size={12} />
                 Share
               </button>
               <button
                 onClick={openAddTracks}
-                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 transition-colors"
+                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[11px] font-medium hover:border-white/20 transition-colors"
               >
                 <Plus size={12} />
                 Add tracks
@@ -500,7 +500,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                 type="button"
                 onClick={() => setShowUpload((value) => !value)}
                 aria-expanded={showUpload}
-                className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-4 py-2 text-[12px] font-medium text-white transition-colors hover:border-white/20"
+                className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-4 py-2 text-[11px] font-medium text-white transition-colors hover:border-white/20"
               >
                 <UploadCloud size={12} />
                 Upload
@@ -568,7 +568,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                         else n.add(tag);
                         return n;
                       })}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-white text-black border-white' : 'bg-transparent border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}>
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-white/[0.14] text-white border-white/30' : 'bg-transparent border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}>
                         {tag}
                       </button>
                     );

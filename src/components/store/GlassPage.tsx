@@ -149,14 +149,14 @@ function Hero({
           <div className="mt-3 min-w-0">
             <Link
               href={`/store/producer/${slugify(producer.display_name)}`}
-              className="inline-block max-w-full text-[15px] md:text-[16px] text-white/90 font-medium hover:text-white transition-colors break-all"
+              className="inline-block max-w-full text-[14px] md:text-[16px] text-white/90 font-medium hover:text-white transition-colors break-all"
             >
               {producer.display_name}
             </Link>
           </div>
         )}
         {meta && (
-          <div className="mt-1.5 flex items-center gap-2 text-[12px] text-white/55 flex-wrap">
+          <div className="mt-1.5 flex items-center gap-2 text-[11px] text-white/55 flex-wrap">
             {meta}
           </div>
         )}

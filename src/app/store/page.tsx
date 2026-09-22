@@ -1238,7 +1238,7 @@ function StorePage() {
             {purchaseStatus === 'success'
               ? <CheckCircle2 size={16} className="shrink-0" />
               : <XCircle size={16} className="shrink-0" />}
-            <p className="text-[12px] font-medium flex-1">
+            <p className="text-[11px] font-medium flex-1">
               {purchaseStatus === 'success'
                 ? 'Purchase complete — check your inbox for the download link.'
                 : 'Checkout cancelled. No payment was taken.'}
@@ -1279,7 +1279,7 @@ function StorePage() {
           <button
             onClick={() => setSidebarOpen((o) => !o)}
             className={`tap lg:hidden flex min-h-11 items-center gap-1.5 rounded-full border px-4 py-2 text-[10px] font-mono uppercase tracking-wider transition-colors ${sidebarOpen || hasActiveFilters
-                ? 'border-white/20 text-black bg-white font-semibold shadow-md hover:bg-white/90'
+                ? 'border-white/30 text-white bg-white/[0.14]'
                 : 'border-white/10 text-white/60 hover:text-white'
               }`}
           >
@@ -1339,7 +1339,7 @@ function StorePage() {
                 }
                 if (e.key === 'Escape') setSearchFocused(false);
               }}
-              className="w-full min-h-11 bg-white/[0.04] border border-white/10 rounded-full py-2 pl-8 pr-3 text-[12px] text-white placeholder:text-white/60 focus:outline-none focus:border-white/20"
+              className="w-full min-h-11 bg-white/[0.04] border border-white/10 rounded-full py-2 pl-8 pr-3 text-[11px] text-white placeholder:text-white/60 focus:outline-none focus:border-white/20"
             />
             {showSearchSuggestions && (
               <div
@@ -1382,7 +1382,7 @@ function StorePage() {
                         {suggestion.kind === 'recent' ? <Clock3 size={12} /> : <Search size={12} />}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12px] font-medium text-white">{suggestion.label}</span>
+                        <span className="block truncate text-[11px] font-medium text-white">{suggestion.label}</span>
                         {suggestion.hint && (
                           <span className="block truncate text-[8px] font-mono uppercase tracking-[0.18em] text-white/40">
                             {suggestion.hint}

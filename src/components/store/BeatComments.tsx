@@ -131,7 +131,7 @@ export function BeatComments({
             onChange={(e) => setAuthorName(e.target.value)}
             placeholder="Your name"
             maxLength={60}
-            className="bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
+            className="bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
           />
           <div className="flex items-center gap-2">
             <button
@@ -154,7 +154,7 @@ export function BeatComments({
               placeholder={`Say something at ${fmtTs(effectiveTs)}…`}
               maxLength={500}
               onKeyDown={(e) => { if (e.key === 'Enter' && canPost) post.mutate(); }}
-              className="flex-1 bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
+              className="flex-1 bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
             />
             <button
               type="button"
@@ -179,7 +179,7 @@ export function BeatComments({
           <Loader2 size={16} className="animate-spin text-white/40 mx-auto" />
         </div>
       ) : comments.length === 0 ? (
-        <p className="text-[12px] text-white/40 text-center py-6">
+        <p className="text-[11px] text-white/40 text-center py-6">
           No comments yet — be the first to drop one.
         </p>
       ) : (

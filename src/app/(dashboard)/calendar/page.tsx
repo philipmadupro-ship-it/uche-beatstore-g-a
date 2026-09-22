@@ -142,7 +142,7 @@ export default function CalendarPage() {
                 <button onClick={prevMonth} className="tap px-3 py-2 text-[var(--text-readable)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-primary)]" aria-label="Previous month">
                   <ChevronLeft size={13} aria-hidden="true" />
                 </button>
-                <span className="min-w-[150px] px-3 text-center text-[12px] font-medium tabular-nums text-[var(--text-primary)]">
+                <span className="min-w-[150px] px-3 text-center text-[11px] font-medium tabular-nums text-[var(--text-primary)]">
                   {monthName}
                 </span>
                 <button onClick={nextMonth} className="tap px-3 py-2 text-[var(--text-readable)] transition-colors hover:bg-white/[0.06] hover:text-[var(--text-primary)]" aria-label="Next month">
@@ -206,7 +206,7 @@ export default function CalendarPage() {
                         eye to "now" without shouting. */}
                     <div className="flex items-center gap-1.5">
                       {isToday ? (
-                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white text-black text-[10px] font-bold tabular-nums">
+                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full border border-white/20 text-white/70 text-[10px] font-bold tabular-nums">
                           {day.date}
                         </span>
                       ) : (
@@ -329,7 +329,7 @@ function ActivityPanel({
           <ActivityIcon size={11} className="text-white" />
           <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">Activity</p>
         </div>
-        <h3 className="text-[15px] font-medium text-white tracking-tight">{heading}</h3>
+        <h3 className="text-[14px] font-medium text-white tracking-tight">{heading}</h3>
         <p className="text-[10px] font-mono uppercase tracking-wider text-white/60 mt-1">
           {items.length} action{items.length === 1 ? '' : 's'} on this day
         </p>

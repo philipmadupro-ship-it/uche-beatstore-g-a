@@ -303,7 +303,7 @@ export function ClientShareVariant({
                   <span className="text-[11px] font-mono font-bold text-white tabular-nums">
                     ${cartTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </span>
-                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white text-black text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 border border-white/20 text-white/70 text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
                     {cartCount}
                   </span>
                 </>
@@ -324,7 +324,7 @@ export function ClientShareVariant({
         }`}>
           <div className="max-w-5xl mx-auto flex items-center gap-3">
             {purchaseStatus === 'success' ? <CheckCircle2 size={16} className="shrink-0" /> : <XCircle size={16} className="shrink-0" />}
-            <p className="text-[12px] font-medium flex-1">
+            <p className="text-[11px] font-medium flex-1">
               {purchaseStatus === 'success'
                 ? 'Purchase complete — check your inbox for the receipt and download link.'
                 : 'Checkout cancelled. No payment was taken.'}
@@ -363,7 +363,7 @@ export function ClientShareVariant({
             {cartCount > 0 ? (
               <>
                 <span className="text-[11px] font-mono font-bold text-white">${cartTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white text-black text-[8px] font-bold rounded-full flex items-center justify-center">
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 border border-white/20 text-white/70 text-[8px] font-bold rounded-full flex items-center justify-center">
                   {cartCount}
                 </span>
               </>
@@ -394,7 +394,7 @@ export function ClientShareVariant({
         {hasBio && (
           <section className="mb-14 max-w-2xl">
             <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/80 mb-3">About</p>
-            <p className="text-[15px] text-white/85 leading-[1.75] whitespace-pre-wrap">
+            <p className="text-[14px] text-white/85 leading-[1.75] whitespace-pre-wrap">
               {creator!.bio}
             </p>
           </section>
@@ -423,7 +423,7 @@ export function ClientShareVariant({
             </div>
 
             {tracks.length === 0 ? (
-              <div className="px-5 py-12 text-center text-[12px] text-white/60">
+              <div className="px-5 py-12 text-center text-[11px] text-white/60">
                 No tracks in this selection yet.
               </div>
             ) : (
@@ -584,7 +584,7 @@ export function ClientShareVariant({
               onSelect={setSelectedLicenseId}
             />
             {creator?.license_notes && (
-              <p className="text-[12px] text-white/80 mt-4 leading-relaxed">
+              <p className="text-[11px] text-white/80 mt-4 leading-relaxed">
                 {creator.license_notes}
               </p>
             )}
@@ -664,7 +664,7 @@ export function ClientShareVariant({
 
             {/* Track info */}
             <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-medium text-white truncate">{playingTrack.title}</p>
+              <p className="text-[11px] font-medium text-white truncate">{playingTrack.title}</p>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-[9px] font-mono text-white/40 tabular-nums">
                   {fmt(currentTime)}
@@ -707,7 +707,7 @@ export function ClientShareVariant({
               >
                 <ShoppingCart size={15} />
                 {cartCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-white text-black text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 border border-white/20 text-white/70 text-[8px] font-bold rounded-full flex items-center justify-center leading-none">
                     {cartCount}
                   </span>
                 )}
@@ -751,7 +751,7 @@ function SocialPill({ href, icon, label }: { href: string; icon: React.ReactNode
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-[12px] text-white hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors"
+      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-[11px] text-white hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors"
     >
       {icon}
       <span className="truncate max-w-[200px]">{label}</span>

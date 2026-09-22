@@ -26,7 +26,7 @@ interface ListContainerProps {
 
 export function ListContainer({ children, header, className }: ListContainerProps) {
   return (
-    <div className={cn('overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]', className)}>
+    <div className={cn('overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]', className)}>
       {header && (
         <div className="hidden border-b border-white/10 bg-white/[0.02] px-4 py-2.5 md:flex md:items-center md:gap-3">
           {header}

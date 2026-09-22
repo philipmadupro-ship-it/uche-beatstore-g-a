@@ -233,7 +233,7 @@ function EmbedCard({ track }: { track: EmbedTrack }) {
         href={storeUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-4 flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl bg-white text-black text-[12px] font-bold uppercase tracking-[0.18em] hover:opacity-90 transition-opacity"
+        className="mt-4 flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl bg-white text-black text-[11px] font-bold uppercase tracking-[0.18em] hover:opacity-90 transition-opacity"
       >
         Buy on U2C Beatstore
         <ExternalLink size={13} />

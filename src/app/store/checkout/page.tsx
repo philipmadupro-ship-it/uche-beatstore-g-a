@@ -311,7 +311,7 @@ function CheckoutContent() {
           </p>
           <Link
             href="/store"
-            className="mt-8 inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-black transition-all hover:bg-white active:scale-[0.98]"
+            className="mt-8 inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-black transition-all hover:bg-white/90 active:scale-[0.98]"
           >
             <ArrowLeft size={13} />
             Browse beats
@@ -457,7 +457,7 @@ function CheckoutContent() {
               <button
                 type="submit"
                 disabled={!termsAccepted}
-                className="w-full py-3.5 rounded-xl bg-white hover:bg-white active:scale-[0.99] text-black text-[11px] font-bold uppercase tracking-wider transition-all focus:outline-none focus:ring-2 focus:ring-white/60 disabled:cursor-not-allowed disabled:opacity-45"
+                className="w-full py-3.5 rounded-xl bg-white hover:bg-white/90 active:scale-[0.99] text-black text-[11px] font-bold uppercase tracking-wider transition-all focus:outline-none focus:ring-2 focus:ring-white/60 disabled:cursor-not-allowed disabled:opacity-45"
               >
                 Continue to Payment
               </button>

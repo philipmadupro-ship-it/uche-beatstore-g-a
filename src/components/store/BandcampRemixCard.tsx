@@ -177,7 +177,7 @@ export default function BandcampRemixCard({
               <span className={`block w-1.5 h-1.5 rounded-full bg-[#6DC6A4] shadow-[0_0_6px_#6DC6A4] mb-1.5 ${reducedMotion ? '' : 'animate-pulse'}`} />
             )}
             <p
-              className="text-[15px] sm:text-base font-bold text-[#FFF8EE] truncate leading-tight [text-shadow:0_2px_8px_rgba(0,0,0,0.95)]"
+              className="text-[14px] sm:text-base font-bold text-[#FFF8EE] truncate leading-tight [text-shadow:0_2px_8px_rgba(0,0,0,0.95)]"
               style={isCurrent ? { color: accentColor } : {}}
             >
               {track.title}
@@ -229,8 +229,8 @@ export default function BandcampRemixCard({
               aria-label={priceLease != null ? `Add ${track.title} lease license to cart, $${priceLease}` : `Lease unavailable for ${track.title}`}
               className="flex-1 flex flex-col items-center justify-center hover:bg-white/[0.04] transition-colors disabled:opacity-25 disabled:cursor-not-allowed gap-px"
             >
-              <span className="text-[7px] font-mono uppercase tracking-[0.18em] text-white/25 leading-none">Lease</span>
-              <span className="text-[12px] font-bold text-white tabular-nums leading-none">
+              <span className="text-[8px] font-mono uppercase tracking-[0.18em] text-white/25 leading-none">Lease</span>
+              <span className="text-[11px] font-bold text-white tabular-nums leading-none">
                 {priceLease != null ? `$${priceLease}` : '—'}
               </span>
             </button>
@@ -241,8 +241,8 @@ export default function BandcampRemixCard({
               className="flex-1 flex flex-col items-center justify-center transition-colors disabled:opacity-25 disabled:cursor-not-allowed gap-px hover:opacity-90"
               style={{ backgroundColor: `${accentColor}18` }}
             >
-              <span className="text-[7px] font-mono uppercase tracking-[0.18em] text-white/25 leading-none">Excl.</span>
-              <span className="text-[12px] font-bold tabular-nums leading-none" style={{ color: accentColor }}>
+              <span className="text-[8px] font-mono uppercase tracking-[0.18em] text-white/25 leading-none">Excl.</span>
+              <span className="text-[11px] font-bold tabular-nums leading-none" style={{ color: accentColor }}>
                 {priceExclusive != null ? `$${priceExclusive}` : '—'}
               </span>
             </button>

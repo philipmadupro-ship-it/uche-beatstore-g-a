@@ -436,7 +436,7 @@ export function LicenseBuilder() {
                   <button
                     onClick={() => saveLicense(l)}
                     disabled={!isDirty || saving[l.id]}
-                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-white disabled:opacity-40 text-black text-[11px] font-bold uppercase tracking-wider transition-all"
+                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-white/90 disabled:opacity-40 text-black text-[11px] font-bold uppercase tracking-wider transition-all"
                   >
                     {saving[l.id] ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
                     Save

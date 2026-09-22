@@ -89,7 +89,7 @@ export default function ResetPasswordPage() {
           <button
             type="submit"
             disabled={isLoading || !email.trim()}
-            className="w-full flex justify-center py-3 px-4 border border-white/50 rounded text-sm font-medium text-black bg-white font-semibold shadow-md hover:bg-white/90 hover:bg-white/80 focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50 transition-all uppercase tracking-widest"
+            className="w-full flex justify-center py-3 px-4 border border-white/50 rounded text-sm font-medium text-black bg-white font-semibold shadow-md hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50 transition-all uppercase tracking-widest"
           >
             {isLoading ? 'Sending…' : 'Send Reset Link'}
           </button>

@@ -45,7 +45,7 @@ export function LicenseSelector({
     return (
       <button
         onClick={onFreeDownload}
-        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 text-[#6DC6A4] text-[12px] font-bold uppercase tracking-wider hover:bg-[#6DC6A4]/20 transition-colors"
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#6DC6A4]/10 border border-[#6DC6A4]/20 text-[#6DC6A4] text-[11px] font-bold uppercase tracking-wider hover:bg-[#6DC6A4]/20 transition-colors"
       >
         <Download size={14} />
         Free Download
@@ -77,7 +77,7 @@ export function LicenseSelector({
             style={isSelected ? { borderColor: accentColor } : {}}
           >
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[12px] font-semibold text-white">{tier.name}</span>
+              <span className="text-[11px] font-semibold text-white">{tier.name}</span>
               <span
                 className="text-[13px] font-bold tabular-nums"
                 style={{ color: accentColor }}

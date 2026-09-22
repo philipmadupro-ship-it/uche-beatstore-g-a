@@ -146,7 +146,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
       title="Send history"
       description={contact.email ? `${contact.name} · ${contact.email}` : contact.name}
       icon={
-        <span className="text-[12px] font-medium text-[var(--text-primary)]">
+        <span className="text-[11px] font-medium text-[var(--text-primary)]">
           {contact.name[0]?.toUpperCase()}
         </span>
       }

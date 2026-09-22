@@ -126,17 +126,105 @@ consistent tree-wide.
    migration signature. Target: one solid-white action per view, so the great majority of
    those become translucent. Measure with
    `grep -rEho "bg-white([^/a-zA-Z0-9_-]|$)" src/ | wc -l`.
-2. **Preview player rebuild** — per "The beat preview player" above.
-3. **`src/components/ui/` radii** — the primitives violate the 8/12/20 rule themselves
-   (`Modal.tsx` is 16px while 16 hand-rolled surfaces write the correct 20px). Fix the
+
+   *2026-09-20 — chips and badges done: **169 across 78 files**.* Every tab, toggle,
+   filter chip and pagination control now uses the `bg-white/[0.14] border-white/30`
+   active state, and every count badge is a hairline pill. What remains is almost
+   entirely **primary-action buttons**, which is the half needing judgement rather than
+   a rule: "one per view" cannot be decided by grep, and several views legitimately have
+   one (checkout, the cart pill, Google sign-in, Save profile). Take them a view at a
+   time. The same pass fixed 45 controls whose hover fill equalled their rest fill and
+   4 carrying two hover fills at once; `lib/ui/tailwind-classes.test.ts` now guards both,
+   so that population cannot regrow.
+2. **Preview player rebuild** — ~~per "The beat preview player" above.~~
+
+   *2026-09-21 — already built; verified rather than rebuilt.* `player/SpectralWaveform.tsx`
+   (canvas, `useSpectralPeaks` + `lib/audio/spectral-peaks.ts`) is wired into all three
+   surfaces the section names: `PlayerBar`, `store/BeatPreviewDrawer` and
+   `share/ShareTrackDetailsDrawer`. Checked against the spec bullets in a browser on the
+   `/store` fixture: cover art anchors the panel with the waveform **below** it, the
+   waveform is continuous and mirrored rather than discrete bars, the playhead is a thin
+   line, elapsed sits left with **remaining** (`−3:30`) right, and transport is plain
+   glyphs with no filled play disc. One deliberate divergence, documented in the component:
+   the playhead is FIXED at centre and the waveform scrolls past it, because a travelling
+   playhead over a three-minute beat is a progress bar, not a transport.
+3. **`src/components/ui/` radii** — ~~the primitives violate the 8/12/20 rule themselves
+   (`Modal.tsx` is 16px while 16 hand-rolled surfaces write the correct 20px)~~. Fix the
    primitives *before* the pages, or the drift comes back.
-4. **Type scale** — worst offenders `store/[id]/page.tsx` and `sales/page.tsx` (9 distinct
-   sizes each). Collapsing `12px → 11px` is the single highest-leverage change.
-5. **Modal consolidation** — 21 hand-rolled overlays; 19 lack Escape, 20 lack focus trap, all
-   21 lack `role="dialog"`. `ui/Modal` already implements all of it. Behaviour change: needs
-   sign-off.
+
+   *2026-09-20 — done, and `Modal.tsx` was already 20px by the time this was picked up.*
+   The primitives now use only 8px controls, 12px cards and 20px modals/heroes: `Card`,
+   `ListRow`, `CoverEditor`, `Skeleton` and `MediaCard` dropped from 16px to 12px,
+   `Dropdown`, `ColorPicker`, `Slider`, `Toaster` and `MediaCard`'s badge from 6px to 8px,
+   `ProductList` 24px and `Toaster` 22px to 20px, and `Drawer`'s bottom sheet from 24px to
+   20px. `lib/ui/radii.test.ts` guards it, with `rounded-full`, the inherited-shape
+   overlays and the 15px colour swatch allowlisted and each reason written down.
+   **The pages are not covered** — they still hold plenty of off-vocabulary radii, and
+   widening the guard before the rollout reaches them would just produce a test people
+   skip. Widen it surface by surface.
+4. **Type scale** — ~~worst offenders `store/[id]/page.tsx` and `sales/page.tsx` (9 distinct
+   sizes each). Collapsing `12px → 11px` is the single highest-leverage change.~~
+
+   *2026-09-21 — the small end is done.* `12px → 11px` app-wide (295 occurrences across
+   108 files) and `7px → 8px` (11), leaving the 7–13px band at five steps: 8, 9, 10, 11
+   (body), 13. 11px was already the dominant body size at 626 uses against 295, so the
+   merge moved the minority onto the majority rather than inventing a value.
+   `lib/ui/type-scale.test.ts` guards the band.
+
+   Two corrections to the note above. `sales` was 9 distinct sizes and is now 8.
+   `store/[id]` was **8, not 9**, and the count overstated it either way: three of those
+   are `text-[28px] sm:text-[36px] md:text-[48px]` on one line — a single responsive
+   heading, not three styles. Its remaining `32px` is the price figure on a licence tier,
+   deliberately distinct from the title. Rendered, the page now shows seven distinct sizes
+   across all its text, dominated by 11px and 9px.
+
+   *2026-09-21 — the headings are done too.* Base heading sizes went from **13 distinct to
+   9**: 14, 16, 18, 20, 24, 28, 32, 40 (the H1 named in CLAUDE.md), 48, plus a single 88px
+   display. Merged `15 → 14` (23), `22 → 20` (7), `34 → 32` (4), and the singletons
+   `17 → 16`, `30 → 28`, `46 → 48`. Each was within two pixels of a neighbour, which reads
+   as inconsistency rather than hierarchy.
+
+   **Responsive ladders are exempt, and that is the load-bearing distinction.**
+   `text-[28px] sm:text-[36px] md:text-[48px]` is ONE heading at three widths — the reader
+   never sees two of them at once, so it does not offend principle 2, and flattening it
+   would either break the ladder or leave two breakpoints painting the same size. The guard
+   enforces the scale on **base** sizes and permits a named list of intermediate rungs
+   (36, 56, and the 112/120 of the project-initial glyph) only when prefixed. They are
+   listed rather than blanket-allowed, or "add a `sm:`" becomes the way around the scale.
+5. **Modal consolidation** — ~~21 hand-rolled overlays; 19 lack Escape, 20 lack focus trap,
+   all 21 lack `role="dialog"`~~. `ui/Modal` already implements all of it.
+
+   *2026-09-21 — done, and the counts above were badly stale by the time it was picked up.*
+   27 components already carried `role="dialog"`; `ContactHistoryDrawer` had been rebuilt on
+   `ui/Drawer` and only matched a scan because it *describes* the old pattern in a comment.
+   Four genuine gaps remained: `QuickShareModal` (a real dialog — now `role="dialog"`,
+   `aria-modal`, focus trap), and the folder popovers in `PlaylistFilterBar` /
+   `ProjectFilterBar` plus the New-release menu on `/library`, which are anchored popovers
+   and menus, so they take Escape and focus restoration with `trapFocus: false` — trapping
+   one strands a keyboard user in a popup they expect to Tab out of. All three previously
+   closed **only** on an outside click, so a keyboard user could not dismiss them at all.
+   `lib/ui/overlay-behavior.test.ts` guards the population, with `DropZone` (a drop target)
+   and `GlassPage` (decorative `aria-hidden` washes) allowlisted and their reasons written
+   down.
 6. **Tokenisation** — 175 files hardcode hex against a 114-property token layer that is
    essentially unused. This is the root cause of repeated colour drift.
+
+   *2026-09-20 — the blocker under this item is fixed; the migration itself is not done.*
+   Tokenising the literals was **not safe to do**, because the token layer did not describe
+   the app: `--bg-card` resolved to `#181815` while 135 components hardcode `#0D0D0A`, and
+   `--bg-page` to `#0B0B0A` against 300 uses of `#090907`. Converting a literal would have
+   *changed its colour*. That was also live, not theoretical — the ~34 sites that already
+   used the tokens (`ui/Card`, `Modal`, `Drawer`, `Field`, and the sales / analytics /
+   calendar / contacts pages) rendered a full shade lighter than their neighbours, and one
+   page painted three different near-blacks at once.
+
+   The surface tokens now hold the measured values, so `#090907` ⇄ `var(--bg-page)` and
+   `#0D0D0A` ⇄ `var(--bg-card)` are genuine no-ops and the migration can proceed surface by
+   surface. Two things to know first: **text, border and accent tokens are still off**
+   (`--text-primary` `#E6DED1` vs `text-white/80`; `--border-default` `#282722` vs
+   `border-white/10`), so only surfaces are safe today; and many literals carry an opacity
+   modifier (`bg-[#090907]/90`), so check how `bg-[var(--bg-page)]/90` compiles here before
+   converting that population.
 
 ## Definition of done per surface
 

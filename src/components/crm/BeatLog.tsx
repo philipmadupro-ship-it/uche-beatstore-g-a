@@ -92,7 +92,7 @@ export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
 
                 {/* Contact */}
                 <div className="min-w-0 pr-2">
-                  <span className="text-[12px] font-medium text-white truncate">{name}</span>
+                  <span className="text-[11px] font-medium text-white truncate">{name}</span>
                   {contact?.email && contact.name !== contact.email && (
                     <p className="text-[10px] text-white/40 truncate">{contact.email}</p>
                   )}
@@ -143,7 +143,7 @@ export function BeatLog({ sends, contacts = [] }: BeatLogProps) {
                 <Mail size={18} className="text-white/40" />
               </div>
               <div className="mt-3">
-                <p className="text-[12px] text-white mb-1">No sends yet</p>
+                <p className="text-[11px] text-white mb-1">No sends yet</p>
                 <p className="text-[10px] text-white/40">Send a beat to a contact to start tracking your pipeline</p>
               </div>
             </div>

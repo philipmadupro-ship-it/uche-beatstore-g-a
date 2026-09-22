@@ -125,7 +125,7 @@ export function LayersPanel({
                   if (event.key === 'Enter') event.currentTarget.blur();
                   if (event.key === 'Escape') setRenamingId(null);
                 }}
-                className="h-7 w-full border border-white/30 bg-[#090907] px-1.5 text-[12px] text-white/90 outline-none"
+                className="h-7 w-full border border-white/30 bg-[#090907] px-1.5 text-[11px] text-white/90 outline-none"
               />
             ) : (
               <button
@@ -138,7 +138,7 @@ export function LayersPanel({
                 onDoubleClick={() => setRenamingId(layer.id)}
                 className="min-w-0 text-left"
               >
-                <span className="block truncate text-[12px] text-white/90">{layer.name}</span>
+                <span className="block truncate text-[11px] text-white/90">{layer.name}</span>
                 <span className="block truncate font-mono text-[10px] uppercase tracking-[0.12em] text-white/40">
                   {layerKindLabel(layer)}
                 </span>

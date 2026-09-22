@@ -113,7 +113,7 @@ export function DropCountdown({ accentColor }: { accentColor: string }) {
               >
                 {fmtCountdown(targetMs)}
               </p>
-              <p className="text-[12px] text-white/65 truncate mt-1">
+              <p className="text-[11px] text-white/65 truncate mt-1">
                 <span className="font-medium text-white">{next.title}</span>
                 {next.bpm ? <span className="text-white/40"> · {next.bpm} BPM</span> : null}
                 {next.key ? <span className="text-white/40"> · {next.key}{next.scale === 'minor' ? 'm' : ''}</span> : null}
@@ -124,7 +124,7 @@ export function DropCountdown({ accentColor }: { accentColor: string }) {
           <div className="flex items-center gap-2 shrink-0">
             {subscribed ? (
               <span
-                className="flex items-center gap-1.5 px-3 py-2 rounded-full text-[12px] font-mono uppercase tracking-wider"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-mono uppercase tracking-wider"
                 style={{ backgroundColor: `${accentColor}26`, color: accentColor }}
               >
                 <Check size={12} />
@@ -137,7 +137,7 @@ export function DropCountdown({ accentColor }: { accentColor: string }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
-                  className="bg-[#090907] border border-white/10 rounded-full px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 min-w-0 w-44 md:w-56"
+                  className="bg-[#090907] border border-white/10 rounded-full px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 min-w-0 w-44 md:w-56"
                 />
                 <button
                   type="button"

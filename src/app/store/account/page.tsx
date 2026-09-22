@@ -111,7 +111,7 @@ export default function AccountSignInPage() {
                 type="button"
                 onClick={handleGoogle}
                 disabled={disabled}
-                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded bg-white text-black hover:bg-white active:scale-[0.98] disabled:opacity-50 transition-all text-sm font-medium"
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded bg-white text-black hover:bg-white/90 active:scale-[0.98] disabled:opacity-50 transition-all text-sm font-medium"
               >
                 <GoogleGlyph />
                 {googleLoading ? 'Redirecting…' : 'Continue with Google'}

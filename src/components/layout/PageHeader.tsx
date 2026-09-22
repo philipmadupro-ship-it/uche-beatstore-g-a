@@ -38,11 +38,11 @@ export function PageHeader({ eyebrow, title, description, actions, meta, childre
           {eyebrow && (
             <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-white/60 mb-2">{eyebrow}</p>
           )}
-          <h1 className="text-[28px] sm:text-[34px] md:text-[40px] font-bold tracking-tight text-white leading-[1.05] font-heading">
+          <h1 className="text-[28px] sm:text-[32px] md:text-[40px] font-bold tracking-tight text-white leading-[1.05] font-heading">
             {title}
           </h1>
           {description && (
-            <p className="text-[12px] text-white/70 max-w-xl mt-2 leading-relaxed">{description}</p>
+            <p className="text-[11px] text-white/70 max-w-xl mt-2 leading-relaxed">{description}</p>
           )}
         </div>
 

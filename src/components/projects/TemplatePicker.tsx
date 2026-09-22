@@ -67,7 +67,7 @@ export function TemplatePicker({
               className="flex items-start gap-3 p-3 rounded-xl border border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.05] transition-colors text-left disabled:opacity-50">
               <span className="text-2xl shrink-0">{tpl.emoji}</span>
               <div className="min-w-0">
-                <p className="text-[12px] font-semibold text-white flex items-center gap-2">
+                <p className="text-[11px] font-semibold text-white flex items-center gap-2">
                   {tpl.label}
                   {applying === tpl.slug && <Loader2 size={11} className="animate-spin text-white/40" />}
                 </p>

@@ -27,7 +27,7 @@ export function PlaylistTagPicker({ playlistId }: { playlistId: string }) {
               const active = tags.includes(tag);
               return (
                 <button key={tag} onClick={() => handleToggle(tag, category)}
-                  className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${active ? 'bg-white text-black border-white font-bold' : 'bg-transparent text-white/50 border-white/20 hover:text-white'}`}>
+                  className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all border ${active ? 'bg-white/[0.14] text-white border-white/30 font-bold' : 'bg-transparent text-white/50 border-white/20 hover:text-white'}`}>
                   {tag}
                 </button>
               );

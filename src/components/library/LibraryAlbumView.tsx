@@ -73,7 +73,7 @@ export function LibraryAlbumView({ tracks, currentTrackId, isPlaying, onPlayTrac
                             onClick={() => onClickDetails(track)}
                             className="group flex items-center justify-between p-3 rounded-2xl hover:bg-white/[0.04] transition-colors cursor-pointer border border-transparent hover:border-white/[0.04]"
                         >
-                            <p className={`text-[15px] font-bold truncate pr-4 ${currentTrackId === track.id ? 'text-white' : 'text-white'}`}>
+                            <p className={`text-[14px] font-bold truncate pr-4 ${currentTrackId === track.id ? 'text-white' : 'text-white'}`}>
                                 {track.title || 'Untitled Track'}
                             </p>
                             

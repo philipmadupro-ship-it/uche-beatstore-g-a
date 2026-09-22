@@ -52,7 +52,7 @@ export function ProjectAnalyticsPanel({ projectId }: { projectId: string }) {
       <Stat icon={<Eye size={11} />} label="Plays" value={stats.plays} />
       <Stat icon={<ShoppingBag size={11} />} label="Sales" value={stats.sales} />
       {stats.gross_usd > 0 && (
-        <span className="text-[12px] font-mono font-bold text-[#6DC6A4]">
+        <span className="text-[11px] font-mono font-bold text-[#6DC6A4]">
           ${stats.gross_usd.toFixed(2)}
         </span>
       )}
@@ -64,7 +64,7 @@ function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; va
   return (
     <span className="flex items-center gap-1 text-white/80" title={label}>
       {icon}
-      <span className="text-[12px] font-mono font-semibold tabular-nums">{value}</span>
+      <span className="text-[11px] font-mono font-semibold tabular-nums">{value}</span>
     </span>
   );
 }

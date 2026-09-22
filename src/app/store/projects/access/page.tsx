@@ -72,10 +72,10 @@ function Inner() {
           <AlertCircle size={28} className="text-red-400" />
         </div>
         <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-white/40">Project delivery</p>
-        <p className="mb-1 text-[22px] font-bold leading-tight text-white">
+        <p className="mb-1 text-[20px] font-bold leading-tight text-white">
           Missing session
         </p>
-        <p className="mx-auto max-w-sm text-[12px] leading-relaxed text-white/80">
+        <p className="mx-auto max-w-sm text-[11px] leading-relaxed text-white/80">
           We could not find your purchase from this URL. Check your email for the secure link.
         </p>
       </Centered>
@@ -89,16 +89,16 @@ function Inner() {
           <AlertCircle size={28} className="text-amber-400" />
         </div>
         <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-white/40">Project delivery</p>
-        <p className="mb-2 text-[22px] font-bold leading-tight text-white">
+        <p className="mb-2 text-[20px] font-bold leading-tight text-white">
           Still preparing your bundle
         </p>
-        <p className="mx-auto mb-5 max-w-sm text-[12px] leading-relaxed text-white/80">
+        <p className="mx-auto mb-5 max-w-sm text-[11px] leading-relaxed text-white/80">
           Your payment went through, but we have not received the confirmation from Stripe yet. The bundle link is also in the confirmation email, or you can refresh in a few seconds.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-2">
           <button
             onClick={() => window.location.reload()}
-            className="flex min-h-11 items-center gap-1.5 rounded-full bg-white px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-black transition-all hover:bg-white active:scale-[0.98]"
+            className="flex min-h-11 items-center gap-1.5 rounded-full bg-white px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-black transition-all hover:bg-white/90 active:scale-[0.98]"
           >
             <RefreshCw size={11} />
             Refresh
@@ -126,7 +126,7 @@ function Inner() {
       <p className="mb-2 text-[24px] font-bold leading-tight text-white">
         Preparing your bundle
       </p>
-      <p className="mx-auto max-w-sm text-[12px] leading-relaxed text-white/80">
+      <p className="mx-auto max-w-sm text-[11px] leading-relaxed text-white/80">
         Finalising your purchase. This usually takes a couple of seconds.
       </p>
       <div className="mx-auto mt-5 flex w-fit items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.03] px-3 py-1.5 text-[10px] font-mono text-white/40">

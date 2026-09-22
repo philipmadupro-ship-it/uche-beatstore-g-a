@@ -7,6 +7,7 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { Drawer } from '@/components/ui/Drawer';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { FolderContainerCard } from '@/components/ui/ProductList';
+import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import {
   type ProjectFilterState,
   type ProjectSortMode,
@@ -51,6 +52,16 @@ export function ProjectFilterBar({
   const [open, setOpen] = useState(false);
   const [mobileFilters, setMobileFilters] = useState(false);
   const [folderMenuOpen, setFolderMenuOpen] = useState(false);
+  // Escape and focus restoration for the folder popover. `trapFocus: false`
+  // on purpose — this is an anchored popover, and trapping one strands a
+  // keyboard user inside a panel they expect to Tab out of. Before this it
+  // closed only on an outside click, so a keyboard user who opened it had no
+  // way to dismiss it at all.
+  const folderPanelRef = useDialogBehavior<HTMLDivElement>({
+    open: folderMenuOpen,
+    onClose: () => setFolderMenuOpen(false),
+    trapFocus: false,
+  });
   const [folderDrawerOpen, setFolderDrawerOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [manage, setManage] = useState(false);
@@ -131,7 +142,7 @@ export function ProjectFilterBar({
         {STATUS_PILLS.map((s) => (
           <button key={s.value} onClick={() => set({ status: s.value })}
             className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-              value.status === s.value ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+              value.status === s.value ? 'bg-white/[0.14] text-white border-white/30' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
             }`}>{s.label}</button>
         ))}
       </div>
@@ -145,7 +156,7 @@ export function ProjectFilterBar({
               return (
                 <button key={tag} onClick={() => toggleTag(tag)}
                   className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                    active ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+                    active ? 'bg-white/[0.14] text-white border-white/30' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
                   }`}>{tag}</button>
               );
             })}
@@ -176,7 +187,7 @@ export function ProjectFilterBar({
                 onChange={(e) => setEditName(e.target.value)}
                 onBlur={() => renameFolder(f.id)}
                 onKeyDown={(e) => { if (e.key === 'Enter') renameFolder(f.id); if (e.key === 'Escape') setEditingId(null); }}
-                className="h-10 w-full rounded-xl border border-white/30 bg-white/[0.04] px-3 text-[12px] text-white focus:outline-none"
+                className="h-10 w-full rounded-xl border border-white/30 bg-white/[0.04] px-3 text-[11px] text-white focus:outline-none"
               />
             ) : (
               <FolderContainerCard
@@ -203,13 +214,13 @@ export function ProjectFilterBar({
           onChange={(e) => setNewFolder(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') createFolder(); }}
           placeholder="New folder"
-          className="min-h-10 flex-1 rounded-full border border-white/10 bg-white/[0.02] px-3 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
+          className="min-h-10 flex-1 rounded-full border border-white/10 bg-white/[0.02] px-3 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
         />
         <button onClick={createFolder} disabled={!newFolder.trim() || busy} className="grid size-10 shrink-0 place-items-center rounded-full border border-white/10 bg-white/[0.04] text-white/60 hover:text-white hover:border-white/20 disabled:opacity-40" aria-label="Create folder">
           {busy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
         </button>
         {folders.length > 0 && (
-          <button onClick={() => setManage((v) => !v)} className={`grid size-10 shrink-0 place-items-center rounded-full transition-colors ${manage ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`} aria-label="Manage folders" title="Manage folders">
+          <button onClick={() => setManage((v) => !v)} className={`grid size-10 shrink-0 place-items-center rounded-full transition-colors ${manage ? 'bg-white/[0.14] text-white' : 'text-white/50 hover:text-white'}`} aria-label="Manage folders" title="Manage folders">
             {manage ? <Check size={12} /> : <Pencil size={12} />}
           </button>
         )}
@@ -226,7 +237,7 @@ export function ProjectFilterBar({
             onClick={() => isMobile ? setFolderDrawerOpen(true) : setFolderMenuOpen((v) => !v)}
             className={`flex min-h-10 items-center gap-2 rounded-full border px-3.5 py-2 text-[11px] font-medium transition-colors ${
               folderMenuOpen || folderDrawerOpen || value.folder !== 'all'
-                ? 'bg-white text-black border-white'
+                ? 'bg-white/[0.14] text-white border-white/30'
                 : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
             }`}
           >
@@ -235,7 +246,12 @@ export function ProjectFilterBar({
           {folderMenuOpen && (
             <>
               <div className="fixed inset-0 z-30" onClick={() => setFolderMenuOpen(false)} />
-              <div className="absolute left-0 top-full z-40 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#0E0C09] p-3 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
+              <div
+                ref={folderPanelRef}
+                role="dialog"
+                aria-label="Filter by project folder"
+                className="absolute left-0 top-full z-40 mt-2 w-[420px] max-w-[calc(100vw-2rem)] rounded-2xl border border-white/10 bg-[#0E0C09] p-3 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
+              >
                 {folderPanel}
               </div>
             </>
@@ -247,13 +263,13 @@ export function ProjectFilterBar({
             value={value.search}
             onChange={(e) => set({ search: e.target.value })}
             placeholder="Search projects + tags…"
-            className="w-full bg-white/[0.02] border border-white/10 rounded-full py-2 pl-9 pr-3 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
+            className="w-full bg-white/[0.02] border border-white/10 rounded-full py-2 pl-9 pr-3 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
           />
         </div>
         <button
           onClick={() => isMobile ? setMobileFilters(true) : setOpen((v) => !v)}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[11px] font-medium border transition-colors min-h-10 ${
-            open || mobileFilters || activeCount > 0 ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+            open || mobileFilters || activeCount > 0 ? 'bg-white/[0.14] text-white border-white/30' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
           }`}
         >
           <SlidersHorizontal size={12} /> Filters{activeCount > 0 ? ` · ${activeCount}` : ''}

@@ -8113,3 +8113,395 @@ Two defects the tests caught, both invisible to `tsc` and a green build:
   owners rather than a second window listener.
 - `SessionFitMarkers` is on the library row only — not the store's
   `BeatListRow`, and not `TrackGridCard`.
+## Library page — home content out of the catalogue list (2026-09-20)
+
+`/library` is two surfaces behind one toggle: **Browse** (a home page) and **All tracks**
+(the vault list). The home content was rendered in both, so in All tracks the producer
+scrolled past a hero, a quick-action row, four tiles linking to other pages, the section
+header, the toolbar, the smart-playlist strip, the cross-surface digest and the sell
+readiness panel before reaching the first track. On a laptop that is the whole fold spent
+on things that are not the catalogue.
+
+The four hub tiles, `ActionDigestPanel` and `SellReadinessPanel` now render only as home
+content, under one `showHomeContent` flag. Nothing was deleted and nothing moved page.
+
+`showHomeContent` is `effectiveBrowseMode === 'sections' || isMobileViewport`, not just the
+former: mobile has no Browse mode (the toggle is `hidden sm:flex` and the mode is forced to
+`'all'` at line 901), so gating on Browse alone would have dropped the digest and the
+readiness panel from phones entirely. Where that content belongs on a phone is a separate
+question; this change does not answer it and does not regress it.
+
+The hero, the quick actions (Upload / New release) and the toolbar stay in both views —
+they are how work starts, not where it is reported.
+
+Verified with `tsc --noEmit`, `next build` and `vitest` (193 files, 2075 tests). The
+dashboard is auth-gated, so there is no preview screenshot.
+
+### Note for the next agent
+`npm run build` fails in a fresh worktree with `Missing API key … new Resend(...)` from
+`/api/email`, which is module-scope construction, not a code defect — the worktree has no
+`.env.local`. Copy it from the main checkout.
+
+## Control language — chips, badges and dead hovers (2026-09-20)
+
+First real slice of `docs/design-direction.md` item 1. Solid `bg-white` went from **288
+across 100 files** to **169 across 78**, and what was converted was chosen by category,
+not by grep count.
+
+**Converted.** Every tab, toggle, filter chip and pagination control now uses the spec's
+active treatment (`bg-white/[0.14] border-white/30`, text at full white) instead of a solid
+white fill: library browse/view toggles and pagination, sales and analytics tabs, analytics
+date presets and genre chips, project and playlist filter bars, the tag pickers, the track
+details drawer tabs, contacts pagination, and the `/store` mobile Filters button and
+Favorites-only toggle — the last two carried the exact `text-black bg-white font-semibold
+shadow-md` migration signature the spec names as residue. Count badges are now hairline
+pills (`border-white/20 text-white/70`) per "status badges are text + hairline border":
+library and analytics filter counts, the calendar day count, the contacts toolbar badge,
+the sales pending-offers badge and three share cart badges.
+
+**Deliberately not converted.** Primary-action buttons. "One solid-white action per view"
+cannot be decided by grep, and several views legitimately have one — checkout, the floating
+cart pill, Google sign-in, Save profile, the exclusive-license Buy button. That half needs
+a view-at-a-time pass and is called out as such in the doc.
+
+**Out of scope, and worth knowing before the next pass.** The `/store` type chips and the
+applied-filter cluster set `background-color` inline from the *producer's* storefront accent,
+which defaults to white. They look like violations in a screenshot and in a computed-style
+dump. `design-direction.md` principle 3 exempts the accent picker explicitly. Leave them.
+
+### Two defects found on the way
+- **45 controls whose hover fill equalled their rest fill** (`bg-white … hover:bg-white`),
+  including the storefront Checkout and Add-to-cart buttons. Valid Tailwind, compiles fine,
+  and the `transition-colors` beside it transitions nothing — the control is simply dead to
+  the pointer. Same migration residue: the rule rewrote rest and hover to the same white.
+- **4 elements with two hover fills at once** (`hover:bg-white/90 hover:bg-white/80`), on the
+  three auth pages and `BatchActionBar`. Tailwind emits both rules, so the winner is decided
+  by stylesheet order rather than class order and the author's intent is unrecoverable.
+
+Both are now guarded in `lib/ui/tailwind-classes.test.ts`, which scans quoted class strings
+rather than whole lines — a line may hold a ternary whose two branches legitimately name the
+same colour. The guard was written and watched fail on all 45 BEFORE the fix, because the
+repo bans scripted styling migrations except behind a guard test.
+
+Verified with `tsc`, `next build`, `vitest` (2077), and by running the storefront against
+`e2e/fixtures/store-db.json` in the browser: the Favorites-only toggle computes to
+`bg white/0.14` + `border white/0.3` when active.
+
+### Note
+Running the storefront locally needs `ENABLE_LOCAL_STORE=true` and the fixture copied to
+`data/db.json`; a `.env.local` pointing at real Supabase makes the e2e storefront tests skip
+rather than fail, which looks like passing. `data/db.json` and `.claude/launch.json` are both
+tracked — restore them afterwards. `next dev` re-adds its block to AGENTS.md; revert it.
+
+## Radii vocabulary in the UI primitives (2026-09-20)
+
+`docs/design-direction.md` item 3, which is explicitly ordered: fix the primitives *before*
+the pages, "or the drift comes back". That ordering is the whole point here — a `Card` at
+16px is not one wrong component, it is the wrong radius arriving on every page that adopts
+it. `Card`, `ListRow`, `MediaCard` and `ProductList` are imported by only 2–6 files each
+today, so this cost almost nothing now and would have cost a sweep later.
+
+- 16px → **12px** (cards): `Card`, `ListRow`, `CoverEditor`, `Skeleton`, and `MediaCard`'s
+  `sm:` bump, which took the cover to 16px only above the `sm` breakpoint.
+- 6px → **8px** (controls): `Dropdown`'s trigger, `ColorPicker`'s swatch and hex field,
+  `Slider`'s value tooltip, `Toaster`'s action button, `MediaCard`'s corner badge,
+  `Skeleton`'s avatar.
+- 24px/22px → **20px** (modals, heroes): `ProductList`, `Toaster`, and `Drawer`'s bottom
+  sheet. `Card`'s outer wrapper said `rounded-[1.25rem]`, which is 20px already — respelled
+  so the vocabulary is greppable.
+
+The doc claimed `Modal.tsx` was 16px. It is already `rounded-[20px]`; someone fixed it and
+the doc kept the stale claim. Corrected there.
+
+`lib/ui/radii.test.ts` guards the primitives. Tailwind's near-misses are what make this
+invisible in review: `rounded-md` is 6px, `rounded-2xl` 16px, `rounded-3xl` 24px — each one
+degree off a real token. Allowlisted, with the reason written next to each: `rounded-full`
+(a pill's radius is its height, not a step on the surface scale), `rounded-t-full` (the
+gloss gradient inside the glass buttons), `rounded-[inherit]` (overlays taking their
+parent's shape), and `rounded-[3px]` (the 15px colour swatch — at 8px it reads as a circle,
+which is the one shape a swatch must not be).
+
+The guard scans quoted class strings, not lines: "rounded" appears in these files' prose
+too, and the first draft reported `ActionMenu`'s "inset, rounded highlight" comment and
+`ListRow`'s "rounded container" comment as violations. It was also checked in the other
+direction — reverting `Card` to `rounded-2xl` makes it fail with that exact class named,
+because a guard that has never failed is not known to work.
+
+**Scoped to `src/components/ui/` on purpose.** The pages still hold many off-vocabulary
+radii; a guard that fails on day one is a guard people skip.
+
+Verified with `tsc`, `next build` and `vitest` (194 files, 2078).
+
+## Token layer realigned to the app's measured palette (2026-09-20)
+
+Groundwork for `design-direction.md` item 6. The migration it asks for — tokenise 175 files
+of hardcoded hex — **was not safe to perform**, and finding out why was the work.
+
+The token layer did not describe the app. `--bg-card` resolved to `#181815` while 135
+components hardcode `#0D0D0A`; `--bg-page` resolved to `#0B0B0A` against 300 uses of
+`#090907`. Converting a literal to its "equivalent" token would therefore have *changed
+that surface's colour*, app-wide, while looking like a no-op refactor in review.
+
+It was already shipped, not hypothetical. About 34 sites use the tokens today — `ui/Card`,
+`Modal`, `Drawer`, `Field`, `EmptyState`, and the sales / analytics / calendar / contacts
+pages — so every one of those panels rendered a full shade lighter than the hand-rolled
+panels beside it. Measured on `/dev/design-system` in the browser: **three different
+near-blacks painting at once** — `rgb(9,9,7)` and `rgb(13,13,10)` from literals, and
+`rgb(11,11,10)` from the token-driven `<body>`, which was lighter than the panels sitting on
+it and darker than the cards.
+
+**Decision (the producer's, asked explicitly): the literals are the palette, the tokens were
+wrong.** CLAUDE.md's measured table and AGENTS.md's design-system table both already declare
+`#090907` / `#0D0D0A`, and CLAUDE.md warns that a value copied from the variables "lands
+off-palette against its neighbours" — which is precisely what was measured. The alternative
+(keep De Roche graphite, convert 435 literals) is a whole-app restyle, not a refactor.
+
+Changed in `:root` only, at the semantic layer rather than the `--dr-*` primitives, so the
+source scale survives and `[data-theme="de-roche-archive"]` keeps its own overrides:
+
+- `--background-primary` → `#090907`
+- `--surface-primary` → `#0D0D0A`
+- `--surface-hover` → `var(--dr-black-900)` `#11110F`, the next step on the ramp and an
+  existing primitive rather than a fourth invented near-black. The old value
+  (`--dr-basalt-750` `#282722`) was four steps up and read as a grey flash on hover.
+
+The unused `--bg-*-hsl` triples were brought into step too. Nothing consumes them, but an
+unused declaration that disagrees with reality is how this drifted in the first place.
+
+Verified in the browser: dark resolves to `#090907` / `#0d0d0a` / `#11110f` with the body at
+`rgb(9,9,7)`, the third near-black is gone, and toggling `data-theme="de-roche-archive"`
+still inverts to paper `#eee8dd` — the light theme was not touched. Plus `tsc`,
+`next build`, `vitest` (2078).
+
+### The migration is unblocked, not done
+`#090907` ⇄ `var(--bg-page)` is now a genuine no-op, so tokenising can go surface by surface.
+Two things the next pass needs:
+- **Only surfaces are safe.** `--text-primary` is `#E6DED1` where components write
+  `text-white/80`, and `--border-default` is a warm `#282722` against `border-white/10`.
+  Those tokens are still a shade away from the app and need the same treatment first.
+- **Opacity modifiers on hex literals** (`bg-[#090907]/90`, `bg-[#0D0D0A]/60`) are a separate
+  population. Check how `bg-[var(--bg-page)]/90` compiles in this Tailwind version before
+  converting them; the plain literals are the safe ones. Six live in `components/ui` alone,
+  two of them modified, which is why the primitives were left on literals this pass rather
+  than half-converted.
+## Notifications verified end to end (2026-09-21)
+
+Asked to confirm the notifications feature works. It mostly does — the route, the badge
+arithmetic and the OS-notification selection rule are all sound and already covered by 23
+unit tests. Three things were wrong, and the first had been wrong since the feature shipped.
+
+**1. Realtime was inert.** `TopBar` has always run
+`useRealtimeTable({ table: 'notifications' })`, but `notifications` was never added to the
+`supabase_realtime` publication — migration 064 created the table and no migration ever made
+it a publication member. Postgres therefore never broadcast its changes and that subscription
+has done nothing since day one. The bell only ever updated on the 60-second poll sitting
+beside it, so a sale could go unseen for up to a minute and its OS notification was late by
+the same amount. It degraded quietly instead of breaking, which is exactly why nobody caught
+it: the poll is a deliberate fallback and `desktop.ts` fires from whatever the poll returns,
+so everything still arrived, just slowly. `116_notifications_realtime.sql` fixes it, mirroring
+`012_realtime_comments.sql`.
+
+**Numbered 116, not 115** — `115_track_collaborators.sql` already exists on branch
+`claude/code-review-agent-integration-cdf964`. The house rule to run
+`git log --all -- supabase/migrations/` before naming is what caught it.
+
+**2. "Opened links" notifications do not exist.** Both AGENTS.md and CLAUDE.md said opened
+share links surface as notifications. Nothing writes one: the Resend webhook records
+`beat_sends.opened_at` / `link_clicked_at` and stops there. Exactly three things create a
+notification row — a completed purchase, a buyer offer, and a fulfilment alert. Both docs
+corrected; the feature was not invented to match them, because nobody asked for it.
+
+**3. `PATCH` validated the body before authenticating.** A signed-out caller got a 400 about
+their payload instead of a 401, and untrusted JSON was parsed for callers with no business
+there. Reordered.
+
+### Route tests added
+`api/notifications/route.test.ts`, 11 cases, pinning the two regressions this endpoint has
+already suffered — the badge counted from the rendered page (so it undercounted past 20 while
+the unbounded "Mark all read" cleared rows the producer never saw), and opening the panel
+firing `read_all` (so glancing at one sale read every other). Neither is visible in a
+screenshot. The auth-ordering test was checked against the pre-fix route and fails there, so
+it is known to test what it claims.
+
+Verified with `tsc`, `next build` and `vitest` (195 files, 2089).
+
+### Not done
+Migration 116 is written but **not applied** — still waiting on `SUPABASE_DB_URL`. Merging is
+safe without it: the poll is the existing behaviour, so the code does not depend on the
+migration, it is just slower until applied.
+
+## Overlay keyboard behaviour (2026-09-21)
+
+`design-direction.md` item 5. The doc said 21 hand-rolled overlays, 19 without Escape, 20
+without a focus trap, all 21 without `role="dialog"`, and flagged it as a behaviour change
+needing sign-off. **Those numbers were badly stale.** 27 components already carry
+`role="dialog"`, and `ContactHistoryDrawer` had been rebuilt on `ui/Drawer` — it only
+appeared in a scan because it *describes* the old `fixed inset-0` pattern in a comment.
+
+Four real gaps, and the interesting part is that they are not all the same kind of thing:
+
+- `QuickShareModal` is a genuine dialog. It now has `role="dialog"`, `aria-modal`, a focus
+  trap and focus restoration via `useDialogBehavior`.
+- The folder popovers in `PlaylistFilterBar` and `ProjectFilterBar`, and the New-release menu
+  on `/library`, are anchored popovers and menus. They get Escape and focus restoration with
+  **`trapFocus: false`** — trapping an anchored menu strands a keyboard user inside a popup
+  they expect to Tab out of, which is the rule `useDialogBehavior` states in its own header.
+
+All three of those closed **only** on an outside click. A keyboard user who opened one had no
+way to dismiss it.
+
+### The guard caught its own false negative
+`lib/ui/overlay-behavior.test.ts` flags a `fixed inset-0` scrim carrying a dismiss handler
+when the file has no dialog behaviour. The first version also accepted a `ui/Modal` /
+`ui/Drawer` / `ui/Popover` **import** as proof — and passed, because `/library` imports
+`Drawer` for its filter sheet while separately hand-rolling the release menu with a bare
+scrim. A file-level import proves nothing about the particular overlay being scanned, so the
+check was narrowed to the hook alone; it then failed on `/library`, which is how that fourth
+gap was found at all.
+
+It strips comments first, for the `ContactHistoryDrawer` reason above. `DropZone` (a drop
+target with no focusable content, `aria-hidden` when inactive) and `GlassPage` (two `-z-10
+aria-hidden` background washes) are allowlisted with their reasons.
+
+Verified with `tsc`, `next build` and `vitest` (196 files, 2090).
+
+### Still open on item 5
+The release menu is now dismissable but is still a hand-rolled menu, not `ui/ActionMenu`, so
+it has no arrow-key navigation. Converting it is a separate change — `ActionMenu` brings its
+own grouping model and keyboard indices, and it deserves its own pass rather than riding
+along with an accessibility fix.
+
+## Preview player: verified, not rebuilt (2026-09-21)
+
+`design-direction.md` item 2. Like item 5, the open-work list was behind the code — the
+rebuild had already happened. `player/SpectralWaveform.tsx` renders the spec'd player on a
+canvas, backed by `useSpectralPeaks` and `lib/audio/spectral-peaks.ts`, and is wired into all
+three surfaces the section names: `PlayerBar`, `store/BeatPreviewDrawer` and
+`share/ShareTrackDetailsDrawer`.
+
+Checked against each spec bullet in a browser, on `/store` with `e2e/fixtures/store-db.json`,
+rather than by reading the source: cover art anchors the panel with the waveform below it and
+never painted over it; the waveform is continuous and mirrored, not discrete bars; the
+playhead is a thin line; elapsed sits left with remaining (`−3:30`) right; transport is plain
+glyphs with no filled play disc; and the drawer carries exactly one solid-white primary
+action (Lease $30), which is what the control language asks for.
+
+One deliberate divergence from the written spec, already documented in the component: the
+playhead is fixed at centre and the waveform scrolls past it, rather than a line travelling
+across a static waveform. The reason given is that over a three-minute beat a travelling
+playhead is a progress bar, not a transport. Left alone — the code's argument is better than
+the doc's bullet, and the doc now records the divergence instead of implying a defect.
+
+### A false alarm worth recording
+The storefront first rendered "No beats in the store yet" while `/api/store` returned two
+listed tracks, which looked like a serious public-storefront regression. It was not: the dev
+server was still compiling, and the page populated fully a few seconds later. Worth knowing
+before someone else chases it.
+
+It did surface something real, though. `e2e/storefront.spec.ts` asserts
+`cards.first().or(empty).first()` — **the empty state passes** — and the other two storefront
+tests `test.skip` when no cards are present. So a genuine catalogue regression would leave CI
+green with 2 passed and 4 skipped. That is worth tightening, but it is a change to the test's
+contract and belongs in its own pass, not smuggled into a verification note.
+
+## Type scale: the small end collapsed (2026-09-21)
+
+`design-direction.md` item 4. Principle 2 asks for fewer sizes per screen; app-wide there
+were **28 distinct** `text-[Npx]` values, most of the mass between 7px and 13px. A one-pixel
+step is invisible in isolation and obvious in aggregate — two labels a pixel apart in the
+same panel read as a rendering bug, not a hierarchy.
+
+Did exactly what the doc named as highest-leverage, and no more:
+
+- **`12px → 11px`**, 295 occurrences across 108 files. 11px was already the dominant body
+  size (626 uses against 295), so this moves the minority onto the majority rather than
+  inventing a value.
+- **`7px → 8px`**, 11 occurrences — below the smallest real step.
+
+The 7–13px band is now five steps: 8, 9, 10, 11 (body), 13. `lib/ui/type-scale.test.ts`
+guards it, written and watched fail on all 112 files first, per the ban on unguarded scripted
+styling migrations.
+
+### The doc's own numbers were off
+It named `store/[id]` and `sales` at "9 distinct sizes each". `sales` was 9 and is now 8.
+`store/[id]` was **8**, and the count overstates it either way: three of those are
+`text-[28px] sm:text-[36px] md:text-[48px]` **on one line** — a single responsive heading
+counted as three styles. Its remaining `32px` is the price figure on a licence tier, which is
+deliberately distinct from the track title. Nothing to collapse there; corrected in the doc
+so the next pass does not chase it.
+
+Verified by rendering `/store/track-demo-002` against the fixture and measuring computed
+`fontSize` on every leaf text node: **seven distinct sizes**, dominated by 11px and 9px, no
+12px. Plus `tsc`, `next build` and `vitest` (197 files, 2091).
+
+### Deliberately not done
+Headings above 13px — 14, 15, 16, 17, 18, 20, 22, 24, 28 and up. Collapsing those is a visual
+judgement per surface rather than a rule, so the guard stops at 13px rather than banning
+sizes nobody has agreed a replacement for. A guard that encodes an unmade decision is how you
+get a test people skip.
+
+## The storefront e2e spec could not fail (2026-09-21)
+
+Flagged while verifying the preview player and fixed here.
+
+`e2e/storefront.spec.ts` was written to skip cleanly on an empty store, so that a dev
+pointing it at a fresh Supabase still passed. Reasonable — except the leniency also applied
+in **CI, where the store is not unknown**: the workflow copies `e2e/fixtures/store-db.json`
+over `data/db.json` and runs with `ENABLE_LOCAL_STORE=true`, guaranteeing two listed, priced
+beats.
+
+So in CI the first test accepted `cards.first().or(empty).first()` — **the empty state
+passed** — and the other two called `test.skip()` when no card appeared. A regression that
+emptied the catalogue (a broken query, a bad filter default, a crashed render) reported
+"2 passed, 4 skipped" and went green. **The suite could not fail for the one reason it
+exists.**
+
+Now the spec knows whether it is seeded, from the same env var the server reads, so the two
+cannot disagree about which data is loaded. When seeded it asserts the fixture — producer
+name, exactly 2 cards, empty state absent — and `missingPrecondition()` throws with a message
+naming the fixture instead of skipping. When not seeded, every previous escape hatch is
+intact, so a brand-new Supabase still passes.
+
+Checked in both directions, which is the only way this claim means anything:
+- seeded, healthy fixture → **4 passed / 2 skipped** (was 2 passed / 4 skipped)
+- seeded, all tracks unlisted → **all 3 storefront tests fail**, with the count assertion
+  reporting `Expected 2, Received 0` and the other two naming the fixture
+
+The 2 remaining skips are the project and playlist detail tests, which need real Supabase.
+That skip is legitimate and already documented in `ci.yml`; the expected counts are now
+written there too, so "green with extra skips" is recognisable as the failure it is.
+
+## Type scale: the headings (2026-09-21)
+
+The other half of item 4. Base heading sizes went from **13 distinct to 9** — 14, 16, 18,
+20, 24, 28, 32, 40 (the H1 named in CLAUDE.md), 48, plus one 88px display glyph.
+
+Merged `15 → 14` (23 occurrences), `22 → 20` (7), `34 → 32` (4), and the singletons
+`17 → 16`, `30 → 28`, `46 → 48`. 36 occurrences across 29 files. Each merged size sat within
+two pixels of a neighbour, which reads as inconsistency rather than hierarchy.
+
+`22px` was worth checking rather than assuming: every use is a stat figure
+(`font-bold tabular-nums`) or a panel title, so 20px is the same role one step down. `15px`
+was ordinary body-level headings across a dozen pages.
+
+### Responsive ladders are exempt, and that is the whole design of the guard
+`text-[28px] sm:text-[36px] md:text-[48px]` is **one heading at three widths**. The reader
+never sees two of them at once, so it does not offend principle 2 at all — and flattening it
+would either break the ladder or leave two breakpoints painting the same size. Principle 2 is
+about sizes visible *together*.
+
+So the guard enforces the scale on **base** sizes and allows a *named* list of intermediate
+rungs only when they carry a responsive prefix: 36, 56, and the 112/120 of
+`text-[88px] sm:text-[112px] lg:text-[120px]` — the single initial letter on a project page,
+which is the clearest case for the exemption there is. They are listed rather than
+blanket-allowing anything prefixed, or "add a `sm:`" becomes the way around the scale.
+
+Checked in both directions. Injecting `text-[22px]` into `sales` makes the guard fail naming
+that file and size; restoring it passes. Worth noting the first attempt at that check used
+`sed '0,/re/s//repl/'`, which silently matched nothing on BSD sed and produced a false "still
+passes" — the guard looked verified when nothing had been injected. Confirm the injection
+landed before trusting the result.
+
+Verified by rendering `/store` against the fixture and measuring computed `fontSize` on every
+leaf text node: 8 distinct sizes, all on the scale (8, 9, 10, 11, 14, 16, 20, 24), two beat
+cards present, layout intact. Plus `tsc`, `next build`, `vitest` (2092).

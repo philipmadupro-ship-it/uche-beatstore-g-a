@@ -133,7 +133,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
             {displayName}
           </h1>
           {creator?.bio && (
-            <p className="mt-3 text-[12px] text-white/80 max-w-lg leading-relaxed">{creator.bio}</p>
+            <p className="mt-3 text-[11px] text-white/80 max-w-lg leading-relaxed">{creator.bio}</p>
           )}
         </div>
 
@@ -269,7 +269,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                 <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/60">
                   Notes from the producer
                 </p>
-                <p className="text-[12px] text-white/80 leading-relaxed whitespace-pre-wrap">
+                <p className="text-[11px] text-white/80 leading-relaxed whitespace-pre-wrap">
                   {currentTrack?.description || project.description}
                 </p>
               </div>
@@ -312,7 +312,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <p className={`text-[12px] font-medium truncate ${active ? 'text-white' : 'text-white/85 group-hover:text-white'}`}>
+                        <p className={`text-[11px] font-medium truncate ${active ? 'text-white' : 'text-white/85 group-hover:text-white'}`}>
                           {t.title}
                         </p>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">

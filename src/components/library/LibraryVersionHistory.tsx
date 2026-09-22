@@ -58,7 +58,7 @@ export function LibraryVersionHistory({ track, versions }: Props) {
       {versions.length === 0 ? (
         <div className="bg-gradient-to-b from-[#0D0D0D] to-[#090907] border border-white/10 rounded-xl py-10 text-center">
           <History size={20} className="mx-auto text-white/30 mb-3" />
-          <p className="text-[12px] text-white/80 mb-1">No prior versions yet</p>
+          <p className="text-[11px] text-white/80 mb-1">No prior versions yet</p>
           <p className="text-[10px] text-white/40 font-mono uppercase tracking-wider">
             Replacing the audio will snapshot the current file as v1
           </p>
@@ -71,7 +71,7 @@ export function LibraryVersionHistory({ track, versions }: Props) {
               Live
             </span>
             <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-medium text-white truncate">{track.title}</p>
+              <p className="text-[11px] font-medium text-white truncate">{track.title}</p>
               <p className="text-[10px] font-mono text-white/80">
                 {liveCreatedAt} · current master
               </p>
@@ -92,7 +92,7 @@ export function LibraryVersionHistory({ track, versions }: Props) {
                 {v.version_label || `v${v.version_number}`}
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] text-white truncate">
+                <p className="text-[11px] text-white truncate">
                   {new Date(v.created_at).toLocaleDateString('en-US', {
                     month: 'short', day: 'numeric', year: 'numeric',
                     hour: 'numeric', minute: '2-digit',

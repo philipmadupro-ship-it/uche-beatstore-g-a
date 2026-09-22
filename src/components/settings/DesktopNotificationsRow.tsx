@@ -102,7 +102,7 @@ export function DesktopNotificationsRow() {
       onClick={toggle}
     >
       <div>
-        <p className="text-[12px] font-medium text-white">Desktop notifications</p>
+        <p className="text-[11px] font-medium text-white">Desktop notifications</p>
         <p className="mt-0.5 text-[10px] text-[var(--text-readable)]">{description}</p>
       </div>
       <div className={`w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-[#6DC6A4]' : 'bg-white/[0.05] border border-white/20'}`}>

@@ -338,7 +338,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             <Lock size={16} className="text-white/40" />
           </div>
           <h1 className="text-[18px] font-medium text-white mb-1">Password required</h1>
-          <p className="text-[12px] text-white/40">This link is protected</p>
+          <p className="text-[11px] text-white/40">This link is protected</p>
         </div>
         <input
           type="password" value={password} onChange={(e) => setPassword(e.target.value)}
@@ -348,7 +348,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         />
         {passwordError && <p className="text-[11px] text-red-400 mb-3">{passwordError}</p>}
         <button type="submit" disabled={unlocking || !password}
-          className="w-full bg-white text-black py-3 rounded-lg text-[12px] font-medium hover:bg-white disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+          className="w-full bg-white text-black py-3 rounded-lg text-[11px] font-medium hover:bg-white/90 disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
         >
           {unlocking ? <Loader2 size={13} className="animate-spin" /> : null}
           Unlock
@@ -362,7 +362,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       <div className="text-center max-w-sm">
         <Shield size={28} className="text-red-400 mx-auto mb-4" />
         <h1 className="text-[18px] font-medium text-white mb-2">Link unavailable</h1>
-        <p className="text-[12px] text-white/40">{error}</p>
+        <p className="text-[11px] text-white/40">{error}</p>
       </div>
     </div>
   );
@@ -388,14 +388,14 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
           {purchaseBanner === 'success' ? (
             <>
               <Check size={14} className="text-[#6DC6A4] shrink-0" />
-              <span className="text-[12px] font-medium">
+              <span className="text-[11px] font-medium">
                 Purchase complete — receipt + access sent to your email.
               </span>
             </>
           ) : (
             <>
               <XIcon size={14} className="text-white/80 shrink-0" />
-              <span className="text-[12px] font-medium">Checkout cancelled.</span>
+              <span className="text-[11px] font-medium">Checkout cancelled.</span>
             </>
           )}
           <button
@@ -793,7 +793,7 @@ function LicenseInfoSection({ creator }: { creator: LegacyCreatorShape }) {
       <p className="text-[10px] font-mono uppercase tracking-wider text-white/40">Licensing</p>
 
       {creator?.license_notes && (
-        <p className="text-[12px] text-white/80 leading-relaxed">{creator.license_notes}</p>
+        <p className="text-[11px] text-white/80 leading-relaxed">{creator.license_notes}</p>
       )}
 
       <div className="space-y-2">

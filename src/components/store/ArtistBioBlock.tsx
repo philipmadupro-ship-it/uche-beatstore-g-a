@@ -97,7 +97,7 @@ export function ArtistBioBlock({ creator, accentColor, plainTitle = false }: Pro
         {plainTitle ? (
           <p
             aria-hidden
-            className="px-4 font-heading text-[34px] leading-[1.05] md:px-8 md:text-[56px]"
+            className="px-4 font-heading text-[32px] leading-[1.05] md:px-8 md:text-[56px]"
             style={{ color: accentColor || '#FFFFFF' }}
           >
             {creator?.display_name || 'Producer'}

@@ -100,7 +100,7 @@ export function RecommendationsStrip<T extends MinTrack>({
 
               {/* Body */}
               <div className={`${compact ? 'p-2 gap-0.5' : 'p-2.5 gap-1'} flex flex-col min-w-0`}>
-                <p className={`${compact ? 'text-[11px]' : 'text-[12px]'} font-medium truncate ${isCurrent ? '' : 'text-white'}`}
+                <p className={`${compact ? 'text-[11px]' : 'text-[11px]'} font-medium truncate ${isCurrent ? '' : 'text-white'}`}
                   style={isCurrent ? { color: accentColor } : {}}
                 >
                   {t.title}

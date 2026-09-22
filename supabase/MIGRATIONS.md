@@ -49,6 +49,7 @@ service-role key can read the schema's effects but cannot run DDL):
 | `113_store_layout.sql` | **not applied** | `creator_profiles.store_layout` missing |
 | `114_share_price_overrides.sql` | no-op on prod | columns already exist, added outside migrations |
 | `115_track_collaborators.sql` | **not applied** | new table; `track_collaborators` missing |
+| `116_notifications_realtime.sql` | **not applied** | new — adds `notifications` to the realtime publication |
 
 What each still-pending one does:
 
@@ -82,3 +83,17 @@ renumber the *next* new migration past 106, don't touch the existing pairs).
 The robust end state is a deploy step that runs `npm run db:migrate` against the
 target project (with `SUPABASE_DB_URL` as a CI secret) immediately before the
 app deploy, so schema and code ship together and drift is impossible.
+
+- `116_notifications_realtime.sql` — adds `public.notifications` to the
+  `supabase_realtime` publication and sets `REPLICA IDENTITY FULL`, mirroring
+  `012_realtime_comments.sql`. `TopBar` has subscribed to this table since it
+  was created in 064, but the table was never a publication member, so nothing
+  was ever broadcast and the bell updated only on its 60-second poll. Safe to
+  apply any time and safe to merge before applying — the poll is the existing
+  behaviour, so the code does not depend on this migration, it just gets slower
+  without it. Idempotent.
+
+  **Numbered 116, not 115.** `115_track_collaborators.sql` already exists on
+  branch `claude/code-review-agent-integration-cdf964`. Two branches claiming
+  one number is the collision this file warns about; check
+  `git log --all -- supabase/migrations/` before naming the next one.

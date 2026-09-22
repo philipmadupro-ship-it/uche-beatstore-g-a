@@ -225,7 +225,7 @@ export function SectionRenderer({
                       ) : null}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12px] text-white/80">{track.title}</span>
+                      <span className="block truncate text-[11px] text-white/80">{track.title}</span>
                       <span className="block font-mono text-[10px] text-white/30">
                         {track.bpm ? `${track.bpm} BPM` : ''}{track.key ? ` · ${track.key}` : ''}
                       </span>
