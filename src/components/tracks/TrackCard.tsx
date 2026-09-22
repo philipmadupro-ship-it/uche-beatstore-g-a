@@ -11,6 +11,7 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { isInteractiveDragStartTarget, setTrackDragData } from '@/lib/dnd';
 import { SessionFitMarkers } from './SessionFitMarkers';
+import { RowWaveform } from './RowWaveform';
 import { useOfflineTrack } from '@/hooks/useOfflineCache';
 import { offlineActionLabel } from '@/lib/offline/status';
 import { toast } from '@/hooks/useToast';
@@ -597,6 +598,18 @@ function TrackCardImpl({
                 {genreMoodTags.length === 0 && !track.store_listed ? (
                   <span className="text-[11px] text-white/20">—</span>
                 ) : null}
+              </div>
+            );
+          }
+          if (col.id === 'waveform') {
+            return (
+              <div key={col.id} className="relative z-10 hidden min-w-0 items-center md:flex">
+                <RowWaveform
+                  trackId={track.id}
+                  peaksUrl={track.peaks_url}
+                  title={track.title}
+                  onPlay={onPlayClick}
+                />
               </div>
             );
           }

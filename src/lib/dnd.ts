@@ -224,5 +224,9 @@ export function isTrackDrag(e: React.DragEvent): boolean {
  */
 export function isInteractiveDragStartTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
-  return target.closest('button, input, textarea, select, a, [contenteditable="true"]') !== null;
+  // `[role="slider"]` covers the row waveform: pressing on it means seek, and
+  // without this a press-and-move there started dragging the whole row.
+  return (
+    target.closest('button, input, textarea, select, a, [contenteditable="true"], [role="slider"]') !== null
+  );
 }

@@ -55,6 +55,7 @@ import { DropCountdown } from '@/components/store/DropCountdown';
 import { logPlay } from '@/lib/buyer-session';
 import { BeatCard } from '@/components/store/BeatCard';
 import { RowCallbackCache } from '@/lib/ui/stable-row-callbacks';
+import { canLoadMore, isCurrentRequest, mergeLoadedPage } from '@/lib/store/load-more';
 import { BeatPreviewDrawer } from '@/components/store/BeatPreviewDrawer';
 import { trackStoreEvent } from '@/lib/store/track-event';
 
@@ -467,16 +468,20 @@ function StorePage() {
     setPageInfo(storeQuery.data?.pageInfo ?? { hasMore: false, nextCursor: null });
   }, [storeQuery.data?.pageInfo]);
   const initialTracks = useMemo(() => storeQuery.data?.tracks ?? [], [storeQuery.data?.tracks]);
-  const tracks = useMemo(() => {
-    const seen = new Set<string>();
-    const merged: StoreTrack[] = [];
-    for (const track of [...initialTracks, ...loadedMoreTracks]) {
-      if (!track?.id || seen.has(track.id)) continue;
-      seen.add(track.id);
-      merged.push(track);
-    }
-    return merged;
-  }, [initialTracks, loadedMoreTracks]);
+  // Merged, de-duplicated and capped by lib/store/load-more — this used to
+  // grow by 80 on every press with no upper bound.
+  const { tracks, capped: loadMoreCapped } = useMemo(
+    () => mergeLoadedPage(initialTracks, loadedMoreTracks),
+    [initialTracks, loadedMoreTracks],
+  );
+
+  // The query currently on screen, for rejecting a stale "load more". Updated
+  // in an effect, NOT assigned during render: writing a ref during render is
+  // a React Compiler lint error, and lint errors block CI.
+  const currentStoreQueryRef = useRef(serverStoreQuery);
+  useEffect(() => {
+    currentStoreQueryRef.current = serverStoreQuery;
+  }, [serverStoreQuery]);
   const licenses = useMemo(() => storeQuery.data?.licenses ?? [], [storeQuery.data?.licenses]);
   const featuredPlaylists = useMemo(() => storeQuery.data?.featuredPlaylists ?? [], [storeQuery.data?.featuredPlaylists]);
   const featuredProjects = useMemo(() => storeQuery.data?.featuredProjects ?? [], [storeQuery.data?.featuredProjects]);
@@ -490,25 +495,34 @@ function StorePage() {
   }, [facetsQuery.isError]);
 
   const loadMoreTracks = useCallback(async () => {
-    if (!pageInfo.hasMore || !pageInfo.nextCursor || loadingMore) return;
+    if (!canLoadMore(pageInfo, tracks.length) || loadingMore) return;
+    // Remember which query this page is for. If the buyer changes a filter
+    // before it arrives, the page has already been reset for the new query,
+    // and appending this response would put the OLD filter's beats into the
+    // new results and overwrite the cursor with one from the wrong query.
+    const issuedFor = serverStoreQuery;
     setLoadingMore(true);
     try {
-      const params = new URLSearchParams(serverStoreQuery);
-      params.set('cursor', pageInfo.nextCursor);
+      const params = new URLSearchParams(issuedFor);
+      params.set('cursor', pageInfo.nextCursor!);
       const res = await fetch(`/api/store?${params.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (!isCurrentRequest(issuedFor, currentStoreQueryRef.current)) return;
       setLoadedMoreTracks((current) => [
         ...current,
         ...normalizeStoreTracks((data.tracks as StoreTrack[]) ?? []),
       ]);
       setPageInfo((data.pageInfo ?? { hasMore: false, nextCursor: null }) as StorePageInfo);
     } catch {
-      toast.error("Couldn't load more beats");
+      // A failure for a query the buyer has already left is not worth a toast.
+      if (isCurrentRequest(issuedFor, currentStoreQueryRef.current)) {
+        toast.error("Couldn't load more beats");
+      }
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, pageInfo.hasMore, pageInfo.nextCursor, serverStoreQuery]);
+  }, [loadingMore, pageInfo, serverStoreQuery, tracks.length]);
   useEffect(() => {
     try {
       const stored = localStorage.getItem('store-view-mode');
@@ -1652,17 +1666,28 @@ function StorePage() {
                 />
               )}
 
-              {pageInfo.hasMore && (
+              {canLoadMore(pageInfo, tracks.length) && (
                 <div className="mt-8 flex justify-center">
                   <button
                     type="button"
                     onClick={loadMoreTracks}
                     disabled={loadingMore}
-                    className="tap inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-[#14110D] px-6 text-[10px] font-mono uppercase tracking-[0.2em] text-white transition-colors hover:border-[#FFFFFF]/40 hover:text-white disabled:cursor-wait disabled:opacity-60"
+                    aria-busy={loadingMore}
+                    className="tap inline-flex min-h-11 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] px-6 text-[10px] font-mono uppercase tracking-[0.2em] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:cursor-wait disabled:opacity-40"
                   >
                     {loadingMore ? 'Loading beats...' : 'Load more beats'}
                   </button>
                 </div>
+              )}
+
+              {/* The cap, not the catalogue, ended the list. Say so, and point at
+                  the filters — they run across the whole catalogue server-side,
+                  so narrowing finds a beat that another page of scrolling
+                  would not. */}
+              {loadMoreCapped && pageInfo.hasMore && (
+                <p className="mt-8 text-center text-[11px] text-white/60" role="status">
+                  Showing the first {tracks.length} beats. Narrow it down with the filters to find the rest.
+                </p>
               )}
             </>
           )}

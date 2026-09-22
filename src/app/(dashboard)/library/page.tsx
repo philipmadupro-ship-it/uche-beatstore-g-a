@@ -48,6 +48,9 @@ import { ColumnPicker } from '@/components/library/ColumnPicker';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import type { TrackStatsMap } from '@/lib/library/track-stats';
 import { RowCallbackCache } from '@/lib/ui/stable-row-callbacks';
+import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
+import { enqueuePrefetch } from '@/lib/audio/preview-cache';
+import { prefetchItemsFor } from '@/lib/audio/prefetch-items';
 
 // Sort modes — added so the library is browsable beyond "newest first."
 // `recent` reflects upload time; `recently_played` would need a history
@@ -929,6 +932,25 @@ export default function LibraryPage() {
     [playClickCache],
   );
 
+  // Arrow-key auditioning (adapted from splicedd). Moving the cursor PLAYS the
+  // row — judging a beat in a second and moving on is the point, and making
+  // the producer press Enter on every one would halve the speed of it.
+  // `playTrackRef.current` is read when the key is pressed, not during render.
+  const auditionTrack = useCallback((t: Track) => playTrackRef.current(t), []);
+  // Warm the rows either side, so whichever way the producer presses next is
+  // already loading. Goes through the shared rule that never prefetches a
+  // master, so this path cannot pull a full WAV into the preview cache.
+  const warmNeighbours = useCallback((neighbours: Track[]) => {
+    const items = prefetchItemsFor(neighbours);
+    if (items.length) enqueuePrefetch(items);
+  }, []);
+  const listNav = useListKeyboardNavigation({
+    items: pageTracks,
+    onMove: auditionTrack,
+    onActivate: auditionTrack,
+    onNeighbours: warmNeighbours,
+  });
+
   // Map library tracks to the PortfolioTrack shape MusicPortfolio expects.
   const portfolioTracks = useMemo<PortfolioTrack[]>(() => {
     return filtered.map((track) => ({
@@ -1479,11 +1501,30 @@ export default function LibraryPage() {
               })}
               <span />
             </div>
+            {/* Owns ↑/↓ for moving between rows. Wraps the rows only — not the
+                sort header above — so arrows on a column header never move
+                the list. A labelled group rather than a listbox: every row
+                holds its own buttons and menus, and a listbox's options may
+                not contain interactive children, so declaring one would be a
+                promise the markup breaks. */}
+            <div
+              role="group"
+              aria-label="Tracks. Use the up and down arrow keys to audition, Enter to play."
+              tabIndex={0}
+              onKeyDown={listNav.onKeyDown}
+              className="rounded-xl outline-none focus-visible:ring-1 focus-visible:ring-white/30"
+            >
             {pageTracks.map((t, i) => {
               const absIdx = currentPage * PAGE_SIZE + i;
+              const isCursor = listNav.activeIndex === i;
               return (
-                <TrackCard
+                <div
                   key={t.id}
+                  data-row-index={i}
+                  aria-current={isCursor ? 'true' : undefined}
+                  className={isCursor ? 'rounded-xl ring-1 ring-white/30' : undefined}
+                >
+                <TrackCard
                   track={t}
                   index={absIdx + 1}
                   columns={activeColumns}
@@ -1504,8 +1545,10 @@ export default function LibraryPage() {
                     isLastInOrder: absIdx === filtered.length - 1,
                   } : {})}
                 />
+                </div>
               );
             })}
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">

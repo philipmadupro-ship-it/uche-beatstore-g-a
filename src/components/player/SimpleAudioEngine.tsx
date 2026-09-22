@@ -33,6 +33,7 @@ import { getOfflineSrc } from '@/lib/offline/audio-cache';
 import { getPreviewSrc, peekPreviewSrc } from '@/lib/audio/preview-cache';
 import { useSessionContext } from '@/hooks/useSessionContext';
 import { previewAdjustment } from '@/lib/audio/session-match';
+import { seekSeconds } from '@/lib/audio/waveform-path';
 
 export function SimpleAudioEngine() {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -165,12 +166,14 @@ export function SimpleAudioEngine() {
   useEffect(() => {
     const a = audioRef.current;
     if (!a || seekTarget == null) return;
-    const dur = a.duration;
-    if (isFinite(dur) && dur > 0) {
-      a.currentTime = Math.max(0, Math.min(1, seekTarget)) * dur;
-    }
+    // Falls back to the track's stored duration when the element has no
+    // metadata yet — see `seekSeconds`. Without it, seeking a track that is
+    // not already playing (load and seek in one click, e.g. on a row
+    // waveform) was silently dropped and playback started from zero.
+    const seconds = seekSeconds(seekTarget, a.duration, currentTrack?.duration_seconds);
+    if (seconds != null) a.currentTime = seconds;
     usePlayer.setState({ seekTarget: null });
-  }, [seekTarget]);
+  }, [seekTarget, currentTrack?.duration_seconds]);
 
   return (
     <audio
