@@ -33,9 +33,20 @@ interface EmbedTrack {
   peaks_url?: string | null;
 }
 
-function proxied(src: string | null | undefined): string | null {
-  if (!src) return null;
-  return src.startsWith('/') ? src : `/api/audio?src=${encodeURIComponent(src)}`;
+/**
+ * The embed is PUBLIC — it renders in a stranger's page (CSP frame-ancestors
+ * `*`) with no session at all.
+ *
+ * It used to wrap every absolute URL in `/api/audio`, which is the producer's
+ * authenticated proxy: an anonymous viewer got a 401 and silent audio, and the
+ * only reason it ever appeared to work was a signed-in producer previewing
+ * their own embed. What arrives here is already public — `/api/store/[id]`
+ * runs `redactPublicTrackMedia`, which replaces `audio_url` with the public
+ * preview derivative (a CDN URL when one is configured, otherwise
+ * `/api/store/preview/[id]`) — so it is used exactly as given.
+ */
+function publicMedia(src: string | null | undefined): string | null {
+  return src || null;
 }
 
 function getTopLevelWindowState(): boolean {
@@ -109,14 +120,14 @@ function EmbedCard({ track }: { track: EmbedTrack }) {
   const [progress, setProgress] = useState(0); // 0..1
   const [peaks, setPeaks] = useState<number[] | null>(null);
 
-  const src = proxied(track.audio_url);
+  const src = publicMedia(track.audio_url);
   const storeUrl = `/store/${track.id}`;
 
   // Pull the precomputed peaks sidecar for a static waveform preview.
   useEffect(() => {
     if (!track.peaks_url) return;
     let alive = true;
-    fetch(proxied(track.peaks_url)!)
+    fetch(publicMedia(track.peaks_url)!)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!alive || !data) return;

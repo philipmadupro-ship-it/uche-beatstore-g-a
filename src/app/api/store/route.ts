@@ -5,6 +5,16 @@ import { errorMessage } from '@/lib/errors';
 import { artworkThemeFromProfile, loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
 import { resolveStoreOwner } from '@/lib/store/owner';
 import { redactPublicTrackMedia } from '@/lib/store/public-media';
+import { POPULAR_ORDER_COLUMNS, comparePopularity } from '@/lib/store/popularity';
+import {
+  bpmFilterExpression,
+  bpmInRange,
+  parseBpmRange,
+  parsePriceRange,
+  parseTrackIds,
+  priceFilterExpression,
+  priceInRange,
+} from '@/lib/store/server-filters';
 
 export const runtime = 'nodejs';
 // force-dynamic: no static pre-render; every request hits the DB so
@@ -148,6 +158,13 @@ function parseStoreFilters(req: NextRequest) {
     duration: cleanParam(params.get('duration')),
     freeOnly: params.get('free') === '1' || params.get('free') === 'true',
     newThisWeek: params.get('new') === '1' || params.get('new') === 'true',
+    // BPM, price and `ids` (the buyer's wishlist) used to be applied only in
+    // the browser, over the pages already fetched — so they searched a slice
+    // of the catalogue and reported the answer as if it were the whole thing.
+    // See lib/store/server-filters.
+    bpmRange: parseBpmRange(params.get('bpmMin'), params.get('bpmMax')),
+    priceRange: parsePriceRange(params.get('priceMin'), params.get('priceMax')),
+    ids: parseTrackIds(params.get('ids')),
     sort: sort || 'newest',
   };
 }
@@ -156,10 +173,20 @@ function localFilterAndSortTracks(
   tracks: StoreTrackRow[],
   tagsByTrack: Record<string, Array<{ tag: string; category: string | null }>>,
   filters: ReturnType<typeof parseStoreFilters>,
+  defaultLeasePrice?: number | null,
 ) {
   const q = filters.q.toLowerCase();
+  const pinned = filters.ids == null ? null : new Set(filters.ids);
   const filtered = tracks.filter((track) => {
     const tags = tagsByTrack[track.id] ?? [];
+    if (pinned && !pinned.has(track.id)) return false;
+    if (filters.bpmRange && !bpmInRange(track.bpm as number | null, filters.bpmRange)) return false;
+    if (
+      filters.priceRange &&
+      !priceInRange(track.lease_price_usd as number | null, defaultLeasePrice, filters.priceRange)
+    ) {
+      return false;
+    }
     if (filters.type === 'beats' && track.type !== 'beat' && track.type !== 'instrumental') return false;
     if (filters.type && filters.type !== 'all' && filters.type !== 'beats' && track.type !== filters.type) return false;
     if (filters.freeOnly && !track.free_download_enabled) return false;
@@ -205,7 +232,8 @@ function localFilterAndSortTracks(
       sorted.sort((a, b) => String(a.title ?? '').localeCompare(String(b.title ?? '')));
       break;
     case 'popular':
-      sorted.sort((a, b) => Number(b.rating ?? 0) - Number(a.rating ?? 0));
+      // Same rule as the browser and the Supabase path — lib/store/popularity.
+      sorted.sort(comparePopularity);
       break;
     case 'newest':
     default:
@@ -241,7 +269,15 @@ export async function GET(req: NextRequest) {
         if (!localTagsByTrack[row.track_id]) localTagsByTrack[row.track_id] = [];
         localTagsByTrack[row.track_id].push({ tag: row.tag, category: row.category ?? null });
       }
-      const filteredStoreTracks = localFilterAndSortTracks(allStoreTracks, localTagsByTrack, filters);
+      const localDefaultLeasePrice = (getLocalRows<CreatorProfileRow>('creator_profiles')[0] as
+        | { license_lease_price_usd?: number | null }
+        | undefined)?.license_lease_price_usd ?? null;
+      const filteredStoreTracks = localFilterAndSortTracks(
+        allStoreTracks,
+        localTagsByTrack,
+        filters,
+        localDefaultLeasePrice,
+      );
       const tracks = pagination
         ? filteredStoreTracks.slice(pagination.offset, pagination.offset + pagination.limit)
         : filteredStoreTracks;
@@ -333,6 +369,38 @@ export async function GET(req: NextRequest) {
     // values as filter separators).
     let safeSeller = safeSellerId(sellerId);
 
+    // A null `lease_price_usd` means "inherit the producer's default"
+    // (migration 021), so a price filter cannot be expressed against the
+    // tracks table alone — it needs a value that lives on the profile. The
+    // profile is otherwise read much further down, after the catalogue query,
+    // so when (and only when) a price filter is active it is read early here.
+    let defaultLeasePrice: number | null = null;
+    let defaultLeasePriceUnknown = false;
+    if (filters.priceRange) {
+      try {
+        const { data, error } = await admin
+          .from('creator_profiles')
+          .select('license_lease_price_usd')
+          .eq('user_id', sellerId ?? '')
+          .maybeSingle();
+        if (error) throw error;
+        const raw = (data as { license_lease_price_usd?: number | null } | null)
+          ?.license_lease_price_usd;
+        defaultLeasePrice = raw == null ? null : Number(raw);
+      } catch {
+        // Column missing on a partially-migrated database, or the profile row
+        // is unreadable. Say so rather than guessing zero: the expression
+        // builder then errs towards including unpriced tracks, and the
+        // browser narrows them with the default it already holds.
+        defaultLeasePriceUnknown = true;
+      }
+    }
+
+    // The wishlist lives in the buyer's own browser, so "favourites only" can
+    // only be answered if the ids are sent. An empty list is not the same as
+    // no filter: it means nothing is saved, and must match nothing.
+    const pinnedIds = filters.ids;
+
     // ── Tracks ─────────────────────────────────────────────────────────────
     // Try with store_sort_order first (migration 033). Fall back without it.
     let tracksAny: StoreTrackRow[] = [];
@@ -359,6 +427,7 @@ export async function GET(req: NextRequest) {
 
     await applyTagFilter('genre', filters.genre);
     await applyTagFilter('mood', filters.mood);
+    if (pinnedIds != null) intersectTrackIds(pinnedIds);
 
     const safeSearch = filters.q.replace(/[%,()]/g, ' ').trim();
     const applyTrackFilters = (query: StoreQuery): StoreQuery => {
@@ -371,6 +440,14 @@ export async function GET(req: NextRequest) {
       if (filters.freeOnly) next = next.eq('free_download_enabled', true);
       if (filters.newThisWeek) {
         next = next.gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
+      }
+      if (filters.bpmRange) next = next.or(bpmFilterExpression(filters.bpmRange));
+      if (filters.priceRange) {
+        next = next.or(
+          priceFilterExpression(filters.priceRange, defaultLeasePrice, {
+            defaultUnknown: defaultLeasePriceUnknown,
+          }),
+        );
       }
       if (filters.key) next = next.ilike('key', filters.key);
       if (filters.scale) next = next.ilike('scale', filters.scale);
@@ -399,8 +476,18 @@ export async function GET(req: NextRequest) {
           return query.order('lease_price_usd', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
         case 'title':
           return query.order('title', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
-        case 'popular':
-          return query.order('rating', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false });
+        case 'popular': {
+          // The columns come from lib/store/popularity so SQL and the JS
+          // comparator cannot drift into two different meanings of "popular".
+          // The `id` key is what makes the order total: without it two beats
+          // rated the same in the same second can swap between requests, and a
+          // row then shows up on two pages or on none as the offset passes it.
+          let ordered = query;
+          for (const { column, ascending, nullsFirst } of POPULAR_ORDER_COLUMNS) {
+            ordered = ordered.order(column, { ascending, nullsFirst });
+          }
+          return ordered;
+        }
         case 'newest':
         default:
           return includeStoreOrder

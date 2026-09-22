@@ -122,6 +122,26 @@ export const NotificationReadBodySchema = z.object({
 }).strict();
 export type NotificationReadBody = z.infer<typeof NotificationReadBodySchema>;
 
+// ── Track collaborators (migration 115) ────────────────────────────────
+//
+// `role` mirrors `title-metadata.ts`'s `CollaboratorRole` — kept as a plain
+// string union here rather than importing that module's type, so this
+// contract has no dependency on the parser. The column itself is free text
+// (see the migration), a producer typing a role that isn't one of these three
+// still writes fine; the enum only bounds what THIS route's POST accepts.
+export const COLLABORATOR_ROLES = ['producer', 'feature', 'collaborator'] as const;
+
+export const CollaboratorCreateBodySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  role: z.enum(COLLABORATOR_ROLES),
+}).strict();
+export type CollaboratorCreateBody = z.infer<typeof CollaboratorCreateBodySchema>;
+
+export const CollaboratorDeleteBodySchema = z.object({
+  id: z.string().min(1),
+}).strict();
+export type CollaboratorDeleteBody = z.infer<typeof CollaboratorDeleteBodySchema>;
+
 // ── Projects ────────────────────────────────────────────────────────────
 
 export const PROJECT_STATUSES = ['in_progress', 'final', 'archived'] as const;

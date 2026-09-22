@@ -13,8 +13,6 @@ export const VISUAL_PEAK_MAX = 1;
 export interface DawWaveformBar {
   height: number;
   index: number;
-  isBeat: boolean;
-  isDownbeat: boolean;
   isTransient: boolean;
 }
 
@@ -50,18 +48,40 @@ export function syntheticVisualPeaks(trackId: string, count: number): number[] {
   });
 }
 
+/**
+ * Downsample to `targetCount` values by taking the peak of each bucket, then
+ * normalize into the visible `[VISUAL_PEAK_MIN, VISUAL_PEAK_MAX]` range.
+ *
+ * This used to sample the value at a computed fractional index and lerp
+ * between its two neighbours. A kick sitting in the middle of a bucket —
+ * between the two points actually sampled — got averaged toward silence as
+ * often as it landed on a peak, so the browse-surface waveform read as soft
+ * noise instead of a beat. `lib/cover/waveform.ts`'s `resamplePeaks` documents
+ * the identical failure mode for the cover-art waveform and fixes it the same
+ * way: take the max magnitude inside each bucket, never a point sample or an
+ * interpolation between two of them. That module lives in a different
+ * feature domain (cover-art) and isn't in scope to edit here, so the bucket
+ * algorithm is reimplemented rather than imported — the two call sites should
+ * not depend on each other across domains, but the fix is the same fix.
+ */
 export function resampleVisualPeaks(peaks: number[], targetCount: number): number[] {
   if (targetCount <= 0) return [];
   if (peaks.length === 0) return Array(targetCount).fill(0.5);
 
   const output: number[] = [];
   for (let i = 0; i < targetCount; i += 1) {
-    const sourceIndex = targetCount === 1 ? 0 : (i / (targetCount - 1)) * (peaks.length - 1);
-    const low = Math.floor(sourceIndex);
-    const high = Math.min(low + 1, peaks.length - 1);
-    const t = sourceIndex - low;
-    const raw = Math.abs(peaks[low] ?? 0) * (1 - t) + Math.abs(peaks[high] ?? 0) * t;
-    output.push(raw);
+    const start = (i / targetCount) * peaks.length;
+    const end = ((i + 1) / targetCount) * peaks.length;
+    const from = Math.floor(start);
+    // At least one sample per bucket when upsampling past the source length.
+    const to = Math.max(from + 1, Math.ceil(end));
+
+    let peak = 0;
+    for (let j = from; j < to && j < peaks.length; j += 1) {
+      const value = Math.abs(peaks[j] ?? 0);
+      if (value > peak) peak = value;
+    }
+    output.push(peak);
   }
 
   const max = Math.max(...output, 1e-6);
@@ -69,31 +89,41 @@ export function resampleVisualPeaks(peaks: number[], targetCount: number): numbe
 }
 
 /**
- * Beat-grid + transient annotation for the compact pill waveform.
+ * Transient annotation for the compact pill waveform.
  *
- * `isBeat`/`isDownbeat` are positional by design — a 1/4 and 1/16 grid, which
- * is how a DAW draws its ruler. `isTransient` is derived from actual peak
- * heights relative to their neighbours.
+ * `isTransient` is derived from actual peak heights relative to their
+ * neighbours, so it carries real audio information.
  *
- * This function deliberately carries NO frequency information. It used to
- * expose a `band` field assigned via `index % 5`, which looked spectral while
- * being purely positional; it was only ever read by one component and has been
- * removed. Real spectral colour lives in `spectral-peaks.ts`, driven by actual
- * band energy.
+ * This function used to also emit `isBeat`/`isDownbeat`, a 1/4 and 1/16 grid
+ * computed from `index % 4` / `index % 16` — arithmetic on the bar's position
+ * in the resampled array, not on tempo, time, or anything about the audio.
+ * Two bars 16 apart are only "a bar apart" if BAR_COUNT bars happen to span a
+ * whole number of bars at the track's actual BPM, which isn't true in
+ * general — the grid drew the same shape over a 90 BPM beat and a 174 BPM
+ * one. CLAUDE.md documents the identical mistake in the cover-art waveform
+ * (bands from `index % 6` / `index % 3`) and calls it out as a defect class:
+ * positional arithmetic that "looked" musical while carrying none of the
+ * track's actual timing.
+ *
+ * A real grid would need the track's BPM and the clip's duration to place
+ * bar/downbeat lines at actual time positions, but the only current caller
+ * (`MiniWaveform`, rendered from `PlayerBar`) has neither in scope to plumb
+ * through — `PlayerBar` isn't part of this change. Rather than keep a fake
+ * grid that pretends to be musical, it's removed outright; `isTransient`
+ * (real, peak-derived) is the only annotation this module makes now. If a
+ * true tempo-locked grid is wanted later, it belongs in a function that takes
+ * `bpm` and `durationSeconds` as inputs, not one that infers time from array
+ * index.
  */
 export function buildDawWaveformBars(peaks: number[]): DawWaveformBar[] {
   return peaks.map((height, index) => {
     const previous = peaks[index - 1] ?? height;
     const next = peaks[index + 1] ?? height;
     const localAverage = (previous + height + next) / 3;
-    const isBeat = index % 4 === 0;
-    const isDownbeat = index % 16 === 0;
     const isTransient = height >= 0.72 && height >= localAverage * 1.16;
     return {
       height,
       index,
-      isBeat,
-      isDownbeat,
       isTransient,
     };
   });

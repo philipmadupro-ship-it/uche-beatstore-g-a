@@ -1,11 +1,13 @@
 'use client';
 
+import { memo } from 'react';
 import { Music, ExternalLink } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { fmtDur } from './helpers';
 import type { StoreTrack } from './types';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
+import { SessionFitMarkers } from '@/components/tracks/SessionFitMarkers';
 
 interface Props {
   track: StoreTrack;
@@ -23,7 +25,9 @@ interface Props {
   accentColor: string;
 }
 
-export function BeatListRow({
+/** Memoised — see the equivalent note on `BeatCard`. Effective only when the
+ *  caller (currently `StoreListView`) passes stable callback references. */
+function BeatListRowImpl({
   track, index, priceLease, priceExclusive, isCurrent, isPlaying, isPreview,
   onPlay, onPreview, onAddLease, onAddExclusive, onFreeDownload, accentColor,
 }: Props) {
@@ -121,6 +125,14 @@ export function BeatListRow({
           </div>
         )}
 
+        {/* Only ever renders for the producer's own browser — the session
+            context is a localStorage preference, never a buyer's, so this
+            is invisible on every visit but the producer's own. Renders
+            nothing at all when no session is set. */}
+        <div className="hidden md:flex shrink-0 items-center">
+          <SessionFitMarkers track={track} />
+        </div>
+
         {track.has_wav && (
           <div className="hidden md:flex shrink-0 items-center">
             <span className="rounded-sm bg-white/[0.06] border border-white/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-[0.15em] text-white/60">
@@ -186,3 +198,5 @@ export function BeatListRow({
     </div>
   );
 }
+
+export const BeatListRow = memo(BeatListRowImpl);

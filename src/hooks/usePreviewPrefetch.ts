@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { enqueuePrefetch } from '@/lib/audio/preview-cache';
+import { prefetchItemsFor } from '@/lib/audio/prefetch-items';
 
 type Prefetchable = { id?: string | null; audio_url?: string | null };
 
@@ -18,11 +19,9 @@ export function usePreviewPrefetch(tracks: Prefetchable[] | null | undefined): v
     if (!tracks?.length) return;
     // Defer to idle so prefetch never competes with first paint / interaction.
     const run = () => {
-      const items = tracks
-        .filter((t): t is { id: string; audio_url: string } =>
-          !!t?.id && !!t?.audio_url && /^https?:\/\//i.test(t.audio_url),
-        )
-        .map((t) => ({ id: t.id, url: t.audio_url }));
+      // The never-prefetch-a-master rule lives in lib/audio/prefetch-items so
+      // keyboard auditioning applies the same one.
+      const items = prefetchItemsFor(tracks);
       if (items.length) enqueuePrefetch(items);
     };
     const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;

@@ -48,6 +48,7 @@ service-role key can read the schema's effects but cannot run DDL):
 | `112_backfill_buyer_contacts.sql` | **not applied** | 1 paid buyer email has no contact |
 | `113_store_layout.sql` | **not applied** | `creator_profiles.store_layout` missing |
 | `114_share_price_overrides.sql` | no-op on prod | columns already exist, added outside migrations |
+| `115_track_collaborators.sql` | **not applied** | new table; `track_collaborators` missing |
 | `116_notifications_realtime.sql` | **not applied** | new — adds `notifications` to the realtime publication |
 
 What each still-pending one does:
@@ -56,6 +57,11 @@ What each still-pending one does:
   for any paid buyer email that has none, and marks every contact with a paid
   purchase `crm_status='customer'` / `buyer_pipeline_status='purchased'`. Only
   fills NULLs. Excludes the `unknown@invalid` sentinel.
+- `115_track_collaborators.sql` — new table holding who else is credited on a
+  track, written from the filename credits `lib/upload/title-metadata` parses
+  at upload. Nothing reads it until it is applied; the upload path treats a
+  failed write as non-fatal, so an unapplied migration costs the credits, not
+  the upload.
 - `113_store_layout.sql` — adds `creator_profiles.store_layout` (jsonb) for the
   Store Editor's Design mode. `/api/store` reads it in its own query, so the
   storefront survives without it, but the builder has nowhere to save.
@@ -66,7 +72,7 @@ Update this table when a run is confirmed.
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 114 (next new migration = 115). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 115 (next new migration = 116). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch

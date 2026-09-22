@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Track } from '@/lib/types';
 import { Music, Star } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
@@ -8,8 +8,9 @@ import { ActionMenu } from '@/components/ui/ActionMenu';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { setTrackDragData } from '@/lib/dnd';
+import { isInteractiveDragStartTarget, setTrackDragData } from '@/lib/dnd';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { SessionFitMarkers } from './SessionFitMarkers';
 
 interface TrackGridCardProps {
   track: Track;
@@ -31,7 +32,9 @@ const TYPE_COLOR: Record<string, string> = {
   remix: 'text-[#eca9a9]',
 };
 
-export function TrackGridCard({
+/** See the same note on `TrackCard` — memoised, but only effective when the
+ *  parent (library page) hands it stable callback props. */
+function TrackGridCardImpl({
   track,
   onClickDetails,
   onPlayClick,
@@ -82,10 +85,24 @@ export function TrackGridCard({
     <div
       className={`group relative flex flex-col cursor-pointer ${selected ? 'ring-2 ring-white/60 rounded-xl' : ''}`}
       onClick={handleCardClick}
+      // Native HTML5 draggable — also carries a `DownloadURL` entry (see
+      // lib/dnd.ts) so dropping the card onto the desktop or a DAW window
+      // saves the real audio file, not just the title as text.
       draggable
       onDragStart={(e) => {
+        // The star rating buttons and the ⋯ menu trigger live inside this
+        // draggable card; a press-and-drag starting on one of them would
+        // otherwise still be picked up by this ancestor's `draggable`.
+        if (isInteractiveDragStartTarget(e.target)) {
+          e.preventDefault();
+          return;
+        }
         e.stopPropagation();
-        setTrackDragData(e, { id: track.id, title: track.title, cover_url: track.cover_url ?? null });
+        setTrackDragData(
+          e,
+          { id: track.id, title: track.title, cover_url: track.cover_url ?? null },
+          track.audio_url,
+        );
       }}
     >
       {/* Cover art */}
@@ -173,6 +190,10 @@ export function TrackGridCard({
               {track.key}{isMinor ? 'm' : ''}
             </span>
           )}
+          {/* Whether this fits the session the producer set in the TopBar.
+              Renders nothing at all when no session is set, so the card is
+              unchanged for anyone not using it. */}
+          <SessionFitMarkers track={track} />
         </div>
 
         {/* More button — top right on hover. Portaled via Popover so the menu
@@ -248,3 +269,5 @@ export function TrackGridCard({
     </div>
   );
 }
+
+export const TrackGridCard = memo(TrackGridCardImpl);

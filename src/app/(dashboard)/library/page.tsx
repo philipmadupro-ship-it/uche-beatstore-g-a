@@ -48,6 +48,10 @@ import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { ColumnPicker } from '@/components/library/ColumnPicker';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import type { TrackStatsMap } from '@/lib/library/track-stats';
+import { RowCallbackCache } from '@/lib/ui/stable-row-callbacks';
+import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
+import { enqueuePrefetch } from '@/lib/audio/preview-cache';
+import { prefetchItemsFor } from '@/lib/audio/prefetch-items';
 
 // Sort modes — added so the library is browsable beyond "newest first."
 // `recent` reflects upload time; `recently_played` would need a history
@@ -884,6 +888,79 @@ export default function LibraryPage() {
     }
   };
 
+  // ── Stable row callbacks for TrackCard / TrackGridCard ──────────────────
+  // Every row prop below used to be a fresh arrow function built inline in
+  // the `.map()` (`onClickDetails={(track) => setSelectedTrack(track)}`,
+  // `onPlayClick={() => playTrack(t)}`). Both TrackCard and TrackGridCard are
+  // now `memo`-wrapped, and `memo` does nothing against a prop that changes
+  // reference on every render — which an inline arrow always does. See
+  // `lib/ui/stable-row-callbacks.ts` for why the cache keys on the track
+  // object's identity rather than its content.
+  //
+  // `playTrack`, `handleDeleteTrack` and `fetchTracks` close over
+  // `filtered`/`tracks` and are redefined every render, so they can't be
+  // depended on directly inside a `useCallback([])`. Refs give a callback
+  // that never changes identity while always invoking the CURRENT
+  // implementation — the standard "latest ref" pattern, safer here than
+  // guessing a dependency array for functions this large.
+  const playTrackRef = useRef(playTrack);
+  playTrackRef.current = playTrack;
+  const handleDeleteTrackRef = useRef(handleDeleteTrack);
+  handleDeleteTrackRef.current = handleDeleteTrack;
+  const fetchTracksRef = useRef(fetchTracks);
+  fetchTracksRef.current = fetchTracks;
+
+  // `onClickDetails` / `onShare` / `onSelectChange` already take the track as
+  // an argument, so they can be hoisted directly with an empty dependency
+  // array — they only ever call a `useState` setter, and setters are
+  // guaranteed stable by React.
+  const handleClickDetails = useCallback((track: Track) => setSelectedTrack(track), []);
+  const handleShareTrack = useCallback((track: Track) => setShareTarget(track), []);
+  const handleDeleteTrackRow = useCallback((track: Track) => { void handleDeleteTrackRef.current(track); }, []);
+  const handleSelectChange = useCallback((track: Track, sel: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (sel) next.add(track.id); else next.delete(track.id);
+      return next;
+    });
+  }, []);
+  const handleChangedRow = useCallback(() => { void fetchTracksRef.current(); }, []);
+
+  // `onPlayClick` takes no track argument (its signature is shared with the
+  // project/playlist pages, which this task doesn't touch), so the per-row
+  // closure that captures `t` can't be eliminated — only kept stable per
+  // row via the cache, rebuilt for a row only when that row's own track
+  // object changes identity (an edit/refetch), not on every unrelated
+  // render.
+    // Lazy `useState` rather than `useRef`: the cache must be READ during
+  // render to build the rows, which the React Compiler rule forbids for a
+  // ref, and `useRef(new X())` also constructs a fresh cache on every
+  // render only to discard it. The initialiser runs once.
+  const [playClickCache] = useState(() => new RowCallbackCache<Track>());
+  const getPlayClickHandler = useCallback(
+    (track: Track) => playClickCache.get(track.id, 'play', track, (t) => () => playTrackRef.current(t)),
+    [playClickCache],
+  );
+
+  // Arrow-key auditioning (adapted from splicedd). Moving the cursor PLAYS the
+  // row — judging a beat in a second and moving on is the point, and making
+  // the producer press Enter on every one would halve the speed of it.
+  // `playTrackRef.current` is read when the key is pressed, not during render.
+  const auditionTrack = useCallback((t: Track) => playTrackRef.current(t), []);
+  // Warm the rows either side, so whichever way the producer presses next is
+  // already loading. Goes through the shared rule that never prefetches a
+  // master, so this path cannot pull a full WAV into the preview cache.
+  const warmNeighbours = useCallback((neighbours: Track[]) => {
+    const items = prefetchItemsFor(neighbours);
+    if (items.length) enqueuePrefetch(items);
+  }, []);
+  const listNav = useListKeyboardNavigation({
+    items: pageTracks,
+    onMove: auditionTrack,
+    onActivate: auditionTrack,
+    onNeighbours: warmNeighbours,
+  });
+
   // Map library tracks to the PortfolioTrack shape MusicPortfolio expects.
   const portfolioTracks = useMemo<PortfolioTrack[]>(() => {
     return filtered.map((track) => ({
@@ -1447,28 +1524,43 @@ export default function LibraryPage() {
               })}
               <span />
             </div>
+            {/* Owns ↑/↓ for moving between rows. Wraps the rows only — not the
+                sort header above — so arrows on a column header never move
+                the list. A labelled group rather than a listbox: every row
+                holds its own buttons and menus, and a listbox's options may
+                not contain interactive children, so declaring one would be a
+                promise the markup breaks. */}
+            <div
+              role="group"
+              aria-label="Tracks. Use the up and down arrow keys to audition, Enter to play."
+              tabIndex={0}
+              onKeyDown={listNav.onKeyDown}
+              className="rounded-xl outline-none focus-visible:ring-1 focus-visible:ring-white/30"
+            >
             {pageTracks.map((t, i) => {
               const absIdx = currentPage * PAGE_SIZE + i;
+              const isCursor = listNav.activeIndex === i;
               return (
-                <TrackCard
+                <div
                   key={t.id}
+                  data-row-index={i}
+                  aria-current={isCursor ? 'true' : undefined}
+                  className={isCursor ? 'rounded-xl ring-1 ring-white/30' : undefined}
+                >
+                <TrackCard
                   track={t}
                   index={absIdx + 1}
                   columns={activeColumns}
                   columnStats={columnStats}
-                  onClickDetails={(track) => setSelectedTrack(track)}
-                  onPlayClick={() => playTrack(t)}
-                  onDelete={(track) => handleDeleteTrack(track)}
-                  onShare={(track) => setShareTarget(track)}
+                  onClickDetails={handleClickDetails}
+                  onPlayClick={getPlayClickHandler(t)}
+                  onDelete={handleDeleteTrackRow}
+                  onShare={handleShareTrack}
                   editable
-                  onChanged={() => { void fetchTracks(); }}
+                  onChanged={handleChangedRow}
                   selectable={selectMode && sortMode !== 'store_order'}
                   selected={selectedIds.has(t.id)}
-                  onSelectChange={(track, sel) => setSelectedIds((prev) => {
-                    const next = new Set(prev);
-                    if (sel) next.add(track.id); else next.delete(track.id);
-                    return next;
-                  })}
+                  onSelectChange={handleSelectChange}
                   {...(sortMode === 'store_order' ? {
                     onMoveUp: () => moveTrack(absIdx, absIdx - 1),
                     onMoveDown: () => moveTrack(absIdx, absIdx + 1),
@@ -1476,8 +1568,10 @@ export default function LibraryPage() {
                     isLastInOrder: absIdx === filtered.length - 1,
                   } : {})}
                 />
+                </div>
               );
             })}
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
@@ -1485,17 +1579,13 @@ export default function LibraryPage() {
               <TrackGridCard
                 key={t.id}
                 track={t}
-                onClickDetails={(track) => setSelectedTrack(track)}
-                onPlayClick={() => playTrack(t)}
-                onDelete={(track) => handleDeleteTrack(track)}
-                onShare={(track) => setShareTarget(track)}
+                onClickDetails={handleClickDetails}
+                onPlayClick={getPlayClickHandler(t)}
+                onDelete={handleDeleteTrackRow}
+                onShare={handleShareTrack}
                 selectable={selectMode}
                 selected={selectedIds.has(t.id)}
-                onSelectChange={(track, sel) => setSelectedIds((prev) => {
-                  const next = new Set(prev);
-                  if (sel) next.add(track.id); else next.delete(track.id);
-                  return next;
-                })}
+                onSelectChange={handleSelectChange}
               />
             ))}
           </div>

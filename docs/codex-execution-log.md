@@ -7994,6 +7994,125 @@ through a share link. See `supabase/MIGRATIONS.md`.
   on statically rendered pages.
 - `/api/store/beat-match` has no UI caller since `BeatMatchModal` was removed.
 
+## 2026-09-20 — Session matching, store filter correctness, filename credits
+
+Prompted by a read of `splicedd` (a Tauri sample browser) for techniques worth
+porting. Its Splice access layer — a hidden webview on `splice.com` to clear
+Cloudflare, plus an XOR descrambler for preview MP3s — was deliberately NOT
+ported: illegal, and web-impossible regardless. What was worth taking is its
+`project.ts`, which is pure and has no Splice IP in it.
+
+### New pure modules
+- **`lib/audio/key-normalize.ts`** — one canonical key/scale spelling.
+  `tracks.key` is unconstrained TEXT written by three sources that disagree:
+  the filename parser emits the flat the producer typed, `analyze.server`
+  indexes a sharps-only table, Essentia emits its own. `lib/store/filters.ts`
+  compared them as lowercased strings, so **every track stored as `Bb` was
+  invisible to a filter for `A#`** — and the facet sidebar offers both
+  spellings, because it lists the distinct values in the column. Normalising
+  now happens at the write boundary (`merge.ts`) and on read (the filter), so
+  existing rows are fixed without a backfill.
+- **`lib/audio/session-match.ts`** — `keyFit` / `tempoFit` /
+  `previewAdjustment`, adapted from splicedd's `project.ts`. Loops fold to
+  half- or double-time past a ×√2 stretch, √2 being the ratio at which
+  stretching up and stretching down are equally severe. Built on the existing
+  Camelot table in `lib/audio/harmonic.ts` rather than a second copy. Nothing
+  consumes it yet — the session-context UI is the next piece.
+  splicedd's second branch, varispeed-repitching one-shots to the session key,
+  was NOT ported: every track here is a finished arrangement.
+
+### Store filter correctness (the real bug)
+`bpmMin`/`bpmMax`, price and favourites were applied **only in the browser**,
+over `tracks` — the pages fetched so far. On a catalogue larger than one page
+they searched a slice and presented it as the whole answer, while
+`/api/store/facets` advertised the range of the entire catalogue. Now sent to
+the server (`lib/store/server-filters.ts`, pure + tested). Two semantics had to
+be reproduced exactly or the move would change what buyers see:
+- a track with **no BPM is kept** by a BPM filter (`bpm.is.null` is the first
+  `.or()` arm);
+- a null `lease_price_usd` means "inherit the profile default" (mig 021), not
+  free — so the default is read early, and when it can't be read the filter
+  errs towards **including** unpriced tracks, because the browser pass narrows
+  them a moment later whereas a wrongly excluded row never reaches the page.
+
+The wishlist lives in the buyer's own browser, so "favourites only" sends
+`?ids=`. An empty list is not the same as no filter: it matches nothing.
+`catalog-scale.test.ts` now asserts the BPM filter finds all 66 matching
+fixture tracks rather than the 80-row page.
+
+### Filename credits
+`lib/upload/title-metadata.ts` now reads collaborators — `prod. by`,
+`produced by`, `feat.`, `ft.`, `featuring`, `w/`, `with` — with roles, split on
+`&`, `,`, `x`, `and`. Extraction runs BEFORE the BPM and key passes, so
+`Drift (prod. by Gm) 92` credits Gm instead of reading a key.
+
+**`Cardo x Metro type beat` is deliberately not a collaboration.** In this
+corpus the `x` convention names who a beat should SOUND like; crediting them
+would put strangers on the producer's own catalogue. `x` only separates names
+inside a credit a marker already opened. There is a test pinning this.
+
+Stored by **migration 115** (`track_collaborators`) — a join table, not a
+column, because a collaborator is a person who recurs across tracks and that is
+what later allows "everything I made with X" or a link to a `contacts` row.
+Writes are replace-then-insert scoped to `source = 'filename'`, so a re-parse
+never accumulates the credits of every name a file ever had and never deletes
+one the producer typed. `persistTrackCollaborators` never throws: an unapplied
+migration costs the credits, not the upload.
+
+### Open
+- **Migration 115 is not applied**, and neither are 112/113. See
+  `supabase/MIGRATIONS.md`.
+- Nothing reads `track_collaborators` yet — no UI, no API route.
+- `lib/audio/session-match.ts` has no consumer yet.
+
+### Phase 3 — the session context, wired
+
+`lib/audio/session-match.ts` now has consumers.
+
+- **`hooks/useSessionContext.ts`** — Zustand + persist, `antigravity-session-context`.
+  localStorage rather than `creator_profiles`, for the reason
+  `lib/notifications/desktop.ts` gives for its own preference: this describes
+  the machine the producer is sitting at, and the session open on the studio
+  Mac is not the one open on the laptop.
+  Deliberately **not** a filter. Setting a tempo marks what fits and leaves the
+  catalogue intact; `matchTolerance` only widens what counts. A session that
+  silently hid two thirds of the library would be abandoned in a day.
+  `clear()` resets tempo and key but keeps tolerance and `previewInSession`:
+  "stop matching this session" is not "forget how I like matching to behave".
+- **`components/nav/SessionContextControl.tsx`** — the TopBar pill. That is the
+  only always-visible chrome available: a second TopBar row is not, since the
+  hub dropdowns replaced one. Tap tempo (`lib/audio/tap-tempo.ts`, pure and
+  tested — span over interval count, not a running mean of gaps, so one late
+  tap barely moves it), ½ / 2×, a piano-octave key picker, Make relative,
+  tolerance, and the preview toggle. The pill narrows to its icon on a phone
+  rather than disappearing.
+- **`components/tracks/SessionFitMarkers.tsx`** — per-row ✓ / ⇄ / ½× / 2×.
+  Renders nothing at all when no session is set, so the row is untouched for
+  anyone not using it. Every marker carries a label; none depends on colour.
+- **Player** — `SimpleAudioEngine` applies `previewAdjustment` as
+  `playbackRate` with `preservesPitch`, in its own effect AFTER the source
+  effect, because loading a source resets both to their defaults; setting them
+  beside the `src` assignment silently does nothing.
+  `SessionTempoBadge` says so whenever the preview is not at the track's own
+  tempo — otherwise a 92 BPM beat auditioned in a 140 BPM session reads as a
+  140 BPM beat, and the catalogue the producer thinks they have is not the one
+  they have.
+
+Two defects the tests caught, both invisible to `tsc` and a green build:
+- The pill's accessible name was the session value alone ("140 BPM · F minor"),
+  which says what the value is and never what the control is. Named explicitly.
+- The tempo field mirrored the store into state and corrected it in an effect —
+  the cascading-render pattern React's lint rule exists to catch, and a lint
+  **error**, which blocks CI. It keeps a draft only while being edited; the
+  rest of the time the store is the value, so a tap or ½ / 2× needs no syncing.
+
+### Still open after Phase 3
+- Migration 115 unapplied (with 112/113). Nothing reads `track_collaborators`.
+- No keyboard auditioning: ↑/↓ are already bound globally to volume
+  (`usePlayerKeyboardShortcuts.ts:49`), so it needs arbitration between the two
+  owners rather than a second window listener.
+- `SessionFitMarkers` is on the library row only — not the store's
+  `BeatListRow`, and not `TrackGridCard`.
 ## Library page — home content out of the catalogue list (2026-09-20)
 
 `/library` is two surfaces behind one toggle: **Browse** (a home page) and **All tracks**

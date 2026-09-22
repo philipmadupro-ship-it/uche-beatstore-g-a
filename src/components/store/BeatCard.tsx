@@ -13,6 +13,7 @@
  * Playing state is now communicated once, by the accent edge.
  */
 
+import { memo } from 'react';
 import { Heart, Download } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
@@ -47,7 +48,14 @@ interface Props {
   recentSales?: number;
 }
 
-export function BeatCard({
+/**
+ * Memoised — the store grid re-renders every card on ANY interaction
+ * (previewing one track, toggling a wishlist heart, "load more" appending
+ * more rows) unless the parent hands each card stable callback references.
+ * `/src/app/store/page.tsx` builds these through `lib/ui/stable-row-callbacks.ts`
+ * rather than a fresh arrow per render.
+ */
+function BeatCardImpl({
   track, priceLease, priceExclusive, licenseCount = 0, lowestLicensePrice = null, isCurrent, isPlaying, isPreview,
   onPreview, onAddLease, onAddExclusive, onFreeDownload, accentColor,
   isWishlisted, onToggleWishlist, recentSales,
@@ -223,3 +231,5 @@ export function BeatCard({
     </div>
   );
 }
+
+export const BeatCard = memo(BeatCardImpl);

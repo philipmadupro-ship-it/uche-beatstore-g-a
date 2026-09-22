@@ -127,7 +127,10 @@ interface ProjectShareResponse {
  *   - hydrates from /api/projects/share/[token] (project + ordered tracks + role)
  *   - shows a comments panel; the form's visibility is gated on role
  *   - download button is gated on `allow_downloads` (shows "Downloads disabled" otherwise)
- *   - downloads route through /api/audio?download=1 so Content-Disposition forces save
+ *   - downloads route through /api/share/[token]/download, which decides what
+ *     this recipient is entitled to. NOT through /api/audio: that is the
+ *     producer's own proxy, it is producer-gated, and a share recipient is by
+ *     definition not the producer.
  */
 export default function ProjectSharePage({ params: paramsPromise }: { params: Promise<{ token: string }> }) {
   const params = React.use(paramsPromise);

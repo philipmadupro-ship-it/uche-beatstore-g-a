@@ -1,3 +1,5 @@
+import { normalizeKey } from '@/lib/audio/key-normalize';
+import { comparePopularity } from './popularity';
 import type { Track } from '@/lib/types';
 
 export interface StoreTrack extends Track {
@@ -82,14 +84,30 @@ export function filterAndSortTracks(
     // BPM
     if (t.bpm != null && (t.bpm < filters.bpmMin || t.bpm > filters.bpmMax)) return false;
 
-    // Key
-    if (filters.keyFilter && (t.key ?? '').toLowerCase() !== filters.keyFilter.toLowerCase()) {
-      return false;
-    }
+    // Key and scale, compared through `lib/audio/key-normalize` rather than as
+    // raw strings. Three things write `tracks.key` and they spell enharmonics
+    // differently, so a straight comparison made every track stored as `Bb`
+    // invisible to a filter for `A#` — and the facet sidebar offers both
+    // spellings, because it lists the distinct values actually in the column.
+    //
+    // Normalising also picks up a scale written into the key itself (`F#m`),
+    // which the old scale comparison against `t.scale` alone could not see.
+    if (filters.keyFilter || filters.scaleFilter) {
+      const track = normalizeKey(t.key, t.scale);
 
-    // Scale (major / minor)
-    if (filters.scaleFilter && (t.scale ?? '').toLowerCase() !== filters.scaleFilter) {
-      return false;
+      if (filters.keyFilter) {
+        const wanted = normalizeKey(filters.keyFilter);
+        if (wanted.key) {
+          if (track.key !== wanted.key) return false;
+        } else if ((t.key ?? '').toLowerCase() !== filters.keyFilter.toLowerCase()) {
+          // The filter value isn't readable as a key. Fall back to the literal
+          // comparison so an odd stored value is still selectable by its own
+          // facet entry rather than matching nothing at all.
+          return false;
+        }
+      }
+
+      if (filters.scaleFilter && track.scale !== filters.scaleFilter) return false;
     }
 
     // Duration bucket
@@ -150,18 +168,13 @@ export function filterAndSortTracks(
     case 'title':
       sorted.sort((a, b) => a.title.localeCompare(b.title));
       break;
-    case 'popular': {
-      // If play_count is populated (from store_plays), sort by real plays.
-      // Fall back to a quality proxy (rating × 100 + bpm) for stores
-      // that haven't accumulated play data yet.
-      const score = (t: StoreTrack) =>
-        (t.play_count != null ? t.play_count * 10 : 0) + (t.rating ?? 0) * 100;
-      sorted.sort((a, b) => {
-        const diff = score(b) - score(a);
-        return diff !== 0 ? diff : a.title.localeCompare(b.title);
-      });
+    case 'popular':
+      // One rule, shared with both server paths — see lib/store/popularity.
+      // This used to score `play_count * 10 + rating * 100` here, which the
+      // server could not express, so re-ranking a server-ordered page
+      // produced an order that was neither rule's.
+      sorted.sort(comparePopularity);
       break;
-    }
     case 'newest':
     default:
       sorted.sort(

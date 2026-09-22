@@ -10,6 +10,7 @@ import { requireRowOwnership } from '@/lib/db';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { nextVersionLabel } from '@/lib/naming';
 import { parseTitleMetadata } from '@/lib/upload/title-metadata';
+import { persistTrackCollaborators } from '@/lib/upload/collaborators';
 import { errorMessage } from '@/lib/errors';
 import { enqueueUploadProcessingJob } from '@/lib/upload/processing';
 
@@ -266,6 +267,11 @@ export async function POST(req: NextRequest) {
         }
 
         const savedTrackId = track && typeof track.id === 'string' ? track.id : replaceTrackId;
+        if (savedTrackId) {
+          // Credits the producer wrote into the filename. Best-effort — see
+          // `persistTrackCollaborators`.
+          await persistTrackCollaborators(supabase, savedTrackId, titleMeta.collaborators);
+        }
         if (savedTrackId && userId) {
           await enqueueUploadProcessingJob({
             trackId: savedTrackId,

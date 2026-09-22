@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildDawWaveformBars, loadVisualPeaks, resampleVisualPeaks, syntheticVisualPeaks } from './visual-peaks';
+import {
+  buildDawWaveformBars,
+  loadVisualPeaks,
+  resampleVisualPeaks,
+  syntheticVisualPeaks,
+  VISUAL_PEAK_MAX,
+  VISUAL_PEAK_MIN,
+} from './visual-peaks';
 
 afterEach(() => {
   delete process.env.NEXT_PUBLIC_R2_CDN_URL;
@@ -25,13 +32,34 @@ describe('visual waveform peaks', () => {
     expect(resampleVisualPeaks([], 3)).toEqual([0.5, 0.5, 0.5]);
   });
 
-  it('marks DAW-style beat grid positions and downbeats', () => {
+  it('does not derive a beat grid from array position', () => {
+    // buildDawWaveformBars must carry no isBeat/isDownbeat field — those used
+    // to be `index % 4` / `index % 16`, arithmetic on position with no
+    // relationship to the track's actual tempo. Confirm the shape stays gone
+    // rather than quietly creeping back in.
     const bars = buildDawWaveformBars(Array(17).fill(0.4));
+    expect(bars[0]).not.toHaveProperty('isBeat');
+    expect(bars[0]).not.toHaveProperty('isDownbeat');
+    expect(Object.keys(bars[0]).sort()).toEqual(['height', 'index', 'isTransient']);
+  });
 
-    expect(bars.filter((bar) => bar.isBeat).map((bar) => bar.index)).toEqual([0, 4, 8, 12, 16]);
-    expect(bars.filter((bar) => bar.isDownbeat).map((bar) => bar.index)).toEqual([0, 16]);
-    expect(bars[0]).toMatchObject({ isBeat: true, isDownbeat: true });
-    expect(bars[4]).toMatchObject({ isBeat: true, isDownbeat: false });
+  it('preserves a transient that sits between two resampled sample points', () => {
+    // A single spike at index 2 of 5 source samples, downsampled to 2 target
+    // bars. The old point-sample-and-interpolate implementation only ever
+    // reads peaks[0], peaks[1] (for bar 0) and peaks[4] (for bar 1) — indices
+    // (0/1)*4=0 and (1/1)*4=4 — so it never touches index 2 at all and the
+    // spike vanishes into two flat, silent-looking bars. Peak-per-bucket must
+    // still see it, because the spike falls inside a bucket span even though
+    // it isn't one of the two points a lerp would have sampled.
+    const spike = [0, 0, 1, 0, 0];
+    const linearInterpolationResult = [0, 0]; // what the old algorithm produced — kept as a regression witness
+    const result = resampleVisualPeaks(spike, 2);
+
+    expect(result).not.toEqual(
+      linearInterpolationResult.map(() => VISUAL_PEAK_MIN),
+    );
+    expect(result[0]).toBeCloseTo(VISUAL_PEAK_MAX, 5);
+    expect(result[1]).toBeCloseTo(VISUAL_PEAK_MAX, 5);
   });
 
   it('flags local peak spikes as transients', () => {

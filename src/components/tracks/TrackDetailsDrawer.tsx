@@ -23,6 +23,7 @@ import { DrawerActionList } from '@/components/tracks/drawer/DrawerActionList';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { InlineText } from '@/components/ui/InlineText';
 import { InlineTagStrip, type TagGroup } from '@/components/ui/InlineTagStrip';
+import { TrackCollaboratorStrip } from '@/components/tracks/TrackCollaboratorStrip';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { useTags } from '@/hooks/useTags';
 
@@ -606,6 +607,15 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                   groups={TRACK_TAG_GROUPS}
                   onToggle={({ tag, category, active }) => toggleTag.mutate({ tag, category, active })}
                 />
+              </div>
+
+              {/* Credits — who's on this track. A filename credit
+                  (source: 'filename') is marked distinctly from one typed
+                  by hand, since only the former is ever replaced by a
+                  re-parse. See lib/upload/collaborators.ts. */}
+              <div className="border-b border-white/10 px-6 py-5">
+                <h3 className="mb-3 text-[9px] font-black uppercase tracking-[0.25em] text-white/40">Credits</h3>
+                <TrackCollaboratorStrip trackId={track.id} />
               </div>
 
               {/* Type / Status / Rating — extracted to drawer/TrackMetadataEditor. */}

@@ -79,6 +79,7 @@ const COLUMN_MIGRATIONS: Record<string, string> = {
 /** Tables a UI action writes, and the migration that creates them. */
 const TABLE_MIGRATIONS: Record<string, string> = {
   tag_colors: '107_tag_colors',
+  track_collaborators: '115_track_collaborators',
 };
 
 /**

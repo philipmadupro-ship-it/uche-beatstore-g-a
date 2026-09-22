@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Track } from '@/lib/types';
 import { Star, Music, ChevronUp, ChevronDown, Check } from 'lucide-react';
 import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
@@ -9,8 +9,11 @@ import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
-import { setTrackDragData } from '@/lib/dnd';
-import { cacheTrack, getCachedMeta, removeCached } from '@/lib/offline/audio-cache';
+import { isInteractiveDragStartTarget, setTrackDragData } from '@/lib/dnd';
+import { SessionFitMarkers } from './SessionFitMarkers';
+import { RowWaveform } from './RowWaveform';
+import { useOfflineTrack } from '@/hooks/useOfflineCache';
+import { offlineActionLabel } from '@/lib/offline/status';
 import { toast } from '@/hooks/useToast';
 import { gridTemplate, type LibraryColumn, type TrackWithTags } from '@/lib/library/columns';
 import type { TrackStatsMap } from '@/lib/library/track-stats';
@@ -95,7 +98,20 @@ type TrackWithInlineTags = Track & {
   track_tags?: TrackTag[];
 };
 
-export function TrackCard({
+/**
+ * Wrapped in `memo` below and exported as `TrackCard`. Zero components in
+ * this app were memoised before this change — a single parent state update
+ * (selecting one row, an unrelated poll tick) re-rendered every visible row
+ * and everything inside it (waveform peaks, offline status, session-fit
+ * markers, each subscribing to its own store). `memo` only pays off when the
+ * parent hands this component STABLE prop references; see
+ * `lib/ui/stable-row-callbacks.ts`, which is what the library and store
+ * pages now use to build `onPlayClick` et al. without a fresh closure per
+ * render. Memoising the child without stabilising the parent's props is a
+ * no-op that looks like a fix — see the render-count assertions in
+ * `TrackCard.scale.test.tsx`.
+ */
+function TrackCardImpl({
   track,
   index,
   onClickDetails,
@@ -126,59 +142,54 @@ export function TrackCard({
   // Optimistic title so the row updates the instant the field closes, without
   // waiting for the page's refetch to come back.
   const [titleOverride, setTitleOverride] = useState<string | null>(null);
-  const trackTags = (track as TrackWithInlineTags).track_tags ?? [];
+  // Memoized so `?? []` doesn't hand downstream `useMemo`s (artworkTags) a
+  // fresh array identity on every render.
+  const trackTags = useMemo(
+    () => (track as TrackWithInlineTags).track_tags ?? [],
+    [track],
+  );
   const stemStatus = track.stems_status as string | null | undefined;
   const hasCompletedStems = stemStatus === 'done' || stemStatus === 'completed';
 
-  // Offline Caching integration
-  const [isCached, setIsCached] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<number | null>(null);
+  // Offline caching — single implementation shared with `OfflineToggle`, see
+  // `useOfflineTrack` (hooks/useOfflineCache.ts) and `lib/offline/status.ts`.
+  // This row previously kept a parallel copy of this whole state machine
+  // (isCached/syncProgress + its own cacheTrack/removeCached calls); now both
+  // surfaces read the same status and label so they can't drift.
+  const {
+    isCached,
+    downloading: offlineDownloading,
+    progress: offlineProgress,
+    status: offlineStatus,
+    announcement: offlineAnnouncement,
+    download: downloadOffline,
+    remove: removeOffline,
+  } = useOfflineTrack(track.id);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const meta = await getCachedMeta(track.id);
-        setIsCached(!!meta);
-      } catch (err) {
-        console.error('IndexedDB read failed:', err);
-      }
-    })();
-  }, [track.id]);
-
-  const syncToDevice = async () => {
+  const toggleOffline = async () => {
+    if (isCached) {
+      await removeOffline();
+      return;
+    }
     if (!track.audio_url) return;
-    setSyncProgress(0);
-    try {
-      const url = track.audio_url.startsWith('http')
-        ? track.audio_url
-        : `${window.location.origin}${track.audio_url}`;
-
-      await cacheTrack(track.id, url, track.title, (loaded, total) => {
-        setSyncProgress(loaded / total);
-      });
-      setIsCached(true);
-      toast.success(`"${track.title.toUpperCase()}" cached for offline playback!`);
-    } catch (err) {
-      console.error('Offline caching failed:', err);
-      toast.error('Sync failed', err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setSyncProgress(null);
-    }
-  };
-
-  const removeFromCache = async () => {
-    try {
-      await removeCached(track.id);
-      setIsCached(false);
-      toast.success(`"${track.title.toUpperCase()}" removed from local storage.`);
-    } catch (err) {
-      console.error('Failed to remove cache:', err);
-      toast.error('Failed to delete cache');
-    }
+    const url = track.audio_url.startsWith('http')
+      ? track.audio_url
+      : `${window.location.origin}${track.audio_url}`;
+    // Errors surface through `offlineStatus`/the row's live region — see
+    // useOfflineTrack, which sets its own `error` state rather than throwing.
+    await downloadOffline(url, track.title);
   };
 
   // A refetch that brings back a different title means the override is stale.
-  useEffect(() => { setTitleOverride(null); }, [track.title]);
+  // Adjusted during render (React's documented pattern for resetting state
+  // when a prop changes) rather than in a `useEffect` — a synchronous
+  // setState inside an effect schedules an extra render pass; this way the
+  // reset lands in the same render as the prop change.
+  const [prevTrackTitle, setPrevTrackTitle] = useState(track.title);
+  if (track.title !== prevTrackTitle) {
+    setPrevTrackTitle(track.title);
+    setTitleOverride(null);
+  }
 
   const renameTrack = async (next: string) => {
     if (!next) return false;
@@ -298,14 +309,17 @@ export function TrackCard({
       items: [
         { id: 'share', label: 'Share track', hidden: !onShare, onSelect: () => onShare?.(track) },
         {
-          id: 'uncache', label: 'Remove offline cache', hidden: !isCached,
-          onSelect: () => { void removeFromCache(); },
-        },
-        {
-          id: 'cache',
-          label: syncProgress !== null ? `Syncing (${Math.round(syncProgress * 100)}%)` : 'Sync to device',
-          hidden: isCached, busy: syncProgress !== null,
-          onSelect: () => { void syncToDevice(); return 'keep-open' as const; },
+          id: 'offline',
+          label: offlineActionLabel(offlineStatus, offlineProgress),
+          busy: offlineDownloading,
+          onSelect: () => {
+            const startingDownload = !isCached;
+            void toggleOffline();
+            // Stay open while a download starts so the row keeps showing
+            // progress; a removal closes the menu immediately like any other
+            // one-shot action.
+            return startingDownload ? ('keep-open' as const) : undefined;
+          },
         },
       ],
     },
@@ -331,18 +345,32 @@ export function TrackCard({
     <div
       onClick={handleRowPress}
       // Native HTML5 draggable so the user can drop tracks onto contact
-      // rows (or future drop targets — playlists, projects). We don't
+      // rows (or future drop targets — playlists, projects), or drag them
+      // straight out of the browser onto the desktop / a DAW. We don't
       // mount a heavy DnD library; the dataTransfer payload is encoded
       // through lib/dnd.ts and decoded on the target.
       draggable={draggableTrack}
       onDragStart={(e) => {
         if (!draggableTrack) return;
+        // A press on the ⋯ menu, the rename field, or a control button can
+        // still land on this ancestor's `draggable`, since the browser
+        // walks up to the nearest draggable element regardless of which
+        // child was pressed. Bail out so the click keeps working instead
+        // of being swallowed by a one-pixel drag.
+        if (isInteractiveDragStartTarget(e.target)) {
+          e.preventDefault();
+          return;
+        }
         e.stopPropagation();
-        setTrackDragData(e, {
-          id: track.id,
-          title: track.title,
-          cover_url: track.cover_url ?? null,
-        });
+        setTrackDragData(
+          e,
+          {
+            id: track.id,
+            title: track.title,
+            cover_url: track.cover_url ?? null,
+          },
+          track.audio_url,
+        );
       }}
       style={columns ? ({ '--track-row-cols': gridTemplate(columns) } as React.CSSProperties) : undefined}
       className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-lg border px-2.5 py-2 transition-colors cursor-pointer ${columns ? 'track-row-dynamic' : TRACK_ROW_GRID} md:gap-4 md:px-3 ${
@@ -353,6 +381,13 @@ export function TrackCard({
             : 'border-white/[0.07] hover:border-white/[0.16] hover:bg-white/[0.04]'
       }`}
     >
+      {/* Offline save/remove status, announced on transitions only — see
+          useOfflineTrack / lib/offline/status.ts. Visually hidden: the row's
+          badge and the ⋯ menu label already show this sighted. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {offlineAnnouncement}
+      </span>
+
       {/* Cover/play cell — mirrors the Store list row. In select or store
           order mode this cell becomes the control, keeping actions left. */}
       <div
@@ -451,6 +486,10 @@ export function TrackCard({
           {track.key ? (
             <span className="text-white/55">{track.key}{track.scale === 'minor' ? 'm' : ''}</span>
           ) : null}
+          {/* Whether this fits the session the producer set in the TopBar.
+              Renders nothing at all when no session is set, so the row is
+              unchanged for anyone not using it. */}
+          <SessionFitMarkers track={track} />
           {(track.bpm || track.key) && track.type ? <span aria-hidden className="h-2 w-px bg-white/15" /> : null}
           {track.type ? <span className="truncate">{track.type}</span> : null}
           {!track.bpm && !track.key && !track.type ? <span>—</span> : null}
@@ -559,6 +598,18 @@ export function TrackCard({
                 {genreMoodTags.length === 0 && !track.store_listed ? (
                   <span className="text-[11px] text-white/20">—</span>
                 ) : null}
+              </div>
+            );
+          }
+          if (col.id === 'waveform') {
+            return (
+              <div key={col.id} className="relative z-10 hidden min-w-0 items-center md:flex">
+                <RowWaveform
+                  trackId={track.id}
+                  peaksUrl={track.peaks_url}
+                  title={track.title}
+                  onPlay={onPlayClick}
+                />
               </div>
             );
           }
@@ -681,6 +732,8 @@ export function TrackCard({
     </div>
   );
 }
+
+export const TrackCard = memo(TrackCardImpl);
 
 function formatDuration(seconds: number | null): string {
   if (!seconds || !Number.isFinite(seconds)) return '—';
