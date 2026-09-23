@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildDawWaveformBars,
+  clearVisualPeaksCache,
   loadVisualPeaks,
+  visualPeaksFetchUrl,
   resampleVisualPeaks,
   syntheticVisualPeaks,
   VISUAL_PEAK_MAX,
@@ -12,6 +14,12 @@ afterEach(() => {
   delete process.env.NEXT_PUBLIC_R2_CDN_URL;
   delete process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
   vi.unstubAllGlobals();
+  clearVisualPeaksCache();
+});
+
+const okPeaks = (peaks: number[]) => vi.fn().mockResolvedValue({
+  ok: true,
+  json: async () => ({ version: 1, duration: 12, length: peaks.length, peaks }),
 });
 
 describe('visual waveform peaks', () => {
@@ -70,13 +78,60 @@ describe('visual waveform peaks', () => {
     expect(bars[3].isTransient).toBe(false);
   });
 
-  it('skips unreadable raw R2 sidecars without fetching', async () => {
-    const fetch = vi.fn();
+  // This used to assert the opposite — "skips unreadable raw R2 sidecars
+  // without fetching" — which with no CDN configured meant every library
+  // waveform rendered as an empty box. Unreadable R2 URLs are now proxied.
+  it('routes an unreadable r2.dev sidecar through the same-origin proxy', async () => {
+    const fetch = okPeaks([0.4, 0.6]);
     vi.stubGlobal('fetch', fetch);
     process.env.NEXT_PUBLIC_R2_PUBLIC_URL = 'https://pub-abc.r2.dev';
 
-    await expect(loadVisualPeaks('https://pub-abc.r2.dev/peaks/a.json', new AbortController().signal)).resolves.toBeNull();
-    expect(fetch).not.toHaveBeenCalled();
+    await expect(loadVisualPeaks('https://pub-abc.r2.dev/peaks/a.json', new AbortController().signal))
+      .resolves.toEqual([0.4, 0.6]);
+    expect(fetch).toHaveBeenCalledWith(
+      `/api/audio?src=${encodeURIComponent('https://pub-abc.r2.dev/peaks/a.json')}`,
+      expect.any(Object),
+    );
+  });
+
+  it('proxies private r2:// refs and leaves local paths direct', () => {
+    expect(visualPeaksFetchUrl('r2://bucket/peaks/a.json')).toBe(
+      `/api/audio?src=${encodeURIComponent('r2://bucket/peaks/a.json')}`,
+    );
+    expect(visualPeaksFetchUrl('/uploads/peaks/a.json')).toBe('/uploads/peaks/a.json');
+    expect(visualPeaksFetchUrl('')).toBeNull();
+    expect(visualPeaksFetchUrl(null)).toBeNull();
+  });
+
+  it('returns null rather than throwing when the proxy refuses (no producer session)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }));
+    process.env.NEXT_PUBLIC_R2_PUBLIC_URL = 'https://pub-abc.r2.dev';
+
+    await expect(loadVisualPeaks('https://pub-abc.r2.dev/peaks/a.json', new AbortController().signal))
+      .resolves.toBeNull();
+  });
+
+  it('fetches a sidecar once per page, however many times rows remount', async () => {
+    const fetch = okPeaks([0.1, 0.9]);
+    vi.stubGlobal('fetch', fetch);
+    process.env.NEXT_PUBLIC_R2_PUBLIC_URL = 'https://pub-abc.r2.dev';
+
+    const url = 'https://pub-abc.r2.dev/peaks/a.json';
+    await loadVisualPeaks(url, new AbortController().signal);
+    await loadVisualPeaks(url, new AbortController().signal);
+    await expect(loadVisualPeaks(url, new AbortController().signal)).resolves.toEqual([0.1, 0.9]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cache a failure, so a later load can succeed', async () => {
+    process.env.NEXT_PUBLIC_R2_PUBLIC_URL = 'https://pub-abc.r2.dev';
+    const url = 'https://pub-abc.r2.dev/peaks/a.json';
+
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('aborted')));
+    await expect(loadVisualPeaks(url, new AbortController().signal)).resolves.toBeNull();
+
+    vi.stubGlobal('fetch', okPeaks([0.5]));
+    await expect(loadVisualPeaks(url, new AbortController().signal)).resolves.toEqual([0.5]);
   });
 
   it('loads peaks from a configured CDN URL', async () => {

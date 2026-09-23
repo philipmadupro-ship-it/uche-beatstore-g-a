@@ -129,17 +129,57 @@ export function buildDawWaveformBars(peaks: number[]): DawWaveformBar[] {
   });
 }
 
+/**
+ * Where to fetch a peaks sidecar from.
+ *
+ * Peaks live in the public R2 bucket, usually at a `pub-….r2.dev` URL. The
+ * browser cannot `fetch()` those without CORS headers, so `canFetchReadableAudio`
+ * rightly refuses them — and this loader used to stop there and return null.
+ * With no CDN configured that was EVERY peaks URL, so the library's waveform
+ * column rendered an empty box on every row while looking like a feature.
+ *
+ * Unreadable http(s) URLs now go through the same-origin `/api/audio` proxy,
+ * which streams any source for the producer. Anywhere a producer session is
+ * absent (a buyer on the store) the proxy answers 401, the loader returns
+ * null, and callers fall back exactly as they did before.
+ */
+export function visualPeaksFetchUrl(url: string | null | undefined): string | null {
+  const resolved = cdnAudioSrc(url);
+  if (!resolved) return null;
+  if (canFetchReadableAudio(resolved)) return resolved;
+  if (/^https?:\/\//i.test(resolved)) return `/api/audio?src=${encodeURIComponent(resolved)}`;
+  return null;
+}
+
+/**
+ * Resolved peaks by source URL, for the life of the page.
+ *
+ * The proxy sends `no-store`, so without this every remount — switching list
+ * to grid and back, re-sorting — refetches fifty sidecars through a function.
+ * Only successes are kept: an aborted or failed load must be free to retry.
+ */
+const peaksCache = new Map<string, number[]>();
+
 export async function loadVisualPeaks(url: string, signal: AbortSignal): Promise<number[] | null> {
-  const readableUrl = cdnAudioSrc(url);
-  if (!canFetchReadableAudio(readableUrl)) return null;
+  const fetchUrl = visualPeaksFetchUrl(url);
+  if (!fetchUrl) return null;
+
+  const cached = peaksCache.get(fetchUrl);
+  if (cached) return cached;
 
   try {
-    const response = await fetch(readableUrl, { signal, cache: 'force-cache' });
+    const response = await fetch(fetchUrl, { signal, cache: 'force-cache' });
     if (!response.ok) return null;
     const json = (await response.json()) as ClientPeaksFile;
     if (!json?.peaks?.length) return null;
+    peaksCache.set(fetchUrl, json.peaks);
     return json.peaks;
   } catch {
     return null;
   }
+}
+
+/** Test seam: the cache outlives a single test otherwise. */
+export function clearVisualPeaksCache(): void {
+  peaksCache.clear();
 }
