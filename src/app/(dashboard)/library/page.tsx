@@ -7,6 +7,7 @@
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { bulkRatingMessage, matchesRating } from '@/lib/library/rating';
+import { loadMoreState } from '@/lib/library/load-more';
 import { PageContainer } from '@/components/layout/PageHeader';
 import {
   Loader2, Music, Search, Sparkles, Shuffle, Disc3, LayoutList, LayoutGrid,
@@ -413,8 +414,12 @@ export default function LibraryPage() {
   const [hasMoreTracks, setHasMoreTracks] = useState(false);
   const [nextTrackCursor, setNextTrackCursor] = useState<string | null>(null);
   const [loadingMoreTracks, setLoadingMoreTracks] = useState(false);
+  /** Catalogue size from the first page's `pageInfo.total`; null if unknown. */
+  const [totalTracks, setTotalTracks] = useState<number | null>(null);
+  const [loadingAllTracks, setLoadingAllTracks] = useState(false);
+  const loadMoreSentinel = useRef<HTMLDivElement>(null);
 
-  const fetchTracks = async ({ cursor = null, append = false }: { cursor?: string | null; append?: boolean } = {}) => {
+  const fetchTracks = async ({ cursor = null, append = false }: { cursor?: string | null; append?: boolean } = {}): Promise<string | null> => {
     if (append) setLoadingMoreTracks(true);
     // Only gate the UI behind the skeleton when there's nothing painted yet —
     // with a cached list on screen this is a silent background refresh.
@@ -447,12 +452,15 @@ export default function LibraryPage() {
       });
       setHasMoreTracks(Boolean(data.pageInfo?.hasMore));
       setNextTrackCursor(data.pageInfo?.nextCursor ?? null);
+      if (typeof data.pageInfo?.total === 'number') setTotalTracks(data.pageInfo.total);
+      return data.pageInfo?.hasMore ? (data.pageInfo?.nextCursor ?? null) : null;
     } catch (err) {
       console.error('Error fetching tracks:', err);
       setFetchError(errorMessage(err) || 'Failed to load tracks');
       // Keep any cached list on screen (stale-while-revalidate) — only blank
       // the view when we never had data to show.
       if (!append && !getCached('library:tracks')) setTracks([]);
+      return null;
     } finally {
       if (append) setLoadingMoreTracks(false);
       else setLoading(false);
@@ -460,9 +468,41 @@ export default function LibraryPage() {
   };
 
   const loadMoreTracks = () => {
-    if (!hasMoreTracks || !nextTrackCursor || loadingMoreTracks) return;
+    if (!hasMoreTracks || !nextTrackCursor || loadingMoreTracks || loadingAllTracks) return;
     void fetchTracks({ cursor: nextTrackCursor, append: true });
   };
+
+  /**
+   * Page through everything that is left. Sequential, not parallel: each page
+   * is an offset from the last, and firing them at once would hammer the API
+   * for a list the producer is going to scroll anyway. Stops on the first
+   * failed page, which `fetchTracks` has already reported.
+   */
+  const loadAllTracks = async () => {
+    if (!hasMoreTracks || !nextTrackCursor || loadingAllTracks) return;
+    setLoadingAllTracks(true);
+    let cursor: string | null = nextTrackCursor;
+    // Hard stop well past any real catalogue, so a server that keeps saying
+    // "hasMore" can never spin this forever.
+    for (let guard = 0; cursor && guard < 200; guard += 1) {
+      cursor = await fetchTracks({ cursor, append: true });
+    }
+    setLoadingAllTracks(false);
+  };
+
+  // Load the next page as the end of the list scrolls into view. The button
+  // below stays — it is the keyboard path, and the fallback where
+  // IntersectionObserver is missing.
+  useEffect(() => {
+    const node = loadMoreSentinel.current;
+    if (!node || !hasMoreTracks || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries.some((e) => e.isIntersecting)) loadMoreTracks(); },
+      { rootMargin: '600px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  });
 
   useEffect(() => { fetchTracks(); }, []);
 
@@ -1649,18 +1689,58 @@ export default function LibraryPage() {
           </div>
         )}
 
-        {effectiveBrowseMode === 'all' && hasMoreTracks && (
-          <div className="flex justify-center pb-28">
-            <button
-              type="button"
-              onClick={loadMoreTracks}
-              disabled={loadingMoreTracks}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-5 py-2.5 text-[9px] font-mono uppercase tracking-[0.18em] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-wait disabled:opacity-60"
-            >
-              {loadingMoreTracks ? 'Loading tracks...' : 'Load more tracks'}
-            </button>
-          </div>
-        )}
+        {effectiveBrowseMode === 'all' && tracks.length > 0 && (() => {
+          const footer = loadMoreState({
+            loaded: tracks.length,
+            total: totalTracks,
+            hasMore: hasMoreTracks,
+            filtersActive: hasActiveFilters(filters) || search.trim().length > 0,
+          });
+          const busy = loadingMoreTracks || loadingAllTracks;
+          return (
+            <div className="mx-auto flex w-full max-w-md flex-col items-center gap-3 pb-28 pt-4">
+              <div ref={loadMoreSentinel} aria-hidden className="h-px w-full" />
+              <p className="text-[11px] tabular-nums text-white/40" aria-live="polite">
+                {footer.countLabel}
+              </p>
+              {footer.progress != null && footer.progress < 1 ? (
+                <div className="h-0.5 w-40 overflow-hidden rounded-full bg-white/[0.08]" aria-hidden>
+                  <div
+                    className="h-full rounded-full bg-white/50 transition-[width] duration-300"
+                    style={{ width: `${footer.progress * 100}%` }}
+                  />
+                </div>
+              ) : null}
+              {footer.filtersPartial ? (
+                <p className="text-center text-[11px] text-[#c8a47a]">
+                  Filters only cover the tracks loaded so far.
+                </p>
+              ) : null}
+              {hasMoreTracks ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={loadMoreTracks}
+                    disabled={busy}
+                    className="rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[11px] font-medium text-white/70 backdrop-blur-sm transition-colors hover:border-white/20 hover:bg-white/[0.07] hover:text-white disabled:cursor-wait disabled:opacity-50"
+                  >
+                    {loadingMoreTracks && !loadingAllTracks ? 'Loading…' : 'Load more'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void loadAllTracks()}
+                    disabled={busy}
+                    className="rounded-full px-4 py-2 text-[11px] font-medium text-white/50 transition-colors hover:text-white disabled:cursor-wait disabled:opacity-50"
+                  >
+                    {loadingAllTracks
+                      ? 'Loading all…'
+                      : footer.remaining != null ? `Load all ${footer.remaining}` : 'Load all'}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          );
+        })()}
 
         </>
         )}{/* end browseMode === 'all' */}

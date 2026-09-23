@@ -373,12 +373,16 @@ function TrackCardImpl({
         );
       }}
       style={columns ? ({ '--track-row-cols': gridTemplate(columns) } as React.CSSProperties) : undefined}
-      className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-lg border px-2.5 py-2 transition-colors cursor-pointer ${columns ? 'track-row-dynamic' : TRACK_ROW_GRID} md:gap-4 md:px-3 ${
+      // Styled after shadcn's Item (image variant): one hairline outline,
+      // a quiet hover fill, and a playing state told apart by fill and a
+      // silver edge rather than the old tan wash — CLAUDE.md keeps borders and
+      // text white-at-alpha, and the warm tint was the last of the brown set.
+      className={`group relative grid min-h-[60px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-md border px-2.5 py-2.5 outline-none transition-colors duration-100 cursor-pointer focus-visible:border-white/30 focus-visible:ring-[3px] focus-visible:ring-white/10 ${columns ? 'track-row-dynamic' : TRACK_ROW_GRID} md:gap-4 md:px-3 ${
         isCurrent
-          ? 'border-[#D4BFA0]/35 bg-[#D4BFA0]/[0.07] shadow-[inset_3px_0_0_#D4BFA0]'
+          ? 'border-white/20 bg-white/[0.06] shadow-[inset_2px_0_0_rgb(255_255_255/0.7)]'
           : selected
-            ? 'border-white/[0.24] bg-white/[0.08]'
-            : 'border-white/[0.07] hover:border-white/[0.16] hover:bg-white/[0.04]'
+            ? 'border-white/20 bg-white/[0.05]'
+            : 'border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.03]'
       }`}
     >
       {/* Offline save/remove status, announced on transitions only — see
@@ -431,7 +435,7 @@ function TrackCardImpl({
           <button
             type="button"
             onClick={handlePlay}
-            className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#090907] text-white"
+            className="relative h-10 w-10 shrink-0 overflow-hidden rounded-sm bg-[#090907] text-white"
             aria-label={isActive ? 'Pause track' : 'Play track'}
           >
             {/* Same resolution as the grid: own cover, then the producer's
@@ -464,7 +468,7 @@ function TrackCardImpl({
             inputClassName="text-[14px] font-semibold"
           />
         ) : (
-          <h4 className={`truncate text-[14px] font-semibold leading-tight tracking-[-0.01em] transition-colors ${
+          <h4 className={`truncate text-[14px] font-medium leading-snug tracking-[-0.01em] transition-colors ${
             isCurrent ? 'text-white' : 'text-white/95 group-hover:text-white'
           }`}>
             {displayTitle}
@@ -478,20 +482,20 @@ function TrackCardImpl({
             be narrower than it used to be, and this line was breaking "167
             BPM" across two rows, which made the row taller and read as a
             layout fault. Overflow should clip, not reflow. */}
-        <div className="mt-1 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden whitespace-nowrap text-[9px] font-mono uppercase tracking-[0.14em] text-white/40">
+        <div className="mt-0.5 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-hidden whitespace-nowrap text-[11px] leading-normal text-white/40">
           {track.bpm ? (
-            <span className="shrink-0 tabular-nums text-white/55">{track.bpm}<span className="text-white/30"> BPM</span></span>
+            <span className="shrink-0 tabular-nums text-white/60">{track.bpm}<span className="text-white/35"> bpm</span></span>
           ) : null}
-          {track.bpm && track.key ? <span aria-hidden className="h-2 w-px bg-white/15" /> : null}
+          {track.bpm && track.key ? <span aria-hidden className="text-white/20">·</span> : null}
           {track.key ? (
-            <span className="text-white/55">{track.key}{track.scale === 'minor' ? 'm' : ''}</span>
+            <span className="text-white/60">{track.key}{track.scale === 'minor' ? 'm' : ''}</span>
           ) : null}
           {/* Whether this fits the session the producer set in the TopBar.
               Renders nothing at all when no session is set, so the row is
               unchanged for anyone not using it. */}
           <SessionFitMarkers track={track} />
-          {(track.bpm || track.key) && track.type ? <span aria-hidden className="h-2 w-px bg-white/15" /> : null}
-          {track.type ? <span className="truncate">{track.type}</span> : null}
+          {(track.bpm || track.key) && track.type ? <span aria-hidden className="text-white/20">·</span> : null}
+          {track.type ? <span className="truncate capitalize">{track.type}</span> : null}
           {!track.bpm && !track.key && !track.type ? <span>—</span> : null}
         </div>
 
@@ -503,13 +507,13 @@ function TrackCardImpl({
             duration and date (the Time column), the store/price marker, and the
             rating as a single numeral instead of five tap targets too small to
             hit accurately anyway. */}
-        <div className="mt-1 flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.12em] text-white/35 md:hidden">
+        <div className="mt-0.5 flex items-center gap-2 text-[11px] leading-normal text-white/40 md:hidden">
           <span className="tabular-nums">{durationLabel}</span>
-          <span aria-hidden className="h-2 w-px bg-white/15" />
+          <span aria-hidden className="text-white/20">·</span>
           <span className="tabular-nums">{uploadDate}</span>
           {currentRating ? (
             <>
-              <span aria-hidden className="h-2 w-px bg-white/15" />
+              <span aria-hidden className="text-white/20">·</span>
               <span className="flex items-center gap-0.5 text-[#c8a84b]">
                 <Star size={8} fill="#c8a84b" strokeWidth={0} aria-hidden />
                 <span className="tabular-nums">{currentRating}</span>
@@ -518,7 +522,7 @@ function TrackCardImpl({
           ) : null}
           {track.store_listed ? (
             <>
-              <span aria-hidden className="h-2 w-px bg-white/15" />
+              <span aria-hidden className="text-white/20">·</span>
               <span className="text-[#D4BFA0]">
                 {track.lease_price_usd != null ? `$${track.lease_price_usd}` : 'Listed'}
               </span>
@@ -526,7 +530,7 @@ function TrackCardImpl({
           ) : null}
           {isCached ? (
             <>
-              <span aria-hidden className="h-2 w-px bg-white/15" />
+              <span aria-hidden className="text-white/20">·</span>
               <span className="text-white/45">Offline</span>
             </>
           ) : null}

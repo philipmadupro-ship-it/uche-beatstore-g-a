@@ -1,0 +1,31 @@
+// shadcn/ui (new-york-v4), vendored from the registry. Colours resolve through
+// the `--color-*` theme mapping in globals.css, so these render on the app's
+// palette. Imports rewritten for this repo; otherwise unmodified, so a future
+// `shadcn diff` stays meaningful.
+"use client"
+
+import * as React from "react"
+import { cn } from "@/lib/cn"
+import { Separator as SeparatorPrimitive } from "radix-ui"
+
+function Separator({
+  className,
+  orientation = "horizontal",
+  decorative = true,
+  ...props
+}: React.ComponentProps<typeof SeparatorPrimitive.Root>) {
+  return (
+    <SeparatorPrimitive.Root
+      data-slot="separator"
+      decorative={decorative}
+      orientation={orientation}
+      className={cn(
+        "shrink-0 bg-border data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+export { Separator }

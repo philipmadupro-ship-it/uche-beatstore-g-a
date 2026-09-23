@@ -236,7 +236,12 @@ async function listBoundedTracks(
     const hasMore = cursor + limit < rows.length;
     const payload = {
       tracks: page,
-      pageInfo: { hasMore, nextCursor: hasMore ? String(cursor + limit) : null },
+      // First page only, matching the Supabase path below.
+      pageInfo: {
+        hasMore,
+        nextCursor: hasMore ? String(cursor + limit) : null,
+        ...(cursor === 0 ? { total: rows.length } : {}),
+      },
     };
     return NextResponse.json(paged ? payload : page, {
       headers: { 'Cache-Control': 'private, max-age=15, stale-while-revalidate=60' },
@@ -268,33 +273,38 @@ async function listBoundedTracks(
 
   // The filter chain is rebuilt per attempt because a Supabase query builder
   // cannot have its select swapped after construction.
-  const runTracksQuery = (columns: string) => {
-    let dbQuery = owner.admin
-      .from('tracks')
-      .select(columns)
-      .or(`user_id.eq.${safeUserId},user_id.is.null`);
-
-    if (filters.type && filters.type !== 'all') dbQuery = dbQuery.eq('type', filters.type);
-    if (filters.key) dbQuery = dbQuery.eq('key', filters.key);
-    if (filters.minRating) dbQuery = dbQuery.gte('rating', Number(filters.minRating));
-    if (filters.minBpm) dbQuery = dbQuery.gte('bpm', Number(filters.minBpm));
-    if (filters.maxBpm) dbQuery = dbQuery.lte('bpm', Number(filters.maxBpm));
-    if (filters.storeListed === '1') dbQuery = dbQuery.eq('store_listed', true);
-    if (filters.storeListed === '0') dbQuery = dbQuery.eq('store_listed', false);
-    if (junctionIds) dbQuery = dbQuery.in('id', junctionIds);
+  // One filter chain for both the page and the count, so "N tracks" can never
+  // disagree with what paging will actually deliver.
+  // Generic over the builder because its type depends on the select (a
+  // column list for the page, a head-only count for the total).
+  const applyFilters = <Q,>(dbQuery: Q): Q => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the builder's chain type is select-dependent
+    let query = (dbQuery as any).or(`user_id.eq.${safeUserId},user_id.is.null`);
+    if (filters.type && filters.type !== 'all') query = query.eq('type', filters.type);
+    if (filters.key) query = query.eq('key', filters.key);
+    if (filters.minRating) query = query.gte('rating', Number(filters.minRating));
+    if (filters.minBpm) query = query.gte('bpm', Number(filters.minBpm));
+    if (filters.maxBpm) query = query.lte('bpm', Number(filters.maxBpm));
+    if (filters.storeListed === '1') query = query.eq('store_listed', true);
+    if (filters.storeListed === '0') query = query.eq('store_listed', false);
+    if (junctionIds) query = query.in('id', junctionIds);
     if (q) {
       const safeQ = q.replace(/[%,()]/g, ' ').trim();
       if (safeQ) {
         const bpmFilter = /^\d{2,3}$/.test(safeQ) ? `,bpm.eq.${Number(safeQ)}` : '';
-        dbQuery = dbQuery.or(`title.ilike.%${safeQ}%,description.ilike.%${safeQ}%,key.ilike.%${safeQ}%${bpmFilter}`);
+        query = query.or(`title.ilike.%${safeQ}%,description.ilike.%${safeQ}%,key.ilike.%${safeQ}%${bpmFilter}`);
       }
     }
+    return query as Q;
+  };
+
+  const runTracksQuery = (columns: string) => {
+    const dbQuery = applyFilters(owner.admin.from('tracks').select(columns));
 
     return dbQuery
       .order('created_at', { ascending: false })
       .range(cursor, cursor + limit);
   };
-
   const { data, error } = await selectWithOptionalColumns(
     BASE_COLUMNS,
     OPTIONAL_COLUMNS,
@@ -311,9 +321,31 @@ async function listBoundedTracks(
   const rows = (data ?? []) as unknown as TrackListRow[];
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
+
+  // The total, on the FIRST page only: it is what lets the library say
+  // "50 of 633" and offer to load the rest, and it does not change while the
+  // producer pages through. A head-only count returns no rows. A failed count
+  // leaves `total` out rather than failing the page — the list still works,
+  // it just cannot say how long it is.
+  let total: number | undefined;
+  if (paged && cursor === 0) {
+    if (!hasMore) {
+      total = page.length;
+    } else {
+      const { count, error: countError } = await applyFilters(
+        owner.admin.from('tracks').select('id', { count: 'exact', head: true }),
+      );
+      if (!countError && typeof count === 'number') total = count;
+    }
+  }
+
   const payload = {
     tracks: page,
-    pageInfo: { hasMore, nextCursor: hasMore ? String(cursor + limit) : null },
+    pageInfo: {
+      hasMore,
+      nextCursor: hasMore ? String(cursor + limit) : null,
+      ...(total !== undefined ? { total } : {}),
+    },
   };
 
   return NextResponse.json(paged ? payload : page, {

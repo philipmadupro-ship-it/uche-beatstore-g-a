@@ -254,7 +254,7 @@ Text and borders are **white at alpha**, never warm hexes — that is what keeps
 
 **Type:** Akira Expanded (body, ships in `/public/fonts`), Synkopy (`.font-heading` — page titles), Panchang (`.font-mono` — metadata, labels). No CDN fonts. Labels: 10px mono uppercase `tracking-[0.2em]` `text-white/40`.
 
-**Components:** no UI library. Primitives are hand-rolled (`Dropdown`, `BatchActionBar`, `useToast`, `confirmToast`, etc.). No Radix, no Headless UI.
+**Components:** mostly hand-rolled primitives (`Dropdown`, `BatchActionBar`, `useToast`, `confirmToast`, etc.). shadcn/ui (with Radix underneath) is also available in `components/shadcn`, re-coloured to this palette — use it where a primitive doesn't exist yet. No Headless UI.
 
 **Motion:** `prefers-reduced-motion: reduce` MUST disable any nontrivial animation (vinyl spin, particle text, cosmos card fades, portfolio scramble text, smooth scroll).
 
@@ -263,7 +263,7 @@ Text and borders are **white at alpha**, never warm hexes — that is what keeps
 - No *required* accounts for buyers — purchasing never demands sign-in, and email at checkout is still the only identifier a one-time buyer has to give. Persistent buyer accounts exist as an *opt-in* (see "Buyer accounts" above) for anyone who wants a saved library across devices, not as a purchase gate.
 - No multi-tenant producer model (yet). Single `creator_profiles` row drives the store.
 - No subscriptions. Every sale is a one-time payment.
-- No Radix / Headless UI / shadcn. Primitives are hand-rolled.
+- No Headless UI. shadcn/ui lives in `components/shadcn` on this palette; the older hand-rolled primitives in `components/ui` stay.
 - No CDN font imports. The three faces (Akira, Synkopy, Panchang) ship from `/public/fonts`.
 - No nanoid in `useCart`. Item IDs are `${trackId}-${licenseId}-${ts}` strings.
 - No JS smooth-scroll library. Cosmos feel comes from CSS `scroll-behavior: smooth` + `animation-timeline: view()` on `.track-masonry > *`.

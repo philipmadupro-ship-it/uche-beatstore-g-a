@@ -304,9 +304,56 @@
   .range-tap::-moz-range-thumb { width: 22px; height: 22px; }
 }
 
+/* shadcn tokens, mapped onto this app's palette.
+ *
+ * shadcn components colour themselves with `bg-primary`, `text-muted-foreground`
+ * and so on. These give those names the app's black-and-silver values rather
+ * than shadcn's defaults, so a component pulled in from the registry lands on
+ * palette. Deliberately NOT named after the existing `--accent` / `--success`
+ * variables above, which older code reads with different meanings — the raw
+ * shadcn values live under `--sc-*`, and only the `--color-*` theme names below
+ * are exposed as utilities. Text and borders are white at alpha, per CLAUDE.md. */
+:root {
+  --sc-primary: #F2F2F0;
+  --sc-primary-foreground: #090907;
+  --sc-secondary: rgb(255 255 255 / 0.06);
+  --sc-muted: rgb(255 255 255 / 0.04);
+  --sc-accent: rgb(255 255 255 / 0.08);
+  --sc-border: rgb(255 255 255 / 0.10);
+  --sc-input: rgb(255 255 255 / 0.12);
+  --sc-ring: rgb(255 255 255 / 0.30);
+  /* Referenced as raw variables by the effect components (progress sweeps,
+     glows), which is why they exist outside the theme block too. */
+  --primary-foreground: var(--sc-primary-foreground);
+  --info: #71A4B5;
+  --brand: #c8a47a;
+}
+
 @theme inline {
   --color-background: var(--bg-page);
   --color-foreground: var(--text-primary);
+  --color-card: #0D0D0A;
+  --color-card-foreground: rgb(255 255 255 / 0.8);
+  --color-popover: #0D0D0A;
+  --color-popover-foreground: rgb(255 255 255 / 0.8);
+  --color-primary: var(--sc-primary);
+  --color-primary-foreground: var(--sc-primary-foreground);
+  --color-secondary: var(--sc-secondary);
+  --color-secondary-foreground: rgb(255 255 255 / 0.8);
+  --color-muted: var(--sc-muted);
+  --color-muted-foreground: rgb(255 255 255 / 0.4);
+  --color-accent: var(--sc-accent);
+  --color-accent-foreground: rgb(255 255 255 / 0.9);
+  --color-destructive: var(--color-red-400);
+  --color-border: var(--sc-border);
+  --color-input: var(--sc-input);
+  --color-ring: var(--sc-ring);
+  --color-brand: var(--brand);
+  --color-info: var(--info);
+  --color-mint: #6DC6A4;
+  /* No --radius-* overrides: Tailwind's defaults already back 757 existing
+     rounded-sm/md/lg/xl usages, and remapping them to shadcn's scale would
+     quietly re-round the whole app. shadcn components use the defaults. */
   --font-sans: 'Akira Expanded';
   --font-heading: 'Synkopy';
   /* Panchang replaces monospace and other utility fonts across the app */

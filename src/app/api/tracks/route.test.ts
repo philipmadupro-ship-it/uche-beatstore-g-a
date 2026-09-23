@@ -58,6 +58,15 @@ describe('GET /api/tracks', () => {
     expect(mockScopedList).toHaveBeenCalled();
   });
 
+  it('reports the total on the first page only', async () => {
+    seedTracks();
+    const mod = await import('./route');
+    const first = await (await mod.GET(req('/api/tracks?paged=1&limit=1'))).json();
+    const second = await (await mod.GET(req('/api/tracks?paged=1&limit=1&cursor=1'))).json();
+    expect(first.pageInfo.total).toBe(3);
+    expect(second.pageInfo).not.toHaveProperty('total');
+  });
+
   it('returns a paged object when requested', async () => {
     seedTracks();
     const mod = await import('./route');
@@ -67,7 +76,9 @@ describe('GET /api/tracks', () => {
 
     expect(res.status).toBe(200);
     expect(body.tracks.map((track: { id: string }) => track.id)).toEqual(['track-1', 'track-2']);
-    expect(body.pageInfo).toEqual({ hasMore: true, nextCursor: '2' });
+    // The first page carries the total, so the library can say "2 of 3"
+    // and offer to load the rest; later pages leave it out (see below).
+    expect(body.pageInfo).toEqual({ hasMore: true, nextCursor: '2', total: 3 });
   });
 
   it('searches before slicing bounded results', async () => {
