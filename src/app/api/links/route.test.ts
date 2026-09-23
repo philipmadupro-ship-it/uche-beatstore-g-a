@@ -52,6 +52,49 @@ beforeEach(() => {
 });
 
 describe('GET /api/links', () => {
+  it('chunks id filters so a large catalogue does not blow the query string', async () => {
+    // PostgREST puts `.in()` filters in the URL. One filter over ~650 track
+    // ids is ~24KB and comes back as a bare "Bad Request", which the page
+    // renders as "no share links yet" — an empty account, not a failure.
+    const tracks = Array.from({ length: 250 }, (_, i) => ({
+      id: `track-${i}`,
+      user_id: 'owner-1',
+      title: `T${i}`,
+      type: 'beat',
+      cover_url: null,
+    }));
+    const rows: RowsByTable = {
+      share_links: [],
+      projects: [],
+      playlists: [],
+      tracks,
+      track_tags: [],
+      project_shares: [],
+      project_tracks: [],
+      playlist_tracks: [],
+    };
+    mockRequireUser.mockResolvedValue({ ok: true, userId: 'owner-1', admin: adminClient(rows) });
+
+    const route = await loadRoute();
+    const res = await route.GET();
+    expect(res.status).toBe(200);
+
+    const trackIdFilters = queryCalls.filter(
+      (call) => call.operation === 'in' && call.column === 'track_id',
+    );
+    expect(trackIdFilters.length).toBeGreaterThan(2);
+    for (const call of trackIdFilters) {
+      expect((call.value as unknown[]).length).toBeLessThanOrEqual(100);
+    }
+    // Chunking must not lose rows: every id still gets asked about.
+    const asked = new Set(
+      trackIdFilters
+        .filter((call) => call.table === 'project_shares')
+        .flatMap((call) => call.value as string[]),
+    );
+    expect(asked.size).toBe(250);
+  });
+
   it('requires an authenticated owner', async () => {
     mockRequireUser.mockResolvedValue({
       ok: false,
@@ -139,6 +182,65 @@ describe('GET /api/links', () => {
     expect(JSON.stringify(body)).not.toContain('password_hash');
     expect(JSON.stringify(body)).not.toContain('audio_url');
     expect(JSON.stringify(body)).not.toContain('protected.example');
+  });
+
+  it('carries artwork the page can fall back on: cover, kind and a subject-stable seed', async () => {
+    const rows: RowsByTable = {
+      share_links: [
+        {
+          id: 'legacy-1',
+          user_id: 'owner-1',
+          token: 'legacy-token',
+          kind: 'track',
+          track_ids: ['track-1'],
+          created_at: '2026-06-03T00:00:00Z',
+        },
+      ],
+      projects: [{ id: 'project-1', user_id: 'owner-1', name: 'Midnight Tape', cover_url: null }],
+      playlists: [],
+      tracks: [
+        { id: 'track-1', user_id: 'owner-1', title: 'Static', type: 'beat', cover_url: 'https://cdn/static.jpg' },
+      ],
+      track_tags: [
+        { track_id: 'track-1', tag: 'Chill', category: 'mood' },
+        { track_id: 'track-1', tag: 'Drill', category: 'genre' },
+        { track_id: 'track-1', tag: '808s', category: 'instrument' },
+      ],
+      project_shares: [
+        {
+          id: 'project-share-1',
+          token: 'project-token',
+          content_type: 'project',
+          project_id: 'project-1',
+          created_at: '2026-06-02T00:00:00Z',
+        },
+      ],
+      project_tracks: [{ project_id: 'project-1', track_id: 'track-1', position: 0 }],
+      playlist_tracks: [],
+    };
+    mockRequireUser.mockResolvedValue({ ok: true, userId: 'owner-1', admin: adminClient(rows) });
+
+    const route = await loadRoute();
+    const body = await (await route.GET()).json();
+    const byId = Object.fromEntries(body.links.map((link: any) => [link.id, link]));
+
+    // A coverless project borrows its first track's art rather than showing
+    // nothing, and asks for the PROJECT default-artwork slot.
+    expect(byId['project-share-1']).toMatchObject({
+      cover_url: 'https://cdn/static.jpg',
+      artwork_kind: 'project',
+      // Seeded on the project, not the share: two links to one project must
+      // generate the same gradient.
+      artwork_seed: 'project-1',
+      artwork_tags: ['Drill', 'Chill'],
+    });
+    expect(byId['legacy-1']).toMatchObject({
+      artwork_kind: 'track',
+      artwork_seed: 'track-1',
+    });
+    expect(byId['legacy-1'].tracks[0]).toMatchObject({ cover_url: 'https://cdn/static.jpg' });
+    // instrument/status tags do not steer the gradient.
+    expect(byId['legacy-1'].artwork_tags).not.toContain('808s');
   });
 
   it('scopes modern shares through content owned by the authenticated user', async () => {

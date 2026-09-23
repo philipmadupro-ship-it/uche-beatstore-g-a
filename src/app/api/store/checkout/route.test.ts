@@ -21,6 +21,12 @@ vi.mock('@/lib/stripe/server', () => ({
   isStripeConfigured: () => mockIsStripeConfigured(),
 }));
 
+const mockRateLimit = vi.fn();
+vi.mock('@/lib/security/rate-limit', () => ({
+  rateLimitDurable: (...args: unknown[]) => mockRateLimit(...args),
+  clientIp: () => '203.0.113.7',
+}));
+
 vi.mock('@/lib/db', () => ({
   isSupabaseConfigured: () => mockIsSupabaseConfigured(),
 }));
@@ -60,6 +66,7 @@ const VALID_PROJECT = {
 };
 
 beforeEach(() => {
+  mockRateLimit.mockResolvedValue(true);
   vi.clearAllMocks();
   mockIsStripeConfigured.mockReturnValue(true);
   mockIsSupabaseConfigured.mockReturnValue(true);

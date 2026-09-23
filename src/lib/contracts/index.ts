@@ -87,6 +87,61 @@ export const TrackPatchBodySchema = z.object({
 }).strict();
 export type TrackPatchBody = z.infer<typeof TrackPatchBodySchema>;
 
+// PATCH /api/tracks/[id]/stem-files — rename / recategorise one stem file.
+//
+// The categories mirror the route's own allow-list, `topline` included: a
+// topline is a recorded idea rather than a deliverable stem, and the producer
+// share filters on exactly that value.
+export const STEM_FILE_CATEGORIES = [
+  'vocals', 'drums', 'bass', 'melody', 'fx', 'other', 'topline',
+] as const;
+
+export const StemFilePatchBodySchema = z.object({
+  file_id: z.string().min(1),
+  label: z.string().min(1).max(120).optional(),
+  category: z.enum(STEM_FILE_CATEGORIES).optional(),
+}).strict().refine(
+  (b) => b.label !== undefined || b.category !== undefined,
+  { message: 'Nothing to update' },
+);
+export type StemFilePatchBody = z.infer<typeof StemFilePatchBodySchema>;
+
+// ── Notifications ───────────────────────────────────────────────────────
+
+/**
+ * Mark specific notifications read.
+ *
+ * Opening the bell used to PATCH `action=read_all`, so glancing at the panel
+ * cleared every notification whether or not the producer had looked at it —
+ * open it to check one thing and the rest are gone. Reading is now something
+ * you do to a notification, not something that happens because a panel
+ * rendered, so the route needs to take ids.
+ */
+export const NotificationReadBodySchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(100),
+}).strict();
+export type NotificationReadBody = z.infer<typeof NotificationReadBodySchema>;
+
+// ── Track collaborators (migration 115) ────────────────────────────────
+//
+// `role` mirrors `title-metadata.ts`'s `CollaboratorRole` — kept as a plain
+// string union here rather than importing that module's type, so this
+// contract has no dependency on the parser. The column itself is free text
+// (see the migration), a producer typing a role that isn't one of these three
+// still writes fine; the enum only bounds what THIS route's POST accepts.
+export const COLLABORATOR_ROLES = ['producer', 'feature', 'collaborator'] as const;
+
+export const CollaboratorCreateBodySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  role: z.enum(COLLABORATOR_ROLES),
+}).strict();
+export type CollaboratorCreateBody = z.infer<typeof CollaboratorCreateBodySchema>;
+
+export const CollaboratorDeleteBodySchema = z.object({
+  id: z.string().min(1),
+}).strict();
+export type CollaboratorDeleteBody = z.infer<typeof CollaboratorDeleteBodySchema>;
+
 // ── Projects ────────────────────────────────────────────────────────────
 
 export const PROJECT_STATUSES = ['in_progress', 'final', 'archived'] as const;
@@ -283,6 +338,16 @@ export const ContactSegmentCreateBodySchema = z.object({
 }).strict();
 export type ContactSegmentCreateBody = z.infer<typeof ContactSegmentCreateBodySchema>;
 
+// Rename a saved segment, retarget its filters, or reorder it. Every field is
+// optional so a rename doesn't have to resend the filter payload; the route
+// rejects a body that would change nothing.
+export const ContactSegmentUpdateBodySchema = z.object({
+  name: z.string().min(1).max(60).optional(),
+  filters: ContactSegmentFiltersSchema.optional(),
+  position: z.number().int().min(0).max(1000).optional(),
+}).strict();
+export type ContactSegmentUpdateBody = z.infer<typeof ContactSegmentUpdateBodySchema>;
+
 // ── Find-or-create a contact by email (ad-hoc send) ───────────────────────
 export const ContactResolveBodySchema = z.object({
   email: z.string().email().max(200),
@@ -292,8 +357,50 @@ export type ContactResolveBody = z.infer<typeof ContactResolveBodySchema>;
 
 // ── CRM lifecycle stage (mig 092) ─────────────────────────────────────────
 // Editable, stored. Distinct from the auto-computed activity tone.
-export const CRM_STAGES = ['prospect', 'active', 'engaged', 'cold', 'archived'] as const;
+//
+// Ordered as the pipeline reads, because this array drives the dropdown.
+// `customer` is terminal-positive and set automatically by the Stripe webhook
+// on any completed purchase — before it existed the stage the producer
+// actually manages never moved on a sale (only the parallel
+// `buyer_pipeline_status` column did, which the stage cell doesn't read).
+// Mig 092 enforces the allowed values in Zod rather than a CHECK constraint,
+// so adding a stage needs no schema change.
+export const CRM_STAGES = ['prospect', 'active', 'engaged', 'customer', 'cold', 'archived'] as const;
 export type CrmStage = (typeof CRM_STAGES)[number];
+
+// ── Contact create / edit ─────────────────────────────────────────────────
+// One field list shared by POST /api/contacts and PATCH /api/contacts/[id],
+// so the two can't drift. They did: the create route hand-destructured seven
+// keys and silently dropped everything else, including `phone` and `category`
+// — both of which AddContactModal has always collected, and `category` drives
+// the CRM filters. A hand-added contact lost them on every save.
+const ContactWritableFields = {
+  email: z.string().email().max(200).nullable().optional(),
+  phone: z.string().max(60).nullable().optional(),
+  role: z.string().max(120).nullable().optional(),
+  label: z.string().max(120).nullable().optional(),
+  category: z.string().max(60).nullable().optional(),
+  genre: z.string().max(120).nullable().optional(),
+  country: z.string().max(120).nullable().optional(),
+  city: z.string().max(120).nullable().optional(),
+  instagram: z.string().max(120).nullable().optional(),
+  twitter: z.string().max(120).nullable().optional(),
+  website: z.string().max(300).nullable().optional(),
+  notes: z.string().max(10000).nullable().optional(),
+  crm_status: z.enum(CRM_STAGES).nullable().optional(),
+} as const;
+
+export const ContactCreateBodySchema = z.object({
+  name: z.string().min(1).max(200),
+  ...ContactWritableFields,
+}).strict();
+export type ContactCreateBody = z.infer<typeof ContactCreateBodySchema>;
+
+export const ContactPatchBodySchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  ...ContactWritableFields,
+}).strict();
+export type ContactPatchBody = z.infer<typeof ContactPatchBodySchema>;
 
 // Batch edit a set of contacts (stage and/or category).
 export const ContactsBatchPatchBodySchema = z.object({

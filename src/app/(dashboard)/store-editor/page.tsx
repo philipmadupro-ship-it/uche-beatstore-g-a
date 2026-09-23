@@ -26,7 +26,7 @@ import {
   Image as ImageIcon, Upload, Globe,
   Music, ListMusic, DollarSign, Eye, EyeOff,
   GripVertical, X, Plus, Layers, Search,
-  ShoppingBag, Star, Tag, Trash2, Clock, Mic2, Play, Download,
+  ShoppingBag, Star, Tag, Trash2, Mic2, Play,
   ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
@@ -39,6 +39,13 @@ import { LicenseBuilder } from '@/components/store/LicenseBuilder';
 import { ArtistBioBlock } from '@/components/store/ArtistBioBlock';
 import { BeatCard } from '@/components/store/BeatCard';
 import { TrackLicensePanel } from '@/components/store/TrackLicensePanel';
+import { StoreBeatRow } from '@/components/store/StoreBeatRow';
+import {
+  attentionFilterForLabel,
+  hasSellablePrice,
+  matchesAttentionFilter,
+  type AttentionFilter,
+} from '@/lib/store-editor/beat-row';
 import type { StoreTrack, CreatorProfile } from '@/components/store/types';
 import { StorefrontBuilder } from '@/components/store-editor/StorefrontBuilder';
 import type { StorefrontData } from '@/components/store-editor/SectionRenderer';
@@ -177,7 +184,9 @@ function Section({
   const panelId = `store-editor-section-${id}`;
 
   return (
-    <section className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
+    /* `section-<id>` is the scroll anchor the hash deep-link targets; the
+       panel keeps its own `store-editor-section-<id>` for aria-controls. */
+    <section id={`section-${id}`} className="scroll-mt-24 overflow-hidden rounded-xl border border-white/10 bg-white/[0.04]">
       <button
         type="button"
         onClick={onToggle}
@@ -716,6 +725,9 @@ export default function StoreEditorPage() {
   const [allTracks, setAllTracks] = useState<TrackRow[]>([]);
   const [trackSummary, setTrackSummary] = useState<TrackStoreSummary | null>(null);
   const [trackSearch, setTrackSearch] = useState('');
+  // Set by the Needs-attention panel to narrow the rows below to the beats one
+  // issue is about. Null = show everything.
+  const [attentionFilter, setAttentionFilter] = useState<AttentionFilter | null>(null);
   const [visibleTrackRows, setVisibleTrackRows] = useState(TRACK_LIST_BATCH_SIZE);
   const [trackNextCursor, setTrackNextCursor] = useState<string | null>(null);
   const [trackHasMore, setTrackHasMore] = useState(false);
@@ -813,6 +825,26 @@ export default function StoreEditorPage() {
 
   const producerPicksOpen = openSections.has('producer-picks');
 
+  /**
+   * Deep-link to a section by hash — `/store-editor#licenses`.
+   *
+   * Every section already has a stable `id`, but nothing read the URL, so
+   * links from elsewhere in the app could only land the producer at the top
+   * of a fourteen-section accordion and leave them to find the right one.
+   * Settings in particular pointed at /settings/licenses, a page whose entire
+   * content is a notice saying the builder moved here.
+   */
+  useEffect(() => {
+    const id = window.location.hash.replace('#', '');
+    if (!id) return;
+    openSection(id);
+    // Wait a frame so the panel has expanded before scrolling to it.
+    const frame = requestAnimationFrame(() => {
+      document.getElementById(`section-${id}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   /* ── Builder plumbing ─────────────────────────────────────────────────── */
 
   /**
@@ -897,15 +929,38 @@ export default function StoreEditorPage() {
     setVisibleTrackRows(TRACK_LIST_BATCH_SIZE);
   }, [trackSearch, allTracks.length]);
 
+  /**
+   * Whether a beat has a price a buyer could pay. Delegates to
+   * `hasSellablePrice` so the Needs-attention counter and the row filter
+   * cannot disagree about which beats are unpriced.
+   *
+   * Declared HERE, above `filteredTrackRows`, because that memo calls it
+   * during render — it used to live ~800 lines further down, which put it in
+   * the temporal dead zone the moment anything above it needed the rule.
+   */
+  const hasReadyPrice = useCallback(
+    (track: TrackRow): boolean => hasSellablePrice(track, {
+      defaultLeasePrice: form.license_lease_price_usd,
+      defaultExclusivePrice: form.license_exclusive_price_usd,
+      tiers: globalLicenses,
+      linksByTrack: trackLicenseLinks,
+    }),
+    [form.license_lease_price_usd, form.license_exclusive_price_usd, globalLicenses, trackLicenseLinks],
+  );
+
   const filteredTrackRows = useMemo(() => {
     const search = trackSearch.trim().toLowerCase();
-    if (!search) return allTracks;
-    return allTracks.filter((t) =>
+    let rows = allTracks;
+    if (attentionFilter) {
+      rows = rows.filter((t) => matchesAttentionFilter(attentionFilter, t, hasReadyPrice));
+    }
+    if (!search) return rows;
+    return rows.filter((t) =>
       t.title.toLowerCase().includes(search) ||
       (t.key ?? '').toLowerCase().includes(search) ||
       String(t.bpm ?? '').includes(search)
     );
-  }, [allTracks, trackSearch]);
+  }, [allTracks, trackSearch, attentionFilter, hasReadyPrice]);
 
   const renderedTrackRows = useMemo(
     () => filteredTrackRows.slice(0, visibleTrackRows),
@@ -1088,13 +1143,24 @@ export default function StoreEditorPage() {
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
         setGlobalLicenses(loadedGlobalLicenses);
         setPromoCodes(promod.codes ?? []);
-        setTrackSummary({
-          ...summaryData,
-          producerPicks: ((summaryData.producerPicks ?? []) as ApiTrackRow[]).map(mapTrackRow),
-        });
+        // Only store the summary if the request actually succeeded. A failed
+        // response still parses as JSON ({ error: '…' }), and spreading that
+        // made trackSummary truthy while `issues` / `producerPicks` stayed
+        // undefined — so every `trackSummary?.x.y` below dereferenced undefined
+        // and took the whole page down with it. Leaving it null instead lets
+        // the `?? allTracks…` fallbacks that already exist do their job.
+        if (trackSummaryRes.ok) {
+          setTrackSummary({
+            ...summaryData,
+            producerPicks: ((summaryData.producerPicks ?? []) as ApiTrackRow[]).map(mapTrackRow),
+          });
+        } else {
+          console.error('store-summary failed; falling back to client-side counts', summaryData);
+          setTrackSummary(null);
+        }
         const firstTrackPage = await loadTrackPage({ search: '' });
         void loadTrackLicenseLinks(firstTrackPage.filter((t) => t.store_listed).map((t) => t.id));
-        setPreviewTracks((summaryData.producerPicks ?? []).slice(0, 3).map(mapTrackRow));
+        setPreviewTracks(((summaryData.producerPicks ?? []) as ApiTrackRow[]).slice(0, 3).map(mapTrackRow));
         const p = pd.profile ?? {};
         setStoreLayout(p.store_layout ?? null);
         setProfileLoaded(true);
@@ -1298,6 +1364,40 @@ export default function StoreEditorPage() {
     void persistListedTrackOrder(reordered);
   };
 
+  /**
+   * Write one or more fields on a beat from its listing row.
+   *
+   * Optimistic, and rolls the row back on failure — the row edits title,
+   * cover and price now, and a price that appears to save but does not is the
+   * worst possible outcome on the screen that decides what sells.
+   */
+  const patchTrackRow = async (trackId: string, patch: Record<string, unknown>): Promise<boolean> => {
+    const before = allTracks.find((t) => t.id === trackId);
+    setAllTracks((prev) => {
+      const updated = prev.map((t) => t.id === trackId ? { ...t, ...patch } as TrackRow : t);
+      setPreviewTracks(updated.filter((t) => t.store_listed).slice(0, 3));
+      return updated;
+    });
+    try {
+      const res = await fetch(`/api/tracks/${trackId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      return true;
+    } catch (err) {
+      if (before) {
+        setAllTracks((prev) => prev.map((t) => t.id === trackId ? before : t));
+      }
+      toast.error('Could not save', err instanceof Error ? err.message : 'Try again');
+      return false;
+    }
+  };
+
   /* ── Track listing toggle ── */
   const toggleTrackListed = async (trackId: string, currentlyListed: boolean) => {
     setTogglingTrack(trackId);
@@ -1344,14 +1444,14 @@ export default function StoreEditorPage() {
   /* ── Track featured toggle (migration 054) ── */
   const toggleTrackFeatured = async (trackId: string, currentlyFeatured: boolean) => {
     const nextState = !currentlyFeatured;
-    const currentPickCount = trackSummary?.producerPicks.length ?? allTracks.filter((t) => t.store_listed && t.store_featured).length;
+    const currentPickCount = trackSummary?.producerPicks?.length ?? allTracks.filter((t) => t.store_listed && t.store_featured).length;
     if (nextState && currentPickCount >= 12) {
       toast.error("Producer's Picks is full", 'Remove one pick before adding another.');
       return;
     }
     const before = allTracks.find((track) => track.id === trackId)
       ?? producerPickCandidates.find((track) => track.id === trackId)
-      ?? trackSummary?.producerPicks.find((track) => track.id === trackId);
+      ?? trackSummary?.producerPicks?.find((track) => track.id === trackId);
     const after = before ? { ...before, store_featured: nextState } : null;
     if (before && after) patchTrackSummaryVisibility(before, after);
     if (before) {
@@ -1426,8 +1526,6 @@ export default function StoreEditorPage() {
   /* ── Scheduled-publish action ──
      Drafts can be given a future timestamp. The cron route at
      /api/cron/publish-scheduled flips them live when due. */
-  const [scheduleOpenFor, setScheduleOpenFor] = useState<string | null>(null);
-  const [scheduleDraft, setScheduleDraft] = useState<string>('');
   const setSchedule = async (trackId: string, isoOrNull: string | null) => {
     const prev = allTracks;
     setAllTracks((p) => p.map((t) => t.id === trackId ? { ...t, scheduled_publish_at: isoOrNull } : t));
@@ -1677,32 +1775,8 @@ export default function StoreEditorPage() {
   const producerPicks = trackSummary?.producerPicks ?? allTracks.filter((t) => t.store_listed && t.store_featured).slice(0, 12);
   const producerPickIds = new Set(producerPicks.map((track) => track.id));
   const availableProducerPicks = producerPickCandidates.filter((track) => !producerPickIds.has(track.id));
-  const listedMissingPeaksCount = trackSummary?.issues.missingPeaks.count
+  const listedMissingPeaksCount = trackSummary?.issues?.missingPeaks?.count
     ?? allTracks.filter((t) => t.store_listed && !t.peaks_url).length;
-
-  const hasReadyPrice = (track: TrackRow): boolean => {
-    const legacyReady = (
-      (track.lease_price_usd != null && track.lease_price_usd > 0)
-      || (track.exclusive_price_usd != null && track.exclusive_price_usd > 0)
-      || Number(form.license_lease_price_usd) > 0
-      || Number(form.license_exclusive_price_usd) > 0
-    );
-    if (globalLicenses.length === 0) return legacyReady;
-
-    const links = trackLicenseLinks[track.id] ?? [];
-    const useLinked = links.some((link) => link.linked);
-    const activeTiers = globalLicenses.filter((license) => {
-      if (!useLinked) return true;
-      const link = links.find((row) => row.license_id === license.id);
-      return !!link?.linked && link.enabled;
-    });
-    const tierReady = activeTiers.some((license) => {
-      if (license.is_free) return true;
-      const override = links.find((row) => row.license_id === license.id)?.price_override_usd;
-      return Number(override ?? license.price_usd) > 0;
-    });
-    return tierReady || (activeTiers.length === 0 && legacyReady);
-  };
 
   if (loading) {
     return (
@@ -1784,7 +1858,7 @@ export default function StoreEditorPage() {
             /* Never offer the builder on a failed load: it would start from the
                default layout and autosave it over whatever the producer had. */
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-6">
-              <p className="text-[12px] text-white/80">Could not load your storefront settings.</p>
+              <p className="text-[11px] text-white/80">Could not load your storefront settings.</p>
               <p className="mt-1 text-[11px] leading-relaxed text-white/50">
                 The builder stays closed until they load, so it cannot overwrite your saved
                 layout with a blank one. Reload the page to try again.
@@ -2489,8 +2563,9 @@ export default function StoreEditorPage() {
               badge={`${trackSummary?.listed ?? allTracks.filter((t) => t.store_listed).length} listed`}
             >
               <p className="text-[11px] text-white/40">
-                Toggle beats on or off to control what appears in your public store. To set prices and cover art, open the beat in your{' '}
-                <Link href="/library" className="text-white/80 underline underline-offset-2 hover:text-white transition-colors">Library</Link>.
+                Toggle a beat on or off to control what appears in your public store.
+                Cover, title and lease price edit in place — click them. Everything
+                else about a row is in its ⋯ menu.
               </p>
 
               {/* Search */}
@@ -2514,6 +2589,15 @@ export default function StoreEditorPage() {
                 </span>
                 <span>{trackSummary?.total ?? allTracks.length} total beats</span>
                 {trackSearch.trim() && <span>{filteredTrackRows.length} matching</span>}
+                {attentionFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setAttentionFilter(null)}
+                    className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-amber-300 transition-colors hover:border-amber-500/50 hover:text-amber-200"
+                  >
+                    Filtered to {filteredTrackRows.length} · clear
+                  </button>
+                )}
               </div>
 
               {/* Needs attention — surfaces listed beats with quality
@@ -2546,15 +2630,36 @@ export default function StoreEditorPage() {
                               <span className="opacity-0 group-hover:opacity-100 text-amber-400/80 ml-auto">Open waveforms</span>
                             </button>
                           ) : (
-                            <a
-                              href={`/library/${i.firstId}`}
-                              className="text-[11px] text-white/80 hover:text-amber-300 flex items-center gap-2 group"
+                            /* Narrow the list below to exactly these beats
+                               instead of linking to /library/<firstId>. The
+                               old link opened one of them on another page,
+                               with no route back to the other nine — and
+                               cover, price and title are all editable in the
+                               row now, so the fix is right here. */
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = attentionFilterForLabel(i.label);
+                                if (next) setAttentionFilter((cur) => cur === next ? null : next);
+                              }}
+                              aria-pressed={attentionFilter === attentionFilterForLabel(i.label)}
+                              className={`w-full text-left text-[11px] flex items-center gap-2 group ${
+                                attentionFilter === attentionFilterForLabel(i.label)
+                                  ? 'text-amber-300'
+                                  : 'text-white/80 hover:text-amber-300'
+                              }`}
                             >
                             <span className="w-1 h-1 rounded-full bg-amber-400/60" />
                             <span className="tabular-nums font-mono text-amber-400/90">{i.count}</span>
                             <span>listed beat{i.count === 1 ? '' : 's'} {i.label}</span>
-                            <span className="opacity-0 group-hover:opacity-100 text-amber-400/80 ml-auto">→</span>
-                            </a>
+                            <span className={`ml-auto text-amber-400/80 ${
+                              attentionFilter === attentionFilterForLabel(i.label)
+                                ? 'opacity-100'
+                                : 'opacity-0 group-hover:opacity-100'
+                            }`}>
+                              {attentionFilter === attentionFilterForLabel(i.label) ? 'Showing these' : 'Show these'}
+                            </span>
+                            </button>
                           )}
                         </li>
                       ))}
@@ -2574,6 +2679,23 @@ export default function StoreEditorPage() {
                 </div>
               ) : (
                 <div className="max-h-[60dvh] space-y-1 overflow-y-auto overscroll-contain pr-1 sm:max-h-[480px]">
+                  {/* A filter that matches nothing must say so. An empty
+                      scroll box reads as a loading fault, and the producer who
+                      just fixed the last unpriced beat deserves to be told. */}
+                  {renderedTrackRows.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-white/10 py-8 text-center">
+                      <p className="text-[11px] text-white/40">
+                        {attentionFilter ? 'Nothing left to fix here.' : 'No beats match that search.'}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => { setAttentionFilter(null); setTrackSearch(''); }}
+                        className="mt-2 text-[10px] font-mono uppercase tracking-[0.18em] text-white/60 underline underline-offset-2 transition-colors hover:text-white"
+                      >
+                        Show all beats
+                      </button>
+                    </div>
+                  )}
                   {(() => {
                     // Index map (within the *listed* subset) so the drag
                     // handlers know which slot a row occupies. Drafts are
@@ -2587,250 +2709,38 @@ export default function StoreEditorPage() {
                         const isListed = listedIdx >= 0;
                         return (
                       <div key={t.id}>
-                      <div
-                        draggable={isListed}
+                      <StoreBeatRow
+                        track={t}
+                        listedIndex={listedIdx}
+                        listedCount={listedIds.length}
+                        defaultLeasePrice={
+                          Number(form.license_lease_price_usd) > 0
+                            ? Number(form.license_lease_price_usd)
+                            : null
+                        }
+                        licensePanelOpen={licenseExpandedFor.has(t.id)}
+                        voiceTagConfigured={!!form.voice_tag_url}
+                        busy={togglingTrack === t.id}
+                        onPatch={(patch) => patchTrackRow(t.id, patch)}
+                        onToggleListed={() => toggleTrackListed(t.id, t.store_listed)}
+                        onToggleFeatured={() => toggleTrackFeatured(t.id, t.store_featured)}
+                        onToggleFreeDownload={() => toggleFreeDownload(t.id, t.free_download_enabled)}
+                        onToggleVoiceTag={() => toggleTrackTag(t.id, t.voice_tag_enabled)}
+                        onToggleLicensePanel={() => {
+                          if (licenseExpandedFor.has(t.id)) void loadTrackLicenseLinks([t.id]);
+                          setLicenseExpandedFor((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(t.id)) next.delete(t.id);
+                            else next.add(t.id);
+                            return next;
+                          });
+                        }}
+                        onMove={(direction) => moveListedTrack(listedIdx, direction)}
+                        onSetSchedule={(iso) => setSchedule(t.id, iso)}
                         onDragStart={() => { if (isListed) handleTrackDragStart(listedIdx); }}
                         onDragOver={(e) => { if (isListed) handleTrackDragOver(e, listedIdx); }}
                         onDragEnd={handleTrackDragEnd}
-                        className={`flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 transition-colors sm:flex-nowrap sm:gap-3 ${
-                          t.store_listed
-                            ? 'bg-white/[0.03] border-white/10 hover:border-white/20 cursor-grab active:cursor-grabbing'
-                            : 'bg-transparent border-white/[0.06] hover:border-white/10'
-                        }`}
-                      >
-                        {/* Drag handle — only on listed rows */}
-                        {isListed && (
-                          <GripVertical size={13} className="hidden shrink-0 text-white/30 hover:text-white/60 sm:block" />
-                        )}
-                        {/* Cover art */}
-                        <div className="w-9 h-9 rounded-lg overflow-hidden bg-white/[0.05] border border-white/20 shrink-0">
-                          {t.cover_url
-                            ? <Image src={t.cover_url} alt="" width={36} height={36} unoptimized className="w-full h-full object-cover" />
-                            : <div className="w-full h-full flex items-center justify-center text-white/30"><Music size={12} /></div>}
-                        </div>
-
-                        {/* Info */}
-                        <div className="min-w-[120px] flex-1">
-                          <p className={`text-[11px] font-medium truncate ${t.store_listed ? 'text-white' : 'text-white/80'}`}>
-                            {t.title}
-                          </p>
-                          <p className="text-[9px] font-mono text-white/40 uppercase tracking-wider">
-                            {t.type}
-                            {t.bpm ? ` · ${t.bpm} BPM` : ''}
-                            {t.key ? ` · ${t.key}` : ''}
-                          </p>
-                        </div>
-
-                        {/* Price badge (if set) */}
-                        {t.lease_price_usd != null && (
-                          <span className="hidden sm:block text-[9px] font-mono text-white/80 tabular-nums shrink-0">
-                            ${t.lease_price_usd}
-                          </span>
-                        )}
-
-                        {/* Status badge — Live / Draft / Scheduled */}
-                        {t.store_listed ? (
-                          <span className="hidden sm:block text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-[#6DC6A4] bg-[#6DC6A4]/10 border border-[#6DC6A4]/20">
-                            Live
-                          </span>
-                        ) : t.scheduled_publish_at ? (
-                          <span
-                            className="hidden sm:flex items-center gap-1 text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-amber-300 bg-amber-500/10 border border-amber-500/30"
-                            title={`Auto-publishes ${new Date(t.scheduled_publish_at).toLocaleString()}`}
-                          >
-                            <ChevronRight size={9} className="-mr-0.5" />
-                            Scheduled
-                          </span>
-                        ) : (
-                          <span className="hidden sm:block text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded shrink-0 text-white/30 bg-white/[0.05] border border-white/10">
-                            Draft
-                          </span>
-                        )}
-
-                        {/* Schedule button — only on drafts; opens an
-                            inline datetime picker. Clearing the input
-                            cancels any pending schedule. */}
-                        {!t.store_listed && (
-                          <div className="relative shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (scheduleOpenFor === t.id) {
-                                  setScheduleOpenFor(null);
-                                } else {
-                                  setScheduleOpenFor(t.id);
-                                  setScheduleDraft(t.scheduled_publish_at
-                                    ? new Date(t.scheduled_publish_at).toISOString().slice(0, 16)
-                                    : '');
-                                }
-                              }}
-                              title={t.scheduled_publish_at
-                                ? `Edit schedule (${new Date(t.scheduled_publish_at).toLocaleString()})`
-                                : 'Schedule auto-publish'}
-                              className={`w-7 h-7 rounded-lg flex items-center justify-center border transition-colors ${
-                                t.scheduled_publish_at
-                                  ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                                  : 'bg-white/[0.03] border-white/10 text-white/40 hover:text-amber-300 hover:border-amber-500/30'
-                              }`}
-                            >
-                              <Clock size={12} />
-                            </button>
-                            {scheduleOpenFor === t.id && (
-                              <div className="absolute right-0 top-9 z-30 w-64 rounded-xl bg-white/[0.02] border border-white/[0.10] p-3">
-                                <p className="text-[9px] font-mono uppercase tracking-wider text-white/40 mb-2">
-                                  Auto-publish at
-                                </p>
-                                <input
-                                  type="datetime-local"
-                                  value={scheduleDraft}
-                                  onChange={(e) => setScheduleDraft(e.target.value)}
-                                  className={inputCls}
-                                />
-                                <div className="flex items-center gap-2 mt-3">
-                                  <button
-                                    onClick={async () => {
-                                      if (!scheduleDraft) return;
-                                      const iso = new Date(scheduleDraft).toISOString();
-                                      await setSchedule(t.id, iso);
-                                      setScheduleOpenFor(null);
-                                    }}
-                                    disabled={!scheduleDraft}
-                                    className="flex-1 px-3 py-2 rounded-lg bg-white text-black text-[10px] font-bold uppercase tracking-wider hover:bg-white/90 transition-colors disabled:opacity-40"
-                                  >
-                                    Schedule
-                                  </button>
-                                  {t.scheduled_publish_at && (
-                                    <button
-                                      onClick={async () => {
-                                        await setSchedule(t.id, null);
-                                        setScheduleOpenFor(null);
-                                      }}
-                                      className="px-3 py-2 rounded-lg border border-white/20 text-white/80 text-[10px] font-mono uppercase tracking-wider hover:text-white hover:border-white/40 transition-colors"
-                                    >
-                                      Clear
-                                    </button>
-                                  )}
-                                </div>
-                                {t.scheduled_publish_at && (
-                                  <p className="mt-2 text-[10px] text-white/40">
-                                    Currently set for {new Date(t.scheduled_publish_at).toLocaleString()}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Producer's-Picks toggle — only available on listed
-                            tracks. Star fills with the accent gold when active. */}
-                        {t.store_listed && (
-                          <button
-                            onClick={() => toggleTrackFeatured(t.id, t.store_featured)}
-                            title={t.store_featured ? "Unpin from Producer's Picks" : "Pin to Producer's Picks"}
-                            className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center border transition-colors ${
-                              t.store_featured
-                                ? 'bg-white/15 border-white/40 text-white'
-                                : 'bg-white/[0.03] border-white/10 text-white/40 hover:text-white hover:border-white/30'
-                            }`}
-                          >
-                            <Star size={12} fill={t.store_featured ? 'currentColor' : 'none'} />
-                          </button>
-                        )}
-
-                        {/* License tier panel toggle — listed tracks only */}
-                        {t.store_listed && (
-                          <div className="flex shrink-0 items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => moveListedTrack(listedIdx, -1)}
-                              disabled={listedIdx === 0}
-                              aria-label={`Move ${t.title} up`}
-                              className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
-                            >
-                              <ArrowUp size={12} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => moveListedTrack(listedIdx, 1)}
-                              disabled={listedIdx === listedIds.length - 1}
-                              aria-label={`Move ${t.title} down`}
-                              className="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-25 sm:h-7 sm:w-7"
-                            >
-                              <ArrowDown size={12} />
-                            </button>
-                          </div>
-                        )}
-
-                        {t.store_listed && (
-                          <button
-                            onClick={() => {
-                              if (licenseExpandedFor.has(t.id)) void loadTrackLicenseLinks([t.id]);
-                              setLicenseExpandedFor((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(t.id)) next.delete(t.id);
-                                else next.add(t.id);
-                                return next;
-                              });
-                            }}
-                            title="Configure license tiers for this beat"
-                            className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center border transition-colors ${
-                              licenseExpandedFor.has(t.id)
-                                ? 'bg-white/10 border-white/30 text-white'
-                                : 'bg-white/[0.03] border-white/10 text-white/40 hover:text-white hover:border-white/20'
-                            }`}
-                          >
-                            <Layers size={12} />
-                          </button>
-                        )}
-
-                        {/* Free-download toggle — listed tracks only. Green when on. */}
-                        {t.store_listed && (
-                          <button
-                            onClick={() => toggleFreeDownload(t.id, t.free_download_enabled)}
-                            title={t.free_download_enabled ? 'Free download on — click to disable' : 'Enable free download (email-gated)'}
-                            className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center border transition-colors ${
-                              t.free_download_enabled
-                                ? 'bg-[#6DC6A4]/15 border-[#6DC6A4]/40 text-[#6DC6A4]'
-                                : 'bg-white/[0.03] border-white/10 text-white/40 hover:text-[#6DC6A4] hover:border-[#6DC6A4]/30'
-                            }`}
-                          >
-                            <Download size={12} />
-                          </button>
-                        )}
-
-                        {/* Voice-tag toggle — only on listed tracks, and only
-                            useful once a tag is uploaded (button hints when not). */}
-                        {t.store_listed && (
-                          <button
-                            onClick={() => {
-                              if (!form.voice_tag_url) { toast.info('Upload a voice tag first', 'Find it in the Voice Tag section above.'); return; }
-                              toggleTrackTag(t.id, t.voice_tag_enabled);
-                            }}
-                            title={t.voice_tag_enabled ? 'Voice tag on (preview only)' : 'Add voice tag to preview'}
-                            className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center border transition-colors ${
-                              t.voice_tag_enabled
-                                ? 'bg-white/10 border-white/30 text-white'
-                                : 'bg-white/[0.03] border-white/10 text-white/40 hover:text-white hover:border-white/20'
-                            }`}
-                          >
-                            <Mic2 size={12} />
-                          </button>
-                        )}
-
-                        {/* Toggle */}
-                        <button
-                          onClick={() => toggleTrackListed(t.id, t.store_listed)}
-                          disabled={togglingTrack === t.id}
-                          title={t.store_listed ? 'Remove from store' : 'Add to store'}
-                          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out outline-none disabled:opacity-60 ${
-                            t.store_listed ? 'bg-[#6DC6A4]' : 'bg-white/20'
-                          }`}
-                        >
-                          <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                            t.store_listed ? 'translate-x-5' : 'translate-x-0'
-                          }`} />
-                        </button>
-                      </div>
+                      />
                       {/* Per-track license panel — expands below the row */}
                       {licenseExpandedFor.has(t.id) && (
                         <div className="mx-3 mb-1 px-3 py-3 rounded-xl bg-[#090907] border border-white/20">
@@ -3221,7 +3131,10 @@ export default function StoreEditorPage() {
               <LicenseBuilder />
             </Section>
 
-            {/* Mobile save shortcut */}
+            {/* Mobile save shortcut — the header button is off-screen on
+                phones. Same label as the header one: it is the same action,
+                and calling it "Save Store" here and "Save changes" up there
+                read as two different commits. */}
             <div className="pt-4 lg:hidden flex justify-end">
               <button
                 onClick={handleSave}
@@ -3229,7 +3142,7 @@ export default function StoreEditorPage() {
                 className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white hover:bg-white/90 disabled:opacity-60 text-black text-[11px] font-semibold transition-all"
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-                {saving ? 'Saving…' : 'Save Store'}
+                {saving ? 'Saving…' : 'Save changes'}
               </button>
             </div>
           </div>

@@ -74,7 +74,7 @@ export function CalendarView() {
               key={day.toString()} 
               className={`
                 p-4 border-r border-b border-white/10 transition-colors
-                ${!isSameMonth(day, currentMonth) ? 'bg-[#090907]/50 opacity-20' : 'hover:bg-white/[0.05]/50'}
+                ${!isSameMonth(day, currentMonth) ? 'bg-[#090907]/50 opacity-20' : 'hover:bg-white/[0.05]'}
                 ${(i + 1) % 7 === 0 ? 'border-r-0' : ''}
               `}
             >

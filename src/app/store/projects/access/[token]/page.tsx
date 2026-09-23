@@ -128,14 +128,14 @@ function RowMenu({
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-9 z-30 w-44 rounded-xl bg-white/[0.04]/95 backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5"
+      className="absolute right-0 top-9 z-30 w-44 rounded-xl bg-white/[0.04] backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5"
     >
       {track.wav_url && (
         <a
           href={track.wav_url}
           download
           onClick={onClose}
-          className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] transition-colors"
+          className="flex items-center gap-2 px-3 py-2 text-[11px] text-white hover:bg-white/[0.06] transition-colors"
         >
           <Download size={12} style={{ color: accent }} />
           Download WAV
@@ -146,7 +146,7 @@ function RowMenu({
           href={track.audio_url}
           download
           onClick={onClose}
-          className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] transition-colors"
+          className="flex items-center gap-2 px-3 py-2 text-[11px] text-white hover:bg-white/[0.06] transition-colors"
         >
           <Download size={12} className="text-white/60" />
           Download MP3
@@ -155,7 +155,7 @@ function RowMenu({
       <div className="my-1 mx-2 border-t border-white/[0.06]" />
       <button
         onClick={() => { onCopy(); onClose(); }}
-        className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] transition-colors w-full text-left"
+        className="flex items-center gap-2 px-3 py-2 text-[11px] text-white hover:bg-white/[0.06] transition-colors w-full text-left"
       >
         <Copy size={12} className="text-white/60" />
         Copy track title
@@ -284,7 +284,7 @@ export default function ProjectAccessPage({
     <>
       <button
         onClick={onToggleFollow}
-        className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] transition-colors ${following ? 'text-black' : 'bg-white/[0.08] border border-white/[0.10] text-white hover:bg-white/[0.14]'}`}
+        className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[11px] transition-colors ${following ? 'text-black' : 'bg-white/[0.08] border border-white/[0.10] text-white hover:bg-white/[0.14]'}`}
         style={following ? { backgroundColor: accent } : {}}
       >
         {following ? <Check size={12} /> : <Plus size={12} />}
@@ -293,7 +293,7 @@ export default function ProjectAccessPage({
       <button
         onClick={playAll}
         disabled={tracks.length === 0}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/[0.08] border border-white/[0.10] text-white text-[12px] hover:bg-white/[0.14] transition-colors disabled:opacity-40"
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/[0.08] border border-white/[0.10] text-white text-[11px] hover:bg-white/[0.14] transition-colors disabled:opacity-40"
       >
         {anyOurTrackPlaying ? <Pause size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" className="ml-0.5" />}
         {anyOurTrackPlaying ? 'Pause' : 'Play all'}
@@ -416,7 +416,7 @@ function TrackList({
     return (
       <div className="px-6 md:px-10 py-10 text-center">
         <Music size={20} className="text-white/40 mx-auto mb-2" />
-        <p className="text-[12px] text-white/60">No tracks in this project yet.</p>
+        <p className="text-[11px] text-white/60">No tracks in this project yet.</p>
       </div>
     );
   }
@@ -424,7 +424,7 @@ function TrackList({
   return (
     <div className="px-2 md:px-4 pt-4 pb-2">
       <div className="px-4 md:px-6 mb-1 flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold text-white">{heading}</h2>
+        <h2 className="text-[14px] font-semibold text-white">{heading}</h2>
       </div>
 
       <ul>

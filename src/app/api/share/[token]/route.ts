@@ -8,6 +8,7 @@ import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 import { signedSharePeaksUrl, signedSharePreviewUrl } from '@/lib/share-media-token';
 import { cdnAudioSrc } from '@/lib/audio/cdn';
+import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 const log = createLogger('api.share.token');
 
@@ -151,7 +152,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       }
 
       const safeShare = withoutPasswordHash(share);
-      return NextResponse.json({ share: safeShare, tracks: safeTracks, creator, stems });
+      return NextResponse.json({
+        share: safeShare,
+        tracks: safeTracks,
+        creator,
+        stems,
+        // Recipients have no session; the artwork comes with the payload.
+        artworkTheme: await loadPublicArtworkTheme(supabaseAdmin, share.user_id),
+      });
     }
 
     // Local fallback

@@ -16,6 +16,8 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { fmtDur, getSimilarTracks } from './helpers';
 import { TagChips } from './TagChips';
 import type { StoreTrack, LicenseTier } from './types';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
 
 interface Props {
   track: StoreTrack;
@@ -130,11 +132,19 @@ export function BeatPreviewDrawer({
     >
         {/* Full-bleed cover hero */}
         <div className="relative h-[260px] shrink-0 overflow-hidden bg-[#090907]">
-          {track.cover_url ? (
-            <CoverImage src={track.cover_url} sizes="(max-width: 640px) 100vw, 480px" priority className="object-cover" />
-          ) : (
-            <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 40% 50%, ${accentColor}22 0%, transparent 70%), #090907` }} />
-          )}
+          {/* The hero is the biggest artwork on the storefront, so a coverless
+              beat showing an accent wash was the most visible place the brand
+              went missing. */}
+          <ArtworkFallback
+            src={track.cover_url}
+            seed={track.id}
+            kind="track"
+            tags={artworkTagsOf(track.tags)}
+            alt={track.title}
+            sizes="(max-width: 640px) 100vw, 480px"
+            priority
+            className="object-cover"
+          />
           {/* Audio-reactive ASCII layer, only where there is artwork to react
               over. Without a cover the hero is already a plain gradient and the
               effect would read as noise on nothing. */}

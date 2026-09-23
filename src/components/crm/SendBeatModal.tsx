@@ -10,6 +10,7 @@ import {
 import { Contact, Track } from '@/lib/types';
 import { toast } from '@/hooks/useToast';
 import { Dropdown } from '@/components/ui/Dropdown';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { Modal } from '@/components/ui/Modal';
 import { buildBeatSendEmail, defaultSubject } from '@/lib/email/beat-send-template';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
@@ -246,6 +247,10 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
       return {
         title: selectedTracks.length === 1 ? selectedTracks[0].title : `${selectedTracks.length} tracks`,
         cover: selectedTracks[0]?.cover_url ?? null,
+        // Seed + kind so the preview tile falls back to brand artwork the same
+        // way the list row above it does, instead of a lone grey glyph.
+        seed: selectedTracks[0]?.id ?? 'send-beat',
+        kind: 'track' as const,
         valid: selectedTracks.length > 0,
         countLabel: `${selectedTracks.length} track${selectedTracks.length === 1 ? '' : 's'}`,
       };
@@ -253,6 +258,8 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
     return {
       title: selectedProject?.name ?? 'Pick a project',
       cover: selectedProject?.cover_url ?? null,
+      seed: selectedProject?.id ?? 'send-beat',
+      kind: 'project' as const,
       valid: !!selectedProjectId,
       countLabel: selectedProject?.track_count != null
         ? `${selectedProject.track_count} track${selectedProject.track_count === 1 ? '' : 's'}`
@@ -534,7 +541,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 title={r.email || 'No email on file'}
               >
                 {isAdhoc ? r.email : r.name}
-                {isAdhoc && <span className="text-[7px] opacity-70">NEW</span>}
+                {isAdhoc && <span className="text-[8px] opacity-70">NEW</span>}
                 {!isAdhoc && !r.email && <span className="text-[8px]">⚠</span>}
                 <button onClick={() => removeRecipient(r.id)} className="text-white/60 hover:text-red-400 -mr-0.5" title="Remove from this send">
                   <X size={10} />
@@ -638,7 +645,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
             <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 custom-scrollbar">
               {/* Similar Beats AI Suggestions Strip */}
               {mode === 'tracks' && baselineTrack && suggestedTracks.length > 0 && (
-                <div className="mb-4 p-3 rounded-lg border border-[#c8a47a]/25 bg-[#100e1f]/90 backdrop-blur-md space-y-2 animate-in fade-in duration-300">
+ <div className="mb-4 p-3 rounded-lg border border-[#c8a47a]/25 bg-[#100e1f]/90 backdrop-blur-md space-y-2 ui-fade-in duration-300">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 text-[#c8a47a]">
                       <Sparkles size={11} className={`text-[#c8a47a] ${reducedMotion ? '' : 'animate-pulse'}`} />
@@ -671,16 +678,14 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                               : 'bg-white/[0.02] border-white/[0.06] text-[#888] hover:text-[#e8e8e8] hover:bg-white/[0.04]'
                           }`}
                         >
-                          <div className="w-5 h-5 bg-[#101010] rounded overflow-hidden shrink-0">
-                            {t.cover_url ? (
-                              <img loading="lazy" src={t.cover_url} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-[#444]"><Music size={8} /></div>
-                            )}
+                          <div className="relative w-5 h-5 bg-[#101010] rounded overflow-hidden shrink-0">
+                            <ArtworkFallback src={t.cover_url} seed={t.id} kind="track" sizes="20px" className="object-cover">
+                              <Music size={8} aria-hidden="true" />
+                            </ArtworkFallback>
                           </div>
                           <div className="text-left">
                             <p className="text-[10px] font-medium truncate max-w-[100px]">{t.title}</p>
-                            <p className="text-[7px] font-mono uppercase tracking-wider text-[#555]">
+                            <p className="text-[8px] font-mono uppercase tracking-wider text-[#555]">
                               {t.bpm ? `${t.bpm} BPM` : ''}{t.key ? ` · ${t.key}` : ''}
                             </p>
                           </div>
@@ -726,15 +731,15 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                           {selected && <Check size={11} className="text-white" />}
                         </div>
                         {/* Cover */}
-                        <div className="w-9 h-9 bg-[#0D0D0A] rounded-lg border border-white/10 overflow-hidden shrink-0">
-                          {hasCover
-                            ? <img loading="lazy" src={track.cover_url!} alt="" className="w-full h-full object-cover" />
-                            : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={12} /></div>}
+                        <div className="relative w-9 h-9 bg-[#0D0D0A] rounded-lg border border-white/10 overflow-hidden shrink-0">
+                          <ArtworkFallback src={track.cover_url} seed={track.id} kind="track" sizes="36px" className="object-cover">
+                            <Music size={12} aria-hidden="true" />
+                          </ArtworkFallback>
                         </div>
                         {/* Title + meta */}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 min-w-0">
-                            <p className={`text-[12px] font-medium truncate ${selected ? 'text-white' : 'text-white/90'}`}>{track.title}</p>
+                            <p className={`text-[11px] font-medium truncate ${selected ? 'text-white' : 'text-white/90'}`}>{track.title}</p>
                             {sentBefore && (
                               <span className="shrink-0 text-[8px] font-mono uppercase tracking-wider text-white/80 bg-white/10 border border-white/20 px-1.5 py-0.5 rounded" title="Already sent to this contact">
                                 Sent before
@@ -789,13 +794,13 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                       }`}>
                         {selected && <Check size={11} className="text-white" />}
                       </div>
-                      <div className="w-7 h-7 bg-[#0D0D0A] rounded border border-white/10 overflow-hidden shrink-0">
-                        {project.cover_url
-                          ? <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
-                          : <div className="w-full h-full flex items-center justify-center text-white/40"><Disc3 size={11} /></div>}
+                      <div className="relative w-7 h-7 bg-[#0D0D0A] rounded border border-white/10 overflow-hidden shrink-0">
+                        <ArtworkFallback src={project.cover_url} seed={project.id} kind="project" sizes="28px" className="object-cover">
+                          <Disc3 size={11} aria-hidden="true" />
+                        </ArtworkFallback>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[12px] font-medium truncate">{project.name}</p>
+                        <p className="text-[11px] font-medium truncate">{project.name}</p>
                         <p className="text-[9px] font-mono text-white/60 uppercase tracking-wider">
                           {project.track_count != null ? `${project.track_count} tracks` : 'project'}
                         </p>
@@ -815,13 +820,13 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-white/70 mb-2">Sending</p>
                   <div className="bg-[#0D0D0A] border border-white/10 rounded-xl p-3 flex items-center gap-3">
-                    <div className="w-10 h-10 bg-white/[0.05] rounded-lg overflow-hidden shrink-0 border border-white/20">
-                      {summary.cover
-                        ? <img loading="lazy" src={summary.cover} alt="" className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={14} /></div>}
+                    <div className="relative w-10 h-10 bg-white/[0.05] rounded-lg overflow-hidden shrink-0 border border-white/20">
+                      <ArtworkFallback src={summary.cover} seed={summary.seed} kind={summary.kind} sizes="40px" className="object-cover">
+                        <Music size={14} aria-hidden="true" />
+                      </ArtworkFallback>
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[12px] font-medium text-white truncate">{summary.title}</p>
+                      <p className="text-[11px] font-medium text-white truncate">{summary.title}</p>
                       <p className="text-[10px] font-mono text-white/60">{summary.countLabel}</p>
                     </div>
                   </div>
@@ -854,7 +859,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                     {templates.map((t) => (
                       <div key={t.id} className="flex items-center gap-2 group">
                         <button onClick={() => applyTemplate(t)} className="flex-1 text-left px-2.5 py-1.5 rounded-lg hover:bg-white/[0.04] transition-colors">
-                          <p className="text-[12px] font-medium text-white">{t.name}</p>
+                          <p className="text-[11px] font-medium text-white">{t.name}</p>
                           {t.subject && <p className="text-[10px] text-white/60 truncate">{t.subject}</p>}
                         </button>
                         <button onClick={() => deleteTemplate(t.id)} className="p-1 text-white/40 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
@@ -874,14 +879,14 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                       placeholder={resolvedSubject}
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
-                      className="flex-1 bg-transparent text-[12px] text-white placeholder:text-white/40 focus:outline-none min-w-0"
+                      className="flex-1 bg-transparent text-[11px] text-white placeholder:text-white/40 focus:outline-none min-w-0"
                     />
                   </div>
                   <div className="relative bg-[#0D0D0A] border border-white/10 rounded-xl focus-within:border-white/40 transition-colors">
                     <MessageSquare size={11} className="absolute left-3.5 top-3.5 text-white/50 pointer-events-none" />
                     <textarea
                       placeholder={`Hey ${(recipients[0]?.name || '').split(' ')[0] || 'there'}, here's some new work…`}
-                      className="w-full min-h-[110px] bg-transparent pl-9 pr-4 pt-3 pb-3 text-[12px] text-white placeholder:text-white/50 focus:outline-none resize-none leading-relaxed"
+                      className="w-full min-h-[110px] bg-transparent pl-9 pr-4 pt-3 pb-3 text-[11px] text-white placeholder:text-white/50 focus:outline-none resize-none leading-relaxed"
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                     />
@@ -970,10 +975,10 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                       {/* Avatar */}
                       {previewContact && (() => {
                         const p = previewPalette(previewContact.name);
-                        return <div className={`w-8 h-8 rounded-full ${p.bg} flex items-center justify-center text-[12px] font-bold ${p.text} shrink-0`}>{previewContact.name[0]?.toUpperCase()}</div>;
+                        return <div className={`w-8 h-8 rounded-full ${p.bg} flex items-center justify-center text-[11px] font-bold ${p.text} shrink-0`}>{previewContact.name[0]?.toUpperCase()}</div>;
                       })()}
                       <div className="text-left">
-                        <p className="text-[12px] font-semibold text-white">{previewContact?.name}</p>
+                        <p className="text-[11px] font-semibold text-white">{previewContact?.name}</p>
                         <p className="text-[10px] text-white/60">{previewContact?.email ?? 'no email'}</p>
                       </div>
                     </div>
@@ -1008,7 +1013,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                       </div>
                       <div className="flex items-center gap-2.5">
                         <span className="text-[9px] font-mono text-white/40 w-9 shrink-0 uppercase tracking-wider">Subj</span>
-                        <span className="text-[12px] font-semibold text-white truncate">{resolvedSubject}</span>
+                        <span className="text-[11px] font-semibold text-white truncate">{resolvedSubject}</span>
                       </div>
                     </div>
                     {/* Email body */}

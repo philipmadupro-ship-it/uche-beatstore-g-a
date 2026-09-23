@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { publicError } from '@/lib/api-error';
 import { slugify } from '@/lib/slug';
 import { redactPublicTrackMedia } from '@/lib/store/public-media';
+import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -122,6 +123,7 @@ export async function GET(
 
     const res = NextResponse.json({
       creator,
+      artworkTheme: await loadPublicArtworkTheme(admin, sellerId),
       tracks: safeTracks,
       playlists: playlistsRes.data ?? [],
       projects: projectsRes.data ?? [],

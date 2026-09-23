@@ -27,6 +27,9 @@ import {
 import { toast } from '@/hooks/useToast';
 import { asVideoStyle } from '@/lib/share/styles';
 import { normalizeThemeColor } from '@/lib/theme/colors';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 interface TrackShape {
   id: string;
@@ -86,12 +89,14 @@ function VerticalShareContent({
       return {
         track: j.track as TrackShape,
         creator: (j.creator ?? null) as CreatorShape | null,
+        artworkTheme: (j.artworkTheme ?? null) as PublicArtworkTheme | null,
       };
     },
     retry: false,
   });
   const track = data?.track ?? null;
   const creator = data?.creator ?? null;
+  const artworkTheme = data?.artworkTheme ?? null;
   const accent = normalizeThemeColor(creator?.accent_color);
 
   const searchParams = useSearchParams();
@@ -335,13 +340,14 @@ function VerticalShareContent({
   }
 
   return (
+    <ArtworkThemeProvider theme={artworkTheme}>
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
       {/* Floating controls (outside the stage so they don't appear in a
           screen-recorded frame) */}
       <div className="fixed top-3 left-3 right-3 z-20 flex items-center gap-2 justify-between">
         <Link
           href={`/store/${id}`}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04]/80 backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04] backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
         >
           <ArrowLeft size={11} />
           Exit
@@ -352,7 +358,7 @@ function VerticalShareContent({
               type="button"
               onClick={startRecord}
               disabled={recording}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04]/80 backdrop-blur border border-white/[0.10] text-white text-[11px] font-mono uppercase tracking-wider hover:bg-white/[0.05]/90 transition-colors disabled:opacity-40"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04] backdrop-blur border border-white/[0.10] text-white text-[11px] font-mono uppercase tracking-wider hover:bg-white/[0.05] transition-colors disabled:opacity-40"
               title="Capture a 15-second WebM (Chromium browsers only)"
             >
               {recording ? <Loader2 size={11} className="animate-spin" /> : <Video size={11} />}
@@ -362,7 +368,7 @@ function VerticalShareContent({
           <button
             type="button"
             onClick={copyLink}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04]/80 backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04] backdrop-blur border border-white/[0.08] text-white/70 text-[11px] font-mono uppercase tracking-wider hover:text-white transition-colors"
           >
             <Copy size={11} />
             Copy link
@@ -409,8 +415,13 @@ function VerticalShareContent({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" style={coverFilter ? { filter: coverFilter } : undefined} />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-white/10 to-[#090907] flex items-center justify-center text-white/40">
-                <Music size={40} />
+              // The stage is screen-recorded frame by frame, so the filter is
+              // applied to the wrapper rather than the generated artwork's own
+              // layers, which a capture would otherwise flatten inconsistently.
+              <div className="w-full h-full" style={coverFilter ? { filter: coverFilter } : undefined}>
+                <ArtworkFallback src={null} seed={track.id} kind="track" sizes="300px" className="w-full h-full object-cover">
+                  <Music size={40} aria-hidden="true" />
+                </ArtworkFallback>
               </div>
             )}
           </div>
@@ -513,5 +524,6 @@ function VerticalShareContent({
         <p className="hidden">{duration.toFixed(1)}s</p>
       )}
     </div>
+    </ArtworkThemeProvider>
   );
 }

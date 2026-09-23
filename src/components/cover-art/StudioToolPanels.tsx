@@ -157,7 +157,7 @@ export function CollagePanel({
                 : 'border-white/10 hover:border-white/20',
             )}
           >
-            <span className="block text-[12px] text-white/90">{item.name}</span>
+            <span className="block text-[11px] text-white/90">{item.name}</span>
             <span className="block text-[11px] leading-relaxed text-white/40">{item.hint}</span>
           </button>
         ))}
@@ -211,9 +211,9 @@ export function SourcePanel({
           options={sourceKinds.map((kind) => ({ value: kind, label: kind === 'empty' ? 'Blank' : kind }))}
           onChange={onSourceKind}
         />
-        {sourceState === 'loading' ? <p className="text-[12px] text-white/40">Loading…</p> : null}
+        {sourceState === 'loading' ? <p className="text-[11px] text-white/40">Loading…</p> : null}
         {sourceError ? (
-          <p className="border border-[#A95235]/40 bg-[#A95235]/10 p-2 text-[12px] text-white/90">{sourceError}</p>
+          <p className="border border-[#A95235]/40 bg-[#A95235]/10 p-2 text-[11px] text-white/90">{sourceError}</p>
         ) : null}
         <div className="grid max-h-64 gap-1 overflow-y-auto">
           {sourceOptions.map((option) => (
@@ -234,7 +234,7 @@ export function SourcePanel({
                 style={option.coverUrl ? { backgroundImage: `url(${option.coverUrl})` } : { background: '#0D0D0A' }}
               />
               <span className="min-w-0">
-                <span className="block truncate text-[12px] text-white/90">{option.label}</span>
+                <span className="block truncate text-[11px] text-white/90">{option.label}</span>
                 <span className="block truncate font-mono text-[10px] uppercase tracking-[0.12em] text-white/40">
                   {option.detail ?? ''}
                 </span>
@@ -266,7 +266,7 @@ export function SourcePanel({
                 <span key={color} style={{ background: color }} />
               ))}
             </span>
-            <span className="block text-[12px] text-white/90">{direction.name}</span>
+            <span className="block text-[11px] text-white/90">{direction.name}</span>
             <span className="block text-[11px] leading-relaxed text-white/40">{direction.rationale}</span>
           </button>
         ))}
@@ -404,7 +404,7 @@ export function ExportPanel({
             value={settings.filename}
             onChange={(event) => onSettings({ filename: event.target.value })}
             aria-label="Export filename"
-            className="h-9 w-full border border-white/10 bg-[#090907] px-2 text-[12px] text-white/90 outline-none focus:border-white/40"
+            className="h-9 w-full border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
           />
         </label>
 

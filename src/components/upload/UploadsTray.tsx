@@ -10,6 +10,23 @@ import {
   formatBytes, formatSpeed, formatEta,
   type UploadItem,
 } from '@/lib/upload/manager';
+import {
+  uploadRowActions, isUploadActive, canEditUploadedTrack,
+  type UploadRowAction,
+} from '@/lib/upload/row-actions';
+import { InlineText } from '@/components/ui/InlineText';
+import { parseTitleMetadata, describeTitleMetadata } from '@/lib/upload/title-metadata';
+import { InlineTagStrip, type TagGroup } from '@/components/ui/InlineTagStrip';
+import { TAG_TAXONOMY } from '@/lib/types/tags';
+import { useTags } from '@/hooks/useTags';
+import { toast } from '@/hooks/useToast';
+
+/** Shared track vocabulary, same order the drawer uses. */
+const TRACK_TAG_GROUPS: TagGroup[] = Object.entries(TAG_TAXONOMY).map(([category, options]) => ({
+  category,
+  label: category,
+  options: options as readonly string[],
+}));
 
 /**
  * Persistent tray of in-flight uploads. Mounted globally in the dashboard
@@ -111,10 +128,45 @@ function UploadRow({ u }: { u: UploadItem }) {
   const abort = useUploadManager((s) => s.abort);
   const remove = useUploadManager((s) => s.remove);
   const resume = useUploadManager((s) => s.resume);
+  const patch = useUploadManager((s) => s._patch);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const pct = u.fileSize > 0 ? Math.min(100, (u.bytesUploaded / u.fileSize) * 100) : 0;
-  const isActive = u.status === 'uploading' || u.status === 'preparing' || u.status === 'finalizing';
+  const isActive = isUploadActive(u.status);
+  const editable = canEditUploadedTrack(u);
+  const trackId = (u.track?.id as string | undefined) ?? '';
+  const trackTitle = (u.track?.title as string | undefined) ?? u.fileName.replace(/\.[^.]+$/, '');
+  const filenameMeta = describeTitleMetadata(parseTitleMetadata(u.fileName));
+
+  /**
+   * Rename the track this row created.
+   *
+   * The tray is the only place the freshly-created row id is on screen, and it
+   * is the moment the producer still knows what the file is. Before this, a
+   * beat landed in the library under whatever the file was called —
+   * `beat_final_v3_140.wav` — and fixing it meant finding it again later.
+   */
+  const renameUploadedTrack = async (next: string) => {
+    if (!trackId) return false;
+    try {
+      const res = await fetch(`/api/tracks/${trackId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: next }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || `HTTP ${res.status}`);
+      }
+      // Keep the tray's own copy in step so the row does not snap back to the
+      // filename on the next store update.
+      patch(u.id, { track: { ...(u.track ?? {}), title: next } });
+      return true;
+    } catch (err) {
+      toast.error('Rename failed', err instanceof Error ? err.message : 'Try again');
+      return false;
+    }
+  };
 
   const onResumePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -126,15 +178,25 @@ function UploadRow({ u }: { u: UploadItem }) {
       {/* row 1: name + actions */}
       <div className="flex items-center gap-2 mb-1.5">
         <FileAudio size={11} className="text-white/40 shrink-0" />
-        <span className="text-[11px] text-white truncate flex-1" title={u.fileName}>
-          {u.fileName}
-        </span>
+        {editable ? (
+          <InlineText
+            label={`Title of ${trackTitle}`}
+            value={trackTitle}
+            onSave={renameUploadedTrack}
+            maxLength={200}
+            className="-mx-1 min-w-0 flex-1 px-1 text-[11px] text-white"
+            inputClassName="text-[11px]"
+          />
+        ) : (
+          <span className="text-[11px] text-white truncate flex-1" title={u.fileName}>
+            {u.fileName}
+          </span>
+        )}
         <span className="text-[9px] font-mono text-white/40 shrink-0">
           {formatBytes(u.fileSize)}
         </span>
         <RowActions
           u={u}
-          isActive={isActive}
           onPause={() => pause(u.id)}
           onRetry={() => retry(u.id)}
           onAbort={() => abort(u.id)}
@@ -182,6 +244,13 @@ function UploadRow({ u }: { u: UploadItem }) {
         )}
       </div>
 
+      {/* What the filename said. Shown on success, so the producer can see the
+          BPM and key were taken from the name rather than guessed — and spot
+          it if the name lied. */}
+      {u.status === 'success' && filenameMeta && (
+        <p className="mt-1 text-[10px] text-white/40">{filenameMeta}</p>
+      )}
+
       {/* error/info detail */}
       {u.error && u.status !== 'success' && (
         <p className="mt-1 text-[10px] text-red-400 flex items-start gap-1">
@@ -194,6 +263,31 @@ function UploadRow({ u }: { u: UploadItem }) {
           Upload interrupted. Re-pick the same file to resume from {Math.round(pct)}%.
         </p>
       )}
+
+      {/* Tag it while you still remember what it is. */}
+      {editable && <UploadedTrackTags trackId={trackId} />}
+    </div>
+  );
+}
+
+/**
+ * Tags for a just-uploaded track, in the tray.
+ *
+ * Split out because `useTags` must not run for rows that have no track id —
+ * a hook cannot be called conditionally, so the condition lives on whether
+ * this component is rendered at all.
+ */
+function UploadedTrackTags({ trackId }: { trackId: string }) {
+  const { tags, toggleTag } = useTags(trackId);
+  return (
+    <div className="mt-2">
+      <InlineTagStrip
+        subject="track"
+        tags={tags}
+        groups={TRACK_TAG_GROUPS}
+        emptyLabel="Tag it"
+        onToggle={({ tag, category, active }) => toggleTag.mutate({ tag, category, active })}
+      />
     </div>
   );
 }
@@ -247,10 +341,9 @@ function StatusBadge({ u, pct }: { u: UploadItem; pct: number }) {
 }
 
 function RowActions({
-  u, isActive, onPause, onRetry, onAbort, onRemove, onPickResume,
+  u, onPause, onRetry, onAbort, onRemove, onPickResume,
 }: {
   u: UploadItem;
-  isActive: boolean;
   onPause: () => void;
   onRetry: () => void;
   onAbort: () => void;
@@ -258,43 +351,37 @@ function RowActions({
   onPickResume: () => void;
 }) {
   const btn = 'tap grid size-8 sm:size-7 place-items-center rounded text-white/60 hover:text-white hover:bg-white/[0.05] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-black';
+
+  /* Which controls this row offers is decided by `uploadRowActions` from the
+     status alone. It used to be five inline conditionals, one of which keyed
+     off an `isActive` flag computed by the parent beside the status it came
+     from — two sources for one fact. */
+  const spec: Record<UploadRowAction, { icon: React.ReactNode; title: string; label: string; onClick: () => void; className?: string }> = {
+    pause:   { icon: <Pause size={10} />, title: 'Pause', label: `Pause upload for ${u.fileName}`, onClick: onPause },
+    resume:  { icon: <Play size={10} />, title: 'Resume', label: `Resume upload for ${u.fileName}`, onClick: onRetry },
+    retry:   { icon: <RefreshCw size={10} />, title: 'Retry', label: `Retry upload for ${u.fileName}`, onClick: onRetry },
+    repick:  { icon: <Upload size={10} />, title: 'Re-pick file to resume', label: `Choose original file to resume upload for ${u.fileName}`, onClick: onPickResume, className: 'text-[#E2C16D] hover:text-[#E2C16D]' },
+    cancel:  { icon: <X size={10} />, title: 'Cancel', label: `Cancel upload for ${u.fileName}`, onClick: onAbort, className: 'hover:text-red-400' },
+    dismiss: { icon: <X size={10} />, title: 'Dismiss', label: `Dismiss upload for ${u.fileName}`, onClick: onRemove },
+  };
+
   return (
     <div className="flex items-center gap-0.5 shrink-0">
-      {isActive && (
-        <button onClick={onPause} className={btn} title="Pause" aria-label={`Pause upload for ${u.fileName}`}>
-          <Pause size={10} />
-        </button>
-      )}
-      {u.status === 'paused' && (
-        <button onClick={onRetry} className={btn} title="Resume" aria-label={`Resume upload for ${u.fileName}`}>
-          <Play size={10} />
-        </button>
-      )}
-      {u.status === 'error' && (
-        <button onClick={onRetry} className={btn} title="Retry" aria-label={`Retry upload for ${u.fileName}`}>
-          <RefreshCw size={10} />
-        </button>
-      )}
-      {u.status === 'interrupted' && (
-        <button
-          onClick={onPickResume}
-          className={`${btn} text-[#E2C16D] hover:text-[#E2C16D]`}
-          title="Re-pick file to resume"
-          aria-label={`Choose original file to resume upload for ${u.fileName}`}
-        >
-          <Upload size={10} />
-        </button>
-      )}
-      {(isActive || u.status === 'paused' || u.status === 'queued') && (
-        <button onClick={onAbort} className={`${btn} hover:text-red-400`} title="Cancel" aria-label={`Cancel upload for ${u.fileName}`}>
-          <X size={10} />
-        </button>
-      )}
-      {(u.status === 'success' || u.status === 'error' || u.status === 'interrupted') && (
-        <button onClick={onRemove} className={btn} title="Dismiss" aria-label={`Dismiss upload for ${u.fileName}`}>
-          <X size={10} />
-        </button>
-      )}
+      {uploadRowActions(u.status).map((action) => {
+        const a = spec[action];
+        return (
+          <button
+            key={action}
+            type="button"
+            onClick={a.onClick}
+            title={a.title}
+            aria-label={a.label}
+            className={`${btn} ${a.className ?? ''}`}
+          >
+            {a.icon}
+          </button>
+        );
+      })}
     </div>
   );
 }

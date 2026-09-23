@@ -104,7 +104,7 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Your name (optional)"
-                className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2.5 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 transition-colors"
+                className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2.5 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 transition-colors"
               />
               <input
                 type="email"
@@ -112,7 +112,7 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="your@email.com *"
                 required
-                className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2.5 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 transition-colors"
+                className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2.5 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 transition-colors"
               />
               {error && (
                 <p className="text-[11px] text-red-400 bg-red-400/5 border border-red-400/20 rounded px-3 py-2">{error}</p>
@@ -120,7 +120,7 @@ export function FreeDownloadModal({ track, onClose, accentColor }: Props) {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-black font-bold text-[12px] uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-black font-bold text-[11px] uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-50"
                 style={{ backgroundColor: accentColor }}
               >
                 {submitting ? <Loader2 size={14} className="animate-spin" /> : null}

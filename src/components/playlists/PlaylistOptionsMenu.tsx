@@ -1,27 +1,32 @@
 'use client';
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreHorizontal, Image as ImageIcon, Pencil, FolderInput, Trash2, Loader2, Pin, Tag } from 'lucide-react';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { PlaylistFolderSelect } from './PlaylistFolderSelect';
 import { PlaylistTagPicker } from './PlaylistTagPicker';
 import { uploadImageFile } from '@/lib/upload/image-upload-client';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
 
 interface PlaylistLite { id: string; name: string; pinned?: boolean; cover_url?: string | null }
 
-export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'right' }: {
+/**
+ * Per-playlist ⋯ menu. Same grouping rules as ProjectOptionsMenu — frequent
+ * edits first, cover/sharing next, destructive last and separated — so the two
+ * collection types do not teach different muscle memory for the same job.
+ *
+ * `onEditTitle` lets a host page that shows the name inline own the rename; the
+ * menu no longer grows its own input for a field the page can already edit.
+ */
+export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'right', onEditTitle }: {
   playlist: PlaylistLite; onChanged?: () => void; onDeleted?: () => void; align?: 'left' | 'right';
+  onEditTitle?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  const [renaming, setRenaming] = useState(false);
-  const [nameDraft, setNameDraft] = useState(playlist.name);
   const [showFolders, setShowFolders] = useState(false);
   const [showTags, setShowTags] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const isPinned = !!playlist.pinned;
-  const menuRef = useDialogBehavior({ open, onClose: () => setOpen(false), trapFocus: false });
   const tagsPanelRef = useDialogBehavior({ open: showTags, onClose: () => setShowTags(false) });
 
   const patch = async (body: Record<string, unknown>, label: string) => {
@@ -40,18 +45,18 @@ export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'r
     try {
       const coverUrl = await uploadImageFile(file);
       await patch({ cover_url: coverUrl }, 'cover');
-      toast.success('Cover updated'); setOpen(false);
+      toast.success('Cover updated');
     } catch (err) { toast.error('Cover upload failed', err instanceof Error ? err.message : ''); setBusy(null); }
     finally { if (fileRef.current) fileRef.current.value = ''; }
   };
 
-  const submitRename = async () => {
-    const n = nameDraft.trim(); if (!n || n === playlist.name) { setRenaming(false); return; }
-    await patch({ name: n }, 'name'); toast.success('Renamed'); setRenaming(false); setOpen(false);
+  /** Clear the cover so the playlist falls back to the brand default again. */
+  const removeCover = async () => {
+    await patch({ cover_url: null }, 'cover');
+    toast.success('Cover removed');
   };
 
   const handleDelete = async () => {
-    setOpen(false);
     const ok = await confirmToast(`Delete "${playlist.name}"?`, 'Tracks stay in your library.', { confirmLabel: 'Delete', cancelLabel: 'Keep', danger: true });
     if (!ok) return; setBusy('delete');
     try {
@@ -66,44 +71,58 @@ export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'r
     } catch (err) { toast.error("Couldn't delete", err instanceof Error ? err.message : ''); setBusy(null); }
   };
 
+  const sections: MenuSection[] = [
+    {
+      id: 'edit',
+      items: [
+        {
+          id: 'rename', label: 'Rename', shortcut: 'R', shortcutKey: 'r',
+          hidden: !onEditTitle, onSelect: () => onEditTitle?.(),
+        },
+        { id: 'tags', label: 'Edit tags', shortcut: 'T', shortcutKey: 't', onSelect: () => setShowTags(true) },
+      ],
+    },
+    {
+      id: 'content',
+      label: 'Content',
+      items: [
+        {
+          id: 'cover', label: 'Change cover', busy: busy === 'cover',
+          onSelect: () => { fileRef.current?.click(); return 'keep-open' as const; },
+        },
+        {
+          id: 'cover-remove', label: 'Remove cover', busy: busy === 'cover',
+          hidden: !playlist.cover_url, onSelect: removeCover,
+        },
+      ],
+    },
+    {
+      id: 'playlist',
+      label: 'Playlist',
+      items: [
+        {
+          id: 'pin', label: isPinned ? 'Unpin' : 'Pin to top', checked: isPinned, busy: busy === 'pin',
+          onSelect: async () => { await patch({ pinned: !isPinned }, 'pin'); toast.success(isPinned ? 'Unpinned' : 'Pinned to top'); },
+        },
+        { id: 'folders', label: 'Move to folders…', onSelect: () => setShowFolders(true) },
+      ],
+    },
+    {
+      id: 'danger', danger: true,
+      items: [{ id: 'delete', label: 'Delete playlist', busy: busy === 'delete', onSelect: handleDelete }],
+    },
+  ];
+
   return (
     <>
       <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={onCoverFile} />
-      <div className="relative">
-        <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen((v) => !v); setNameDraft(playlist.name); setRenaming(false); }} aria-label="Playlist options"
-          className="w-7 h-7 rounded-full flex items-center justify-center bg-black/40 backdrop-blur-sm text-white/60 hover:text-white hover:bg-black/60 transition-colors">
-          {busy && !open ? <Loader2 size={13} className="animate-spin" /> : <MoreHorizontal size={14} />}
-        </button>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(false); }} />
-            <div ref={menuRef} role="menu" tabIndex={-1} onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
-              className={`absolute top-full mt-1 ${align === 'right' ? 'right-0' : 'left-0'} z-50 w-52 max-w-[calc(100vw-2rem)] bg-[#0e0c09] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden py-1 focus:outline-none`}>
-              {renaming ? (
-                <div className="p-2">
-                  <input autoFocus value={nameDraft} onChange={(e) => setNameDraft(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') submitRename(); if (e.key === 'Escape') { e.stopPropagation(); setRenaming(false); } }}
-                    className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2.5 py-2 text-[12px] text-white focus:outline-none focus:border-white/20" />
-                  <div className="flex justify-end gap-1.5 mt-2">
-                    <button onClick={() => setRenaming(false)} className="px-2 py-1 text-[10px] font-mono uppercase text-white/60 hover:text-white">Cancel</button>
-                    <button onClick={submitRename} className="px-2.5 py-1 text-[10px] font-mono uppercase rounded bg-white text-black hover:bg-white/90 font-bold">Save</button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <MI icon={<Pin size={13} className={isPinned ? 'text-white font-bold' : ''} />} label={isPinned ? 'Unpin' : 'Pin to top'} busy={busy === 'pin'} onClick={async () => { await patch({ pinned: !isPinned }, 'pin'); setOpen(false); toast.success(isPinned ? 'Unpinned' : 'Pinned to top'); }} />
-                  <MI icon={<ImageIcon size={13} />} label="Change cover" busy={busy === 'cover'} onClick={() => fileRef.current?.click()} />
-                  <MI icon={<Pencil size={13} />} label="Rename" onClick={() => setRenaming(true)} />
-                  <MI icon={<FolderInput size={13} />} label="Move to folders" onClick={() => { setShowFolders(true); setOpen(false); }} />
-                  <MI icon={<Tag size={13} />} label="Edit tags" onClick={() => { setShowTags(true); setOpen(false); }} />
-                  <div className="my-1 border-t border-white/10" />
-                  <MI icon={<Trash2 size={13} />} label="Delete" danger onClick={handleDelete} />
-                </>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+      <ActionMenu
+        sections={sections}
+        align={align}
+        label="Playlist options"
+        busy={!!busy}
+        triggerClassName="flex h-7 w-7 items-center justify-center rounded-full bg-black/40 text-white/60 backdrop-blur-sm transition-colors hover:bg-black/60 hover:text-white"
+      />
       {showFolders && createPortal(<PlaylistFolderSelect playlistId={playlist.id} onClose={() => setShowFolders(false)} onSaved={onChanged} />, document.body)}
       {showTags && createPortal(
         <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setShowTags(false)}>
@@ -121,14 +140,5 @@ export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'r
         </div>, document.body,
       )}
     </>
-  );
-}
-
-function MI({ icon, label, onClick, danger, busy }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean; busy?: boolean }) {
-  return (
-    <button onClick={onClick} disabled={busy} className={`w-full flex items-center gap-2.5 px-3 py-2 text-[12px] font-medium transition-colors disabled:opacity-50 ${danger ? 'text-red-400 hover:bg-red-500/10' : 'text-white hover:bg-white/5'}`}>
-      <span className="shrink-0">{busy ? <Loader2 size={13} className="animate-spin" /> : icon}</span>
-      {label}
-    </button>
   );
 }

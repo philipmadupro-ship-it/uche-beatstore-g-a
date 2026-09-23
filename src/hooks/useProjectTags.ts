@@ -11,6 +11,9 @@ export function useProjectTags(projectId: string) {
 
   const { data: tags = [], isLoading } = useQuery<string[]>({
     queryKey: ['project-tags', projectId],
+    // Callers that render before their project resolves pass '' — without this
+    // the hook fetches `/api/projects//tags` and React Query retries the 404.
+    enabled: !!projectId,
     queryFn: async () => {
       const res = await fetch(`/api/projects/${projectId}/tags`);
       if (!res.ok) throw new Error('Failed to fetch project tags');

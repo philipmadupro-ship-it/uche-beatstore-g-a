@@ -13,7 +13,8 @@
 import { useMemo } from 'react';
 import { Music } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
-import { CoverImage } from '@/components/ui/CoverImage';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
 
 interface MinTrack {
   id: string;
@@ -22,6 +23,8 @@ interface MinTrack {
   cover_url?: string | null;
   bpm?: number | null;
   free_download_enabled?: boolean | null;
+  /** Steers the generated cover when the track has no artwork of its own. */
+  tags?: Array<{ tag: string; category?: string | null }> | null;
 }
 
 interface RecommendationsStripProps<T extends MinTrack> {
@@ -68,13 +71,16 @@ export function RecommendationsStrip<T extends MinTrack>({
             >
               {/* Cover */}
               <div className="relative aspect-square bg-[#090907] overflow-hidden">
-                {t.cover_url ? (
-                  <CoverImage src={t.cover_url} alt="" sizes="160px" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-white/40 bg-gradient-to-br from-white/10 to-[#090907]">
-                    <Music size={18} />
-                  </div>
-                )}
+                <ArtworkFallback
+                  src={t.cover_url}
+                  seed={t.id}
+                  kind="track"
+                  tags={artworkTagsOf(t.tags)}
+                  sizes="160px"
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                >
+                  <Music size={18} aria-hidden="true" />
+                </ArtworkFallback>
                 {/* Play affordance — stopPropagation so the cover's preview-click stays the default for the rest of the card */}
                 <span
                   role="button"
@@ -94,7 +100,7 @@ export function RecommendationsStrip<T extends MinTrack>({
 
               {/* Body */}
               <div className={`${compact ? 'p-2 gap-0.5' : 'p-2.5 gap-1'} flex flex-col min-w-0`}>
-                <p className={`${compact ? 'text-[11px]' : 'text-[12px]'} font-medium truncate ${isCurrent ? '' : 'text-white'}`}
+                <p className={`${compact ? 'text-[11px]' : 'text-[11px]'} font-medium truncate ${isCurrent ? '' : 'text-white'}`}
                   style={isCurrent ? { color: accentColor } : {}}
                 >
                   {t.title}

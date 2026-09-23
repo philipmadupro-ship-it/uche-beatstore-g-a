@@ -39,7 +39,7 @@ export function ContactTagPicker({ contactId, onChanged }: { contactId: string; 
       <form onSubmit={(e) => { e.preventDefault(); add(custom); setCustom(''); }} className="relative">
         <Plus size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
         <input value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Add a tag…"
-          className="w-full bg-[#090907] border border-white/20 rounded-lg pl-8 pr-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40" />
+          className="w-full bg-[#090907] border border-white/20 rounded-lg pl-8 pr-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40" />
       </form>
 
       {/* Starter suggestions */}

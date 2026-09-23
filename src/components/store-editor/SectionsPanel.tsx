@@ -140,12 +140,12 @@ export function SectionsPanel({
                         if (event.key === 'Enter') { onRename(section.id, event.currentTarget.value); onRenamingChange(null); }
                         if (event.key === 'Escape') onRenamingChange(null);
                       }}
-                      className="w-full border border-white/20 bg-[#090907] px-1 py-0.5 text-[12px] text-white/90 outline-none focus:border-white/60"
+                      className="w-full border border-white/20 bg-[#090907] px-1 py-0.5 text-[11px] text-white/90 outline-none focus:border-white/60"
                     />
                   ) : (
                     <>
                       <span className={cn(
-                        'block truncate text-[12px]',
+                        'block truncate text-[11px]',
                         hiddenHere ? 'text-white/30 line-through' : selected ? 'text-white/90' : 'text-white/70',
                       )}
                       >

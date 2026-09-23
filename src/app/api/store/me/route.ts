@@ -5,6 +5,7 @@ import { isSupabaseConfigured } from '@/lib/local-store';
 import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
+import { normalizeEmail } from '@/lib/contacts/email';
 import {
   buildBuyerLibraryShape,
   collectBuyerLibraryTrackIds,
@@ -48,7 +49,7 @@ async function upsertLeadContact(
     const { error } = await admin.from('contacts').upsert(
       {
         user_id: sellerUserId,
-        email,
+        email: normalizeEmail(email),
         name: email,
         label: 'lead',
         crm_status: 'prospect',

@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 import { redactPublicTrackMedia } from '@/lib/store/public-media';
+import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -170,6 +171,7 @@ export async function GET(
       playlist: safePlaylist,
       tracks,
       creator,
+      artworkTheme: await loadPublicArtworkTheme(admin, sellerId),
       pricing_fallback: {
         lease: profileLease,
         exclusive: profileExclusive,

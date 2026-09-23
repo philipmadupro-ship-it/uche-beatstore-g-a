@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { selectInChunks } from '@/lib/db-in-chunks';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -31,11 +32,9 @@ export async function GET() {
     const contactIds = [...new Set(rows.map((t) => t.contact_id as string))];
     let nameMap: Record<string, string> = {};
     if (contactIds.length > 0) {
-      const { data: contacts } = await auth.admin
-        .from('contacts')
-        .select('id, name')
-        .in('id', contactIds);
-      nameMap = Object.fromEntries((contacts ?? []).map((c) => [c.id, c.name]));
+      const contacts = await selectInChunks<{ id: string; name: string }>(contactIds, (batch) =>
+        auth.admin.from('contacts').select('id, name').in('id', batch));
+      nameMap = Object.fromEntries(contacts.map((c) => [c.id, c.name]));
     }
 
     const out = rows.map((t) => ({

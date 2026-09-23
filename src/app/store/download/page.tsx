@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { usePlayer } from '@/hooks/usePlayer';
 import type { Track } from '@/lib/types';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { PublicArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 
 /* ─── Types ────────────────────────────────────────────────── */
 
@@ -162,7 +164,7 @@ function DownloadPortal() {
           </div>
           <Link
             href="/store"
-            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-black transition-all hover:bg-white active:scale-[0.98]"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-white px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-black transition-all hover:bg-white/90 active:scale-[0.98]"
           >
             <ArrowLeft size={13} />
             Back to store
@@ -178,6 +180,9 @@ function DownloadPortal() {
   const totalFiles = tracks.reduce((sum, track) => sum + (track.downloads?.length ?? 0), 0);
 
   return (
+    // Post-purchase delivery resolves a purchase token, not a catalogue, so
+    // the artwork theme is fetched rather than carried in the payload.
+    <PublicArtworkThemeProvider>
     <div className="min-h-screen bg-[#090907] text-white">
       <div className="mx-auto max-w-4xl px-4 pb-24 pt-10 md:px-6">
 
@@ -199,8 +204,8 @@ function DownloadPortal() {
               </div>
               <div>
                 <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.24em] text-[#6DC6A4]">Purchase confirmed</p>
-                <h1 className="text-[28px] font-bold leading-tight text-white md:text-[34px]">Your files are ready</h1>
-                <p className="mt-2 max-w-xl text-[12px] leading-relaxed text-white/60">
+                <h1 className="text-[28px] font-bold leading-tight text-white md:text-[32px]">Your files are ready</h1>
+                <p className="mt-2 max-w-xl text-[11px] leading-relaxed text-white/60">
                   Receipt sent to <span className="text-white/80">{purchase.buyer_email}</span>. Keep this private link for future downloads.
                 </p>
               </div>
@@ -250,7 +255,7 @@ function DownloadPortal() {
                 className={`overflow-hidden rounded-[22px] border transition-all ${
                   isCurrent
                     ? 'border-white/20 bg-white/[0.04]'
-                    : 'border-white/10 bg-white/[0.04]/60'
+                    : 'border-white/10 bg-white/[0.04]'
                 }`}
               >
                 {/* Track header */}
@@ -260,13 +265,9 @@ function DownloadPortal() {
                     onClick={() => handlePlay(track)}
                     className="relative w-16 h-16 rounded-xl overflow-hidden bg-[#090907] border border-white/10 shrink-0 group"
                   >
-                    {track.cover_url ? (
-                      <img src={track.cover_url} alt={track.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white/40">
-                        <Music size={20} />
-                      </div>
-                    )}
+                    <ArtworkFallback src={track.cover_url} seed={track.id} kind="track" alt={track.title} sizes="64px" className="w-full h-full object-cover">
+                      <Music size={20} aria-hidden="true" />
+                    </ArtworkFallback>
                     <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
                       {isTrackPlaying
                         ? <Pause size={16} fill="currentColor" className="text-white" />
@@ -279,7 +280,7 @@ function DownloadPortal() {
 
                   {/* Meta */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-white truncate">{track.title}</p>
+                    <p className="text-[14px] font-semibold text-white truncate">{track.title}</p>
                     <div className="flex items-center flex-wrap gap-2 mt-1.5">
                       <span className={`text-[9px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                         track.license_type === 'exclusive'
@@ -378,6 +379,7 @@ function DownloadPortal() {
         </div>
       </div>
     </div>
+    </PublicArtworkThemeProvider>
   );
 }
 
@@ -401,7 +403,7 @@ function FileDownloadRow({
           <span className={meta.accent}>{meta.icon}</span>
         </div>
         <div>
-          <p className="text-[12px] font-medium text-white">{file.label}</p>
+          <p className="text-[11px] font-medium text-white">{file.label}</p>
           <p className="text-[9px] font-mono text-white/40 uppercase tracking-wider">
             {['vocals', 'drums', 'bass', 'other'].includes(file.format) ? 'Stem · WAV' : file.format.replace('-main', '').toUpperCase()}
           </p>
@@ -414,7 +416,7 @@ function FileDownloadRow({
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all shrink-0 ${
           downloading
             ? 'bg-white/10 text-white cursor-wait'
-            : 'bg-white text-black hover:bg-white active:scale-95'
+            : 'bg-white text-black hover:bg-white/90 active:scale-95'
         }`}
       >
         {downloading ? (

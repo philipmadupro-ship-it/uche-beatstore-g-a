@@ -50,7 +50,11 @@ async function loadInitialData(): Promise<{
       admin
         .from('contacts')
         .select('*')
-        .or(`user_id.eq.${user.id},user_id.is.null`)
+        // Strict owner match, same as the beat_sends query below. These two
+        // used to disagree — contacts included legacy null-owner rows while
+        // beat_sends did not — so an orphan contact rendered with a lead score
+        // and an empty send history. Mig 111 adopts those rows onto the owner.
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false }),
       admin
         .from('beat_sends')

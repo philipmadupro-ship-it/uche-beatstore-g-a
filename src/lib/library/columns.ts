@@ -101,6 +101,10 @@ export const LIBRARY_COLUMNS: LibraryColumn[] = [
   { id: 'bpm',      label: 'BPM',        width: '64px',             align: 'right', sort: 'bpm-desc', value: (t) => (t.bpm ? String(t.bpm) : '') },
   { id: 'key',      label: 'Key',        width: '56px',             align: 'right', value: (t) => (t.key ? `${t.key}${t.scale === 'minor' ? 'm' : ''}` : '') },
   { id: 'duration', label: 'Duration',   width: '72px',             align: 'right', value: (t) => fmtDuration(t.duration_seconds) },
+  // Rendered as a seekable waveform by TrackCard, not as text. `value` is what
+  // an export or a text fallback would see: there is no meaningful string for
+  // a waveform, so it says whether one exists.
+  { id: 'waveform', label: 'Waveform',   width: 'minmax(0,1.2fr)',  align: 'left',  value: (t) => (t.peaks_url ? 'yes' : '') },
   { id: 'energy',   label: 'Energy',     width: '68px',             align: 'right', value: (t) => fmtScore(t.energy) },
   { id: 'type',     label: 'Type',       width: '96px',             align: 'left',  value: (t) => t.type ?? '' },
   { id: 'status',   label: 'Status',     width: '96px',             align: 'left',  value: (t) => t.status ?? '' },

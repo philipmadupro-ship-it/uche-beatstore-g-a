@@ -1,10 +1,13 @@
 'use client';
 
+import { memo } from 'react';
 import { Music, ExternalLink } from 'lucide-react';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
-import { CoverImage } from '@/components/ui/CoverImage';
 import { fmtDur } from './helpers';
 import type { StoreTrack } from './types';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
+import { SessionFitMarkers } from '@/components/tracks/SessionFitMarkers';
 
 interface Props {
   track: StoreTrack;
@@ -22,7 +25,9 @@ interface Props {
   accentColor: string;
 }
 
-export function BeatListRow({
+/** Memoised — see the equivalent note on `BeatCard`. Effective only when the
+ *  caller (currently `StoreListView`) passes stable callback references. */
+function BeatListRowImpl({
   track, index, priceLease, priceExclusive, isCurrent, isPlaying, isPreview,
   onPlay, onPreview, onAddLease, onAddExclusive, onFreeDownload, accentColor,
 }: Props) {
@@ -61,9 +66,16 @@ export function BeatListRow({
           onClick={onPreview}
           className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-[#090907] cursor-pointer relative group"
         >
-          {track.cover_url
-            ? <CoverImage src={track.cover_url} sizes="40px" className="object-cover" />
-            : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={14} /></div>}
+          <ArtworkFallback
+            src={track.cover_url}
+            seed={track.id}
+            kind="track"
+            tags={artworkTagsOf(track.tags)}
+            sizes="40px"
+            className="object-cover"
+          >
+            <Music size={14} aria-hidden="true" />
+          </ArtworkFallback>
           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
             <ExternalLink size={10} className="text-white" />
           </div>
@@ -71,7 +83,7 @@ export function BeatListRow({
 
         <div className="flex-1 min-w-0">
           <button onClick={onPreview} className="text-left w-full" title={track.title}>
-            <p className={`text-[15px] font-bold leading-tight truncate transition-colors ${isPreview || isCurrent ? '' : 'text-[#FFF8EE] hover:text-white'}`}
+            <p className={`text-[14px] font-bold leading-tight truncate transition-colors ${isPreview || isCurrent ? '' : 'text-[#FFF8EE] hover:text-white'}`}
               style={isPreview || isCurrent ? { color: accentColor } : {}}
             >
               {track.title}
@@ -113,6 +125,14 @@ export function BeatListRow({
           </div>
         )}
 
+        {/* Only ever renders for the producer's own browser — the session
+            context is a localStorage preference, never a buyer's, so this
+            is invisible on every visit but the producer's own. Renders
+            nothing at all when no session is set. */}
+        <div className="hidden md:flex shrink-0 items-center">
+          <SessionFitMarkers track={track} />
+        </div>
+
         {track.has_wav && (
           <div className="hidden md:flex shrink-0 items-center">
             <span className="rounded-sm bg-white/[0.06] border border-white/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-[0.15em] text-white/60">
@@ -153,7 +173,7 @@ export function BeatListRow({
                 className="hidden sm:flex px-3 py-2 rounded-md bg-white/[0.06] border border-white/[0.10] text-white text-[11px] font-bold hover:bg-white/[0.12] hover:border-white/[0.18] transition-colors disabled:opacity-30 flex-col items-center leading-none"
               >
                 <span>{priceLease != null ? `$${priceLease}` : '—'}</span>
-                <span className="text-[7px] font-mono text-white/60 mt-0.5 uppercase tracking-wider">Lease</span>
+                <span className="text-[8px] font-mono text-white/60 mt-0.5 uppercase tracking-wider">Lease</span>
               </button>
               <button
                 onClick={onAddExclusive}
@@ -162,13 +182,13 @@ export function BeatListRow({
                 style={{ backgroundColor: accentColor }}
               >
                 <span>{priceExclusive != null ? `$${priceExclusive}` : '—'}</span>
-                <span className="text-[7px] font-mono text-black/60 mt-0.5 uppercase tracking-wider">Excl.</span>
+                <span className="text-[8px] font-mono text-black/60 mt-0.5 uppercase tracking-wider">Excl.</span>
               </button>
             </>
           )}
           <button
             onClick={onPreview}
-            className="hidden sm:flex w-8 h-8 rounded-md items-center justify-center text-white/40 hover:text-black bg-white font-semibold shadow-md hover:bg-white/90/[0.03] hover:bg-white/[0.07] border border-white/[0.04] transition-all"
+            className="hidden sm:flex w-8 h-8 rounded-md items-center justify-center text-white/40 hover:text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/[0.04] transition-all"
             title="Preview"
           >
             <ExternalLink size={11} />
@@ -178,3 +198,5 @@ export function BeatListRow({
     </div>
   );
 }
+
+export const BeatListRow = memo(BeatListRowImpl);

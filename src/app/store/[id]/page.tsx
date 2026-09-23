@@ -20,9 +20,12 @@ import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { slugify } from '@/lib/slug';
 import { BeatComments } from '@/components/store/BeatComments';
 import { ShareMenu } from '@/components/store/ShareMenu';
-import { seededGradient } from '@/lib/ui/cover-gradient';
 import { normalizeThemeColor } from '@/lib/theme/colors';
 import type { Track } from '@/lib/types';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
+import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 /* ─── Types ────────────────────────────────────────────────── */
 
@@ -128,7 +131,7 @@ function mapToUiTier(t: ApiLicenseTier): LicenseTier {
       ? 'border-white/20 bg-gradient-to-b from-white/10 to-[#0D0D0A]'
       : 'border-white/20 hover:border-white/20',
     buttonClass: t.is_exclusive
-      ? 'bg-white hover:bg-white text-black'
+      ? 'bg-white hover:bg-white/90 text-black'
       : 'bg-white/[0.06] hover:bg-white/[0.1] text-white border border-white/[0.08]',
   };
 }
@@ -156,6 +159,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
       return {
         track: json.track as Track,
         creator: (json.creator ?? null) as CreatorProfile | null,
+        artworkTheme: (json.artworkTheme ?? null) as PublicArtworkTheme | null,
         licenses: ((json.licenses ?? []) as ApiLicenseTier[]).map(mapToUiTier),
         tags: (json.tags ?? []) as Array<{ tag: string; category: string }>,
         related: (json.related ?? []) as Track[],
@@ -167,6 +171,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
 
   const track = data?.track ?? null;
   const creator = data?.creator ?? null;
+  const artworkTheme = data?.artworkTheme ?? null;
   const licenses = data?.licenses ?? [];
   const tags = data?.tags ?? [];
   const related = data?.related ?? [];
@@ -264,6 +269,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
   };
 
   return (
+    <ArtworkThemeProvider theme={artworkTheme}>
     <div className="min-h-screen bg-[#090907] pb-28 text-white md:pb-0">
       <script
         type="application/ld+json"
@@ -317,19 +323,18 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                   className="relative w-full aspect-square rounded-xl overflow-hidden bg-white/[0.04] group block"
                   style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}
                 >
-                  {track.cover_url ? (
-                    <CoverImage
-                      src={track.cover_url}
-                      alt={track.title}
-                      priority
-                      sizes="(max-width: 640px) 78vw, (max-width: 768px) 260px, 320px"
-                      className="w-full h-full object-cover group-hover:scale-[1.04] [transition:transform_700ms_cubic-bezier(0.32,0.72,0,1)]"
-                    />
-                  ) : (
-                    <div className="absolute inset-0" style={seededGradient(track.id)}>
-                      <div className="w-full h-full flex items-center justify-center"><Music size={40} className="text-white/40" /></div>
-                    </div>
-                  )}
+                  <ArtworkFallback
+                    src={track.cover_url}
+                    seed={track.id}
+                    kind="track"
+                    tags={artworkTagsOf(tags)}
+                    alt={track.title}
+                    priority
+                    sizes="(max-width: 640px) 78vw, (max-width: 768px) 260px, 320px"
+                    className="w-full h-full object-cover group-hover:scale-[1.04] [transition:transform_700ms_cubic-bezier(0.32,0.72,0,1)]"
+                  >
+                    <Music size={40} aria-hidden="true" />
+                  </ArtworkFallback>
                   {/* Play overlay */}
                   <div
                     className={`absolute inset-0 flex items-center justify-center ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
@@ -716,6 +721,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
         </div>
       )}
     </div>
+    </ArtworkThemeProvider>
   );
 }
 
@@ -894,13 +900,16 @@ function RelatedCard({ track }: { track: Track }) {
   return (
     <Link href={`/store/${track.id}`} className="group flex flex-col rounded-xl border border-white/10 bg-white/[0.04] overflow-hidden hover:border-white/20 transition-all">
       <div className="relative w-full aspect-square bg-[#090907]">
-        {track.cover_url ? (
-          <CoverImage src={track.cover_url} alt={track.title} sizes="(max-width: 640px) 50vw, 220px" className="object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-white/40 bg-gradient-to-br from-white/10 to-[#090907]">
-            <Music size={20} />
-          </div>
-        )}
+        <ArtworkFallback
+          src={track.cover_url}
+          seed={track.id}
+          kind="track"
+          alt={track.title}
+          sizes="(max-width: 640px) 50vw, 220px"
+          className="object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+        >
+          <Music size={20} aria-hidden="true" />
+        </ArtworkFallback>
         <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
           <PlayGlyph size={18} className="text-white ml-0.5" />
         </div>
@@ -954,7 +963,7 @@ function OfferModal({ trackId, trackTitle, accent, onClose }: {
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+ <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm ui-fade-in duration-200" onClick={onClose}>
       <div
         ref={panelRef}
         role="dialog"

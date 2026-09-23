@@ -1,9 +1,9 @@
 'use client';
 
 import { useRef, useEffect, useCallback, useState, useSyncExternalStore } from 'react';
-import Image from 'next/image';
 import { gsap } from 'gsap';
 import { ScrambleTextPlugin } from 'gsap/ScrambleTextPlugin';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 gsap.registerPlugin(ScrambleTextPlugin);
 
@@ -362,18 +362,7 @@ export default function MusicPortfolio({
                                     aria-label={`Play ${track.title}`}
                                     className="w-8 h-8 shrink-0 rounded overflow-hidden relative group/cover"
                                 >
-                                    {track.cover_url ? (
-                                        <Image
-                                            src={track.cover_url}
-                                            alt=""
-                                            width={32}
-                                            height={32}
-                                            className="w-full h-full object-cover"
-                                            unoptimized
-                                        />
-                                    ) : (
-                                        <div className="w-full h-full bg-gradient-to-br from-white/10 to-[#090907]" />
-                                    )}
+                                    <ArtworkFallback src={track.cover_url} seed={track.id} kind="track" sizes="32px" className="object-cover" />
                                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/cover:opacity-100 transition-opacity flex items-center justify-center">
                                         {isCurrent && isPlaying ? (
                                             <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" className="text-white" aria-hidden="true">
@@ -401,7 +390,7 @@ export default function MusicPortfolio({
                                                 titleRefs.current.delete(track.id);
                                             }
                                         }}
-                                        className={`block text-[13px] md:text-[15px] font-medium tracking-wide truncate ${isEmbedded ? '' : 'font-heading'}`}
+                                        className={`block text-[13px] md:text-[14px] font-medium tracking-wide truncate ${isEmbedded ? '' : 'font-heading'}`}
                                         data-original-text={track.title}
                                     >
                                         {track.title}
@@ -433,7 +422,7 @@ export default function MusicPortfolio({
                                         {(track.tags ?? []).slice(0, 2).map((tag) => (
                                             <span
                                                 key={tag}
-                                                className="px-2 py-1 rounded-md text-[10px] font-mono uppercase tracking-[0.15em] text-white/80 bg-white/[0.04]/80 border border-white/[0.08] backdrop-blur-sm"
+                                                className="px-2 py-1 rounded-md text-[10px] font-mono uppercase tracking-[0.15em] text-white/80 bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm"
                                             >
                                                 {tag}
                                             </span>
@@ -455,8 +444,8 @@ export default function MusicPortfolio({
                                             <div className="flex items-center gap-1.5">
                                                 {track.priceLease != null && (
                                                     <span className="flex flex-col items-center px-2 py-1 rounded-md bg-white/[0.06] border border-white/[0.10] backdrop-blur-sm leading-none">
-                                                        <span className="text-[12px] font-bold text-white tabular-nums">${track.priceLease}</span>
-                                                        <span className="text-[7px] font-mono uppercase tracking-wider text-white/60 mt-0.5">Lease</span>
+                                                        <span className="text-[11px] font-bold text-white tabular-nums">${track.priceLease}</span>
+                                                        <span className="text-[8px] font-mono uppercase tracking-wider text-white/60 mt-0.5">Lease</span>
                                                     </span>
                                                 )}
                                                 {track.priceExclusive != null && (
@@ -464,8 +453,8 @@ export default function MusicPortfolio({
                                                         className="flex flex-col items-center px-2 py-1 rounded-md leading-none"
                                                         style={{ backgroundColor: '#FFFFFF', color: '#000' }}
                                                     >
-                                                        <span className="text-[12px] font-bold tabular-nums">${track.priceExclusive}</span>
-                                                        <span className="text-[7px] font-mono uppercase tracking-wider text-black/55 mt-0.5">Excl.</span>
+                                                        <span className="text-[11px] font-bold tabular-nums">${track.priceExclusive}</span>
+                                                        <span className="text-[8px] font-mono uppercase tracking-wider text-black/55 mt-0.5">Excl.</span>
                                                     </span>
                                                 )}
                                                 {track.priceLease == null && track.priceExclusive == null && (

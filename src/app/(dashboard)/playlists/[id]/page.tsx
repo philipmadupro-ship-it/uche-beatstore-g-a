@@ -13,9 +13,8 @@ import { TrackCard, TRACK_ROW_GRID } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { PlaylistOfflineSync } from '@/components/offline/PlaylistOfflineSync';
-import { Loader2, Camera, Check, X, Edit2, Play, Share2, Music, Plus, Search, Tag, ListMusic, CheckSquare, ListPlus, UploadCloud } from 'lucide-react';
+import { Loader2, Check, X, Edit2, Play, Share2, Music, Plus, Search, Tag, ListMusic, CheckSquare, ListPlus, UploadCloud } from 'lucide-react';
 import { PlaylistSuggestions } from '@/components/playlists/PlaylistSuggestions';
-import { seededGradient } from '@/lib/ui/cover-gradient';
 import { AddFromLibraryModal } from '@/components/projects/AddFromLibraryModal';
 import { Track } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
@@ -24,6 +23,7 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { DropZone } from '@/components/upload/DropZone';
 import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { CoverEditor } from '@/components/ui/CoverEditor';
 
 type PlaylistDetail = {
   id: string;
@@ -48,6 +48,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadingArt, setUploadingArt] = useState(false);
+  const [removingArt, setRemovingArt] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState('');
@@ -123,6 +124,29 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
       toast.error('Cover upload failed', err instanceof Error ? err.message : 'Try again');
     } finally {
       setUploadingArt(false);
+    }
+  };
+
+  /** Clear the cover — the playlist falls back to the default playlist artwork. */
+  const handleArtRemove = async () => {
+    setRemovingArt(true);
+    try {
+      const patch = await fetch(`/api/playlists/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cover_url: null }),
+      });
+      if (!patch.ok) {
+        const e = await patch.json().catch(() => ({}));
+        toast.error('Could not remove cover', e.error || `HTTP ${patch.status}`);
+        return;
+      }
+      toast.success('Cover removed');
+      fetchData();
+    } catch (err) {
+      toast.error('Could not remove cover', err instanceof Error ? err.message : 'Try again');
+    } finally {
+      setRemovingArt(false);
     }
   };
 
@@ -344,22 +368,21 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
             project detail pages so all three feel like one family. */}
         <div className="grid grid-cols-1 gap-5 sm:gap-8 lg:grid-cols-[minmax(280px,360px)_1fr] lg:gap-10">
           <div className="mx-auto w-full max-w-[240px] sm:max-w-none lg:sticky lg:top-10 lg:self-start">
-            <div
-              className="group relative aspect-square w-full cursor-pointer overflow-hidden rounded-xl border border-white/[0.05] bg-white/[0.04] shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:rounded-2xl"
-              onClick={() => fileInputRef.current?.click()}
+            <CoverEditor
+              src={playlist?.cover_url}
+              seed={playlist?.id ?? 'pl'}
+              kind="playlist"
+              inputRef={fileInputRef}
+              uploading={uploadingArt}
+              removing={removingArt}
+              onFile={handleArtChange}
+              onRemove={handleArtRemove}
+              removeLabel={playlist?.name}
+              priority
+              className="rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.4)] sm:rounded-2xl"
             >
-              {playlist?.cover_url ? (
-                <img loading="lazy" src={playlist.cover_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-[120px] font-light text-white/[0.07]" style={seededGradient(playlist?.id ?? 'pl')}>
-                  <ListMusic size={64} className="text-white/15" />
-                </div>
-              )}
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                {uploadingArt ? <Loader2 size={20} className="animate-spin text-white" /> : <Camera size={20} className="text-white" />}
-              </div>
-              <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handleArtChange} />
-            </div>
+              <ListMusic size={64} />
+            </CoverEditor>
           </div>
 
           <div className="min-w-0">
@@ -410,7 +433,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                     rows={4}
                     maxLength={2000}
                     placeholder="What's this playlist about? Late-night drives, gospel chops, etc."
-                    className="w-full bg-[#090907] border border-white/20 rounded-lg px-3 py-2.5 text-[15px] font-light leading-[1.7] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 resize-none"
+                    className="w-full bg-[#090907] border border-white/20 rounded-lg px-3 py-2.5 text-[14px] font-light leading-[1.7] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 resize-none"
                   />
                   <p className="mt-1 text-[9px] font-mono text-white/40">
                     {tempDescription.length}/2000 · ⌘/Ctrl+Enter to save
@@ -422,7 +445,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                   className="group mt-2 block w-full text-left sm:mt-4"
                 >
                   {playlist?.description ? (
-                    <p className="text-[15px] text-white/60 leading-[1.7] whitespace-pre-line group-hover:text-white transition-colors font-light tracking-wide">
+                    <p className="text-[14px] text-white/60 leading-[1.7] whitespace-pre-line group-hover:text-white transition-colors font-light tracking-wide">
                       {playlist.description}
                     </p>
                   ) : (
@@ -453,7 +476,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               <button
                 onClick={handlePlayAll}
                 disabled={!tracks.length}
-                className="glass-play-surface flex items-center gap-2 px-4 py-2 rounded-md text-[12px] font-medium disabled:opacity-30"
+                className="glass-play-surface flex items-center gap-2 px-4 py-2 rounded-md text-[11px] font-medium disabled:opacity-30"
               >
                 <Play size={12} fill="currentColor" className="ml-0.5" />
                 Play
@@ -461,14 +484,14 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
               <button
                 onClick={() => setShowShareModal(true)}
                 disabled={!tracks.length}
-                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 disabled:opacity-30 transition-colors"
+                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[11px] font-medium hover:border-white/20 disabled:opacity-30 transition-colors"
               >
                 <Share2 size={12} />
                 Share
               </button>
               <button
                 onClick={openAddTracks}
-                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 transition-colors"
+                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[11px] font-medium hover:border-white/20 transition-colors"
               >
                 <Plus size={12} />
                 Add tracks
@@ -477,7 +500,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                 type="button"
                 onClick={() => setShowUpload((value) => !value)}
                 aria-expanded={showUpload}
-                className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-4 py-2 text-[12px] font-medium text-white transition-colors hover:border-white/20"
+                className="flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.04] px-4 py-2 text-[11px] font-medium text-white transition-colors hover:border-white/20"
               >
                 <UploadCloud size={12} />
                 Upload
@@ -545,7 +568,7 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                         else n.add(tag);
                         return n;
                       })}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-white text-black border-white' : 'bg-transparent border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}>
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-white/[0.14] text-white border-white/30' : 'bg-transparent border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}>
                         {tag}
                       </button>
                     );
@@ -606,6 +629,8 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                   isLastInOrder={trackIndex === tracks.length - 1}
                   onRemoveFromContext={() => removeTrack(track.id)}
                   removeLabel="Remove from playlist"
+                  editable
+                  onChanged={fetchData}
                 />
               );
             })

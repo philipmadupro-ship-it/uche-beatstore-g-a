@@ -15,6 +15,7 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { ErasureRequestSchema } from '@/lib/contracts';
 import { DefaultArtworkCard } from '@/components/settings/DefaultArtworkCard';
 import { TagColorsCard } from '@/components/settings/TagColorsCard';
+import { DesktopNotificationsRow } from '@/components/settings/DesktopNotificationsRow';
 
 interface TeamMember {
   user_id: string;
@@ -67,13 +68,30 @@ export default function SettingsPage() {
     })();
   }, []);
 
+  /**
+   * Optimistic, but it rolls back and says so.
+   *
+   * This used to `.catch(() => undefined)` without checking `res.ok`, so a
+   * rejected save left the switch sitting in its new position: the producer
+   * saw "Lossless exports: on" and got MP3s.
+   */
   const savePrefs = async (next: Prefs) => {
+    const previous = prefs;
     setPrefs(next);
-    await fetch('/api/profile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(next),
-    }).catch(() => undefined);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(next),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || `HTTP ${res.status}`);
+      }
+    } catch (err) {
+      setPrefs(previous);
+      toast.error('Preference not saved', err instanceof Error ? err.message : 'Try again');
+    }
   };
 
   const handleErase = async (e: React.FormEvent) => {
@@ -85,7 +103,7 @@ export default function SettingsPage() {
     }
     const ok = await confirmToast(
       `Erase ${email}?`,
-      'Their email + Stripe details are permanently anonymised on all purchase records. Sale amounts and dates are kept. This cannot be undone.',
+      'Their email and Stripe details are anonymised on sales, offers, delivery emails, their contact and comments, and their favourites, history, playlists, follows and carts are deleted. Sale amounts and dates are kept. This cannot be undone.',
       { confirmLabel: 'Erase data', cancelLabel: 'Cancel', danger: true },
     );
     if (!ok) return;
@@ -98,8 +116,8 @@ export default function SettingsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Erasure failed');
-      const total = (data.licensePurchases ?? 0) + (data.projectAccessLinks ?? 0);
-      toast.success(total > 0 ? `Erased buyer data on ${total} record${total === 1 ? '' : 's'}` : 'No purchase records found for that email');
+      const total = typeof data.total === 'number' ? data.total : 0;
+      toast.success(total > 0 ? `Erased buyer data on ${total} record${total === 1 ? '' : 's'}` : 'No records found for that email');
       setEraseEmail('');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Erasure failed');
@@ -117,13 +135,17 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
       });
-      if (res.ok) {
-        setSuccess(true);
-        setInviteEmail('');
-        setTimeout(() => setSuccess(false), 3000);
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        // Previously: `if (res.ok) {…}` with no else and a console.error in
+        // the catch. A rejected invite looked identical to no click at all.
+        throw new Error(j?.error || `HTTP ${res.status}`);
       }
+      setSuccess(true);
+      setInviteEmail('');
+      setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
-      console.error(err);
+      toast.error('Invite not sent', err instanceof Error ? err.message : 'Try again');
     } finally {
       setSending(false);
     }
@@ -172,8 +194,12 @@ export default function SettingsPage() {
 
           {/* License Builder */}
           <section>
+            {/* Straight to the canonical builder. This used to point at
+                /settings/licenses, a page whose entire content is a notice
+                saying the builder moved to the store editor — so reaching it
+                cost two navigations through a tombstone. */}
             <Link
-              href="/settings/licenses"
+              href="/store-editor#licenses"
               className="group block"
             >
               <Card interactive className="flex items-center gap-5 p-6">
@@ -194,7 +220,7 @@ export default function SettingsPage() {
           <section>
             <div className="flex items-center gap-2 mb-4">
               <Shield size={14} className="text-white/40" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Team members</h2>
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-white">Team members</h2>
             </div>
             {loading ? (
               <div className="py-12 flex justify-center"><Loader2 size={16} className="animate-spin text-white/40" /></div>
@@ -207,13 +233,13 @@ export default function SettingsPage() {
             ) : (
               <Card className="divide-y divide-white/10 overflow-hidden">
                 {team.map((m) => (
-                  <div key={m.user_id} className="flex items-center justify-between px-4 py-3 bg-white/[0.04]/50">
+                  <div key={m.user_id} className="flex items-center justify-between px-4 py-3 bg-white/[0.04]">
                     <div className="flex items-center gap-3">
                       <div className="w-7 h-7 rounded-full bg-[#0D0D0A] border border-white/10 flex items-center justify-center text-[10px] font-medium text-white/80">
                         {m.name?.[0] || m.email[0]}
                       </div>
                       <div>
-                        <p className="text-[12px] font-medium text-white">{m.name || m.email}</p>
+                        <p className="text-[11px] font-medium text-white">{m.name || m.email}</p>
                         {m.name && <p className="text-[10px] font-mono text-white/40">{m.email}</p>}
                       </div>
                     </div>
@@ -230,7 +256,7 @@ export default function SettingsPage() {
           <section>
             <div className="flex items-center gap-2 mb-4">
               <UserPlus size={14} className="text-white/40" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Invite collaborator</h2>
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-white">Invite collaborator</h2>
             </div>
             <Card>
               <form onSubmit={handleInvite} className="space-y-4 p-6">
@@ -279,7 +305,7 @@ export default function SettingsPage() {
           <section>
             <div className="flex items-center gap-2 mb-4">
               <SettingsIcon size={14} className="text-white/40" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Preferences</h2>
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-white">Preferences</h2>
             </div>
             <Card className="divide-y divide-white/10 overflow-hidden">
               <ToggleRow
@@ -294,6 +320,9 @@ export default function SettingsPage() {
                 on={prefs.auto_tagging}
                 onToggle={(v) => savePrefs({ ...prefs, auto_tagging: v })}
               />
+              {/* Per-device, not per-account: OS permission is granted per
+                  browser, so this one does not go through savePrefs. */}
+              <DesktopNotificationsRow />
             </Card>
           </section>
 
@@ -301,13 +330,14 @@ export default function SettingsPage() {
           <section>
             <div className="flex items-center gap-2 mb-4">
               <Shield size={14} className="text-white/40" />
-              <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Buyer privacy</h2>
+              <h2 className="text-[11px] font-bold uppercase tracking-wider text-white">Buyer privacy</h2>
             </div>
             <Card className="p-6">
               <p className="text-[13px] text-white/40 mb-4 max-w-prose">
-                Honour a buyer&apos;s data-deletion request. Their email and Stripe details are
-                permanently anonymised across every purchase record; sale amounts and dates are
-                kept for your accounting.
+                Honour a buyer&apos;s data-deletion request. Their email is anonymised on sales,
+                offers, delivery emails, their contact and comments; their favourites, listening
+                history, playlists, follows and abandoned carts are deleted. Sale amounts and dates
+                are kept for your accounting.
               </p>
               <form onSubmit={handleErase} className="flex flex-col sm:flex-row gap-3 sm:items-end">
                 <Field
@@ -338,15 +368,18 @@ function ToggleRow({ title, description, on, onToggle }: { title: string; descri
       type="button"
       role="switch"
       aria-checked={on}
-      className="flex w-full cursor-pointer items-center justify-between bg-white/[0.04]/50 px-6 py-4 text-left transition-colors hover:bg-white/[0.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/45 focus-visible:ring-inset"
+      className="flex w-full cursor-pointer items-center justify-between bg-white/[0.02] px-6 py-4 text-left transition-colors hover:bg-white/[0.05] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/45 focus-visible:ring-inset"
       onClick={() => onToggle(!on)}
     >
       <div>
-        <p className="text-[12px] font-medium text-white">{title}</p>
+        <p className="text-[11px] font-medium text-white">{title}</p>
         <p className="mt-0.5 text-[10px] text-[var(--text-readable)]">{description}</p>
       </div>
-      <div className={`w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-white' : 'bg-white/[0.05] border border-white/20'}`}>
-        <div className={`w-3.5 h-3.5 rounded-full absolute top-[3px] transition-all ${on ? 'right-[3px] bg-white' : 'left-[3px] bg-white/40'}`} />
+      {/* The knob was `bg-white` on a `bg-white` track when on — a solid white
+          pill with no visible thumb, so the only way to read the switch was to
+          remember which side it started on. */}
+      <div className={`w-9 h-5 rounded-full relative transition-colors ${on ? 'bg-[#6DC6A4]' : 'bg-white/[0.05] border border-white/20'}`}>
+        <div className={`w-3.5 h-3.5 rounded-full absolute top-[3px] transition-all ${on ? 'right-[3px] bg-[#090907]' : 'left-[3px] bg-white/40'}`} />
       </div>
     </button>
   );

@@ -13,7 +13,6 @@
  */
 
 import { useState, use, useMemo } from 'react';
-import Image from 'next/image';
 import {
   Loader2, ListMusic, Play, Pause, Music, ShoppingBag, Check,
   Headphones, Clock, Heart, MoreHorizontal,
@@ -30,6 +29,9 @@ import { ProducerProfile } from '@/components/store/ProducerProfile';
 import { normalizeThemeColor } from '@/lib/theme/colors';
 import type { Track } from '@/lib/types';
 import type { CartItem } from '@/hooks/useCart';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 interface PlaylistTrack {
   id: string;
@@ -109,6 +111,7 @@ export default function PlaylistPage({
         playlist: PlaylistShape;
         tracks: PlaylistTrack[];
         creator: Creator | null;
+        artworkTheme: PublicArtworkTheme | null;
         pricing_fallback?: { lease: number | null; exclusive: number | null };
       };
     },
@@ -116,6 +119,7 @@ export default function PlaylistPage({
   const playlist = data?.playlist ?? null;
   const tracks = useMemo(() => data?.tracks ?? [], [data?.tracks]);
   const creator = data?.creator ?? null;
+  const artworkTheme = data?.artworkTheme ?? null;
   const fallback = data?.pricing_fallback ?? { lease: null, exclusive: null };
   const error = queryError ? (queryError as Error).message : null;
 
@@ -256,7 +260,7 @@ export default function PlaylistPage({
       <button
         onClick={playAll}
         disabled={tracks.length === 0}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/[0.08] border border-white/[0.10] text-white text-[12px] hover:bg-white/[0.14] transition-colors disabled:opacity-40"
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/[0.08] border border-white/[0.10] text-white text-[11px] hover:bg-white/[0.14] transition-colors disabled:opacity-40"
       >
         {anyOurTrackPlaying ? <Pause size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" className="ml-0.5" />}
         {anyOurTrackPlaying ? 'Pause' : 'Play all'}
@@ -264,7 +268,7 @@ export default function PlaylistPage({
       <button
         onClick={() => addBulk('lease', 'all')}
         disabled={tracks.length === 0}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-white/[0.10] bg-white/[0.04] text-white text-[12px] hover:bg-white/[0.08] transition-colors disabled:opacity-40"
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full border border-white/[0.10] bg-white/[0.04] text-white text-[11px] hover:bg-white/[0.08] transition-colors disabled:opacity-40"
       >
         <ShoppingBag size={11} />
         Add all — Lease
@@ -272,7 +276,7 @@ export default function PlaylistPage({
       <button
         onClick={() => addBulk('exclusive', 'all')}
         disabled={tracks.length === 0}
-        className="flex items-center gap-1.5 px-4 py-2 rounded-full text-black text-[12px] font-medium transition-opacity hover:opacity-90 disabled:opacity-40"
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full text-black text-[11px] font-medium transition-opacity hover:opacity-90 disabled:opacity-40"
         style={{ backgroundColor: accent }}
       >
         <ShoppingBag size={11} />
@@ -282,6 +286,7 @@ export default function PlaylistPage({
   );
 
   return (
+    <ArtworkThemeProvider theme={artworkTheme}>
     <div className={stickyVisible ? 'pb-20' : ''}>
       <GlassPage coverUrl={playlist.cover_url} accentColor={accent}>
         <GlassPage.TabNav
@@ -338,7 +343,7 @@ export default function PlaylistPage({
               {tracks.length === 0 ? (
                 <div className="px-6 md:px-10 py-10 text-center">
                   <Music size={20} className="text-white/40 mx-auto mb-2" />
-                  <p className="text-[12px] text-white/60">No tracks listed for sale in this playlist yet.</p>
+                  <p className="text-[11px] text-white/60">No tracks listed for sale in this playlist yet.</p>
                 </div>
               ) : (
                 <ul>
@@ -377,9 +382,9 @@ export default function PlaylistPage({
                         {/* Cover + title */}
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-[#090907] border border-white/[0.06] shrink-0">
-                            {t.cover_url
-                              ? <Image src={t.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized />
-                              : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={14} /></div>}
+                            <ArtworkFallback src={t.cover_url} seed={t.id} kind="track" sizes="40px" className="object-cover">
+                              <Music size={14} aria-hidden="true" />
+                            </ArtworkFallback>
                             {(isHov || isCur) && (
                               <button
                                 onClick={(e) => {
@@ -439,19 +444,19 @@ export default function PlaylistPage({
                               <button
                                 onClick={() => addOne(t, 'lease')}
                                 disabled={lp == null}
-                                className="flex flex-col items-center px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/[0.10] text-white text-[12px] font-bold hover:bg-white/[0.12] transition-colors disabled:opacity-30 leading-none"
+                                className="flex flex-col items-center px-2.5 py-1.5 rounded-md bg-white/[0.06] border border-white/[0.10] text-white text-[11px] font-bold hover:bg-white/[0.12] transition-colors disabled:opacity-30 leading-none"
                               >
                                 <span className="tabular-nums">{lp != null ? `$${lp}` : '—'}</span>
-                                <span className="text-[7px] font-mono text-white/45 mt-0.5 uppercase tracking-wider">Lease</span>
+                                <span className="text-[8px] font-mono text-white/45 mt-0.5 uppercase tracking-wider">Lease</span>
                               </button>
                               <button
                                 onClick={() => addOne(t, 'exclusive')}
                                 disabled={ep == null}
-                                className="flex flex-col items-center px-2.5 py-1.5 rounded-md text-black text-[12px] font-bold hover:opacity-90 transition-opacity disabled:opacity-30 leading-none"
+                                className="flex flex-col items-center px-2.5 py-1.5 rounded-md text-black text-[11px] font-bold hover:opacity-90 transition-opacity disabled:opacity-30 leading-none"
                                 style={{ backgroundColor: accent }}
                               >
                                 <span className="tabular-nums">{ep != null ? `$${ep}` : '—'}</span>
-                                <span className="text-[7px] font-mono text-black/60 mt-0.5 uppercase tracking-wider">Excl.</span>
+                                <span className="text-[8px] font-mono text-black/60 mt-0.5 uppercase tracking-wider">Excl.</span>
                               </button>
                             </>
                           )}
@@ -478,11 +483,11 @@ export default function PlaylistPage({
                             <MoreHorizontal size={14} />
                           </button>
                           {menuFor === t.id && (
-                            <div className="absolute right-0 top-9 z-30 w-44 rounded-xl bg-white/[0.04]/95 backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5">
+                            <div className="absolute right-0 top-9 z-30 w-44 rounded-xl bg-white/[0.04] backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5">
                               <button
                                 onClick={() => { addOne(t, 'lease'); setMenuFor(null); }}
                                 disabled={lp == null}
-                                className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] w-full text-left disabled:opacity-40"
+                                className="flex items-center gap-2 px-3 py-2 text-[11px] text-white hover:bg-white/[0.06] w-full text-left disabled:opacity-40"
                               >
                                 <Plus size={12} className="text-white/60" />
                                 Add lease {lp != null ? `($${lp})` : ''}
@@ -490,7 +495,7 @@ export default function PlaylistPage({
                               <button
                                 onClick={() => { addOne(t, 'exclusive'); setMenuFor(null); }}
                                 disabled={ep == null}
-                                className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] w-full text-left disabled:opacity-40"
+                                className="flex items-center gap-2 px-3 py-2 text-[11px] text-white hover:bg-white/[0.06] w-full text-left disabled:opacity-40"
                               >
                                 <Plus size={12} style={{ color: accent }} />
                                 Add exclusive {ep != null ? `($${ep})` : ''}
@@ -501,7 +506,7 @@ export default function PlaylistPage({
                                   try { navigator.clipboard.writeText(t.title); toast.success('Copied'); } catch {/* noop */}
                                   setMenuFor(null);
                                 }}
-                                className="flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-white/[0.06] w-full text-left"
+                                className="flex items-center gap-2 px-3 py-2 text-[11px] text-white hover:bg-white/[0.06] w-full text-left"
                               >
                                 <Copy size={12} className="text-white/60" />
                                 Copy title
@@ -526,9 +531,9 @@ export default function PlaylistPage({
 
       {/* Sticky bulk-action bar (only when selection > 0) */}
       {stickyVisible && (
-        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 sm:bottom-28 z-40 bg-white/[0.02]/90 border border-white/[0.10] rounded-2xl shadow-[0_16px_60px_rgba(0,0,0,0.7)] backdrop-blur-2xl px-4 py-3 w-[min(620px,calc(100vw-32px))]">
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-24 sm:bottom-28 z-40 bg-white/[0.02] border border-white/[0.10] rounded-2xl shadow-[0_16px_60px_rgba(0,0,0,0.7)] backdrop-blur-2xl px-4 py-3 w-[min(620px,calc(100vw-32px))]">
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="text-[12px] text-white flex items-center gap-2">
+            <div className="text-[11px] text-white flex items-center gap-2">
               <span className="font-bold tabular-nums">{selected.size}</span>
               <span className="text-white/60">selected</span>
             </div>
@@ -561,5 +566,6 @@ export default function PlaylistPage({
         </div>
       )}
     </div>
+    </ArtworkThemeProvider>
   );
 }

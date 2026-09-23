@@ -64,7 +64,7 @@ export function GlassPage({
         </>
       )}
       <div className={`${maxWidth} mx-auto`}>
-        <div className="rounded-[28px] border border-white/[0.08] bg-white/[0.04]/70 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.55)] overflow-hidden">
+        <div className="rounded-[28px] border border-white/[0.08] bg-white/[0.04] backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.55)] overflow-hidden">
           {children}
         </div>
       </div>
@@ -149,14 +149,14 @@ function Hero({
           <div className="mt-3 min-w-0">
             <Link
               href={`/store/producer/${slugify(producer.display_name)}`}
-              className="inline-block max-w-full text-[15px] md:text-[16px] text-white/90 font-medium hover:text-white transition-colors break-all"
+              className="inline-block max-w-full text-[14px] md:text-[16px] text-white/90 font-medium hover:text-white transition-colors break-all"
             >
               {producer.display_name}
             </Link>
           </div>
         )}
         {meta && (
-          <div className="mt-1.5 flex items-center gap-2 text-[12px] text-white/55 flex-wrap">
+          <div className="mt-1.5 flex items-center gap-2 text-[11px] text-white/55 flex-wrap">
             {meta}
           </div>
         )}

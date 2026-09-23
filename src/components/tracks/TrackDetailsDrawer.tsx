@@ -21,6 +21,18 @@ import { TrackMetadataEditor } from '@/components/tracks/drawer/TrackMetadataEdi
 import { TrackNotesEditor } from '@/components/tracks/drawer/TrackNotesEditor';
 import { DrawerActionList } from '@/components/tracks/drawer/DrawerActionList';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { InlineText } from '@/components/ui/InlineText';
+import { InlineTagStrip, type TagGroup } from '@/components/ui/InlineTagStrip';
+import { TrackCollaboratorStrip } from '@/components/tracks/TrackCollaboratorStrip';
+import { TAG_TAXONOMY } from '@/lib/types/tags';
+import { useTags } from '@/hooks/useTags';
+
+/** Track tag vocabulary — the shared taxonomy, in scanning order. */
+const TRACK_TAG_GROUPS: TagGroup[] = Object.entries(TAG_TAXONOMY).map(([category, options]) => ({
+  category,
+  label: category,
+  options: options as readonly string[],
+}));
 
 // Type/Status options moved into drawer/TrackMetadataEditor along with
 // the editor UI itself.
@@ -120,6 +132,9 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isReplacing, setIsReplacing] = useState(false);
   const panelRef = useDialogBehavior({ open: true, onClose });
+  // Same rule as the three hooks above: unconditional, because `track` can go
+  // null mid-session and a hook that disappears crashes the render.
+  const { tags, toggleTag } = useTags(trackProp?.id ?? '');
 
   if (!track) return null;
 
@@ -376,7 +391,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
       />
       
       <div 
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 animate-in fade-in" 
+ className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 ui-fade-in" 
         onClick={onClose}
       />
       <div
@@ -385,7 +400,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         aria-modal="true"
         aria-label={`${track.title} details`}
         tabIndex={-1}
-        className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-[#0c0b09] border-l border-white/[0.06] z-50 flex flex-col animate-in slide-in-from-right duration-300 focus:outline-none"
+ className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-[#0c0b09] border-l border-white/[0.06] z-50 flex flex-col ui-drawer-right duration-300 focus:outline-none"
       >
         <div className="relative p-6 border-b border-white/[0.06]">
           <div className="relative flex items-start justify-between w-full gap-3">
@@ -394,19 +409,31 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
               <div className="flex items-center gap-2 mb-3">
                 <button
                   onClick={() => setView('details')}
-                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-colors ${view === 'details' ? 'bg-white text-black' : 'bg-white/[0.05] text-white/40 hover:text-white/80'}`}
+                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-colors ${view === 'details' ? 'bg-white/[0.14] text-white' : 'bg-white/[0.05] text-white/40 hover:text-white/80'}`}
                 >
                   Details
                 </button>
                 <button
                   onClick={() => setView('insights')}
-                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-colors ${view === 'insights' ? 'bg-white text-black' : 'bg-white/[0.05] text-white/40 hover:text-white/80'}`}
+                  className={`text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded-md transition-colors ${view === 'insights' ? 'bg-white/[0.14] text-white' : 'bg-white/[0.05] text-white/40 hover:text-white/80'}`}
                 >
                   Insights
                 </button>
               </div>
-              {/* Title */}
-              <h2 className="text-xl font-black text-white uppercase tracking-tighter truncate leading-none mb-2">{track.title}</h2>
+              {/* Title — editable right here. It used to be static text, so
+                  renaming a beat meant leaving the drawer for /library/[id]. */}
+              <InlineText
+                label="Track title"
+                value={track.title}
+                onSave={async (next) => {
+                  if (!next) return false;
+                  await patchTrack({ title: next });
+                  return true;
+                }}
+                maxLength={200}
+                className="mb-2 -mx-1 px-1 text-xl font-black uppercase leading-none tracking-tighter text-white"
+                inputClassName="text-xl font-black uppercase tracking-tighter"
+              />
               {/* Key / BPM / type meta strip */}
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[9px] font-mono uppercase tracking-widest text-white/60 bg-white/[0.05] border border-white/20 px-2 py-0.5 rounded">
@@ -455,7 +482,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
 
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {view === 'insights' ? (
-            <div className="p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+ <div className="p-6 space-y-6 ui-pop-up duration-500">
               {/* Top stat cards — BPM + Key large */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-[#090907] border border-white/10 rounded-2xl p-4">
@@ -569,6 +596,28 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                 onSaved={onUpdate}
               />
 
+              {/* Tags — inline, with per-pill remove. Editing a beat's tags
+                  previously required leaving the drawer for the full
+                  /library/[id] page; the drawer showed none of them. */}
+              <div className="border-b border-white/10 px-6 py-5">
+                <h3 className="mb-3 text-[9px] font-black uppercase tracking-[0.25em] text-white/40">Tags</h3>
+                <InlineTagStrip
+                  subject="track"
+                  tags={tags}
+                  groups={TRACK_TAG_GROUPS}
+                  onToggle={({ tag, category, active }) => toggleTag.mutate({ tag, category, active })}
+                />
+              </div>
+
+              {/* Credits — who's on this track. A filename credit
+                  (source: 'filename') is marked distinctly from one typed
+                  by hand, since only the former is ever replaced by a
+                  re-parse. See lib/upload/collaborators.ts. */}
+              <div className="border-b border-white/10 px-6 py-5">
+                <h3 className="mb-3 text-[9px] font-black uppercase tracking-[0.25em] text-white/40">Credits</h3>
+                <TrackCollaboratorStrip trackId={track.id} />
+              </div>
+
               {/* Type / Status / Rating — extracted to drawer/TrackMetadataEditor. */}
               <TrackMetadataEditor
                 track={track}
@@ -620,7 +669,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
         {/* Replace-audio progress — panel-level overlay (the waveform block
             that used to host it was removed). */}
         {isReplacing && (
-          <div className="absolute inset-0 bg-[#090907]/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 animate-in fade-in z-10">
+ <div className="absolute inset-0 bg-[#090907]/85 backdrop-blur-sm flex flex-col items-center justify-center p-6 ui-fade-in z-10">
             <Loader2 size={32} className="animate-spin text-white mb-4" />
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white">Replacing Source Asset</p>
           </div>

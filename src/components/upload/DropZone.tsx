@@ -45,8 +45,8 @@ const FORMAT_STYLE: Record<string, string> = {
   aiff: 'text-[#8ecf9f] bg-[#0a1f0a]/60 border-[#1f3a1f]',
   aif:  'text-[#8ecf9f] bg-[#0a1f0a]/60 border-[#1f3a1f]',
   mp3:  'text-white bg-[#1f1a0a]/60 border-[#3a2f1f]',
-  m4a:  'text-white/80 bg-white/[0.05]/60 border-white/20',
-  ogg:  'text-white/80 bg-white/[0.05]/60 border-white/20',
+  m4a:  'text-white/80 bg-white/[0.05] border-white/20',
+  ogg:  'text-white/80 bg-white/[0.05] border-white/20',
 };
 
 function fmtBytes(b: number): string {

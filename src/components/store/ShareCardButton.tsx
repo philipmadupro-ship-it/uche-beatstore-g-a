@@ -114,7 +114,7 @@ export function ShareCardModal({
             type="button"
             onClick={nativeShare}
             disabled={sharing}
-            className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-md text-black text-[12px] font-bold uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-40"
+            className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-md text-black text-[11px] font-bold uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-40"
             style={{ backgroundColor: accentColor }}
           >
             {sharing ? <Loader2 size={12} className="animate-spin" /> : <Share2 size={12} />}
@@ -123,7 +123,7 @@ export function ShareCardModal({
           <a
             href={cardUrl}
             download={`${trackTitle.replace(/[^\w\d-]+/g, '_')}-share.png`}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-md bg-white/[0.06] border border-white/[0.10] text-white text-[12px] font-bold uppercase tracking-wider hover:bg-white/[0.10] transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-md bg-white/[0.06] border border-white/[0.10] text-white text-[11px] font-bold uppercase tracking-wider hover:bg-white/[0.10] transition-colors"
           >
             <Download size={12} />
             Save

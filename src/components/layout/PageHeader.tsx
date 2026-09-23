@@ -38,16 +38,22 @@ export function PageHeader({ eyebrow, title, description, actions, meta, childre
           {eyebrow && (
             <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-white/60 mb-2">{eyebrow}</p>
           )}
-          <h1 className="text-[28px] sm:text-[34px] md:text-[40px] font-bold tracking-tight text-white leading-[1.05] font-heading">
+          <h1 className="text-[28px] sm:text-[32px] md:text-[40px] font-bold tracking-tight text-white leading-[1.05] font-heading">
             {title}
           </h1>
           {description && (
-            <p className="text-[12px] text-white/70 max-w-xl mt-2 leading-relaxed">{description}</p>
+            <p className="text-[11px] text-white/70 max-w-xl mt-2 leading-relaxed">{description}</p>
           )}
         </div>
 
+        {/* Actions row wraps below sm. `shrink-0` + nowrap meant it kept its
+            full intrinsic width inside a narrower parent, pushing trailing
+            controls past the viewport edge — at 375px the contacts header's
+            "Import" sat at x=484 and was clipped rather than scrollable, so it
+            could not be reached at all. Shared by every dashboard page that
+            passes `actions`, so this was never a contacts-only problem. */}
         {(meta || actions) && (
-          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 sm:shrink-0">
             {meta && (
               <span className="text-[11px] font-mono text-white/50 uppercase tracking-wider whitespace-nowrap">{meta}</span>
             )}

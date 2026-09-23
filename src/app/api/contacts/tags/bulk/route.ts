@@ -35,12 +35,13 @@ export async function POST(req: NextRequest) {
     if (!auth.ok) return auth.res;
 
     if (isSupabaseConfigured()) {
-      // Restrict to owned contacts first.
+      // Restrict to owned contacts first. Owner-only, matching the rest of the
+      // contacts surface (mig 097's RLS decision; orphans adopted by mig 111).
       const { data: owned } = await auth.admin
         .from('contacts')
         .select('id')
         .in('id', ids)
-        .or(`user_id.eq.${auth.userId},user_id.is.null`);
+        .eq('user_id', auth.userId);
       const ownedIds = ((owned ?? []) as ContactIdRow[]).map((c) => c.id);
       if (ownedIds.length === 0) return NextResponse.json({ updated: 0 });
 

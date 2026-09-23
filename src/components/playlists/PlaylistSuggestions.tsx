@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { Sparkles, Loader2, Music, Plus, Check, ChevronDown } from 'lucide-react';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { toast } from '@/hooks/useToast';
 
 interface Track { id: string; title: string; type?: string | null; bpm?: number | null; key?: string | null; scale?: string | null; cover_url?: string | null }
@@ -149,13 +150,13 @@ export function PlaylistSuggestions({
                 const pct = matchPct(r.distance);
                 return (
                   <div key={r.track.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/10 hover:border-white/20 transition-colors">
-                    <div className="w-9 h-9 rounded-md overflow-hidden bg-[#090907] border border-white/10 shrink-0">
-                      {r.track.cover_url
-                        ? <img loading="lazy" src={r.track.cover_url} alt="" className="w-full h-full object-cover" />
-                        : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={12} /></div>}
+                    <div className="relative w-9 h-9 rounded-md overflow-hidden bg-[#090907] border border-white/10 shrink-0">
+                      <ArtworkFallback src={r.track.cover_url} seed={r.track.id} kind="track" sizes="36px" className="object-cover">
+                        <Music size={12} aria-hidden="true" />
+                      </ArtworkFallback>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[12px] font-medium text-white truncate">{r.track.title}</p>
+                      <p className="text-[11px] font-medium text-white truncate">{r.track.title}</p>
                       <p className="text-[9px] font-mono text-white/60 uppercase tracking-wider mt-0.5 truncate">
                         {r.track.type}
                         {r.track.bpm ? ` · ${r.track.bpm} bpm` : ''}

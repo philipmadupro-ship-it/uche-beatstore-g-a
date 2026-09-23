@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { useEffect } from 'react';
 import { normalisePalette } from '@/lib/artwork/palette';
 import type { ArtworkKind } from '@/lib/artwork/gradient';
+import { useArtworkThemeContext } from '@/components/providers/ArtworkThemeProvider';
 
 /**
  * The producer's brand assets: a logo, and one default artwork per kind.
@@ -82,11 +83,22 @@ export const useBrandArtworkStore = create<BrandArtworkState>((set, get) => ({
  * not as three things you must fill in before anything works.
  */
 export function useBrandArtwork(kind: ArtworkKind = 'track') {
-  const logoUrl = useBrandArtworkStore((s) => s.logoUrl);
-  const artwork = useBrandArtworkStore((s) => s.artwork);
+  // A public page supplies the theme with its own data; only the dashboard
+  // fetches. Reading context first is what lets one component serve both.
+  const supplied = useArtworkThemeContext();
+
+  const storeLogoUrl = useBrandArtworkStore((s) => s.logoUrl);
+  const storeArtwork = useBrandArtworkStore((s) => s.artwork);
   const load = useBrandArtworkStore((s) => s.load);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    // Skip the fetch entirely inside a provider: on the storefront it would
+    // be a guaranteed 401 on every page view.
+    if (!supplied) load();
+  }, [load, supplied]);
+
+  const logoUrl = supplied ? supplied.logo_url : storeLogoUrl;
+  const artwork = supplied ? supplied.artwork : storeArtwork;
 
   const own = artwork[kind] ?? EMPTY;
   const fallback = artwork.track ?? EMPTY;

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { scopedList, insertOwned, isErrorResponse } from '@/lib/db';
 import { readBody } from '@/lib/validate';
 import { ContactResolveBodySchema } from '@/lib/contracts';
+import { normalizeEmail } from '@/lib/contacts/email';
 
 /**
  * POST /api/contacts/resolve — find-or-create a contact by email.
@@ -14,8 +15,11 @@ import { ContactResolveBodySchema } from '@/lib/contracts';
 export async function POST(req: NextRequest) {
   const parsed = await readBody(req, ContactResolveBodySchema);
   if (!parsed.ok) return parsed.res;
-  const email = parsed.data.email.trim();
-  const emailLc = email.toLowerCase();
+  // Canonical form for both the match and the write — this route compared
+  // case-insensitively but stored raw, so an ad-hoc send to `Foo@Bar.com`
+  // created a contact the checkout/webhook rows could never line up with.
+  const email = normalizeEmail(parsed.data.email);
+  const emailLc = email;
 
   // Find existing (case-insensitive) among the caller's contacts.
   const existing = await scopedList<{ id: string; email: string | null; name: string }>('contacts', { orderBy: 'name', ascending: true });

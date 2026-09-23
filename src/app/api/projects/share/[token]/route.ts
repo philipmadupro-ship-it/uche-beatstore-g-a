@@ -4,6 +4,7 @@ import { isSupabaseConfigured, getAll, query } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { signedSharePeaksUrl, signedSharePreviewUrl } from '@/lib/share-media-token';
 import { cdnAudioSrc } from '@/lib/audio/cdn';
+import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -267,7 +268,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       }
       const creator = playlistRow?.user_id ? await fetchCreator(playlistRow.user_id) : null;
       const playlistPublic = redactUserId(playlistRow);
-      return NextResponse.json({ share: redactShare(share), playlist: playlistPublic, project: null, tracks, creator, stems });
+      return NextResponse.json({
+        share: redactShare(share),
+        playlist: playlistPublic,
+        project: null,
+        tracks,
+        creator,
+        stems,
+        // Recipients of a share link have no session either, so the artwork
+        // they see comes with the payload like it does on the storefront.
+        artworkTheme: await loadPublicArtworkTheme(admin, playlistRow?.user_id),
+      });
     }
 
     // ── Single-track share ──────────────────────────────────────────────
@@ -281,7 +292,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         : [];
       const creator = track?.user_id ? await fetchCreator(track.user_id) : null;
       const trackPublic = track ? { id: track.id, title: track.title, cover_url: track.cover_url } : null;
-      return NextResponse.json({ share: redactShare(share), track: trackPublic, project: null, playlist: null, tracks, creator, stems });
+      return NextResponse.json({
+        share: redactShare(share),
+        track: trackPublic,
+        project: null,
+        playlist: null,
+        tracks,
+        creator,
+        stems,
+        artworkTheme: await loadPublicArtworkTheme(admin, track?.user_id),
+      });
     }
 
     // ── Project share (default) ─────────────────────────────────────────
@@ -342,6 +362,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       creator,
       stems,
       licenses,
+      artworkTheme: await loadPublicArtworkTheme(admin, projectRow?.user_id),
     });
   } catch (error: unknown) {
     console.error('Project share read error:', error);

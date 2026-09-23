@@ -1,14 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Track } from '@/lib/types';
-import { MoreHorizontal, Star, Music, Trash2, MinusCircle, Info, Download, Loader2, Share2, ChevronUp, ChevronDown, Check } from 'lucide-react';
+import { Star, Music, ChevronUp, ChevronDown, Check } from 'lucide-react';
+import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
+import { InlineText } from '@/components/ui/InlineText';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useRating } from '@/hooks/useRating';
-import { setTrackDragData } from '@/lib/dnd';
-import { cacheTrack, getCachedMeta, removeCached } from '@/lib/offline/audio-cache';
+import { isInteractiveDragStartTarget, setTrackDragData } from '@/lib/dnd';
+import { SessionFitMarkers } from './SessionFitMarkers';
+import { RowWaveform } from './RowWaveform';
+import { useOfflineTrack } from '@/hooks/useOfflineCache';
+import { offlineActionLabel } from '@/lib/offline/status';
 import { toast } from '@/hooks/useToast';
 import { gridTemplate, type LibraryColumn, type TrackWithTags } from '@/lib/library/columns';
 import type { TrackStatsMap } from '@/lib/library/track-stats';
@@ -34,6 +39,12 @@ interface TrackCardProps {
   onDelete?: (track: Track) => void;
   /** When provided, exposes "Share track" in the context menu. */
   onShare?: (track: Track) => void;
+  /** Dashboard rows only. Turns on inline rename — the title cell becomes a
+   *  field and the ⋯ menu grows a Rename item that focuses it. The public
+   *  storefront row omits it, so a visitor never gets an editor. */
+  editable?: boolean;
+  /** Called after an inline edit lands, so the page can refetch. */
+  onChanged?: () => void;
   /** When true the row renders a checkbox in the index column and the
    *  row's main click toggles selection instead of opening the drawer.
    *  Used by the library list when the user enters "Select" mode for
@@ -87,7 +98,20 @@ type TrackWithInlineTags = Track & {
   track_tags?: TrackTag[];
 };
 
-export function TrackCard({
+/**
+ * Wrapped in `memo` below and exported as `TrackCard`. Zero components in
+ * this app were memoised before this change — a single parent state update
+ * (selecting one row, an unrelated poll tick) re-rendered every visible row
+ * and everything inside it (waveform peaks, offline status, session-fit
+ * markers, each subscribing to its own store). `memo` only pays off when the
+ * parent hands this component STABLE prop references; see
+ * `lib/ui/stable-row-callbacks.ts`, which is what the library and store
+ * pages now use to build `onPlayClick` et al. without a fresh closure per
+ * render. Memoising the child without stabilising the parent's props is a
+ * no-op that looks like a fix — see the render-count assertions in
+ * `TrackCard.scale.test.tsx`.
+ */
+function TrackCardImpl({
   track,
   index,
   onClickDetails,
@@ -96,6 +120,8 @@ export function TrackCard({
   removeLabel = 'Remove from project',
   onDelete,
   onShare,
+  editable = false,
+  onChanged,
   selectable = false,
   selected = false,
   onSelectChange,
@@ -112,69 +138,80 @@ export function TrackCard({
 }: TrackCardProps) {
   void index;
   const { currentTrack, isPlaying, setTrack, togglePlay } = usePlayer();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const trackTags = (track as TrackWithInlineTags).track_tags ?? [];
+  const [renaming, setRenaming] = useState(false);
+  // Optimistic title so the row updates the instant the field closes, without
+  // waiting for the page's refetch to come back.
+  const [titleOverride, setTitleOverride] = useState<string | null>(null);
+  // Memoized so `?? []` doesn't hand downstream `useMemo`s (artworkTags) a
+  // fresh array identity on every render.
+  const trackTags = useMemo(
+    () => (track as TrackWithInlineTags).track_tags ?? [],
+    [track],
+  );
   const stemStatus = track.stems_status as string | null | undefined;
   const hasCompletedStems = stemStatus === 'done' || stemStatus === 'completed';
 
-  // Offline Caching integration
-  const [isCached, setIsCached] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<number | null>(null);
+  // Offline caching — single implementation shared with `OfflineToggle`, see
+  // `useOfflineTrack` (hooks/useOfflineCache.ts) and `lib/offline/status.ts`.
+  // This row previously kept a parallel copy of this whole state machine
+  // (isCached/syncProgress + its own cacheTrack/removeCached calls); now both
+  // surfaces read the same status and label so they can't drift.
+  const {
+    isCached,
+    downloading: offlineDownloading,
+    progress: offlineProgress,
+    status: offlineStatus,
+    announcement: offlineAnnouncement,
+    download: downloadOffline,
+    remove: removeOffline,
+  } = useOfflineTrack(track.id);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const meta = await getCachedMeta(track.id);
-        setIsCached(!!meta);
-      } catch (err) {
-        console.error('IndexedDB read failed:', err);
-      }
-    })();
-  }, [track.id]);
-
-  const handleSync = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleOffline = async () => {
+    if (isCached) {
+      await removeOffline();
+      return;
+    }
     if (!track.audio_url) return;
-    setSyncProgress(0);
-    try {
-      const url = track.audio_url.startsWith('http')
-        ? track.audio_url
-        : `${window.location.origin}${track.audio_url}`;
+    const url = track.audio_url.startsWith('http')
+      ? track.audio_url
+      : `${window.location.origin}${track.audio_url}`;
+    // Errors surface through `offlineStatus`/the row's live region — see
+    // useOfflineTrack, which sets its own `error` state rather than throwing.
+    await downloadOffline(url, track.title);
+  };
 
-      await cacheTrack(track.id, url, track.title, (loaded, total) => {
-        setSyncProgress(loaded / total);
+  // A refetch that brings back a different title means the override is stale.
+  // Adjusted during render (React's documented pattern for resetting state
+  // when a prop changes) rather than in a `useEffect` — a synchronous
+  // setState inside an effect schedules an extra render pass; this way the
+  // reset lands in the same render as the prop change.
+  const [prevTrackTitle, setPrevTrackTitle] = useState(track.title);
+  if (track.title !== prevTrackTitle) {
+    setPrevTrackTitle(track.title);
+    setTitleOverride(null);
+  }
+
+  const renameTrack = async (next: string) => {
+    if (!next) return false;
+    try {
+      const res = await fetch(`/api/tracks/${track.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: next }),
       });
-      setIsCached(true);
-      toast.success(`"${track.title.toUpperCase()}" cached for offline playback!`);
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        toast.error('Rename failed', j?.error || `HTTP ${res.status}`);
+        return false;
+      }
+      setTitleOverride(next);
+      onChanged?.();
+      return true;
     } catch (err) {
-      console.error('Offline caching failed:', err);
-      toast.error('Sync failed', err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setSyncProgress(null);
+      toast.error('Rename failed', err instanceof Error ? err.message : 'Network error');
+      return false;
     }
   };
-
-  const handleRemoveSync = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await removeCached(track.id);
-      setIsCached(false);
-      toast.success(`"${track.title.toUpperCase()}" removed from local storage.`);
-    } catch (err) {
-      console.error('Failed to remove cache:', err);
-      toast.error('Failed to delete cache');
-    }
-  };
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, [menuOpen]);
 
   const isCurrent = currentTrack?.id === track.id;
   const isActive = isCurrent && isPlaying;
@@ -199,8 +236,15 @@ export function TrackCard({
     else onClickDetails?.(track);
   };
 
+  const displayTitle = titleOverride ?? track.title;
   const uploadDate = new Date(track.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  const { rate: rateTrack } = useRating(track.id, track.rating || 0);
+  // `currentRating` — NOT `track.rating` — is what the stars render from.
+  // Parents that fetch with plain useState (the project and playlist pages)
+  // never see React Query's ['tracks'] invalidate, so their `track` prop stays
+  // stale after a successful rate and the star visibly did nothing. The hook's
+  // value carries the optimistic write and falls back to the prop, so it is
+  // correct for React Query parents and plain-fetch parents alike.
+  const { rate: rateTrack, rating: currentRating } = useRating(track.id, track.rating || 0);
   const durationLabel = formatDuration(track.duration_seconds ?? null);
   const genreMoodTags = trackTags.filter((tt) => tt.category === 'genre' || tt.category === 'mood');
   // Genre first, then mood — the gradient leads on the first entry, and genre
@@ -221,22 +265,112 @@ export function TrackCard({
     rateTrack(star);
   };
 
+  /**
+   * Row menu, ordered by how often a producer reaches for each item rather
+   * than by which subsystem owns it.
+   *
+   * Rename comes first and edits the row in place; the old menu's first item
+   * was "View details", which opened a 420px drawer whose own title was not
+   * editable. Offline sync and the two list-membership actions keep their own
+   * groups so the destructive row at the bottom is never adjacent to a
+   * routine one.
+   */
+  const rowMenuSections: MenuSection[] = [
+    {
+      id: 'edit',
+      items: [
+        {
+          id: 'rename', label: 'Rename', shortcut: 'R', shortcutKey: 'r',
+          hidden: !editable,
+          onSelect: () => setRenaming(true),
+        },
+        {
+          id: 'details', label: 'View details', shortcut: 'I', shortcutKey: 'i',
+          hidden: !onClickDetails,
+          onSelect: () => onClickDetails?.(track),
+        },
+      ],
+    },
+    {
+      id: 'order',
+      items: [
+        {
+          id: 'up', label: 'Move up', hidden: !onMoveUp || moveControls !== 'menu',
+          disabled: isFirstInOrder, onSelect: () => onMoveUp?.(),
+        },
+        {
+          id: 'down', label: 'Move down', hidden: !onMoveDown || moveControls !== 'menu',
+          disabled: isLastInOrder, onSelect: () => onMoveDown?.(),
+        },
+      ],
+    },
+    {
+      id: 'content',
+      items: [
+        { id: 'share', label: 'Share track', hidden: !onShare, onSelect: () => onShare?.(track) },
+        {
+          id: 'offline',
+          label: offlineActionLabel(offlineStatus, offlineProgress),
+          busy: offlineDownloading,
+          onSelect: () => {
+            const startingDownload = !isCached;
+            void toggleOffline();
+            // Stay open while a download starts so the row keeps showing
+            // progress; a removal closes the menu immediately like any other
+            // one-shot action.
+            return startingDownload ? ('keep-open' as const) : undefined;
+          },
+        },
+      ],
+    },
+    {
+      id: 'membership',
+      items: [
+        {
+          id: 'remove', label: removeLabel, hidden: !onRemoveFromContext,
+          onSelect: () => onRemoveFromContext?.(track),
+        },
+      ],
+    },
+    {
+      id: 'danger',
+      danger: true,
+      items: [
+        { id: 'delete', label: 'Delete from library', hidden: !onDelete, onSelect: () => onDelete?.(track) },
+      ],
+    },
+  ];
+
   return (
     <div
       onClick={handleRowPress}
       // Native HTML5 draggable so the user can drop tracks onto contact
-      // rows (or future drop targets — playlists, projects). We don't
+      // rows (or future drop targets — playlists, projects), or drag them
+      // straight out of the browser onto the desktop / a DAW. We don't
       // mount a heavy DnD library; the dataTransfer payload is encoded
       // through lib/dnd.ts and decoded on the target.
       draggable={draggableTrack}
       onDragStart={(e) => {
         if (!draggableTrack) return;
+        // A press on the ⋯ menu, the rename field, or a control button can
+        // still land on this ancestor's `draggable`, since the browser
+        // walks up to the nearest draggable element regardless of which
+        // child was pressed. Bail out so the click keeps working instead
+        // of being swallowed by a one-pixel drag.
+        if (isInteractiveDragStartTarget(e.target)) {
+          e.preventDefault();
+          return;
+        }
         e.stopPropagation();
-        setTrackDragData(e, {
-          id: track.id,
-          title: track.title,
-          cover_url: track.cover_url ?? null,
-        });
+        setTrackDragData(
+          e,
+          {
+            id: track.id,
+            title: track.title,
+            cover_url: track.cover_url ?? null,
+          },
+          track.audio_url,
+        );
       }}
       style={columns ? ({ '--track-row-cols': gridTemplate(columns) } as React.CSSProperties) : undefined}
       className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-lg border px-2.5 py-2 transition-colors cursor-pointer ${columns ? 'track-row-dynamic' : TRACK_ROW_GRID} md:gap-4 md:px-3 ${
@@ -247,6 +381,13 @@ export function TrackCard({
             : 'border-white/[0.07] hover:border-white/[0.16] hover:bg-white/[0.04]'
       }`}
     >
+      {/* Offline save/remove status, announced on transitions only — see
+          useOfflineTrack / lib/offline/status.ts. Visually hidden: the row's
+          badge and the ⋯ menu label already show this sighted. */}
+      <span role="status" aria-live="polite" className="sr-only">
+        {offlineAnnouncement}
+      </span>
+
       {/* Cover/play cell — mirrors the Store list row. In select or store
           order mode this cell becomes the control, keeping actions left. */}
       <div
@@ -307,13 +448,28 @@ export function TrackCard({
         )}
       </div>
 
-      {/* Title + core metadata */}
-      <div className="relative z-10 min-w-0">
-        <h4 className={`truncate text-[14px] font-semibold leading-tight tracking-[-0.01em] transition-colors ${
-          isCurrent ? 'text-white' : 'text-white/95 group-hover:text-white'
-        }`}>
-          {track.title}
-        </h4>
+      {/* Title + core metadata. The title is the row's one inline editor:
+          renaming a beat used to mean opening the details drawer, and the
+          drawer's title was not editable either — the only rename lived on
+          /library/[id]. */}
+      <div className="relative z-10 min-w-0" onClick={(e) => { if (renaming) e.stopPropagation(); }}>
+        {renaming ? (
+          <InlineText
+            label="Track title"
+            value={displayTitle}
+            editing
+            onEditingChange={(v) => setRenaming(v)}
+            onSave={renameTrack}
+            maxLength={200}
+            inputClassName="text-[14px] font-semibold"
+          />
+        ) : (
+          <h4 className={`truncate text-[14px] font-semibold leading-tight tracking-[-0.01em] transition-colors ${
+            isCurrent ? 'text-white' : 'text-white/95 group-hover:text-white'
+          }`}>
+            {displayTitle}
+          </h4>
+        )}
         {/* Metadata as discrete cells rather than a ' · ' string: BPM and key
             are the two values a producer scans for, and a run-on line makes
             them hunt. Separators are rendered, not typed, so a missing value
@@ -330,6 +486,10 @@ export function TrackCard({
           {track.key ? (
             <span className="text-white/55">{track.key}{track.scale === 'minor' ? 'm' : ''}</span>
           ) : null}
+          {/* Whether this fits the session the producer set in the TopBar.
+              Renders nothing at all when no session is set, so the row is
+              unchanged for anyone not using it. */}
+          <SessionFitMarkers track={track} />
           {(track.bpm || track.key) && track.type ? <span aria-hidden className="h-2 w-px bg-white/15" /> : null}
           {track.type ? <span className="truncate">{track.type}</span> : null}
           {!track.bpm && !track.key && !track.type ? <span>—</span> : null}
@@ -347,12 +507,12 @@ export function TrackCard({
           <span className="tabular-nums">{durationLabel}</span>
           <span aria-hidden className="h-2 w-px bg-white/15" />
           <span className="tabular-nums">{uploadDate}</span>
-          {track.rating ? (
+          {currentRating ? (
             <>
               <span aria-hidden className="h-2 w-px bg-white/15" />
               <span className="flex items-center gap-0.5 text-[#c8a84b]">
                 <Star size={8} fill="#c8a84b" strokeWidth={0} aria-hidden />
-                <span className="tabular-nums">{track.rating}</span>
+                <span className="tabular-nums">{currentRating}</span>
               </span>
             </>
           ) : null}
@@ -388,10 +548,10 @@ export function TrackCard({
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className={`flex shrink-0 items-center gap-0.5 transition-opacity ${
-                  track.rating ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+                  currentRating ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
                 }`}>
                   {[1, 2, 3, 4, 5].map((star) => {
-                    const on = Boolean(track.rating && track.rating >= star);
+                    const on = Boolean(currentRating && currentRating >= star);
                     return (
                       <button
                         key={star}
@@ -438,6 +598,18 @@ export function TrackCard({
                 {genreMoodTags.length === 0 && !track.store_listed ? (
                   <span className="text-[11px] text-white/20">—</span>
                 ) : null}
+              </div>
+            );
+          }
+          if (col.id === 'waveform') {
+            return (
+              <div key={col.id} className="relative z-10 hidden min-w-0 items-center md:flex">
+                <RowWaveform
+                  trackId={track.id}
+                  peaksUrl={track.peaks_url}
+                  title={track.title}
+                  onPlay={onPlayClick}
+                />
               </div>
             );
           }
@@ -507,11 +679,11 @@ export function TrackCard({
       <div className="relative z-10 hidden items-center justify-end gap-2 md:flex" onClick={(e) => e.stopPropagation()}>
         <div
           className={`flex shrink-0 items-center gap-0.5 transition-opacity ${
-            track.rating ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+            currentRating ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
           }`}
         >
           {[1, 2, 3, 4, 5].map((star) => {
-            const on = Boolean(track.rating && track.rating >= star);
+            const on = Boolean(currentRating && currentRating >= star);
             return (
               <button
                 key={star}
@@ -546,110 +718,22 @@ export function TrackCard({
         </>
       )}
 
-      {/* More */}
-      <div ref={menuRef} className="relative z-20 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-        <button
-          onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
-          className={`flex h-9 w-9 items-center justify-center rounded-full border transition-colors ${
-            menuOpen
-              ? 'border-white/20 bg-white/[0.05] text-white'
-              : 'border-transparent text-[#8B8273] hover:bg-white/[0.06] hover:text-white'
-          }`}
-          aria-label="Track actions"
-          aria-expanded={menuOpen}
-        >
-          <MoreHorizontal size={14} />
-        </button>
-        {menuOpen && (
-          <div
-            className="absolute right-0 top-full z-[80] mt-1 w-52 bg-[#090907] border border-white/10 rounded-lg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] py-1 animate-in fade-in slide-in-from-top-1"
-          >
-            {onClickDetails && (
-              <button
-                onClick={() => { setMenuOpen(false); onClickDetails(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
-              >
-                <Info size={12} className="text-white" /> View details
-              </button>
-            )}
-            {(onMoveUp || onMoveDown) && moveControls === 'menu' && (
-              <>
-                <button
-                  onClick={() => { setMenuOpen(false); onMoveUp?.(); }}
-                  disabled={isFirstInOrder}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A] disabled:opacity-40 disabled:hover:bg-transparent"
-                >
-                  <ChevronUp size={12} className="text-white" /> Move up
-                </button>
-                <button
-                  onClick={() => { setMenuOpen(false); onMoveDown?.(); }}
-                  disabled={isLastInOrder}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A] disabled:opacity-40 disabled:hover:bg-transparent"
-                >
-                  <ChevronDown size={12} className="text-white" /> Move down
-                </button>
-              </>
-            )}
-            {onShare && (
-              <button
-                onClick={() => { setMenuOpen(false); onShare(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
-              >
-                <Share2 size={12} className="text-white" /> Share track
-              </button>
-            )}
-            
-            {isCached ? (
-              <button
-                onClick={(e) => { setMenuOpen(false); handleRemoveSync(e); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-amber-500 hover:bg-[#0D0D0A]"
-              >
-                <MinusCircle size={12} className="text-amber-500 shrink-0" /> Remove offline cache
-              </button>
-            ) : (
-              <button
-                onClick={(e) => { handleSync(e); }}
-                disabled={syncProgress !== null}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A] disabled:opacity-50"
-              >
-                {syncProgress !== null ? (
-                  <>
-                    <Loader2 size={12} className="animate-spin text-white shrink-0" />
-                    <span>Syncing ({Math.round(syncProgress * 100)}%)</span>
-                  </>
-                ) : (
-                  <>
-                    <Download size={12} className="text-white shrink-0" />
-                    <span>Sync to device</span>
-                  </>
-                )}
-              </button>
-            )}
-            {onRemoveFromContext && (
-              <button
-                onClick={() => { setMenuOpen(false); onRemoveFromContext(track); }}
-                className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-white hover:bg-[#0D0D0A]"
-              >
-                <MinusCircle size={12} className="text-white/80" /> {removeLabel}
-              </button>
-            )}
-            {onDelete && (
-              <>
-                <div className="my-1 border-t border-white/10" />
-                <button
-                  onClick={() => { setMenuOpen(false); onDelete(track); }}
-                  className="w-full text-left flex items-center gap-2 px-3 py-2 text-[12px] text-red-400 hover:bg-red-950/30"
-                >
-                  <Trash2 size={12} /> Delete from library
-                </button>
-              </>
-            )}
-          </div>
-        )}
+      {/* Row actions. Grouped by frequency, destructive last, keyboard
+          navigable — see components/ui/ActionMenu. */}
+      <div className="relative z-20 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+        <ActionMenu
+          sections={rowMenuSections}
+          align="right"
+          label="Track actions"
+          width={224}
+          triggerClassName="flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-[#8B8273] transition-colors hover:bg-white/[0.06] hover:text-white"
+        />
       </div>
     </div>
   );
 }
+
+export const TrackCard = memo(TrackCardImpl);
 
 function formatDuration(seconds: number | null): string {
   if (!seconds || !Number.isFinite(seconds)) return '—';

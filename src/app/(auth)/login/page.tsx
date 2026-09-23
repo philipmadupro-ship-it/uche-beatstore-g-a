@@ -134,7 +134,7 @@ export default function LoginPage() {
           type="button"
           onClick={handleGoogle}
           disabled={formDisabled}
-          className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded bg-white text-black hover:bg-white active:scale-[0.98] disabled:opacity-50 transition-all text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-black"
+          className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded bg-white text-black hover:bg-white/90 active:scale-[0.98] disabled:opacity-50 transition-all text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-black"
         >
           <GoogleGlyph />
           {googleLoading ? 'Redirecting…' : 'Continue with Google'}
@@ -210,7 +210,7 @@ export default function LoginPage() {
           </div>
 
           {isSignUp && (
-            <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+ <div className="ui-pop duration-300">
               <label htmlFor="confirmPassword" className="block text-xs font-medium uppercase text-white/40 mb-1">
                 Confirm Password
               </label>
@@ -247,7 +247,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={formDisabled}
-            className="w-full flex justify-center py-3 px-4 mt-6 border border-white/50 rounded text-sm font-medium text-black bg-white font-semibold shadow-md hover:bg-white/90 hover:bg-white/80 focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50 transition-all uppercase tracking-widest"
+            className="w-full flex justify-center py-3 px-4 mt-6 border border-white/50 rounded text-sm font-medium text-black bg-white font-semibold shadow-md hover:bg-white/90 focus:outline-none focus:ring-2 focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-black disabled:opacity-50 transition-all uppercase tracking-widest"
           >
             {isLoading ? 'Processing…' : isSignUp ? 'Create Account' : 'Sign In'}
           </button>

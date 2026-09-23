@@ -202,18 +202,18 @@ export function ImportContactsModal({ onClose, onSuccess }: Props) {
                 {parsing ? (
                   <div className="flex flex-col items-center gap-3">
                     <Loader2 size={20} className="animate-spin text-white" />
-                    <p className="text-[12px] text-white/80">Parsing {filename}…</p>
+                    <p className="text-[11px] text-white/80">Parsing {filename}…</p>
                   </div>
                 ) : (
                   <>
                     <Upload size={22} className="text-white/50 mx-auto mb-3" />
                     <p className="text-[13px] text-white mb-1">Drop a file or click to upload</p>
-                    <p className="text-[11px] text-white/60">.csv, .xlsx, .xls — columns auto-detected</p>
+                    <p className="text-[11px] text-white/60">.csv or .xlsx — columns auto-detected</p>
                   </>
                 )}
                 <input
                   ref={fileRef} type="file"
-                  accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                  accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   onChange={onPick}
                   className="hidden"
                 />

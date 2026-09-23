@@ -36,6 +36,7 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { cn } from '@/lib/utils';
 import type { Contact, BeatSend } from '@/lib/types';
+import { deriveActivityTone, type ActivityTone } from '@/lib/contacts/tone';
 
 const PIPELINE_TONES: Record<string, { dot: string; text: string; ring: string; label: string }> = {
   sent:        { dot: 'bg-white/40', text: 'text-white/60', ring: 'ring-white/20',    label: 'Sent' },
@@ -87,12 +88,13 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
   useEffect(() => { fetchAll(); }, [params.id]);
 
   // ── Engagement + pipeline derived state ─────────────────────────────
-  const engagementTone = useMemo<'active' | 'engaged' | 'cold'>(() => {
-    if (sends.length === 0) return 'cold';
-    const latest = sends.reduce((m, s) => (s.sent_at > m ? s.sent_at : m), '');
-    const days = (Date.now() - Date.parse(latest)) / 86_400_000;
-    return days <= 30 ? 'active' : 'engaged';
-  }, [sends]);
+  const engagementTone = useMemo<ActivityTone>(() => {
+    const latest = sends.length
+      ? sends.reduce((m, s) => (s.sent_at > m ? s.sent_at : m), '')
+      : null;
+    // Purchases count: a customer who was never sent a beat is not "cold".
+    return deriveActivityTone({ lastSentAt: latest, purchases: activitySummary?.purchases ?? 0 });
+  }, [sends, activitySummary]);
 
   const latestStatus = useMemo(() => {
     if (sends.length === 0) return null;
@@ -223,7 +225,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                 <EditableLine
                   value={contact.name}
                   onSave={(v) => patchField('name', v)}
-                  className="text-[22px] font-medium text-white leading-tight tracking-tight"
+                  className="text-[20px] font-medium text-white leading-tight tracking-tight"
                   placeholder="Name"
                 />
 
@@ -292,7 +294,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                 <div className="mt-4 flex items-center gap-2">
                   <button
                     onClick={() => setSendModalOpen(true)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-white text-black text-[12px] font-medium hover:bg-white/90 active:scale-[0.98] transition-all"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-white text-black text-[11px] font-medium hover:bg-white/90 active:scale-[0.98] transition-all"
                   >
                     <Send size={12} />
                     Send beat
@@ -305,7 +307,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                   )}
                   <button
                     onClick={deleteContact}
-                    className="px-3 py-2.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-white/60 hover:text-red-400 hover:border-red-500/30 text-[12px] font-medium transition-colors"
+                    className="px-3 py-2.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-white/60 hover:text-red-400 hover:border-red-500/30 text-[11px] font-medium transition-colors"
                     title="Delete contact"
                   >
                     <Trash2 size={12} />
@@ -329,6 +331,9 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                 <DetailField icon={<Globe size={11} />}   label="Twitter"   value={contact.twitter}   onSave={(v) => patchField('twitter', v)} prefix="@" />
                 <DetailField icon={<MapPin size={11} />}  label="City"      value={contact.city}      onSave={(v) => patchField('city', v)} />
                 <DetailField icon={<MapPin size={11} />}  label="Country"   value={contact.country}   onSave={(v) => patchField('country', v)} />
+                {/* `website` has existed on the row and the Contact type all
+                    along with no UI anywhere and no route that accepted it. */}
+                <DetailField icon={<Globe size={11} />}   label="Website"   value={contact.website}   onSave={(v) => patchField('website', v)} />
               </div>
             </section>
 
@@ -494,11 +499,11 @@ function DetailField({
             if (e.key === 'Enter') commit();
             else if (e.key === 'Escape') { setDraft(value ?? ''); setEditing(false); }
           }}
-          className="w-full bg-transparent outline-none text-[12px] text-white border-b border-white/40"
+          className="w-full bg-transparent outline-none text-[11px] text-white border-b border-white/40"
           placeholder={`Add ${label.toLowerCase()}`}
         />
       ) : (
-        <button onClick={() => { setDraft(value ?? ''); setEditing(true); }} className="block text-left text-[12px] w-full">
+        <button onClick={() => { setDraft(value ?? ''); setEditing(true); }} className="block text-left text-[11px] w-full">
           {value ? (
             <span className="text-white">{prefix}{value}</span>
           ) : (

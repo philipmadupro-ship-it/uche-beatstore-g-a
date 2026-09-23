@@ -4,6 +4,8 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Music } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import type { ArtworkKind } from '@/lib/artwork/gradient';
 
 interface ProductListProps {
   children: ReactNode;
@@ -12,7 +14,7 @@ interface ProductListProps {
 
 export function ProductList({ children, className }: ProductListProps) {
   return (
-    <div className={cn('relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#14110d]/80 shadow-[0_18px_52px_rgba(0,0,0,0.42)]', className)}>
+    <div className={cn('relative overflow-hidden rounded-[20px] border border-white/[0.08] bg-[#14110d]/80 shadow-[0_18px_52px_rgba(0,0,0,0.42)]', className)}>
       {children}
     </div>
   );
@@ -23,6 +25,9 @@ interface ProductListRowProps {
   title: string;
   coverUrl?: string | null;
   coverFallback?: ReactNode;
+  /** Row id. Supplying it turns a missing cover into generated brand artwork. */
+  artworkSeed?: string;
+  artworkKind?: ArtworkKind;
   eyebrow?: ReactNode;
   meta?: ReactNode;
   tags?: ReactNode;
@@ -42,6 +47,8 @@ export function ProductListRow({
   title,
   coverUrl,
   coverFallback,
+  artworkSeed,
+  artworkKind = 'track',
   eyebrow,
   meta,
   tags,
@@ -57,7 +64,13 @@ export function ProductListRow({
 }: ProductListRowProps) {
   const coverContent = (
     <>
-      {coverUrl ? (
+      {artworkSeed ? (
+        // A seed means the caller can identify the row, so a missing cover
+        // becomes brand artwork rather than a glyph.
+        <ArtworkFallback src={coverUrl} seed={artworkSeed} kind={artworkKind} sizes="48px" className="object-cover">
+          {coverFallback ?? <Music size={17} aria-hidden="true" />}
+        </ArtworkFallback>
+      ) : coverUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={coverUrl} alt="" className="h-full w-full object-cover" />
       ) : (
@@ -72,7 +85,7 @@ export function ProductListRow({
   const titleContent = (
     <>
       {eyebrow && <div className="mb-1 flex min-h-4 items-center gap-2 text-[9px] font-mono uppercase tracking-[0.18em] text-white/40">{eyebrow}</div>}
-      <h3 className="truncate text-[15px] font-bold leading-tight text-white transition-colors group-hover:text-[#fff7ea] sm:text-[16px]">
+      <h3 className="truncate text-[14px] font-bold leading-tight text-white transition-colors group-hover:text-[#fff7ea] sm:text-[16px]">
         {title}
       </h3>
       {meta && <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-mono text-white/40">{meta}</div>}
@@ -200,7 +213,7 @@ export function FolderContainerCard({
             </div>
           )}
         </div>
-        <p className="truncate text-[12px] font-bold text-white sm:text-[13px]">{label}</p>
+        <p className="truncate text-[11px] font-bold text-white sm:text-[13px]">{label}</p>
         {count != null && <p className="mt-0.5 text-[10px] text-white/40">{count} item{count === 1 ? '' : 's'}</p>}
       </button>
       {actions && <div className="absolute right-2 top-2 flex items-center gap-1">{actions}</div>}

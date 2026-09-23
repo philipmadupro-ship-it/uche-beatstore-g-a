@@ -41,7 +41,7 @@ export function StudioLastTake({ take, saving, onSave }: Props) {
           <button
             onClick={onSave}
             disabled={saving}
-            className="flex items-center gap-2 px-3 py-2 rounded-md bg-white text-black hover:bg-white text-[11px] font-medium transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 rounded-md bg-white text-black hover:bg-white/90 text-[11px] font-medium transition-colors disabled:opacity-50"
           >
             {saving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
             Save to library

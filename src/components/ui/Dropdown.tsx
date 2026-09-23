@@ -179,7 +179,7 @@ export function Dropdown<T extends string = string>({
         className={cn(
           // min-h-10 keeps the trigger at the 40px tap-target floor set in
           // docs/design-direction.md; py-2 alone rendered it at 35px.
-          'inline-flex min-h-10 items-center justify-between gap-2 px-3 py-2 rounded-md',
+          'inline-flex min-h-10 items-center justify-between gap-2 px-3 py-2 rounded-lg',
           'bg-white/[0.04] border border-white/10 text-[11px] text-white',
           'hover:border-white/20 transition-colors',
           'focus:outline-none focus:border-white/20 focus:ring-1 focus:ring-white/30',
@@ -200,10 +200,9 @@ export function Dropdown<T extends string = string>({
           ref={menuRef}
           role="listbox"
           className={cn(
-            'fixed z-[200] py-1 rounded-lg overflow-y-auto max-h-[60vh]',
-            'bg-[#090907]/95 backdrop-blur-xl border border-white/[0.08]',
-            'shadow-[0_4px_24px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset]',
-            'animate-in fade-in zoom-in-95 duration-100',
+            'overlay-surface fixed z-[200] py-1 rounded-xl overflow-y-auto max-h-[60vh]',
+            'border border-white/[0.12]',
+'ui-pop',
           )}
           style={{
             top: coords.top,
@@ -217,7 +216,7 @@ export function Dropdown<T extends string = string>({
         >
           {options.map((opt, i) => (
             <div key={opt.value}>
-              {opt.separator && <div className="my-1 h-px bg-white/[0.06] mx-2" />}
+              {opt.separator && <div className="my-1 h-px bg-white/[0.08] mx-2" />}
               <button
                 type="button"
                 role="option"
@@ -225,9 +224,12 @@ export function Dropdown<T extends string = string>({
                 onMouseEnter={() => setHighlight(i)}
                 onClick={() => { onChange(opt.value); setOpen(false); triggerRef.current?.focus(); }}
                 className={cn(
-                  'w-full text-left flex items-center gap-2 px-2.5 py-1.5 text-[11px] text-white',
+                  'mx-1 w-[calc(100%-0.5rem)] rounded-lg text-left flex items-center gap-2 px-2 py-1.5 text-[11px] text-white',
                   'transition-colors',
-                  highlight === i ? 'bg-white/[0.04]' : '',
+                  // Was bg-white/[0.04]: 4% white over a 95%-black panel, so
+                  // the keyboard highlight was all but invisible. Same
+                  // strength as ActionMenu's rows now.
+                  highlight === i ? 'bg-white/[0.08]' : '',
                 )}
               >
                 <span className="w-3.5 flex items-center justify-center">

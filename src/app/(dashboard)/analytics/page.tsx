@@ -252,7 +252,7 @@ export default function AnalyticsPage() {
                 onClick={() => setDatePreset(value)}
                 className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors ${
                   datePreset === value
-                    ? 'bg-white text-black'
+                    ? 'bg-white/[0.14] text-white'
                     : 'bg-white/[0.04] border border-white/[0.06] text-white/60 hover:text-white hover:bg-white/[0.08]'
                 }`}
               >{label}</button>
@@ -268,14 +268,14 @@ export default function AnalyticsPage() {
               <SlidersHorizontal size={12} />
               Filters
               {activeFilterCount > 0 && (
-                <span className="w-4 h-4 rounded-full bg-white text-black text-[8px] font-bold flex items-center justify-center leading-none">{activeFilterCount}</span>
+                <span className="w-4 h-4 rounded-full border border-white/20 text-white/70 text-[8px] font-bold flex items-center justify-center leading-none">{activeFilterCount}</span>
               )}
             </button>
           </div>
 
           {/* Expanded filter panel */}
           {showFilters && (
-            <div className="mt-3 bg-white/[0.02] border border-white/10 rounded-xl p-4 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+ <div className="mt-3 bg-white/[0.02] border border-white/10 rounded-xl p-4 space-y-4 ui-pop duration-200">
 
               {/* Genre — first-class */}
               <div>
@@ -284,7 +284,7 @@ export default function AnalyticsPage() {
                   {TAG_TAXONOMY.genre.map((g) => (
                     <button key={g} onClick={() => toggleGenre(g)}
                       className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-all ${
-                        selectedGenres.has(g) ? 'bg-white text-black border-white font-bold' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'
+                        selectedGenres.has(g) ? 'bg-white/[0.14] text-white border-white/30 font-bold' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'
                       }`}>{g}</button>
                   ))}
                 </div>
@@ -316,7 +316,7 @@ export default function AnalyticsPage() {
                       <div className="flex flex-wrap gap-1.5">
                         {TYPE_OPTIONS.map(({ value, label }) => (
                           <button key={value} onClick={() => setTypeFilter(value)}
-                            className={`px-2.5 py-1 rounded-md text-[10px] font-medium border transition-colors ${typeFilter === value ? 'bg-white text-black border-white font-bold' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}
+                            className={`px-2.5 py-1 rounded-md text-[10px] font-medium border transition-colors ${typeFilter === value ? 'bg-white/[0.14] text-white border-white/30 font-bold' : 'border-white/10 text-white/60 hover:text-white hover:border-white/20'}`}
                           >{label}</button>
                         ))}
                       </div>
@@ -366,7 +366,7 @@ export default function AnalyticsPage() {
         ) : error ? (
           <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-6 flex items-start gap-3">
             <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
-            <p className="text-[12px] text-red-300 font-medium">{error}</p>
+            <p className="text-[11px] text-red-300 font-medium">{error}</p>
           </div>
         ) : isEmpty ? (
           <EmptyState
@@ -504,7 +504,7 @@ export default function AnalyticsPage() {
                         <span className="text-[10px] font-mono text-white/40 tabular-nums w-5 shrink-0">{rank + 1}</span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1.5 gap-2">
-                            <Link href={`/library/${t.track_id}`} className="text-[12px] text-white truncate hover:text-white/80 transition-colors flex-1">
+                            <Link href={`/library/${t.track_id}`} className="text-[11px] text-white truncate hover:text-white/80 transition-colors flex-1">
                               {t.title}
                             </Link>
                             <div className="flex items-center gap-3 shrink-0">
@@ -557,7 +557,7 @@ export default function AnalyticsPage() {
                           href={`/share/${s.token}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[12px] text-white hover:text-white/80 transition-colors font-mono truncate inline-flex items-center gap-1.5"
+                          className="text-[11px] text-white hover:text-white/80 transition-colors font-mono truncate inline-flex items-center gap-1.5"
                           title={s.token}
                         >
                           /{s.token.slice(0, 12)}{s.token.length > 12 ? '…' : ''}
@@ -594,7 +594,7 @@ function EngagementCard({ label, value, icon, accent }: { label: string; value: 
         {icon}
         <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/50 truncate">{label}</span>
       </div>
-      <p className="text-[22px] font-bold text-white tabular-nums leading-none">{value}</p>
+      <p className="text-[20px] font-bold text-white tabular-nums leading-none">{value}</p>
     </Card>
   );
 }

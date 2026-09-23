@@ -31,6 +31,9 @@ import { playbackAudioSrc } from '@/lib/audio/cdn';
 import { normalizationGain } from '@/lib/audio/loudness';
 import { getOfflineSrc } from '@/lib/offline/audio-cache';
 import { getPreviewSrc, peekPreviewSrc } from '@/lib/audio/preview-cache';
+import { useSessionContext } from '@/hooks/useSessionContext';
+import { previewAdjustment } from '@/lib/audio/session-match';
+import { seekSeconds } from '@/lib/audio/waveform-path';
 
 export function SimpleAudioEngine() {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -43,6 +46,18 @@ export function SimpleAudioEngine() {
   const trackId = currentTrack?.id;
   const url = currentTrack?.audio_url ?? null;
   const normGain = normalizationGain(currentTrack?.loudness);
+
+  // What the producer is working in, and whether they asked previews to match
+  // it. `previewAdjustment` returns null unless there is something to do, so
+  // the common case costs one comparison and leaves playbackRate at 1.
+  const sessionBpm = useSessionContext((s) => s.bpm);
+  const previewInSession = useSessionContext((s) => s.previewInSession);
+  const adjustment = previewInSession
+    ? previewAdjustment(
+      { bpm: sessionBpm, key: null, scale: null },
+      { bpm: currentTrack?.bpm ?? null },
+    )
+    : null;
 
   // ── Load source when the track changes ────────────────────────────────
   // Latency-critical: nothing async may sit between the tap and play().
@@ -117,6 +132,29 @@ export function SimpleAudioEngine() {
     }
   }, [isPlaying, trackId, setBuffering, setPlaybackError, setPlaying]);
 
+  // ── Session tempo (time-stretch, pitch preserved) ─────────────────────
+  // Applied in its own effect, after the source effect, because loading a new
+  // source resets BOTH `playbackRate` and `preservesPitch` to their defaults —
+  // setting them next to the `src` assignment silently does nothing.
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+
+    a.playbackRate = adjustment?.rate ?? 1;
+
+    // `preservesPitch` is in the HTML spec but not in TypeScript's
+    // HTMLMediaElement, and Safari and older Firefox only ship it prefixed.
+    // Without it the stretch becomes a varispeed and a beat changes key.
+    const el = a as HTMLAudioElement & {
+      preservesPitch?: boolean;
+      mozPreservesPitch?: boolean;
+      webkitPreservesPitch?: boolean;
+    };
+    el.preservesPitch = true;
+    el.mozPreservesPitch = true;
+    el.webkitPreservesPitch = true;
+  }, [adjustment, trackId, url]);
+
   // ── Volume (× duck × loudness normalization) ──────────────────────────
   useEffect(() => {
     const a = audioRef.current;
@@ -128,12 +166,14 @@ export function SimpleAudioEngine() {
   useEffect(() => {
     const a = audioRef.current;
     if (!a || seekTarget == null) return;
-    const dur = a.duration;
-    if (isFinite(dur) && dur > 0) {
-      a.currentTime = Math.max(0, Math.min(1, seekTarget)) * dur;
-    }
+    // Falls back to the track's stored duration when the element has no
+    // metadata yet — see `seekSeconds`. Without it, seeking a track that is
+    // not already playing (load and seek in one click, e.g. on a row
+    // waveform) was silently dropped and playback started from zero.
+    const seconds = seekSeconds(seekTarget, a.duration, currentTrack?.duration_seconds);
+    if (seconds != null) a.currentTime = seconds;
     usePlayer.setState({ seekTarget: null });
-  }, [seekTarget]);
+  }, [seekTarget, currentTrack?.duration_seconds]);
 
   return (
     <audio

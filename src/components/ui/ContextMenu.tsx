@@ -12,8 +12,9 @@
  * must NOT be added here.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { firstEnabledIndex, nextEnabledIndex, type MenuAction } from '@/lib/ui/action-menu';
 
 export type ContextMenuItem =
   | { kind: 'separator' }
@@ -36,6 +37,31 @@ export function ContextMenu({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ x, y });
+  const [highlight, setHighlight] = useState(-1);
+
+  /**
+   * Ids for `aria-activedescendant`. Focus stays on the panel and the cursor
+   * is a painted highlight, so without these the arrow keys move something a
+   * screen reader cannot see — same gap `ui/ActionMenu` had.
+   */
+  const menuId = useId();
+  const itemId = (index: number) => `${menuId}-item-${index}`;
+
+  /**
+   * The actionable rows, in render order.
+   *
+   * Separators carry no identity and must not take a keyboard index —
+   * arrowing onto one would look like the highlight vanishing. Shaped as
+   * `MenuAction` so the arrow-key maths is the same tested function
+   * `ui/ActionMenu` uses rather than a second copy of the wrapping and
+   * skip-disabled rules.
+   */
+  const actions = useMemo<MenuAction[]>(
+    () => items
+      .filter((i): i is Extract<ContextMenuItem, { kind: 'action' }> => i.kind === 'action')
+      .map((i, idx) => ({ id: `${i.label}-${idx}`, label: i.label, disabled: i.disabled, onSelect: i.onSelect })),
+    [items],
+  );
 
   /**
    * Nudge the menu back on screen if it would overflow.
@@ -56,6 +82,27 @@ export function ContextMenu({
       y: Math.min(y, window.innerHeight - box.height - 8),
     });
   }, [x, y]);
+
+  // Focus the panel so it is reachable at all from the keyboard. Without
+  // this the menu announced itself as a menu and then took no key but Escape.
+  //
+  // And hand focus back when it goes. The menu took focus and never returned
+  // it, so closing it — Escape, or running Duplicate or Hide — dropped focus
+  // on <body>. The studio's shortcuts listen on window and kept working, which
+  // is why it went unnoticed; a screen reader lost its place on every use.
+  // Same rule as ui/ActionMenu: only restore if nothing else claimed focus in
+  // the meantime, so clicking into a field to dismiss the menu keeps that
+  // field focused.
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = ref.current;
+    panel?.focus();
+    return () => {
+      const active = document.activeElement;
+      const unclaimed = !active || active === document.body || !active.isConnected || !!panel?.contains(active);
+      if (unclaimed && previous?.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -78,29 +125,59 @@ export function ContextMenu({
       ref={ref}
       role="menu"
       aria-label="Layer actions"
+      aria-activedescendant={highlight >= 0 ? itemId(highlight) : undefined}
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          setHighlight((h) => nextEnabledIndex(actions, h, event.key === 'ArrowDown' ? 1 : -1));
+        } else if (event.key === 'Home') {
+          event.preventDefault();
+          setHighlight(firstEnabledIndex(actions));
+        } else if (event.key === 'End') {
+          event.preventDefault();
+          setHighlight(nextEnabledIndex(actions, 0, -1));
+        } else if (event.key === 'Enter' || event.key === ' ') {
+          const action = actions[highlight];
+          if (!action) return;
+          event.preventDefault();
+          action.onSelect();
+          onClose();
+        }
+      }}
       style={{ left: position.x, top: position.y }}
-      className="fixed z-[1001] min-w-48 border border-white/20 bg-[#0D0D0A] py-1 shadow-[0_18px_50px_rgba(0,0,0,0.55)]"
+      className="overlay-surface fixed z-[1001] min-w-48 rounded-xl border border-white/[0.12] py-1 focus:outline-none"
       // The menu owns its own clicks; the capture-phase closer above would
       // otherwise dismiss it before an item could fire.
       onPointerDown={(event) => event.stopPropagation()}
     >
-      {items.map((item, index) => (
+      {(() => { let actionIndex = -1; return items.map((item, index) => (
         item.kind === 'separator' ? (
           // A separator carries no identity of its own, so its index is its key.
-          <span key={`sep-${index}`} role="separator" className="my-1 block h-px bg-white/10" />
+          <span key={`sep-${index}`} role="separator" className="mx-2 my-1 block h-px bg-white/[0.08]" />
         ) : (
+          ((): React.ReactNode => {
+            actionIndex += 1;
+            const myIndex = actionIndex;
+            const active = highlight === myIndex && !item.disabled;
+            return (
           <button
             key={item.label}
+            id={itemId(myIndex)}
             type="button"
             role="menuitem"
             disabled={item.disabled}
+            onMouseEnter={() => setHighlight(myIndex)}
             onClick={() => {
               item.onSelect();
               onClose();
             }}
             className={cn(
-              'flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-[12px] transition-colors disabled:opacity-30',
-              item.danger ? 'text-white/90 hover:bg-[#A95235]/20' : 'text-white/60 hover:bg-white/[0.10] hover:text-white/90',
+              'mx-1 flex w-[calc(100%-0.5rem)] items-center justify-between gap-6 rounded-lg px-2.5 py-1.5 text-left text-[11px] transition-colors disabled:opacity-30',
+              // Danger matches ActionMenu's red rather than the rust #A95235,
+              // which appears nowhere else in the app's palette.
+              item.danger ? 'text-red-400 hover:bg-red-500/10' : 'text-white/60 hover:bg-white/[0.08] hover:text-white/90',
+              active && (item.danger ? 'bg-red-500/10' : 'bg-white/[0.08] text-white/90'),
               'disabled:hover:bg-transparent',
             )}
           >
@@ -109,8 +186,10 @@ export function ContextMenu({
               <span className="shrink-0 font-mono text-[10px] text-white/40">{item.shortcut}</span>
             ) : null}
           </button>
+            );
+          })()
         )
-      ))}
+      )); })()}
     </div>
   );
 }

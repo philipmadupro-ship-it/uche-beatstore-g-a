@@ -4,18 +4,20 @@
     {
       "name": "Next.js Dev Server",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["/Users/philipmadu/antigravity/.claude/dev.sh"],
+      "runtimeArgs": [
+        "/Users/philipmadu/antigravity/.claude/dev.sh"
+      ],
       "port": 3000,
       "autoPort": true
     },
     {
-      "name": "worktree",
+      "name": "recursing-sinoussi",
       "runtimeExecutable": "bash",
       "runtimeArgs": [
         "-c",
-        "cd /Users/philipmadu/antigravity/.claude/worktrees/wizardly-mendeleev-89e9c0 && exec node_modules/.bin/next dev --webpack -p 3100"
+        "exec node_modules/.bin/next dev -p 3110"
       ],
-      "port": 3100,
+      "port": 3110,
       "autoPort": true
     }
   ]

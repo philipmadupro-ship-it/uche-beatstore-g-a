@@ -8,6 +8,7 @@ import { mergeFeatures } from '@/lib/audio/merge';
 import { extractPeaks } from '@/lib/audio/peaks';
 import { readStoredObject, uploadPeaksSidecar, uploadPublicPreview } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
+import { parseTitleMetadata } from '@/lib/upload/title-metadata';
 
 type UploadProcessingJob = {
   id: string;
@@ -41,16 +42,65 @@ export async function enqueueUploadProcessingJob(opts: {
   audioUrl: string;
   fileName: string;
   clientAnalysis?: Partial<AudioFeatures> | null;
-}): Promise<void> {
+}): Promise<string | null> {
   const admin = createServiceClient();
-  const { error } = await admin.from('upload_processing_jobs').insert({
-    track_id: opts.trackId,
-    user_id: opts.userId,
-    audio_url: opts.audioUrl,
-    file_name: opts.fileName,
-    client_analysis: opts.clientAnalysis ?? null,
-  });
+  const { data, error } = await admin
+    .from('upload_processing_jobs')
+    .insert({
+      track_id: opts.trackId,
+      user_id: opts.userId,
+      audio_url: opts.audioUrl,
+      file_name: opts.fileName,
+      client_analysis: opts.clientAnalysis ?? null,
+    })
+    .select('id')
+    .maybeSingle();
   if (error) throw new Error(`Upload processing enqueue failed: ${error.message}`);
+  return (data as { id?: string } | null)?.id ?? null;
+}
+
+/** Jobs retried at most this many times before they are left for a human. */
+export const MAX_PROCESSING_ATTEMPTS = 5;
+
+/**
+ * A job whose worker died mid-run (function timeout, deploy, crash) stays in
+ * `processing` forever unless something reclaims it. Past this age its lock is
+ * treated as abandoned. Comfortably longer than the 300s function ceiling.
+ */
+export const STALE_PROCESSING_LOCK_MS = 15 * 60_000;
+
+/**
+ * PostgREST `or` filter for jobs a worker may claim: pending, failed, or
+ * processing with an abandoned lock. The timestamp is an ISO string (no
+ * commas), so it is safe to interpolate.
+ */
+export function claimableJobFilter(now: number): string {
+  const staleBefore = new Date(now - STALE_PROCESSING_LOCK_MS).toISOString();
+  return `status.in.(pending,failed),and(status.eq.processing,locked_at.lt.${staleBefore})`;
+}
+
+/**
+ * Process one job straight after its upload completes, so a new beat gets its
+ * peaks, preview and analysis in seconds instead of waiting for the daily
+ * cron (which stays as the retry path). Never throws: a failure is recorded
+ * on the job row for the cron to pick up.
+ */
+export async function processUploadProcessingJobById(id: string): Promise<{
+  id: string;
+  trackId: string;
+  ok: boolean;
+  error?: string;
+} | null> {
+  const admin = createServiceClient();
+  const { data, error } = await admin
+    .from('upload_processing_jobs')
+    .select('id,user_id,track_id,audio_url,file_name,client_analysis,attempts')
+    .eq('id', id)
+    .lt('attempts', MAX_PROCESSING_ATTEMPTS)
+    .maybeSingle();
+  if (error || !data) return null;
+  if (!(await claimJob(id))) return null;
+  return processOneJob(data as UploadProcessingJob);
 }
 
 export async function processUploadProcessingBatch(limit = 3): Promise<{
@@ -62,8 +112,8 @@ export async function processUploadProcessingBatch(limit = 3): Promise<{
   const { data, error } = await admin
     .from('upload_processing_jobs')
     .select('id,user_id,track_id,audio_url,file_name,client_analysis,attempts')
-    .in('status', ['pending', 'failed'])
-    .lt('attempts', 5)
+    .or(claimableJobFilter(Date.now()))
+    .lt('attempts', MAX_PROCESSING_ATTEMPTS)
     .order('created_at', { ascending: true })
     .limit(Math.max(1, Math.min(limit, 10)));
   if (error) throw new Error(`Upload processing lookup failed: ${error.message}`);
@@ -93,7 +143,7 @@ async function claimJob(id: string): Promise<boolean> {
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
-    .in('status', ['pending', 'failed'])
+    .or(claimableJobFilter(Date.now()))
     .select('id')
     .maybeSingle();
   if (error) throw new Error(`Upload processing claim failed: ${error.message}`);
@@ -144,7 +194,11 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
       console.warn('Upload processing preview failed:', err);
     }
 
+    // Re-read the filename here too: this update runs after the track row
+    // exists, so without it a detected tempo would overwrite the one the
+    // producer wrote in the name.
     const merged = mergeFeatures({
+      title: parseTitleMetadata(job.file_name),
       client: job.client_analysis,
       server: serverAnalysis,
       audd,

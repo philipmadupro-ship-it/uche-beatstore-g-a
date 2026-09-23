@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { Music } from 'lucide-react';
-import { CoverImage } from '@/components/ui/CoverImage';
 import type { BuyerLibraryTrackSummary } from '@/lib/store/buyer-library';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 function formatTrackMeta(track: BuyerLibraryTrackSummary | null): string {
   if (!track) return 'Unavailable';
@@ -32,14 +32,13 @@ export function BuyerLibraryTile({
       className="group flex min-h-[72px] gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-2 transition-colors hover:border-white/20 hover:bg-white/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
     >
       <span className="relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-md border border-white/10 bg-[#090907] text-white/40">
-        {track?.cover_url ? (
-          <CoverImage
-            src={track.cover_url}
-            alt=""
-            className="object-cover"
-            sizes="48px"
-          />
+        {track ? (
+          <ArtworkFallback src={track.cover_url} seed={track.id} kind="track" sizes="48px" className="object-cover">
+            <Music size={13} aria-hidden="true" />
+          </ArtworkFallback>
         ) : (
+          // No track at all — this is the "browse beats" placeholder tile,
+          // which should stay a glyph rather than impersonate a release.
           <Music size={13} />
         )}
       </span>

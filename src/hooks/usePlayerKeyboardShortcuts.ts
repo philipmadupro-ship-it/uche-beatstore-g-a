@@ -32,6 +32,14 @@ export function usePlayerKeyboardShortcuts({
 }: Options) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // A handler closer to the target already claimed this key. That is how a
+      // track list takes ↑/↓ for moving between rows while volume keeps them
+      // everywhere else: the list listens on its own element, which the event
+      // reaches before bubbling up to this window listener, and calls
+      // preventDefault() on the keys it handles. First to claim a key wins.
+      // Without this check both would act — a single ↓ would move the row AND
+      // drop the volume.
+      if (e.defaultPrevented) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;

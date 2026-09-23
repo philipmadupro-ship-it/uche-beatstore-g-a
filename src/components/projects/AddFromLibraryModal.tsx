@@ -7,12 +7,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Image from 'next/image';
 import { X, Search, Music, Loader2, Check, SlidersHorizontal, ChevronDown } from 'lucide-react';
 import { fmtBpm, fmtKey, fmtDuration } from '@/lib/audio/format';
 import { errorMessage } from '@/lib/errors';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface Props {
   endpoint: string;
@@ -182,7 +182,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
+ <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm ui-fade-in" onClick={onClose}>
       <div
         ref={panelRef}
         role="dialog"
@@ -228,7 +228,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
                 <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/30 w-10 shrink-0">Type</span>
                 {TYPE_OPTIONS.map((t) => (
                   <button key={t} onClick={() => setTypeFilter(t)}
-                    className={`px-2.5 py-1 rounded-full text-[10px] font-medium border capitalize transition-all ${typeFilter === t ? 'bg-white text-black border-white/30' : 'bg-transparent border-white/10 text-white/60 hover:border-white/20 hover:text-white/80'}`}>
+                    className={`px-2.5 py-1 rounded-full text-[10px] font-medium border capitalize transition-all ${typeFilter === t ? 'bg-white/[0.14] text-white border-white/30' : 'bg-transparent border-white/10 text-white/60 hover:border-white/20 hover:text-white/80'}`}>
                     {t}
                   </button>
                 ))}
@@ -256,7 +256,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
                     const on = selectedTags.has(tag);
                     return (
                       <button key={tag} onClick={() => toggleTag(tag)}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-white text-black border-white/30' : 'bg-transparent border-white/10 text-white/60 hover:border-white/20 hover:text-white/80'}`}>
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all ${on ? 'bg-white/[0.14] text-white border-white/30' : 'bg-transparent border-white/10 text-white/60 hover:border-white/20 hover:text-white/80'}`}>
                         {tag}
                       </button>
                     );
@@ -272,7 +272,7 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
           {loading ? (
             <div className="flex items-center justify-center py-20"><Loader2 size={18} className="animate-spin text-white/40" /></div>
           ) : error ? (
-            <div className="text-center py-12 text-[12px] text-red-400">{error}</div>
+            <div className="text-center py-12 text-[11px] text-red-400">{error}</div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16">
               <Music size={20} className="mx-auto text-white/30 mb-3" />
@@ -291,8 +291,10 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
                       <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-colors ${isSel ? 'bg-white border-white/30' : 'border-white/20'}`}>
                         {isSel && <Check size={11} className="text-black" />}
                       </div>
-                      <div className="w-10 h-10 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-center shrink-0 overflow-hidden">
-                        {t.cover_url ? <Image src={t.cover_url} alt="" width={40} height={40} className="w-full h-full object-cover" unoptimized /> : <Music size={14} className="text-white/30" />}
+                      <div className="relative w-10 h-10 rounded-lg bg-white/[0.04] border border-white/10 shrink-0 overflow-hidden">
+                        <ArtworkFallback src={t.cover_url} seed={t.id} kind="track" sizes="40px" className="object-cover">
+                          <Music size={14} aria-hidden="true" />
+                        </ArtworkFallback>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[13px] font-medium text-white truncate">{t.title}</p>
@@ -344,9 +346,9 @@ export function AddFromLibraryModal({ endpoint, excludeIds = [], onClose, onAdde
           </div>
           <div className="flex items-center gap-2">
             {error && <p className="text-[10px] text-red-400 mr-2 max-w-[200px] truncate">{error}</p>}
-            <button onClick={onClose} className="text-[12px] text-white/80 hover:text-white px-3 py-1.5 rounded-lg transition-colors">Cancel</button>
+            <button onClick={onClose} className="text-[11px] text-white/80 hover:text-white px-3 py-1.5 rounded-lg transition-colors">Cancel</button>
             <button onClick={submit} disabled={selected.size === 0 || submitting}
-              className="flex items-center gap-2 bg-white hover:bg-white disabled:opacity-40 text-black px-5 py-2 rounded-lg text-[12px] font-semibold transition-colors">
+              className="flex items-center gap-2 bg-white hover:bg-white/90 disabled:opacity-40 text-black px-5 py-2 rounded-lg text-[11px] font-semibold transition-colors">
               {submitting ? <Loader2 size={12} className="animate-spin" /> : null}
               Add {selected.size > 0 ? `${selected.size} track${selected.size !== 1 ? 's' : ''}` : ''}
             </button>

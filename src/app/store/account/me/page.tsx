@@ -119,7 +119,7 @@ export default function BuyerMePage() {
           <p className="text-[11px] text-white/80 mb-5">{msg}</p>
           <Link
             href="/store/account"
-            className="inline-block text-[10px] font-mono uppercase tracking-wider px-4 py-2 rounded-md bg-white text-black hover:bg-white transition-colors"
+            className="inline-block text-[10px] font-mono uppercase tracking-wider px-4 py-2 rounded-md bg-white text-black hover:bg-white/90 transition-colors"
           >
             Sign in again
           </Link>
@@ -167,7 +167,7 @@ export default function BuyerMePage() {
         <h1 className="text-[28px] sm:text-[36px] font-bold text-white leading-none tracking-tight font-heading">
           Your purchases
         </h1>
-        <p className="mt-2 text-[12px] text-white/60">
+        <p className="mt-2 text-[11px] text-white/60">
           Signed in as <span className="text-white">{data.email}</span>.
         </p>
 
@@ -188,12 +188,12 @@ export default function BuyerMePage() {
           <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.04] px-6 py-16 text-center">
             <Music size={28} className="text-white/40 mx-auto mb-3" />
             <p className="text-[14px] text-white font-medium mb-1">No purchases yet</p>
-            <p className="text-[12px] text-white/60 max-w-md mx-auto mb-5">
+            <p className="text-[11px] text-white/60 max-w-md mx-auto mb-5">
               Once you license a beat or buy a project bundle, it&apos;ll show up here.
             </p>
             <Link
               href="/store"
-              className="inline-block text-[10px] font-mono uppercase tracking-wider px-4 py-2 rounded-md bg-white text-black hover:bg-white transition-colors"
+              className="inline-block text-[10px] font-mono uppercase tracking-wider px-4 py-2 rounded-md bg-white text-black hover:bg-white/90 transition-colors"
             >
               Browse beats
             </Link>
@@ -223,7 +223,7 @@ export default function BuyerMePage() {
                       {b.download_url && (
                         <a
                           href={b.download_url}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white text-black hover:bg-white transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] font-mono uppercase tracking-wider bg-white text-black hover:bg-white/90 transition-colors"
                         >
                           <Download size={11} />
                           Open
@@ -246,7 +246,7 @@ export default function BuyerMePage() {
                     <li key={r.id} className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3">
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-medium text-white truncate">
+                          <p className="text-[11px] font-medium text-white truncate">
                             {r.items.map((i) => i.title).filter(Boolean).join(' · ')
                               || `${r.items.length} track${r.items.length === 1 ? '' : 's'}`}
                           </p>
@@ -276,7 +276,7 @@ export default function BuyerMePage() {
               <div className="flex items-start gap-3">
                 <CreditCard size={16} className="text-white/80 mt-0.5 shrink-0" />
                 <div className="flex-1">
-                  <p className="text-[12px] font-medium text-white">Invoices &amp; payment methods</p>
+                  <p className="text-[11px] font-medium text-white">Invoices &amp; payment methods</p>
                   <p className="text-[11px] text-white/60 mt-1 leading-relaxed">
                     Manage your Stripe-side payment details, download invoices, or update billing email.
                   </p>
@@ -382,7 +382,7 @@ function SessionLibrary() {
           Recently played
         </p>
         {recentHistory.length === 0 ? (
-          <p className="text-[12px] text-white/40">Listen to a beat on the store and it&apos;ll show up here.</p>
+          <p className="text-[11px] text-white/40">Listen to a beat on the store and it&apos;ll show up here.</p>
         ) : (
           <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
             {recentHistory.map((r, i) => (
@@ -403,7 +403,7 @@ function SessionLibrary() {
           Favorites ({data.favorites.length})
         </p>
         {data.favorites.length === 0 ? (
-          <p className="text-[12px] text-white/40">Tap the heart on any beat to save it here, synced across your devices.</p>
+          <p className="text-[11px] text-white/40">Tap the heart on any beat to save it here, synced across your devices.</p>
         ) : (
           <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
             {data.favorites.map((f) => (
@@ -428,27 +428,27 @@ function SessionLibrary() {
             placeholder="New playlist name"
             maxLength={80}
             onKeyDown={(e) => { if (e.key === 'Enter' && newPlaylistName.trim()) createMut.mutate(newPlaylistName.trim()); }}
-            className="flex-1 bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
+            className="flex-1 bg-[#090907] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
           />
           <button
             type="button"
             onClick={() => createMut.mutate(newPlaylistName.trim())}
             disabled={!newPlaylistName.trim() || createMut.isPending}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-white text-black text-[11px] font-bold uppercase tracking-wider hover:bg-white transition-colors disabled:opacity-40"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-md bg-white text-black text-[11px] font-bold uppercase tracking-wider hover:bg-white/90 transition-colors disabled:opacity-40"
           >
             {createMut.isPending ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
             Create
           </button>
         </div>
         {data.playlists.length === 0 ? (
-          <p className="text-[12px] text-white/40">Build your own mixtapes from the producer&apos;s catalogue.</p>
+          <p className="text-[11px] text-white/40">Build your own mixtapes from the producer&apos;s catalogue.</p>
         ) : (
           <ul className="space-y-1.5">
             {data.playlists.map((p) => (
               <li key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/10">
                 <ListMusic size={12} className="text-white/40" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-medium text-white truncate">{p.name}</p>
+                  <p className="text-[11px] font-medium text-white truncate">{p.name}</p>
                   <p className="text-[10px] font-mono text-white/40">
                     {p.track_ids.length} tracks · {buyerTrackTitles(p.tracks)} · updated {new Date(p.updated_at).toLocaleDateString()}
                   </p>

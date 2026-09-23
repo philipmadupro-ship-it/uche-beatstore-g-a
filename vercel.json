@@ -2,16 +2,28 @@
   "regions": ["cdg1"],
   "crons": [
     {
-      "path": "/api/cron/nudge-stale",
-      "schedule": "0 14 * * *"
+      "path": "/api/cron/backfill-previews",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/backfill-peaks",
+      "schedule": "30 2 * * *"
+    },
+    {
+      "path": "/api/cron/migrate-legacy-audio",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-stripe-events",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/process-fulfillment-emails",
+      "schedule": "0 5 * * *"
     },
     {
       "path": "/api/cron/publish-scheduled",
       "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/abandoned-carts",
-      "schedule": "0 16 * * *"
     },
     {
       "path": "/api/cron/announce-drops",
@@ -22,12 +34,20 @@
       "schedule": "0 7 * * *"
     },
     {
-      "path": "/api/cron/migrate-legacy-audio",
-      "schedule": "0 3 * * *"
+      "path": "/api/cron/reconcile-payments",
+      "schedule": "0 8 * * *"
     },
     {
-      "path": "/api/cron/process-fulfillment-emails",
-      "schedule": "0 5 * * *"
+      "path": "/api/cron/fulfillment-alerts",
+      "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/nudge-stale",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/abandoned-carts",
+      "schedule": "0 16 * * *"
     }
   ]
 }

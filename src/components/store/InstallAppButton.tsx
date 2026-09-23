@@ -61,7 +61,7 @@ export function InstallAppButton() {
           setDeferred(null);
         }
       }}
-      className="hidden sm:flex fixed bottom-[7rem] sm:bottom-[8rem] left-4 sm:left-6 z-[60] items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04]/85 backdrop-blur-xl border border-white/[0.10] text-white text-[10px] font-mono uppercase tracking-[0.18em] hover:bg-white/[0.05]/90 transition-colors"
+      className="hidden sm:flex fixed bottom-[7rem] sm:bottom-[8rem] left-4 sm:left-6 z-[60] items-center gap-1.5 px-3 py-2 rounded-full bg-white/[0.04] backdrop-blur-xl border border-white/[0.10] text-white text-[10px] font-mono uppercase tracking-[0.18em] hover:bg-white/[0.05] transition-colors"
       title="Install this app to your home screen"
     >
       <Download size={11} />

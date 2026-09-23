@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { buildCsp, cspHeaderName as cspHeaderNameFor } from '@/lib/security/csp';
 
 /**
  * Next.js 16 renamed the `middleware` file convention to `proxy`. The shape
@@ -21,44 +22,8 @@ import { NextResponse, type NextRequest } from 'next/server';
  *    of `/share/*` and a few other surfaces). Flip `AUTH_REDIRECTS_ENABLED`
  *    to enable.
  */
-// ── Content-Security-Policy ──────────────────────────────────────────────
-// Strict, nonce-based CSP. Shipping in REPORT-ONLY first: an *enforcing*
-// strict script-src white-screens any statically-rendered page (Next's
-// build-time inline bootstrap scripts can't receive a per-request nonce).
-// Report-Only lets the policy bake against real traffic with zero risk;
-// flip CSP_ENFORCE to true once the violation reports are clean.
-const CSP_ENFORCE = false;
-
-function buildCsp(nonce: string, framable = false): string {
-  // /embed/* must be framable on any origin (it's a distribution widget), so
-  // its frame-ancestors is wide-open; every other route stays locked to self.
-  const frameAncestors = framable ? `frame-ancestors *` : `frame-ancestors 'self'`;
-  return [
-    `default-src 'self'`,
-    // Next inline bootstrap gets the nonce; bundled chunks are 'self';
-    // Stripe.js is allowlisted for embedded checkout. 'wasm-unsafe-eval'
-    // permits WebAssembly compilation only (Essentia/audio-decode) — it does
-    // NOT allow arbitrary JS eval, so it's safe. (Dev-mode HMR also trips
-    // 'unsafe-eval'; that's a dev-only false positive — don't add it.)
-    `script-src 'self' 'nonce-${nonce}' 'wasm-unsafe-eval' https://js.stripe.com`,
-    // Inline styles + styled-jsx need 'unsafe-inline' (style injection is not
-    // a meaningful XSS vector the way script injection is).
-    `style-src 'self' 'unsafe-inline'`,
-    `img-src 'self' data: blob: https:`,
-    `media-src 'self' blob: https:`,
-    `font-src 'self' data:`,
-    `connect-src 'self' https: wss:`,
-    `frame-src https://js.stripe.com https://*.stripe.com`,
-    frameAncestors,
-    `base-uri 'self'`,
-    `form-action 'self'`,
-    `object-src 'none'`,
-    // Collect violations so report-only mode can actually "bake against real
-    // traffic" before we flip CSP_ENFORCE. Without an endpoint, report-only
-    // reported to nowhere. /api/csp-report samples + logs them.
-    `report-uri /api/csp-report`,
-  ].join('; ');
-}
+// Content-Security-Policy: enforced on /store/*, report-only elsewhere.
+// Why the split, and the policy itself, live in src/lib/security/csp.ts.
 
 export async function proxy(request: NextRequest) {
   // Per-request nonce. Set the (enforcing) CSP on the REQUEST headers so the
@@ -67,7 +32,7 @@ export async function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
   const framable = request.nextUrl.pathname.startsWith('/embed/');
   const csp = buildCsp(nonce, framable);
-  const cspHeaderName = CSP_ENFORCE ? 'Content-Security-Policy' : 'Content-Security-Policy-Report-Only';
+  const cspHeaderName = cspHeaderNameFor(request.nextUrl.pathname);
 
   const baseRequestHeaders = new Headers(request.headers);
   baseRequestHeaders.set('x-nonce', nonce);

@@ -36,6 +36,7 @@ import { StudioMixer } from '@/components/studio/sections/StudioMixer';
 import { StudioLastTake } from '@/components/studio/sections/StudioLastTake';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { GlassPlayButton } from '@/components/ui/GlassPlayButton';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 type StemKey = 'vocals' | 'drums' | 'bass' | 'other';
 
@@ -554,7 +555,7 @@ export function StudioWorkstation() {
       <div className="mb-5 sm:mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="mb-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">Sketchpad</p>
-          <h1 className="font-heading text-[30px] leading-none text-white">Studio</h1>
+          <h1 className="font-heading text-[28px] leading-none text-white">Studio</h1>
         </div>
         <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
           <span className="hidden rounded-full border border-white/10 bg-white/[0.02] px-3 py-2 text-[10px] font-mono uppercase tracking-[0.18em] text-white/40 sm:inline-flex">
@@ -617,22 +618,22 @@ export function StudioWorkstation() {
               <div className="rounded-2xl border border-[#0D0D0A] bg-[#090907] p-3 sm:p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-center gap-3">
-                  {active.cover_url ? (
-                    <img loading="lazy"
-                      src={audioSrc(active.cover_url) || active.cover_url}
-                      alt=""
-                      className="h-11 w-11 shrink-0 rounded-lg border border-white/10 object-cover sm:h-12 sm:w-12"
-                    />
-                  ) : (
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#0D0D0A] sm:h-12 sm:w-12">
-                      <Music2 size={18} className="text-white/40" />
-                    </div>
-                  )}
+                  <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-white/10 sm:h-12 sm:w-12">
+                    <ArtworkFallback
+                      src={active.cover_url ? audioSrc(active.cover_url) || active.cover_url : null}
+                      seed={active.id}
+                      kind="track"
+                      sizes="48px"
+                      className="object-cover"
+                    >
+                      <Music2 size={18} aria-hidden="true" />
+                    </ArtworkFallback>
+                  </div>
                   <div className="min-w-0">
                     <p className="mb-1 text-[9px] font-mono uppercase tracking-[0.18em] text-white/40 sm:text-[10px] sm:tracking-[0.2em]">
                       Now in studio
                     </p>
-                    <h2 className="truncate text-[15px] font-medium text-white sm:text-[17px]">{active.title}</h2>
+                    <h2 className="truncate text-[14px] font-medium text-white sm:text-[16px]">{active.title}</h2>
                     <p className="mt-1 truncate text-[10px] font-mono uppercase tracking-wider text-white/40 sm:text-[11px]">
                       {active.bpm ? `${Math.round(active.bpm * effectiveRate)} BPM` : '— BPM'}
                       {active.key && ` · ${active.key}${active.scale ? ' ' + active.scale : ''}`}

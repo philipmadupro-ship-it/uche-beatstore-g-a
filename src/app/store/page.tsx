@@ -35,6 +35,10 @@ import {
 } from '@/components/store/types';
 import { sanitizeUrl } from '@/components/store/helpers';
 import { normalizeThemeColor } from '@/lib/theme/colors';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
+import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 import { FreeDownloadModal } from '@/components/store/FreeDownloadModal';
 import { StoreContactForm } from '@/components/store/StoreContactForm';
 import { ArtistBioBlock } from '@/components/store/ArtistBioBlock';
@@ -50,8 +54,9 @@ import {
 import { DropCountdown } from '@/components/store/DropCountdown';
 import { logPlay } from '@/lib/buyer-session';
 import { BeatCard } from '@/components/store/BeatCard';
+import { RowCallbackCache } from '@/lib/ui/stable-row-callbacks';
+import { canLoadMore, isCurrentRequest, mergeLoadedPage } from '@/lib/store/load-more';
 import { BeatPreviewDrawer } from '@/components/store/BeatPreviewDrawer';
-import { CoverImage } from '@/components/ui/CoverImage';
 import { trackStoreEvent } from '@/lib/store/track-event';
 
 /* ─── Suspense wrapper ───────────────────────────────────────── */
@@ -184,13 +189,17 @@ function StoreSalesSpotlight({
                 aria-label={`Preview ${track.title}`}
                 className="group relative aspect-square overflow-hidden rounded-xl bg-[#090907] text-left"
               >
-                {track.cover_url ? (
-                  <CoverImage src={track.cover_url} alt="" sizes="104px" priority className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]" />
-                ) : (
-                  <div className="grid h-full w-full place-items-center bg-white/[0.04] text-white/40">
-                    <Music size={28} />
-                  </div>
-                )}
+                <ArtworkFallback
+                  src={track.cover_url}
+                  seed={track.id}
+                  kind="track"
+                  tags={artworkTagsOf(track.tags)}
+                  sizes="104px"
+                  priority
+                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                >
+                  <Music size={28} aria-hidden="true" />
+                </ArtworkFallback>
                 <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
               </button>
               <div className="min-w-0">
@@ -239,13 +248,9 @@ function StoreSalesSpotlight({
           <div className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-[#14110D]/80 p-3">
             <div className="flex h-full gap-3">
               <Link href={`/store/projects/${project.id}`} className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-[#090907] sm:size-24">
-                {projectCover ? (
-                  <CoverImage src={projectCover} alt="" sizes="96px" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="grid h-full w-full place-items-center text-white/40">
-                    <Music size={22} />
-                  </div>
-                )}
+                <ArtworkFallback src={projectCover} seed={project.id} kind="project" sizes="96px" className="h-full w-full object-cover">
+                  <Music size={22} aria-hidden="true" />
+                </ArtworkFallback>
               </Link>
               <div className="flex min-w-0 flex-1 flex-col">
                 <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/40">Bundle</p>
@@ -307,6 +312,13 @@ function StorePage() {
   const [priceMax, setPriceMax] = useState(99999);
   const [sortBy, setSortBy] = useState<'newest' | 'popular' | 'bpm-asc' | 'bpm-desc' | 'price-asc' | 'price-desc' | 'title'>('newest');
   const wishlist = useWishlist();
+  // `useWishlist` builds a fresh Set every render, so the ids are flattened to
+  // a sorted, stable array before anything depends on their identity.
+  const wishlistKey = [...wishlist.ids].sort().join(',');
+  const wishlistIds = useMemo(
+    () => (wishlistKey === '' ? [] : wishlistKey.split(',')),
+    [wishlistKey],
+  );
 
   // Debounced search
   const [search, setSearch] = useState('');
@@ -354,18 +366,44 @@ function StorePage() {
     if (freeOnly) params.set('free', '1');
     if (newThisWeek) params.set('new', '1');
     if (sortBy !== 'newest') params.set('sort', sortBy);
+
+    // BPM, price and favourites now go to the server too. They used to be
+    // applied only below, over `tracks` — the pages fetched so far — so on a
+    // catalogue larger than one page they searched a slice and presented the
+    // result as the whole thing. The client pass is kept: it is the same
+    // predicate, so it changes nothing, and it keeps working if a deploy ever
+    // serves an older API that ignores these parameters.
+    //
+    // The sentinels (0 / 999 / 99999) mean "the user has not touched this",
+    // which is exactly when the filter should not be sent. Resolving them
+    // against the catalogue's real range happens further down, and depends on
+    // the very fetch this query drives.
+    if (bpmMin !== 0) params.set('bpmMin', String(bpmMin));
+    if (bpmMax !== 999) params.set('bpmMax', String(bpmMax));
+    if (priceMin !== 0) params.set('priceMin', String(priceMin));
+    if (priceMax !== 99999) params.set('priceMax', String(priceMax));
+    // An empty wishlist still sends `ids=`, because "only my favourites" with
+    // none saved matches nothing — not everything.
+    if (favoritesOnly) params.set('ids', wishlistIds.join(','));
+
     return params.toString();
   }, [
+    bpmMax,
+    bpmMin,
     debouncedSearch,
     durationBucket,
+    favoritesOnly,
     freeOnly,
     genreFilter,
     keyFilter,
     moodFilter,
     newThisWeek,
+    priceMax,
+    priceMin,
     scaleFilter,
     sortBy,
     typeFilter,
+    wishlistIds,
   ]);
 
   const storeQuery = useQuery({
@@ -377,6 +415,10 @@ function StorePage() {
       const rawTracks = (data.tracks as StoreTrack[]) ?? [];
       return {
         creator: (data.creator ?? null) as CreatorProfile | null,
+        // The producer's default artwork, palette and tag colours. A buyer has
+        // no session, so this rides along with the catalogue rather than being
+        // fetched per card from a session-gated endpoint.
+        artworkTheme: (data.artworkTheme ?? null) as PublicArtworkTheme | null,
         tracks: normalizeStoreTracks(rawTracks),
         licenses: (data.licenses as LicenseTier[]) ?? [],
         featuredPlaylists: (data.featuredPlaylists as FeaturedPlaylist[]) ?? [],
@@ -394,6 +436,7 @@ function StorePage() {
     },
   });
   const creator = storeQuery.data?.creator ?? null;
+  const artworkTheme = storeQuery.data?.artworkTheme ?? null;
 
   // Social proof — "N sold this week" per track. Independent, best-effort
   // fetch: a failure here must never affect the catalogue itself, which is
@@ -425,16 +468,20 @@ function StorePage() {
     setPageInfo(storeQuery.data?.pageInfo ?? { hasMore: false, nextCursor: null });
   }, [storeQuery.data?.pageInfo]);
   const initialTracks = useMemo(() => storeQuery.data?.tracks ?? [], [storeQuery.data?.tracks]);
-  const tracks = useMemo(() => {
-    const seen = new Set<string>();
-    const merged: StoreTrack[] = [];
-    for (const track of [...initialTracks, ...loadedMoreTracks]) {
-      if (!track?.id || seen.has(track.id)) continue;
-      seen.add(track.id);
-      merged.push(track);
-    }
-    return merged;
-  }, [initialTracks, loadedMoreTracks]);
+  // Merged, de-duplicated and capped by lib/store/load-more — this used to
+  // grow by 80 on every press with no upper bound.
+  const { tracks, capped: loadMoreCapped } = useMemo(
+    () => mergeLoadedPage(initialTracks, loadedMoreTracks),
+    [initialTracks, loadedMoreTracks],
+  );
+
+  // The query currently on screen, for rejecting a stale "load more". Updated
+  // in an effect, NOT assigned during render: writing a ref during render is
+  // a React Compiler lint error, and lint errors block CI.
+  const currentStoreQueryRef = useRef(serverStoreQuery);
+  useEffect(() => {
+    currentStoreQueryRef.current = serverStoreQuery;
+  }, [serverStoreQuery]);
   const licenses = useMemo(() => storeQuery.data?.licenses ?? [], [storeQuery.data?.licenses]);
   const featuredPlaylists = useMemo(() => storeQuery.data?.featuredPlaylists ?? [], [storeQuery.data?.featuredPlaylists]);
   const featuredProjects = useMemo(() => storeQuery.data?.featuredProjects ?? [], [storeQuery.data?.featuredProjects]);
@@ -448,25 +495,34 @@ function StorePage() {
   }, [facetsQuery.isError]);
 
   const loadMoreTracks = useCallback(async () => {
-    if (!pageInfo.hasMore || !pageInfo.nextCursor || loadingMore) return;
+    if (!canLoadMore(pageInfo, tracks.length) || loadingMore) return;
+    // Remember which query this page is for. If the buyer changes a filter
+    // before it arrives, the page has already been reset for the new query,
+    // and appending this response would put the OLD filter's beats into the
+    // new results and overwrite the cursor with one from the wrong query.
+    const issuedFor = serverStoreQuery;
     setLoadingMore(true);
     try {
-      const params = new URLSearchParams(serverStoreQuery);
-      params.set('cursor', pageInfo.nextCursor);
+      const params = new URLSearchParams(issuedFor);
+      params.set('cursor', pageInfo.nextCursor!);
       const res = await fetch(`/api/store?${params.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (!isCurrentRequest(issuedFor, currentStoreQueryRef.current)) return;
       setLoadedMoreTracks((current) => [
         ...current,
         ...normalizeStoreTracks((data.tracks as StoreTrack[]) ?? []),
       ]);
       setPageInfo((data.pageInfo ?? { hasMore: false, nextCursor: null }) as StorePageInfo);
     } catch {
-      toast.error("Couldn't load more beats");
+      // A failure for a query the buyer has already left is not worth a toast.
+      if (isCurrentRequest(issuedFor, currentStoreQueryRef.current)) {
+        toast.error("Couldn't load more beats");
+      }
     } finally {
       setLoadingMore(false);
     }
-  }, [loadingMore, pageInfo.hasMore, pageInfo.nextCursor, serverStoreQuery]);
+  }, [loadingMore, pageInfo, serverStoreQuery, tracks.length]);
   useEffect(() => {
     try {
       const stored = localStorage.getItem('store-view-mode');
@@ -903,6 +959,51 @@ function StorePage() {
     if (added) toast.success(`Added: ${t.title} (${type})`);
   };
 
+  // ── Stable row callbacks for the grid's BeatCard ─────────────────────────
+  // `BeatCard` is `memo`-wrapped, but every callback prop below used to be a
+  // fresh arrow built inline in the `.map()` (`onPlay={() => handlePlay(t)}`),
+  // which defeats memoisation for every card whenever ANY unrelated state
+  // changes — previewing a different track, adding one item to cart, "load
+  // more" appending a page. `handlePlay` / `addToCart` close over
+  // `filtered`/`currentTrack`/etc. and are redefined every render, so a ref
+  // holds the latest implementation while the callback identity itself stays
+  // fixed per row (see `lib/ui/stable-row-callbacks.ts`).
+  const handlePlayRef = useRef(handlePlay);
+  handlePlayRef.current = handlePlay;
+  const addToCartRef = useRef(addToCart);
+  addToCartRef.current = addToCart;
+    // Lazy `useState` rather than `useRef`: the cache must be READ during
+  // render to build the rows, which the React Compiler rule forbids for a
+  // ref, and `useRef(new X())` also constructs a fresh cache on every
+  // render only to discard it. The initialiser runs once.
+  const [gridCallbackCache] = useState(() => new RowCallbackCache<StoreTrack>());
+  const getGridPlayHandler = useCallback(
+    (t: StoreTrack) => gridCallbackCache.get(t.id, 'play', t, (track) => () => handlePlayRef.current(track)),
+    [gridCallbackCache],
+  );
+  const getGridPreviewHandler = useCallback(
+    (t: StoreTrack) => gridCallbackCache.get(t.id, 'preview', t, (track) => (
+      () => setPreviewTrack((current) => (current?.id === track.id ? null : track))
+    )),
+    [gridCallbackCache],
+  );
+  const getGridAddLeaseHandler = useCallback(
+    (t: StoreTrack) => gridCallbackCache.get(t.id, 'addLease', t, (track) => () => addToCartRef.current(track, 'lease')),
+    [gridCallbackCache],
+  );
+  const getGridAddExclusiveHandler = useCallback(
+    (t: StoreTrack) => gridCallbackCache.get(t.id, 'addExclusive', t, (track) => () => addToCartRef.current(track, 'exclusive')),
+    [gridCallbackCache],
+  );
+  const getGridFreeDownloadHandler = useCallback(
+    (t: StoreTrack) => gridCallbackCache.get(t.id, 'freeDownload', t, (track) => () => setFreeDownloadTrack(track)),
+    [gridCallbackCache],
+  );
+  const getGridWishlistHandler = useCallback(
+    (t: StoreTrack) => gridCallbackCache.get(t.id, 'wishlist', t, (track) => () => wishlist.toggle(track.id)),
+    [gridCallbackCache, wishlist],
+  );
+
   const addLicenseToCart = (t: StoreTrack, license: LicenseTier) => {
     const added = addItem(t as Track, {
       id: license.id,
@@ -1113,6 +1214,11 @@ function StorePage() {
   }
 
   return (
+    // Every card below draws its own artwork when a beat has no cover. The
+    // provider is what makes that artwork the producer's rather than a
+    // generic accent wash — and what makes a beat look identical here and in
+    // the dashboard.
+    <ArtworkThemeProvider theme={artworkTheme}>
     <div
       className="store-ui min-h-screen bg-[#090907] pb-28"
       style={{
@@ -1132,7 +1238,7 @@ function StorePage() {
             {purchaseStatus === 'success'
               ? <CheckCircle2 size={16} className="shrink-0" />
               : <XCircle size={16} className="shrink-0" />}
-            <p className="text-[12px] font-medium flex-1">
+            <p className="text-[11px] font-medium flex-1">
               {purchaseStatus === 'success'
                 ? 'Purchase complete — check your inbox for the download link.'
                 : 'Checkout cancelled. No payment was taken.'}
@@ -1166,11 +1272,14 @@ function StorePage() {
       {/* ── Toolbar — sticky glass header ──────────────────────── */}
       <div className="sticky top-0 z-30" style={{ backdropFilter: 'blur(24px)', background: 'rgba(10,9,7,0.88)', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
         <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-2.5 flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-3">
-          {/* Mobile filters toggle */}
+          {/* Mobile filters toggle — hidden with the sidebar it opens when the
+              catalogue is empty, so the control can't open an absent panel.
+              Kept mounted while loading to avoid a toolbar reflow. */}
+          {(loading || tracks.length > 0) && (
           <button
             onClick={() => setSidebarOpen((o) => !o)}
             className={`tap lg:hidden flex min-h-11 items-center gap-1.5 rounded-full border px-4 py-2 text-[10px] font-mono uppercase tracking-wider transition-colors ${sidebarOpen || hasActiveFilters
-                ? 'border-white/20 text-black bg-white font-semibold shadow-md hover:bg-white/90'
+                ? 'border-white/30 text-white bg-white/[0.14]'
                 : 'border-white/10 text-white/60 hover:text-white'
               }`}
           >
@@ -1183,6 +1292,7 @@ function StorePage() {
               </span>
             )}
           </button>
+          )}
 
           {/* Search */}
           <div className="relative order-2 min-w-0 basis-full sm:order-none sm:basis-auto sm:flex-1 sm:min-w-[160px] sm:max-w-sm">
@@ -1229,13 +1339,13 @@ function StorePage() {
                 }
                 if (e.key === 'Escape') setSearchFocused(false);
               }}
-              className="w-full min-h-11 bg-white/[0.04] border border-white/10 rounded-full py-2 pl-8 pr-3 text-[12px] text-white placeholder:text-white/60 focus:outline-none focus:border-white/20"
+              className="w-full min-h-11 bg-white/[0.04] border border-white/10 rounded-full py-2 pl-8 pr-3 text-[11px] text-white placeholder:text-white/60 focus:outline-none focus:border-white/20"
             />
             {showSearchSuggestions && (
               <div
                 id="store-search-suggestions"
                 role="listbox"
-                className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02]/[0.98] shadow-[0_18px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+                className="absolute left-0 right-0 top-[calc(100%+6px)] z-40 overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] shadow-[0_18px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl"
               >
                 <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
                   <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-white/40">
@@ -1272,7 +1382,7 @@ function StorePage() {
                         {suggestion.kind === 'recent' ? <Clock3 size={12} /> : <Search size={12} />}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12px] font-medium text-white">{suggestion.label}</span>
+                        <span className="block truncate text-[11px] font-medium text-white">{suggestion.label}</span>
                         {suggestion.hint && (
                           <span className="block truncate text-[8px] font-mono uppercase tracking-[0.18em] text-white/40">
                             {suggestion.hint}
@@ -1374,7 +1484,17 @@ function StorePage() {
           standard laptops. Sidebar stays sticky on the left. */}
       <div className="max-w-[1600px] mx-auto px-4 md:px-8 py-10 md:py-14 flex gap-6 md:gap-8 items-start">
 
-        {/* Left sidebar — sticky, visible on lg+ */}
+        {/* Left sidebar — sticky, visible on lg+.
+            Suppressed entirely when the catalogue has nothing in it: six
+            filter groups (sort, type, genre, mood, key, scale, BPM) offering
+            to narrow zero results is noise, and it pushed the "no beats yet"
+            message off-centre. Keyed on the unfiltered catalogue, not on
+            `filtered`, so a search that legitimately returns nothing still
+            keeps the controls needed to undo it. Gated on `!loading` too, so
+            the sidebar isn't yanked out and popped back in while the first
+            fetch is still in flight — that would be a layout shift on every
+            visit, which is worse than the noise it removes. */}
+        {(loading || tracks.length > 0) && (
         <StoreSidebar
           open={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
@@ -1422,6 +1542,7 @@ function StorePage() {
           availableKeys={availableKeys}
           accentColor={accentColor}
         />
+        )}
 
         {/* Main content */}
         <div className="flex-1 min-w-0">
@@ -1506,14 +1627,14 @@ function StorePage() {
                         isCurrent={currentTrack?.id === t.id}
                         isPlaying={isPlaying && currentTrack?.id === t.id}
                         isPreview={previewTrack?.id === t.id}
-                        onPlay={() => handlePlay(t)}
-                        onPreview={() => setPreviewTrack(previewTrack?.id === t.id ? null : t)}
-                        onAddLease={() => addToCart(t, 'lease')}
-                        onAddExclusive={() => addToCart(t, 'exclusive')}
-                        onFreeDownload={() => setFreeDownloadTrack(t)}
+                        onPlay={getGridPlayHandler(t)}
+                        onPreview={getGridPreviewHandler(t)}
+                        onAddLease={getGridAddLeaseHandler(t)}
+                        onAddExclusive={getGridAddExclusiveHandler(t)}
+                        onFreeDownload={getGridFreeDownloadHandler(t)}
                         accentColor={accentColor}
                         isWishlisted={wishlist.has(t.id)}
-                        onToggleWishlist={() => wishlist.toggle(t.id)}
+                        onToggleWishlist={getGridWishlistHandler(t)}
                         recentSales={momentumByTrack[t.id]}
                       />
                       </div>
@@ -1545,17 +1666,28 @@ function StorePage() {
                 />
               )}
 
-              {pageInfo.hasMore && (
+              {canLoadMore(pageInfo, tracks.length) && (
                 <div className="mt-8 flex justify-center">
                   <button
                     type="button"
                     onClick={loadMoreTracks}
                     disabled={loadingMore}
-                    className="tap inline-flex min-h-11 items-center justify-center rounded-full border border-white/10 bg-[#14110D] px-6 text-[10px] font-mono uppercase tracking-[0.2em] text-white transition-colors hover:border-[#FFFFFF]/40 hover:text-white disabled:cursor-wait disabled:opacity-60"
+                    aria-busy={loadingMore}
+                    className="tap inline-flex min-h-11 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] px-6 text-[10px] font-mono uppercase tracking-[0.2em] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:cursor-wait disabled:opacity-40"
                   >
                     {loadingMore ? 'Loading beats...' : 'Load more beats'}
                   </button>
                 </div>
+              )}
+
+              {/* The cap, not the catalogue, ended the list. Say so, and point at
+                  the filters — they run across the whole catalogue server-side,
+                  so narrowing finds a beat that another page of scrolling
+                  would not. */}
+              {loadMoreCapped && pageInfo.hasMore && (
+                <p className="mt-8 text-center text-[11px] text-white/60" role="status">
+                  Showing the first {tracks.length} beats. Narrow it down with the filters to find the rest.
+                </p>
               )}
             </>
           )}
@@ -1639,5 +1771,6 @@ function StorePage() {
         @keyframes beat-pulse{0%,100%{box-shadow:0 0 0 1px var(--pulse-clr,rgba(231,215,190,0.2))}50%{box-shadow:0 0 0 3px var(--pulse-clr,rgba(231,215,190,0.15))}}
       `}</style>
     </div>
+    </ArtworkThemeProvider>
   );
 }

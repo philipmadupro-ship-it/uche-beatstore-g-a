@@ -6,6 +6,8 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { licenseAvailability } from '@/lib/store/license-availability';
+import { normalizeEmail } from '@/lib/contacts/email';
+import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 
 const log = createLogger('api.store.checkout');
 export const runtime = 'nodejs';
@@ -193,6 +195,12 @@ function applyDiscount(
  * a project_access_links row and emails the buyer a /projects/share/<token> link.
  */
 export async function POST(req: NextRequest) {
+  // Each call creates a Stripe session and an abandoned_carts row, and that
+  // row later sends up to two reminder emails to whatever address was typed.
+  // Unthrottled, this was a way to make the store email strangers.
+  if (!await rateLimitDurable(`checkout:${clientIp(req)}`, 10, 60_000)) {
+    return NextResponse.json({ error: 'Too many checkout attempts. Wait a minute and try again.' }, { status: 429 });
+  }
   if (!isStripeConfigured()) {
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 503 });
   }
@@ -202,7 +210,12 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({})) as CheckoutBody;
-    const buyerEmail = typeof body.buyer_email === 'string' ? body.buyer_email.trim() : '';
+    // Normalised (not just trimmed): this value lands in
+    // license_purchases.buyer_email and Stripe metadata, and every reader
+    // — /api/store/orders, the contact activity timeline — looks it up
+    // lowercased. Trim-only meant a buyer who typed capitals could not
+    // find their own order.
+    const buyerEmail = typeof body.buyer_email === 'string' ? normalizeEmail(body.buyer_email) : '';
     const candidateItems = Array.isArray(body.items) ? body.items : [];
     const projectId = typeof body.project_id === 'string' ? body.project_id.trim() : '';
     const promoCode = typeof body.promo_code === 'string' ? body.promo_code.trim().toUpperCase() : '';
@@ -212,6 +225,11 @@ export async function POST(req: NextRequest) {
 
     if (!buyerEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(buyerEmail)) {
       return NextResponse.json({ error: 'Valid buyer email required' }, { status: 400 });
+    }
+    // Per-address cap, across IPs: bounds how many reminder emails any one
+    // inbox can be sent, however many machines submit it.
+    if (!await rateLimitDurable(`checkout-email:${buyerEmail}`, 10, 60 * 60_000)) {
+      return NextResponse.json({ error: 'Too many checkout attempts for this email. Try again later.' }, { status: 429 });
     }
     if (!projectId && !candidateItems.length) {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 });

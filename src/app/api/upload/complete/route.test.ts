@@ -5,6 +5,8 @@
  * - missing chunks fail before storage finalize
  * - destination attach failures return errors instead of falling back to local-store success
  * - owned project destinations attach the new track and complete successfully
+ * - the queued job is processed straight away via after(), not left for the daily cron
+ * - BPM and key written in the filename are applied, and cut from the title
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -28,6 +30,13 @@ const mockGetAll = vi.fn();
 const mockGetUser = vi.fn();
 const mockFrom = vi.fn();
 const mockEnqueueUploadProcessingJob = vi.fn();
+const mockProcessJobById = vi.fn();
+const afterCallbacks: Array<() => unknown> = [];
+
+vi.mock('next/server', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('next/server')>()),
+  after: (cb: () => unknown) => { afterCallbacks.push(cb); },
+}));
 
 vi.mock('@/lib/storage/multipart', () => ({
   completeMultipart: (...args: unknown[]) => mockCompleteMultipart(...args),
@@ -64,6 +73,7 @@ vi.mock('@/lib/storage/upload', () => ({
 
 vi.mock('@/lib/upload/processing', () => ({
   enqueueUploadProcessingJob: (...args: unknown[]) => mockEnqueueUploadProcessingJob(...args),
+  processUploadProcessingJobById: (...args: unknown[]) => mockProcessJobById(...args),
 }));
 
 vi.mock('@/lib/local-store', () => ({
@@ -173,7 +183,9 @@ beforeEach(() => {
   mockExtractPeaks.mockResolvedValue(null);
   mockUploadPeaksSidecar.mockResolvedValue(null);
   mockUploadPublicPreview.mockResolvedValue(null);
-  mockEnqueueUploadProcessingJob.mockResolvedValue(undefined);
+  mockEnqueueUploadProcessingJob.mockResolvedValue('job-1');
+  mockProcessJobById.mockResolvedValue({ id: 'job-1', trackId: 'track-1', ok: true });
+  afterCallbacks.length = 0;
   mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
   mockFrom.mockImplementation((table: string) => supabaseTable(table));
 });
@@ -240,10 +252,54 @@ describe('POST /api/upload/complete', () => {
       clientAnalysis: null,
     });
     expect(mockDeleteSession).toHaveBeenCalledWith('sess-1');
+    expect(afterCallbacks).toHaveLength(1);
+    expect(mockProcessJobById).not.toHaveBeenCalled();
+    await afterCallbacks[0]();
+    expect(mockProcessJobById).toHaveBeenCalledWith('job-1');
     expect(await res.json()).toEqual({
       success: true,
       track: { id: 'track-1', title: 'Beat' },
       processing: 'queued',
     });
+  });
+
+  it('does not throw from after() when immediate processing fails', async () => {
+    mockGetSession.mockReturnValueOnce(session({}));
+    mockProcessJobById.mockRejectedValueOnce(new Error('R2 unavailable'));
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const mod = await loadRoute();
+    const res = await mod.POST(post({ sessionId: 'sess-1' }));
+
+    expect(res.status).toBe(200);
+    expect(afterCallbacks).toHaveLength(1);
+    await expect(Promise.resolve(afterCallbacks[0]())).resolves.toBeUndefined();
+    spy.mockRestore();
+  });
+
+  it('applies the BPM and key written in the filename, and cuts them from the title', async () => {
+    const inserted: Array<Record<string, unknown>> = [];
+    mockGetSession.mockReturnValueOnce(session({ fileName: 'Night Shift 140 Fm.wav' }));
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'tracks') {
+        return {
+          insert: (row: Record<string, unknown>) => {
+            inserted.push(row);
+            return { select: () => ({ single: () => Promise.resolve({ data: { id: 'track-1' }, error: null }) }) };
+          },
+        };
+      }
+      return supabaseTable(table);
+    });
+
+    const mod = await loadRoute();
+    const res = await mod.POST(post({ sessionId: 'sess-1' }));
+
+    expect(res.status).toBe(200);
+    expect(inserted[0]).toMatchObject({ title: 'Night Shift' });
+    // The filename is handed to the merge as the highest-precedence source.
+    expect(mockMergeFeatures).toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.objectContaining({ bpm: 140, key: 'F', scale: 'minor' }) }),
+    );
   });
 });

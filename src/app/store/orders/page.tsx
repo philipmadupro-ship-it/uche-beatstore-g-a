@@ -123,7 +123,7 @@ export default function OrdersPage() {
               </div>
 
               {error && (
-                <div className="flex items-center gap-2 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-[12px] text-red-300">
+                <div className="flex items-center gap-2 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-[11px] text-red-300">
                   <AlertCircle size={14} className="shrink-0" />
                   {error}
                 </div>
@@ -132,7 +132,7 @@ export default function OrdersPage() {
               <button
                 type="submit"
                 disabled={!emailValid || submitting}
-                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 text-[11px] font-bold uppercase tracking-wider text-black transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-white px-4 text-[11px] font-bold uppercase tracking-wider text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
                 {submitting ? 'Sending...' : 'Send secure link'}

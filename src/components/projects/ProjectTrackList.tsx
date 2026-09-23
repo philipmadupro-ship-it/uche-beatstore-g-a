@@ -25,6 +25,8 @@ interface Props {
   onToggleSelectMode?: () => void;
   /** Called after a drag-to-reorder completes with the new ordered id list. */
   onReorder?: (orderedIds: string[]) => void;
+  /** Refetch after a row edits a track in place (inline rename). */
+  onTrackChanged?: () => void;
 }
 
 type InlineTrackTag = { tag: string; category?: string | null };
@@ -43,7 +45,7 @@ export function ProjectTrackList({
   onSelectTrack, onPlayTrack, onRemoveTrack, onDeleteTrack,
   onAddFromLibrary, onShowUpload,
   selectedIds, onToggleSelect, onSelectAll,
-  selectMode = false, onToggleSelectMode, onReorder,
+  selectMode = false, onToggleSelectMode, onReorder, onTrackChanged,
 }: Props) {
   // Internal tag filter — derive available tags from all tracks, let user
   // narrow within the already type/search filtered list.
@@ -162,7 +164,7 @@ export function ProjectTrackList({
             return (
               <button key={tag} onClick={() => toggleTag(tag)}
                 className={`px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all ${
-                  on ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+                  on ? 'bg-white/[0.14] text-white border-white/30' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
                 }`}>
                 {tag}
               </button>
@@ -258,6 +260,8 @@ export function ProjectTrackList({
                 draggableTrack={false}
                 onRemoveFromContext={(t) => onRemoveTrack(t.id)}
                 removeLabel="Remove from project"
+                editable
+                onChanged={onTrackChanged}
                 onDelete={(t) => onDeleteTrack(t.id)}
                 selectable={selectable}
                 selected={selectable && selectedIds!.has(track.id)}

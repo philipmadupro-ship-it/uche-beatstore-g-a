@@ -9,6 +9,7 @@ import { toast } from '@/hooks/useToast';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 
 // Module-level cache so re-opening the drawer (or opening it on
 // successive contacts in one session) doesn't refetch the whole
@@ -66,7 +67,6 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
   useEffect(() => { setLocalSends(sends); }, [sends]);
 
   const [savingStatusId, setSavingStatusId] = useState<string | null>(null);
-  const [openStatusId, setOpenStatusId] = useState<string | null>(null);
 
   const sorted = useMemo(
     () => [...localSends].sort((a, b) =>
@@ -82,7 +82,6 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
     const prev = localSends.find((s) => s.id === sendId)?.status;
     setLocalSends((list) => list.map((s) => s.id === sendId ? { ...s, status: newStatus } : s));
     setSavingStatusId(sendId);
-    setOpenStatusId(null);
     try {
       const res = await fetch(`/api/beat_sends/${sendId}`, {
         method: 'PATCH',
@@ -147,7 +146,7 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
       title="Send history"
       description={contact.email ? `${contact.name} · ${contact.email}` : contact.name}
       icon={
-        <span className="text-[12px] font-medium text-[var(--text-primary)]">
+        <span className="text-[11px] font-medium text-[var(--text-primary)]">
           {contact.name[0]?.toUpperCase()}
         </span>
       }
@@ -196,53 +195,36 @@ export function ContactHistoryDrawer({ contact, sends, onClose, onSendAgain }: P
                     {/* Status as a self-contained dropdown — click to
                         cycle the send through the pipeline. Saved
                         immediately via PATCH /api/beat_sends/[id]. */}
-                    <div className="relative">
-                      <button
-                        onClick={() => setOpenStatusId(openStatusId === s.id ? null : s.id)}
-                        disabled={savingStatusId === s.id}
-                        className={`inline-flex items-center gap-1.5 text-[9px] font-mono uppercase tracking-wider px-2 py-1 rounded ${status.bg} ${status.color} hover:brightness-125 disabled:opacity-50 transition-all`}
-                        title="Click to change status"
-                      >
-                        {savingStatusId === s.id
-                          ? <Loader2 size={10} className="animate-spin" />
-                          : <Icon size={10} />}
-                        {status.label}
-                        <ChevronDown size={9} className="opacity-50" />
-                      </button>
-                      {openStatusId === s.id && (
-                        <>
-                          {/* Backdrop captures outside-clicks to close the
-                              menu — small inline solution avoids pulling
-                              in a popover library for one use. */}
-                          <div
-                            className="fixed inset-0 z-[80]"
-                            onClick={() => setOpenStatusId(null)}
-                          />
-                          <div className="absolute top-full left-0 mt-1 z-[81] bg-[#090907] border border-white/20 rounded-md shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] py-1 min-w-[140px]">
-                            {STATUS_OPTIONS.map((opt) => {
-                              const cfg = statusConfig(opt);
-                              const OptIcon = cfg.icon;
-                              const isCurrent = opt === s.status;
-                              return (
-                                <button
-                                  key={opt}
-                                  onClick={() => updateStatus(s.id, opt)}
-                                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-left transition-colors ${
-                                    isCurrent
-                                      ? `${cfg.bg} ${cfg.color}`
-                                      : `text-white/80 hover:bg-white/10 hover:text-white`
-                                  }`}
-                                >
-                                  <OptIcon size={10} />
-                                  {cfg.label}
-                                  {isCurrent && <CheckCircle size={9} className="ml-auto opacity-60" />}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </>
-                      )}
-                    </div>
+                    {/* Status picker. Hand-rolled before: an inline
+                        `fixed inset-0` scrim, an `absolute top-full` panel
+                        that any ancestor overflow could clip, and no keyboard
+                        navigation at all. ActionMenu's `checked` carries the
+                        current value, which is what this menu is for. */}
+                    <ActionMenu
+                      align="left"
+                      width={168}
+                      label={`Change status for send on ${s.sent_at ? new Date(s.sent_at).toLocaleDateString() : 'unknown date'}`}
+                      triggerContent={
+                        <span className="inline-flex items-center gap-1.5">
+                          {savingStatusId === s.id
+                            ? <Loader2 size={10} className="animate-spin" />
+                            : <Icon size={10} />}
+                          {status.label}
+                          <ChevronDown size={9} className="opacity-50" />
+                        </span>
+                      }
+                      triggerClassName={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-[9px] font-mono uppercase tracking-wider transition-all hover:brightness-125 disabled:opacity-50 ${status.bg} ${status.color}`}
+                      sections={[{
+                        id: 'status',
+                        items: STATUS_OPTIONS.map((opt) => ({
+                          id: opt,
+                          label: statusConfig(opt).label,
+                          checked: opt === s.status,
+                          busy: savingStatusId === s.id,
+                          onSelect: () => updateStatus(s.id, opt),
+                        })),
+                      }]}
+                    />
                     <span className="text-[9px] font-mono text-white/40">
                       {s.sent_at
                         ? new Date(s.sent_at).toLocaleString('en-US', {

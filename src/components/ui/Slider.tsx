@@ -167,7 +167,7 @@ export function Slider({
           className="absolute bottom-full mb-2 -translate-x-1/2 pointer-events-none"
           style={{ left: `${pct}%` }}
         >
-          <div className="relative px-2 py-1 rounded-md bg-white/[0.05] border border-white/20 text-[10px] font-mono text-white whitespace-nowrap shadow-lg">
+          <div className="relative px-2 py-1 rounded-lg bg-white/[0.05] border border-white/20 text-[10px] font-mono text-white whitespace-nowrap shadow-lg">
             {formatTooltip ? formatTooltip(value) : Math.round(value).toString()}
             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 h-2 w-2 rotate-45 bg-white/[0.05] border-r border-b border-white/20" />
           </div>

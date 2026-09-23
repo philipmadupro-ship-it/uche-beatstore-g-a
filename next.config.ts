@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { fileURLToPath } from "node:url";
+import { allowedImageHostnames } from "./src/lib/images/remote-hosts";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url)).replace(/\/$/, "");
 
@@ -37,22 +38,33 @@ const nextConfig: NextConfig = {
   // server bundle requires them at runtime; analyze.client.ts (browser) does
   // not import them, so client builds are unaffected.
   experimental: {
-    // Bump multipart body limit so the buyer beat-match upload (vocal
-    // clip up to ~25MB) makes it through Next's parser instead of being
-    // truncated at the default 10MB.
+    // Multipart body limit for server actions. Raised for the buyer
+    // beat-match upload, which has since been removed; kept because the
+    // default 10MB is low for any audio-bearing action.
     serverActions: { bodySizeLimit: '25mb' },
   },
   // Cover art lives in Cloudflare R2's public bucket. Allowlist it so
   // next/image can optimize (resize + AVIF/WebP) the storefront covers —
-  // the single biggest LCP win on the public store. r2.dev serves dev
-  // buckets; a custom domain would be added here too once wired.
+  // the single biggest LCP win on the public store.
+  //
+  // Built from the shared list rather than written out here, because
+  // CoverImage has to make the same judgement at render time: next/image
+  // THROWS for an unlisted hostname instead of firing onError, so a mismatch
+  // between these two lists is a crashed page, not a slow image. The custom
+  // CDN domain (NEXT_PUBLIC_R2_CDN_URL) is folded in automatically — it was
+  // missing here, so enabling that documented option would have broken every
+  // optimized cover.
   images: {
-    remotePatterns: [
-      { protocol: 'https', hostname: '*.r2.dev' },
-      { protocol: 'https', hostname: '*.r2.cloudflarestorage.com' },
-    ],
+    remotePatterns: allowedImageHostnames().map((hostname) => ({
+      protocol: 'https' as const,
+      hostname,
+    })),
   },
   serverExternalPackages: [
+    // exceljs pulls in graceful-fs, which patches `fs` at load. Bundled, it
+    // gets the empty `fs` stub from resolveAlias below and throws while the
+    // build collects route config. Loaded from node_modules it sees real fs.
+    'exceljs',
     'audio-decode',
     '@wasm-audio-decoders/opus-ml',
     '@wasm-audio-decoders/common',

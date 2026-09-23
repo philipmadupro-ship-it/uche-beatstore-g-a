@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { useEffect } from 'react';
 import { normaliseTagColors, normaliseTagKey, type TagColorMap } from '@/lib/artwork/tag-colors';
+import { useArtworkThemeContext } from '@/components/providers/ArtworkThemeProvider';
 
 /**
  * The producer's tag colour overrides, fetched once per session.
@@ -52,10 +53,15 @@ export const useTagColorStore = create<TagColorState>((set, get) => ({
 }));
 
 export function useTagColors() {
+  // Same split as useBrandArtwork: public trees are handed their overrides,
+  // the dashboard fetches them. /api/tags/colors is session-gated.
+  const supplied = useArtworkThemeContext();
   const colors = useTagColorStore((s) => s.colors);
   const load = useTagColorStore((s) => s.load);
-  useEffect(() => { load(); }, [load]);
-  return colors;
+  useEffect(() => {
+    if (!supplied) load();
+  }, [load, supplied]);
+  return supplied ? supplied.tag_colors : colors;
 }
 
 /** Persist one tag colour. `null` clears the override. */

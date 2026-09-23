@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 import { redactPublicTrackMedia } from '@/lib/store/public-media';
+import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -150,6 +151,7 @@ export async function GET(
     };
 
     const res = NextResponse.json({
+      artworkTheme: await loadPublicArtworkTheme(admin, sellerId),
       project: { ...safeProject, cover_url: sanitizeUrl(safeProject.cover_url) },
       tracks,
       creator,

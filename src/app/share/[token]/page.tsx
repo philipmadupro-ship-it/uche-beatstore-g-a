@@ -17,6 +17,9 @@ import { RapperShareVariant } from '@/components/share/variants/RapperShareVaria
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 type RecipientKind = 'client' | 'producer' | 'rapper' | 'friend';
 
@@ -95,6 +98,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   const [unlocking, setUnlocking] = useState(false);
   const [share, setShare] = useState<LegacyShareShape | null>(null);
   const [creator, setCreator] = useState<LegacyCreatorShape | null>(null);
+  const [artworkTheme, setArtworkTheme] = useState<PublicArtworkTheme | null>(null);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -141,6 +145,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       setShareTitle(data.share?.title || 'Shared tracks');
       setShare(data.share || null);
       setCreator(data.creator || null);
+      setArtworkTheme(data.artworkTheme ?? null);
       setAllowDownloads(data.share?.allow_downloads !== false);
       setRequiresPassword(false);
     } catch {
@@ -333,7 +338,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
             <Lock size={16} className="text-white/40" />
           </div>
           <h1 className="text-[18px] font-medium text-white mb-1">Password required</h1>
-          <p className="text-[12px] text-white/40">This link is protected</p>
+          <p className="text-[11px] text-white/40">This link is protected</p>
         </div>
         <input
           type="password" value={password} onChange={(e) => setPassword(e.target.value)}
@@ -343,7 +348,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         />
         {passwordError && <p className="text-[11px] text-red-400 mb-3">{passwordError}</p>}
         <button type="submit" disabled={unlocking || !password}
-          className="w-full bg-white text-black py-3 rounded-lg text-[12px] font-medium hover:bg-white disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+          className="w-full bg-white text-black py-3 rounded-lg text-[11px] font-medium hover:bg-white/90 disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
         >
           {unlocking ? <Loader2 size={13} className="animate-spin" /> : null}
           Unlock
@@ -357,7 +362,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       <div className="text-center max-w-sm">
         <Shield size={28} className="text-red-400 mx-auto mb-4" />
         <h1 className="text-[18px] font-medium text-white mb-2">Link unavailable</h1>
-        <p className="text-[12px] text-white/40">{error}</p>
+        <p className="text-[11px] text-white/40">{error}</p>
       </div>
     </div>
   );
@@ -374,7 +379,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   const purchaseBannerNode = purchaseBanner && typeof document !== 'undefined'
     ? createPortal(
         <div
-          className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] max-w-[90vw] sm:max-w-md px-5 py-3 rounded-full border backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] flex items-center gap-3 animate-in slide-in-from-top-4 fade-in duration-300 ${
+ className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] max-w-[90vw] sm:max-w-md px-5 py-3 rounded-full border backdrop-blur-xl shadow-[0_12px_40px_rgba(0,0,0,0.5)] flex items-center gap-3 ui-pop duration-300 ${
             purchaseBanner === 'success'
               ? 'bg-[#0e1f17]/95 border-[#6DC6A4]/30 text-[#9fe5c1]'
               : 'bg-[#1f1410]/95 border-white/20 text-white'
@@ -383,14 +388,14 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
           {purchaseBanner === 'success' ? (
             <>
               <Check size={14} className="text-[#6DC6A4] shrink-0" />
-              <span className="text-[12px] font-medium">
+              <span className="text-[11px] font-medium">
                 Purchase complete — receipt + access sent to your email.
               </span>
             </>
           ) : (
             <>
               <XIcon size={14} className="text-white/80 shrink-0" />
-              <span className="text-[12px] font-medium">Checkout cancelled.</span>
+              <span className="text-[11px] font-medium">Checkout cancelled.</span>
             </>
           )}
           <button
@@ -427,6 +432,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
           creator={creator}
           licenses={[]}
           shareToken={share?.sales_enabled ? params.token : undefined}
+          sharePassword={password || null}
           shareLeasePrice={share?.lease_price_usd ?? null}
           shareExclusivePrice={share?.exclusive_price_usd ?? null}
           shareDiscountPercent={share?.discount_percent ?? null}
@@ -544,6 +550,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   }
 
   return (
+    <ArtworkThemeProvider theme={artworkTheme}>
     <>
     {purchaseBannerNode}
     <div className="min-h-screen bg-[#090907] text-white flex flex-col font-sans">
@@ -576,13 +583,9 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
                   className="absolute inset-0 rounded-full overflow-hidden bg-black animate-vinyl shadow-[0_8px_28px_rgba(0,0,0,0.6)]"
                   style={{ animationPlayState: isPlaying ? 'running' : 'paused' }}
                 >
-                  {activeTrack.cover_url ? (
-                    <img loading="lazy" src={activeTrack.cover_url} alt="" className="w-full h-full object-cover" draggable={false} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-4xl font-light text-white/20 bg-gradient-to-br from-[#161520] to-[#090907]">
-                      {activeTrack.title[0]}
-                    </div>
-                  )}
+                  <ArtworkFallback src={activeTrack.cover_url} seed={activeTrack.id} kind="track" sizes="320px" className="object-cover">
+                    <span className="text-4xl font-light">{activeTrack.title[0]}</span>
+                  </ArtworkFallback>
                   {/* Concentric grooves — radial gradient with tight stops
                       gives the look of pressed-vinyl rings without
                       stacking 20 individual rings. Sits ABOVE the
@@ -748,6 +751,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       </main>
     </div>
     </>
+    </ArtworkThemeProvider>
   );
 }
 
@@ -789,7 +793,7 @@ function LicenseInfoSection({ creator }: { creator: LegacyCreatorShape }) {
       <p className="text-[10px] font-mono uppercase tracking-wider text-white/40">Licensing</p>
 
       {creator?.license_notes && (
-        <p className="text-[12px] text-white/80 leading-relaxed">{creator.license_notes}</p>
+        <p className="text-[11px] text-white/80 leading-relaxed">{creator.license_notes}</p>
       )}
 
       <div className="space-y-2">

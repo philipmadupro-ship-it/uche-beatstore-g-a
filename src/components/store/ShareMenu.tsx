@@ -7,10 +7,11 @@
  * buyer picks the format they actually want.
  */
 
-import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { Share2, Image as ImageIcon, Video, Link2 } from 'lucide-react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Share2 } from 'lucide-react';
 import { ShareCardModal } from './ShareCardButton';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 import { toast } from '@/hooks/useToast';
 
 interface Props {
@@ -23,23 +24,8 @@ interface Props {
 export function ShareMenu({
   trackId, trackTitle, producerName, accentColor = '#FFFFFF',
 }: Props) {
-  const [open, setOpen] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    setTimeout(() => document.addEventListener('mousedown', onClick), 0);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  const router = useRouter();
 
   const copyLink = async () => {
     if (typeof window === 'undefined') return;
@@ -65,63 +51,45 @@ export function ShareMenu({
 
   return (
     <>
-      <div className="relative shrink-0" ref={wrapRef}>
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          title="Share"
-          className="w-10 h-10 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-white/80 hover:text-white hover:bg-white/[0.08] hover:border-white/[0.16] transition-colors"
-        >
-          <Share2 size={14} />
-        </button>
-
-        {open && (
-          <div
-            role="menu"
-            className="absolute right-0 top-12 z-30 w-60 rounded-xl bg-white/[0.04]/95 backdrop-blur-xl border border-white/[0.10] shadow-[0_24px_60px_rgba(0,0,0,0.6)] py-1.5"
-          >
-            <button
-              role="menuitem"
-              onClick={() => { setOpen(false); copyLink(); }}
-              className="flex items-center gap-2 w-full px-3 py-2.5 text-[12px] text-white hover:bg-white/[0.06] transition-colors text-left"
-            >
-              <Link2 size={12} className="text-white/55" />
-              <div className="flex-1">
-                <p>Copy / share link</p>
-                <p className="text-[10px] text-white/35 font-mono mt-0.5">Quick URL share</p>
-              </div>
-            </button>
-
-            <div className="my-1 mx-2 border-t border-white/[0.06]" />
-
-            <button
-              role="menuitem"
-              onClick={() => { setOpen(false); setCardOpen(true); }}
-              className="flex items-center gap-2 w-full px-3 py-2.5 text-[12px] text-white hover:bg-white/[0.06] transition-colors text-left"
-            >
-              <ImageIcon size={12} style={{ color: accentColor }} />
-              <div className="flex-1">
-                <p>Share card (image)</p>
-                <p className="text-[10px] text-white/35 font-mono mt-0.5">1080×1920 for Stories</p>
-              </div>
-            </button>
-
-            <Link
-              role="menuitem"
-              href={`/store/${trackId}/share`}
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-3 py-2.5 text-[12px] text-white hover:bg-white/[0.06] transition-colors"
-            >
-              <Video size={12} style={{ color: accentColor }} />
-              <div className="flex-1">
-                <p>Vertical preview</p>
-                <p className="text-[10px] text-white/35 font-mono mt-0.5">9:16 for TikTok / Reels</p>
-              </div>
-            </Link>
-          </div>
-        )}
+      {/* One menu model app-wide. This was hand-rolled: it declared
+          role="menu" and role="menuitem" — telling a screen reader to expect
+          arrow-key navigation — and implemented none, and its
+          `absolute right-0 top-12` panel could be clipped by any ancestor
+          with overflow. ActionMenu portals, positions and handles the
+          keyboard, and already renders the per-item hint line this menu had
+          built for itself. */}
+      <div className="relative shrink-0">
+        <ActionMenu
+          align="right"
+          width={240}
+          label="Share"
+          triggerContent={<Share2 size={14} />}
+          triggerClassName="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white/80 transition-colors hover:border-white/[0.16] hover:bg-white/[0.08] hover:text-white"
+          sections={[
+            {
+              id: 'link',
+              items: [
+                {
+                  id: 'copy', label: 'Copy / share link', hint: 'Quick URL share',
+                  onSelect: copyLink,
+                },
+              ],
+            },
+            {
+              id: 'formats',
+              items: [
+                {
+                  id: 'card', label: 'Share card (image)', hint: '1080×1920 for Stories',
+                  onSelect: () => setCardOpen(true),
+                },
+                {
+                  id: 'vertical', label: 'Vertical preview', hint: '9:16 for TikTok / Reels',
+                  onSelect: () => router.push(`/store/${trackId}/share`),
+                },
+              ],
+            },
+          ]}
+        />
       </div>
 
       <ShareCardModal

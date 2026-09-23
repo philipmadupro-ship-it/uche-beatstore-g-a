@@ -92,7 +92,7 @@ export function ProjectFolderSelect({
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
+ <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm ui-fade-in duration-200" onClick={onClose}>
       <div
         ref={panelRef}
         role="dialog"
@@ -105,7 +105,7 @@ export function ProjectFolderSelect({
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div className="flex items-center gap-2">
             <FolderPlus size={13} className="text-white/80" />
-            <h3 className="text-[12px] font-bold text-white">Move to folders</h3>
+            <h3 className="text-[11px] font-bold text-white">Move to folders</h3>
           </div>
           <button onClick={onClose} className="text-white/40 hover:text-white transition-colors"><X size={14} /></button>
         </div>
@@ -124,7 +124,7 @@ export function ProjectFolderSelect({
                   <span className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 ${on ? 'bg-white border-white/30' : 'border-white/20'}`}>
                     {on && <Check size={11} className="text-black" />}
                   </span>
-                  <span className="text-[12px] text-white truncate">{f.name}</span>
+                  <span className="text-[11px] text-white truncate">{f.name}</span>
                 </button>
               );
             })
@@ -137,7 +137,7 @@ export function ProjectFolderSelect({
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') createFolder(); }}
             placeholder="New folder…"
-            className="flex-1 min-w-0 bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20"
+            className="flex-1 min-w-0 bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20"
           />
           <button onClick={createFolder} disabled={!newName.trim() || creating}
             className="shrink-0 flex items-center gap-1 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-[11px] font-medium text-white/80 hover:text-white hover:border-white/20 disabled:opacity-40 transition-colors">
@@ -148,7 +148,7 @@ export function ProjectFolderSelect({
         <div className="px-5 py-3 border-t border-white/10 flex items-center justify-end gap-2">
           <button onClick={onClose} className="px-3 py-2 rounded-lg text-[11px] font-mono uppercase tracking-wider text-white/60 hover:text-white transition-colors">Cancel</button>
           <button onClick={save} disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-white text-black hover:bg-white transition-colors disabled:opacity-40">
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-40">
             {saving ? <Loader2 size={12} className="animate-spin" /> : null}Save
           </button>
         </div>

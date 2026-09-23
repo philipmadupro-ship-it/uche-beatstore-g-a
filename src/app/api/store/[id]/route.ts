@@ -3,6 +3,7 @@ import { isSupabaseConfigured, getAll, getById } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { redactPublicTrackMedia } from '@/lib/store/public-media';
+import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -398,9 +399,15 @@ export async function GET(
     const safeRelated = related.map(stripUserId).map(redactPublicTrackMedia);
     const safeFans = fansAlsoBought.map(stripUserId).map(redactPublicTrackMedia);
 
+    // Default artwork + palette + tag colours, so a coverless beat renders the
+    // producer's artwork rather than an accent wash. Buyers have no session,
+    // so it cannot be fetched client-side.
+    const artworkTheme = await loadPublicArtworkTheme(admin, sellerId);
+
     const res = NextResponse.json({
       track: safeTrack,
       creator,
+      artworkTheme,
       licenses,
       tags: (tagsRes.data as TrackTagRow[] | null) ?? [],
       related: safeRelated,

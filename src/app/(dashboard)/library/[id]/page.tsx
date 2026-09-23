@@ -9,7 +9,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageContainer } from '@/components/layout/PageHeader';
-import { Loader2, Camera, Check, X, Edit2, Music, Download, Share2, Activity, Sliders } from 'lucide-react';
+import { Loader2, Check, X, Edit2, Music, Download, Share2, Activity, Sliders } from 'lucide-react';
 import { PlayGlyph } from '@/components/player/TransportIcons';
 import { useRouter } from 'next/navigation';
 import { Track, TrackStatus, TrackType } from '@/lib/types';
@@ -30,6 +30,7 @@ import { SimilarTracks } from '@/components/tracks/SimilarTracks';
 import { ArrangementOverlay } from '@/components/tracks/ArrangementOverlay';
 import { TrackListingEditor } from '@/components/tracks/TrackListingEditor';
 import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { CoverEditor } from '@/components/ui/CoverEditor';
 // `analyzeAudio` is dynamically imported inside `handleReanalyze` so the
 // audio-decode worker chain doesn't break client/SSR bundling.
 
@@ -68,6 +69,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
   const [versions, setVersions] = useState<TrackVersion[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadingArt, setUploadingArt] = useState(false);
+  const [removingArt, setRemovingArt] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [tempTitle, setTempTitle] = useState('');
   const [shareOpen, setShareOpen] = useState(false);
@@ -87,6 +89,16 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
     bass_url: string | null;
     other_url: string | null;
   } | null>(null);
+
+  // Genre then mood, matching how the library rows seed their artwork — the
+  // same track must not generate a different gradient here than in the list.
+  const artworkTags = React.useMemo(() => {
+    const rows = (track as (Track & { track_tags?: Array<{ tag: string; category?: string | null }> }) | null)?.track_tags ?? [];
+    return [
+      ...rows.filter((t) => t.category === 'genre').map((t) => t.tag),
+      ...rows.filter((t) => t.category === 'mood').map((t) => t.tag),
+    ];
+  }, [track]);
 
   const { setTrack: setGlobalTrack } = usePlayer();
   const router = useRouter();
@@ -151,6 +163,29 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
       toast.error('Cover upload failed', err instanceof Error ? err.message : 'Try again');
     } finally {
       setUploadingArt(false);
+    }
+  };
+
+  /** Clear the cover — the track falls back to the default artwork. */
+  const handleArtRemove = async () => {
+    setRemovingArt(true);
+    try {
+      const patch = await fetch(`/api/tracks/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cover_url: null }),
+      });
+      if (!patch.ok) {
+        const e = await patch.json().catch(() => ({}));
+        toast.error('Could not remove cover', e.error || `HTTP ${patch.status}`);
+        return;
+      }
+      toast.success('Cover removed');
+      fetchData();
+    } catch (err) {
+      toast.error('Could not remove cover', err instanceof Error ? err.message : 'Try again');
+    } finally {
+      setRemovingArt(false);
     }
   };
 
@@ -305,22 +340,22 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
           {/* Cover column. Click anywhere on the square to swap the
               cover image — same affordance as the project detail page. */}
           <div className="lg:sticky lg:top-10 lg:self-start">
-            <div
-              className="aspect-square w-full bg-white/[0.04] rounded-2xl border border-white/[0.05] overflow-hidden group relative cursor-pointer shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
-              onClick={() => fileInputRef.current?.click()}
+            <CoverEditor
+              src={track.cover_url}
+              seed={track.id}
+              kind="track"
+              tags={artworkTags}
+              inputRef={fileInputRef}
+              uploading={uploadingArt}
+              removing={removingArt}
+              onFile={handleArtChange}
+              onRemove={handleArtRemove}
+              removeLabel={track.title}
+              priority
+              className="shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
             >
-              {track.cover_url ? (
-                <img loading="lazy" src={track.cover_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-black bg-gradient-to-br from-[#161520] to-[#090907]">
-                  <Music size={64} strokeWidth={1.2} />
-                </div>
-              )}
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                {uploadingArt ? <Loader2 size={20} className="animate-spin text-white" /> : <Camera size={20} className="text-white" />}
-              </div>
-              <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handleArtChange} />
-            </div>
+              <Music size={64} strokeWidth={1.2} />
+            </CoverEditor>
           </div>
 
           {/* Right column — meta + all sub-panels. */}
@@ -411,7 +446,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <button
                 onClick={() => setGlobalTrack(track)}
-                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-black transition-colors hover:bg-white sm:gap-2 sm:px-4 sm:text-[12px]"
+                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-black transition-colors hover:bg-white/90 sm:gap-2 sm:px-4 sm:text-[11px]"
               >
                 <PlayGlyph size={13} className="ml-0.5" />
                 Play
@@ -420,14 +455,14 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 onClick={handleReanalyze}
                 disabled={reanalyzing || !track.audio_url}
                 title={track.audio_url ? 'Re-extract BPM, key and loudness' : 'Upload source audio before analyzing'}
-                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-[#090907] transition-colors hover:bg-[#E2CDA8] disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-[12px]"
+                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-white px-3 text-[11px] font-medium text-[#090907] transition-colors hover:bg-[#E2CDA8] disabled:cursor-not-allowed disabled:opacity-50 sm:gap-2 sm:px-4 sm:text-[11px]"
               >
                 {reanalyzing ? <Loader2 size={12} className="animate-spin" /> : <Activity size={12} />}
                 {reanalyzing ? 'Analyzing…' : 'Analyze'}
               </button>
               <button
                 onClick={() => setShareOpen(true)}
-                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-[11px] font-medium text-white transition-colors hover:border-white/20 sm:gap-2 sm:px-4 sm:text-[12px]"
+                className="tap inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 text-[11px] font-medium text-white transition-colors hover:border-white/20 sm:gap-2 sm:px-4 sm:text-[11px]"
               >
                 <Share2 size={12} />
                 Share
@@ -435,7 +470,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
               <button
                 onClick={() => router.push(`/studio?track=${track.id}`)}
                 title="Open this track in the studio (loop / pitch / stems / record)"
-                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[12px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/20 hover:bg-white/10"
+                className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[11px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/20 hover:bg-white/10"
               >
                 <Sliders size={12} />
                 Studio
@@ -444,7 +479,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 <a
                   href={audioSrc(track.audio_url)}
                   download={`${track.title || 'track'}.wav`}
-                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[12px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/20"
+                  className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[11px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/20"
                 >
                   <Download size={12} />
                   Download

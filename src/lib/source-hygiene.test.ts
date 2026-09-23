@@ -26,16 +26,29 @@ import { execSync } from 'node:child_process';
  * on disk and behave identically at runtime.
  */
 
-/** Every tracked source file, minus this one (whose regex names the range). */
+/**
+ * Every source file, tracked OR newly written, minus this one (whose regex
+ * names the range).
+ *
+ * `git ls-files` alone lists only TRACKED files, which made this guard blind
+ * to exactly the case it is most needed for: a brand-new file. A new test was
+ * written with a literal NUL in it, the full suite passed because the file was
+ * still untracked, and the guard only failed on the next run — after the
+ * commit had made the file tracked. A check that cannot see new work is not a
+ * pre-commit check. `--others --exclude-standard` adds untracked files while
+ * still honouring .gitignore, so node_modules and build output stay out.
+ */
 function sourceFiles(): string[] {
-  const out = execSync('git ls-files "src/**/*.ts" "src/**/*.tsx"', {
-    encoding: 'utf8',
-    cwd: process.cwd(),
-  });
-  return out
-    .split('\n')
-    .filter(Boolean)
-    .filter((f) => !f.endsWith('src/lib/source-hygiene.test.ts'));
+  const listed = (args: string) =>
+    execSync(`git ls-files ${args} "src/**/*.ts" "src/**/*.tsx"`, {
+      encoding: 'utf8',
+      cwd: process.cwd(),
+    })
+      .split('\n')
+      .filter(Boolean);
+
+  const all = [...listed(''), ...listed('--others --exclude-standard')];
+  return [...new Set(all)].filter((f) => !f.endsWith('src/lib/source-hygiene.test.ts'));
 }
 
 /**

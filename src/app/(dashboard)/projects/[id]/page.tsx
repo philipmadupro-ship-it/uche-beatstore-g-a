@@ -19,13 +19,13 @@ import { ProjectTrackList } from '@/components/projects/ProjectTrackList';
 import { ProjectChecklist, type ChecklistItem } from '@/components/projects/ProjectChecklist';
 import { ToplineRecorder } from '@/components/lyrics/ToplineRecorder';
 import { ProjectAnalyticsPanel } from '@/components/projects/ProjectAnalyticsPanel';
-import { Loader2, Camera, ListPlus } from 'lucide-react';
+import { Loader2, ListPlus } from 'lucide-react';
 import { Track } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
-import { seededGradient } from '@/lib/ui/cover-gradient';
 import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { CoverEditor } from '@/components/ui/CoverEditor';
 
 type ProjectStatus = 'in_progress' | 'final' | 'archived';
 
@@ -53,18 +53,13 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadingArt, setUploadingArt] = useState(false);
+  const [removingArt, setRemovingArt] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
   const [activeTab, setActiveTab] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showUpload, setShowUpload] = useState(false);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [tempTitle, setTempTitle] = useState('');
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAddFromLibrary, setShowAddFromLibrary] = useState(false);
-  const [editingTargets, setEditingTargets] = useState(false);
-  const [targetBpm, setTargetBpm] = useState<string>('');
-  const [targetKey, setTargetKey] = useState<string>('');
-  const [description, setDescription] = useState<string>('');
   const [priceUsd, setPriceUsd] = useState<string>('');
   const [savingStorefront, setSavingStorefront] = useState(false);
   // Multi-select state — Set for O(1) toggle. Mirrors playlists +
@@ -86,15 +81,17 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
       const prData = await prRes.json();
       if (prData.project) {
         setProject(prData.project);
-        setTempTitle(prData.project.name);
-        setTargetBpm(prData.project.bpm_target ? String(prData.project.bpm_target) : '');
-        setTargetKey(prData.project.key_target || '');
-        setDescription(prData.project.description ?? '');
         setPriceUsd(
           prData.project.price_usd != null ? String(prData.project.price_usd) : '',
         );
       }
-      const tracksRes = await fetch(`/api/tracks?project_id=${params.id}`);
+      // `no-store` is load-bearing. /api/tracks answers with
+      // `stale-while-revalidate=60`, so a plain fetch after a write resolves
+      // with the PRE-write body while the fresh copy arrives only as a
+      // background revalidation this promise never sees. That is why a rating
+      // set on this page reappeared as empty stars after a reload — the write
+      // had persisted, the screen was reading a cached response.
+      const tracksRes = await fetch(`/api/tracks?project_id=${params.id}`, { cache: 'no-store' });
       const tracksData = await tracksRes.json();
       setTracks(Array.isArray(tracksData) ? tracksData : tracksData.tracks || []);
     } catch (err) {
@@ -153,6 +150,29 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
     }
   };
 
+  /** Clear the cover — the project falls back to the default project artwork. */
+  const handleArtRemove = async () => {
+    setRemovingArt(true);
+    try {
+      const patch = await fetch(`/api/projects/${params.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cover_url: null }),
+      });
+      if (!patch.ok) {
+        const e = await patch.json().catch(() => ({}));
+        toast.error('Could not remove cover', e.error || `HTTP ${patch.status}`);
+        return;
+      }
+      toast.success('Cover removed');
+      fetchData();
+    } catch (err) {
+      toast.error('Could not remove cover', err instanceof Error ? err.message : 'Try again');
+    } finally {
+      setRemovingArt(false);
+    }
+  };
+
   // patchProject — single source of truth for the three "edit a project
   // field" handlers below. The previous implementations all PATCHed and
   // then locally mutated `project` regardless of HTTP status, so a 400
@@ -182,21 +202,19 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
     }
   };
 
-  const handleRename = async () => {
-    if (!tempTitle.trim() || tempTitle === project?.name) {
-      setIsEditingTitle(false);
-      return;
-    }
-    const ok = await patchProject({ name: tempTitle.trim() });
-    if (ok) setIsEditingTitle(false);
+  // The three header editors below all funnel into patchProject and report
+  // back whether the save landed, so an inline field can stay open on a
+  // rejected save instead of closing over a value the server never took.
+  const handleRename = async (next: string) => {
+    if (!next) return false;
+    return patchProject({ name: next });
   };
 
-  const saveTargets = async () => {
-    const bpm = targetBpm ? parseInt(targetBpm, 10) : null;
-    const key = targetKey.trim() || null;
-    const ok = await patchProject({ bpm_target: bpm, key_target: key });
-    if (ok) setEditingTargets(false);
-  };
+  const saveTargets = (patch: { bpm_target?: number | null; key_target?: string | null }) =>
+    patchProject(patch);
+
+  const saveDescription = (next: string) =>
+    patchProject({ description: next === '' ? null : next });
 
   const setStatus = async (status: ProjectStatus) => {
     await patchProject({ status });
@@ -213,22 +231,20 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
     setTogglingStoreFeatured(false);
   };
 
-  const saveStorefront = async () => {
+  /**
+   * Price is the only field left on the storefront card — the description
+   * moved up into the header, where it is autosaved next to the project it
+   * describes rather than behind a Save button at the bottom of the page.
+   */
+  const savePrice = async () => {
     setSavingStorefront(true);
-    const trimmed = description.trim();
     const priceParsed = priceUsd.trim() === '' ? null : Number.parseFloat(priceUsd);
     if (priceParsed != null && (Number.isNaN(priceParsed) || priceParsed < 0)) {
       toast.error('Invalid price', 'Enter a non-negative number');
       setSavingStorefront(false);
       return;
     }
-    await patchProject(
-      {
-        description: trimmed === '' ? null : trimmed,
-        price_usd: priceParsed,
-      },
-      'Storefront details saved',
-    );
+    await patchProject({ price_usd: priceParsed }, 'Price saved');
     setSavingStorefront(false);
   };
 
@@ -364,22 +380,21 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
               instead of inside the header so it can be the dominant
               visual anchor on the project page. */}
           <div className="lg:sticky lg:top-10 lg:self-start">
-            <div
-              className="mx-auto aspect-square w-full max-w-[270px] sm:max-w-[360px] lg:max-w-none bg-white/[0.04] rounded-[20px] border border-white/[0.05] overflow-hidden group relative cursor-pointer"
-              onClick={() => fileInputRef.current?.click()}
+            <CoverEditor
+              src={project?.cover_url}
+              seed={project?.id ?? 'p'}
+              kind="project"
+              inputRef={fileInputRef}
+              uploading={uploadingArt}
+              removing={removingArt}
+              onFile={handleArtChange}
+              onRemove={handleArtRemove}
+              removeLabel={project?.name}
+              priority
+              className="mx-auto max-w-[270px] rounded-[20px] sm:max-w-[360px] lg:max-w-none"
             >
-              {project?.cover_url ? (
-                <img loading="lazy" src={project.cover_url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-[88px] sm:text-[112px] lg:text-[120px] font-light text-white/[0.07]" style={seededGradient(project?.id ?? 'p')}>
-                  {project?.name?.[0] || 'P'}
-                </div>
-              )}
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                {uploadingArt ? <Loader2 size={20} className="animate-spin text-white" /> : <Camera size={20} className="text-white" />}
-              </div>
-              <input type="file" ref={fileInputRef} className="hidden" accept="image/jpeg,image/png,image/webp" onChange={handleArtChange} />
-            </div>
+              <span className="text-[88px] font-light sm:text-[112px] lg:text-[120px]">{project?.name?.[0] || 'P'}</span>
+            </CoverEditor>
           </div>
 
           <div className="min-w-0">
@@ -387,40 +402,26 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                 hideCover=true because the page renders its own bigger
                 cover in the column to the left. */}
             <ProjectDetailHeader
-              hideCover
-          project={project}
-          trackCount={filtered.length}
-          totalDuration={totalDuration}
-          uploadingArt={uploadingArt}
-          fileInputRef={fileInputRef}
-          onArtChange={handleArtChange}
-          onSetStatus={setStatus}
-          isEditingTitle={isEditingTitle}
-          tempTitle={tempTitle}
-          setTempTitle={setTempTitle}
-          onTitleEditStart={() => setIsEditingTitle(true)}
-          onTitleEditCancel={() => { setIsEditingTitle(false); setTempTitle(project?.name || ''); }}
-          onTitleSave={handleRename}
-          editingTargets={editingTargets}
-          targetBpm={targetBpm}
-          setTargetBpm={setTargetBpm}
-          targetKey={targetKey}
-          setTargetKey={setTargetKey}
-          onTargetsEditStart={() => setEditingTargets(true)}
-          onTargetsEditCancel={() => setEditingTargets(false)}
-          onTargetsSave={saveTargets}
-          onPlay={handlePlayProject}
-          onShare={() => setShowShareModal(true)}
-          onAddFromLibrary={() => setShowAddFromLibrary(true)}
-          onToggleUpload={() => setShowUpload(!showUpload)}
-          playDisabled={!filtered.length}
-          shareDisabled={!tracks.length}
-          storeFeatured={project?.store_featured}
-          onToggleStoreFeatured={toggleStoreFeatured}
-          storeFeaturedPending={togglingStoreFeatured}
-          onChanged={fetchData}
-          onDeleted={() => { window.location.href = '/projects'; }}
-        />
+              project={project}
+              trackCount={filtered.length}
+              totalDuration={totalDuration}
+              onSetStatus={setStatus}
+              onRename={handleRename}
+              onSaveTargets={saveTargets}
+              onSaveDescription={saveDescription}
+              onPlay={handlePlayProject}
+              onShare={() => setShowShareModal(true)}
+              onAddFromLibrary={() => setShowAddFromLibrary(true)}
+              onToggleUpload={() => setShowUpload(!showUpload)}
+              /* The cover lives in the column to the left and shares this
+                 file input, so "Edit cover" in the ⋯ menu opens the same
+                 picker clicking the artwork does. */
+              onEditCover={() => fileInputRef.current?.click()}
+              playDisabled={!filtered.length}
+              shareDisabled={!tracks.length}
+              onChanged={fetchData}
+              onDeleted={() => { window.location.href = '/projects'; }}
+            />
 
         {/* Upload Zone */}
         {showUpload && (
@@ -458,6 +459,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           onDeleteTrack={(id) => handleDeleteTrack(id)}
           onAddFromLibrary={() => setShowAddFromLibrary(true)}
           onShowUpload={() => setShowUpload(true)}
+          onTrackChanged={fetchData}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelectOne}
           onSelectAll={toggleSelectAll}
@@ -490,7 +492,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                 underneath the active track work so it reads like admin,
                 not the main project surface. */}
             {project && (
-              <details className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02]/70 p-3">
+              <details className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-3">
                 <summary className="cursor-pointer list-none text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">
                   Checklist {project.checklist?.length ? `· ${project.checklist.filter((item) => item.done).length}/${project.checklist.length}` : ''}
                 </summary>
@@ -506,7 +508,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
 
             {/* Storefront — moved below creation controls so commerce does
                 not compete with the primary project workspace on mobile. */}
-            <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04]/80 p-4 sm:p-5">
+            <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.04] p-4 sm:p-5">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">
                   Storefront
@@ -524,51 +526,33 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
                   {togglingStoreFeatured ? 'Saving...' : project?.store_featured ? 'In store' : 'List in store'}
                 </button>
               </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_180px]">
-                <div>
-                  <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 block mb-1.5">
-                    Description
-                  </label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={3}
-                    maxLength={10000}
-                    placeholder="Describe this project..."
-                    className="w-full bg-white/[0.02] border border-white/10 rounded-lg px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 transition-colors resize-none leading-relaxed"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 block mb-1.5">
+              {/* Price only. The storefront description is the project
+                  description, and it is now edited in the header rather than
+                  in a second textarea five sections further down the page. */}
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="w-[180px]">
+                  <label htmlFor="project-price" className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 block mb-1.5">
                     Price (USD)
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-white/50">$</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] text-white/50">$</span>
                     <input
+                      id="project-price"
                       type="number"
                       min="0"
                       step="0.01"
                       value={priceUsd}
                       onChange={(e) => setPriceUsd(e.target.value)}
+                      onBlur={savePrice}
+                      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
                       placeholder="0.00"
-                      className="w-full bg-white/[0.02] border border-white/10 rounded-lg pl-7 pr-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 transition-colors"
+                      className="w-full bg-white/[0.02] border border-white/10 rounded-lg pl-7 pr-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/40 transition-colors"
                     />
                   </div>
                   <p className="text-[9px] font-mono text-white/40 mt-1.5">
-                    Leave blank to hide from store.
+                    {savingStorefront ? 'Saving…' : 'Saves on blur. Blank hides it from the store.'}
                   </p>
                 </div>
-              </div>
-              <div className="flex justify-end mt-4">
-                <button
-                  type="button"
-                  onClick={saveStorefront}
-                  disabled={savingStorefront}
-                  className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white hover:bg-white/90 disabled:opacity-60 text-black text-[11px] font-semibold transition-all"
-                >
-                  {savingStorefront ? <Loader2 size={12} className="animate-spin" /> : null}
-                  {savingStorefront ? 'Saving...' : 'Save storefront'}
-                </button>
               </div>
             </div>
 
@@ -583,7 +567,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           15s; that's good enough until we wire Supabase Realtime. */}
       {project && (
         <PageContainer className="pt-0 pb-12">
-          <div className="rounded-2xl border border-white/20 bg-white/[0.02]/55 p-3 sm:p-4">
+          <div className="rounded-2xl border border-white/20 bg-white/[0.02] p-3 sm:p-4">
             <ProjectCommentsPanel
               projectId={params.id as string}
               tracks={tracks.map((t) => ({ id: t.id, title: t.title }))}

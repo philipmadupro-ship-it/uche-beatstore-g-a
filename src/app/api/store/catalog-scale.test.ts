@@ -94,6 +94,56 @@ describe('600-beat catalogue budgets', () => {
     expect(body.pageInfo).toEqual({ hasMore: false, nextCursor: null });
   });
 
+  it('filters by BPM across the whole catalogue, not just the first page', async () => {
+    // This is the regression the server-side move exists for. Before it, the
+    // BPM filter ran in the browser over the pages already fetched, so on a
+    // 600-beat catalogue it searched 80 and reported that as the answer.
+    const response = await storeGet(
+      new NextRequest('http://localhost/api/store?limit=80&bpmMin=100&bpmMax=110'),
+    );
+    const body = await response.json();
+    const bpms = body.tracks.map((track: { bpm: number }) => track.bpm);
+    expect(bpms.length).toBeGreaterThan(0);
+    expect(Math.min(...bpms)).toBeGreaterThanOrEqual(100);
+    expect(Math.max(...bpms)).toBeLessThanOrEqual(110);
+    // 11 of every 100 fixture tracks fall in the range, over 600 tracks.
+    expect(bpms).toHaveLength(66);
+  });
+
+  it('filters by lease price across the whole catalogue', async () => {
+    const response = await storeGet(
+      new NextRequest('http://localhost/api/store?limit=80&priceMin=20&priceMax=25'),
+    );
+    const body = await response.json();
+    const prices = body.tracks.map((t: { lease_price_usd: number }) => t.lease_price_usd);
+    expect(prices.length).toBeGreaterThan(0);
+    expect(Math.min(...prices)).toBeGreaterThanOrEqual(20);
+    expect(Math.max(...prices)).toBeLessThanOrEqual(25);
+  });
+
+  it('pins the result to the buyer wishlist when ids are sent', async () => {
+    const wanted = ['scale-track-7', 'scale-track-450', 'scale-track-599'];
+    const response = await storeGet(
+      new NextRequest(`http://localhost/api/store?limit=80&ids=${wanted.join(',')}`),
+    );
+    const body = await response.json();
+    expect(body.tracks.map((t: { id: string }) => t.id).sort()).toEqual([...wanted].sort());
+  });
+
+  it('matches nothing when the wishlist is empty, rather than everything', async () => {
+    const response = await storeGet(new NextRequest('http://localhost/api/store?limit=80&ids='));
+    const body = await response.json();
+    expect(body.tracks).toHaveLength(0);
+  });
+
+  it('ignores a malformed range instead of emptying the catalogue', async () => {
+    const response = await storeGet(
+      new NextRequest('http://localhost/api/store?limit=80&bpmMin=abc&bpmMax=xyz'),
+    );
+    const body = await response.json();
+    expect(body.tracks).toHaveLength(80);
+  });
+
   it('keeps facets and Store Editor summary compact at full scale', async () => {
     const [facetsResponse, summaryResponse] = await Promise.all([facetsGet(), summaryGet()]);
     const facets = await facetsResponse.json();

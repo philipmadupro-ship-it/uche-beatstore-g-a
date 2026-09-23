@@ -92,7 +92,7 @@ export function TrackHeatmap({ trackId, durationSeconds }: TrackHeatmapProps) {
 
   if (loading) {
     return (
-      <div className="h-28 w-full flex items-center justify-center bg-white/[0.02]/50 border border-white/20 rounded-xl">
+      <div className="h-28 w-full flex items-center justify-center bg-white/[0.02] border border-white/20 rounded-xl">
         <Loader2 size={16} className="animate-spin text-white/80" />
       </div>
     );
@@ -100,7 +100,7 @@ export function TrackHeatmap({ trackId, durationSeconds }: TrackHeatmapProps) {
 
   if (error) {
     return (
-      <div className="h-28 w-full flex items-center justify-center bg-white/[0.02]/50 border border-red-950/20 rounded-xl px-4 text-center">
+      <div className="h-28 w-full flex items-center justify-center bg-white/[0.02] border border-red-950/20 rounded-xl px-4 text-center">
         <p className="text-[11px] text-red-400">Failed to render listener density: {error}</p>
       </div>
     );
@@ -131,7 +131,7 @@ export function TrackHeatmap({ trackId, durationSeconds }: TrackHeatmapProps) {
       </div>
 
       {pings.length === 0 ? (
-        <div className="h-24 flex flex-col items-center justify-center border border-dashed border-white/10 rounded-xl bg-white/[0.02]/30">
+        <div className="h-24 flex flex-col items-center justify-center border border-dashed border-white/10 rounded-xl bg-white/[0.02]">
           <p className="text-[11px] text-white/40">No playhead coordinates captured yet.</p>
           <p className="text-[9px] text-white/30 mt-1 font-mono uppercase tracking-wider">
             Share layout pings will compile coordinates automatically
@@ -170,7 +170,7 @@ export function TrackHeatmap({ trackId, durationSeconds }: TrackHeatmapProps) {
 
           {/* Metrics summary */}
           {hotSpotInfo && (
-            <div className="bg-white/[0.02]/40 border border-white/10 rounded-xl p-3.5 flex items-center justify-between text-[11px]">
+            <div className="bg-white/[0.02] border border-white/10 rounded-xl p-3.5 flex items-center justify-between text-[11px]">
               <div>
                 <span className="text-white/40 font-mono uppercase tracking-wider text-[9px] block">Hot Retention Segment</span>
                 <span className="text-white font-bold font-mono tracking-tight mt-0.5 block">{hotSpotInfo.timeRange}</span>

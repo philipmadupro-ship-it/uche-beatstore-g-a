@@ -92,7 +92,7 @@ export function ActivityPanel({ open, onClose }: Props) {
       {/* Backdrop — click to dismiss. Lighter than a modal because the
           panel is informational, not a focus-trap. */}
       <div
-        className="fixed inset-0 z-[80] bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
+ className="fixed inset-0 z-[80] bg-black/40 backdrop-blur-sm ui-fade-in duration-200"
         onClick={onClose}
       />
 
@@ -108,7 +108,7 @@ export function ActivityPanel({ open, onClose }: Props) {
                    bg-gradient-to-b from-[#101012]/95 via-[#090907]/95 to-[#090907]/95
                    backdrop-blur-2xl border-l border-white/[0.06]
                    shadow-[-12px_0_40px_rgba(0,0,0,0.5)]
-                   animate-in slide-in-from-right duration-300 focus:outline-none"
+ ui-drawer-right duration-300 focus:outline-none"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.04]">
           <div className="flex items-center gap-2">
@@ -171,7 +171,7 @@ export function ActivityPanel({ open, onClose }: Props) {
             </div>
           ) : items.length === 0 ? (
             <div className="px-3 py-16 text-center text-white/40">
-              <p className="text-[12px]">Nothing yet in the last 7 days.</p>
+              <p className="text-[11px]">Nothing yet in the last 7 days.</p>
               <p className="text-[10px] mt-1.5 text-white/30">Uploads, comments, sends and ratings will land here.</p>
             </div>
           ) : (() => {
@@ -179,7 +179,7 @@ export function ActivityPanel({ open, onClose }: Props) {
             if (visible.length === 0) {
               return (
                 <div className="px-3 py-16 text-center text-white/40">
-                  <p className="text-[12px]">No {filter} activity in the last 7 days.</p>
+                  <p className="text-[11px]">No {filter} activity in the last 7 days.</p>
                   <button
                     onClick={() => setFilter('all')}
                     className="text-[10px] mt-2 text-white hover:text-white transition-colors underline underline-offset-2"
@@ -223,7 +223,7 @@ function ActivityRow({ item, onNavigate }: { item: ActivityItem; onNavigate: () 
         <Icon size={12} className={color} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-[12px] text-white leading-snug line-clamp-2 group-hover:text-white transition-colors">
+        <p className="text-[11px] text-white leading-snug line-clamp-2 group-hover:text-white transition-colors">
           {item.title}
         </p>
         <p className="text-[10px] text-white/40 mt-0.5 font-mono tabular-nums">

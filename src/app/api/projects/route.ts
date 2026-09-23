@@ -9,6 +9,7 @@ import {
 } from '@/lib/db';
 import { nextProjectName } from '@/lib/naming';
 import { parsePagination } from '@/lib/validate';
+import { selectIn } from '@/lib/db/chunked-in';
 
 type ProjectTrackPreviewRow = {
   project_id: string;
@@ -64,8 +65,15 @@ export async function GET(req: NextRequest) {
     const trackIds = [...new Set(projectTrackRows.map((pt) => pt.track_id).filter(Boolean))];
     const coverByTrack = new Map<string, string | null>();
     if (trackIds.length) {
-      const { data: trackRows } = await admin.from('tracks').select('id, cover_url').in('id', trackIds);
-      (trackRows ?? []).forEach((track: { id: string; cover_url: string | null }) => {
+      // Chunked: this is the union of every project's tracks, which at
+      // catalogue scale overflows a single `.in()`. The error was swallowed
+      // here, so the only symptom was projects quietly losing their preview
+      // covers.
+      const trackRows = await selectIn<{ id: string; cover_url: string | null }>(
+        (ids) => admin.from('tracks').select('id, cover_url').in('id', ids),
+        trackIds,
+      );
+      trackRows.forEach((track) => {
         coverByTrack.set(track.id, track.cover_url);
       });
     }

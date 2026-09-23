@@ -117,7 +117,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
           {currentTrack ? (
             <LyricsStudio trackId={currentTrack.id} />
           ) : (
-            <div className="flex-1 min-h-[450px] bg-white/[0.04]/40 border border-white/10 rounded-2xl p-8 flex items-center justify-center text-white/60">
+            <div className="flex-1 min-h-[450px] bg-white/[0.04] border border-white/10 rounded-2xl p-8 flex items-center justify-center text-white/60">
               <p className="text-sm font-bold uppercase tracking-wider text-white/80">No track selected</p>
             </div>
           )}
@@ -164,13 +164,13 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
                   onChange={(e) => setSessionNotes(e.target.value)}
                   autoFocus
                   placeholder={"Hook:\n\nVerse 1:\n\nBridge:"}
-                  className="flex-1 bg-[#090907] px-3 pt-3 pb-3 text-[12px] text-white placeholder:text-white/30 focus:outline-none resize-none leading-6 tracking-wide"
+                  className="flex-1 bg-[#090907] px-3 pt-3 pb-3 text-[11px] text-white placeholder:text-white/30 focus:outline-none resize-none leading-6 tracking-wide"
                   style={{ fontFamily: 'monospace' }}
                 />
               ) : (
                 <div
                   onClick={() => setEditingNotepad(true)}
-                  className="flex-1 px-3 pt-3 pb-3 text-[12px] leading-6 cursor-pointer whitespace-pre-wrap select-text tracking-wide"
+                  className="flex-1 px-3 pt-3 pb-3 text-[11px] leading-6 cursor-pointer whitespace-pre-wrap select-text tracking-wide"
                   style={{ fontFamily: 'monospace' }}
                 >
                   {sessionNotes
@@ -184,7 +184,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
 
           {/* Projects Track List (if multiple tracks) */}
           {tracks.length > 1 && (
-            <div className="bg-white/[0.04]/30 border border-white/10 rounded-2xl p-5 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
+            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-5 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
               <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/60 mb-3">Workspace Tracks</p>
               <div className="space-y-1 max-h-40 overflow-y-auto">
                 {tracks.map((t, i) => {
@@ -194,7 +194,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
                       key={t.id}
                       onClick={() => onPlay(t)}
                       className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/[0.02] transition-colors text-left text-xs ${
-                        active ? 'bg-white/[0.04]/80 border border-white/10' : 'border border-transparent'
+                        active ? 'bg-white/[0.04] border border-white/10' : 'border border-transparent'
                       }`}
                     >
                       <span className="font-mono text-white/60">{String(i + 1).padStart(2, '0')}</span>

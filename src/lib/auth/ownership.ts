@@ -85,6 +85,31 @@ export async function requireUser(): Promise<
 }
 
 /**
+ * Like requireUser, but only for the producer. Buyers sign in through the same
+ * Supabase auth (magic link / Google), so "authenticated" is not "producer".
+ * The producer is identified the way src/proxy.ts does it: they have a
+ * creator_profiles row. Use this on any route whose writes are not already
+ * scoped to rows the caller owns, e.g. erasure of buyer tables keyed only by
+ * email.
+ */
+export async function requireProducer(): Promise<
+  | { ok: true; userId: string; admin: AdminClient }
+  | OwnershipFail
+> {
+  const auth = await requireUser();
+  if (!auth.ok) return auth;
+  const { data: profile } = await auth.admin
+    .from('creator_profiles')
+    .select('user_id')
+    .eq('user_id', auth.userId)
+    .maybeSingle();
+  if (!profile) {
+    return { ok: false, res: NextResponse.json({ error: 'Producer account required' }, { status: 403 }) };
+  }
+  return auth;
+}
+
+/**
  * Validate a UUID before interpolating it into a PostgREST `.or()`
  * filter string. PostgREST treats commas inside `.or(...)` as
  * separators between conditions, so any comma in the value (or any

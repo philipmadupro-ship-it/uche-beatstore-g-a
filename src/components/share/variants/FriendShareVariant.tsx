@@ -124,11 +124,11 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
                     key={t.id}
                     onClick={() => onPlay(t)}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/[0.015] transition-colors text-left ${
-                      active ? 'bg-white/[0.04]/60' : ''
+                      active ? 'bg-white/[0.04]' : ''
                     }`}
                   >
                     <span className="font-mono text-[9px] text-white/40 w-5 shrink-0 tabular-nums">{i + 1}</span>
-                    <span className={`flex-1 text-[12px] font-medium truncate ${active ? 'text-white' : 'text-white/80'}`}>
+                    <span className={`flex-1 text-[11px] font-medium truncate ${active ? 'text-white' : 'text-white/80'}`}>
                       {t.title}
                     </span>
                     {dur > 0 && (

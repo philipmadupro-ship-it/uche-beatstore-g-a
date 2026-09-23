@@ -35,5 +35,8 @@ export const KIND_META: Record<ContactKind, { label: string; color: string }> = 
   buyer:   { label: 'Buyer',   color: '#6DC6A4' },
   artist:  { label: 'Artist',  color: '#c8a47a' },
   lead:    { label: 'Lead',    color: '#c8a84b' },
-  contact: { label: 'Contact', color: 'rgba(255,255,255,0.4)' },
+  // 0.4 measured 3.82:1 against --bg-card — below the 4.5:1 floor for 11px
+  // text. 0.5 clears it at 5.32:1 while staying the quietest of the four
+  // kinds, which is the point of this one: it's the "no signal yet" label.
+  contact: { label: 'Contact', color: 'rgba(255,255,255,0.5)' },
 };

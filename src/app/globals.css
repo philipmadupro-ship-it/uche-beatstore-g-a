@@ -133,14 +133,28 @@
 
   /* De Roche semantic layer. These intentionally coexist with the
    * legacy app tokens while components migrate incrementally. */
-  --background-primary: var(--dr-black-950);
+  /* The three surface steps are the app's MEASURED values, not De Roche
+   * primitives. The primitives stay below as the source scale and still drive
+   * the light [data-theme="de-roche-archive"] inversion, but pointing the dark
+   * surfaces at them put the token layer a full shade away from the app:
+   * --surface-primary resolved to #181815 while 135 components hardcode
+   * #0D0D0A, so every ui/Card, Modal and Drawer rendered a visibly lighter
+   * panel than the hand-rolled panels beside it. Three different near-blacks
+   * painted on one page. CLAUDE.md's measured table is the reference — a value
+   * copied from the variables used to land off-palette against its neighbours,
+   * which is the whole reason components kept reaching for literals instead.
+   * Ramp: #090907 page -> #0D0D0A card -> #11110F hover, R=G with B two lower. */
+  --background-primary: #090907;
   --background-secondary: var(--dr-black-900);
   --background-elevated: var(--dr-charcoal-850);
   --background-recessed: #070706;
   --background-inverse: var(--dr-paper-100);
-  --surface-primary: var(--dr-charcoal-850);
+  --surface-primary: #0D0D0A;
   --surface-secondary: var(--dr-charcoal-800);
-  --surface-hover: var(--dr-basalt-750);
+  /* #11110F — the next step on the ramp, and an existing primitive rather than
+   * a fourth invented near-black. The old value (--dr-basalt-750 #282722) was
+   * four steps up and read as a grey flash on hover. */
+  --surface-hover: var(--dr-black-900);
   --surface-active: var(--dr-stone-700);
   --surface-selected: #2F2C25;
   --surface-disabled: #201F1B;
@@ -168,9 +182,12 @@
   --information: #71A4B5;
 
   /* HSL base values for high-fidelity dynamic opacity blending */
+  /* Nothing consumes these today. They are kept in step with the surfaces
+   * above anyway: an unused declaration that disagrees with reality is exactly
+   * how the token layer drifted a shade away from the app in the first place. */
   --bg-page-hsl: 60 10% 3%;
-  --bg-card-hsl: 40 15% 8%;
-  --bg-hover-hsl: 40 16% 9%;
+  --bg-card-hsl: 60 13% 5%;
+  --bg-hover-hsl: 60 9% 6%;
   --text-primary-hsl: 34 62% 92%;
   --text-secondary-hsl: 36 27% 75%;
   --accent-hsl: 37 46% 83%;
@@ -211,6 +228,11 @@
   --z-popover: 200;
   --z-drawer: 220;
   --z-modal: 240;
+  /* Above --z-modal on purpose. `confirmToast` is called from inside
+   * modals, and a confirm dialog rendered *behind* the surface that
+   * triggered it is unreachable. A transient notification is always
+   * the topmost thing on screen. */
+  --z-toast: 260;
   --dur-fast: 160ms;
   --dur-med: 260ms;
   --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
@@ -487,8 +509,8 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.09);
   color: #fff;
-  backdrop-filter: blur(12px) saturate(1.2);
   -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
   box-shadow:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.22),
     0 2px 12px rgba(0, 0, 0, 0.3);
@@ -547,6 +569,94 @@ body {
 
   .glass-play-spin {
     animation: none;
+  }
+}
+
+/* ── Toast: iOS-style top-center notification banner ───────────────────
+
+   Positioning note: the centering translate lives on the *container*
+   (flex justify-center), never on the card. The entrance keyframe animates
+   `transform`, so a `-translate-x-1/2` on the same element would be
+   overwritten mid-animation and the card would fly in off-centre.
+
+   The glass recipe is spelled out here rather than in Tailwind utilities
+   because the utility form of it would stack a second opacity modifier onto
+   an arbitrary one, match no utility, and compile to nothing — the defect
+   `lib/ui/tailwind-classes.test.ts` exists to catch. (The example is not
+   written out literally here: that test scans source text, and a comment
+   quoting the bad pattern fails it.) It silently drops the translucent base
+   and leaves the blur sitting on top of nothing. */
+.toast-surface {
+  /* Deliberately sets no `border`. This rule is unlayered and Tailwind's
+     utilities live in @layer utilities, so an unlayered `border:` shorthand
+     would beat the per-kind `border-emerald-900/40` / `border-red-900/40`
+     classes on the card and flatten every toast to one colour. The border
+     width comes from the card's own `border` utility. */
+  /* The card surface at 72% — #0D0D0A with the page showing through. The
+     first cut used rgba(20, 17, 13, …), the old warm #14110d, which reads
+     brown against the neutral near-black every other panel in the app uses. */
+  background: rgba(13, 13, 10, 0.72);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
+    0 20px 50px -12px rgba(0, 0, 0, 0.7);
+}
+
+/* ── Anchored overlays: one material ─────────────────────────────────
+   Popover, ActionMenu, Dropdown and the cover-art context menu each carried
+   their own surface — backgrounds at 70% / 95% / 95%-of-a-different-black /
+   solid, borders at 0.12 / 0.12 / 0.08 / 0.20, three different shadows and
+   radii from none to xl. Side by side they read as four products.
+
+   This is the toast glass above, made a little more opaque. A toast carries
+   one short line at the top of the page; a menu is a column of small labels
+   that routinely opens over album art, and at 72% busy artwork shows through
+   the letterforms. 88% keeps the depth and blur while the labels still read
+   over a white cover.
+
+   Same rule as .toast-surface: no `background`-colour utility or `border`
+   shorthand on elements using this class. This rule is unlayered, so it wins
+   over Tailwind's bg-* utilities, and the border comes from each element's
+   own `border` utility. */
+.overlay-surface {
+  background: rgba(13, 13, 10, 0.88);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.10),
+    0 20px 50px -12px rgba(0, 0, 0, 0.7);
+}
+
+/* Drop, overshoot, settle — the iOS banner arc. The 60% keyframe carries it
+   6% past its resting place so the stop reads as physical rather than as an
+   animation ending. `--ease-spring` is already the iOS curve. */
+@keyframes toast-drop-in {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -140%, 0) scale(0.92);
+  }
+  60% {
+    opacity: 1;
+    transform: translate3d(0, 6%, 0) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.toast-enter {
+  animation: toast-drop-in 420ms var(--ease-spring) both;
+}
+
+/* The overshoot is the part that has to go — a card that travels past its
+   mark and springs back is exactly the vestibular trigger this query exists
+   for. Fade in place instead; the notification still announces itself. */
+@media (prefers-reduced-motion: reduce) {
+  .toast-enter {
+    animation: none;
+    opacity: 1;
   }
 }
 
@@ -752,13 +862,59 @@ html {
   animation: drawerPanelBottomIn var(--dur-med) var(--ease-spring) both;
 }
 
+/* Overlay entrances for things anchored to a trigger — popovers, dropdowns,
+   action menus, toasts.
+
+   These exist because the app was full of `animate-in fade-in
+   slide-in-from-top-1` and friends: 54 of them across 34 files. Those are
+   `tailwindcss-animate` utilities and that plugin is not installed (Tailwind
+   v4 here, one bare `@import "tailwindcss"` and no `@plugin`), so they emitted
+   no CSS rule at all — verified in the browser, where a probe element carrying
+   them computes to `animation: none`. Every menu, popover and toast in the app
+   hard-cut into existence while the markup claimed otherwise.
+
+   Anchored overlays move a very short distance, against the edge they are
+   attached to: a panel below its trigger arrives from just above, so it reads
+   as coming OUT of the trigger rather than flying in from elsewhere. */
+@keyframes uiPopIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes uiPopUpIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes uiFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Panel hanging below its trigger. */
+.ui-pop {
+  animation: uiPopIn var(--dur-fast) var(--ease-decelerate) both;
+}
+
+/* Panel sitting above its trigger, or rising from the bottom of the screen. */
+.ui-pop-up {
+  animation: uiPopUpIn var(--dur-fast) var(--ease-decelerate) both;
+}
+
+.ui-fade-in {
+  animation: uiFadeIn var(--dur-med) var(--ease-decelerate) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   [style*="drawerSlide"] { animation: none !important; }
   .ui-scrim,
   .ui-modal-panel,
   .ui-drawer-right,
   .ui-drawer-left,
-  .ui-drawer-bottom {
+  .ui-drawer-bottom,
+  .ui-pop,
+  .ui-pop-up,
+  .ui-fade-in {
     animation: none !important;
   }
 }

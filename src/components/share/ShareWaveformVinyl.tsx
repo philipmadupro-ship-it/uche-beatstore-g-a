@@ -1,9 +1,9 @@
 'use client';
 
-import NextImage from 'next/image';
 import { Music, Play, Pause } from 'lucide-react';
 import { WavePlayer } from '@/components/player/WavePlayer';
 import type { Track as PlayerTrack } from '@/lib/types';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface Track {
   id: string;
@@ -104,13 +104,9 @@ export function ShareWaveformVinyl({
         {/* Center label — slightly inset, holds the cover art with a
             tiny spindle hole punched through. */}
         <div className={`${dim.inner} rounded-full overflow-hidden border-4 border-[#090907] relative`}>
-          {cover ? (
-            <NextImage src={cover} alt="" fill sizes={size === 'compact' ? '192px' : '288px'} unoptimized className="object-cover" />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-white/10 to-[#090907] flex items-center justify-center text-white/80">
-              <Music size={32} />
-            </div>
-          )}
+          <ArtworkFallback src={cover} seed={track?.id ?? 'vinyl'} kind="track" sizes={size === 'compact' ? '192px' : '288px'} className="object-cover">
+            <Music size={32} aria-hidden="true" />
+          </ArtworkFallback>
           {/* Spindle hole — the bit that holds the record on the
               turntable. Drawn as a tiny inset circle. */}
           <div className="absolute inset-0 m-auto w-3 h-3 rounded-full bg-[#090907] border border-black/60" />
@@ -159,7 +155,7 @@ export function ShareWaveformVinyl({
       {/* Waveform visual — if parent waveRef is supplied, we let the parent's
           WaveSurfer handle layout/rendering directly to prevent audio collisions.
           Otherwise fall back to the standalone WavePlayer component. */}
-      <div className="w-full max-w-2xl bg-white/[0.02]/30 rounded-lg p-2 border border-white/[0.02]">
+      <div className="w-full max-w-2xl bg-white/[0.02] rounded-lg p-2 border border-white/[0.02]">
         {waveRef ? (
           <div ref={waveRef} className="w-full" style={{ minHeight: 48 }} />
         ) : (

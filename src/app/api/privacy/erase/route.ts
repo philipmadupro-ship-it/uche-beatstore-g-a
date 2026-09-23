@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser } from '@/lib/auth/ownership';
+import { requireProducer } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { ErasureRequestSchema } from '@/lib/contracts';
-import { normalizeEmail, buildPurchaseErasurePatch } from '@/lib/privacy/erase';
+import { normalizeEmail, buildErasurePlan } from '@/lib/privacy/erase';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -13,20 +13,22 @@ export const dynamic = 'force-dynamic';
 /**
  * Buyer data-erasure (GDPR / CCPA "right to be forgotten").
  *
- * Producer-initiated: the buyer has no account, so they email the producer
- * (the data controller) asking to be forgotten, and the producer triggers this
- * for their own records. We scope every write to the authed `seller_user_id`,
- * so one producer can never erase another's data.
+ * Producer-initiated: the buyer emails the producer (the data controller),
+ * who triggers this from Settings. Only a verified producer may call it
+ * (`requireProducer`): buyers sign in through the same Supabase auth, and
+ * several buyer tables are keyed on email alone.
  *
- * We anonymise rather than delete: the transaction (amount, date, what sold)
- * is retained for the producer's legitimate accounting/tax basis, while the
- * PII (buyer email + Stripe customer id) is stripped. See `lib/privacy/erase`.
+ * What happens to each table is `buildErasurePlan` in `lib/privacy/erase`:
+ * business records (sales, offers, delivery emails, the CRM contact,
+ * comments) are anonymised so the accounting survives; rows that exist only
+ * because of the person (favourites, history, playlists, follows, drop
+ * subscriptions, free downloads, abandoned carts) are deleted.
  *
- * Idempotent: re-running maps the (already-gone) email to the same pseudonym,
- * matches nothing, and reports zero rows — never an error.
+ * Steps run in order and stop at the first error, reporting what was already
+ * done. Every step is idempotent, so re-running after a failure is safe.
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireUser();
+  const auth = await requireProducer();
   if (!auth.ok) return auth.res;
   const { userId, admin } = auth;
 
@@ -47,35 +49,34 @@ export async function POST(req: NextRequest) {
   }
 
   const email = normalizeEmail(parsed.data.email);
-  const patch = buildPurchaseErasurePatch(email);
+  const counts: Record<string, number> = {};
 
-  try {
-    // license_purchases — strip email + Stripe customer, keep the financial row.
-    const { data: lp, error: lpErr } = await admin
-      .from('license_purchases')
-      .update(patch)
-      .eq('seller_user_id', userId)
-      .eq('buyer_email', email)
-      .select('id');
-    if (lpErr) throw lpErr;
-
-    // project_access_links — only carries the email (no stripe customer col).
-    const { data: pal, error: palErr } = await admin
-      .from('project_access_links')
-      .update({ buyer_email: patch.buyer_email })
-      .eq('seller_user_id', userId)
-      .eq('buyer_email', email)
-      .select('id');
-    if (palErr) throw palErr;
-
-    const licensePurchases = lp?.length ?? 0;
-    const projectAccessLinks = pal?.length ?? 0;
-    // Audit the action — never log the raw email (that's the PII we're erasing).
-    log.info('buyer data erased', { sellerUserId: userId, licensePurchases, projectAccessLinks });
-
-    return NextResponse.json({ erased: true, licensePurchases, projectAccessLinks });
-  } catch (err) {
-    log.error('erasure failed', { sellerUserId: userId, error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+  for (const step of buildErasurePlan(email)) {
+    try {
+      const base = step.action === 'delete'
+        ? admin.from(step.table).delete()
+        : admin.from(step.table).update(step.patch ?? {});
+      let query = base.eq(step.emailColumn, email);
+      if (step.scope) query = query.eq(step.scope, userId);
+      if (step.where) {
+        query = step.where.op === 'eq'
+          ? query.eq(step.where.column, step.where.value)
+          : query.neq(step.where.column, step.where.value);
+      }
+      const { data, error } = await query.select();
+      if (error) throw error;
+      counts[step.key] = (counts[step.key] ?? 0) + (data?.length ?? 0);
+    } catch (err) {
+      // Never log the raw email: that is the PII being erased.
+      log.error('erasure step failed', { sellerUserId: userId, table: step.table, error: errorMessage(err) });
+      return NextResponse.json(
+        { error: `Erasure stopped at ${step.table}: ${errorMessage(err)}. Re-run to finish; completed steps are safe to repeat.`, partial: counts },
+        { status: 500 },
+      );
+    }
   }
+
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  log.info('buyer data erased', { sellerUserId: userId, total, counts });
+  return NextResponse.json({ erased: true, total, ...counts });
 }

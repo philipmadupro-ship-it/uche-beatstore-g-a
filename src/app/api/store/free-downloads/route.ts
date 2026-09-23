@@ -10,6 +10,7 @@ import {
   normaliseEmail,
   type FreeDownloadRow,
 } from '@/lib/crm/free-download-leads';
+import { selectIn } from '@/lib/db/chunked-in';
 
 const log = createLogger('api.store.free-downloads');
 
@@ -45,12 +46,16 @@ export async function GET() {
       return NextResponse.json({ leads: [], newLeads: [], totalDownloads: 0 });
     }
 
-    const { data: rows, error } = await admin
-      .from('store_free_downloads')
-      .select('email, track_id, downloaded_at')
-      .in('track_id', trackIds)
-      .order('downloaded_at', { ascending: false });
-    if (error) throw error;
+    // Chunked: trackIds is the producer's whole catalogue, and one `.in()`
+    // over it is rejected as "Bad Request".
+    const rows = await selectIn<{ email: string; track_id: string; downloaded_at: string }>(
+      (ids) => admin
+        .from('store_free_downloads')
+        .select('email, track_id, downloaded_at')
+        .in('track_id', ids)
+        .order('downloaded_at', { ascending: false }),
+      trackIds,
+    );
 
     const withTitles: FreeDownloadRow[] = (rows ?? []).map((r) => ({
       email: r.email as string,
@@ -120,10 +125,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No downloads to promote.' }, { status: 400 });
     }
 
-    const { data: rows } = await admin
-      .from('store_free_downloads')
-      .select('email, track_id, downloaded_at')
-      .in('track_id', trackIds);
+    const rows = await selectIn<{ email: string; track_id: string; downloaded_at: string }>(
+      (ids) => admin
+        .from('store_free_downloads')
+        .select('email, track_id, downloaded_at')
+        .in('track_id', ids),
+      trackIds,
+    );
 
     const leads = aggregateFreeDownloadLeads((rows ?? []).map((r) => ({
       email: r.email as string,

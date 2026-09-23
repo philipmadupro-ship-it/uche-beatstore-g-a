@@ -130,21 +130,10 @@ export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive, onPlay 
         preserveAspectRatio="none"
         className="absolute inset-0 w-full h-full"
       >
-        {dawBars.map((bar) => {
-          if (!bar.isBeat) return null;
-          const x = bar.index * 3 + 1;
-          return (
-            <line
-              key={`grid-${bar.index}`}
-              x1={x}
-              x2={x}
-              y1={bar.isDownbeat ? 4 : 18}
-              y2={bar.isDownbeat ? 96 : 82}
-              stroke={bar.isDownbeat ? 'rgba(231,215,190,0.20)' : 'rgba(231,215,190,0.10)'}
-              strokeWidth={bar.isDownbeat ? 0.45 : 0.3}
-            />
-          );
-        })}
+        {/* No beat-grid lines here: a grid drawn from `index % N` positions in
+            the resampled bar array carries no relationship to the track's
+            actual tempo (see the comment on `buildDawWaveformBars`), so it's
+            removed rather than kept as decoration that looks musical. */}
         {dawBars.map((bar) => {
           const x = bar.index * 3;
           const barH = bar.height * 100;
@@ -156,7 +145,7 @@ export function MiniWaveform({ trackId, peaksUrl, height = 40, isActive, onPlay 
               key={bar.index}
               x={x}
               y={y}
-              width={bar.isDownbeat ? 2.35 : 2}
+              width={2}
               height={barH}
               rx={1.2}
               // Frosted unplayed bars (warm off-white, low alpha) read clearly

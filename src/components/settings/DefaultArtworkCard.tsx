@@ -161,7 +161,7 @@ export function DefaultArtworkCard() {
 
   return (
     <section className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-      <h2 className="text-[12px] font-bold uppercase tracking-wider text-white">Brand &amp; artwork</h2>
+      <h2 className="text-[11px] font-bold uppercase tracking-wider text-white">Brand &amp; artwork</h2>
       <p className="mt-1 text-[11px] leading-snug text-white/50">
         Your logo replaces the mark in the top-left. Default artwork fills in wherever
         something is created without a cover — you can still set artwork per item.

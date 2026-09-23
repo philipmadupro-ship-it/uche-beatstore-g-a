@@ -92,7 +92,7 @@ export function BulkEditPanel({ mode, ids, onClose, onDone, tagsEndpoint = '/api
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 placeholder="Type a tag, Enter to add..."
-                inputClassName="text-[12px] normal-case tracking-normal"
+                inputClassName="text-[11px] normal-case tracking-normal"
               />
             </form>
             <Button

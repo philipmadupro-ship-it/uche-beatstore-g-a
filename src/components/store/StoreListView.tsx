@@ -16,14 +16,13 @@
  */
 
 import { useState } from 'react';
-import {
-  Music, Heart, MoreHorizontal, ShoppingBag, Copy,
-  Plus, Download, Clock,
-} from 'lucide-react';
+import { Music, Heart, Download, Clock, ShoppingBag } from 'lucide-react';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 import { PlayGlyph, PauseGlyph } from '@/components/player/TransportIcons';
-import { CoverImage } from '@/components/ui/CoverImage';
 import { fmtDur } from './helpers';
 import type { StoreTrack } from './types';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
 
 interface Props {
   tracks: StoreTrack[];
@@ -55,7 +54,6 @@ export function StoreListView({
   momentumByTrack = {},
 }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
-  const [menuFor, setMenuFor] = useState<string | null>(null);
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-white/[0.06] bg-white/[0.04]">
@@ -108,9 +106,16 @@ export function StoreListView({
                 onClick={(e) => { e.stopPropagation(); onPlay(t); }}
                 className="relative size-11 shrink-0 cursor-pointer overflow-hidden rounded-lg bg-[#090907]"
               >
-                {t.cover_url
-                  ? <CoverImage src={t.cover_url} sizes="36px" className="object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={13} /></div>}
+                <ArtworkFallback
+                  src={t.cover_url}
+                  seed={t.id}
+                  kind="track"
+                  tags={artworkTagsOf(t.tags)}
+                  sizes="44px"
+                  className="object-cover"
+                >
+                  <Music size={13} aria-hidden="true" />
+                </ArtworkFallback>
                 {(isHov || isCur) && (
                   <span
                     aria-hidden
@@ -242,72 +247,52 @@ export function StoreListView({
                 <Heart size={13} fill={wishlisted ? 'currentColor' : 'none'} />
               </button>
 
-              {/* Menu */}
-              <div className="relative">
-                <button
-                  data-row-action
-                  onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === t.id ? null : t.id); }}
-                  aria-label={`More options for ${t.title}`}
-                  aria-expanded={menuFor === t.id}
-                  className="-m-1.5 flex size-10 items-center justify-center rounded-full text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white"
-                  title="More"
-                >
-                  <MoreHorizontal size={14} />
-                </button>
-                {menuFor === t.id && (
-                  <div
-                    data-row-action
-                    onClick={(e) => e.stopPropagation()}
-                    className="absolute right-0 top-9 z-30 w-48 rounded-xl border border-white/[0.08] bg-[#0D0D0A] py-1.5 shadow-[0_16px_40px_rgba(0,0,0,0.5)]"
-                  >
-                    <button
-                      onClick={() => { onPreview(t); setMenuFor(null); }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-white hover:bg-white/[0.04]"
-                    >
-                      <ShoppingBag size={12} className="text-white/60" />
-                      Open beat
-                    </button>
-                    {!t.free_download_enabled && hasLicenseTiers && (
-                      <button
-                        onClick={() => { onPreview(t); setMenuFor(null); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-white hover:bg-white/[0.04]"
-                      >
-                        <Plus size={12} style={{ color: accentColor }} />
-                        Choose license{lowestLicensePrice != null ? ` from $${lowestLicensePrice}` : ''}
-                      </button>
-                    )}
-                    {!t.free_download_enabled && !hasLicenseTiers && lp != null && (
-                      <button
-                        onClick={() => { onAddLease(t); setMenuFor(null); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-white hover:bg-white/[0.04]"
-                      >
-                        <Plus size={12} className="text-white/60" />
-                        Add lease (${lp})
-                      </button>
-                    )}
-                    {!t.free_download_enabled && !hasLicenseTiers && ep != null && (
-                      <button
-                        onClick={() => { onAddExclusive(t); setMenuFor(null); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-white hover:bg-white/[0.04]"
-                      >
-                        <Plus size={12} style={{ color: accentColor }} />
-                        Add exclusive (${ep})
-                      </button>
-                    )}
-                    <div className="my-1 mx-2 border-t border-white/[0.06]" />
-                    <button
-                      onClick={() => {
-                        try { navigator.clipboard.writeText(`${window.location.origin}/store/${t.id}`); }
-                        catch {/* noop */}
-                        setMenuFor(null);
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-white hover:bg-white/[0.04]"
-                    >
-                      <Copy size={12} className="text-white/60" />
-                      Copy link
-                    </button>
-                  </div>
-                )}
+              {/* Menu. `data-row-action` keeps the row's own click handler
+                  from treating a press on the trigger as "open this beat" —
+                  see the closest() guard on the <li>. */}
+              <div className="relative" data-row-action>
+                <ActionMenu
+                  align="right"
+                  width={208}
+                  label={`More options for ${t.title}`}
+                  triggerClassName="-m-1.5 flex size-10 items-center justify-center rounded-full text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white"
+                  sections={[
+                    {
+                      id: 'buy',
+                      items: [
+                        { id: 'open', label: 'Open beat', onSelect: () => onPreview(t) },
+                        {
+                          id: 'license',
+                          label: `Choose license${lowestLicensePrice != null ? ` from $${lowestLicensePrice}` : ''}`,
+                          hidden: !!t.free_download_enabled || !hasLicenseTiers,
+                          onSelect: () => onPreview(t),
+                        },
+                        {
+                          id: 'lease', label: `Add lease ($${lp})`,
+                          hidden: !!t.free_download_enabled || hasLicenseTiers || lp == null,
+                          onSelect: () => onAddLease(t),
+                        },
+                        {
+                          id: 'exclusive', label: `Add exclusive ($${ep})`,
+                          hidden: !!t.free_download_enabled || hasLicenseTiers || ep == null,
+                          onSelect: () => onAddExclusive(t),
+                        },
+                      ],
+                    },
+                    {
+                      id: 'share',
+                      items: [
+                        {
+                          id: 'copy', label: 'Copy link',
+                          onSelect: () => {
+                            try { navigator.clipboard.writeText(`${window.location.origin}/store/${t.id}`); }
+                            catch {/* noop */}
+                          },
+                        },
+                      ],
+                    },
+                  ]}
+                />
               </div>
             </li>
           );

@@ -13,6 +13,9 @@ import { toast } from '@/hooks/useToast';
 import { getBuyerToken } from '@/lib/buyer-session';
 import type { Track } from '@/lib/types';
 import { FONT_FAMILY_MAP } from '@/components/store/types';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -82,6 +85,9 @@ export default function ProducerPage({
   const { slug } = use(params);
 
   const [creator, setCreator] = useState<CreatorProfile | null>(null);
+  // Supplied by the API because /api/profile is session-gated and a visitor
+  // to a producer page has no session.
+  const [artworkTheme, setArtworkTheme] = useState<PublicArtworkTheme | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [playlists, setPlaylists] = useState<PlaylistItem[]>([]);
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -99,6 +105,7 @@ export default function ProducerPage({
         const data = await res.json();
         if (data.error) { setNotFound(true); return; }
         setCreator(data.creator ?? null);
+        setArtworkTheme(data.artworkTheme ?? null);
         setTracks(data.tracks ?? []);
         setPlaylists(data.playlists ?? []);
         setProjects(data.projects ?? []);
@@ -166,12 +173,13 @@ export default function ProducerPage({
       <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center gap-4 text-white/40">
         <Music size={36} />
         <p className="text-[14px]">Producer not found.</p>
-        <Link href="/store" className="text-[12px] underline hover:text-white">← Back to store</Link>
+        <Link href="/store" className="text-[11px] underline hover:text-white">← Back to store</Link>
       </div>
     );
   }
 
   return (
+    <ArtworkThemeProvider theme={artworkTheme}>
     <div
       className="store-ui min-h-screen bg-[#090907] text-white"
       style={{ fontFamily }}
@@ -216,7 +224,7 @@ export default function ProducerPage({
                 {creator.display_name || 'Producer'}
               </h1>
               {creator.credits && (
-                <p className="text-[12px] text-white/60 mt-1">{creator.credits}</p>
+                <p className="text-[11px] text-white/60 mt-1">{creator.credits}</p>
               )}
             </div>
 
@@ -226,7 +234,7 @@ export default function ProducerPage({
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[11px] font-bold uppercase tracking-wider transition-all border ${
                   isFollowing
                     ? 'bg-transparent border-white/40 text-white/40 hover:border-white/30 hover:text-white'
-                    : 'bg-white border-white/30 text-black hover:bg-white'
+                    : 'bg-white border-white/30 text-black hover:bg-white/90'
                 }`}
               >
                 {isFollowing ? <Heart size={12} fill="currentColor" /> : <UserPlus size={12} />}
@@ -246,7 +254,7 @@ export default function ProducerPage({
             {creator.bio && (
               <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
                 <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-2">Bio</p>
-                <p className="text-[12px] text-white/80 leading-relaxed">{creator.bio}</p>
+                <p className="text-[11px] text-white/80 leading-relaxed">{creator.bio}</p>
               </div>
             )}
 
@@ -334,13 +342,9 @@ export default function ProducerPage({
                       className="group flex flex-col rounded-xl border border-white/10 bg-white/[0.04] overflow-hidden hover:border-white/20 transition-all"
                     >
                       <div className="relative w-full aspect-square bg-[#090907]">
-                        {pl.cover_url ? (
-                          <img src={pl.cover_url} alt={pl.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white/40">
-                            <Music size={20} />
-                          </div>
-                        )}
+                        <ArtworkFallback src={pl.cover_url} seed={pl.id} kind="playlist" alt={pl.name} sizes="220px" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]">
+                          <Music size={20} aria-hidden="true" />
+                        </ArtworkFallback>
                       </div>
                       <div className="p-2.5">
                         <p className="text-[11px] font-medium text-white truncate">{pl.name}</p>
@@ -365,13 +369,9 @@ export default function ProducerPage({
                       className="group flex flex-col rounded-xl border border-white/10 bg-white/[0.04] overflow-hidden hover:border-white/20 transition-all"
                     >
                       <div className="relative w-full aspect-square bg-[#090907]">
-                        {proj.cover_url ? (
-                          <img src={proj.cover_url} alt={proj.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white/40">
-                            <Music size={20} />
-                          </div>
-                        )}
+                        <ArtworkFallback src={proj.cover_url} seed={proj.id} kind="project" alt={proj.name} sizes="220px" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]">
+                          <Music size={20} aria-hidden="true" />
+                        </ArtworkFallback>
                       </div>
                       <div className="p-2.5">
                         <p className="text-[11px] font-medium text-white truncate">{proj.name}</p>
@@ -386,7 +386,7 @@ export default function ProducerPage({
             )}
 
             {tracks.length === 0 && playlists.length === 0 && projects.length === 0 && (
-              <div className="text-center py-16 text-white/40 text-[12px]">
+              <div className="text-center py-16 text-white/40 text-[11px]">
                 No public releases yet.
               </div>
             )}
@@ -394,6 +394,7 @@ export default function ProducerPage({
         </div>
       </div>
     </div>
+    </ArtworkThemeProvider>
   );
 }
 
@@ -417,17 +418,16 @@ function TrackCard({
       className="group flex flex-col rounded-xl border border-white/10 bg-white/[0.04] overflow-hidden hover:border-white/20 transition-all"
     >
       <div className="relative w-full aspect-square bg-[#090907]">
-        {track.cover_url ? (
-          <img
-            src={track.cover_url}
-            alt={track.title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-white/40">
-            <Music size={20} />
-          </div>
-        )}
+        <ArtworkFallback
+          src={track.cover_url}
+          seed={track.id}
+          kind="track"
+          alt={track.title}
+          sizes="220px"
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+        >
+          <Music size={20} aria-hidden="true" />
+        </ArtworkFallback>
         {/* Play overlay */}
         <button
           onClick={(e) => { e.preventDefault(); onPlay(); }}

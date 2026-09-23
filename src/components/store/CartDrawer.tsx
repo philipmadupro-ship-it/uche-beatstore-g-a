@@ -16,7 +16,7 @@ import { useHydrated } from '@/hooks/useHydrated';
 import type { Track } from '@/lib/types';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
-import { CoverImage } from '@/components/ui/CoverImage';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface CartItem {
   id: string;
@@ -108,15 +108,22 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
               <span className="text-[18px] font-bold text-white tabular-nums">${total.toLocaleString()}</span>
             )}
           </div>
+          <label htmlFor="cart-buyer-email" className="sr-only">Email for license delivery</label>
           <input
+            id="cart-buyer-email"
             type="email"
+            autoComplete="email"
+            inputMode="email"
             value={buyerEmail}
             onChange={(e) => setBuyerEmail(e.target.value)}
             placeholder="Your email for the license"
             className="w-full rounded-lg border border-white/[0.08] bg-[#090907] px-3 py-2.5 text-[11px] text-white placeholder:text-white/40 focus:border-white/[0.16] focus:outline-none"
           />
+          <label htmlFor="cart-promo-code" className="sr-only">Promo code</label>
           <input
+            id="cart-promo-code"
             type="text"
+            autoComplete="off"
             value={promoCode}
             onChange={(e) => setPromoCode(e.target.value)}
             placeholder="Promo code"
@@ -168,9 +175,9 @@ export function CartDrawer({ open, onClose, items: rawItems, removeItem, total: 
               className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.05]"
             >
               <div className="relative w-10 h-10 rounded bg-[#090907] border border-white/10 overflow-hidden shrink-0">
-                {i.track.cover_url
-                  ? <CoverImage src={i.track.cover_url} sizes="40px" className="object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={14} /></div>}
+                <ArtworkFallback src={i.track.cover_url} seed={i.track.id} kind="track" sizes="40px" className="object-cover">
+                  <Music size={14} aria-hidden="true" />
+                </ArtworkFallback>
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-[11px] font-medium text-white truncate">{i.track.title}</p>
@@ -206,7 +213,7 @@ export function FloatingCartButton() {
   return (
     <button
       onClick={() => setIsOpen(true)}
-      className={`fixed bottom-[7rem] sm:bottom-[8rem] right-4 sm:right-6 z-[70] flex items-center gap-2 px-4 py-2.5 rounded-full bg-white hover:bg-white text-black shadow-lg shadow-black/40 transition-all ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+      className={`fixed bottom-[7rem] sm:bottom-[8rem] right-4 sm:right-6 z-[70] flex items-center gap-2 px-4 py-2.5 rounded-full bg-white hover:bg-white/90 text-black shadow-lg shadow-black/40 transition-all ${isOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
     >
       <ShoppingCart size={14} />
       <span className="text-[11px] font-bold uppercase tracking-wider">

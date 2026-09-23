@@ -1,11 +1,11 @@
 'use client';
 
-import NextImage from 'next/image';
 import { SpectralWaveform } from '@/components/player/SpectralWaveform';
 import { X, Play, Pause, Music, ShoppingCart, Info, CheckCircle, XCircle, Tag } from 'lucide-react';
 import { useCart } from '@/hooks/useCart';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import type { Track as CartTrack } from '@/lib/types';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface CreatorProfile {
   display_name?: string | null;
@@ -179,7 +179,7 @@ export function ShareTrackDetailsDrawer({
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/75 backdrop-blur-sm z-40 animate-in fade-in duration-300"
+ className="fixed inset-0 bg-black/75 backdrop-blur-sm z-40 ui-fade-in duration-300"
         onClick={onClose}
       />
 
@@ -189,7 +189,7 @@ export function ShareTrackDetailsDrawer({
         aria-modal="true"
         aria-label={`${track.title} details`}
         tabIndex={-1}
-        className="fixed right-0 top-0 bottom-0 w-full sm:w-[440px] bg-[#0c0c0c] border-l border-white/10 z-50 flex flex-col shadow-[0_0_60px_rgba(0,0,0,0.8)] animate-in slide-in-from-right duration-300 focus:outline-none"
+ className="fixed right-0 top-0 bottom-0 w-full sm:w-[440px] bg-[#0c0c0c] border-l border-white/10 z-50 flex flex-col shadow-[0_0_60px_rgba(0,0,0,0.8)] ui-drawer-right duration-300 focus:outline-none"
       >
 
         {/* Header */}
@@ -231,13 +231,9 @@ export function ShareTrackDetailsDrawer({
 
           {/* Cover */}
           <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-white/[0.04] border border-white/10 group shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
-            {cover ? (
-              <NextImage src={cover} alt="" fill sizes="440px" unoptimized className="object-cover transition-transform duration-500 group-hover:scale-105" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-white/30">
-                <Music size={64} />
-              </div>
-            )}
+            <ArtworkFallback src={cover} seed={track.id} kind="track" sizes="440px" className="object-cover transition-transform duration-500 group-hover:scale-105">
+              <Music size={64} aria-hidden="true" />
+            </ArtworkFallback>
             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={handlePlayToggle}
@@ -269,7 +265,7 @@ export function ShareTrackDetailsDrawer({
                 <p className="text-[10px] font-mono text-white/80 uppercase tracking-wider">
                   {isActive ? (isCurrentPlaying ? 'Now playing' : 'Paused') : 'Preview'}
                 </p>
-                <p className="text-[12px] font-medium text-white truncate mt-0.5">{track.title}</p>
+                <p className="text-[11px] font-medium text-white truncate mt-0.5">{track.title}</p>
               </div>
             </div>
             {/* Spectral waveform — same DAW-style low/mid/high colouring as the
@@ -316,7 +312,7 @@ export function ShareTrackDetailsDrawer({
           {track.description && (
             <div className="space-y-2">
               <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/80">Description</p>
-              <p className="text-[12px] text-white/80 leading-relaxed bg-white/[0.04]/30 border border-white/[0.02] p-3.5 rounded-xl whitespace-pre-wrap">
+              <p className="text-[11px] text-white/80 leading-relaxed bg-white/[0.04] border border-white/[0.02] p-3.5 rounded-xl whitespace-pre-wrap">
                 {track.description}
               </p>
             </div>
@@ -361,7 +357,7 @@ export function ShareTrackDetailsDrawer({
             </div>
           ) : (
             shareToken && (
-              <div className="bg-white/[0.04]/20 border border-white/[0.02] rounded-xl p-4 flex gap-3 text-white/60">
+              <div className="bg-white/[0.04] border border-white/[0.02] rounded-xl p-4 flex gap-3 text-white/60">
                 <Info size={14} className="shrink-0 mt-0.5" />
                 <p className="text-[11px] leading-relaxed">
                   Preview only. No prices set for this track yet.
@@ -381,7 +377,7 @@ export function ShareTrackDetailsDrawer({
 
 function StatCell({ label, value, accent }: { label: string; value: string; accent?: 'minor' | 'major' }) {
   return (
-    <div className="bg-white/[0.04]/50 border border-white/20 rounded-xl p-3 text-center">
+    <div className="bg-white/[0.04] border border-white/20 rounded-xl p-3 text-center">
       <p className="text-[8px] font-mono uppercase tracking-widest text-white/40">{label}</p>
       <p className={`text-[13px] font-bold mt-1 font-mono ${
         accent === 'minor' ? 'text-[#c8a47a]' :
@@ -430,7 +426,7 @@ function LicenseCard({
               ${price.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </span>
             {originalPrice && (
-              <span className="text-[12px] font-mono text-white/30 line-through tabular-nums">
+              <span className="text-[11px] font-mono text-white/30 line-through tabular-nums">
                 ${Math.round(originalPrice).toLocaleString()}
               </span>
             )}
@@ -463,7 +459,7 @@ function LicenseCard({
           onClick={onBuy}
           className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors ${
             isExclusive
-              ? 'bg-white text-black hover:bg-white'
+              ? 'bg-white text-black hover:bg-white/90'
               : 'bg-white/[0.05] border border-white/[0.10] hover:bg-white/[0.10] text-white'
           }`}
         >

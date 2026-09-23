@@ -18,6 +18,7 @@ import { ProjectFilterBar } from '@/components/projects/ProjectFilterBar';
 import { ProjectOptionsMenu } from '@/components/projects/ProjectOptionsMenu';
 import { CreateProjectModal } from '@/components/layout/CreateProjectModal';
 import { MediaCard } from '@/components/ui/MediaCard';
+import { renameCollection } from '@/lib/ui/rename-collection';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import {
   filterAndSortProjects,
@@ -26,6 +27,7 @@ import {
   type ProjectListItem,
 } from '@/lib/projects/filters';
 import { getCached, setCached } from '@/lib/client-cache';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface Project extends ProjectListItem {
   status?: 'in_progress' | 'final' | 'archived';
@@ -222,7 +224,7 @@ export default function ProjectsPage() {
             <p className="text-[11px] text-white/60 mb-6 font-mono">{fetchError}</p>
             <button
               onClick={fetchProjects}
-              className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 transition-colors"
+              className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[11px] font-medium hover:border-white/20 transition-colors"
             >
               Try again
             </button>
@@ -245,7 +247,7 @@ export default function ProjectsPage() {
                     </p>
                     <button
                       onClick={() => setFilters({ ...DEFAULT_PROJECT_FILTERS, tags: new Set() })}
-                      className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[12px] font-medium hover:border-white/20 transition-colors"
+                      className="inline-flex items-center gap-2 bg-white/[0.04] border border-white/10 text-white px-4 py-2 rounded-md text-[11px] font-medium hover:border-white/20 transition-colors"
                     >
                       Clear filters
                     </button>
@@ -279,7 +281,9 @@ export default function ProjectsPage() {
                   <Link key={p.id} href={`/projects/${p.id}`} onClick={() => trackRecentOpen(p.id)}
                     className="shrink-0 flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.05] transition-colors min-w-[180px] max-w-[240px]">
                     <div className="w-8 h-8 rounded-md overflow-hidden bg-[#090907] shrink-0">
-                      {p.cover_url || p.preview_covers?.[0] ? <img src={p.cover_url ?? p.preview_covers?.[0]} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white/40"><Music size={12} /></div>}
+                      <ArtworkFallback src={p.cover_url ?? p.preview_covers?.[0] ?? null} seed={p.id} kind="project" sizes="32px" className="object-cover">
+                        <Music size={12} aria-hidden="true" />
+                      </ArtworkFallback>
                     </div>
                     <span className="text-[11px] font-medium text-white truncate">{p.name}</span>
                   </Link>
@@ -307,9 +311,18 @@ export default function ProjectsPage() {
                   pinned={project.pinned}
                   onTogglePin={(e) => togglePin(project, e)}
                   pinBusy={togglingPin === project.id}
-                  optionsMenu={
-                    <ProjectOptionsMenu project={project} onChanged={refreshProjectsAndFolders} onDeleted={fetchProjects} />
-                  }
+                  /* Rename edits the card's own title in place; the menu just
+                     focuses it, so there is one rename UI, not two. */
+                  onRename={(next) => renameCollection('projects', project.id, next, refreshProjectsAndFolders)}
+                  optionsMenu={({ startRename }) => (
+                    <ProjectOptionsMenu
+                      project={project}
+                      trackCount={project.track_count ?? undefined}
+                      onChanged={refreshProjectsAndFolders}
+                      onDeleted={fetchProjects}
+                      onEditTitle={startRename}
+                    />
+                  )}
                   meta={
                     <>
                       <span>{project.track_count || 0} track{project.track_count === 1 ? '' : 's'}</span>

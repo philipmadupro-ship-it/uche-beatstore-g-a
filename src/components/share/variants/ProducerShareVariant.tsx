@@ -1,9 +1,9 @@
 'use client';
 
-import Image from 'next/image';
 import { useState } from 'react';
 import { Music, Play, Pause, SkipBack, SkipForward, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 /**
  * Producer / loop-pack collab variant.
@@ -133,7 +133,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
             {displayName}
           </h1>
           {creator?.bio && (
-            <p className="mt-3 text-[12px] text-white/80 max-w-lg leading-relaxed">{creator.bio}</p>
+            <p className="mt-3 text-[11px] text-white/80 max-w-lg leading-relaxed">{creator.bio}</p>
           )}
         </div>
 
@@ -269,7 +269,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                 <p className="text-[9px] font-mono uppercase tracking-[0.25em] text-white/60">
                   Notes from the producer
                 </p>
-                <p className="text-[12px] text-white/80 leading-relaxed whitespace-pre-wrap">
+                <p className="text-[11px] text-white/80 leading-relaxed whitespace-pre-wrap">
                   {currentTrack?.description || project.description}
                 </p>
               </div>
@@ -297,20 +297,9 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                       }`}
                     >
                       <div className="relative w-9 h-9 rounded-lg overflow-hidden bg-[#090907] border border-white/10 shrink-0">
-                        {t.cover_url ? (
-                          <Image
-                            src={t.cover_url}
-                            alt=""
-                            width={36}
-                            height={36}
-                            className="w-full h-full object-cover"
-                            unoptimized
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-white/30">
-                            <Music size={12} />
-                          </div>
-                        )}
+                        <ArtworkFallback src={t.cover_url} seed={t.id} kind="track" sizes="36px" className="object-cover">
+                          <Music size={12} aria-hidden="true" />
+                        </ArtworkFallback>
                         {active && (
                           <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                             {isPlaying ? (
@@ -323,7 +312,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                       </div>
 
                       <div className="flex-1 min-w-0">
-                        <p className={`text-[12px] font-medium truncate ${active ? 'text-white' : 'text-white/85 group-hover:text-white'}`}>
+                        <p className={`text-[11px] font-medium truncate ${active ? 'text-white' : 'text-white/85 group-hover:text-white'}`}>
                           {t.title}
                         </p>
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">

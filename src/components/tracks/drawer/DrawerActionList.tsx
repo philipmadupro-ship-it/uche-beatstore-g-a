@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { ActionMenu } from '@/components/ui/ActionMenu';
 
 export interface DrawerAction {
   icon: LucideIcon;
@@ -32,9 +32,7 @@ interface Props {
  * ending on a wall of options). Mobile (<sm): primary icon pills + overflow.
  */
 export function DrawerActionList({ actions, onAction, disabled, defaultVisible }: Props) {
-  const [overflowOpen, setOverflowOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
-  const overflowMenuRef = useDialogBehavior({ open: overflowOpen, onClose: () => setOverflowOpen(false), trapFocus: false });
   const PRIMARY_COUNT = 5;
   const primary = actions.slice(0, PRIMARY_COUNT);
   const overflow = actions.slice(PRIMARY_COUNT);
@@ -68,42 +66,31 @@ export function DrawerActionList({ actions, onAction, disabled, defaultVisible }
           })}
 
           {overflow.length > 0 && (
-            <div className="relative">
-              <button
-                onClick={() => setOverflowOpen((o) => !o)}
-                title="More actions"
-                className="flex flex-col items-center gap-1 px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/20 hover:bg-[#18140f] transition-all text-white/40"
-              >
-                <MoreHorizontal size={15} />
-                <span className="text-[8px] font-mono uppercase tracking-wider leading-none">More</span>
-              </button>
-              {overflowOpen && (
-                <>
-                  <div className="fixed inset-0 z-50" onClick={() => setOverflowOpen(false)} />
-                  <div
-                    ref={overflowMenuRef}
-                    role="menu"
-                    tabIndex={-1}
-                    className="absolute bottom-full mb-2 right-0 z-60 w-44 bg-white/[0.04] border border-white/10 rounded-xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] overflow-hidden focus:outline-none"
-                  >
-                    {overflow.map((action, i) => {
-                      const Icon = action.icon;
-                      return (
-                        <button
-                          key={`ov-${i}`}
-                          onClick={() => { setOverflowOpen(false); (action.action ?? (() => onAction(action.label)))(); }}
-                          disabled={disabled}
-                          className={`w-full flex items-center gap-3 px-4 py-3 text-[11px] font-medium hover:bg-white/[0.05] transition-colors ${action.color}`}
-                        >
-                          <Icon size={13} />
-                          {action.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
+            /* One menu model app-wide. This was hand-rolled and declared
+               role="menu" without implementing arrow-key navigation — the
+               ARIA contract says a menu is arrow-navigable, so announcing it
+               and doing nothing is worse than not announcing it. */
+            <ActionMenu
+              align="right"
+              width={200}
+              label="More actions"
+              triggerContent={
+                <span className="flex flex-col items-center gap-1">
+                  <MoreHorizontal size={15} />
+                  <span className="text-[8px] font-mono uppercase leading-none tracking-wider">More</span>
+                </span>
+              }
+              triggerClassName="flex flex-col items-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-white/40 transition-all hover:border-white/20 hover:bg-[#18140f]"
+              sections={[{
+                id: 'overflow',
+                items: overflow.map((action, i) => ({
+                  id: `${action.label}-${i}`,
+                  label: action.label,
+                  disabled,
+                  onSelect: action.action ?? (() => onAction(action.label)),
+                })),
+              }]}
+            />
           )}
         </div>
       </div>

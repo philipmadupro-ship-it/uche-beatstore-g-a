@@ -97,7 +97,7 @@ export function ShortcutSheet({ onClose }: { onClose: () => void }) {
                 {group.items.map(([keys, label]) => (
                   <div key={`${group.title}-${keys}-${label}`} className="flex items-baseline justify-between gap-3">
                     <dt className="shrink-0 font-mono text-[11px] text-white">{keys}</dt>
-                    <dd className="min-w-0 flex-1 border-b border-dotted border-white/10 text-right text-[12px] text-white/60">
+                    <dd className="min-w-0 flex-1 border-b border-dotted border-white/10 text-right text-[11px] text-white/60">
                       {label}
                     </dd>
                   </div>

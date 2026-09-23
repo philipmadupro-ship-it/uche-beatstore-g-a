@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 
 interface ContentShare {
   id: string;
@@ -195,7 +196,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
 
   return (
     <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300"
+ className="fixed inset-0 bg-black/70 backdrop-blur-md z-[100] flex items-center justify-center p-4 ui-fade-in duration-300"
       onClick={onClose}
     >
       <div
@@ -204,7 +205,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
         aria-modal="true"
         aria-label={`Share — ${contentTitle}`}
         tabIndex={-1}
-        className="w-full max-w-[640px] max-h-[90vh] flex flex-col rounded-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-4 duration-500 bg-gradient-to-b from-[#121214]/95 via-[#0e0e10]/95 to-[#090907]/98 backdrop-blur-2xl border border-white/[0.06] shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset] focus:outline-none"
+ className="w-full max-w-[640px] max-h-[90vh] flex flex-col rounded-2xl overflow-hidden ui-pop-up duration-500 bg-gradient-to-b from-[#121214]/95 via-[#0e0e10]/95 to-[#090907]/98 backdrop-blur-2xl border border-white/[0.06] shadow-[0_30px_80px_rgba(0,0,0,0.6),0_0_0_1px_rgba(255,255,255,0.03)_inset] focus:outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative p-6 border-b border-white/[0.04] overflow-hidden">
@@ -214,13 +215,15 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
           />
           <div className="relative z-10 flex items-start gap-4">
             <div className="w-14 h-14 bg-white/[0.05] rounded-xl overflow-hidden shrink-0 border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
-              {coverUrl ? (
-                <img loading="lazy" src={coverUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-white/40 font-black text-xl uppercase bg-gradient-to-br from-white/10 to-[#090907]">
-                  {contentTitle.charAt(0)}
-                </div>
-              )}
+              <ArtworkFallback
+                src={coverUrl}
+                seed={contentId}
+                kind={contentType === 'playlist' ? 'playlist' : contentType === 'track' ? 'track' : 'project'}
+                sizes="64px"
+                className="object-cover"
+              >
+                <span className="font-black text-xl uppercase">{contentTitle.charAt(0)}</span>
+              </ArtworkFallback>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-bold text-white uppercase tracking-[0.2em] mb-1">{CONTENT_LABELS[contentType]}</p>
@@ -231,7 +234,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-black bg-white font-semibold shadow-md hover:bg-white/90/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.12] transition-colors backdrop-blur-sm"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-black bg-white font-semibold shadow-md hover:bg-white/90 border border-white/[0.06] hover:border-white/[0.12] transition-colors backdrop-blur-sm"
             >
               <X size={14} />
             </button>
@@ -322,7 +325,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Password"
-                  className="w-full bg-[#090907] border border-white/10 rounded-md px-3 py-2 text-[12px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50"
+                  className="w-full bg-[#090907] border border-white/10 rounded-md px-3 py-2 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/50"
                 />
               )}
               <ToggleRow
@@ -384,14 +387,14 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => doCopy(generatedUrl)}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[12px] font-medium hover:bg-white active:scale-[0.98] transition-all"
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-full bg-white text-black text-[11px] font-medium hover:bg-white/90 active:scale-[0.98] transition-all"
                   >
                     {copied ? <Check size={13} /> : <Copy size={13} />}
                     {copied ? 'Copied' : 'Copy link'}
                   </button>
                   <button
                     onClick={() => setGeneratedUrl(null)}
-                    className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-white text-[12px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors"
+                    className="px-4 py-3 rounded-full bg-white/[0.04] border border-white/[0.06] text-white text-[11px] font-medium hover:bg-white/[0.08] hover:border-white/[0.12] transition-colors"
                   >
                     Create another
                   </button>
@@ -401,7 +404,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
               <button
                 onClick={generateLink}
                 disabled={generating}
-                className="w-full bg-white hover:bg-white disabled:opacity-40 text-black text-[12px] font-medium py-3 rounded-full transition-all active:scale-[0.99] flex items-center justify-center gap-2"
+                className="w-full bg-white hover:bg-white/90 disabled:opacity-40 text-black text-[11px] font-medium py-3 rounded-full transition-all active:scale-[0.99] flex items-center justify-center gap-2"
               >
                 {generating ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />}
                 Generate link

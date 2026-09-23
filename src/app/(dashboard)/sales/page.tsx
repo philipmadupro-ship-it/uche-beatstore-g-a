@@ -338,7 +338,7 @@ export default function SalesPage() {
                   <p className="text-[9px] font-mono text-white/40">from track licenses</p>
                 </>
               ) : (
-                <p className="text-[12px] text-white/40">No track sales yet</p>
+                <p className="text-[11px] text-white/40">No track sales yet</p>
               )}
             </div>
           </div>
@@ -350,19 +350,19 @@ export default function SalesPage() {
             type="button"
             onClick={() => setView('sales')}
             className={`px-4 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider border transition-colors ${
-              view === 'sales' ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+              view === 'sales' ? 'bg-white/[0.14] text-white border-white/30' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
             }`}
           >Sales</button>
           <button
             type="button"
             onClick={() => setView('offers')}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] font-mono uppercase tracking-wider border transition-colors ${
-              view === 'offers' ? 'bg-white text-black border-white' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
+              view === 'offers' ? 'bg-white/[0.14] text-white border-white/30' : 'bg-white/[0.04] border-white/10 text-white/60 hover:text-white hover:border-white/20'
             }`}
           >
             Offers
             {pendingOffers > 0 && (
-              <span className={`w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center leading-none ${view === 'offers' ? 'bg-black text-white' : 'bg-white text-black'}`}>{pendingOffers}</span>
+              <span className={`w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center leading-none ${view === 'offers' ? 'border border-white/30 text-white' : 'border border-white/20 text-white/70'}`}>{pendingOffers}</span>
             )}
           </button>
         </div>
@@ -379,7 +379,7 @@ export default function SalesPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search buyer, item, session…"
-                className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[12px] text-white transition-colors placeholder:text-white/30 focus:border-white/50 focus:outline-none"
+                className="w-full rounded-full border border-white/10 bg-[#090907] py-2 pl-8 pr-3 text-[11px] text-white transition-colors placeholder:text-white/30 focus:border-white/50 focus:outline-none"
               />
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1 lg:pb-0">
@@ -441,7 +441,7 @@ export default function SalesPage() {
           <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-6 flex items-start gap-3">
             <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-[12px] text-red-300 font-medium">Could not load sales</p>
+              <p className="text-[11px] text-red-300 font-medium">Could not load sales</p>
               <p className="text-[10px] text-white/80 mt-1 font-mono">{error}</p>
             </div>
           </div>
@@ -578,7 +578,7 @@ function OfferRow({ offer, onStatusChange }: { offer: Offer; onStatusChange: (id
         </div>
         <div className="text-right shrink-0">
           <p className="text-[9px] font-mono uppercase tracking-wider text-white/40">Offer</p>
-          <p className="text-[22px] font-bold text-white tabular-nums leading-none">{fmtMoney(offer.offered_price_usd)}</p>
+          <p className="text-[20px] font-bold text-white tabular-nums leading-none">{fmtMoney(offer.offered_price_usd)}</p>
         </div>
       </div>
 
@@ -596,12 +596,12 @@ function OfferRow({ offer, onStatusChange }: { offer: Offer; onStatusChange: (id
           ) : (
             <div className="flex items-center gap-1.5">
               <div className="relative">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60 text-[12px]">$</span>
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60 text-[11px]">$</span>
                 <input type="number" min="1" value={counterPrice} onChange={(e) => setCounterPrice(e.target.value)} placeholder="price" autoFocus
                   className="w-24 bg-[#090907] border border-white/10 rounded-full pl-6 pr-2 py-1.5 text-[11px] text-white placeholder:text-white/30 focus:outline-none focus:border-white/20 tabular-nums" />
               </div>
               <button onClick={() => respond('counter')} disabled={!!busy}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white text-black hover:bg-white transition-colors disabled:opacity-40">
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white text-black hover:bg-white/90 transition-colors disabled:opacity-40">
                 {busy === 'counter' ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}Send
               </button>
               <button onClick={() => { setCounterOpen(false); setCounterPrice(''); }} className="text-white/40 hover:text-white"><X size={13} /></button>
@@ -772,7 +772,7 @@ function SaleRow({ sale }: { sale: Sale }) {
   return (
     <>
       {/* Desktop: table grid row */}
-      <div className="hidden rounded-xl bg-white/[0.02]/70 md:grid md:grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-3.5 py-3 transition-colors hover:bg-[#0D0D0A]">
+      <div className="hidden rounded-xl bg-white/[0.02] md:grid md:grid-cols-[110px_80px_1fr_1.2fr_90px_100px_24px] gap-3 px-3.5 py-3 transition-colors hover:bg-[#0D0D0A]">
         <span className="text-[11px] font-mono text-white/80 tabular-nums">{fmtDate(sale.created_at)}</span>
 
         <span className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-wider text-white/60">
@@ -781,7 +781,7 @@ function SaleRow({ sale }: { sale: Sale }) {
         </span>
 
         <div className="min-w-0">
-          <p className="text-[12px] text-white truncate flex items-center gap-2">
+          <p className="text-[11px] text-white truncate flex items-center gap-2">
             <span className="truncate">{sale.item_label}</span>
             {statusBadges}
           </p>
@@ -796,7 +796,7 @@ function SaleRow({ sale }: { sale: Sale }) {
           {sale.buyer_email}
         </span>
 
-        <span className="text-[12px] font-mono font-bold text-white tabular-nums text-right">
+        <span className="text-[11px] font-mono font-bold text-white tabular-nums text-right">
           {fmtMoney(sale.amount_usd)}
         </span>
 

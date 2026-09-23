@@ -18,6 +18,8 @@ export function Popover({
   width = 240,
   open: controlledOpen,
   onOpenChange,
+  initialFocus = false,
+  label,
 }: {
   trigger: (args: { open: boolean; toggle: () => void; ref: (el: HTMLElement | null) => void }) => ReactNode;
   children: ReactNode | ((close: () => void) => ReactNode);
@@ -25,6 +27,18 @@ export function Popover({
   width?: number;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /**
+   * Move focus into the panel when it opens, and hand it back to the trigger
+   * when it closes. Needed wherever something other than the trigger opens the
+   * popover — a ⋯ menu's "Edit tags", say. Without it focus stays wherever
+   * the opener left it (ActionMenu gives it back to its own trigger), so a
+   * keyboard user is stranded somewhere else while the panel they asked for
+   * sits portaled at the end of the document. Off by default: the popovers
+   * opened only by their own trigger work fine as they are.
+   */
+  initialFocus?: boolean;
+  /** Accessible name. When set, the panel is a labelled `role="dialog"`. */
+  label?: string;
 }) {
   const [uncontrolled, setUncontrolled] = useState(false);
   const isControlled = controlledOpen !== undefined;
@@ -60,6 +74,32 @@ export function Popover({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Runs once the panel exists: `pos` is null for the render in which `open`
+  // first flips, and the portal only mounts after the position is measured.
+  useEffect(() => {
+    if (!initialFocus || !open || !pos) return;
+    const panel = panelRef.current;
+    if (!panel || panel.contains(document.activeElement)) return;
+    const first = panel.querySelector<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])',
+    );
+    (first ?? panel).focus();
+  }, [initialFocus, open, pos]);
+
+  // Give focus back when the panel closes, but only if it was left inside the
+  // panel or dropped to <body>. If the close came from clicking into another
+  // field, that field has focus now and taking it would be the same
+  // focus-steal ActionMenu was fixed for.
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (!initialFocus) return;
+    if (open) { wasOpen.current = true; return; }
+    if (!wasOpen.current) return;
+    wasOpen.current = false;
+    const active = document.activeElement;
+    if (!active || active === document.body || !active.isConnected) triggerRef.current?.focus();
+  }, [initialFocus, open]);
+
   const close = () => setOpen(false);
 
   return (
@@ -68,6 +108,9 @@ export function Popover({
       {open && pos && createPortal(
         <div
           ref={panelRef}
+          role={label ? 'dialog' : undefined}
+          aria-label={label}
+          tabIndex={initialFocus ? -1 : undefined}
           style={{ position: 'fixed', top: pos.top, left: pos.left, width }}
           /* Opaque surface. This was `bg-white/[0.02]` — 2% white over
              whatever the popover happened to cover, so every menu in the app
@@ -76,7 +119,7 @@ export function Popover({
              it floats over; the blur is the house style on top of that, not
              a substitute for a background. The mix leans on a heavy blur so
              the panel can stay genuinely translucent and still read. */
-          className="z-[200] rounded-xl border border-white/[0.12] bg-[#0e0c09]/70 backdrop-blur-2xl backdrop-saturate-150 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.10),0_24px_60px_-12px_rgba(0,0,0,0.7)] animate-in fade-in slide-in-from-top-1 py-1"
+ className="overlay-surface z-[200] rounded-xl border border-white/[0.12] ui-pop py-1"
         >
           {typeof children === 'function' ? children(close) : children}
         </div>,

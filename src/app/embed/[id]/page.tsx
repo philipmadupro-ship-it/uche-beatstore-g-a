@@ -2,6 +2,9 @@
 
 import { use, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, Music, ExternalLink, Check, Copy } from 'lucide-react';
+import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
+import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 /**
  * /embed/[id] — public, chrome-free, embeddable beat player.
@@ -30,9 +33,20 @@ interface EmbedTrack {
   peaks_url?: string | null;
 }
 
-function proxied(src: string | null | undefined): string | null {
-  if (!src) return null;
-  return src.startsWith('/') ? src : `/api/audio?src=${encodeURIComponent(src)}`;
+/**
+ * The embed is PUBLIC — it renders in a stranger's page (CSP frame-ancestors
+ * `*`) with no session at all.
+ *
+ * It used to wrap every absolute URL in `/api/audio`, which is the producer's
+ * authenticated proxy: an anonymous viewer got a 401 and silent audio, and the
+ * only reason it ever appeared to work was a signed-in producer previewing
+ * their own embed. What arrives here is already public — `/api/store/[id]`
+ * runs `redactPublicTrackMedia`, which replaces `audio_url` with the public
+ * preview derivative (a CDN URL when one is configured, otherwise
+ * `/api/store/preview/[id]`) — so it is used exactly as given.
+ */
+function publicMedia(src: string | null | undefined): string | null {
+  return src || null;
 }
 
 function getTopLevelWindowState(): boolean {
@@ -48,6 +62,7 @@ export default function EmbedPage({ params }: { params: Promise<{ id: string }> 
   const { id } = use(params);
   const [track, setTrack] = useState<EmbedTrack | null>(null);
   const [error, setError] = useState(false);
+  const [artworkTheme, setArtworkTheme] = useState<PublicArtworkTheme | null>(null);
   const [topLevel] = useState(getTopLevelWindowState);
 
   useEffect(() => {
@@ -55,7 +70,10 @@ export default function EmbedPage({ params }: { params: Promise<{ id: string }> 
     fetch(`/api/store/${id}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('not found'))))
       .then((json) => {
-        if (alive) setTrack(json.track as EmbedTrack);
+        if (alive) {
+          setTrack(json.track as EmbedTrack);
+          setArtworkTheme((json.artworkTheme ?? null) as PublicArtworkTheme | null);
+        }
       })
       .catch(() => alive && setError(true));
     return () => {
@@ -72,10 +90,12 @@ export default function EmbedPage({ params }: { params: Promise<{ id: string }> 
   }
 
   return (
-    <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center p-3">
-      {track ? <EmbedCard track={track} /> : <CardSkeleton />}
-      {topLevel && track && <EmbedSnippet id={id} />}
-    </div>
+    <ArtworkThemeProvider theme={artworkTheme}>
+      <div className="min-h-screen bg-[#090907] flex flex-col items-center justify-center p-3">
+        {track ? <EmbedCard track={track} /> : <CardSkeleton />}
+        {topLevel && track && <EmbedSnippet id={id} />}
+      </div>
+    </ArtworkThemeProvider>
   );
 }
 
@@ -100,14 +120,14 @@ function EmbedCard({ track }: { track: EmbedTrack }) {
   const [progress, setProgress] = useState(0); // 0..1
   const [peaks, setPeaks] = useState<number[] | null>(null);
 
-  const src = proxied(track.audio_url);
+  const src = publicMedia(track.audio_url);
   const storeUrl = `/store/${track.id}`;
 
   // Pull the precomputed peaks sidecar for a static waveform preview.
   useEffect(() => {
     if (!track.peaks_url) return;
     let alive = true;
-    fetch(proxied(track.peaks_url)!)
+    fetch(publicMedia(track.peaks_url)!)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!alive || !data) return;
@@ -163,14 +183,9 @@ function EmbedCard({ track }: { track: EmbedTrack }) {
           className="relative w-20 h-20 rounded-xl overflow-hidden shrink-0 group"
           aria-label={playing ? 'Pause' : 'Play'}
         >
-          {track.cover_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={track.cover_url} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-white/10 to-[#090907] flex items-center justify-center text-white/80">
-              <Music size={24} />
-            </div>
-          )}
+          <ArtworkFallback src={track.cover_url} seed={track.id} kind="track" sizes="96px" className="object-cover">
+            <Music size={24} aria-hidden="true" />
+          </ArtworkFallback>
           <div className="absolute inset-0 flex items-center justify-center bg-black/35 group-hover:bg-black/45 transition-colors">
             <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center text-black">
               {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
@@ -218,7 +233,7 @@ function EmbedCard({ track }: { track: EmbedTrack }) {
         href={storeUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="mt-4 flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl bg-white text-black text-[12px] font-bold uppercase tracking-[0.18em] hover:opacity-90 transition-opacity"
+        className="mt-4 flex items-center justify-center gap-2 w-full px-3 py-2.5 rounded-xl bg-white text-black text-[11px] font-bold uppercase tracking-[0.18em] hover:opacity-90 transition-opacity"
       >
         Buy on U2C Beatstore
         <ExternalLink size={13} />

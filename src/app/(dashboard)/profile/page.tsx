@@ -179,7 +179,7 @@ export default function ProfilePage() {
                 className={`flex h-9 items-center gap-2 rounded-full px-4 text-[11px] font-medium transition-all ${
                   saved
                     ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                    : 'bg-white text-black hover:bg-white disabled:opacity-50'
+                    : 'bg-white text-black hover:bg-white/90 disabled:opacity-50'
                 }`}
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : saved ? <CheckCircle2 size={13} /> : <Save size={13} />}
@@ -396,7 +396,7 @@ export default function ProfilePage() {
             aria-modal="true"
             aria-label="Live preview of your storefront"
             tabIndex={-1}
-            className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-white/[0.02] border-l border-white/10 z-50 flex flex-col shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] animate-in slide-in-from-right duration-300 overflow-hidden focus:outline-none"
+ className="fixed right-0 top-0 bottom-0 w-full sm:w-[420px] bg-white/[0.02] border-l border-white/10 z-50 flex flex-col shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] ui-drawer-right duration-300 overflow-hidden focus:outline-none"
           >
             {/* Preview header */}
             <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-white/[0.04] shrink-0">
@@ -451,21 +451,21 @@ export default function ProfilePage() {
               {previewView === 'client' && (
                 <>
                   {profile.bio && (
-                    <div className="bg-white/[0.04]/45 border border-white/10 rounded-2xl p-5">
+                    <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-5">
                       <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40 mb-2 font-bold">Bio</p>
                       <p className="text-xs text-white leading-relaxed italic whitespace-pre-wrap">{profile.bio}</p>
                     </div>
                   )}
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white/[0.04]/50 border border-white/10 p-4 rounded-xl text-center">
+                    <div className="bg-white/[0.04] border border-white/10 p-4 rounded-xl text-center">
                       <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-white/40 font-bold block">Lease</span>
                       <p className="text-xl font-mono text-white font-bold mt-1">
                         {profile.license_lease_price_usd ? `$${profile.license_lease_price_usd}` : '—'}
                       </p>
                       <span className="text-[8px] text-white/40 block mt-0.5">WAV · MP3</span>
                     </div>
-                    <div className="bg-white/[0.04]/50 border border-white/10 p-4 rounded-xl text-center">
+                    <div className="bg-white/[0.04] border border-white/10 p-4 rounded-xl text-center">
                       <span className="text-[8px] font-mono uppercase tracking-[0.2em] text-white/40 font-bold block">Exclusive</span>
                       <p className="text-xl font-mono text-[#c8a47a] font-bold mt-1">
                         {profile.license_exclusive_price_usd ? `$${profile.license_exclusive_price_usd}` : '—'}
@@ -475,7 +475,7 @@ export default function ProfilePage() {
                   </div>
 
                   {profile.license_notes && (
-                    <div className="bg-white/[0.04]/30 border border-white/10 p-4 rounded-xl">
+                    <div className="bg-white/[0.04] border border-white/10 p-4 rounded-xl">
                       <p className="text-[8px] font-mono uppercase tracking-[0.2em] text-white/40 mb-1 font-bold">Terms</p>
                       <p className="text-[10px] text-white/80 leading-relaxed">{profile.license_notes}</p>
                     </div>
@@ -495,7 +495,7 @@ export default function ProfilePage() {
               )}
 
               {previewView === 'rapper' && (
-                <div className="bg-white/[0.04]/50 border border-white/10 rounded-2xl p-6 space-y-5">
+                <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-6 space-y-5">
                   <div>
                     <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/80 mb-2 font-bold">Lyrics Studio</p>
                     <div className="bg-[#090907]/90 border border-white/10 p-4 rounded-xl font-mono text-[10px] text-white/90 leading-relaxed space-y-1">
