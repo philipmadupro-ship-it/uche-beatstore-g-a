@@ -1,6 +1,9 @@
 'use client';
 
 import { ChevronDown, X, Check } from 'lucide-react';
+import {
+  parseRatingMode, parseRatingValue, ratingFilterLabel, type RatingMode,
+} from '@/lib/library/rating';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { TRIAGE_STAGE_LABELS, TRIAGE_STAGE_ORDER, type TriageStage } from '@/lib/library/triage';
 import { Popover } from '@/components/ui/Popover';
@@ -40,7 +43,9 @@ export interface LibraryFilters {
   bpmMax: number | null;
   keys: Set<string>;
   scale: 'all' | 'major' | 'minor';
+  /** null = off, 0 = unrated only, 1–5 = stars. See `lib/library/rating`. */
   rating: number | null;
+  ratingMode: RatingMode;
 }
 
 export const DEFAULT_FILTERS: LibraryFilters = {
@@ -54,6 +59,7 @@ export const DEFAULT_FILTERS: LibraryFilters = {
   keys: new Set(),
   scale: 'all',
   rating: null,
+  ratingMode: 'atLeast',
 };
 
 export function hasActiveFilters(f: LibraryFilters): boolean {
@@ -98,6 +104,7 @@ export function serializeFilters(f: LibraryFilters): Record<string, unknown> {
     keys: Array.from(f.keys),
     scale: f.scale,
     rating: f.rating,
+    ratingMode: f.ratingMode,
   };
 }
 
@@ -112,6 +119,7 @@ type SerializedLibraryFilters = {
   keys?: unknown;
   scale?: unknown;
   rating?: unknown;
+  ratingMode?: unknown;
 };
 
 /** Rehydrate filters from a stored JSON object (arrays → Sets). */
@@ -135,7 +143,8 @@ export function deserializeFilters(raw: unknown): LibraryFilters {
     bpmMax: typeof r.bpmMax === 'number' ? r.bpmMax : null,
     keys: new Set<string>(Array.isArray(r.keys) ? r.keys : []),
     scale: r.scale === 'major' || r.scale === 'minor' ? r.scale : 'all',
-    rating: typeof r.rating === 'number' ? r.rating : null,
+    rating: parseRatingValue(r.rating),
+    ratingMode: parseRatingMode(r.ratingMode),
   };
 }
 
@@ -283,18 +292,49 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
             </div>
 
             <div>
-              <FacetLabel>Min rating</FacetLabel>
-              <div className="flex gap-0.5">
-                {[1, 2, 3, 4, 5].map((star) => (
+              <FacetLabel>Rating</FacetLabel>
+              <div className="flex items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map((star) => {
+                  // "Exactly" lights one star; "at least" lights the run up to
+                  // it — the stars show which tracks will pass.
+                  const lit = filters.rating != null && filters.rating > 0 && (
+                    filters.ratingMode === 'exactly' ? star === filters.rating : star <= filters.rating
+                  );
+                  return (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => set({ rating: filters.rating === star ? null : star })}
+                      aria-label={`${filters.ratingMode === 'exactly' ? 'Exactly' : 'At least'} ${star} star${star === 1 ? '' : 's'}`}
+                      aria-pressed={filters.rating === star}
+                      className={`grid size-7 place-items-center rounded-lg text-[14px] transition-colors ${
+                        lit ? 'text-[#c8a84b]' : 'text-white/30 hover:text-white/60'
+                      }`}
+                    >★</button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => set({ rating: filters.rating === 0 ? null : 0 })}
+                  aria-pressed={filters.rating === 0}
+                  className={`ml-1.5 rounded-lg border px-2 py-1 text-[10px] transition-colors ${
+                    filters.rating === 0
+                      ? 'border-white/30 bg-white/10 text-white'
+                      : 'border-white/10 text-white/40 hover:text-white/70'
+                  }`}
+                >Unrated</button>
+              </div>
+              <div className="mt-1.5 flex gap-1" role="group" aria-label="Rating match">
+                {(['atLeast', 'exactly'] as const).map((mode) => (
                   <button
-                    key={star}
-                    onClick={() => set({ rating: filters.rating === star ? null : star })}
-                    aria-label={`Minimum rating ${star} star${star === 1 ? '' : 's'}`}
-                    aria-pressed={filters.rating != null && star <= filters.rating}
-                    className={`grid size-7 place-items-center rounded-lg text-[14px] transition-colors ${
-                      filters.rating != null && star <= filters.rating ? 'text-white' : 'text-white/30 hover:text-white/60'
+                    key={mode}
+                    type="button"
+                    onClick={() => set({ ratingMode: mode })}
+                    aria-pressed={filters.ratingMode === mode}
+                    className={`rounded-md px-2 py-0.5 text-[10px] transition-colors ${
+                      filters.ratingMode === mode ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70'
                     }`}
-                  >★</button>
+                  >{mode === 'atLeast' ? 'And up' : 'Exactly'}</button>
                 ))}
               </div>
             </div>
@@ -356,7 +396,7 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
           )}
           {filters.scale !== 'all' && <Chip label={filters.scale} onRemove={() => set({ scale: 'all' })} />}
           {Array.from(filters.keys).map((k) => <Chip key={k} label={k} onRemove={() => toggleKey(k)} />)}
-          {filters.rating != null && <Chip label={`★ ≥ ${filters.rating}`} onRemove={() => set({ rating: null })} />}
+          {filters.rating != null && <Chip label={ratingFilterLabel(filters.rating, filters.ratingMode)} onRemove={() => set({ rating: null })} />}
           <button
             onClick={() => onChange({ ...DEFAULT_FILTERS, genres: new Set(), statuses: new Set(), keys: new Set() })}
             className="ml-1 font-mono text-[9px] text-white/60 transition-colors hover:text-white"
