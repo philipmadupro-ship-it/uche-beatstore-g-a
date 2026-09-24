@@ -72,10 +72,12 @@ export function PageHeader({ eyebrow, title, description, actions, meta, childre
 /**
  * PageContainer — the consistent dashboard page width + horizontal padding.
  * One max-width (1400px) and one gutter scale so every surface aligns.
+ * `fluid` drops the max-width (same gutters) for full-page tools like the
+ * storefront builder, where 1400px would waste most of a large screen.
  */
-export function PageContainer({ children, className = '' }: { children: ReactNode; className?: string }) {
+export function PageContainer({ children, className = '', fluid = false }: { children: ReactNode; className?: string; fluid?: boolean }) {
   return (
-    <div className={`max-w-[1400px] mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-8 ${className}`}>
+    <div className={`${fluid ? '' : 'max-w-[1400px] '}mx-auto px-4 sm:px-6 md:px-10 pt-6 md:pt-8 ${className}`}>
       {children}
     </div>
   );

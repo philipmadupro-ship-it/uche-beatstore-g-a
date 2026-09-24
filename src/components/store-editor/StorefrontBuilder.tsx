@@ -39,6 +39,10 @@ import { DeviceFrame } from './DeviceFrame';
 import { CanvasInsert } from './CanvasInsert';
 import { SECTION_PRESETS, sectionFromPreset } from '@/lib/store-editor/presets';
 import { moveCanvasBlock } from '@/lib/store-editor/canvas-blocks';
+import { ZoomControl } from '@/components/ui/ZoomControl';
+import { EditorViewButtons } from '@/components/ui/EditorViewButtons';
+import { MusicReactiveBackdrop } from '@/components/ui/MusicReactiveBackdrop';
+import { useEditorExpand } from '@/hooks/useEditorExpand';
 import { SectionsPanel } from './SectionsPanel';
 import { SectionInspector } from './SectionInspector';
 import { ThemePanel } from './ThemePanel';
@@ -67,6 +71,8 @@ type BuilderState = {
 };
 
 const HISTORY_LIMIT = 50;
+/** Up to 200% so a detail can be checked closer than the device shows it. */
+const ZOOM_RANGE = { min: 0.25, max: 2 };
 const AUTOSAVE_MS = 900;
 
 const deviceIcons: Record<StoreBreakpoint, React.ComponentType<{ size?: number }>> = {
@@ -109,6 +115,7 @@ export function StorefrontBuilder({
   /** Copied presentation, waiting to be pasted onto another section. */
   const [clipboardStyle, setClipboardStyle] = useState<SectionStyle | null>(null);
   const [saved, setSaved] = useState<SavedSectionSummary[]>([]);
+  const view = useEditorExpand();
 
   const refreshLibrary = useCallback(() => {
     // Failures are swallowed: the library is a convenience, and IndexedDB is
@@ -307,27 +314,30 @@ export function StorefrontBuilder({
   const width = breakpointWidths[breakpoint];
 
   return (
-    <div className="editor-shell h-[calc(100vh-10.5rem)]">
     <div
       ref={rootRef}
-      className="relative grid h-full grid-rows-[2.75rem_minmax(0,1fr)_1.75rem] overflow-hidden rounded-xl border border-white/10 bg-[#090907]"
+      className={cn(
+        'grid grid-rows-[3.25rem_minmax(0,1fr)] overflow-hidden bg-[#090907]',
+        // Expanded covers the dashboard chrome (z-50) but stays under
+        // popovers (--z-popover 200), which portal to <body>.
+        view.expanded
+          ? 'fixed inset-0 z-[100]'
+          // `relative` only here: beside `fixed` it wins in Tailwind's order.
+          : 'relative h-[calc(100vh-10.5rem)] rounded-xl border border-white/10',
+      )}
     >
       {showShortcuts ? (
         <ShortcutSheet groups={STORE_EDITOR_SHORTCUTS} onClose={() => setShowShortcuts(false)} />
       ) : null}
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <header className="editor-edge flex min-w-0 items-center gap-2 border-b border-white/10 px-3">
-        <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 lg:inline">
+      {/* Toolbar in the Library's pill language — same segmented switch,
+          same resting fill — so the builder reads as part of the app. */}
+      <header className="flex min-w-0 items-center gap-2 overflow-x-auto border-b border-white/10 bg-[#0D0D0A] px-3 no-scrollbar">
+        <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 xl:inline">
           Storefront
         </span>
 
-        <span className="mx-1 h-5 w-px shrink-0 bg-white/10" />
-
-        {/* Device switch. Numbered shortcuts are in the titles rather than a
-            legend, so they are discoverable at the point of use. */}
-        {/* Device switch — one floating segmented pill, the way a pro tool
-            groups a mutually exclusive choice. */}
-        <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-0.5">
+        <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
           {storeBreakpoints.map((point, index) => {
             const Icon = deviceIcons[point];
             return (
@@ -338,10 +348,10 @@ export function StorefrontBuilder({
                 title={`${point} · ${breakpointWidths[point]}px (${index + 1})`}
                 onClick={() => setBreakpoint(point)}
                 className={cn(
-                  'tool-press flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px] capitalize',
+                  'flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px] capitalize transition-colors',
                   breakpoint === point
                     ? 'bg-white/[0.14] text-white'
-                    : 'text-white/50 hover:bg-white/[0.06] hover:text-white/90',
+                    : 'text-white/60 hover:text-white/80',
                 )}
               >
                 <Icon size={12} />
@@ -351,15 +361,18 @@ export function StorefrontBuilder({
           })}
         </div>
 
-        <span className="mx-1 h-5 w-px shrink-0 bg-white/10" />
+        <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/30 lg:inline">
+          {width}px
+        </span>
 
+        <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
         <button
           type="button"
           onClick={undo}
           disabled={editor.past.length === 0}
           title="Undo (⌘Z)"
           aria-label="Undo"
-          className="tool-press grid size-7 shrink-0 place-items-center rounded-lg text-white/60 hover:bg-white/[0.06] hover:text-white/90 disabled:text-white/15 disabled:hover:bg-transparent"
+          className="grid size-7 shrink-0 place-items-center rounded-full text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white disabled:text-white/20 disabled:hover:bg-transparent"
         >
           <Undo2 size={13} />
         </button>
@@ -369,13 +382,11 @@ export function StorefrontBuilder({
           disabled={editor.future.length === 0}
           title="Redo (Shift ⌘Z)"
           aria-label="Redo"
-          className="tool-press grid size-7 shrink-0 place-items-center rounded-lg text-white/60 hover:bg-white/[0.06] hover:text-white/90 disabled:text-white/15 disabled:hover:bg-transparent"
+          className="grid size-7 shrink-0 place-items-center rounded-full text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white disabled:text-white/20 disabled:hover:bg-transparent"
         >
           <Redo2 size={13} />
         </button>
-
-        <span className="mx-1 h-5 w-px shrink-0 bg-white/10" />
-
+        </div>
 
         <span className="ml-auto flex shrink-0 items-center gap-2">
           {/* Announced: the save state changes on its own, so a screen
@@ -387,6 +398,13 @@ export function StorefrontBuilder({
             {saveState === 'saving' ? <><Loader2 size={11} className="animate-spin" /> Saving</> : null}
             {saveState === 'saved' ? <><Check size={11} /> Saved</> : null}
           </span>
+          <EditorViewButtons
+            expanded={view.expanded}
+            onToggleExpanded={view.toggleExpanded}
+            fullscreen={view.fullscreen}
+            fullscreenAvailable={view.fullscreenAvailable}
+            onToggleFullscreen={view.toggleFullscreen}
+          />
         </span>
       </header>
 
@@ -413,7 +431,7 @@ export function StorefrontBuilder({
               title={label}
               onClick={() => setPanel(tab)}
               className={cn(
-                'tool-press grid size-8 place-items-center rounded-lg',
+                'grid size-8 place-items-center rounded-lg transition-colors',
                 panel === tab ? 'bg-white/[0.14] text-white' : 'text-white/40 hover:bg-white/[0.06] hover:text-white/80',
               )}
             >
@@ -548,14 +566,24 @@ export function StorefrontBuilder({
           )}
         </aside>
 
-        {/* Centre: the canvas */}
+        {/* Centre: the canvas. The stage carries the same music-reactive
+            glow as every page header, so the editor breathes with whatever
+            is playing like the rest of the app does. */}
+        <div className="relative isolate min-h-0">
+        <MusicReactiveBackdrop className="inset-0 -z-10" />
+        <ZoomControl
+          floating
+          zoom={zoom}
+          range={ZOOM_RANGE}
+          fitted={autoFit}
+          onZoom={(value) => { setAutoFit(false); setZoom(value); }}
+          onFit={() => setAutoFit(true)}
+          className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2"
+        />
         <div
           ref={stageRef}
           onClick={() => setSelectedId(null)}
-          // A plain, darker pasteboard — Photoshop's, not graph paper. The
-          // grid competed with the storefront for attention and read as
-          // decoration; the device frame is what should hold the eye.
-          className="editor-pasteboard min-h-0 overflow-auto px-10 py-12"
+          className="h-full overflow-auto px-10 pb-20 pt-12"
         >
           <div className="mx-auto" style={{ width: width * zoom }}>
             {/* The frame is the real device width; zoom is a visual scale on
@@ -677,6 +705,7 @@ export function StorefrontBuilder({
             </div>
           </div>
         </div>
+        </div>
 
         {/* Right: inspector */}
         <aside className={cn(
@@ -737,40 +766,6 @@ export function StorefrontBuilder({
         </aside>
       </div>
 
-      {/* ── Status bar ─ zoom lives down here, as in Photoshop: it is a view
-          setting, not an edit, and it crowded the toolbar. ─────────────── */}
-      <footer className="flex min-w-0 items-center gap-3 border-t border-white/10 bg-[#0D0D0A] px-3">
-          <label className="flex shrink-0 items-center gap-1.5" title="Zoom">
-            <span className="font-mono text-[10px] tabular-nums text-white/40">{Math.round(zoom * 100)}%</span>
-            <input
-              type="range"
-              min={25}
-              max={100}
-              value={Math.round(zoom * 100)}
-              aria-label="Zoom"
-              onChange={(event) => { setAutoFit(false); setZoom(Number(event.target.value) / 100); }}
-              className="h-1 w-20 cursor-pointer appearance-none bg-white/10 accent-white"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => setAutoFit(true)}
-            title="Fit to window"
-            className={cn(
-              'shrink-0 rounded-lg border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors',
-              autoFit ? 'border-white/40 text-white/90' : 'border-white/10 text-white/50 hover:border-white/25',
-            )}
-          >
-            Fit
-          </button>
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
-            {breakpoint} · {width}px
-          </span>
-          <span className="ml-auto truncate font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
-            {selected ? selected.name : `${layout.sections.length} sections`}
-          </span>
-        </footer>
-    </div>
     </div>
   );
 }

@@ -17,7 +17,7 @@
  */
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { PageContainer } from '@/components/layout/PageHeader';
+import { PageContainer, PageHeader } from '@/components/layout/PageHeader';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import Image from 'next/image';
@@ -1790,61 +1790,65 @@ export default function StoreEditorPage() {
 
   return (
     <DashboardLayout>
-      <PageContainer className="md:pt-10 pb-32">
+      <PageContainer fluid={editorMode === 'design'} className="pb-32">
 
-        {/* ── Page header ── */}
-        <div className="mb-5 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-[10px] font-mono uppercase tracking-[0.25em] text-white/80 mb-1">Dashboard</p>
-            <h1 className="text-[28px] sm:text-[36px] font-bold tracking-tight text-white leading-none font-heading">
-              Store Editor
-            </h1>
-            <p className="mt-1.5 max-w-[58ch] text-[11px] leading-relaxed text-white/60">
-              Customise your public beatstore — changes go live instantly on save.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 overflow-x-auto pb-1 sm:mt-1 sm:justify-end sm:pb-0">
-            <div className="flex shrink-0 items-center rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
-              {(['design', 'content'] as const).map((mode) => (
+        {/* ── Page header — the shared one, as on Library and Projects ── */}
+        <PageHeader
+          eyebrow="Storefront"
+          title="Store Editor"
+          description={editorMode === 'design'
+            ? 'Arrange your public store on a live canvas. Changes save as you go.'
+            : 'Customise your public beatstore — changes go live instantly on save.'}
+          actions={(
+            <>
+              {/* Same segmented pill as the Library's view switch. */}
+              <div className="flex shrink-0 items-center rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
+                {(['design', 'content'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={editorMode === mode}
+                    onClick={() => setEditorMode(mode)}
+                    className={`rounded-full px-3 py-1.5 text-[11px] capitalize transition-colors ${
+                      editorMode === mode ? 'bg-white/[0.14] text-white' : 'text-white/60 hover:text-white/80'
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                ))}
+              </div>
+              {/* Mobile preview toggle — Content mode only; Design has its own devices. */}
+              {editorMode === 'content' ? (
                 <button
-                  key={mode}
-                  type="button"
-                  aria-pressed={editorMode === mode}
-                  onClick={() => setEditorMode(mode)}
-                  className={`rounded-full px-3 py-1.5 text-[11px] capitalize transition-colors ${
-                    editorMode === mode ? 'bg-white/[0.12] text-white' : 'text-white/60 hover:text-white'
-                  }`}
+                  onClick={() => setPreviewOpen((v) => !v)}
+                  className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-3 py-2 text-[11px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white lg:hidden"
                 >
-                  {mode}
+                  {previewOpen ? <EyeOff size={12} /> : <Eye size={12} />}
+                  Preview
                 </button>
-              ))}
-            </div>
-            {/* Mobile preview toggle */}
-            <button
-              onClick={() => setPreviewOpen((v) => !v)}
-              className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-3 py-2 text-[11px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white lg:hidden"
-            >
-              {previewOpen ? <EyeOff size={12} /> : <Eye size={12} />}
-              Preview
-            </button>
-            <a
-              href="/store"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-3 py-2 text-[11px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white"
-            >
-              <ExternalLink size={12} />
-              View Store
-            </a>
-            <LiquidGlassButton
-              onClick={handleSave}
-              disabled={saving}
-            >
-              {saving ? 'Saving…' : 'Save changes'}
-              {saving ? <Loader2 size={12} className="animate-spin ml-1.5" /> : <Save size={12} className="ml-1.5" />}
-            </LiquidGlassButton>
-          </div>
-        </div>
+              ) : null}
+              <a
+                href="/store"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-3 py-2 text-[11px] text-white/80 transition-colors hover:bg-white/[0.08] hover:text-white"
+              >
+                <ExternalLink size={12} />
+                View Store
+              </a>
+              {/* Design autosaves; a Save button there would suggest it does not. */}
+              {editorMode === 'content' ? (
+                <LiquidGlassButton
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  {saving ? 'Saving…' : 'Save changes'}
+                  {saving ? <Loader2 size={12} className="animate-spin ml-1.5" /> : <Save size={12} className="ml-1.5" />}
+                </LiquidGlassButton>
+              ) : null}
+            </>
+          )}
+        />
 
         {/* ── Design mode: the visual storefront builder ── */}
         {editorMode === 'design' ? (

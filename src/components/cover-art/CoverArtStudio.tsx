@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Download, Grid3x3, Image as ImageIcon, Layers as LayersIcon, Maximize2,
+  Download, Grid3x3, Image as ImageIcon, Layers as LayersIcon,
   Music2, Pause, Play, Redo2, Ruler, Sparkles, SquareStack, Undo2, FolderOpen, Check, Loader2, PanelLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -64,6 +64,15 @@ import { CoverGeneratorPanel } from './CoverGeneratorPanel';
 import { ShortcutSheet } from './ShortcutSheet';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
 import { ContextualToolbar } from './ContextualToolbar';
+import { ZoomControl } from '@/components/ui/ZoomControl';
+import { EditorViewButtons } from '@/components/ui/EditorViewButtons';
+import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
+import { MusicReactiveBackdrop } from '@/components/ui/MusicReactiveBackdrop';
+import { useEditorExpand } from '@/hooks/useEditorExpand';
+import { stepZoom } from '@/lib/ui/zoom';
+
+/** 2% for a whole poster on a laptop, 200% for checking type edges. */
+const ZOOM_RANGE = { min: 0.02, max: 2 };
 
 type Surface = 'dev-lab' | 'cover-art-studio';
 type ToolTab = 'documents' | 'source' | 'add' | 'collage' | 'ai' | 'export';
@@ -173,6 +182,9 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
    * from re-fitting under them every time a panel opens or the window changes.
    */
   const userZoomed = useRef(false);
+  /** Mirrors `userZoomed` for rendering — refs cannot drive the Fit toggle. */
+  const [fitted, setFitted] = useState(true);
+  const view = useEditorExpand();
   /** createdAt of the open document, so autosaves do not keep resetting it. */
   const createdAtRef = useRef<string | undefined>(undefined);
   /** Blocks autosave until the producer has actually changed something. */
@@ -933,8 +945,16 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
   /** Zoom set deliberately, which pins it against auto-fit. */
   const setZoomManually = useCallback((value: number) => {
     userZoomed.current = true;
+    setFitted(false);
     setZoom(value);
   }, []);
+
+  /** Back to automatic: fit now and keep following the window. */
+  const resumeFit = useCallback(() => {
+    userZoomed.current = false;
+    setFitted(true);
+    fitToWindow();
+  }, [fitToWindow]);
 
   /* ── Keyboard ────────────────────────────────────────────────────────── */
 
@@ -1002,8 +1022,7 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
       if (meta && event.key === '0') {
         event.preventDefault();
         // Fit is a request to go back to automatic, so it clears the pin.
-        userZoomed.current = false;
-        fitToWindow();
+        resumeFit();
         return;
       }
       if (meta && event.key === '1') {
@@ -1014,13 +1033,15 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
       if (meta && (event.key === '=' || event.key === '+')) {
         event.preventDefault();
         userZoomed.current = true;
-        setZoom((value) => Math.min(2, value * 1.25));
+        setFitted(false);
+        setZoom((value) => stepZoom(value, 1, ZOOM_RANGE));
         return;
       }
       if (meta && event.key === '-') {
         event.preventDefault();
         userZoomed.current = true;
-        setZoom((value) => Math.max(0.02, value / 1.25));
+        setFitted(false);
+        setZoom((value) => stepZoom(value, -1, ZOOM_RANGE));
         return;
       }
 
@@ -1085,7 +1106,7 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [addShape, addText, copySelection, document.layers, editingId, fitToWindow, redo, selectedIds, setZoomManually, undo, updateDocument]);
+  }, [addShape, addText, copySelection, document.layers, editingId, redo, resumeFit, selectedIds, setZoomManually, undo, updateDocument]);
 
   const auditionSource = () => {
     if (!selectedSourceOption || sourceKind !== 'track') return;
@@ -1200,14 +1221,28 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
     // so a new row has to come out of the canvas's share, not out of the
     // viewport. Growing the container instead is what made the page scroll
     // rather than the panels the last time this layout was touched.
-    <div className="editor-shell h-[calc(100vh-10.5rem)]">
-    <div ref={rootRef} className="relative grid h-full grid-rows-[3.25rem_2.5rem_minmax(0,1fr)_1.75rem] overflow-hidden rounded-xl border border-white/10 bg-[#090907] text-white/90">
+    <div
+      ref={rootRef}
+      className={cn(
+        // No status bar row any more: zoom floats over the canvas, so the
+        // canvas gets that height back.
+        'grid grid-rows-[3.25rem_2.5rem_minmax(0,1fr)] overflow-hidden bg-[#090907] text-white/90',
+        // Expanded covers the dashboard chrome (z-50) but stays under
+        // popovers (--z-popover 200), which portal to <body>.
+        view.expanded
+          ? 'fixed inset-0 z-[100]'
+          // 11rem = the shell's 10.5rem (see above) + the 0.5rem top margin
+          // that stops the frame butting against the TopBar.
+          // `relative` only here: beside `fixed` it wins in Tailwind's order.
+          : 'relative mx-2 mt-2 h-[calc(100vh-11rem)] rounded-xl border border-white/10 sm:mx-4',
+      )}
+    >
       {showShortcuts ? <ShortcutSheet onClose={() => setShowShortcuts(false)} /> : null}
       {menu ? (
         <ContextMenu x={menu.x} y={menu.y} items={contextMenuItems()} onClose={() => setMenu(null)} />
       ) : null}
       {/* Top bar */}
-      <header className="editor-edge flex min-w-0 items-center justify-between gap-2 border-b border-white/10 px-3">
+      <header className="flex min-w-0 items-center justify-between gap-2 border-b border-white/10 bg-[#0D0D0A] px-3">
         <div className="flex min-w-0 shrink items-center gap-2 overflow-hidden">
           {/* Dropped first when space runs out — the document name matters more. */}
           <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 xl:inline">
@@ -1217,8 +1252,11 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
             value={document.name}
             aria-label="Artwork name"
             onChange={(event) => setDocumentQuietly((current) => ({ ...current, name: event.target.value }))}
-            className="w-full min-w-0 max-w-64 border border-transparent bg-transparent px-1.5 py-1 text-sm text-white/90 outline-none hover:border-white/10 focus:border-white/40"
+            className="w-full min-w-0 max-w-64 rounded-lg border border-transparent bg-transparent px-2 py-1 text-[13px] text-white/90 outline-none hover:border-white/10 focus:border-white/30"
           />
+          <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/30 lg:inline">
+            {document.width}×{document.height}
+          </span>
           {/* Autosave is silent, so it needs to be visible somewhere or the
               producer has no reason to trust that closing the tab is safe. */}
           <span
@@ -1252,85 +1290,83 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
             </>
           ) : null}
 
-          <button
-            type="button" onClick={undo} disabled={history.length === 0}
-            aria-label="Undo" title="Undo (⌘Z)"
-            className="grid h-7 w-7 place-items-center text-white/40 transition-colors hover:text-white/90 disabled:opacity-30"
-          >
-            <Undo2 size={13} />
-          </button>
-          <button
-            type="button" onClick={redo} disabled={future.length === 0}
-            aria-label="Redo" title="Redo (⇧⌘Z)"
-            className="grid h-7 w-7 place-items-center text-white/40 transition-colors hover:text-white/90 disabled:opacity-30"
-          >
-            <Redo2 size={13} />
-          </button>
-          <span aria-hidden className="mx-1 h-4 w-px bg-white/10" />
+          {/* Grouped in the Library toolbar's pill language: one segmented
+              pill per family of controls, active = the white/14 fill. */}
+          <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
+            <button
+              type="button" onClick={undo} disabled={history.length === 0}
+              aria-label="Undo" title="Undo (⌘Z)"
+              className={pillIcon(false)}
+            >
+              <Undo2 size={13} />
+            </button>
+            <button
+              type="button" onClick={redo} disabled={future.length === 0}
+              aria-label="Redo" title="Redo (Shift ⌘Z)"
+              className={pillIcon(false)}
+            >
+              <Redo2 size={13} />
+            </button>
+          </div>
 
-          <button
-            type="button" onClick={() => setShowGuides((value) => !value)}
-            aria-pressed={showGuides} aria-label="Toggle guides" title="Guides"
-            className={cn('grid h-7 w-7 place-items-center transition-colors',
-              showGuides ? 'text-white' : 'text-white/40 hover:text-white/90')}
-          >
-            <Grid3x3 size={13} />
-          </button>
-          <button
-            type="button" onClick={() => setShowRulers((value) => !value)}
-            aria-pressed={showRulers} aria-label="Toggle rulers" title="Rulers (Shift R) — drag from a ruler to place a guide"
-            className={cn('grid h-7 w-7 place-items-center transition-colors',
-              showRulers ? 'text-white' : 'text-white/40 hover:text-white/90')}
-          >
-            <Ruler size={13} />
-          </button>
-          <button
-            type="button"
-            onClick={() => { userZoomed.current = false; fitToWindow(); }}
-            aria-label="Fit to window" title="Fit to window"
-            className="grid h-7 w-7 place-items-center text-white/40 transition-colors hover:text-white/90"
-          >
-            <Maximize2 size={13} />
-          </button>
-          <span aria-hidden className="mx-1 h-4 w-px bg-white/10" />
-          <button
-            type="button" onClick={() => setShowTools((value) => !value)}
-            aria-pressed={showTools} aria-label="Toggle tool panel" title="Tools"
-            className={cn('grid h-7 w-7 place-items-center transition-colors',
-              showTools ? 'text-white' : 'text-white/40 hover:text-white/90')}
-          >
-            <PanelLeft size={13} />
-          </button>
-          <button
-            type="button" onClick={() => setShowLayers((value) => !value)}
-            aria-pressed={showLayers} aria-label="Toggle layers panel" title="Layers"
-            className={cn('grid h-7 w-7 place-items-center transition-colors',
-              showLayers ? 'text-white' : 'text-white/40 hover:text-white/90')}
-          >
-            <LayersIcon size={13} />
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowShortcuts(true)}
-            aria-label="Keyboard shortcuts"
-            title="Keyboard shortcuts (?)"
-            className="grid h-7 w-7 place-items-center font-mono text-[11px] text-white/40 transition-colors hover:text-white/90"
-          >
-            ?
-          </button>
-          {/* The one primary action on the page: an island pill with its icon
-              in its own nested circle, which nudges on hover. */}
-          <button
-            type="button"
+          <div className="hidden shrink-0 items-center gap-0.5 rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5 md:flex">
+            <button
+              type="button" onClick={() => setShowGuides((value) => !value)}
+              aria-pressed={showGuides} aria-label="Toggle guides" title="Guides"
+              className={pillIcon(showGuides)}
+            >
+              <Grid3x3 size={13} />
+            </button>
+            <button
+              type="button" onClick={() => setShowRulers((value) => !value)}
+              aria-pressed={showRulers} aria-label="Toggle rulers" title="Rulers (Shift R) — drag from a ruler to place a guide"
+              className={pillIcon(showRulers)}
+            >
+              <Ruler size={13} />
+            </button>
+            <button
+              type="button" onClick={() => setShowTools((value) => !value)}
+              aria-pressed={showTools} aria-label="Toggle tool panel" title="Tools panel"
+              className={pillIcon(showTools)}
+            >
+              <PanelLeft size={13} />
+            </button>
+            <button
+              type="button" onClick={() => setShowLayers((value) => !value)}
+              aria-pressed={showLayers} aria-label="Toggle layers panel" title="Layers panel"
+              className={pillIcon(showLayers)}
+            >
+              <LayersIcon size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowShortcuts(true)}
+              aria-label="Keyboard shortcuts"
+              title="Keyboard shortcuts (?)"
+              className={cn(pillIcon(false), 'font-mono text-[11px]')}
+            >
+              ?
+            </button>
+          </div>
+
+          <EditorViewButtons
+            expanded={view.expanded}
+            onToggleExpanded={view.toggleExpanded}
+            fullscreen={view.fullscreen}
+            fullscreenAvailable={view.fullscreenAvailable}
+            onToggleFullscreen={view.toggleFullscreen}
+          />
+
+          {/* The page's primary action, in the same button every other
+              dashboard page uses for its primary action. */}
+          <LiquidGlassButton
             onClick={() => { void downloadArtwork(); }}
             disabled={exportState === 'exporting'}
-            className="tool-press group ml-1 flex h-9 items-center gap-2 rounded-full bg-white pl-4 pr-1 text-[11px] font-medium text-black hover:bg-white/90 disabled:opacity-50"
+            className="ml-1 h-8"
           >
+            {exportState === 'exporting' ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
             {exportState === 'exporting' ? 'Rendering' : 'Export'}
-            <span className="grid size-7 place-items-center rounded-full bg-black/10 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-spring)] group-hover:-translate-y-px group-hover:translate-x-0.5">
-              {exportState === 'exporting' ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
-            </span>
-          </button>
+          </LiquidGlassButton>
         </div>
       </header>
 
@@ -1378,7 +1414,7 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
               title={item.label}
               aria-label={item.label}
               className={cn(
-                'tool-press grid size-9 place-items-center rounded-lg',
+                'grid size-9 place-items-center rounded-lg transition-colors',
                 tab === item.id && showTools ? 'bg-white/[0.14] text-white' : 'text-white/40 hover:bg-white/[0.06] hover:text-white/80',
               )}
             >
@@ -1475,7 +1511,19 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
         </aside>
 
         {/* Canvas */}
-        <div ref={viewportRef} className="min-h-0">
+        <div ref={viewportRef} className="relative isolate min-h-0">
+          {/* The same music-reactive glow as every page header — it breathes
+              with the source track while you audition it. */}
+          <MusicReactiveBackdrop className="inset-0 -z-10" />
+          <ZoomControl
+            floating
+            zoom={zoom}
+            range={ZOOM_RANGE}
+            fitted={fitted}
+            onZoom={setZoomManually}
+            onFit={resumeFit}
+            className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2"
+          />
           <StudioCanvas
             document={document}
             zoom={zoom}
@@ -1572,28 +1620,14 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
         ) : null}
       </div>
 
-      {/* Status bar — zoom and document facts, as in Photoshop and in the
-          Store Editor next door, so the two editors read as one product. */}
-      <footer className="flex min-w-0 items-center gap-3 border-t border-white/10 bg-[#0D0D0A] px-3">
-        <span className="w-10 font-mono text-[10px] tabular-nums text-white/40">
-          {Math.round(zoom * 100)}%
-        </span>
-        <input
-          type="range" min={0.04} max={0.6} step={0.01} value={zoom}
-          aria-label="Zoom"
-          onChange={(event) => setZoomManually(Number(event.target.value))}
-          className="h-1 w-24 cursor-pointer appearance-none bg-white/10 accent-white"
-        />
-        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
-          {document.width}×{document.height}
-        </span>
-        <span className="ml-auto truncate font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
-          {selectedIds.length > 0
-            ? `${selectedIds.length} selected`
-            : `${document.layers.length} layer${document.layers.length === 1 ? '' : 's'}`}
-        </span>
-      </footer>
     </div>
-    </div>
+  );
+}
+
+/** Icon button inside a segmented pill; `active` = the pressed state. */
+function pillIcon(active: boolean) {
+  return cn(
+    'grid size-7 place-items-center rounded-full transition-colors disabled:text-white/20 disabled:hover:bg-transparent',
+    active ? 'bg-white/[0.14] text-white' : 'text-white/60 hover:bg-white/[0.08] hover:text-white',
   );
 }

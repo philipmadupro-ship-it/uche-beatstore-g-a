@@ -65,9 +65,9 @@ export function SectionsPanel({
   const selectedPinned = selected ? isPinnedSection(selected.kind) : false;
 
   /*
-   * The Photoshop Layers panel, not a list of cards:
-   *   eye | thumbnail | name ............ lock
-   * The eye column is ALWAYS visible (visibility is the thing you toggle most),
+   * Rows follow the Library's item-with-image pattern:
+   *   thumbnail | name / kind meta ............ lock  eye
+   * The eye is ALWAYS visible (visibility is the thing you toggle most),
    * the lock shows only when a layer is locked, and actions on the selected
    * layer live in a fixed bar at the foot of the panel — so rows stay quiet
    * instead of sprouting six icons on hover. ↑/↓ move the selection.
@@ -125,35 +125,26 @@ export function SectionsPanel({
               onClick={() => onSelect(section.id)}
               onDoubleClick={() => setRenaming(section.id)}
               className={cn(
-                'group relative flex h-10 cursor-default select-none items-center border-b border-white/[0.04] pr-2 transition-colors',
-                isSelected ? 'bg-white/[0.10]' : 'hover:bg-white/[0.04]',
+                'group relative mx-1.5 my-0.5 flex h-12 cursor-default select-none items-center gap-2.5 rounded-lg px-1.5 transition-colors',
+                isSelected ? 'bg-white/[0.08] ring-1 ring-inset ring-white/15' : 'hover:bg-white/[0.04]',
                 dragOver === index && 'shadow-[inset_0_2px_0_rgba(255,255,255,0.6)]',
                 !section.locked && !pinned && 'active:cursor-grabbing',
               )}
             >
-              {/* Eye column */}
-              <button
-                type="button"
-                aria-label={settings.visible ? `Hide ${section.name} on ${breakpoint}` : `Show ${section.name} on ${breakpoint}`}
-                title={settings.visible ? `Hide on ${breakpoint}` : `Show on ${breakpoint}`}
-                onClick={(event) => { event.stopPropagation(); onToggle(section.id, { visible: !settings.visible }); }}
-                className="grid h-full w-8 shrink-0 place-items-center border-r border-white/[0.06] text-white/50 transition-colors hover:text-white"
-              >
-                {settings.visible ? <Eye size={12} /> : <EyeOff size={12} className="text-white/20" />}
-              </button>
-
-              {/* Thumbnail */}
+              {/* Thumbnail — the Library's item-with-image row, with the
+                  section's glyph standing in for artwork. */}
               <span
                 aria-hidden
                 className={cn(
-                  'mx-2 grid size-6 shrink-0 place-items-center rounded-[3px] border',
-                  isSelected ? 'border-white/40 bg-white/[0.12] text-white/90' : 'border-white/10 bg-[#090907] text-white/50',
+                  'grid size-9 shrink-0 place-items-center rounded-lg bg-[#090907] ring-1 ring-inset transition-colors',
+                  isSelected ? 'text-white/90 ring-white/20' : 'text-white/50 ring-white/[0.06]',
+                  hiddenHere && 'opacity-40',
                 )}
               >
-                <Icon size={12} />
+                <Icon size={14} />
               </span>
 
-              {/* Name */}
+              {/* Name + meta, two lines like a track row */}
               <span className="min-w-0 flex-1">
                 {renaming === section.id ? (
                   <input
@@ -167,44 +158,51 @@ export function SectionsPanel({
                       if (event.key === 'Enter') { onRename(section.id, event.currentTarget.value); setRenaming(null); }
                       if (event.key === 'Escape') setRenaming(null);
                     }}
-                    className="w-full rounded-[3px] border border-white/30 bg-[#090907] px-1 py-0.5 text-[11px] text-white/90 outline-none"
+                    className="w-full rounded-lg border border-white/20 bg-white/[0.06] px-2 py-1 text-[11px] text-white outline-none focus:border-white/30"
                   />
                 ) : (
-                  <span className={cn(
-                    'block truncate text-[11px]',
-                    hiddenHere ? 'text-white/30' : isSelected ? 'text-white' : 'text-white/70',
-                  )}
-                  >
-                    {section.name}
-                  </span>
+                  <>
+                    <span className={cn(
+                      'block truncate text-[11px]',
+                      hiddenHere ? 'text-white/30' : isSelected ? 'text-white' : 'text-white/80',
+                    )}
+                    >
+                      {section.name}
+                    </span>
+                    <span className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[9px] uppercase tracking-[0.16em] text-white/40">
+                      {section.kind.replace('-', ' ')}
+                      {hiddenHere ? <span className="text-white/30">· hidden</span> : null}
+                      {changed.length > 0 ? (
+                        <span title={`Changed on ${changed.join(' and ')}`}>· {changed.join(' · ')}</span>
+                      ) : null}
+                      {pinned ? <span title="Anchored to the bottom of the storefront"><Anchor size={9} className="text-white/30" aria-label="Anchored" /></span> : null}
+                    </span>
+                  </>
                 )}
               </span>
 
-              {/* Right: device overrides, anchor, lock */}
-              <span className="ml-1 flex shrink-0 items-center gap-1">
-                {changed.map((point) => (
-                  <span
-                    key={point}
-                    title={`Changed on ${point}`}
-                    className="font-mono text-[8px] uppercase text-white/40"
-                  >
-                    {point[0]}
-                  </span>
-                ))}
-                {pinned ? <span title="Anchored to the bottom of the storefront"><Anchor size={10} className="text-white/25" aria-label="Anchored" /></span> : null}
-                <button
-                  type="button"
-                  aria-label={section.locked ? `Unlock ${section.name}` : `Lock ${section.name}`}
-                  title={section.locked ? 'Unlock' : 'Lock'}
-                  onClick={(event) => { event.stopPropagation(); onToggle(section.id, { locked: !section.locked }); }}
-                  className={cn(
-                    'grid size-5 place-items-center transition-opacity',
-                    section.locked ? 'text-white/60' : 'text-white/30 opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-                  )}
-                >
-                  {section.locked ? <Lock size={10} /> : <Unlock size={10} />}
-                </button>
-              </span>
+              {/* Lock (on hover unless locked) and the always-visible eye */}
+              <button
+                type="button"
+                aria-label={section.locked ? `Unlock ${section.name}` : `Lock ${section.name}`}
+                title={section.locked ? 'Unlock' : 'Lock'}
+                onClick={(event) => { event.stopPropagation(); onToggle(section.id, { locked: !section.locked }); }}
+                className={cn(
+                  'grid size-7 shrink-0 place-items-center rounded-full transition-opacity',
+                  section.locked ? 'text-white/60' : 'text-white/40 opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
+                )}
+              >
+                {section.locked ? <Lock size={11} /> : <Unlock size={11} />}
+              </button>
+              <button
+                type="button"
+                aria-label={settings.visible ? `Hide ${section.name} on ${breakpoint}` : `Show ${section.name} on ${breakpoint}`}
+                title={settings.visible ? `Hide on ${breakpoint}` : `Show on ${breakpoint}`}
+                onClick={(event) => { event.stopPropagation(); onToggle(section.id, { visible: !settings.visible }); }}
+                className="grid size-7 shrink-0 place-items-center rounded-full text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white"
+              >
+                {settings.visible ? <Eye size={12} /> : <EyeOff size={12} className="text-white/30" />}
+              </button>
             </li>
           );
         })}
