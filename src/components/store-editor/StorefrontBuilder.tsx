@@ -34,6 +34,7 @@ import {
   type SectionSettings, type StoreBreakpoint, type StoreLayout, type StoreSectionKind,
 } from '@/lib/store-editor/layout';
 import { SectionRenderer, type StorefrontData } from './SectionRenderer';
+import { DeviceFrame } from './DeviceFrame';
 import { moveCanvasBlock } from '@/lib/store-editor/canvas-blocks';
 import { SectionsPanel } from './SectionsPanel';
 import { SectionInspector } from './SectionInspector';
@@ -91,6 +92,7 @@ export function StorefrontBuilder({
   /** Bumped after a snapshot lands, so an open history list picks it up. */
   const [historyKey, setHistoryKey] = useState(0);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [frameWindow, setFrameWindow] = useState<Window | null>(null);
   const [compact, setCompact] = useState(false);
   const [adding, setAdding] = useState(false);
   /** Selected free-form block inside a `canvas` section, if any. */
@@ -263,8 +265,14 @@ export function StorefrontBuilder({
       if (event.key === '3') setBreakpoint('mobile');
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, commit, selectedId]);
+    // Clicking the canvas moves focus into the preview iframe; its keys must
+    // reach the same shortcuts or Delete/⌘Z stop working after one click.
+    frameWindow?.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      frameWindow?.removeEventListener('keydown', onKey);
+    };
+  }, [undo, redo, commit, selectedId, frameWindow]);
 
   /* ── Section operations ───────────────────────────────────────────────── */
 
@@ -548,9 +556,15 @@ export function StorefrontBuilder({
                 top, so every media query inside resolves as it would on the
                 actual device rather than at whatever the panel happens to be. */}
             <div
-              className="origin-top border border-white/15 bg-[#090907]"
-              style={{ width, transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+              className={cn(
+                'origin-top overflow-hidden bg-[#090907] shadow-[0_40px_120px_-20px_rgba(0,0,0,0.8)]',
+                // A phone and a tablet read as devices, not as a narrow desktop.
+                breakpoint === 'desktop' ? 'border border-white/15' : 'rounded-[20px] border-[6px] border-white/[0.08] ring-1 ring-white/15',
+              )}
+              style={{ width: breakpoint === 'desktop' ? width : width + 12, transform: `scale(${zoom})`, transformOrigin: 'top left' }}
             >
+              <DeviceFrame width={width} title={`Storefront preview · ${breakpoint}`} onWindow={setFrameWindow}>
+              <div onClick={() => setSelectedId(null)}>
               {layout.sections.map((section) => {
                 const settings = resolveSection(section, breakpoint);
                 const isSelected = section.id === selectedId;
@@ -618,6 +632,8 @@ export function StorefrontBuilder({
                   </div>
                 );
               })}
+              </div>
+              </DeviceFrame>
             </div>
           </div>
         </div>
