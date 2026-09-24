@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildDawWaveformBars,
   loadVisualPeaks,
+  readablePeaksUrl,
   resampleVisualPeaks,
   syntheticVisualPeaks,
   VISUAL_PEAK_MAX,
@@ -70,13 +71,13 @@ describe('visual waveform peaks', () => {
     expect(bars[3].isTransient).toBe(false);
   });
 
-  it('skips unreadable raw R2 sidecars without fetching', async () => {
-    const fetch = vi.fn();
+  it('reads raw R2 sidecars through the same-origin proxy, never cross-origin', async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ peaks: [0.2, 0.8] }) });
     vi.stubGlobal('fetch', fetch);
     process.env.NEXT_PUBLIC_R2_PUBLIC_URL = 'https://pub-abc.r2.dev';
 
-    await expect(loadVisualPeaks('https://pub-abc.r2.dev/peaks/a.json', new AbortController().signal)).resolves.toBeNull();
-    expect(fetch).not.toHaveBeenCalled();
+    await expect(loadVisualPeaks('https://pub-abc.r2.dev/peaks/a.json', new AbortController().signal)).resolves.toEqual([0.2, 0.8]);
+    expect(fetch.mock.calls[0][0]).toMatch(/^\/api\/audio\?src=/);
   });
 
   it('loads peaks from a configured CDN URL', async () => {
@@ -90,5 +91,17 @@ describe('visual waveform peaks', () => {
 
     await expect(loadVisualPeaks('https://pub-abc.r2.dev/peaks/a.json', new AbortController().signal)).resolves.toEqual([0.2, 0.8]);
     expect(fetch).toHaveBeenCalledWith('https://cdn.example.com/peaks/a.json', expect.any(Object));
+  });
+});
+
+describe('readablePeaksUrl', () => {
+  it('proxies r2.dev sidecars, which send no CORS headers', () => {
+    expect(readablePeaksUrl('https://pub-abc.r2.dev/peaks/a.json')).toBe(
+      `/api/audio?src=${encodeURIComponent('https://pub-abc.r2.dev/peaks/a.json')}`,
+    );
+  });
+  it('keeps same-origin paths direct and drops empty input', () => {
+    expect(readablePeaksUrl('/uploads/a.json')).toBe('/uploads/a.json');
+    expect(readablePeaksUrl(null)).toBeNull();
   });
 });
