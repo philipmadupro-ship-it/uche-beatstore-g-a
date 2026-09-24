@@ -42,6 +42,13 @@ const KIND_ICON: Record<StoreSectionKind, LucideIcon> = {
   canvas: Shapes,
 };
 
+/** Short kind names for the row meta — the long ones truncated at 15rem. */
+const KIND_SHORT: Partial<Record<StoreSectionKind, string>> = {
+  'featured-projects': 'projects',
+  'featured-playlists': 'playlists',
+  'producer-picks': 'picks',
+};
+
 export function SectionsPanel({
   layout, selectedId, breakpoint, onSelect, onReorder, onMove, onToggle, onDuplicate, onDelete, onRename,
 }: {
@@ -170,7 +177,7 @@ export function SectionsPanel({
                       {section.name}
                     </span>
                     <span className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[9px] uppercase tracking-[0.16em] text-white/40">
-                      {section.kind.replace('-', ' ')}
+                      {KIND_SHORT[section.kind] ?? section.kind}
                       {hiddenHere ? <span className="text-white/30">· hidden</span> : null}
                       {changed.length > 0 ? (
                         <span title={`Changed on ${changed.join(' and ')}`}>· {changed.join(' · ')}</span>
