@@ -61,7 +61,6 @@ import { InspectorPanel } from './InspectorPanel';
 import { AddPanel, CollagePanel, ExportPanel, SourcePanel } from './StudioToolPanels';
 import { DocumentsPanel } from './DocumentsPanel';
 import { CoverGeneratorPanel } from './CoverGeneratorPanel';
-import { StudioButton } from './StudioControls';
 import { ShortcutSheet } from './ShortcutSheet';
 import { ContextMenu, type ContextMenuItem } from './ContextMenu';
 import { ContextualToolbar } from './ContextualToolbar';
@@ -1201,13 +1200,14 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
     // so a new row has to come out of the canvas's share, not out of the
     // viewport. Growing the container instead is what made the page scroll
     // rather than the panels the last time this layout was touched.
-    <div ref={rootRef} className="relative grid h-[calc(100vh-10.5rem)] grid-rows-[3.25rem_2.5rem_minmax(0,1fr)_1.75rem] overflow-hidden rounded-xl border border-white/10 bg-[#090907] text-white/90">
+    <div className="editor-shell h-[calc(100vh-10.5rem)]">
+    <div ref={rootRef} className="relative grid h-full grid-rows-[3.25rem_2.5rem_minmax(0,1fr)_1.75rem] overflow-hidden rounded-xl border border-white/10 bg-[#090907] text-white/90">
       {showShortcuts ? <ShortcutSheet onClose={() => setShowShortcuts(false)} /> : null}
       {menu ? (
         <ContextMenu x={menu.x} y={menu.y} items={contextMenuItems()} onClose={() => setMenu(null)} />
       ) : null}
       {/* Top bar */}
-      <header className="flex min-w-0 items-center justify-between gap-2 border-b border-white/10 px-3">
+      <header className="editor-edge flex min-w-0 items-center justify-between gap-2 border-b border-white/10 px-3">
         <div className="flex min-w-0 shrink items-center gap-2 overflow-hidden">
           {/* Dropped first when space runs out — the document name matters more. */}
           <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 xl:inline">
@@ -1318,9 +1318,19 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
           >
             ?
           </button>
-          <StudioButton variant="accent" onClick={() => { void downloadArtwork(); }} disabled={exportState === 'exporting'}>
-            <Download size={12} /> {exportState === 'exporting' ? 'Rendering…' : 'Export'}
-          </StudioButton>
+          {/* The one primary action on the page: an island pill with its icon
+              in its own nested circle, which nudges on hover. */}
+          <button
+            type="button"
+            onClick={() => { void downloadArtwork(); }}
+            disabled={exportState === 'exporting'}
+            className="tool-press group ml-1 flex h-9 items-center gap-2 rounded-full bg-white pl-4 pr-1 text-[11px] font-medium text-black hover:bg-white/90 disabled:opacity-50"
+          >
+            {exportState === 'exporting' ? 'Rendering' : 'Export'}
+            <span className="grid size-7 place-items-center rounded-full bg-black/10 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-spring)] group-hover:-translate-y-px group-hover:translate-x-0.5">
+              {exportState === 'exporting' ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+            </span>
+          </button>
         </div>
       </header>
 
@@ -1368,7 +1378,7 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
               title={item.label}
               aria-label={item.label}
               className={cn(
-                'grid size-9 place-items-center rounded-lg transition-colors',
+                'tool-press grid size-9 place-items-center rounded-lg',
                 tab === item.id && showTools ? 'bg-white/[0.14] text-white' : 'text-white/40 hover:bg-white/[0.06] hover:text-white/80',
               )}
             >
@@ -1583,6 +1593,7 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
             : `${document.layers.length} layer${document.layers.length === 1 ? '' : 's'}`}
         </span>
       </footer>
+    </div>
     </div>
   );
 }

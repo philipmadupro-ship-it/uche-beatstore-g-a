@@ -38,7 +38,7 @@ export function CanvasInsert({ onInsert, zoom = 1 }: {
           aria-expanded={open}
           aria-label="Add a section here"
           onClick={() => setOpen((v) => !v)}
-          className="relative grid size-6 place-items-center rounded-full border border-white/40 bg-[#090907] text-white shadow-[0_4px_16px_rgba(0,0,0,0.6)] transition-colors hover:bg-white hover:text-black"
+          className="relative grid size-6 place-items-center rounded-full border border-white/40 bg-[#090907] text-white shadow-[0_4px_16px_rgba(0,0,0,0.6)] transition-colors hover:bg-white/90 hover:text-black"
         >
           <Plus size={13} />
         </button>
@@ -56,7 +56,7 @@ export function CanvasInsert({ onInsert, zoom = 1 }: {
                 onClick={() => { onInsert(preset); setOpen(false); }}
                 className="rounded-lg border border-transparent px-3 py-2 text-left transition-colors hover:border-white/15 hover:bg-white/[0.06]"
               >
-                <span className="block text-[12px] text-white/90">{preset.label}</span>
+                <span className="block text-[11px] text-white/90">{preset.label}</span>
                 <span className="block text-[10px] text-white/40">{preset.hint}</span>
               </button>
             ))}

@@ -770,7 +770,7 @@ export function StudioCanvas({
         paddingLeft: showRulers ? RULER_SIZE + 40 : undefined,
       }}
       className={cn(
-        'relative grid h-full min-h-0 overflow-auto bg-[#090907] p-10',
+        'editor-pasteboard relative grid h-full min-h-0 overflow-auto p-10',
         spaceHeld && 'cursor-grab',
       )}
       onPointerMove={(event) => {

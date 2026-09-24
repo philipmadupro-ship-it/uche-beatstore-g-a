@@ -307,15 +307,16 @@ export function StorefrontBuilder({
   const width = breakpointWidths[breakpoint];
 
   return (
+    <div className="editor-shell h-[calc(100vh-10.5rem)]">
     <div
       ref={rootRef}
-      className="relative grid h-[calc(100vh-10.5rem)] grid-rows-[2.75rem_minmax(0,1fr)_1.75rem] overflow-hidden rounded-xl border border-white/10 bg-[#090907]"
+      className="relative grid h-full grid-rows-[2.75rem_minmax(0,1fr)_1.75rem] overflow-hidden rounded-xl border border-white/10 bg-[#090907]"
     >
       {showShortcuts ? (
         <ShortcutSheet groups={STORE_EDITOR_SHORTCUTS} onClose={() => setShowShortcuts(false)} />
       ) : null}
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <header className="flex min-w-0 items-center gap-2 border-b border-white/10 px-3">
+      <header className="editor-edge flex min-w-0 items-center gap-2 border-b border-white/10 px-3">
         <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 lg:inline">
           Storefront
         </span>
@@ -324,7 +325,9 @@ export function StorefrontBuilder({
 
         {/* Device switch. Numbered shortcuts are in the titles rather than a
             legend, so they are discoverable at the point of use. */}
-        <div className="flex shrink-0 items-center gap-1">
+        {/* Device switch — one floating segmented pill, the way a pro tool
+            groups a mutually exclusive choice. */}
+        <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-white/10 bg-white/[0.04] p-0.5">
           {storeBreakpoints.map((point, index) => {
             const Icon = deviceIcons[point];
             return (
@@ -335,7 +338,7 @@ export function StorefrontBuilder({
                 title={`${point} · ${breakpointWidths[point]}px (${index + 1})`}
                 onClick={() => setBreakpoint(point)}
                 className={cn(
-                  'flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11px] capitalize transition-colors',
+                  'tool-press flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px] capitalize',
                   breakpoint === point
                     ? 'bg-white/[0.14] text-white'
                     : 'text-white/50 hover:bg-white/[0.06] hover:text-white/90',
@@ -356,7 +359,7 @@ export function StorefrontBuilder({
           disabled={editor.past.length === 0}
           title="Undo (⌘Z)"
           aria-label="Undo"
-          className="grid size-7 shrink-0 place-items-center rounded-lg text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white/90 disabled:text-white/15 disabled:hover:bg-transparent"
+          className="tool-press grid size-7 shrink-0 place-items-center rounded-lg text-white/60 hover:bg-white/[0.06] hover:text-white/90 disabled:text-white/15 disabled:hover:bg-transparent"
         >
           <Undo2 size={13} />
         </button>
@@ -366,7 +369,7 @@ export function StorefrontBuilder({
           disabled={editor.future.length === 0}
           title="Redo (Shift ⌘Z)"
           aria-label="Redo"
-          className="grid size-7 shrink-0 place-items-center rounded-lg text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white/90 disabled:text-white/15 disabled:hover:bg-transparent"
+          className="tool-press grid size-7 shrink-0 place-items-center rounded-lg text-white/60 hover:bg-white/[0.06] hover:text-white/90 disabled:text-white/15 disabled:hover:bg-transparent"
         >
           <Redo2 size={13} />
         </button>
@@ -410,7 +413,7 @@ export function StorefrontBuilder({
               title={label}
               onClick={() => setPanel(tab)}
               className={cn(
-                'grid size-8 place-items-center rounded-lg transition-colors',
+                'tool-press grid size-8 place-items-center rounded-lg',
                 panel === tab ? 'bg-white/[0.14] text-white' : 'text-white/40 hover:bg-white/[0.06] hover:text-white/80',
               )}
             >
@@ -552,7 +555,7 @@ export function StorefrontBuilder({
           // A plain, darker pasteboard — Photoshop's, not graph paper. The
           // grid competed with the storefront for attention and read as
           // decoration; the device frame is what should hold the eye.
-          className="min-h-0 overflow-auto bg-[#050504] px-10 py-12"
+          className="editor-pasteboard min-h-0 overflow-auto px-10 py-12"
         >
           <div className="mx-auto" style={{ width: width * zoom }}>
             {/* The frame is the real device width; zoom is a visual scale on
@@ -767,6 +770,7 @@ export function StorefrontBuilder({
             {selected ? selected.name : `${layout.sections.length} sections`}
           </span>
         </footer>
+    </div>
     </div>
   );
 }
