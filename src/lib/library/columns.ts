@@ -167,7 +167,7 @@ export function resolveColumns(ids: unknown): LibraryColumn[] {
  * configurable and are always present.
  */
 export function gridTemplate(columns: LibraryColumn[]): string {
-  return ['40px', ...columns.map((c) => c.width), '32px'].join(' ');
+  return ['48px', ...columns.map((c) => c.width), '32px'].join(' ');
 }
 
 /** Move a column, for drag-to-reorder. Out-of-range indices are no-ops. */

@@ -87,7 +87,7 @@ interface TrackCardProps {
  * scanner, which reads source text rather than evaluating it — the CSS would
  * never be generated and every row would collapse to a single column.
  */
-export const TRACK_ROW_GRID = 'md:grid-cols-[40px_minmax(0,1.45fr)_minmax(0,1fr)_84px_148px_32px]';
+export const TRACK_ROW_GRID = 'md:grid-cols-[48px_minmax(0,1.45fr)_minmax(0,1fr)_84px_148px_32px]';
 
 type TrackTag = {
   tag: string;
@@ -373,12 +373,14 @@ function TrackCardImpl({
         );
       }}
       style={columns ? ({ '--track-row-cols': gridTemplate(columns) } as React.CSSProperties) : undefined}
-      className={`group relative grid min-h-[56px] grid-cols-[40px_minmax(0,1fr)_32px] items-center gap-3 rounded-lg border px-2.5 py-2 transition-colors cursor-pointer ${columns ? 'track-row-dynamic' : TRACK_ROW_GRID} md:gap-4 md:px-3 ${
+      className={`group relative grid min-h-[64px] grid-cols-[48px_minmax(0,1fr)_32px] items-center gap-3 rounded-xl border px-2 py-2 transition-colors cursor-pointer ${columns ? 'track-row-dynamic' : TRACK_ROW_GRID} md:gap-4 md:px-3 ${
         isCurrent
-          ? 'border-[#D4BFA0]/35 bg-[#D4BFA0]/[0.07] shadow-[inset_3px_0_0_#D4BFA0]'
+          // Playing is STATE, and state is white-at-alpha (design-direction
+          // principle 3) — the old #D4BFA0 wash was the retired amber palette.
+          ? 'border-white/30 bg-white/[0.08]'
           : selected
-            ? 'border-white/[0.24] bg-white/[0.08]'
-            : 'border-white/[0.07] hover:border-white/[0.16] hover:bg-white/[0.04]'
+            ? 'border-white/20 bg-white/[0.06]'
+            : 'border-white/[0.06] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.05]'
       }`}
     >
       {/* Offline save/remove status, announced on transitions only — see
@@ -395,7 +397,7 @@ function TrackCardImpl({
         onClick={(e) => { if (onMoveUp || onMoveDown || selectable) e.stopPropagation(); }}
       >
         {(onMoveUp !== undefined || onMoveDown !== undefined) && moveControls === 'cell' ? (
-          <div className="flex h-10 w-10 flex-col items-center justify-center gap-0.5 rounded-lg border border-white/10 bg-[#090907]/80">
+          <div className="flex h-12 w-12 flex-col items-center justify-center gap-0.5 rounded-lg border border-white/10 bg-[#090907]/80">
             <button
               type="button"
               disabled={isFirstInOrder}
@@ -419,7 +421,7 @@ function TrackCardImpl({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onSelectChange?.(track, !selected); }}
-            className={`h-10 w-10 rounded-lg flex items-center justify-center transition-colors ${
+            className={`h-12 w-12 rounded-lg flex items-center justify-center transition-colors ${
             selected ? 'bg-white border border-white/30 text-black' : 'border border-white/20 bg-[#090907]/70 text-white/30 hover:border-white/30 hover:text-white/80'
           }`}
             aria-pressed={selected}
@@ -431,17 +433,17 @@ function TrackCardImpl({
           <button
             type="button"
             onClick={handlePlay}
-            className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-[#090907] text-white"
+            className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-[#090907] text-white ring-1 ring-inset ring-white/[0.06]"
             aria-label={isActive ? 'Pause track' : 'Play track'}
           >
             {/* Same resolution as the grid: own cover, then the producer's
                 default artwork, then a gradient seeded by this track. The list
                 is the library's default view, so leaving it on a bare glyph
                 meant most people never saw their own artwork at all. */}
-            <ArtworkFallback src={track.cover_url} seed={track.id} tags={artworkTags} sizes="40px" className="object-cover">
+            <ArtworkFallback src={track.cover_url} seed={track.id} tags={artworkTags} sizes="48px" className="object-cover">
               <Music size={13} aria-hidden />
             </ArtworkFallback>
-            <span className={`absolute inset-0 flex items-center justify-center bg-black/55 transition-opacity ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+            <span className={`absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px] transition-opacity ${isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
               {isActive ? <PauseGlyph size={13} /> : <PlayGlyph size={13} className="ml-0.5" />}
             </span>
           </button>
@@ -519,7 +521,7 @@ function TrackCardImpl({
           {track.store_listed ? (
             <>
               <span aria-hidden className="h-2 w-px bg-white/15" />
-              <span className="text-[#D4BFA0]">
+              <span className="text-[#c8a47a]">
                 {track.lease_price_usd != null ? `$${track.lease_price_usd}` : 'Listed'}
               </span>
             </>
@@ -585,7 +587,7 @@ function TrackCardImpl({
                 {track.store_listed ? (
                   <span
                     title={track.lease_price_usd != null ? `Listed from $${track.lease_price_usd}` : 'Listed on the store'}
-                    className="shrink-0 rounded border border-[#D4BFA0]/25 bg-[#D4BFA0]/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[#D4BFA0]"
+                    className="shrink-0 rounded border border-[#c8a47a]/25 bg-[#c8a47a]/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[#c8a47a]"
                   >
                     {track.lease_price_usd != null ? `$${track.lease_price_usd}` : 'Listed'}
                   </span>
@@ -654,7 +656,7 @@ function TrackCardImpl({
         {track.store_listed ? (
           <span
             title={track.lease_price_usd != null ? `Listed from $${track.lease_price_usd}` : 'Listed on the store'}
-            className="shrink-0 rounded border border-[#D4BFA0]/25 bg-[#D4BFA0]/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[#D4BFA0]"
+            className="shrink-0 rounded border border-[#c8a47a]/25 bg-[#c8a47a]/10 px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-wider text-[#c8a47a]"
           >
             {track.lease_price_usd != null ? `$${track.lease_price_usd}` : 'Listed'}
           </span>
