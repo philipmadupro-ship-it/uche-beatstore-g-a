@@ -34,6 +34,7 @@ import {
   type SectionSettings, type StoreBreakpoint, type StoreLayout, type StoreSectionKind,
 } from '@/lib/store-editor/layout';
 import { SectionRenderer, type StorefrontData } from './SectionRenderer';
+import { ShortcutSheet } from '@/components/cover-art/ShortcutSheet';
 import { DeviceFrame } from './DeviceFrame';
 import { moveCanvasBlock } from '@/lib/store-editor/canvas-blocks';
 import { SectionsPanel } from './SectionsPanel';
@@ -49,6 +50,13 @@ import {
   applySectionStyle, copySectionStyle, describeStyle, styleAppliesTo,
   type SectionStyle,
 } from '@/lib/store-editor/section-style';
+
+/** Shown by "?" — a keyboard model nobody can discover might as well not exist. */
+const STORE_EDITOR_SHORTCUTS = [
+  { title: 'View', items: [['1 / 2 / 3', 'Desktop / tablet / mobile'], ['?', 'This sheet']] as Array<[string, string]> },
+  { title: 'Edit', items: [['⌘Z / Shift ⌘Z', 'Undo / redo'], ['⌘D', 'Duplicate section'], ['Delete', 'Remove section'], ['H', 'Hide / show on this device']] as Array<[string, string]> },
+  { title: 'Layers', items: [['↑ / ↓', 'Select previous / next'], ['Enter', 'Rename'], ['Double-click', 'Rename']] as Array<[string, string]> },
+];
 
 type BuilderState = {
   doc: StoreLayout;
@@ -92,6 +100,7 @@ export function StorefrontBuilder({
   /** Bumped after a snapshot lands, so an open history list picks it up. */
   const [historyKey, setHistoryKey] = useState(0);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [frameWindow, setFrameWindow] = useState<Window | null>(null);
   const [compact, setCompact] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -260,6 +269,15 @@ export function StorefrontBuilder({
         setSelectedId(null);
         return;
       }
+      if (event.key === 'Escape') { setShowShortcuts(false); return; }
+      if (event.key === '?') { setShowShortcuts(true); return; }
+      if ((event.key === 'h' || event.key === 'H') && !meta && selectedId) {
+        // Photoshop's hide-layer, scoped to the device being edited — the
+        // same rule as the eye column in the layers panel.
+        commit((current) => updateSection(current, selectedId, (section) =>
+          setSectionSetting(section, breakpoint, 'visible', !resolveSection(section, breakpoint).visible)));
+        return;
+      }
       if (event.key === '1') setBreakpoint('desktop');
       if (event.key === '2') setBreakpoint('tablet');
       if (event.key === '3') setBreakpoint('mobile');
@@ -272,7 +290,7 @@ export function StorefrontBuilder({
       window.removeEventListener('keydown', onKey);
       frameWindow?.removeEventListener('keydown', onKey);
     };
-  }, [undo, redo, commit, selectedId, frameWindow]);
+  }, [undo, redo, commit, selectedId, frameWindow, breakpoint]);
 
   /* ── Section operations ───────────────────────────────────────────────── */
 
@@ -293,6 +311,9 @@ export function StorefrontBuilder({
       ref={rootRef}
       className="relative grid h-[calc(100vh-10.5rem)] grid-rows-[2.75rem_minmax(0,1fr)_1.75rem] overflow-hidden rounded-xl border border-white/10 bg-[#090907]"
     >
+      {showShortcuts ? (
+        <ShortcutSheet groups={STORE_EDITOR_SHORTCUTS} onClose={() => setShowShortcuts(false)} />
+      ) : null}
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
       <header className="flex min-w-0 items-center gap-2 border-b border-white/10 px-3">
         <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 lg:inline">

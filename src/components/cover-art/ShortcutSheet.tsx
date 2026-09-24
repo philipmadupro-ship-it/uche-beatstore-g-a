@@ -64,7 +64,11 @@ export const shortcutGroups: Array<{ title: string; items: Array<[string, string
   },
 ];
 
-export function ShortcutSheet({ onClose }: { onClose: () => void }) {
+export function ShortcutSheet({ onClose, groups = shortcutGroups }: {
+  onClose: () => void;
+  /** Defaults to the Cover Art Studio's; the Store Editor passes its own. */
+  groups?: typeof shortcutGroups;
+}) {
   return (
     <div
       role="dialog"
@@ -90,7 +94,7 @@ export function ShortcutSheet({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2">
-          {shortcutGroups.map((group) => (
+          {groups.map((group) => (
             <section key={group.title}>
               <h3 className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">{group.title}</h3>
               <dl className="grid gap-1">
