@@ -46,6 +46,11 @@ import {
   isFullyHidden, isPinnedSection, normalizeLayout, resolveSection, visibilityClasses,
   type SectionSettings, type StoreSectionKind,
 } from '@/lib/store-editor/layout';
+import { sectionFrame } from '@/lib/store-editor/section-frame';
+import { SectionRenderer } from '@/components/store-editor/SectionRenderer';
+
+/** Section kinds whose markup the layout feature owns (see SectionRenderer). */
+const LAYOUT_RENDERED_KINDS = new Set<string>(['text', 'image', 'video', 'links', 'canvas']);
 import { useStoreBreakpoint } from '@/hooks/useStoreBreakpoint';
 import { FeaturedPlaylistsStrip } from '@/components/store/FeaturedPlaylistsStrip';
 import {
@@ -1263,10 +1268,38 @@ function StorePage() {
       {storeLayout.sections.map((section) => {
         if (isPinnedSection(section.kind)) return null;
         if (isFullyHidden(section)) return null;
+        const hidden = visibilityClasses(section);
+        // The producer's own blocks (text, image, video, links, free canvas)
+        // render through the SAME component the Store Editor canvas uses.
+        // They used to fall through to `default: return null` here, so a block
+        // added in the builder showed in the preview and never reached buyers.
+        // SectionRenderer paints its own frame, so the wrapper below skips it.
+        if (LAYOUT_RENDERED_KINDS.has(section.kind)) {
+          return (
+            <div key={section.id} className={hidden || undefined}>
+              <SectionRenderer
+                section={section}
+                breakpoint={viewerBreakpoint}
+                theme={storeLayout.theme}
+                data={{ creator, tracks: [], playlists: [], projects: [], picks: [] }}
+              />
+            </div>
+          );
+        }
         const node = renderStoreSection(section.kind, resolveSection(section, viewerBreakpoint));
         if (!node) return null;
-        const hidden = visibilityClasses(section);
-        return hidden ? <div key={section.id} className={hidden}>{node}</div> : <Fragment key={section.id}>{node}</Fragment>;
+        // Frame style from the Store Editor — base settings only, because this
+        // HTML is edge-cached for every device (see lib/store-editor/section-frame).
+        const frame = sectionFrame(resolveSection(section, 'desktop'));
+        if (!hidden && !frame.active) return <Fragment key={section.id}>{node}</Fragment>;
+        return (
+          <div key={section.id} className={hidden || undefined} style={frame.active ? frame.style : undefined}>
+            {frame.overlay > 0 ? (
+              <span aria-hidden className="pointer-events-none absolute inset-0 bg-black" style={{ opacity: frame.overlay }} />
+            ) : null}
+            {frame.active ? <div className="relative">{node}</div> : node}
+          </div>
+        );
       })}
 
       {/* ── Toolbar — sticky glass header ──────────────────────── */}

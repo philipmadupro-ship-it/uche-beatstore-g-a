@@ -57,6 +57,56 @@ function PropertyGroup({ title, children }: { title: string; children: React.Rea
   );
 }
 
+/** Colour swatch + hex field + clear. Empty value means "none / inherit". */
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="grid min-w-0 gap-1.5">
+      <Label>{label}</Label>
+      <span className="flex w-full min-w-0 items-center gap-1.5">
+        <input
+          type="color"
+          aria-label={`${label} colour`}
+          value={/^#[0-9a-f]{6}$/i.test(value) ? value : '#000000'}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-8 w-9 shrink-0 cursor-pointer rounded-lg border border-white/10 bg-transparent p-0.5"
+        />
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value.trim())}
+          placeholder="None"
+          aria-label={`${label} hex`}
+          size={1}
+          className="h-8 w-0 min-w-0 flex-1 rounded-lg border border-white/10 bg-[#090907] px-2 font-mono text-[11px] text-white/90 placeholder:text-white/25 focus:border-white/30 focus:outline-none"
+        />
+        {value ? (
+          <button type="button" onClick={() => onChange('')} className="h-8 shrink-0 rounded-lg px-2 text-[10px] text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/80">
+            Clear
+          </button>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
+function RangeField({ label, suffix, min, max, step, value, onChange, zeroLabel = 'Auto' }: {
+  label: string; suffix: string; min: number; max: number; step: number; value: number; onChange: (v: number) => void;
+  zeroLabel?: string;
+}) {
+  return (
+    <label className="grid gap-1.5">
+      <Label>{label}</Label>
+      <span className="flex items-center gap-2">
+        <input
+          type="range" min={min} max={max} step={step} value={value || 0}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="h-1 flex-1 cursor-pointer appearance-none bg-white/10 accent-white"
+        />
+        <span className="w-12 text-right font-mono text-[10px] tabular-nums text-white/50">{value ? `${value}${suffix}` : zeroLabel}</span>
+      </span>
+    </label>
+  );
+}
+
 function Label({ children, overridden, onReset }: {
   children: React.ReactNode;
   overridden?: boolean;
@@ -80,12 +130,14 @@ function Label({ children, overridden, onReset }: {
 }
 
 export function SectionInspector({
-  section, breakpoint, onSet, onClear, onContent, onBlocks, selectedBlockId, onSelectBlock,
+  section, breakpoint, onSet, onSetBase, onClear, onContent, onBlocks, selectedBlockId, onSelectBlock,
   clipboardStyle, onCopyStyle, onPasteStyle, canPasteStyle, pasteStyleLabel, onSaveToLibrary,
 }: {
   section: StoreSection | null;
   breakpoint: StoreBreakpoint;
   onSet: <K extends keyof SectionSettings>(key: K, value: SectionSettings[K]) => void;
+  /** Writes to the base (every device) — used for the frame style keys. */
+  onSetBase?: <K extends keyof SectionSettings>(key: K, value: SectionSettings[K]) => void;
   onClear: (key: keyof SectionSettings) => void;
   onContent: (patch: Record<string, string>) => void;
   /** Free-form blocks, for `canvas` sections. */
@@ -302,6 +354,39 @@ export function SectionInspector({
         ) : null}
 
       </PropertyGroup>
+
+      {onSetBase && can('background') ? (
+        <PropertyGroup title="Style">
+          {/* Frame style applies to every device: /store is cached as one page
+              for all of them. Said here so a mobile-only tweak is not expected. */}
+          <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">All devices</p>
+          <ColorField
+            label="Background"
+            value={settings.background}
+            onChange={(v) => onSetBase('background', v)}
+          />
+          <label className="grid gap-1.5">
+            <Label>Background image</Label>
+            <input
+              value={settings.backgroundImage}
+              onChange={(e) => onSetBase('backgroundImage', e.target.value)}
+              placeholder="https://…"
+              size={1}
+              className="h-8 w-full min-w-0 rounded-lg border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 placeholder:text-white/25 focus:border-white/30 focus:outline-none"
+            />
+          </label>
+          {settings.backgroundImage ? (
+            <RangeField label="Darken image" suffix="%" min={0} max={80} step={5} value={settings.overlay} zeroLabel="None" onChange={(v) => onSetBase('overlay', v)} />
+          ) : null}
+          <ColorField
+            label="Text colour"
+            value={settings.textColor}
+            onChange={(v) => onSetBase('textColor', v)}
+          />
+          <RangeField label="Min height" suffix="px" min={0} max={900} step={20} value={settings.minHeight} onChange={(v) => onSetBase('minHeight', v)} />
+          <RangeField label="Corners" suffix="px" min={0} max={40} step={2} value={settings.radius} zeroLabel="None" onChange={(v) => onSetBase('radius', v)} />
+        </PropertyGroup>
+      ) : null}
 
       <div className="space-y-4 px-4 pb-4">
         {/* Content fields, only for the sections that carry their own copy. */}

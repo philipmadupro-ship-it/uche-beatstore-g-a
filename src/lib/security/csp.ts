@@ -57,7 +57,7 @@ export function buildCsp(nonce: string, framable = false): string {
     // Audio analysis runs in blob: workers (dashboard). Explicit so workers
     // don't fall back to script-src, which has no blob:.
     `worker-src 'self' blob:`,
-    `frame-src https://js.stripe.com https://*.js.stripe.com https://*.stripe.com https://hooks.stripe.com`,
+    `frame-src https://js.stripe.com https://*.js.stripe.com https://*.stripe.com https://hooks.stripe.com https://www.youtube-nocookie.com https://player.vimeo.com`,
     frameAncestors,
     `base-uri 'self'`,
     `form-action 'self'`,

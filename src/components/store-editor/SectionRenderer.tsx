@@ -23,6 +23,8 @@ import type { CreatorProfile, StoreTrack } from '@/components/store/types';
 import { resolveSection, type SectionSettings, type StoreBreakpoint, type StoreSection, type StoreTheme } from '@/lib/store-editor/layout';
 import { cn } from '@/lib/utils';
 import { pointToPercent } from '@/lib/store-editor/canvas-blocks';
+import { safeColor, sectionFrame } from '@/lib/store-editor/section-frame';
+import { toVideoEmbed } from '@/lib/store-editor/video-embed';
 
 export type BuilderPlaylist = {
   id: string;
@@ -71,8 +73,11 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 export function SectionRenderer({
-  section, breakpoint, theme, data, editBlocks,
+  section, breakpoint, theme, data, editBlocks, editing = false,
 }: {
+  /** True on the Store Editor canvas: shows "add … in the inspector" hints that
+   *  must never reach buyers on the live page. */
+  editing?: boolean;
   section: StoreSection;
   breakpoint: StoreBreakpoint;
   theme: StoreTheme;
@@ -91,6 +96,8 @@ export function SectionRenderer({
 }) {
   const settings = resolveSection(section, breakpoint);
   if (!settings.visible) return null;
+  const textColor = safeColor(resolveSection(section, 'desktop').textColor) ?? undefined;
+  const videoEmbed = section.kind === 'video' ? toVideoEmbed(section.content?.videoUrl) : null;
 
   const pad = spacingFor(settings, theme);
   const inner = cn('mx-auto w-full', widthClass(settings.width));
@@ -295,17 +302,19 @@ export function SectionRenderer({
             {section.content?.heading ? (
               <h2
                 className="mb-2 text-[24px] leading-tight"
-                style={{ color: theme.text, fontFamily: 'var(--font-heading)' }}
+                style={{ color: textColor ?? theme.text, fontFamily: 'var(--font-heading)' }}
               >
                 {section.content.heading}
               </h2>
             ) : null}
+            {section.content?.body || editing ? (
             <p
               className="mx-auto whitespace-pre-wrap leading-relaxed"
-              style={{ color: theme.muted, fontSize: theme.typeScale, maxWidth: settings.width === 'narrow' ? '60ch' : undefined }}
+              style={{ color: textColor ?? theme.muted, opacity: textColor ? 0.8 : undefined, fontSize: theme.typeScale, maxWidth: settings.width === 'narrow' ? '60ch' : undefined }}
             >
               {section.content?.body || 'Add your text in the inspector.'}
             </p>
+            ) : null}
             {section.content?.ctaLabel ? (
               <span
                 className="mt-4 inline-block border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.16em]"
@@ -351,7 +360,7 @@ export function SectionRenderer({
                 />
               </div>
             ) : (
-              <EmptyNote icon={Music}>Add an image URL in the inspector</EmptyNote>
+              editing ? <EmptyNote icon={Music}>Add an image URL in the inspector</EmptyNote> : null
             )}
           </div>
         );
@@ -359,20 +368,24 @@ export function SectionRenderer({
       case 'video':
         return (
           <div className={cn(inner, 'px-4')}>
-            {section.content?.videoUrl ? (
+            {videoEmbed ? (
               <div
                 className="aspect-video w-full border"
                 style={{ borderColor: theme.border, background: theme.surface, borderRadius: theme.radius }}
               >
                 <iframe
-                  src={section.content.videoUrl}
-                  title={section.content.heading || 'Video'}
+                  src={videoEmbed}
+                  title={section.content?.heading || 'Video'}
                   className="h-full w-full"
                   allow="accelerometer; clipboard-write; encrypted-media; picture-in-picture"
                 />
               </div>
             ) : (
-              <EmptyNote icon={Music}>Add an embed URL in the inspector</EmptyNote>
+              editing ? (
+                <EmptyNote icon={Music}>
+                  {section.content?.videoUrl ? 'Only YouTube and Vimeo links can be embedded' : 'Paste a YouTube or Vimeo link in the inspector'}
+                </EmptyNote>
+              ) : null
             )}
           </div>
         );
@@ -519,12 +532,18 @@ export function SectionRenderer({
     }
   })();
 
+  // Frame style (background, image, overlay, text colour, height, radius) —
+  // the same function the live /store page uses, so the two cannot disagree.
+  const frame = sectionFrame(resolveSection(section, 'desktop'));
   return (
     <section
       data-section-kind={section.kind}
-      style={{ paddingTop: pad, paddingBottom: pad }}
+      style={{ paddingTop: pad, paddingBottom: pad, ...frame.style }}
     >
-      {body}
+      {frame.overlay > 0 ? (
+        <span aria-hidden className="pointer-events-none absolute inset-0 bg-black" style={{ opacity: frame.overlay }} />
+      ) : null}
+      {frame.active ? <div className="relative">{body}</div> : body}
     </section>
   );
 }

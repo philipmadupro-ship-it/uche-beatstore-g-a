@@ -21,21 +21,23 @@
  *     shell whatever else is on screen.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Check, History, Layers, Loader2, Monitor, Palette, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import {
-  addSection, breakpointWidths, clearSectionOverride, createSection,
+  addSection, breakpointWidths, clearSectionOverride, isPinnedSection,
   duplicateSection, moveSection, normalizeLayout, removeSection, reorderSection,
   resolveSection, setSectionSetting, storeBreakpoints, updateSection,
-  type SectionSettings, type StoreBreakpoint, type StoreLayout, type StoreSectionKind,
+  type SectionSettings, type StoreBreakpoint, type StoreLayout,
 } from '@/lib/store-editor/layout';
 import { SectionRenderer, type StorefrontData } from './SectionRenderer';
 import { ShortcutSheet } from '@/components/cover-art/ShortcutSheet';
 import { DeviceFrame } from './DeviceFrame';
+import { CanvasInsert } from './CanvasInsert';
+import { SECTION_PRESETS, sectionFromPreset } from '@/lib/store-editor/presets';
 import { moveCanvasBlock } from '@/lib/store-editor/canvas-blocks';
 import { SectionsPanel } from './SectionsPanel';
 import { SectionInspector } from './SectionInspector';
@@ -74,8 +76,6 @@ const deviceIcons: Record<StoreBreakpoint, React.ComponentType<{ size?: number }
 };
 
 /** Sections a producer can add. The data-backed ones already exist by default. */
-const addableKinds: StoreSectionKind[] = ['text', 'image', 'video', 'links', 'canvas'];
-
 export function StorefrontBuilder({
   initialLayout,
   data,
@@ -464,19 +464,20 @@ export function StorefrontBuilder({
                 </button>
                 {adding ? (
                   <div className="overlay-surface ui-pop-up absolute bottom-12 left-2 right-2 z-40 max-h-80 overflow-y-auto rounded-xl py-1">
-                    {addableKinds.map((kind) => (
+                    {SECTION_PRESETS.map((preset) => (
                       <button
-                        key={kind}
+                        key={preset.id}
                         type="button"
                         onClick={() => {
-                          const section = createSection(kind);
+                          const section = sectionFromPreset(preset);
                           commit((current) => addSection(current, section));
                           setSelectedId(section.id);
                           setAdding(false);
                         }}
-                        className="mx-1 block w-[calc(100%-0.5rem)] rounded-lg px-3 py-2 text-left text-[11px] capitalize text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white/90"
+                        className="mx-1 block w-[calc(100%-0.5rem)] rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.08]"
                       >
-                        {kind}
+                        <span className="block text-[11px] text-white/80">{preset.label}</span>
+                        <span className="block text-[10px] text-white/35">{preset.hint}</span>
                       </button>
                     ))}
 
@@ -567,12 +568,26 @@ export function StorefrontBuilder({
             >
               <DeviceFrame width={width} title={`Storefront preview · ${breakpoint}`} onWindow={setFrameWindow}>
               <div onClick={() => setSelectedId(null)}>
-              {layout.sections.map((section) => {
+              {layout.sections.map((section, index) => {
                 const settings = resolveSection(section, breakpoint);
                 const isSelected = section.id === selectedId;
+                // An insert point above every movable section, plus one above
+                // the first pinned one (the end of the movable run).
+                const insertable = !isPinnedSection(section.kind)
+                  || index === 0 || !isPinnedSection(layout.sections[index - 1].kind);
                 return (
+                  <Fragment key={section.id}>
+                  {insertable ? (
+                    <CanvasInsert
+                      zoom={zoom}
+                      onInsert={(preset) => {
+                        const created = sectionFromPreset(preset);
+                        commit((current) => addSection(current, created, index));
+                        setSelectedId(created.id);
+                      }}
+                    />
+                  ) : null}
                   <div
-                    key={section.id}
                     role="button"
                     tabIndex={-1}
                     aria-label={`${section.name} section`}
@@ -625,6 +640,7 @@ export function StorefrontBuilder({
                         breakpoint={breakpoint}
                         theme={layout.theme}
                         data={data}
+                        editing
                         editBlocks={section.kind === 'canvas' ? {
                           selectedId: selectedBlockId,
                           onSelect: setSelectedBlockId,
@@ -650,6 +666,7 @@ export function StorefrontBuilder({
                       />
                     </div>
                   </div>
+                  </Fragment>
                 );
               })}
               </div>
@@ -660,7 +677,7 @@ export function StorefrontBuilder({
 
         {/* Right: inspector */}
         <aside className={cn(
-          'min-h-0 border-l border-white/10 bg-[#0D0D0A]',
+          'min-h-0 overflow-x-hidden overflow-y-auto border-l border-white/10 bg-[#0D0D0A]',
           compact && 'absolute inset-y-0 right-0 z-30 w-72 shadow-[0_0_40px_rgba(0,0,0,0.6)]',
         )}
         >
@@ -668,6 +685,10 @@ export function StorefrontBuilder({
             section={selected}
             breakpoint={breakpoint}
             onSet={setSetting}
+            onSetBase={(key, value) => {
+              if (!selectedId) return;
+              commit((current) => updateSection(current, selectedId, (section) => setSectionSetting(section, 'desktop', key, value)));
+            }}
             onClear={clearOverride}
             selectedBlockId={selectedBlockId}
             onSelectBlock={setSelectedBlockId}

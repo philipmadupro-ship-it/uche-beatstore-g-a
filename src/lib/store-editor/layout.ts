@@ -78,6 +78,23 @@ export type SectionSettings = {
   spacing: number;
   width: SectionWidth;
   align: SectionAlign;
+  /* Frame style — painted around ANY section by lib/store-editor/section-frame,
+     so every kind honours them, on the canvas and the live page alike. They
+     live on the base only (see FRAME_KEYS): /store is edge-cached as one HTML
+     for every device, so a per-device background would bake one device's look
+     into the cache. */
+  /** Background colour, or '' for none. */
+  background: string;
+  /** Background image URL (https or same-origin path), or ''. */
+  backgroundImage: string;
+  /** Darkening over the background image, 0–80 (%). */
+  overlay: number;
+  /** Text colour override, or '' to inherit. */
+  textColor: string;
+  /** Minimum height in px; 0 = size to content. */
+  minHeight: number;
+  /** Corner radius of the frame in px. */
+  radius: number;
 };
 
 export const defaultSectionSettings: SectionSettings = {
@@ -87,7 +104,17 @@ export const defaultSectionSettings: SectionSettings = {
   spacing: 4,
   width: 'wide',
   align: 'left',
+  background: '',
+  backgroundImage: '',
+  overlay: 0,
+  textColor: '',
+  minHeight: 0,
+  radius: 0,
 };
+
+/** Settings that apply to every device at once (written to the base only). */
+export const FRAME_KEYS = ['background', 'backgroundImage', 'overlay', 'textColor', 'minHeight', 'radius'] as const;
+export type FrameKey = (typeof FRAME_KEYS)[number];
 
 /** Free-text/media payloads for the sections that carry their own content. */
 export type SectionContent = {
@@ -371,6 +398,14 @@ export function clearBreakpoint(section: StoreSection, breakpoint: StoreBreakpoi
 export type SectionCapability = keyof SectionSettings;
 
 export function sectionCapabilities(kind: StoreSectionKind): SectionCapability[] {
+  // The frame wraps a section from the outside, so every kind the storefront
+  // renders through the layout honours it. The pinned catalogue and trust rail
+  // are drawn by the page itself, so they do not get it.
+  const frame: SectionCapability[] = isPinnedSection(kind) ? [] : [...FRAME_KEYS];
+  return [...baseCapabilities(kind), ...frame];
+}
+
+function baseCapabilities(kind: StoreSectionKind): SectionCapability[] {
   switch (kind) {
     case 'hero':
       // The particle-vs-plain title is a real prop on ArtistBioBlock.
