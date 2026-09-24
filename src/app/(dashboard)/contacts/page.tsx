@@ -6,6 +6,8 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { isSupabaseConfigured, getAll } from '@/lib/local-store';
 import type { Contact, BeatSend } from '@/lib/types';
+import { attachContactTags, type ContactTagRowLike } from '@/lib/contacts/attach-tags';
+import { selectInChunks } from '@/lib/db-in-chunks';
 
 // Server Component — fetches contacts + beat-sends on the server so the
 // page renders with content on first paint instead of flashing a spinner.
@@ -21,7 +23,10 @@ async function loadInitialData(): Promise<{
   try {
     if (!isSupabaseConfigured()) {
       return {
-        contacts: getAll('contacts') as Contact[],
+        contacts: attachContactTags(
+          getAll('contacts') as Contact[],
+          getAll('contact_tags') as ContactTagRowLike[],
+        ) as Contact[],
         beatSends: getAll('beat_sends') as BeatSend[],
         error: null,
       };
@@ -70,8 +75,20 @@ async function loadInitialData(): Promise<{
       console.error('Contacts SSR sends query failed:', sendsRes.error);
     }
 
+    // Tags live in their own table; without them the list and its tag filter
+    // render empty until something forces a client refetch.
+    const contactRows = (contactsRes.data || []) as Contact[];
+    const tagRows = contactRows.length
+      ? await selectInChunks<ContactTagRowLike>(contactRows.map((c) => c.id), (batch) =>
+          admin.from('contact_tags').select('contact_id, tag, category').in('contact_id', batch),
+        ).catch((err) => {
+          console.error('Contacts SSR tags query failed:', err);
+          return [] as ContactTagRowLike[];
+        })
+      : [];
+
     return {
-      contacts: (contactsRes.data || []) as Contact[],
+      contacts: attachContactTags(contactRows, tagRows) as Contact[],
       beatSends: (sendsRes.data || []) as BeatSend[],
       error: contactsRes.error?.message || null,
     };

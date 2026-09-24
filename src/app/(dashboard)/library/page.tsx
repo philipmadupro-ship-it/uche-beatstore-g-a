@@ -38,6 +38,7 @@ import MusicPortfolio, { type PortfolioTrack } from '@/components/library/MusicP
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
+import { matchesRating } from '@/lib/library/rating-filter';
 import { summarizeTriage, triageStage, type TriageStage } from '@/lib/library/triage';
 import { SellReadinessPanel } from '@/components/library/SellReadinessPanel';
 import { ActionDigestPanel } from '@/components/library/ActionDigestPanel';
@@ -343,6 +344,25 @@ export default function LibraryPage() {
 
   // Opens the builder modal (real UI with live discount math) instead of
   // a chain of window.prompts.
+  const bulkRate = async (rating: number) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkEditing(true);
+    const results = await Promise.allSettled(ids.map((id) =>
+      fetch(`/api/tracks/${id}/rate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating }),
+      }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); }),
+    ));
+    setBulkEditing(false);
+    await fetchTracks();
+    const failed = results.filter((r) => r.status === 'rejected').length;
+    const what = rating === 0 ? 'Cleared rating on' : `Rated ${'★'.repeat(rating)}`;
+    if (failed === 0) toast.success(`${what} ${ids.length} track${ids.length === 1 ? '' : 's'}`);
+    else toast.warning(`${what} ${ids.length - failed}, ${failed} failed`);
+  };
+
   const createPackFromSelected = () => {
     if (selectedIds.size < 2) { toast.error('Pick at least 2 beats', 'A pack needs 2+ beats.'); return; }
     setPackModalOpen(true);
@@ -499,7 +519,7 @@ export default function LibraryPage() {
       if (filters.scale === 'major' && t.scale === 'minor') return false;
       if (filters.scale === 'minor' && t.scale !== 'minor') return false;
       if (filters.statuses.size > 0 && (!t.status || !filters.statuses.has(t.status))) return false;
-      if (filters.rating != null && (t.rating == null || t.rating < filters.rating)) return false;
+      if (!matchesRating(t.rating, filters.rating, filters.ratingMatch)) return false;
       // Pipeline stage — derived from the row, so it needs no extra fetch.
       if (filters.triage.size > 0 && !filters.triage.has(triageStage(t, { hasDefaultPrice }))) return false;
       // Genre filter — track_tags come down from the API rich select
@@ -1630,15 +1650,24 @@ export default function LibraryPage() {
         )}
 
         {effectiveBrowseMode === 'all' && hasMoreTracks && (
-          <div className="flex justify-center pb-28">
+          // A hairline "end of page" rule with the control on it: reads as the
+          // list continuing below rather than as one more pill in the page.
+          <div className="flex items-center gap-4 pb-28 pt-2">
+            <span aria-hidden className="h-px flex-1 bg-white/10" />
             <button
               type="button"
               onClick={loadMoreTracks}
               disabled={loadingMoreTracks}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-5 py-2.5 text-[9px] font-mono uppercase tracking-[0.18em] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-wait disabled:opacity-60"
+              aria-busy={loadingMoreTracks}
+              className="group inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-4 text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 backdrop-blur-md transition-colors hover:border-white/20 hover:bg-white/[0.10] hover:text-white/90 active:bg-white/[0.14] disabled:cursor-wait disabled:opacity-40"
             >
-              {loadingMoreTracks ? 'Loading tracks...' : 'Load more tracks'}
+              {loadingMoreTracks
+                ? <Loader2 size={12} className="animate-spin" aria-hidden />
+                : <ChevronDown size={12} className="transition-transform group-hover:translate-y-0.5" aria-hidden />}
+              {loadingMoreTracks ? 'Loading' : 'Load more'}
+              <span className="text-white/30 tabular-nums">{tracks.length} shown</span>
             </button>
+            <span aria-hidden className="h-px flex-1 bg-white/10" />
           </div>
         )}
 
@@ -1677,6 +1706,11 @@ export default function LibraryPage() {
             intent: bulkEditOpen ? 'primary' : 'default',
             onClick: () => setBulkEditOpen((v) => !v),
           },
+          // Selection only ever covers loaded rows, so "all" means everything
+          // the current filters show — filter to 3★ exact, select all, rate 4★.
+          ...(selectedIds.size < filtered.length
+            ? [{ label: `Select all ${filtered.length}`, onClick: () => setSelectedIds(new Set(filtered.map((t) => t.id))) }]
+            : []),
           { label: 'Add tags', icon: <Tag size={11} />, onClick: () => setBulkTagPanel('addTags') },
           { label: 'Remove tags', icon: <Tag size={11} />, onClick: () => setBulkTagPanel('removeTags') },
           {
@@ -1750,6 +1784,28 @@ export default function LibraryPage() {
                     className={`px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all disabled:opacity-40 ${cls}`}
                   >{l}</button>
                 ))}
+              </div>
+            </div>
+            {/* Batch rating — through /rate so rating_history stays whole. */}
+            <div>
+              <p className="text-[9px] font-mono uppercase tracking-wider text-white/30 mb-1.5">Set rating</p>
+              <div className="flex items-center gap-0.5">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button
+                    key={star}
+                    type="button"
+                    disabled={bulkEditing}
+                    aria-label={`Rate ${selectedIds.size} tracks ${star} star${star === 1 ? '' : 's'}`}
+                    onClick={() => void bulkRate(star)}
+                    className="grid size-8 place-items-center rounded-lg text-[16px] text-white/30 transition-colors hover:bg-white/[0.06] hover:text-[#c8a84b] disabled:opacity-40"
+                  >★</button>
+                ))}
+                <button
+                  type="button"
+                  disabled={bulkEditing}
+                  onClick={() => void bulkRate(0)}
+                  className="ml-auto rounded-lg px-2 py-1 text-[10px] text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white/70 disabled:opacity-40"
+                >Clear</button>
               </div>
             </div>
             {/* Batch store list */}

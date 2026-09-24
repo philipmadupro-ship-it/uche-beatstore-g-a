@@ -129,9 +129,26 @@ export function buildDawWaveformBars(peaks: number[]): DawWaveformBar[] {
   });
 }
 
+/**
+ * The URL fetch() can actually read a peaks sidecar from.
+ *
+ * Without a CDN in front of the bucket, sidecars live on `*.r2.dev`, which
+ * sends no CORS headers — so this used to return nothing and every library
+ * waveform stayed blank. Those go through the same-origin `/api/audio` proxy
+ * instead (it streams any http(s) source). On public pages the proxy 401s and
+ * the caller falls back exactly as before.
+ */
+export function readablePeaksUrl(url: string | null | undefined): string | null {
+  const direct = cdnAudioSrc(url);
+  if (!direct) return null;
+  if (canFetchReadableAudio(direct)) return direct;
+  if (/^https?:\/\//i.test(direct)) return `/api/audio?src=${encodeURIComponent(direct)}`;
+  return null;
+}
+
 export async function loadVisualPeaks(url: string, signal: AbortSignal): Promise<number[] | null> {
-  const readableUrl = cdnAudioSrc(url);
-  if (!canFetchReadableAudio(readableUrl)) return null;
+  const readableUrl = readablePeaksUrl(url);
+  if (!readableUrl) return null;
 
   try {
     const response = await fetch(readableUrl, { signal, cache: 'force-cache' });

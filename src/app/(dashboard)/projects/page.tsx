@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { CollectionFolderStrip } from '@/components/ui/CollectionFolderStrip';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageHeader, PageContainer } from '@/components/layout/PageHeader';
 import { Loader2, Music, Layers, Plus, Clock } from 'lucide-react';
@@ -200,6 +201,14 @@ export default function ProjectsPage() {
         />
 
         {/* Folder chips + search + collapsible tag/status/sort filters. */}
+        <CollectionFolderStrip
+          resource="projects"
+          folders={folders}
+          items={projects}
+          value={filters.folder}
+          onChange={(folder) => setFilters({ ...filters, folder })}
+          onChanged={refreshProjectsAndFolders}
+        />
         <ProjectFilterBar
           value={filters}
           onChange={setFilters}
@@ -300,6 +309,7 @@ export default function ProjectsPage() {
               return (
                 <MediaCard
                   artworkSeed={project.id}
+                  dragId={project.id}
                   kind="project"
                   key={project.id}
                   title={project.name}

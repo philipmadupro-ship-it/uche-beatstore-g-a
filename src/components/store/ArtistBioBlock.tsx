@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { MusicReactiveBackdrop } from '@/components/ui/MusicReactiveBackdrop';
 import Link from 'next/link';
 import { ChevronDown, Globe, Mail, ArrowRight } from 'lucide-react';
 import { ParticleText } from '@/components/store/ParticleText';
@@ -85,6 +86,9 @@ export function ArtistBioBlock({ creator, accentColor, plainTitle = false }: Pro
       )}
       {/* Gradient: darker at top so particles stand out against any hero image */}
       <div className="absolute inset-0 z-[1] bg-gradient-to-b from-black/75 via-black/65 to-[#090907]" />
+      {/* Above the darkening gradient, below the type: the hero breathes with
+          whatever the visitor is previewing. */}
+      <MusicReactiveBackdrop className="inset-0 z-[2]" />
 
       <div className="relative z-10 max-w-[1400px] mx-auto pt-8 pb-8 md:pt-20 md:pb-14">
         <div className="px-4 md:px-8">

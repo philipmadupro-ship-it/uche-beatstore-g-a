@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronDown, X, Check } from 'lucide-react';
+import type { RatingMatch } from '@/lib/library/rating-filter';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { TRIAGE_STAGE_LABELS, TRIAGE_STAGE_ORDER, type TriageStage } from '@/lib/library/triage';
 import { Popover } from '@/components/ui/Popover';
@@ -41,6 +42,8 @@ export interface LibraryFilters {
   keys: Set<string>;
   scale: 'all' | 'major' | 'minor';
   rating: number | null;
+  /** How `rating` matches — see lib/library/rating-filter. */
+  ratingMatch: RatingMatch;
 }
 
 export const DEFAULT_FILTERS: LibraryFilters = {
@@ -54,6 +57,7 @@ export const DEFAULT_FILTERS: LibraryFilters = {
   keys: new Set(),
   scale: 'all',
   rating: null,
+  ratingMatch: 'atLeast',
 };
 
 export function hasActiveFilters(f: LibraryFilters): boolean {
@@ -98,6 +102,7 @@ export function serializeFilters(f: LibraryFilters): Record<string, unknown> {
     keys: Array.from(f.keys),
     scale: f.scale,
     rating: f.rating,
+    ratingMatch: f.ratingMatch,
   };
 }
 
@@ -112,6 +117,7 @@ type SerializedLibraryFilters = {
   keys?: unknown;
   scale?: unknown;
   rating?: unknown;
+  ratingMatch?: unknown;
 };
 
 /** Rehydrate filters from a stored JSON object (arrays → Sets). */
@@ -136,6 +142,7 @@ export function deserializeFilters(raw: unknown): LibraryFilters {
     keys: new Set<string>(Array.isArray(r.keys) ? r.keys : []),
     scale: r.scale === 'major' || r.scale === 'minor' ? r.scale : 'all',
     rating: typeof r.rating === 'number' ? r.rating : null,
+    ratingMatch: r.ratingMatch === 'exact' ? 'exact' : 'atLeast',
   };
 }
 
@@ -283,19 +290,52 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
             </div>
 
             <div>
-              <FacetLabel>Min rating</FacetLabel>
-              <div className="flex gap-0.5">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    onClick={() => set({ rating: filters.rating === star ? null : star })}
-                    aria-label={`Minimum rating ${star} star${star === 1 ? '' : 's'}`}
-                    aria-pressed={filters.rating != null && star <= filters.rating}
-                    className={`grid size-7 place-items-center rounded-lg text-[14px] transition-colors ${
-                      filters.rating != null && star <= filters.rating ? 'text-white' : 'text-white/30 hover:text-white/60'
-                    }`}
-                  >★</button>
-                ))}
+              <FacetLabel>Rating</FacetLabel>
+              <div className="flex items-center gap-2">
+                <div className="flex gap-0.5">
+                  {[1, 2, 3, 4, 5].map((star) => {
+                    const lit = filters.rating != null && filters.rating > 0 && star <= filters.rating;
+                    return (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => set({ rating: filters.rating === star ? null : star })}
+                        aria-label={`${filters.ratingMatch === 'exact' ? 'Exactly' : 'At least'} ${star} star${star === 1 ? '' : 's'}`}
+                        aria-pressed={lit}
+                        className={`grid size-7 place-items-center rounded-lg text-[14px] transition-colors ${
+                          lit ? 'text-[#c8a84b]' : 'text-white/30 hover:text-white/60'
+                        }`}
+                      >★</button>
+                    );
+                  })}
+                </div>
+                {/* Two-way segmented: "4★ and up" vs "exactly 4★". Unrated is
+                    only meaningful as an exact match, so it lives beside it. */}
+                <div role="group" aria-label="Rating match" className="flex rounded-lg border border-white/10 p-0.5">
+                  {([['atLeast', '≥'], ['exact', '=']] as const).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={filters.ratingMatch === mode}
+                      aria-label={mode === 'exact' ? 'Exact rating' : 'Rating or higher'}
+                      onClick={() => set({
+                        ratingMatch: mode,
+                        rating: mode === 'atLeast' && filters.rating === 0 ? null : filters.rating,
+                      })}
+                      className={`h-6 min-w-6 rounded-md px-1.5 font-mono text-[11px] transition-colors ${
+                        filters.ratingMatch === mode ? 'bg-white/[0.14] text-white/90' : 'text-white/40 hover:text-white/70'
+                      }`}
+                    >{label}</button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  aria-pressed={filters.rating === 0}
+                  onClick={() => set(filters.rating === 0 ? { rating: null } : { rating: 0, ratingMatch: 'exact' })}
+                  className={`h-7 rounded-lg border px-2 text-[10px] font-mono uppercase tracking-[0.2em] transition-colors ${
+                    filters.rating === 0 ? 'border-white/30 bg-white/[0.14] text-white/90' : 'border-white/10 text-white/40 hover:border-white/20 hover:text-white/70'
+                  }`}
+                >Unrated</button>
               </div>
             </div>
 
@@ -356,7 +396,7 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
           )}
           {filters.scale !== 'all' && <Chip label={filters.scale} onRemove={() => set({ scale: 'all' })} />}
           {Array.from(filters.keys).map((k) => <Chip key={k} label={k} onRemove={() => toggleKey(k)} />)}
-          {filters.rating != null && <Chip label={`★ ≥ ${filters.rating}`} onRemove={() => set({ rating: null })} />}
+          {filters.rating != null && <Chip label={filters.rating === 0 ? 'Unrated' : `★ ${filters.ratingMatch === 'exact' ? '=' : '≥'} ${filters.rating}`} onRemove={() => set({ rating: null })} />}
           <button
             onClick={() => onChange({ ...DEFAULT_FILTERS, genres: new Set(), statuses: new Set(), keys: new Set() })}
             className="ml-1 font-mono text-[9px] text-white/60 transition-colors hover:text-white"

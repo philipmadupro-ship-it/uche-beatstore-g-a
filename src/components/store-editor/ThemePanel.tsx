@@ -172,7 +172,7 @@ function Choice<T extends string>({ label, value, options, onChange }: {
             aria-pressed={value === option.value}
             onClick={() => onChange(option.value)}
             className={cn(
-              'h-8 truncate border px-1 text-[11px] capitalize transition-colors',
+              'h-8 truncate rounded-lg border px-1 text-[11px] capitalize transition-colors',
               value === option.value
                 ? 'border-white/40 bg-white/[0.12] text-white/90'
                 : 'border-white/10 text-white/60 hover:border-white/25 hover:text-white/90',
@@ -211,7 +211,7 @@ export function ThemePanel({ theme, onChange }: {
               type="button"
               title={preset.hint}
               onClick={() => onChange(preset.theme)}
-              className="border border-white/10 px-2 py-1.5 text-left transition-colors hover:border-white/25"
+              className="rounded-lg border border-white/10 px-2 py-1.5 text-left transition-colors hover:border-white/25"
             >
               <span className="mb-1 flex gap-1">
                 {[preset.theme.background, preset.theme.surface, preset.theme.accent].map((color, index) => (

@@ -145,7 +145,7 @@ describe('resolveColumns', () => {
 describe('gridTemplate', () => {
   it('brackets the data columns with the control and actions tracks', () => {
     const tpl = gridTemplate(resolveColumns(['title', 'bpm']));
-    expect(tpl.startsWith('40px ')).toBe(true);
+    expect(tpl.startsWith('48px ')).toBe(true);
     expect(tpl.endsWith(' 32px')).toBe(true);
   });
 

@@ -14,12 +14,16 @@ export interface ContactLike {
   label?: string | null;
   category?: string | null;
   created_at?: string;
+  crm_status?: string | null;
   tags?: ContactTag[];
 }
 
 export type ContactCategoryFilter = 'all' | 'buyers' | 'rappers' | 'producers' | 'a&r' | 'friends' | 'nudge';
 export type ContactStatusFilter = 'all' | 'active' | 'engaged' | 'cold';
-export type ContactSortMode = 'recent' | 'name' | 'category' | 'lastSent' | 'sends' | 'lead';
+export type ContactSortMode = 'recent' | 'name' | 'category' | 'lastSent' | 'sends' | 'lead' | 'stage' | 'revenue' | 'tags';
+
+/** Pipeline order for the 'stage' sort — furthest along first when descending. */
+const STAGE_RANK: Record<string, number> = { archived: 0, cold: 1, prospect: 2, active: 3, engaged: 4, customer: 5 };
 export type SortDir = 'asc' | 'desc';
 
 export interface ContactFilterState {
@@ -41,6 +45,8 @@ export interface ContactFilterContext {
   sendCountByContact?: Map<string, number>;
   /** Map contactId → lead score (0–100). Required for the 'lead' sort. */
   leadScoreByContact?: Map<string, number>;
+  /** Map contactId → lifetime revenue (USD). Required for the 'revenue' sort. */
+  revenueByContact?: Map<string, number>;
 }
 
 /** True when a contact matches the given category segment (role-aware). */
@@ -119,6 +125,17 @@ export function filterAndSortContacts<T extends ContactLike>(
         (leadScore?.get(a.id) ?? 0) - (leadScore?.get(b.id) ?? 0) ||
         String(lastSent.get(a.id) ?? '').localeCompare(String(lastSent.get(b.id) ?? ''));
       break;
+    case 'stage':
+      cmp = (a, b) =>
+        (STAGE_RANK[a.crm_status ?? ''] ?? -1) - (STAGE_RANK[b.crm_status ?? ''] ?? -1) ||
+        b.name.localeCompare(a.name);
+      break;
+    case 'revenue':
+      cmp = (a, b) => (ctx.revenueByContact?.get(a.id) ?? 0) - (ctx.revenueByContact?.get(b.id) ?? 0);
+      break;
+    case 'tags':
+      cmp = (a, b) => (a.tags?.length ?? 0) - (b.tags?.length ?? 0);
+      break;
     case 'recent':
     default:
       cmp = (a, b) => String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''));
@@ -126,7 +143,7 @@ export function filterAndSortContacts<T extends ContactLike>(
   sorted.sort(cmp);
   // Default direction is 'desc' for recency/count columns, 'asc' for name —
   // but the caller's explicit sortDir always wins.
-  const defaultDesc = state.sort === 'recent' || state.sort === 'lastSent' || state.sort === 'sends' || state.sort === 'lead';
+  const defaultDesc = state.sort !== 'name' && state.sort !== 'category';
   const dir = state.sortDir ?? (defaultDesc ? 'desc' : 'asc');
   if (dir === 'desc') sorted.reverse();
   return sorted;

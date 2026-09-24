@@ -1,10 +1,11 @@
 'use client';
 
 import { usePlayer } from '@/hooks/usePlayer';
+import { usePlayerReactivity } from '@/hooks/usePlayerReactivity';
 import {
   Volume2, VolumeX,
   ListMusic, Music, Shuffle, Repeat, ChevronDown,
-  AlertTriangle, Loader2,
+  AlertTriangle, Loader2, Minimize2,
 } from 'lucide-react';
 import { PlayGlyph, PauseGlyph, PrevGlyph, NextGlyph } from './TransportIcons';
 import { MarqueeText } from './MarqueeText';
@@ -14,7 +15,7 @@ import { AsciiCoverArt } from './AsciiCoverArt';
 import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
-import { useState, useRef, useSyncExternalStore, useMemo } from 'react';
+import { useState, useRef, useSyncExternalStore, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { CoverImage } from '@/components/ui/CoverImage';
@@ -42,6 +43,16 @@ const getServerSnapshot = () => false;
  * Business logic is identical to the old PlayerBar — only the visual
  * layer changed. Queue, volume, transport all behave the same.
  */
+const PLAYER_COLLAPSED_KEY = 'antigravity-player-collapsed';
+const collapsedListeners = new Set<() => void>();
+function subscribeCollapsed(listener: () => void) {
+  collapsedListeners.add(listener);
+  return () => { collapsedListeners.delete(listener); };
+}
+function readCollapsed(): boolean {
+  try { return localStorage.getItem(PLAYER_COLLAPSED_KEY) === '1'; } catch { return false; }
+}
+
 export function PlayerBar() {
   const {
     currentTrack, isPlaying, togglePlay, next, prev,
@@ -69,6 +80,14 @@ export function PlayerBar() {
     }
   };
   const [queueOpen, setQueueOpen] = useState(false);
+  // Tucked away into a small pill in the corner, so the bar stops covering
+  // the bottom of long pages. Playback carries on; the choice persists per
+  // browser. Read after mount so SSR and first client render agree.
+  const collapsed = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
+  const setCollapsedPersisted = (value: boolean) => {
+    try { localStorage.setItem(PLAYER_COLLAPSED_KEY, value ? '1' : '0'); } catch { /* storage denied */ }
+    collapsedListeners.forEach((l) => l());
+  };
   const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
   const nowPlayingPanelRef = useDialogBehavior({ open: nowPlayingOpen, onClose: () => setNowPlayingOpen(false) });
   const mounted = useSyncExternalStore(subscribeToClientSnapshot, getClientSnapshot, getServerSnapshot);
@@ -99,6 +118,12 @@ export function PlayerBar() {
     true,
     bandsUrlFromPeaksUrl(currentTrack?.peaks_url),
   );
+
+  // Hand the numbers to the hero backdrops — one analysis for the whole app.
+  const publishReactivity = usePlayerReactivity((s) => s.publish);
+  useEffect(() => {
+    publishReactivity({ level: nowPlayingLevel, bass: nowPlayingBass, playing: Boolean(currentTrack) && isPlaying });
+  }, [publishReactivity, nowPlayingLevel, nowPlayingBass, isPlaying, currentTrack]);
 
   if (!currentTrack) return null;
 
@@ -131,6 +156,43 @@ export function PlayerBar() {
           no sound). Headless; renders nothing visible. */}
       <SimpleAudioEngine />
 
+      {collapsed ? (
+        <div
+          className="fixed bottom-3 right-3 md:bottom-5 md:right-5 z-50"
+          style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          <div className="ui-pop-up flex items-center gap-1 rounded-full border border-white/[0.10] bg-white/[0.03] p-1 pr-1.5 shadow-[0_12px_40px_-10px_rgba(0,0,0,0.6)] backdrop-blur-md backdrop-saturate-150">
+            <button
+              type="button"
+              onClick={() => setCollapsedPersisted(false)}
+              className="size-9 overflow-hidden rounded-full border border-white/[0.08]"
+              aria-label={`Expand player — ${currentTrack.title || 'Untitled'}`}
+              title="Expand player"
+            >
+              <ArtworkFallback
+                src={currentTrack.cover_url}
+                seed={currentTrack.id}
+                tags={playerArtworkTags}
+                kind="track"
+                sizes="36px"
+                className="h-full w-full object-cover"
+              >
+                <Music size={12} aria-hidden />
+              </ArtworkFallback>
+            </button>
+            <button
+              type="button"
+              onClick={handlePrimaryPlay}
+              disabled={!streamStatus.canAttemptPlayback}
+              className="glass-play-surface flex size-9 items-center justify-center rounded-full disabled:opacity-40"
+              aria-label={isPlaying ? 'Pause' : 'Play'}
+              data-playing={isPlaying ? 'true' : 'false'}
+            >
+              {isBuffering ? <Loader2 size={14} className="animate-spin" /> : isPlaying ? <PauseGlyph size={15} /> : <PlayGlyph size={15} className="ml-0.5" />}
+            </button>
+          </div>
+        </div>
+      ) : (
       <div
         className="fixed bottom-3 md:bottom-5 left-2 right-2 md:left-1/2 md:right-auto md:-translate-x-1/2 z-50 pointer-events-none flex justify-center"
         style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
@@ -142,8 +204,11 @@ export function PlayerBar() {
             // through it, one hairline edge, one soft cast shadow to lift it
             // off the page. Previously this stacked four shadow layers plus a
             // hover swap and a gradient sheen overlay — one signal is enough.
-            'backdrop-blur-2xl border border-white/[0.10]',
-            'bg-white/[0.04]',
+            // A lighter blur than before (2xl): at that strength the pill read
+            // as a solid slab. md + saturate keeps text legible over artwork
+            // while the page visibly moves underneath.
+            'backdrop-blur-md backdrop-saturate-150 border border-white/[0.10]',
+            'bg-white/[0.025]',
             'shadow-[0_16px_50px_-8px_rgba(0,0,0,0.55)]',
 'ui-pop-up duration-300',
             // Below md: no min-width, fill the screen edges-minus-padding.
@@ -308,6 +373,15 @@ export function PlayerBar() {
                 );
               })()}
             </button>
+            <button
+              type="button"
+              onClick={() => setCollapsedPersisted(true)}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-white/50 transition-colors hover:bg-white/[0.06] hover:text-white"
+              aria-label="Minimise player"
+              title="Minimise player"
+            >
+              <Minimize2 size={12} />
+            </button>
             {/* Volume — clickable mute toggle + hover-revealed slider so
                 the pill stays compact in the resting state. Hidden on
                 touch-only screens where hover isn't a thing anyway. */}
@@ -336,6 +410,7 @@ export function PlayerBar() {
           </div>
         </div>
       </div>
+      )}
 
       {queueOpen && <QueueDrawer onClose={() => setQueueOpen(false)} />}
 

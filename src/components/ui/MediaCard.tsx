@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { COLLECTION_DRAG_MIME } from '@/lib/collections/folders';
 import { useState } from 'react';
 import { Check, Pin } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -51,6 +52,8 @@ interface MediaCardProps {
   onRename?: (next: string) => Promise<boolean> | boolean;
   /** Extra overlay content (play button bottom-left, count badge bottom-right…). */
   overlay?: ReactNode;
+  /** Makes the card draggable onto a folder (see CollectionFolderStrip). */
+  dragId?: string;
 }
 
 export function MediaCard({
@@ -73,6 +76,7 @@ export function MediaCard({
   optionsMenu,
   onRename,
   overlay,
+  dragId,
 }: MediaCardProps) {
   const covers = (previewCovers ?? []).filter(Boolean) as string[];
   const [renaming, setRenaming] = useState(false);
@@ -184,9 +188,19 @@ export function MediaCard({
     );
   }
 
+  const dragProps = dragId && !renaming && !selectMode
+    ? {
+        draggable: true,
+        onDragStart: (e: React.DragEvent) => {
+          e.dataTransfer.setData(COLLECTION_DRAG_MIME, dragId);
+          e.dataTransfer.effectAllowed = 'copyMove';
+        },
+      }
+    : {};
+
   if (href && !renaming) {
     return (
-      <Link href={href} onClick={onOpen} className="group block min-w-0">
+      <Link href={href} onClick={onOpen} className="group block min-w-0" {...dragProps}>
         {coverBlock}
         {textBlock}
       </Link>
@@ -194,7 +208,7 @@ export function MediaCard({
   }
 
   return (
-    <div className="group min-w-0">
+    <div className="group min-w-0" {...dragProps}>
       {coverBlock}
       {textBlock}
     </div>

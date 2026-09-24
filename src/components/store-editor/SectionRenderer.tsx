@@ -437,6 +437,10 @@ export function SectionRenderer({
                     event.stopPropagation();
                     editBlocks.onSelect(block.id);
                     const frameEl = event.currentTarget.parentElement;
+                    // The builder renders the canvas inside an iframe (so media
+                    // queries see the device width). Listeners go on THAT
+                    // window, or moves over the frame never arrive.
+                    const win = event.currentTarget.ownerDocument.defaultView ?? window;
                     if (!frameEl) return;
                     const frame = frameEl.getBoundingClientRect();
                     // Grab offset in percent, so the block does not jump its
@@ -451,14 +455,14 @@ export function SectionRenderer({
                     const up = (e: PointerEvent) => {
                       const at = pointToPercent(e.clientX, e.clientY, frame);
                       editBlocks.onMove(block.id, at.x - grabX, at.y - grabY, true);
-                      window.removeEventListener('pointermove', move);
-                      window.removeEventListener('pointerup', up);
+                      win.removeEventListener('pointermove', move);
+                      win.removeEventListener('pointerup', up);
                     };
                     // Window listeners, matching the cover art canvas: a fast
                     // drag that leaves the frame still ends cleanly instead of
                     // leaving the block stuck to the cursor.
-                    window.addEventListener('pointermove', move);
-                    window.addEventListener('pointerup', up);
+                    win.addEventListener('pointermove', move);
+                    win.addEventListener('pointerup', up);
                   } : undefined}
                   className={cn(
                     'absolute overflow-hidden',

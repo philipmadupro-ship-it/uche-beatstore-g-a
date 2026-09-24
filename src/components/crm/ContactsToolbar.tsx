@@ -4,6 +4,20 @@ import { useState } from 'react';
 import { Search, ChevronDown, Plus, Download, RefreshCw, Bookmark, BookmarkPlus, X, Check, Pencil, Save } from 'lucide-react';
 import { Popover } from '@/components/ui/Popover';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
+import { Dropdown } from '@/components/ui/Dropdown';
+import type { ContactSortMode, SortDir } from '@/lib/contacts/filters';
+
+const SORT_OPTIONS: Array<{ value: ContactSortMode; label: string }> = [
+  { value: 'recent', label: 'Recently added' },
+  { value: 'lastSent', label: 'Last sent' },
+  { value: 'lead', label: 'Hottest lead' },
+  { value: 'stage', label: 'Pipeline stage' },
+  { value: 'revenue', label: 'Revenue' },
+  { value: 'sends', label: 'Most sends' },
+  { value: 'tags', label: 'Most tagged' },
+  { value: 'name', label: 'Name' },
+  { value: 'category', label: 'Category' },
+];
 
 export interface Segment { id: string; name: string; filters: { search?: string; category?: string; status?: string; sort?: string } }
 
@@ -25,6 +39,9 @@ interface Props {
   onApplySegment: (s: Segment) => void; onSaveSegment: () => void; onDeleteSegment: (s: Segment) => void;
   onRenameSegment: (s: Segment) => void; onUpdateSegmentFilters: (s: Segment) => void;
   onExport: () => void; onAddContact: () => void; onRefresh: () => void; refreshing: boolean;
+  /** Sort lives here too: the table's sortable headers are hidden on phones. */
+  sortMode: ContactSortMode; sortDir: SortDir;
+  setSort: (mode: ContactSortMode) => void; toggleSortDir: () => void;
 }
 
 function FilterButton({ label, badge, children, align = 'left' }: { label: string; badge?: number; children: (close: () => void) => React.ReactNode; align?: 'left' | 'right' }) {
@@ -168,6 +185,21 @@ export function ContactsToolbar(p: Props) {
 
         {/* Deferred (follow-up): More Filters ▾, Columns ▾ */}
 
+        <div className="flex items-center gap-1">
+          <Dropdown
+            value={p.sortMode}
+            onChange={(v) => p.setSort(v as ContactSortMode)}
+            options={SORT_OPTIONS}
+            aria-label="Sort contacts"
+          />
+          <button
+            type="button"
+            onClick={p.toggleSortDir}
+            aria-label={p.sortDir === 'asc' ? 'Ascending — switch to descending' : 'Descending — switch to ascending'}
+            title={p.sortDir === 'asc' ? 'Ascending' : 'Descending'}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] font-mono text-[11px] text-white/70 transition-colors hover:border-white/20 hover:bg-white/[0.10] hover:text-white"
+          >{p.sortDir === 'asc' ? '↑' : '↓'}</button>
+        </div>
         <button onClick={p.onExport} title="Export filtered to CSV"
           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[11px] font-medium border border-[var(--border)] text-white/80 hover:text-white hover:border-[var(--border-hover)] transition-colors">
           <Download size={12} /> Export

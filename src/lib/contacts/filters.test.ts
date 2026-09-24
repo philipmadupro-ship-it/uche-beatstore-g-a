@@ -89,3 +89,19 @@ describe('paginate', () => {
     expect(pageCount(50, 25)).toBe(2);
   });
 });
+
+describe('filterAndSortContacts — stage / revenue / tags sorts', () => {
+  it('stage puts customers first, unstaged last', () => {
+    const list = [make({ id: 'p', crm_status: 'prospect' }), make({ id: 'c', crm_status: 'customer' }), make({ id: 'n' })];
+    expect(filterAndSortContacts(list, state({ sort: 'stage' }), emptyCtx).map((c) => c.id)).toEqual(['c', 'p', 'n']);
+  });
+  it('revenue sorts by the lifetime-revenue map, highest first', () => {
+    const list = [make({ id: 'a' }), make({ id: 'b' })];
+    const ctx = { ...emptyCtx, revenueByContact: new Map([['b', 120], ['a', 30]]) };
+    expect(filterAndSortContacts(list, state({ sort: 'revenue' }), ctx).map((c) => c.id)).toEqual(['b', 'a']);
+  });
+  it('tags sorts most-tagged first', () => {
+    const list = [make({ id: 'a' }), make({ id: 'b', tags: [{ tag: 'vip' }, { tag: 'drill' }] as ContactLike['tags'] })];
+    expect(filterAndSortContacts(list, state({ sort: 'tags' }), emptyCtx).map((c) => c.id)).toEqual(['b', 'a']);
+  });
+});

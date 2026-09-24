@@ -100,7 +100,7 @@ export function DefaultArtworkCard() {
       await save(
         { [f.url]: url, [f.palette]: palette.length > 0 ? palette : null },
         () => apply({
-          artwork: { ...artwork, [slot]: { url, palette: normalisePalette(palette) } },
+          artwork: { ...useBrandArtworkStore.getState().artwork, [slot]: { url, palette: normalisePalette(palette) } },
         }),
       );
       toast.success('Artwork saved');
@@ -119,7 +119,7 @@ export function DefaultArtworkCard() {
       } else {
         const f = FIELDS[slot];
         await save({ [f.url]: null, [f.palette]: null }, () => apply({
-          artwork: { ...artwork, [slot]: { url: null, palette: [] } },
+          artwork: { ...useBrandArtworkStore.getState().artwork, [slot]: { url: null, palette: [] } },
         }));
       }
       toast.success('Removed');
@@ -134,11 +134,14 @@ export function DefaultArtworkCard() {
     const f = FIELDS[slot];
     const payload = colors.map((hex) => ({ hex, weight: 1 / colors.length }));
     // Optimistic — a colour control that lags a round trip feels broken.
-    apply({ artwork: { ...artwork, [slot]: { ...artwork[slot], palette: colors } } });
+    // Read the store at call time: `artwork` is this render's copy, and after an
+    // await it can predate another slot's save — spreading it would undo that.
+    const current = useBrandArtworkStore.getState().artwork;
+    apply({ artwork: { ...current, [slot]: { ...current[slot], palette: colors } } });
     const res = await fetch('/api/profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [f.url]: artwork[slot].url, [f.palette]: payload }),
+      body: JSON.stringify({ [f.url]: current[slot].url, [f.palette]: payload }),
     });
     if (!res.ok) toast.error('Could not save colours');
   };

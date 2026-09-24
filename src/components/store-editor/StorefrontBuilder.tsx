@@ -23,7 +23,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Check, Loader2, Monitor, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2,
+  Check, History, Layers, Loader2, Monitor, Palette, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
@@ -34,6 +34,7 @@ import {
   type SectionSettings, type StoreBreakpoint, type StoreLayout, type StoreSectionKind,
 } from '@/lib/store-editor/layout';
 import { SectionRenderer, type StorefrontData } from './SectionRenderer';
+import { DeviceFrame } from './DeviceFrame';
 import { moveCanvasBlock } from '@/lib/store-editor/canvas-blocks';
 import { SectionsPanel } from './SectionsPanel';
 import { SectionInspector } from './SectionInspector';
@@ -91,6 +92,7 @@ export function StorefrontBuilder({
   /** Bumped after a snapshot lands, so an open history list picks it up. */
   const [historyKey, setHistoryKey] = useState(0);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [frameWindow, setFrameWindow] = useState<Window | null>(null);
   const [compact, setCompact] = useState(false);
   const [adding, setAdding] = useState(false);
   /** Selected free-form block inside a `canvas` section, if any. */
@@ -263,8 +265,14 @@ export function StorefrontBuilder({
       if (event.key === '3') setBreakpoint('mobile');
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, commit, selectedId]);
+    // Clicking the canvas moves focus into the preview iframe; its keys must
+    // reach the same shortcuts or Delete/⌘Z stop working after one click.
+    frameWindow?.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      frameWindow?.removeEventListener('keydown', onKey);
+    };
+  }, [undo, redo, commit, selectedId, frameWindow]);
 
   /* ── Section operations ───────────────────────────────────────────────── */
 
@@ -283,7 +291,7 @@ export function StorefrontBuilder({
   return (
     <div
       ref={rootRef}
-      className="relative grid h-[calc(100vh-10.5rem)] grid-rows-[3rem_minmax(0,1fr)] overflow-hidden border border-white/10 bg-[#090907]"
+      className="relative grid h-[calc(100vh-10.5rem)] grid-rows-[2.75rem_minmax(0,1fr)_1.75rem] overflow-hidden rounded-xl border border-white/10 bg-[#090907]"
     >
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
       <header className="flex min-w-0 items-center gap-2 border-b border-white/10 px-3">
@@ -306,10 +314,10 @@ export function StorefrontBuilder({
                 title={`${point} · ${breakpointWidths[point]}px (${index + 1})`}
                 onClick={() => setBreakpoint(point)}
                 className={cn(
-                  'flex h-7 items-center gap-1.5 border px-2 text-[11px] capitalize transition-colors',
+                  'flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11px] capitalize transition-colors',
                   breakpoint === point
-                    ? 'border-white/40 bg-white/[0.12] text-white/90'
-                    : 'border-white/10 text-white/60 hover:border-white/25 hover:text-white/90',
+                    ? 'bg-white/[0.14] text-white'
+                    : 'text-white/50 hover:bg-white/[0.06] hover:text-white/90',
                 )}
               >
                 <Icon size={12} />
@@ -327,7 +335,7 @@ export function StorefrontBuilder({
           disabled={editor.past.length === 0}
           title="Undo (⌘Z)"
           aria-label="Undo"
-          className="grid size-7 shrink-0 place-items-center text-white/60 transition-colors hover:text-white/90 disabled:text-white/15"
+          className="grid size-7 shrink-0 place-items-center rounded-lg text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white/90 disabled:text-white/15 disabled:hover:bg-transparent"
         >
           <Undo2 size={13} />
         </button>
@@ -337,36 +345,13 @@ export function StorefrontBuilder({
           disabled={editor.future.length === 0}
           title="Redo (Shift ⌘Z)"
           aria-label="Redo"
-          className="grid size-7 shrink-0 place-items-center text-white/60 transition-colors hover:text-white/90 disabled:text-white/15"
+          className="grid size-7 shrink-0 place-items-center rounded-lg text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white/90 disabled:text-white/15 disabled:hover:bg-transparent"
         >
           <Redo2 size={13} />
         </button>
 
         <span className="mx-1 h-5 w-px shrink-0 bg-white/10" />
 
-        <label className="flex shrink-0 items-center gap-1.5" title="Zoom">
-          <span className="font-mono text-[10px] tabular-nums text-white/40">{Math.round(zoom * 100)}%</span>
-          <input
-            type="range"
-            min={25}
-            max={100}
-            value={Math.round(zoom * 100)}
-            aria-label="Zoom"
-            onChange={(event) => { setAutoFit(false); setZoom(Number(event.target.value) / 100); }}
-            className="h-1 w-20 cursor-pointer appearance-none bg-white/10 accent-white"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={() => setAutoFit(true)}
-          title="Fit to window"
-          className={cn(
-            'shrink-0 border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors',
-            autoFit ? 'border-white/40 text-white/90' : 'border-white/10 text-white/50 hover:border-white/25',
-          )}
-        >
-          Fit
-        </button>
 
         <span className="ml-auto flex shrink-0 items-center gap-2">
           {/* Announced: the save state changes on its own, so a screen
@@ -384,31 +369,43 @@ export function StorefrontBuilder({
       {/* ── Body ────────────────────────────────────────────────────────── */}
       <div className={cn(
         'relative grid min-h-0',
-        compact ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[16rem_minmax(0,1fr)_18rem]',
+        compact ? 'grid-cols-[2.75rem_minmax(0,1fr)]' : 'grid-cols-[2.75rem_15rem_minmax(0,1fr)_17rem]',
       )}
       >
         {/* Left: sections / theme */}
+        {/* Tool rail — Photoshop's panel strip: icons switch what the panel
+            beside them shows, so the panel carries no tab row of its own. */}
+        <nav aria-label="Editor panels" className="flex min-h-0 flex-col items-center gap-1 border-r border-white/10 bg-[#0D0D0A] py-2">
+          {([
+            ['sections', Layers, 'Layers'],
+            ['theme', Palette, 'Theme'],
+            ['history', History, 'History'],
+          ] as const).map(([tab, Icon, label]) => (
+            <button
+              key={tab}
+              type="button"
+              aria-pressed={panel === tab}
+              aria-label={label}
+              title={label}
+              onClick={() => setPanel(tab)}
+              className={cn(
+                'grid size-8 place-items-center rounded-lg transition-colors',
+                panel === tab ? 'bg-white/[0.14] text-white' : 'text-white/40 hover:bg-white/[0.06] hover:text-white/80',
+              )}
+            >
+              <Icon size={14} aria-hidden />
+            </button>
+          ))}
+        </nav>
+
         <aside className={cn(
           'flex min-h-0 flex-col border-r border-white/10 bg-[#0D0D0A]',
-          compact && 'absolute inset-y-0 left-0 z-30 w-64 border-r shadow-[0_0_40px_rgba(0,0,0,0.6)]',
+          compact && 'absolute inset-y-0 left-11 z-30 w-64 border-r shadow-[0_0_40px_rgba(0,0,0,0.6)]',
         )}
         >
-          <div className="flex shrink-0 border-b border-white/10">
-            {(['sections', 'theme', 'history'] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                aria-pressed={panel === tab}
-                onClick={() => setPanel(tab)}
-                className={cn(
-                  'flex-1 py-2 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors',
-                  panel === tab ? 'bg-white/[0.06] text-white/90' : 'text-white/40 hover:text-white/70',
-                )}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
+          <p className="shrink-0 border-b border-white/10 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
+            {panel === 'sections' ? 'Layers' : panel}
+          </p>
 
           {panel === 'sections' ? (
             <>
@@ -440,12 +437,12 @@ export function StorefrontBuilder({
                 <button
                   type="button"
                   onClick={() => setAdding((open) => !open)}
-                  className="flex h-8 w-full items-center justify-center gap-1.5 border border-white/10 text-[11px] text-white/60 transition-colors hover:border-white/25 hover:text-white/90"
+                  className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] text-[11px] text-white/60 transition-colors hover:border-white/20 hover:bg-white/[0.10] hover:text-white/90"
                 >
                   <Plus size={12} /> Add section
                 </button>
                 {adding ? (
-                  <div className="absolute bottom-12 left-2 right-2 z-40 max-h-80 overflow-y-auto border border-white/20 bg-[#0D0D0A] shadow-[0_0_40px_rgba(0,0,0,0.7)]">
+                  <div className="overlay-surface ui-pop-up absolute bottom-12 left-2 right-2 z-40 max-h-80 overflow-y-auto rounded-xl py-1">
                     {addableKinds.map((kind) => (
                       <button
                         key={kind}
@@ -456,7 +453,7 @@ export function StorefrontBuilder({
                           setSelectedId(section.id);
                           setAdding(false);
                         }}
-                        className="block w-full px-3 py-2 text-left text-[11px] capitalize text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white/90"
+                        className="mx-1 block w-[calc(100%-0.5rem)] rounded-lg px-3 py-2 text-left text-[11px] capitalize text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white/90"
                       >
                         {kind}
                       </button>
@@ -530,27 +527,25 @@ export function StorefrontBuilder({
         <div
           ref={stageRef}
           onClick={() => setSelectedId(null)}
-          className="min-h-0 overflow-auto bg-[#050504] p-8"
-          style={{
-            // A faint grid reads as "surface you are composing on" without
-            // competing with the artwork sitting on it.
-            backgroundImage:
-              'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),'
-              + 'linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)',
-            backgroundSize: '32px 32px',
-          }}
+          // A plain, darker pasteboard — Photoshop's, not graph paper. The
+          // grid competed with the storefront for attention and read as
+          // decoration; the device frame is what should hold the eye.
+          className="min-h-0 overflow-auto bg-[#050504] px-10 py-12"
         >
           <div className="mx-auto" style={{ width: width * zoom }}>
-            <p className="mb-2 text-center font-mono text-[9px] uppercase tracking-[0.2em] text-white/25">
-              {breakpoint} · {width}px
-            </p>
             {/* The frame is the real device width; zoom is a visual scale on
                 top, so every media query inside resolves as it would on the
                 actual device rather than at whatever the panel happens to be. */}
             <div
-              className="origin-top border border-white/15 bg-[#090907]"
-              style={{ width, transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+              className={cn(
+                'origin-top overflow-hidden bg-[#090907] shadow-[0_40px_120px_-20px_rgba(0,0,0,0.8)]',
+                // A phone and a tablet read as devices, not as a narrow desktop.
+                breakpoint === 'desktop' ? 'border border-white/15' : 'rounded-[20px] border-[6px] border-white/[0.08] ring-1 ring-white/15',
+              )}
+              style={{ width: breakpoint === 'desktop' ? width : width + 12, transform: `scale(${zoom})`, transformOrigin: 'top left' }}
             >
+              <DeviceFrame width={width} title={`Storefront preview · ${breakpoint}`} onWindow={setFrameWindow}>
+              <div onClick={() => setSelectedId(null)}>
               {layout.sections.map((section) => {
                 const settings = resolveSection(section, breakpoint);
                 const isSelected = section.id === selectedId;
@@ -567,8 +562,8 @@ export function StorefrontBuilder({
                       setSelectedId(section.id);
                     }}
                     className={cn(
-                      'relative outline-none transition-shadow',
-                      isSelected ? 'ring-1 ring-inset ring-white/60' : 'hover:ring-1 hover:ring-inset hover:ring-white/20',
+                      'group/section relative outline-none transition-shadow',
+                      isSelected ? 'ring-1 ring-inset ring-white/80' : 'hover:ring-1 hover:ring-inset hover:ring-white/30',
                       !settings.visible && 'opacity-30',
                     )}
                   >
@@ -576,14 +571,32 @@ export function StorefrontBuilder({
                         labelled, rather than vanishing — otherwise hiding
                         something on mobile makes it unselectable to unhide. */}
                     {!settings.visible ? (
-                      <span className="pointer-events-none absolute left-2 top-2 z-10 border border-white/20 bg-[#090907] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-white/50">
+                      <span className="pointer-events-none absolute right-2 top-2 z-10 border border-white/20 bg-[#090907] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-white/50">
                         Hidden on {breakpoint}
                       </span>
                     ) : null}
+                    {/* Name tag: solid when selected, faint on hover — the way a
+                        design tool labels the frame under the cursor. */}
+                    <span className={cn(
+                      'pointer-events-none absolute left-0 top-0 z-10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] transition-opacity',
+                      isSelected ? 'bg-white text-black opacity-100' : 'bg-black/70 text-white/70 opacity-0 group-hover/section:opacity-100',
+                    )}>
+                      {section.name}
+                    </span>
+                    {/* Transform handles on the selection, as in Photoshop:
+                        they say "this is the thing you are editing" more
+                        clearly than an outline alone. Decorative only. */}
                     {isSelected ? (
-                      <span className="pointer-events-none absolute right-0 top-0 z-10 bg-white/80 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-black">
-                        {section.name}
-                      </span>
+                      <>
+                        {['left-0 top-0', 'right-0 top-0', 'left-0 bottom-0', 'right-0 bottom-0'].map((pos) => (
+                          <span
+                            key={pos}
+                            aria-hidden
+                            className={cn('pointer-events-none absolute z-10 size-2 -translate-x-px border border-black bg-white', pos,
+                              pos.includes('right') && 'translate-x-px', pos.includes('bottom') ? 'translate-y-px' : '-translate-y-px')}
+                          />
+                        ))}
+                      </>
                     ) : null}
                     <div className={cn(!settings.visible && 'pointer-events-none')}>
                       <SectionRenderer
@@ -618,6 +631,8 @@ export function StorefrontBuilder({
                   </div>
                 );
               })}
+              </div>
+              </DeviceFrame>
             </div>
           </div>
         </div>
@@ -676,7 +691,40 @@ export function StorefrontBuilder({
           />
         </aside>
       </div>
+
+      {/* ── Status bar ─ zoom lives down here, as in Photoshop: it is a view
+          setting, not an edit, and it crowded the toolbar. ─────────────── */}
+      <footer className="flex min-w-0 items-center gap-3 border-t border-white/10 bg-[#0D0D0A] px-3">
+          <label className="flex shrink-0 items-center gap-1.5" title="Zoom">
+            <span className="font-mono text-[10px] tabular-nums text-white/40">{Math.round(zoom * 100)}%</span>
+            <input
+              type="range"
+              min={25}
+              max={100}
+              value={Math.round(zoom * 100)}
+              aria-label="Zoom"
+              onChange={(event) => { setAutoFit(false); setZoom(Number(event.target.value) / 100); }}
+              className="h-1 w-20 cursor-pointer appearance-none bg-white/10 accent-white"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => setAutoFit(true)}
+            title="Fit to window"
+            className={cn(
+              'shrink-0 rounded-lg border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors',
+              autoFit ? 'border-white/40 text-white/90' : 'border-white/10 text-white/50 hover:border-white/25',
+            )}
+          >
+            Fit
+          </button>
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+            {breakpoint} · {width}px
+          </span>
+          <span className="ml-auto truncate font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+            {selected ? selected.name : `${layout.sections.length} sections`}
+          </span>
+        </footer>
     </div>
   );
 }
-

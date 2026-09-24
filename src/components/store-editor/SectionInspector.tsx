@@ -116,15 +116,15 @@ export function SectionInspector({
       {/* Reuse. Kept at the top because these act on the section as a whole,
           before any of the per-field controls below. */}
       {onCopyStyle || onSaveToLibrary ? (
-        <div className="flex items-center gap-1 border-b border-white/10 px-4 py-2.5">
+        <div className="flex items-center gap-1 border-b border-white/10 px-3 py-2">
           {onCopyStyle ? (
             <button
               type="button"
               onClick={onCopyStyle}
               title="Copy this section's spacing, width and alignment"
-              className="flex items-center gap-1.5 border border-white/10 px-2 py-1.5 text-[11px] text-white/60 transition-colors hover:border-white/25 hover:text-white/90"
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1.5 text-[11px] text-white/60 transition-colors hover:border-white/25 hover:text-white/90"
             >
-              <Copy size={11} /> Copy style
+              <Copy size={11} /> Copy
             </button>
           ) : null}
           {onPasteStyle ? (
@@ -139,7 +139,7 @@ export function SectionInspector({
                   : canPasteStyle ? pasteStyleLabel
                     : 'This section does not use any of the copied settings'
               }
-              className="flex items-center gap-1.5 border border-white/10 px-2 py-1.5 text-[11px] text-white/60 transition-colors hover:border-white/25 hover:text-white/90 disabled:cursor-not-allowed disabled:border-white/[0.06] disabled:text-white/20"
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1.5 text-[11px] text-white/60 transition-colors hover:border-white/25 hover:text-white/90 disabled:cursor-not-allowed disabled:border-white/[0.06] disabled:text-white/20"
             >
               <ClipboardPaste size={11} /> Paste
             </button>
@@ -149,7 +149,7 @@ export function SectionInspector({
               type="button"
               onClick={onSaveToLibrary}
               title="Save this section to reuse it later"
-              className="ml-auto flex items-center gap-1.5 border border-white/10 px-2 py-1.5 text-[11px] text-white/60 transition-colors hover:border-white/25 hover:text-white/90"
+              className="ml-auto flex items-center gap-1.5 rounded-lg border border-white/10 px-2 py-1.5 text-[11px] text-white/60 transition-colors hover:border-white/25 hover:text-white/90"
             >
               <Bookmark size={11} /> Save
             </button>
@@ -168,7 +168,7 @@ export function SectionInspector({
                 aria-pressed={settings.visible === value}
                 onClick={() => onSet('visible', value)}
                 className={cn(
-                  'h-8 border text-[11px] transition-colors',
+                  'h-8 rounded-lg border text-[11px] transition-colors',
                   settings.visible === value
                     ? 'border-white/40 bg-white/[0.12] text-white/90'
                     : 'border-white/10 text-white/60 hover:border-white/25 hover:text-white/90',
@@ -203,7 +203,7 @@ export function SectionInspector({
                 aria-pressed={settings.columns === count}
                 onClick={() => onSet('columns', count)}
                 className={cn(
-                  'h-8 border text-[11px] tabular-nums transition-colors',
+                  'h-8 rounded-lg border text-[11px] tabular-nums transition-colors',
                   settings.columns === count
                     ? 'border-white/40 bg-white/[0.12] text-white/90'
                     : 'border-white/10 text-white/60 hover:border-white/25 hover:text-white/90',
@@ -245,7 +245,7 @@ export function SectionInspector({
                 aria-pressed={settings.width === value}
                 onClick={() => onSet('width', value)}
                 className={cn(
-                  'h-8 border text-[11px] capitalize transition-colors',
+                  'h-8 rounded-lg border text-[11px] capitalize transition-colors',
                   settings.width === value
                     ? 'border-white/40 bg-white/[0.12] text-white/90'
                     : 'border-white/10 text-white/60 hover:border-white/25 hover:text-white/90',
@@ -268,7 +268,7 @@ export function SectionInspector({
                 aria-pressed={settings.align === value}
                 onClick={() => onSet('align', value)}
                 className={cn(
-                  'h-8 border text-[11px] capitalize transition-colors',
+                  'h-8 rounded-lg border text-[11px] capitalize transition-colors',
                   settings.align === value
                     ? 'border-white/40 bg-white/[0.12] text-white/90'
                     : 'border-white/10 text-white/60 hover:border-white/25 hover:text-white/90',

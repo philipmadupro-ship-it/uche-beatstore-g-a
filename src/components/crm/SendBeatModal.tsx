@@ -568,7 +568,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
         </div>
 
         {/* Mode + tab segmented controls */}
-        <div className="px-8 py-3 border-b border-white/10 flex items-center gap-4 bg-[#090907]/40">
+        <div className="px-4 sm:px-8 py-3 border-b border-white/10 flex flex-wrap items-center gap-3 sm:gap-4 bg-[#090907]/40">
           <div className="flex items-center gap-1 bg-[#090907] border border-white/10 rounded-md p-0.5">
             <SegBtn active={mode === 'tracks'} onClick={() => setMode('tracks')} icon={<Music size={11} />}>
               Tracks
@@ -578,6 +578,13 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
             </SegBtn>
           </div>
 
+          {/* Send lives up here with the controls it depends on — at the
+              bottom of a tall modal it was below the fold on a laptop. */}
+          {recipientsWithoutEmail.length > 0 && (
+            <span className="text-[10px] font-mono uppercase tracking-wider text-yellow-500/80 hidden sm:inline">
+              ⚠ {recipientsWithoutEmail.length} no email · will skip
+            </span>
+          )}
           <div className="flex items-center gap-1 bg-[#090907] border border-white/10 rounded-md p-0.5 ml-auto">
             <SegBtn active={tab === 'compose'} onClick={() => setTab('compose')} icon={<Pencil size={11} />}>
               Compose
@@ -586,11 +593,31 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               Preview
             </SegBtn>
           </div>
+          <LiquidGlassButton
+            disabled={sending || !summary.valid || recipientsWithEmail === 0}
+            onClick={handleSend}
+            active
+          >
+            {sending ? (
+              <><Loader2 size={12} className="animate-spin" /> Sending…</>
+            ) : (
+              <>
+                <Send size={12} />
+                Send to {recipientsWithEmail === 1
+                  ? (recipients.find((r) => r.email)?.name || '').split(' ')[0]
+                  : `${recipientsWithEmail} contact${recipientsWithEmail === 1 ? '' : 's'}`}
+              </>
+            )}
+          </LiquidGlassButton>
         </div>
 
-        <div className="flex flex-1 min-h-0">
+        {/* Two panes, each scrolling on its own: browse tracks/projects on the
+            left while the compose/preview on the right stays put. A fixed
+            height is what makes that work — without it the modal grew to its
+            content and both sides scrolled as one page. */}
+        <div className="flex flex-col md:flex-row h-[min(680px,calc(88dvh-190px))] min-h-0">
           {/* Left — source selection */}
-          <div className="w-5/12 border-r border-white/10 flex flex-col">
+          <div className="md:w-5/12 h-1/2 md:h-auto border-b md:border-b-0 md:border-r border-white/10 flex flex-col min-h-0">
             <div className="px-6 pt-4 pb-3 border-b border-white/10 space-y-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={12} />
@@ -813,7 +840,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
           </div>
 
           {/* Right — compose or preview */}
-          <div className="flex-1 flex flex-col bg-[#090907]/40 min-h-0">
+          <div className="flex-1 flex flex-col bg-[#090907]/40 min-h-0 overflow-hidden">
             {tab === 'compose' ? (
               <div className="flex flex-col flex-1 min-h-0 px-7 py-6 gap-5 overflow-y-auto custom-scrollbar">
                 {/* Summary */}
@@ -1028,29 +1055,6 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
               </div>
             )}
 
-            <div className="px-7 py-4 border-t border-white/10 bg-[#090907] flex items-center gap-3">
-              {recipientsWithoutEmail.length > 0 && (
-                <span className="text-[10px] font-mono uppercase tracking-wider text-yellow-500/80 mr-auto">
-                  ⚠ {recipientsWithoutEmail.length} no email · will skip
-                </span>
-              )}
-              <LiquidGlassButton
-                disabled={sending || !summary.valid || recipientsWithEmail === 0}
-                onClick={handleSend}
-                active
-              >
-                {sending ? (
-                  <><Loader2 size={12} className="animate-spin" /> Sending…</>
-                ) : (
-                  <>
-                    <Send size={12} />
-                    Send to {recipientsWithEmail === 1
-                      ? (recipients.find((r) => r.email)?.name || '').split(' ')[0]
-                      : `${recipientsWithEmail} contact${recipientsWithEmail === 1 ? '' : 's'}`}
-                  </>
-                )}
-              </LiquidGlassButton>
-            </div>
           </div>
         </div>
 
