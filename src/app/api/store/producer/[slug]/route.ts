@@ -59,7 +59,7 @@ export async function GET(
     const { data: exactCreator, error: cErr } = await admin
       .from('creator_profiles')
       .select([
-        'user_id', 'display_name', 'bio', 'hero_image_url', 'credits',
+        'user_id', 'display_name', 'bio', 'hero_image_url', 'credits', 'logo_url',
         'license_lease_price_usd', 'license_exclusive_price_usd', 'license_notes',
         'instagram_handle', 'twitter_handle', 'spotify_url',
         'soundcloud_url', 'website_url', 'contact_email',
@@ -77,7 +77,7 @@ export async function GET(
       const { data: candidates } = await admin
         .from('creator_profiles')
         .select([
-          'user_id', 'display_name', 'bio', 'hero_image_url', 'credits',
+          'user_id', 'display_name', 'bio', 'hero_image_url', 'credits', 'logo_url',
           'license_lease_price_usd', 'license_exclusive_price_usd', 'license_notes',
           'instagram_handle', 'twitter_handle', 'spotify_url',
           'soundcloud_url', 'website_url', 'contact_email',

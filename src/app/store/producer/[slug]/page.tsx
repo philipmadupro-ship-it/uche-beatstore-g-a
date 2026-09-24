@@ -14,6 +14,8 @@ import { getBuyerToken } from '@/lib/buyer-session';
 import type { Track } from '@/lib/types';
 import { FONT_FAMILY_MAP } from '@/components/store/types';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { MusicReactiveBackdrop } from '@/components/ui/MusicReactiveBackdrop';
+import { formatSignature, producerSignature } from '@/lib/store/producer-signature';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
@@ -25,6 +27,7 @@ interface CreatorProfile {
   bio?: string | null;
   hero_image_url?: string | null;
   credits?: string | null;
+  logo_url?: string | null;
   license_notes?: string | null;
   instagram_handle?: string | null;
   twitter_handle?: string | null;
@@ -159,6 +162,8 @@ export default function ProducerPage({
   };
 
   const fontFamily = FONT_FAMILY_MAP[creator?.font_style ?? 'default'] ?? FONT_FAMILY_MAP.default;
+  const signatureLine = formatSignature(producerSignature(tracks));
+  const creditLines = (creator?.credits ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
 
   if (loading) {
     return (
@@ -185,7 +190,8 @@ export default function ProducerPage({
       style={{ fontFamily }}
     >
       {/* ── Hero ── */}
-      <div className="relative">
+      <div className="relative isolate">
+        <MusicReactiveBackdrop className="inset-0 z-[1]" />
         {/* Hero background image */}
         {creator.hero_image_url ? (
           <div className="h-[220px] md:h-[320px] w-full relative overflow-hidden">
@@ -214,17 +220,26 @@ export default function ProducerPage({
         {/* Producer header card */}
         <div className="max-w-6xl mx-auto px-4 md:px-10 -mt-12 md:-mt-20 relative z-10">
           <div className="flex flex-col md:flex-row md:items-end gap-4 md:gap-6">
-            {/* Avatar placeholder */}
-            <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center shadow-lg shrink-0">
-              <Music size={32} className="text-white/40" />
+            {/* The producer's mark — the logo from Settings → Brand artwork.
+                A generic music glyph here said nothing about whose page it is. */}
+            <div className="w-20 h-20 md:w-28 md:h-28 rounded-[20px] overflow-hidden bg-[#0D0D0A] border border-white/10 flex items-center justify-center shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)] shrink-0">
+              {creator.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={creator.logo_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="font-heading text-[28px] md:text-[40px] text-white/80">
+                  {(creator.display_name || 'P').trim().charAt(0).toUpperCase()}
+                </span>
+              )}
             </div>
 
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl md:text-4xl font-bold text-white leading-tight">
+              <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/40 mb-1.5">Producer</p>
+              <h1 className="font-heading text-[28px] md:text-[40px] text-white leading-[1.05]">
                 {creator.display_name || 'Producer'}
               </h1>
-              {creator.credits && (
-                <p className="text-[11px] text-white/60 mt-1">{creator.credits}</p>
+              {signatureLine && (
+                <p className="mt-2 text-[10px] font-mono uppercase tracking-[0.2em] text-white/60">{signatureLine}</p>
               )}
             </div>
 
@@ -255,6 +270,19 @@ export default function ProducerPage({
               <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
                 <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-2">Bio</p>
                 <p className="text-[11px] text-white/80 leading-relaxed">{creator.bio}</p>
+              </div>
+            )}
+
+            {/* Credits are stored one per line (the profile field says so);
+                rendered as one run-on sentence they read as a typo. */}
+            {creditLines.length > 0 && (
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+                <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-2">Credits</p>
+                <ul className="space-y-1.5">
+                  {creditLines.map((line) => (
+                    <li key={line} className="text-[11px] text-white/80 leading-snug">{line}</li>
+                  ))}
+                </ul>
               </div>
             )}
 
