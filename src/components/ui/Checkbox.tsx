@@ -29,7 +29,7 @@ export function Checkbox({ indeterminate = false, className, ...rest }: Props) {
         ref={ref}
         type="checkbox"
         className={cn(
-          'peer size-4 cursor-pointer appearance-none rounded-[5px] border border-white/20 bg-white/[0.06] transition-colors',
+          'peer size-4 cursor-pointer appearance-none rounded-[3px] border border-white/20 bg-white/[0.06] transition-colors',
           'hover:border-white/30 hover:bg-white/[0.10]',
           'checked:border-white checked:bg-white indeterminate:border-white/60 indeterminate:bg-white/60',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-1 focus-visible:ring-offset-[#090907]',
@@ -41,7 +41,7 @@ export function Checkbox({ indeterminate = false, className, ...rest }: Props) {
       <svg viewBox="0 0 12 12" aria-hidden className="pointer-events-none absolute size-3 text-black opacity-0 peer-checked:opacity-100">
         <path d="M2.5 6.2 5 8.6l4.5-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      <span aria-hidden className="pointer-events-none absolute h-[2px] w-2 rounded bg-black opacity-0 peer-indeterminate:opacity-100" />
+      <span aria-hidden className="pointer-events-none absolute h-[2px] w-2 rounded-full bg-black opacity-0 peer-indeterminate:opacity-100" />
     </span>
   );
 }

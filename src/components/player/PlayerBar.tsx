@@ -1,6 +1,7 @@
 'use client';
 
 import { usePlayer } from '@/hooks/usePlayer';
+import { usePlayerReactivity } from '@/hooks/usePlayerReactivity';
 import {
   Volume2, VolumeX,
   ListMusic, Music, Shuffle, Repeat, ChevronDown,
@@ -14,7 +15,7 @@ import { AsciiCoverArt } from './AsciiCoverArt';
 import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
-import { useState, useRef, useSyncExternalStore, useMemo } from 'react';
+import { useState, useRef, useSyncExternalStore, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { CoverImage } from '@/components/ui/CoverImage';
@@ -117,6 +118,12 @@ export function PlayerBar() {
     true,
     bandsUrlFromPeaksUrl(currentTrack?.peaks_url),
   );
+
+  // Hand the numbers to the hero backdrops — one analysis for the whole app.
+  const publishReactivity = usePlayerReactivity((s) => s.publish);
+  useEffect(() => {
+    publishReactivity({ level: nowPlayingLevel, bass: nowPlayingBass, playing: Boolean(currentTrack) && isPlaying });
+  }, [publishReactivity, nowPlayingLevel, nowPlayingBass, isPlaying, currentTrack]);
 
   if (!currentTrack) return null;
 

@@ -15,6 +15,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { MusicReactiveBackdrop } from '@/components/ui/MusicReactiveBackdrop';
 
 interface PageHeaderProps {
   /** Small mono label above the title, e.g. "Work in progress". */
@@ -32,7 +33,8 @@ interface PageHeaderProps {
 
 export function PageHeader({ eyebrow, title, description, actions, meta, children }: PageHeaderProps) {
   return (
-    <header className="mb-6 sm:mb-8">
+    <header className="relative isolate mb-6 sm:mb-8">
+      <MusicReactiveBackdrop className="-inset-x-8 -top-10 -bottom-6 -z-10" />
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div className="min-w-0">
           {eyebrow && (
