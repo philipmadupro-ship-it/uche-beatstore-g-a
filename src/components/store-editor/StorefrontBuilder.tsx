@@ -21,21 +21,28 @@
  *     shell whatever else is on screen.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Check, History, Layers, Loader2, Monitor, Palette, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
 import {
-  addSection, breakpointWidths, clearSectionOverride, createSection,
+  addSection, breakpointWidths, clearSectionOverride, isPinnedSection,
   duplicateSection, moveSection, normalizeLayout, removeSection, reorderSection,
   resolveSection, setSectionSetting, storeBreakpoints, updateSection,
-  type SectionSettings, type StoreBreakpoint, type StoreLayout, type StoreSectionKind,
+  type SectionSettings, type StoreBreakpoint, type StoreLayout,
 } from '@/lib/store-editor/layout';
 import { SectionRenderer, type StorefrontData } from './SectionRenderer';
+import { ShortcutSheet } from '@/components/cover-art/ShortcutSheet';
 import { DeviceFrame } from './DeviceFrame';
+import { CanvasInsert } from './CanvasInsert';
+import { SECTION_PRESETS, sectionFromPreset } from '@/lib/store-editor/presets';
 import { moveCanvasBlock } from '@/lib/store-editor/canvas-blocks';
+import { ZoomControl } from '@/components/ui/ZoomControl';
+import { EditorViewButtons } from '@/components/ui/EditorViewButtons';
+import { MusicReactiveBackdrop } from '@/components/ui/MusicReactiveBackdrop';
+import { useEditorExpand } from '@/hooks/useEditorExpand';
 import { SectionsPanel } from './SectionsPanel';
 import { SectionInspector } from './SectionInspector';
 import { ThemePanel } from './ThemePanel';
@@ -50,6 +57,13 @@ import {
   type SectionStyle,
 } from '@/lib/store-editor/section-style';
 
+/** Shown by "?" — a keyboard model nobody can discover might as well not exist. */
+const STORE_EDITOR_SHORTCUTS = [
+  { title: 'View', items: [['1 / 2 / 3', 'Desktop / tablet / mobile'], ['?', 'This sheet']] as Array<[string, string]> },
+  { title: 'Edit', items: [['⌘Z / Shift ⌘Z', 'Undo / redo'], ['⌘D', 'Duplicate section'], ['Delete', 'Remove section'], ['H', 'Hide / show on this device']] as Array<[string, string]> },
+  { title: 'Layers', items: [['↑ / ↓', 'Select previous / next'], ['Enter', 'Rename'], ['Double-click', 'Rename']] as Array<[string, string]> },
+];
+
 type BuilderState = {
   doc: StoreLayout;
   past: StoreLayout[];
@@ -57,6 +71,8 @@ type BuilderState = {
 };
 
 const HISTORY_LIMIT = 50;
+/** Up to 200% so a detail can be checked closer than the device shows it. */
+const ZOOM_RANGE = { min: 0.25, max: 2 };
 const AUTOSAVE_MS = 900;
 
 const deviceIcons: Record<StoreBreakpoint, React.ComponentType<{ size?: number }>> = {
@@ -66,8 +82,6 @@ const deviceIcons: Record<StoreBreakpoint, React.ComponentType<{ size?: number }
 };
 
 /** Sections a producer can add. The data-backed ones already exist by default. */
-const addableKinds: StoreSectionKind[] = ['text', 'image', 'video', 'links', 'canvas'];
-
 export function StorefrontBuilder({
   initialLayout,
   data,
@@ -92,6 +106,7 @@ export function StorefrontBuilder({
   /** Bumped after a snapshot lands, so an open history list picks it up. */
   const [historyKey, setHistoryKey] = useState(0);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [frameWindow, setFrameWindow] = useState<Window | null>(null);
   const [compact, setCompact] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -100,6 +115,7 @@ export function StorefrontBuilder({
   /** Copied presentation, waiting to be pasted onto another section. */
   const [clipboardStyle, setClipboardStyle] = useState<SectionStyle | null>(null);
   const [saved, setSaved] = useState<SavedSectionSummary[]>([]);
+  const view = useEditorExpand();
 
   const refreshLibrary = useCallback(() => {
     // Failures are swallowed: the library is a convenience, and IndexedDB is
@@ -260,6 +276,15 @@ export function StorefrontBuilder({
         setSelectedId(null);
         return;
       }
+      if (event.key === 'Escape') { setShowShortcuts(false); return; }
+      if (event.key === '?') { setShowShortcuts(true); return; }
+      if ((event.key === 'h' || event.key === 'H') && !meta && selectedId) {
+        // Photoshop's hide-layer, scoped to the device being edited — the
+        // same rule as the eye column in the layers panel.
+        commit((current) => updateSection(current, selectedId, (section) =>
+          setSectionSetting(section, breakpoint, 'visible', !resolveSection(section, breakpoint).visible)));
+        return;
+      }
       if (event.key === '1') setBreakpoint('desktop');
       if (event.key === '2') setBreakpoint('tablet');
       if (event.key === '3') setBreakpoint('mobile');
@@ -272,7 +297,7 @@ export function StorefrontBuilder({
       window.removeEventListener('keydown', onKey);
       frameWindow?.removeEventListener('keydown', onKey);
     };
-  }, [undo, redo, commit, selectedId, frameWindow]);
+  }, [undo, redo, commit, selectedId, frameWindow, breakpoint]);
 
   /* ── Section operations ───────────────────────────────────────────────── */
 
@@ -291,19 +316,28 @@ export function StorefrontBuilder({
   return (
     <div
       ref={rootRef}
-      className="relative grid h-[calc(100vh-10.5rem)] grid-rows-[2.75rem_minmax(0,1fr)_1.75rem] overflow-hidden rounded-xl border border-white/10 bg-[#090907]"
+      className={cn(
+        'grid grid-rows-[3.25rem_minmax(0,1fr)] overflow-hidden bg-[#090907]',
+        // Expanded covers the dashboard chrome (z-50) but stays under
+        // popovers (--z-popover 200), which portal to <body>.
+        view.expanded
+          ? 'fixed inset-0 z-[100]'
+          // `relative` only here: beside `fixed` it wins in Tailwind's order.
+          : 'relative h-[calc(100vh-10.5rem)] rounded-xl border border-white/10',
+      )}
     >
+      {showShortcuts ? (
+        <ShortcutSheet groups={STORE_EDITOR_SHORTCUTS} onClose={() => setShowShortcuts(false)} />
+      ) : null}
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
-      <header className="flex min-w-0 items-center gap-2 border-b border-white/10 px-3">
-        <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 lg:inline">
+      {/* Toolbar in the Library's pill language — same segmented switch,
+          same resting fill — so the builder reads as part of the app. */}
+      <header className="flex min-w-0 items-center gap-2 overflow-x-auto border-b border-white/10 bg-[#0D0D0A] px-3 no-scrollbar">
+        <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40 xl:inline">
           Storefront
         </span>
 
-        <span className="mx-1 h-5 w-px shrink-0 bg-white/10" />
-
-        {/* Device switch. Numbered shortcuts are in the titles rather than a
-            legend, so they are discoverable at the point of use. */}
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
           {storeBreakpoints.map((point, index) => {
             const Icon = deviceIcons[point];
             return (
@@ -314,10 +348,10 @@ export function StorefrontBuilder({
                 title={`${point} · ${breakpointWidths[point]}px (${index + 1})`}
                 onClick={() => setBreakpoint(point)}
                 className={cn(
-                  'flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11px] capitalize transition-colors',
+                  'flex h-7 items-center gap-1.5 rounded-full px-3 text-[11px] capitalize transition-colors',
                   breakpoint === point
                     ? 'bg-white/[0.14] text-white'
-                    : 'text-white/50 hover:bg-white/[0.06] hover:text-white/90',
+                    : 'text-white/60 hover:text-white/80',
                 )}
               >
                 <Icon size={12} />
@@ -327,15 +361,18 @@ export function StorefrontBuilder({
           })}
         </div>
 
-        <span className="mx-1 h-5 w-px shrink-0 bg-white/10" />
+        <span className="hidden shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/30 lg:inline">
+          {width}px
+        </span>
 
+        <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
         <button
           type="button"
           onClick={undo}
           disabled={editor.past.length === 0}
           title="Undo (⌘Z)"
           aria-label="Undo"
-          className="grid size-7 shrink-0 place-items-center rounded-lg text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white/90 disabled:text-white/15 disabled:hover:bg-transparent"
+          className="grid size-7 shrink-0 place-items-center rounded-full text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white disabled:text-white/20 disabled:hover:bg-transparent"
         >
           <Undo2 size={13} />
         </button>
@@ -345,13 +382,11 @@ export function StorefrontBuilder({
           disabled={editor.future.length === 0}
           title="Redo (Shift ⌘Z)"
           aria-label="Redo"
-          className="grid size-7 shrink-0 place-items-center rounded-lg text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white/90 disabled:text-white/15 disabled:hover:bg-transparent"
+          className="grid size-7 shrink-0 place-items-center rounded-full text-white/60 transition-colors hover:bg-white/[0.08] hover:text-white disabled:text-white/20 disabled:hover:bg-transparent"
         >
           <Redo2 size={13} />
         </button>
-
-        <span className="mx-1 h-5 w-px shrink-0 bg-white/10" />
-
+        </div>
 
         <span className="ml-auto flex shrink-0 items-center gap-2">
           {/* Announced: the save state changes on its own, so a screen
@@ -363,6 +398,13 @@ export function StorefrontBuilder({
             {saveState === 'saving' ? <><Loader2 size={11} className="animate-spin" /> Saving</> : null}
             {saveState === 'saved' ? <><Check size={11} /> Saved</> : null}
           </span>
+          <EditorViewButtons
+            expanded={view.expanded}
+            onToggleExpanded={view.toggleExpanded}
+            fullscreen={view.fullscreen}
+            fullscreenAvailable={view.fullscreenAvailable}
+            onToggleFullscreen={view.toggleFullscreen}
+          />
         </span>
       </header>
 
@@ -443,19 +485,20 @@ export function StorefrontBuilder({
                 </button>
                 {adding ? (
                   <div className="overlay-surface ui-pop-up absolute bottom-12 left-2 right-2 z-40 max-h-80 overflow-y-auto rounded-xl py-1">
-                    {addableKinds.map((kind) => (
+                    {SECTION_PRESETS.map((preset) => (
                       <button
-                        key={kind}
+                        key={preset.id}
                         type="button"
                         onClick={() => {
-                          const section = createSection(kind);
+                          const section = sectionFromPreset(preset);
                           commit((current) => addSection(current, section));
                           setSelectedId(section.id);
                           setAdding(false);
                         }}
-                        className="mx-1 block w-[calc(100%-0.5rem)] rounded-lg px-3 py-2 text-left text-[11px] capitalize text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white/90"
+                        className="mx-1 block w-[calc(100%-0.5rem)] rounded-lg px-3 py-2 text-left transition-colors hover:bg-white/[0.08]"
                       >
-                        {kind}
+                        <span className="block text-[11px] text-white/80">{preset.label}</span>
+                        <span className="block text-[10px] text-white/35">{preset.hint}</span>
                       </button>
                     ))}
 
@@ -523,14 +566,24 @@ export function StorefrontBuilder({
           )}
         </aside>
 
-        {/* Centre: the canvas */}
+        {/* Centre: the canvas. The stage carries the same music-reactive
+            glow as every page header, so the editor breathes with whatever
+            is playing like the rest of the app does. */}
+        <div className="relative isolate min-h-0">
+        <MusicReactiveBackdrop className="inset-0 -z-10" />
+        <ZoomControl
+          floating
+          zoom={zoom}
+          range={ZOOM_RANGE}
+          fitted={autoFit}
+          onZoom={(value) => { setAutoFit(false); setZoom(value); }}
+          onFit={() => setAutoFit(true)}
+          className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2"
+        />
         <div
           ref={stageRef}
           onClick={() => setSelectedId(null)}
-          // A plain, darker pasteboard — Photoshop's, not graph paper. The
-          // grid competed with the storefront for attention and read as
-          // decoration; the device frame is what should hold the eye.
-          className="min-h-0 overflow-auto bg-[#050504] px-10 py-12"
+          className="h-full overflow-auto px-10 pb-20 pt-12"
         >
           <div className="mx-auto" style={{ width: width * zoom }}>
             {/* The frame is the real device width; zoom is a visual scale on
@@ -546,12 +599,26 @@ export function StorefrontBuilder({
             >
               <DeviceFrame width={width} title={`Storefront preview · ${breakpoint}`} onWindow={setFrameWindow}>
               <div onClick={() => setSelectedId(null)}>
-              {layout.sections.map((section) => {
+              {layout.sections.map((section, index) => {
                 const settings = resolveSection(section, breakpoint);
                 const isSelected = section.id === selectedId;
+                // An insert point above every movable section, plus one above
+                // the first pinned one (the end of the movable run).
+                const insertable = !isPinnedSection(section.kind)
+                  || index === 0 || !isPinnedSection(layout.sections[index - 1].kind);
                 return (
+                  <Fragment key={section.id}>
+                  {insertable ? (
+                    <CanvasInsert
+                      zoom={zoom}
+                      onInsert={(preset) => {
+                        const created = sectionFromPreset(preset);
+                        commit((current) => addSection(current, created, index));
+                        setSelectedId(created.id);
+                      }}
+                    />
+                  ) : null}
                   <div
-                    key={section.id}
                     role="button"
                     tabIndex={-1}
                     aria-label={`${section.name} section`}
@@ -604,6 +671,7 @@ export function StorefrontBuilder({
                         breakpoint={breakpoint}
                         theme={layout.theme}
                         data={data}
+                        editing
                         editBlocks={section.kind === 'canvas' ? {
                           selectedId: selectedBlockId,
                           onSelect: setSelectedBlockId,
@@ -629,6 +697,7 @@ export function StorefrontBuilder({
                       />
                     </div>
                   </div>
+                  </Fragment>
                 );
               })}
               </div>
@@ -636,10 +705,11 @@ export function StorefrontBuilder({
             </div>
           </div>
         </div>
+        </div>
 
         {/* Right: inspector */}
         <aside className={cn(
-          'min-h-0 border-l border-white/10 bg-[#0D0D0A]',
+          'min-h-0 overflow-x-hidden overflow-y-auto border-l border-white/10 bg-[#0D0D0A]',
           compact && 'absolute inset-y-0 right-0 z-30 w-72 shadow-[0_0_40px_rgba(0,0,0,0.6)]',
         )}
         >
@@ -647,6 +717,10 @@ export function StorefrontBuilder({
             section={selected}
             breakpoint={breakpoint}
             onSet={setSetting}
+            onSetBase={(key, value) => {
+              if (!selectedId) return;
+              commit((current) => updateSection(current, selectedId, (section) => setSectionSetting(section, 'desktop', key, value)));
+            }}
             onClear={clearOverride}
             selectedBlockId={selectedBlockId}
             onSelectBlock={setSelectedBlockId}
@@ -692,39 +766,6 @@ export function StorefrontBuilder({
         </aside>
       </div>
 
-      {/* ── Status bar ─ zoom lives down here, as in Photoshop: it is a view
-          setting, not an edit, and it crowded the toolbar. ─────────────── */}
-      <footer className="flex min-w-0 items-center gap-3 border-t border-white/10 bg-[#0D0D0A] px-3">
-          <label className="flex shrink-0 items-center gap-1.5" title="Zoom">
-            <span className="font-mono text-[10px] tabular-nums text-white/40">{Math.round(zoom * 100)}%</span>
-            <input
-              type="range"
-              min={25}
-              max={100}
-              value={Math.round(zoom * 100)}
-              aria-label="Zoom"
-              onChange={(event) => { setAutoFit(false); setZoom(Number(event.target.value) / 100); }}
-              className="h-1 w-20 cursor-pointer appearance-none bg-white/10 accent-white"
-            />
-          </label>
-          <button
-            type="button"
-            onClick={() => setAutoFit(true)}
-            title="Fit to window"
-            className={cn(
-              'shrink-0 rounded-lg border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors',
-              autoFit ? 'border-white/40 text-white/90' : 'border-white/10 text-white/50 hover:border-white/25',
-            )}
-          >
-            Fit
-          </button>
-          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
-            {breakpoint} · {width}px
-          </span>
-          <span className="ml-auto truncate font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
-            {selected ? selected.name : `${layout.sections.length} sections`}
-          </span>
-        </footer>
     </div>
   );
 }
