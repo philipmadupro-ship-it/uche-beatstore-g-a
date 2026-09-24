@@ -15,7 +15,7 @@
  * is happening rather than leaving it to be inferred.
  */
 
-import { Bookmark, ClipboardPaste, Copy, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { Bookmark, ChevronRight, ClipboardPaste, Copy, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Dropdown } from '@/components/ui/Dropdown';
 import {
   overriddenKeys, resolveSection, supportsSetting,
@@ -39,6 +39,23 @@ const VARIANTS: Partial<Record<StoreSection['kind'], { value: string; label: str
     { value: 'grid', label: 'Grid' },
   ],
 };
+
+/**
+ * A collapsible group of properties — Photoshop's Properties panel, where a
+ * long list of controls folds into named sections you open as needed. Native
+ * <details>: keyboard and screen-reader behaviour for free, open by default.
+ */
+function PropertyGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <details open className="group/prop border-b border-white/10">
+      <summary className="flex h-8 cursor-pointer list-none items-center gap-1.5 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-white/50 transition-colors hover:text-white/80 [&::-webkit-details-marker]:hidden">
+        <ChevronRight size={11} aria-hidden className="transition-transform group-open/prop:rotate-90" />
+        {title}
+      </summary>
+      <div className="space-y-4 px-4 pb-4 pt-1">{children}</div>
+    </details>
+  );
+}
 
 function Label({ children, overridden, onReset }: {
   children: React.ReactNode;
@@ -157,7 +174,7 @@ export function SectionInspector({
         </div>
       ) : null}
 
-      <div className="space-y-4 px-4 py-4">
+      <PropertyGroup title="Display">
         <label className="grid gap-1.5">
           <Label overridden={isOverridden('visible')} onReset={() => onClear('visible')}>Visible</Label>
           <div className="grid grid-cols-2 gap-1">
@@ -216,6 +233,9 @@ export function SectionInspector({
         </div>
         ) : null}
 
+      </PropertyGroup>
+
+      <PropertyGroup title="Size &amp; spacing">
         <label className="grid gap-1.5">
           <Label overridden={isOverridden('spacing')} onReset={() => onClear('spacing')}>Spacing</Label>
           <span className="flex items-center gap-2">
@@ -281,6 +301,9 @@ export function SectionInspector({
         </div>
         ) : null}
 
+      </PropertyGroup>
+
+      <div className="space-y-4 px-4 pb-4">
         {/* Content fields, only for the sections that carry their own copy. */}
         {(section.kind === 'text' || section.kind === 'image' || section.kind === 'video') ? (
           <div className="space-y-3 border-t border-white/10 pt-4">
