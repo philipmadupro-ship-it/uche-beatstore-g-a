@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { pickProvidedProfileFields } from '@/lib/profile/patch';
 import { getCreatorProfile, updateCreatorProfile } from '@/lib/actions/profile';
 import { errorMessage, schemaCacheMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
@@ -113,7 +114,7 @@ export async function POST(req: NextRequest) {
       ...(bundle_discount_percent !== undefined && { bundle_discount_percent: Math.max(0, Math.min(90, Number(bundle_discount_percent) || 0)) }),
     };
 
-    const result = await updateCreatorProfile(payload);
+    const result = await updateCreatorProfile(pickProvidedProfileFields(payload, body));
     if (result.error) {
       const status = result.error === 'Not authenticated' ? 401 : 500;
       // A pending migration is the most common cause of a failed profile

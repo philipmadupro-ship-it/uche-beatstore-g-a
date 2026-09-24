@@ -1650,15 +1650,24 @@ export default function LibraryPage() {
         )}
 
         {effectiveBrowseMode === 'all' && hasMoreTracks && (
-          <div className="flex justify-center pb-28">
+          // A hairline "end of page" rule with the control on it: reads as the
+          // list continuing below rather than as one more pill in the page.
+          <div className="flex items-center gap-4 pb-28 pt-2">
+            <span aria-hidden className="h-px flex-1 bg-white/10" />
             <button
               type="button"
               onClick={loadMoreTracks}
               disabled={loadingMoreTracks}
-              className="rounded-full border border-white/10 bg-white/[0.04] px-5 py-2.5 text-[9px] font-mono uppercase tracking-[0.18em] text-white/60 transition-colors hover:border-white/20 hover:text-white disabled:cursor-wait disabled:opacity-60"
+              aria-busy={loadingMoreTracks}
+              className="group inline-flex h-9 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-4 text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 backdrop-blur-md transition-colors hover:border-white/20 hover:bg-white/[0.10] hover:text-white/90 active:bg-white/[0.14] disabled:cursor-wait disabled:opacity-40"
             >
-              {loadingMoreTracks ? 'Loading tracks...' : 'Load more tracks'}
+              {loadingMoreTracks
+                ? <Loader2 size={12} className="animate-spin" aria-hidden />
+                : <ChevronDown size={12} className="transition-transform group-hover:translate-y-0.5" aria-hidden />}
+              {loadingMoreTracks ? 'Loading' : 'Load more'}
+              <span className="text-white/30 tabular-nums">{tracks.length} shown</span>
             </button>
+            <span aria-hidden className="h-px flex-1 bg-white/10" />
           </div>
         )}
 
