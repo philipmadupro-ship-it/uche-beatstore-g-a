@@ -23,7 +23,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Check, Loader2, Monitor, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2,
+  Check, History, Layers, Loader2, Monitor, Palette, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/useToast';
@@ -291,7 +291,7 @@ export function StorefrontBuilder({
   return (
     <div
       ref={rootRef}
-      className="relative grid h-[calc(100vh-10.5rem)] grid-rows-[3rem_minmax(0,1fr)] overflow-hidden border border-white/10 bg-[#090907]"
+      className="relative grid h-[calc(100vh-10.5rem)] grid-rows-[2.75rem_minmax(0,1fr)_1.75rem] overflow-hidden rounded-xl border border-white/10 bg-[#090907]"
     >
       {/* ── Toolbar ─────────────────────────────────────────────────────── */}
       <header className="flex min-w-0 items-center gap-2 border-b border-white/10 px-3">
@@ -352,29 +352,6 @@ export function StorefrontBuilder({
 
         <span className="mx-1 h-5 w-px shrink-0 bg-white/10" />
 
-        <label className="flex shrink-0 items-center gap-1.5" title="Zoom">
-          <span className="font-mono text-[10px] tabular-nums text-white/40">{Math.round(zoom * 100)}%</span>
-          <input
-            type="range"
-            min={25}
-            max={100}
-            value={Math.round(zoom * 100)}
-            aria-label="Zoom"
-            onChange={(event) => { setAutoFit(false); setZoom(Number(event.target.value) / 100); }}
-            className="h-1 w-20 cursor-pointer appearance-none bg-white/10 accent-white"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={() => setAutoFit(true)}
-          title="Fit to window"
-          className={cn(
-            'shrink-0 border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors',
-            autoFit ? 'border-white/40 text-white/90' : 'border-white/10 text-white/50 hover:border-white/25',
-          )}
-        >
-          Fit
-        </button>
 
         <span className="ml-auto flex shrink-0 items-center gap-2">
           {/* Announced: the save state changes on its own, so a screen
@@ -392,31 +369,43 @@ export function StorefrontBuilder({
       {/* ── Body ────────────────────────────────────────────────────────── */}
       <div className={cn(
         'relative grid min-h-0',
-        compact ? 'grid-cols-[minmax(0,1fr)]' : 'grid-cols-[16rem_minmax(0,1fr)_18rem]',
+        compact ? 'grid-cols-[2.75rem_minmax(0,1fr)]' : 'grid-cols-[2.75rem_15rem_minmax(0,1fr)_17rem]',
       )}
       >
         {/* Left: sections / theme */}
+        {/* Tool rail — Photoshop's panel strip: icons switch what the panel
+            beside them shows, so the panel carries no tab row of its own. */}
+        <nav aria-label="Editor panels" className="flex min-h-0 flex-col items-center gap-1 border-r border-white/10 bg-[#0D0D0A] py-2">
+          {([
+            ['sections', Layers, 'Layers'],
+            ['theme', Palette, 'Theme'],
+            ['history', History, 'History'],
+          ] as const).map(([tab, Icon, label]) => (
+            <button
+              key={tab}
+              type="button"
+              aria-pressed={panel === tab}
+              aria-label={label}
+              title={label}
+              onClick={() => setPanel(tab)}
+              className={cn(
+                'grid size-8 place-items-center rounded-lg transition-colors',
+                panel === tab ? 'bg-white/[0.14] text-white' : 'text-white/40 hover:bg-white/[0.06] hover:text-white/80',
+              )}
+            >
+              <Icon size={14} aria-hidden />
+            </button>
+          ))}
+        </nav>
+
         <aside className={cn(
           'flex min-h-0 flex-col border-r border-white/10 bg-[#0D0D0A]',
-          compact && 'absolute inset-y-0 left-0 z-30 w-64 border-r shadow-[0_0_40px_rgba(0,0,0,0.6)]',
+          compact && 'absolute inset-y-0 left-11 z-30 w-64 border-r shadow-[0_0_40px_rgba(0,0,0,0.6)]',
         )}
         >
-          <div className="flex shrink-0 border-b border-white/10">
-            {(['sections', 'theme', 'history'] as const).map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                aria-pressed={panel === tab}
-                onClick={() => setPanel(tab)}
-                className={cn(
-                  'flex-1 py-2 font-mono text-[10px] uppercase tracking-[0.18em] transition-colors',
-                  panel === tab ? 'bg-white/[0.06] text-white/90' : 'text-white/40 hover:text-white/70',
-                )}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
+          <p className="shrink-0 border-b border-white/10 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
+            {panel === 'sections' ? 'Layers' : panel}
+          </p>
 
           {panel === 'sections' ? (
             <>
@@ -549,9 +538,6 @@ export function StorefrontBuilder({
           }}
         >
           <div className="mx-auto" style={{ width: width * zoom }}>
-            <p className="mb-2 text-center font-mono text-[9px] uppercase tracking-[0.2em] text-white/25">
-              {breakpoint} · {width}px
-            </p>
             {/* The frame is the real device width; zoom is a visual scale on
                 top, so every media query inside resolves as it would on the
                 actual device rather than at whatever the panel happens to be. */}
@@ -581,7 +567,7 @@ export function StorefrontBuilder({
                       setSelectedId(section.id);
                     }}
                     className={cn(
-                      'relative outline-none transition-shadow',
+                      'group/section relative outline-none transition-shadow',
                       isSelected ? 'ring-1 ring-inset ring-white/60' : 'hover:ring-1 hover:ring-inset hover:ring-white/20',
                       !settings.visible && 'opacity-30',
                     )}
@@ -590,15 +576,18 @@ export function StorefrontBuilder({
                         labelled, rather than vanishing — otherwise hiding
                         something on mobile makes it unselectable to unhide. */}
                     {!settings.visible ? (
-                      <span className="pointer-events-none absolute left-2 top-2 z-10 border border-white/20 bg-[#090907] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-white/50">
+                      <span className="pointer-events-none absolute right-2 top-2 z-10 border border-white/20 bg-[#090907] px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-white/50">
                         Hidden on {breakpoint}
                       </span>
                     ) : null}
-                    {isSelected ? (
-                      <span className="pointer-events-none absolute right-0 top-0 z-10 bg-white/80 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-black">
-                        {section.name}
-                      </span>
-                    ) : null}
+                    {/* Name tag: solid when selected, faint on hover — the way a
+                        design tool labels the frame under the cursor. */}
+                    <span className={cn(
+                      'pointer-events-none absolute left-0 top-0 z-10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] transition-opacity',
+                      isSelected ? 'bg-white text-black opacity-100' : 'bg-black/70 text-white/70 opacity-0 group-hover/section:opacity-100',
+                    )}>
+                      {section.name}
+                    </span>
                     <div className={cn(!settings.visible && 'pointer-events-none')}>
                       <SectionRenderer
                         section={section}
@@ -692,7 +681,40 @@ export function StorefrontBuilder({
           />
         </aside>
       </div>
+
+      {/* ── Status bar ─ zoom lives down here, as in Photoshop: it is a view
+          setting, not an edit, and it crowded the toolbar. ─────────────── */}
+      <footer className="flex min-w-0 items-center gap-3 border-t border-white/10 bg-[#0D0D0A] px-3">
+          <label className="flex shrink-0 items-center gap-1.5" title="Zoom">
+            <span className="font-mono text-[10px] tabular-nums text-white/40">{Math.round(zoom * 100)}%</span>
+            <input
+              type="range"
+              min={25}
+              max={100}
+              value={Math.round(zoom * 100)}
+              aria-label="Zoom"
+              onChange={(event) => { setAutoFit(false); setZoom(Number(event.target.value) / 100); }}
+              className="h-1 w-20 cursor-pointer appearance-none bg-white/10 accent-white"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => setAutoFit(true)}
+            title="Fit to window"
+            className={cn(
+              'shrink-0 border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors',
+              autoFit ? 'border-white/40 text-white/90' : 'border-white/10 text-white/50 hover:border-white/25',
+            )}
+          >
+            Fit
+          </button>
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+            {breakpoint} · {width}px
+          </span>
+          <span className="ml-auto truncate font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+            {selected ? selected.name : `${layout.sections.length} sections`}
+          </span>
+        </footer>
     </div>
   );
 }
-
