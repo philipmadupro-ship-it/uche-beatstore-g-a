@@ -6,6 +6,7 @@ import { errorMessage } from '@/lib/errors';
 import { ContactsBatchPatchBodySchema, ContactCreateBodySchema, type CrmStage } from '@/lib/contracts';
 import { normalizeEmailOrNull } from '@/lib/contacts/email';
 import { selectInChunks } from '@/lib/db-in-chunks';
+import { attachContactTags } from '@/lib/contacts/attach-tags';
 import { describeStageChange } from '@/lib/contacts/stage-change';
 import { createLogger } from '@/lib/log';
 
@@ -87,30 +88,21 @@ export async function GET(req: NextRequest) {
 
   // Batch-attach tags so the CRM can filter/group by them client-side.
   const ids = rows.map((r) => r.id);
-  const tagsByContact = new Map<string, { tag: string; category: string | null }[]>();
+  let tagRows: ContactTagRow[] = [];
   if (ids.length) {
     if (isSupabaseConfigured()) {
       const admin = createServiceClient();
       // Chunked: one id per contact went into the URL, so this sat on the same
       // length cliff that took /api/tracks/store-summary (and with it the whole
       // store editor) down at ~650 ids.
-      const tagRows = await selectInChunks<ContactTagRow>(ids, (batch) =>
+      tagRows = await selectInChunks<ContactTagRow>(ids, (batch) =>
         admin.from('contact_tags').select('contact_id, tag, category').in('contact_id', batch));
-      tagRows.forEach((r) => {
-        const arr = tagsByContact.get(r.contact_id) ?? [];
-        arr.push({ tag: r.tag, category: r.category ?? null });
-        tagsByContact.set(r.contact_id, arr);
-      });
     } else {
-      getAll<ContactTagRow>('contact_tags').forEach((r) => {
-        const arr = tagsByContact.get(r.contact_id) ?? [];
-        arr.push({ tag: r.tag, category: r.category ?? null });
-        tagsByContact.set(r.contact_id, arr);
-      });
+      tagRows = getAll<ContactTagRow>('contact_tags');
     }
   }
 
-  const withTags = rows.map((r) => ({ ...r, tags: tagsByContact.get(r.id) ?? [] }));
+  const withTags = attachContactTags(rows, tagRows);
   return NextResponse.json(withTags);
 }
 
