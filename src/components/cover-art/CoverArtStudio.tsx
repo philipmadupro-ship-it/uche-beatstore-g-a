@@ -1201,7 +1201,7 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
     // so a new row has to come out of the canvas's share, not out of the
     // viewport. Growing the container instead is what made the page scroll
     // rather than the panels the last time this layout was touched.
-    <div ref={rootRef} className="relative grid h-[calc(100vh-10.5rem)] grid-rows-[3.25rem_2.5rem_minmax(0,1fr)] overflow-hidden bg-[#090907] text-white/90">
+    <div ref={rootRef} className="relative grid h-[calc(100vh-10.5rem)] grid-rows-[3.25rem_2.5rem_minmax(0,1fr)_1.75rem] overflow-hidden rounded-xl border border-white/10 bg-[#090907] text-white/90">
       {showShortcuts ? <ShortcutSheet onClose={() => setShowShortcuts(false)} /> : null}
       {menu ? (
         <ContextMenu x={menu.x} y={menu.y} items={contextMenuItems()} onClose={() => setMenu(null)} />
@@ -1292,15 +1292,6 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
           >
             <Maximize2 size={13} />
           </button>
-          <span className="hidden w-12 text-right font-mono text-[10px] tabular-nums text-white/40 sm:inline">
-            {Math.round(zoom * 100)}%
-          </span>
-          <input
-            type="range" min={0.04} max={0.6} step={0.01} value={zoom}
-            aria-label="Zoom"
-            onChange={(event) => setZoomManually(Number(event.target.value))}
-            className="hidden h-1 w-24 cursor-pointer appearance-none bg-white/10 accent-white lg:inline-block"
-          />
           <span aria-hidden className="mx-1 h-4 w-px bg-white/10" />
           <button
             type="button" onClick={() => setShowTools((value) => !value)}
@@ -1352,11 +1343,11 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
           width rather than being squeezed to a sliver behind them. */}
       <div className={cn(
         'relative grid min-h-0',
-        compact && 'grid-cols-[3.5rem_minmax(0,1fr)]',
-        !compact && showTools && showLayers && 'grid-cols-[3.5rem_17rem_minmax(0,1fr)_17rem]',
-        !compact && showTools && !showLayers && 'grid-cols-[3.5rem_17rem_minmax(0,1fr)]',
-        !compact && !showTools && showLayers && 'grid-cols-[3.5rem_minmax(0,1fr)_17rem]',
-        !compact && !showTools && !showLayers && 'grid-cols-[3.5rem_minmax(0,1fr)]',
+        compact && 'grid-cols-[2.75rem_minmax(0,1fr)]',
+        !compact && showTools && showLayers && 'grid-cols-[2.75rem_17rem_minmax(0,1fr)_17rem]',
+        !compact && showTools && !showLayers && 'grid-cols-[2.75rem_17rem_minmax(0,1fr)]',
+        !compact && !showTools && showLayers && 'grid-cols-[2.75rem_minmax(0,1fr)_17rem]',
+        !compact && !showTools && !showLayers && 'grid-cols-[2.75rem_minmax(0,1fr)]',
       )}>
         {/* Tool rail */}
         <nav aria-label="Studio tools" className="flex flex-col items-center gap-1 border-r border-white/10 bg-[#0D0D0A] py-2">
@@ -1375,13 +1366,13 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
               aria-pressed={tab === item.id && showTools}
               aria-expanded={tab === item.id && showTools}
               title={item.label}
+              aria-label={item.label}
               className={cn(
-                'grid h-11 w-11 place-content-center gap-1 text-[9px] uppercase tracking-[0.1em] transition-colors',
-                tab === item.id && showTools ? 'bg-white/[0.10] text-white' : 'text-white/40 hover:text-white/90',
+                'grid size-9 place-items-center rounded-lg transition-colors',
+                tab === item.id && showTools ? 'bg-white/[0.14] text-white' : 'text-white/40 hover:bg-white/[0.06] hover:text-white/80',
               )}
             >
-              <item.icon size={15} />
-              <span>{item.label}</span>
+              <item.icon size={15} aria-hidden />
             </button>
           ))}
         </nav>
@@ -1391,7 +1382,7 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
           hidden={!showTools}
           className={cn(
             'min-h-0 overflow-y-auto border-r border-white/10 bg-[#0D0D0A]',
-            compact && 'absolute inset-y-0 left-14 z-30 w-[17rem] shadow-[12px_0_32px_rgba(0,0,0,0.5)]',
+            compact && 'absolute inset-y-0 left-11 z-30 w-[17rem] shadow-[12px_0_32px_rgba(0,0,0,0.5)]',
           )}
         >
           {tab === 'documents' ? (
@@ -1570,6 +1561,28 @@ export function CoverArtStudio({ surface = 'cover-art-studio' }: { surface?: Sur
           </aside>
         ) : null}
       </div>
+
+      {/* Status bar — zoom and document facts, as in Photoshop and in the
+          Store Editor next door, so the two editors read as one product. */}
+      <footer className="flex min-w-0 items-center gap-3 border-t border-white/10 bg-[#0D0D0A] px-3">
+        <span className="w-10 font-mono text-[10px] tabular-nums text-white/40">
+          {Math.round(zoom * 100)}%
+        </span>
+        <input
+          type="range" min={0.04} max={0.6} step={0.01} value={zoom}
+          aria-label="Zoom"
+          onChange={(event) => setZoomManually(Number(event.target.value))}
+          className="h-1 w-24 cursor-pointer appearance-none bg-white/10 accent-white"
+        />
+        <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+          {document.width}×{document.height}
+        </span>
+        <span className="ml-auto truncate font-mono text-[10px] uppercase tracking-[0.2em] text-white/30">
+          {selectedIds.length > 0
+            ? `${selectedIds.length} selected`
+            : `${document.layers.length} layer${document.layers.length === 1 ? '' : 's'}`}
+        </span>
+      </footer>
     </div>
   );
 }
