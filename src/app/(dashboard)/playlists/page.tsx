@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { CollectionFolderStrip } from '@/components/ui/CollectionFolderStrip';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Loader2, ListMusic, Plus, Clock } from 'lucide-react';
 import Link from 'next/link';
@@ -148,6 +149,14 @@ export default function PlaylistsPage() {
           }
         />
 
+        <CollectionFolderStrip
+          resource="playlists"
+          folders={folders}
+          items={playlists}
+          value={filters.folder}
+          onChange={(folder) => setFilters({ ...filters, folder })}
+          onChanged={refreshPlaylistsAndFolders}
+        />
         <PlaylistFilterBar value={filters} onChange={setFilters} folders={foldersWithCovers} onFoldersChanged={fetchFolders} resultCount={filtered.length} />
 
         {loading ? (
@@ -206,6 +215,7 @@ export default function PlaylistsPage() {
               return (
                 <MediaCard
                   artworkSeed={playlist.id}
+                  dragId={playlist.id}
                   kind="playlist"
                   key={playlist.id}
                   title={playlist.name}
