@@ -15,13 +15,32 @@
 
 import { useRef, useState } from 'react';
 import {
-  ChevronDown, ChevronUp, Copy, Eye, EyeOff, GripVertical, Lock, Trash2, Unlock,
+  AlignLeft, Anchor, BadgeCheck, ChevronDown, ChevronUp, Clock, Copy, Eye, EyeOff, Image as ImageIcon,
+  LayoutGrid, Layers, Link2, ListMusic, Lock, Music, PanelTop, Shapes, Sparkles, Star, Trash2, Unlock, Video,
+  type LucideIcon,
 } from 'lucide-react';
 import {
   isPinnedSection, resolveSection, storeBreakpoints,
-  type StoreBreakpoint, type StoreLayout,
+  type StoreBreakpoint, type StoreLayout, type StoreSectionKind,
 } from '@/lib/store-editor/layout';
 import { cn } from '@/lib/utils';
+
+/** Layer thumbnail per kind — Photoshop gives every layer a glyph you can scan. */
+const KIND_ICON: Record<StoreSectionKind, LucideIcon> = {
+  hero: PanelTop,
+  countdown: Clock,
+  'featured-projects': Layers,
+  'featured-playlists': ListMusic,
+  spotlight: Sparkles,
+  'producer-picks': Star,
+  catalog: Music,
+  trust: BadgeCheck,
+  text: AlignLeft,
+  image: ImageIcon,
+  video: Video,
+  links: Link2,
+  canvas: Shapes,
+};
 
 export function SectionsPanel({
   layout, selectedId, breakpoint, onSelect, onReorder, onMove, onToggle, onDuplicate, onDelete, onRename,
@@ -41,33 +60,53 @@ export function SectionsPanel({
   const [dragOver, setDragOver] = useState<number | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
 
-  return (
-    <div className="min-h-0 overflow-y-auto">
-      <div className="border-b border-white/10 px-3 py-2.5">
-        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
-          Sections · {layout.sections.length}
-        </p>
-      </div>
+  const selectedIndex = layout.sections.findIndex((s) => s.id === selectedId);
+  const selected = selectedIndex >= 0 ? layout.sections[selectedIndex] : null;
+  const selectedPinned = selected ? isPinnedSection(selected.kind) : false;
 
-      <ul className="py-1">
+  /*
+   * The Photoshop Layers panel, not a list of cards:
+   *   eye | thumbnail | name ............ lock
+   * The eye column is ALWAYS visible (visibility is the thing you toggle most),
+   * the lock shows only when a layer is locked, and actions on the selected
+   * layer live in a fixed bar at the foot of the panel — so rows stay quiet
+   * instead of sprouting six icons on hover. ↑/↓ move the selection.
+   */
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <ul
+        role="listbox"
+        aria-label="Sections"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (renaming) return;
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            const delta = event.key === 'ArrowDown' ? 1 : -1;
+            const next = layout.sections[Math.min(layout.sections.length - 1, Math.max(0, (selectedIndex < 0 ? -1 : selectedIndex) + delta))];
+            if (next) onSelect(next.id);
+          }
+          if (event.key === 'Enter' && selectedId) { event.preventDefault(); setRenaming(selectedId); }
+        }}
+        className="min-h-0 flex-1 overflow-y-auto py-1 outline-none focus-visible:shadow-[inset_2px_0_0_rgba(255,255,255,0.5)]"
+      >
         {layout.sections.map((section, index) => {
           const settings = resolveSection(section, breakpoint);
-          const selected = section.id === selectedId;
+          const isSelected = section.id === selectedId;
           const hiddenHere = !settings.visible;
-          // The catalogue carries the sticky filter toolbar directly above it,
-          // and the trust rail is a footer element. Both are anchored on the
-          // live storefront, so the drag is disabled rather than accepted and
-          // then ignored once published.
+          // Catalogue + trust rail are anchored on the live storefront, so the
+          // drag is disabled rather than accepted and then ignored.
           const pinned = isPinnedSection(section.kind);
-          // Badge the breakpoints that change this section, so a layout with
-          // mobile-specific behaviour is visible without hunting for it.
           const changed = storeBreakpoints.filter(
             (point) => point !== 'desktop' && Object.keys(section.overrides[point] ?? {}).length > 0,
           );
+          const Icon = KIND_ICON[section.kind] ?? LayoutGrid;
 
           return (
             <li
               key={section.id}
+              role="option"
+              aria-selected={isSelected}
               draggable={!section.locked && !pinned}
               onDragStart={() => { dragIndex.current = index; }}
               onDragOver={(event) => {
@@ -83,130 +122,120 @@ export function SectionsPanel({
                 if (from !== null && from !== index) onReorder(layout.sections[from].id, index);
               }}
               onDragEnd={() => { dragIndex.current = null; setDragOver(null); }}
+              onClick={() => onSelect(section.id)}
+              onDoubleClick={() => setRenaming(section.id)}
               className={cn(
-                'group relative border-l-2 transition-colors',
-                selected ? 'border-l-white/70 bg-white/[0.06]' : 'border-l-transparent hover:bg-white/[0.03]',
-                dragOver === index && 'border-t border-t-white/40',
+                'group relative flex h-10 cursor-default select-none items-center border-b border-white/[0.04] pr-2 transition-colors',
+                isSelected ? 'bg-white/[0.10]' : 'hover:bg-white/[0.04]',
+                dragOver === index && 'shadow-[inset_0_2px_0_rgba(255,255,255,0.6)]',
+                !section.locked && !pinned && 'active:cursor-grabbing',
               )}
             >
-              <div className="flex items-center gap-1.5 px-2 py-2">
-                <GripVertical
-                  size={12}
-                  aria-hidden
-                  className={cn(
-                    'shrink-0',
-                    section.locked || pinned ? 'text-white/10' : 'cursor-grab text-white/20 group-hover:text-white/40',
-                  )}
-                />
+              {/* Eye column */}
+              <button
+                type="button"
+                aria-label={settings.visible ? `Hide ${section.name} on ${breakpoint}` : `Show ${section.name} on ${breakpoint}`}
+                title={settings.visible ? `Hide on ${breakpoint}` : `Show on ${breakpoint}`}
+                onClick={(event) => { event.stopPropagation(); onToggle(section.id, { visible: !settings.visible }); }}
+                className="grid h-full w-8 shrink-0 place-items-center border-r border-white/[0.06] text-white/50 transition-colors hover:text-white"
+              >
+                {settings.visible ? <Eye size={12} /> : <EyeOff size={12} className="text-white/20" />}
+              </button>
 
+              {/* Thumbnail */}
+              <span
+                aria-hidden
+                className={cn(
+                  'mx-2 grid size-6 shrink-0 place-items-center rounded-[3px] border',
+                  isSelected ? 'border-white/40 bg-white/[0.12] text-white/90' : 'border-white/10 bg-[#090907] text-white/50',
+                )}
+              >
+                <Icon size={12} />
+              </span>
+
+              {/* Name */}
+              <span className="min-w-0 flex-1">
+                {renaming === section.id ? (
+                  <input
+                    autoFocus
+                    aria-label="Section name"
+                    defaultValue={section.name}
+                    onClick={(event) => event.stopPropagation()}
+                    onBlur={(event) => { onRename(section.id, event.target.value); setRenaming(null); }}
+                    onKeyDown={(event) => {
+                      event.stopPropagation();
+                      if (event.key === 'Enter') { onRename(section.id, event.currentTarget.value); setRenaming(null); }
+                      if (event.key === 'Escape') setRenaming(null);
+                    }}
+                    className="w-full rounded-[3px] border border-white/30 bg-[#090907] px-1 py-0.5 text-[11px] text-white/90 outline-none"
+                  />
+                ) : (
+                  <span className={cn(
+                    'block truncate text-[11px]',
+                    hiddenHere ? 'text-white/30' : isSelected ? 'text-white' : 'text-white/70',
+                  )}
+                  >
+                    {section.name}
+                  </span>
+                )}
+              </span>
+
+              {/* Right: device overrides, anchor, lock */}
+              <span className="ml-1 flex shrink-0 items-center gap-1">
+                {changed.map((point) => (
+                  <span
+                    key={point}
+                    title={`Changed on ${point}`}
+                    className="font-mono text-[8px] uppercase text-white/40"
+                  >
+                    {point[0]}
+                  </span>
+                ))}
+                {pinned ? <span title="Anchored to the bottom of the storefront"><Anchor size={10} className="text-white/25" aria-label="Anchored" /></span> : null}
                 <button
                   type="button"
-                  onClick={() => onSelect(section.id)}
-                  onDoubleClick={() => setRenaming(section.id)}
-                  className="min-w-0 flex-1 text-left"
-                >
-                  {renaming === section.id ? (
-                    <input
-                      autoFocus
-                      defaultValue={section.name}
-                      onBlur={(event) => { onRename(section.id, event.target.value); setRenaming(null); }}
-                      onKeyDown={(event) => {
-                        event.stopPropagation();
-                        if (event.key === 'Enter') { onRename(section.id, event.currentTarget.value); setRenaming(null); }
-                        if (event.key === 'Escape') setRenaming(null);
-                      }}
-                      className="w-full border border-white/20 bg-[#090907] px-1 py-0.5 text-[11px] text-white/90 outline-none focus:border-white/60"
-                    />
-                  ) : (
-                    <>
-                      <span className={cn(
-                        'block truncate text-[11px]',
-                        hiddenHere ? 'text-white/30 line-through' : selected ? 'text-white/90' : 'text-white/70',
-                      )}
-                      >
-                        {section.name}
-                      </span>
-                      <span className="mt-0.5 flex items-center gap-1.5">
-                        <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/25">
-                          {section.kind.replace(/-/g, ' ')}
-                        </span>
-                        {pinned ? (
-                          <span
-                            title="Anchored to the bottom of the storefront"
-                            className="font-mono text-[8px] uppercase tracking-[0.1em] text-white/25"
-                          >
-                            Pinned
-                          </span>
-                        ) : null}
-                        {changed.map((point) => (
-                          <span
-                            key={point}
-                            title={`Overridden on ${point}`}
-                            className="font-mono text-[8px] uppercase tracking-[0.1em] text-[#c8a47a]"
-                          >
-                            {point[0]}
-                          </span>
-                        ))}
-                      </span>
-                    </>
+                  aria-label={section.locked ? `Unlock ${section.name}` : `Lock ${section.name}`}
+                  title={section.locked ? 'Unlock' : 'Lock'}
+                  onClick={(event) => { event.stopPropagation(); onToggle(section.id, { locked: !section.locked }); }}
+                  className={cn(
+                    'grid size-5 place-items-center transition-opacity',
+                    section.locked ? 'text-white/60' : 'text-white/30 opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
                   )}
-                </button>
-
-                {/* Actions stay mounted but only paint on hover/selection, so
-                    the list reads as content rather than a wall of icons.
-                    Positioned ABSOLUTELY rather than in flow: six icons in the
-                    row is ~120px of layout width, and while they were merely
-                    transparent they still took that width — which squeezed
-                    every section name into "Produc…" even though the panel had
-                    room for it. Floating them over a matching background keeps
-                    the name at full width until the row is actually hovered. */}
-                <span className={cn(
-                  'absolute right-0 top-0 flex h-full shrink-0 items-center gap-0.5 bg-gradient-to-l from-[#0D0D0A] from-70% to-transparent pl-6 pr-2 transition-opacity',
-                  selected ? 'opacity-100' : 'pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100',
-                )}
                 >
-                  <IconAction
-                    label={pinned ? `${section.name} is anchored` : index === 0 ? 'Already first' : `Move ${section.name} up`}
-                    disabled={pinned || index === 0}
-                    onClick={() => onMove(section.id, -1)}
-                  >
-                    <ChevronUp size={11} />
-                  </IconAction>
-                  <IconAction
-                    label={pinned ? `${section.name} is anchored` : index === layout.sections.length - 1 ? 'Already last' : `Move ${section.name} down`}
-                    disabled={pinned || index === layout.sections.length - 1}
-                    onClick={() => onMove(section.id, 1)}
-                  >
-                    <ChevronDown size={11} />
-                  </IconAction>
-                  <IconAction label={`Duplicate ${section.name}`} onClick={() => onDuplicate(section.id)}>
-                    <Copy size={11} />
-                  </IconAction>
-                  <IconAction
-                    label={settings.visible ? `Hide ${section.name} on ${breakpoint}` : `Show ${section.name} on ${breakpoint}`}
-                    onClick={() => onToggle(section.id, { visible: !settings.visible })}
-                  >
-                    {settings.visible ? <Eye size={11} /> : <EyeOff size={11} />}
-                  </IconAction>
-                  <IconAction
-                    label={section.locked ? `Unlock ${section.name}` : `Lock ${section.name}`}
-                    onClick={() => onToggle(section.id, { locked: !section.locked })}
-                  >
-                    {section.locked ? <Lock size={11} /> : <Unlock size={11} />}
-                  </IconAction>
-                  <IconAction
-                    label={section.locked ? `${section.name} is locked` : `Delete ${section.name}`}
-                    disabled={section.locked}
-                    onClick={() => onDelete(section.id)}
-                  >
-                    <Trash2 size={11} />
-                  </IconAction>
-                </span>
-              </div>
+                  {section.locked ? <Lock size={10} /> : <Unlock size={10} />}
+                </button>
+              </span>
             </li>
           );
         })}
       </ul>
+
+      {/* Panel foot — Photoshop's layer action strip. Acts on the selection. */}
+      <div className="flex h-8 shrink-0 items-center justify-end gap-0.5 border-t border-white/10 px-1.5">
+        <span className="mr-auto pl-1 font-mono text-[9px] uppercase tracking-[0.18em] text-white/30">
+          {layout.sections.length} layers
+        </span>
+        <IconAction
+          label={!selected ? 'Select a section' : selectedPinned ? 'Anchored' : 'Move up'}
+          disabled={!selected || selectedPinned || selectedIndex === 0}
+          onClick={() => selected && onMove(selected.id, -1)}
+        ><ChevronUp size={12} /></IconAction>
+        <IconAction
+          label={!selected ? 'Select a section' : selectedPinned ? 'Anchored' : 'Move down'}
+          disabled={!selected || selectedPinned || selectedIndex === layout.sections.length - 1}
+          onClick={() => selected && onMove(selected.id, 1)}
+        ><ChevronDown size={12} /></IconAction>
+        <IconAction
+          label="Duplicate (⌘D)"
+          disabled={!selected}
+          onClick={() => selected && onDuplicate(selected.id)}
+        ><Copy size={12} /></IconAction>
+        <IconAction
+          label={selected?.locked ? 'Locked' : 'Delete (Del)'}
+          disabled={!selected || selected.locked}
+          onClick={() => selected && onDelete(selected.id)}
+        ><Trash2 size={12} /></IconAction>
+      </div>
     </div>
   );
 }
@@ -224,7 +253,7 @@ function IconAction({ label, disabled, onClick, children }: {
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="grid size-5 place-items-center text-white/40 transition-colors hover:text-white/90 disabled:cursor-not-allowed disabled:text-white/10"
+      className="grid size-7 place-items-center rounded-lg text-white/50 transition-colors hover:bg-white/[0.06] hover:text-white/90 disabled:cursor-not-allowed disabled:text-white/15 disabled:hover:bg-transparent"
     >
       {children}
     </button>

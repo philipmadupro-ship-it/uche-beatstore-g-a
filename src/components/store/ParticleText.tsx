@@ -200,12 +200,18 @@ export function ParticleText({ text, color = '#FFFFFF', className }: ParticleTex
       mouse.active = false;
     };
 
-    window.addEventListener('resize', onResize);
+    // Watch the container, not the window: the hero can change width without
+    // the window resizing (the Store Editor's device frame, a sidebar
+    // opening), and a canvas sized for the old width clips the name.
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null;
+    if (observer) observer.observe(wrap);
+    else window.addEventListener('resize', onResize);
     wrap.addEventListener('mousemove', onMove);
     wrap.addEventListener('mouseleave', onLeave);
 
     return () => {
       cancelAnimationFrame(raf);
+      observer?.disconnect();
       window.removeEventListener('resize', onResize);
       wrap.removeEventListener('mousemove', onMove);
       wrap.removeEventListener('mouseleave', onLeave);

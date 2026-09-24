@@ -314,10 +314,10 @@ export function StorefrontBuilder({
                 title={`${point} · ${breakpointWidths[point]}px (${index + 1})`}
                 onClick={() => setBreakpoint(point)}
                 className={cn(
-                  'flex h-7 items-center gap-1.5 border px-2 text-[11px] capitalize transition-colors',
+                  'flex h-7 items-center gap-1.5 rounded-lg px-2 text-[11px] capitalize transition-colors',
                   breakpoint === point
-                    ? 'border-white/40 bg-white/[0.12] text-white/90'
-                    : 'border-white/10 text-white/60 hover:border-white/25 hover:text-white/90',
+                    ? 'bg-white/[0.14] text-white'
+                    : 'text-white/50 hover:bg-white/[0.06] hover:text-white/90',
                 )}
               >
                 <Icon size={12} />
@@ -335,7 +335,7 @@ export function StorefrontBuilder({
           disabled={editor.past.length === 0}
           title="Undo (⌘Z)"
           aria-label="Undo"
-          className="grid size-7 shrink-0 place-items-center text-white/60 transition-colors hover:text-white/90 disabled:text-white/15"
+          className="grid size-7 shrink-0 place-items-center rounded-lg text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white/90 disabled:text-white/15 disabled:hover:bg-transparent"
         >
           <Undo2 size={13} />
         </button>
@@ -345,7 +345,7 @@ export function StorefrontBuilder({
           disabled={editor.future.length === 0}
           title="Redo (Shift ⌘Z)"
           aria-label="Redo"
-          className="grid size-7 shrink-0 place-items-center text-white/60 transition-colors hover:text-white/90 disabled:text-white/15"
+          className="grid size-7 shrink-0 place-items-center rounded-lg text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white/90 disabled:text-white/15 disabled:hover:bg-transparent"
         >
           <Redo2 size={13} />
         </button>
@@ -437,12 +437,12 @@ export function StorefrontBuilder({
                 <button
                   type="button"
                   onClick={() => setAdding((open) => !open)}
-                  className="flex h-8 w-full items-center justify-center gap-1.5 border border-white/10 text-[11px] text-white/60 transition-colors hover:border-white/25 hover:text-white/90"
+                  className="flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] text-[11px] text-white/60 transition-colors hover:border-white/20 hover:bg-white/[0.10] hover:text-white/90"
                 >
                   <Plus size={12} /> Add section
                 </button>
                 {adding ? (
-                  <div className="absolute bottom-12 left-2 right-2 z-40 max-h-80 overflow-y-auto border border-white/20 bg-[#0D0D0A] shadow-[0_0_40px_rgba(0,0,0,0.7)]">
+                  <div className="overlay-surface ui-pop-up absolute bottom-12 left-2 right-2 z-40 max-h-80 overflow-y-auto rounded-xl py-1">
                     {addableKinds.map((kind) => (
                       <button
                         key={kind}
@@ -453,7 +453,7 @@ export function StorefrontBuilder({
                           setSelectedId(section.id);
                           setAdding(false);
                         }}
-                        className="block w-full px-3 py-2 text-left text-[11px] capitalize text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white/90"
+                        className="mx-1 block w-[calc(100%-0.5rem)] rounded-lg px-3 py-2 text-left text-[11px] capitalize text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white/90"
                       >
                         {kind}
                       </button>
@@ -527,15 +527,10 @@ export function StorefrontBuilder({
         <div
           ref={stageRef}
           onClick={() => setSelectedId(null)}
-          className="min-h-0 overflow-auto bg-[#050504] p-8"
-          style={{
-            // A faint grid reads as "surface you are composing on" without
-            // competing with the artwork sitting on it.
-            backgroundImage:
-              'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),'
-              + 'linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)',
-            backgroundSize: '32px 32px',
-          }}
+          // A plain, darker pasteboard — Photoshop's, not graph paper. The
+          // grid competed with the storefront for attention and read as
+          // decoration; the device frame is what should hold the eye.
+          className="min-h-0 overflow-auto bg-[#050504] px-10 py-12"
         >
           <div className="mx-auto" style={{ width: width * zoom }}>
             {/* The frame is the real device width; zoom is a visual scale on
@@ -568,7 +563,7 @@ export function StorefrontBuilder({
                     }}
                     className={cn(
                       'group/section relative outline-none transition-shadow',
-                      isSelected ? 'ring-1 ring-inset ring-white/60' : 'hover:ring-1 hover:ring-inset hover:ring-white/20',
+                      isSelected ? 'ring-1 ring-inset ring-white/80' : 'hover:ring-1 hover:ring-inset hover:ring-white/30',
                       !settings.visible && 'opacity-30',
                     )}
                   >
@@ -588,6 +583,21 @@ export function StorefrontBuilder({
                     )}>
                       {section.name}
                     </span>
+                    {/* Transform handles on the selection, as in Photoshop:
+                        they say "this is the thing you are editing" more
+                        clearly than an outline alone. Decorative only. */}
+                    {isSelected ? (
+                      <>
+                        {['left-0 top-0', 'right-0 top-0', 'left-0 bottom-0', 'right-0 bottom-0'].map((pos) => (
+                          <span
+                            key={pos}
+                            aria-hidden
+                            className={cn('pointer-events-none absolute z-10 size-2 -translate-x-px border border-black bg-white', pos,
+                              pos.includes('right') && 'translate-x-px', pos.includes('bottom') ? 'translate-y-px' : '-translate-y-px')}
+                          />
+                        ))}
+                      </>
+                    ) : null}
                     <div className={cn(!settings.visible && 'pointer-events-none')}>
                       <SectionRenderer
                         section={section}
@@ -702,7 +712,7 @@ export function StorefrontBuilder({
             onClick={() => setAutoFit(true)}
             title="Fit to window"
             className={cn(
-              'shrink-0 border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors',
+              'shrink-0 rounded-lg border px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors',
               autoFit ? 'border-white/40 text-white/90' : 'border-white/10 text-white/50 hover:border-white/25',
             )}
           >
