@@ -29,7 +29,7 @@ import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 
 const categoryFilters: ContactCategoryFilter[] = ['all', 'buyers', 'rappers', 'producers', 'a&r', 'friends', 'nudge'];
 const statusFilters: ContactStatusFilter[] = ['all', 'active', 'engaged', 'cold'];
-const sortModes: ContactSortMode[] = ['recent', 'name', 'category', 'lastSent', 'sends', 'lead'];
+const sortModes: ContactSortMode[] = ['recent', 'name', 'category', 'lastSent', 'sends', 'lead', 'stage', 'revenue', 'tags'];
 
 function asCategoryFilter(value: string | undefined): ContactCategoryFilter {
   return categoryFilters.includes(value as ContactCategoryFilter) ? value as ContactCategoryFilter : 'all';
@@ -354,8 +354,8 @@ export function ContactsView({
 
   const filtered = useMemo(() => {
     const fState: ContactFilterState = { search: searchQuery, category: categoryFilter, status: statusFilter, sort: sortMode, sortDir, tags: tagFilter };
-    return filterAndSortContacts(contacts, fState, { lastSentByContact, needsNudgeIds, sendCountByContact, leadScoreByContact });
-  }, [contacts, searchQuery, categoryFilter, sortMode, sortDir, statusFilter, tagFilter, lastSentByContact, needsNudgeIds, sendCountByContact, leadScoreByContact]);
+    return filterAndSortContacts(contacts, fState, { lastSentByContact, needsNudgeIds, sendCountByContact, leadScoreByContact, revenueByContact });
+  }, [contacts, searchQuery, categoryFilter, sortMode, sortDir, statusFilter, tagFilter, lastSentByContact, needsNudgeIds, sendCountByContact, leadScoreByContact, revenueByContact]);
 
   // Reset to page 1 whenever the result set changes.
   useEffect(() => { setCurrentPage(1); }, [searchQuery, categoryFilter, statusFilter, sortMode, sortDir, tagFilter, pageSize]);
@@ -460,6 +460,9 @@ export function ContactsView({
             onRenameSegment={renameSegment} onUpdateSegmentFilters={updateSegmentFilters}
             onApplySegment={applySegment} onSaveSegment={saveSegment} onDeleteSegment={deleteSegment}
             onExport={exportFiltered} onAddContact={() => setShowAddModal(true)} onRefresh={refetch} refreshing={refreshing}
+            sortMode={sortMode} sortDir={sortDir}
+            setSort={(m) => { setSortMode(m); setSortDir(m === 'name' || m === 'category' ? 'asc' : 'desc'); }}
+            toggleSortDir={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
           />
 
           {refreshing && contacts.length === 0 ? (
