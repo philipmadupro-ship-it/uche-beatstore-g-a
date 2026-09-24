@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Users, Upload, Send, Mail } from 'lucide-react';
+import { Users, Upload, Send, Mail, Folder } from 'lucide-react';
 import { Contact, BeatSend } from '@/lib/types';
 import { filterAndSortContacts, paginate, type ContactCategoryFilter, type ContactFilterState, type ContactSortMode, type ContactStatusFilter, type SortDir } from '@/lib/contacts/filters';
 import type { CrmStage } from '@/lib/contracts';
@@ -328,6 +328,14 @@ export function ContactsView({
     for (const c of contacts) for (const t of c.tags ?? []) seen.add(t.tag);
     return [...seen].sort();
   }, [contacts]);
+  // Tag → how many contacts carry it, for the folder strip. Tags are how
+  // contacts are grouped (mig 091), so the strip shows them as folders: always
+  // on screen, counted, one click to open — instead of behind a filter popover.
+  const tagCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of contacts) for (const t of new Set((c.tags ?? []).map((x) => x.tag))) counts.set(t, (counts.get(t) ?? 0) + 1);
+    return counts;
+  }, [contacts]);
 
   const needsNudgeIds = useMemo(() => {
     const s = new Set<string>();
@@ -464,6 +472,41 @@ export function ContactsView({
             setSort={(m) => { setSortMode(m); setSortDir(m === 'name' || m === 'category' ? 'asc' : 'desc'); }}
             toggleSortDir={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
           />
+
+          {allTags.length > 0 && (
+            <nav aria-label="Contact folders (tags)" className="-mx-1 mb-4 flex items-center gap-1.5 overflow-x-auto px-1 pb-1 no-scrollbar">
+              <button
+                type="button"
+                aria-pressed={tagFilter.size === 0}
+                onClick={() => setTagFilter(new Set())}
+                className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-[11px] transition-colors ${
+                  tagFilter.size === 0 ? 'border-white/30 bg-white/[0.14] text-white' : 'border-white/10 bg-white/[0.06] text-white/60 hover:border-white/20 hover:bg-white/[0.10] hover:text-white/90'
+                }`}
+              >
+                <Users size={12} aria-hidden /> Everyone
+                <span className="font-mono text-[10px] tabular-nums text-white/40">{contacts.length}</span>
+              </button>
+              <span aria-hidden className="mx-1 h-5 w-px shrink-0 bg-white/10" />
+              {allTags.map((tag) => {
+                const active = tagFilter.size === 1 && tagFilter.has(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setTagFilter(active ? new Set() : new Set([tag]))}
+                    className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-[11px] transition-colors ${
+                      active ? 'border-white/30 bg-white/[0.14] text-white' : 'border-white/10 bg-white/[0.06] text-white/60 hover:border-white/20 hover:bg-white/[0.10] hover:text-white/90'
+                    }`}
+                  >
+                    <Folder size={12} aria-hidden />
+                    <span className="max-w-[160px] truncate">{tag}</span>
+                    <span className="font-mono text-[10px] tabular-nums text-white/40">{tagCounts.get(tag) ?? 0}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          )}
 
           {refreshing && contacts.length === 0 ? (
             <div className="border border-[var(--border)] rounded-xl overflow-hidden bg-[var(--bg-card)]">
