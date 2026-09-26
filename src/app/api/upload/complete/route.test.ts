@@ -204,6 +204,21 @@ beforeEach(() => {
   mockFrom.mockImplementation((table: string) => supabaseTable(table));
 });
 
+describe('POST /api/upload/complete — local no-database mode', () => {
+  it('writes the track to the local store and never touches Supabase', async () => {
+    mockIsSupabaseConfigured.mockReturnValue(false);
+    mockLocalInsert.mockReturnValue({ id: 'local-1', title: 'Beat' });
+    const mod = await loadRoute();
+    const res = await mod.POST(post({ sessionId: 'sess-1' }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true, track: { id: 'local-1' } });
+    expect(mockLocalInsert).toHaveBeenCalledWith('tracks', expect.objectContaining({ audio_url: expect.any(String) }));
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockDeleteSession).toHaveBeenCalledWith('sess-1');
+  });
+});
+
 describe('POST /api/upload/complete — failure cleanup', () => {
   it('removes the half-created track and the object when the destination attach fails', async () => {
     mockGetSession.mockReturnValueOnce(session({ projectId: 'missing-destination' }));

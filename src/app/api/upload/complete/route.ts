@@ -311,91 +311,9 @@ export async function POST(req: NextRequest) {
       stems_status: 'none' as const,
     };
 
-    // 3. Persist track row (replace-with-versioning OR insert new)
-    let track: Record<string, unknown> | null = null;
-
-    if (isSupabaseConfigured()) {
-      try {
-        const supabase = await createServerClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        const userId = user?.id || session.userId || null;
-
-        if (session.replaceTrackId) {
-          // Same auth gate as /api/upload/route.ts — verify the caller
-          // owns the target before overwriting. Without this, a
-          // legitimate multipart session id paired with a forged
-          // `replaceTrackId` from a different user lets an attacker
-          // replace audio they don't own.
-          const { requireRowOwnership } = await import('@/lib/db');
-          const owner = await requireRowOwnership('tracks', session.replaceTrackId);
-          if (!owner.ok) return owner.res;
-
-          const { data: existing } = await supabase
-            .from('tracks')
-            .select('*')
-            .eq('id', session.replaceTrackId)
-            .single();
-          if (existing) {
-            const { data: vs } = await supabase
-              .from('track_versions')
-              .select('version_number')
-              .eq('track_id', session.replaceTrackId);
-            const { number, label } = nextVersionLabel(vs ?? []);
-            await supabase.from('track_versions').insert({
-              track_id: session.replaceTrackId,
-              version_number: number,
-              version_label: label,
-              audio_url: existing.audio_url,
-              preview_url: existing.preview_url,
-              duration_seconds: existing.duration_seconds,
-              bpm: existing.bpm,
-              key: existing.key,
-              scale: existing.scale,
-              loudness: existing.loudness,
-              energy: existing.energy,
-              danceability: existing.danceability,
-              valence: existing.valence,
-              acousticness: existing.acousticness,
-              notes: existing.notes,
-              created_by: userId,
-            });
-          }
-          const { data, error } = await supabase
-            .from('tracks')
-            .update({ ...trackData, stems_status: 'none' })
-            .eq('id', session.replaceTrackId)
-            .select()
-            .single();
-          if (error) throw new Error(error.message);
-          track = data;
-        } else {
-          const { data, error } = await supabase
-            .from('tracks')
-            .insert({ user_id: userId, ...trackData })
-            .select()
-            .single();
-          if (error) throw new Error(`DB Insert Error: ${error.message}`);
-          track = data;
-
-          if (session.projectId) {
-            const savedTrack = track;
-            const trackId = savedTrack && typeof savedTrack.id === 'string' ? savedTrack.id : null;
-            if (!trackId) throw new Error('Upload saved without a track id');
-            await attachTrackToDestination(supabase, session.projectId, trackId, userId);
-          }
-        }
-      } catch (err) {
-        console.error('Supabase op failed, falling back to local store:', err);
-        const message = errorMessage(err) || 'Database save failed';
-        if (/destination|attach/i.test(message)) {
-          const status = /forbidden/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 500;
-          return NextResponse.json({ error: message }, { status });
-        }
-        track = writeLocal(trackData, session.replaceTrackId, session.projectId);
-      }
-    } else {
-      track = writeLocal(trackData, session.replaceTrackId, session.projectId);
-    }
+    // 3. Persist track row. Only local no-database dev reaches this point:
+    // the Supabase branch above always returns.
+    const track = writeLocal(trackData, session.replaceTrackId, session.projectId);
 
     await deleteSession(sessionId);
     return NextResponse.json({ success: true, track });
