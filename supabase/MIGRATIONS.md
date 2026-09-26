@@ -50,8 +50,8 @@ service-role key can read the schema's effects but cannot run DDL):
 | `114_share_price_overrides.sql` | no-op on prod | columns already exist, added outside migrations |
 | `115_track_collaborators.sql` | **not applied** | new table; `track_collaborators` missing |
 | `116_notifications_realtime.sql` | **not applied** | new — adds `notifications` to the realtime publication |
-| `117_project_access_payment_intent.sql` | **not applied** | new — `project_access_links.stripe_payment_intent` |
-| `118_finish_strict_owned_rows.sql` | **not applied** | new — owner-only RLS on 8 leftover tables; drops `beat_comments_public_read` |
+| `117_project_access_payment_intent.sql` | applied | reported applied by the producer 2026-09-26 |
+| `118_finish_strict_owned_rows.sql` | applied | reported applied by the producer 2026-09-26 |
 
 What each still-pending one does:
 
