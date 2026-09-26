@@ -7,6 +7,7 @@ import { getAuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
 import { isSupabaseConfigured, insert, update, getAll } from '@/lib/local-store';
 import { requireRowOwnership } from '@/lib/db';
+import { requireProducer } from '@/lib/auth/ownership';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { nextVersionLabel } from '@/lib/naming';
 import { parseTitleMetadata } from '@/lib/upload/title-metadata';
@@ -90,6 +91,9 @@ export async function POST(req: NextRequest) {
       if (authError || !user) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
       }
+      // Buyers share this Supabase auth; only the producer may write storage.
+      const producer = await requireProducer();
+      if (!producer.ok) return producer.res;
       authenticatedUserId = user.id;
       if (replaceTrackId) {
         const owner = await requireRowOwnership('tracks', replaceTrackId);

@@ -35,3 +35,16 @@ export function imageUploadErrorMessage(error: ImageUploadValidationError) {
   }
   return 'Keep artwork under 8 MB.';
 }
+
+/**
+ * Magic-byte check: the declared MIME type is client-controlled, so the bytes
+ * must actually be the format we are about to store and serve.
+ */
+export function matchesImageSignature(bytes: Uint8Array, mimeType: AcceptedImageMimeType): boolean {
+  const at = (offset: number, sig: number[]) => sig.every((b, i) => bytes[offset + i] === b);
+  switch (mimeType) {
+    case 'image/jpeg': return at(0, [0xff, 0xd8, 0xff]);
+    case 'image/png': return at(0, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    case 'image/webp': return at(0, [0x52, 0x49, 0x46, 0x46]) && at(8, [0x57, 0x45, 0x42, 0x50]);
+  }
+}
