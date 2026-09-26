@@ -52,6 +52,7 @@ service-role key can read the schema's effects but cannot run DDL):
 | `116_notifications_realtime.sql` | **not applied** | new — adds `notifications` to the realtime publication |
 | `117_creator_profiles_no_self_insert.sql` | **not applied** | security — drops the RLS policy that let any signed-in buyer insert a `creator_profiles` row |
 | `118_strict_arrangements_rls.sql` | **not applied** | security — owner-only RLS on `arrangements` (097 missed it) |
+| `119_producer_only_catalogue_writes.sql` | **not applied** | security — RLS writes to `tracks`/`projects`/`playlists` require a producer profile (apply after 117) |
 
 What each still-pending one does:
 
@@ -79,7 +80,7 @@ Update this table when a run is confirmed.
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 118 (next new migration = 119). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 119 (next new migration = 120). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch

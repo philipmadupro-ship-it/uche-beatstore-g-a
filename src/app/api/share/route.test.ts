@@ -15,11 +15,12 @@ const mockShareInsert = vi.fn();
 
 vi.mock('@/lib/db', () => ({
   isSupabaseConfigured: () => mockIsSupabaseConfigured(),
-  requireUser: () => mockRequireUser(),
   createServiceClient: vi.fn(),
   getAll: vi.fn(),
   insert: vi.fn(),
 }));
+
+vi.mock('@/lib/auth/ownership', () => ({ requireProducer: () => mockRequireUser() }));
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(),

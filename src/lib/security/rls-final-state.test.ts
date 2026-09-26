@@ -57,4 +57,13 @@ describe('final RLS policy state', () => {
       .sort();
     expect(openWrites).toEqual(['play_head_pings.play_head_pings_insert', 'share_plays.public insert play']);
   });
+
+  it('catalogue writes through RLS require the producer, not just any session', () => {
+    // Buyers hold Supabase sessions; owner_only alone let them insert
+    // store-listed tracks pointing at private audio (mig 119).
+    for (const table of ['tracks', 'projects', 'playlists']) {
+      const body = policies.get(`${table}.owner_only`) ?? '';
+      expect(body, table).toMatch(/WITH CHECK[\s\S]*is_producer\(\)/i);
+    }
+  });
 });

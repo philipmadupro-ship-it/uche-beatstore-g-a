@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUrl } from '@/lib/env';
 import { createClient as createServerClient } from '@/lib/supabase/server';
-import { isSupabaseConfigured, insert, getAll, createServiceClient, requireUser } from '@/lib/db';
+import { isSupabaseConfigured, insert, getAll, createServiceClient } from '@/lib/db';
+import { requireProducer } from '@/lib/auth/ownership';
 import { nanoid } from 'nanoid';
 import bcrypt from 'bcryptjs';
 import { errorMessage } from '@/lib/errors';
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
     };
 
     if (isSupabaseConfigured()) {
-      const owner = await requireUser();
+      const owner = await requireProducer();
       if (!owner.ok) return owner.res;
 
       const { data: ownedTracks, error: tracksError } = await owner.admin
