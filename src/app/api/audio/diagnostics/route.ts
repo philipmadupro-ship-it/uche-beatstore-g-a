@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createServiceClient, requireUser } from '@/lib/auth/ownership';
+import { createServiceClient, requireProducer } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 
@@ -112,7 +112,7 @@ export async function GET() {
     return NextResponse.json(out);
   }
 
-  const auth = await requireUser();
+  const auth = await requireProducer();
   if (!auth.ok) {
     out.hints.push('Sign in to see per-track diagnostics.');
     return NextResponse.json(out, { status: 401 });

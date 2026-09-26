@@ -3,7 +3,7 @@ import { getAppUrl } from '@/lib/env';
 import { Resend } from 'resend';
 import { nanoid } from 'nanoid';
 import { isSupabaseConfigured, insert, createServiceClient } from '@/lib/db';
-import { createClient as createServerClient } from '@/lib/supabase/server';
+import { requireProducer } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 const log = createLogger('api.invite');
@@ -28,11 +28,9 @@ export async function POST(req: NextRequest) {
     // invitation emails through our Resend account, spending the budget and
     // damaging sender reputation. Require a logged-in user.
     if (isSupabaseConfigured()) {
-      const cookieClient = await createServerClient();
-      const { data: { user } } = await cookieClient.auth.getUser();
-      if (!user) {
-        return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-      }
+      // requireProducer, not "signed in": buyers share this Supabase auth.
+      const auth = await requireProducer();
+      if (!auth.ok) return auth.res;
     }
 
     const token = nanoid(16);
