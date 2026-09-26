@@ -127,11 +127,7 @@ async function probe(page: Page): Promise<Probe> {
       // Fixture covers are deliberately unanswered — see the header — whether
       // requested directly or through next/image.
       && !COVERS.test(where)
-      && !where.includes('/_next/image?url=https%3A%2F%2Fscale-fixture.test')
-      // Known, once-per-session: the preview drawer's artwork asks the
-      // session-gated /api/tags/colors on the public store (see PR notes).
-      // Counted separately below so a per-card regression still fails.
-      && !where.endsWith('/api/tags/colors')) {
+      && !where.includes('/_next/image?url=https%3A%2F%2Fscale-fixture.test')) {
       p.consoleErrors.push(`${m.text()} ${m.location().url ?? ''}`.trim());
     }
   });
@@ -281,8 +277,9 @@ test.describe('storefront at scale', () => {
     expect(sumOf(served.audio)).toBeLessThanOrEqual(10);
     expect(p.serverErrors).toEqual([]);
     expect(p.consoleErrors).toEqual([]);
-    // Deduped per session by useTagColorStore; more than one is a storm.
-    expect(p.count(/\/api\/tags\/colors/)).toBeLessThanOrEqual(1);
+    // A buyer has no session: the public store must never ask the dashboard's
+    // session-gated artwork endpoints (it used to, and got a 401).
+    expect(p.count(/\/api\/(tags\/colors|profile)(\?|$)/)).toBe(0);
   });
 
   test('a late facets response does not turn the first page into a filter', async ({ page }) => {

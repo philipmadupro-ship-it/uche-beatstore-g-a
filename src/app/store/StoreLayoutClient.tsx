@@ -18,6 +18,7 @@ import { CartDrawer, FloatingCartButton } from '@/components/store/CartDrawer';
 import { InstallAppButton } from '@/components/store/InstallAppButton';
 import { useCart } from '@/hooks/useCart';
 import { usePathname } from 'next/navigation';
+import { PublicArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 
 export function StoreLayoutClient({ children }: { children: React.ReactNode }) {
   const { items, removeItem, isOpen, setIsOpen, cartTotal } = useCart();
@@ -39,7 +40,10 @@ export function StoreLayoutClient({ children }: { children: React.ReactNode }) {
       </main>
       <MediaSessionBridge />
       {!isTransactional && (
-        <>
+        // The player and cart draw track artwork but sit outside every page's
+        // provider. Without one, their artwork hooks took the dashboard path
+        // and called session-gated endpoints — a 401 for every buyer.
+        <PublicArtworkThemeProvider>
           <PlayerBar />
           <VoiceTagPlayer />
           <FloatingCartButton />
@@ -51,7 +55,7 @@ export function StoreLayoutClient({ children }: { children: React.ReactNode }) {
             removeItem={removeItem}
             total={cartTotal()}
           />
-        </>
+        </PublicArtworkThemeProvider>
       )}
     </div>
   );
