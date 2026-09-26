@@ -14,6 +14,7 @@
     "test:scale": "vitest run src/app/api/store/catalog-scale.test.ts src/app/api/tracks/route.test.ts src/components/tracks/TrackCard.scale.test.tsx src/lib/ui/stable-row-callbacks.test.ts",
     "readiness:prod": "node scripts/ops/production-readiness.mjs",
     "e2e": "playwright test",
+    "e2e:scale": "node e2e/fixtures/generate-scale-db.mjs > data/db.json && E2E_SCALE=1 playwright test e2e/storefront-scale.spec.ts",
     "e2e:headed": "playwright test --headed",
     "e2e:ui": "playwright test --ui",
     "claude:help": "bash scripts/claude/agent-help.sh",

@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { toggleFavorite as toggleFavoriteApi } from '@/lib/buyer-session';
@@ -49,6 +50,11 @@ export function useWishlist(): {
 } {
   const ids = store((s) => s.ids);
   const toggle = store((s) => s.toggle);
-  const setIds = new Set(ids);
-  return { ids: setIds, has: (id) => setIds.has(id), toggle, count: ids.length };
+  // Stable while the saved list is unchanged. A fresh Set per render made
+  // every memo keyed on `ids` recompute on every render — on /store that re-ran
+  // the catalogue filter and re-queued preview prefetch each time, so ordinary
+  // playback drained the whole catalogue's previews in the background.
+  const setIds = useMemo(() => new Set(ids), [ids]);
+  const has = useCallback((id: string) => setIds.has(id), [setIds]);
+  return { ids: setIds, has, toggle, count: ids.length };
 }
