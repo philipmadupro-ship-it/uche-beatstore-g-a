@@ -91,6 +91,7 @@ export async function proxy(request: NextRequest) {
     '/library', '/projects', '/playlists', '/contacts',
     '/calendar', '/links', '/settings', '/studio', '/profile',
     '/campaigns', '/store-editor', '/sales', '/analytics', '/offline',
+    '/cover-art',
   ];
   const path = request.nextUrl.pathname;
   // /projects/share/[token] is a PUBLIC reader page (same shape as
