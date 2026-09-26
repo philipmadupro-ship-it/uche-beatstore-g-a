@@ -50,10 +50,10 @@ service-role key can read the schema's effects but cannot run DDL):
 | `114_share_price_overrides.sql` | no-op on prod | columns already exist, added outside migrations |
 | `115_track_collaborators.sql` | **not applied** | new table; `track_collaborators` missing |
 | `116_notifications_realtime.sql` | **not applied** | new — adds `notifications` to the realtime publication |
-| `117_creator_profiles_no_self_insert.sql` | **not applied** | security — drops the RLS policy that let any signed-in buyer insert a `creator_profiles` row |
-| `118_strict_arrangements_rls.sql` | **not applied** | security — owner-only RLS on `arrangements` (097 missed it) |
-| `119_producer_only_catalogue_writes.sql` | **not applied** | security — RLS writes to `tracks`/`projects`/`playlists` require a producer profile (apply after 117) |
-| `120_producer_only_share_links.sql` | **not applied** | security — RLS writes to `share_links` require a producer profile (needs 119) |
+| `117_creator_profiles_no_self_insert.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — drops the RLS policy that let any signed-in buyer insert a `creator_profiles` row |
+| `118_strict_arrangements_rls.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — owner-only RLS on `arrangements` (097 missed it) |
+| `119_producer_only_catalogue_writes.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — RLS writes to `tracks`/`projects`/`playlists` require a producer profile (apply after 117) |
+| `120_producer_only_share_links.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — RLS writes to `share_links` require a producer profile (needs 119) |
 
 What each still-pending one does:
 
