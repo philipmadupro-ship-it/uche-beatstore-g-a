@@ -74,10 +74,16 @@ export async function GET(req: NextRequest) {
     } else {
       const { data: access } = await admin
         .from('project_access_links')
-        .select('project_id')
+        .select('project_id, expires_at')
         .eq('stripe_session_id', sessionId)
         .maybeSingle();
       if (!access) {
+        return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
+      }
+      // Same expiry rule as /api/store/projects/access/[token]/download. This
+      // route used to skip it, so a session_id kept serving masters and stems
+      // after the token route had already stopped.
+      if (access.expires_at && new Date(access.expires_at).getTime() < Date.now()) {
         return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
       }
       const { data: belongs } = await admin

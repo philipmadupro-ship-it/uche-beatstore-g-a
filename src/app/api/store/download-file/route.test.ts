@@ -188,4 +188,46 @@ describe('GET /api/store/download-file', () => {
     expect(res.status).toBe(403);
     expect(mockStreamAudioSource).not.toHaveBeenCalled();
   });
+
+  describe('project bundle purchases', () => {
+    function mockProject(expiresAt: string | null) {
+      const one = (data: unknown) => ({ maybeSingle: () => Promise.resolve({ data, error: null }) });
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'license_purchases') return { select: () => ({ eq: () => one(null) }) };
+        if (table === 'project_access_links') {
+          return { select: () => ({ eq: () => one({ project_id: 'proj-1', expires_at: expiresAt }) }) };
+        }
+        if (table === 'project_tracks') {
+          return { select: () => ({ eq: () => ({ eq: () => one({ track_id: 'track-1' }) }) }) };
+        }
+        if (table === 'tracks') {
+          return {
+            select: () => ({
+              eq: () => one({ title: 'Bundle Beat', audio_url: 'r2://priv/beat.mp3', wav_url: 'r2://priv/beat.wav' }),
+            }),
+          };
+        }
+        throw new Error(`Unexpected table ${table}`);
+      });
+    }
+
+    it('denies an expired project access link, matching the token route', async () => {
+      mockProject(new Date(Date.now() - 60_000).toISOString());
+      const mod = await loadRoute();
+      const res = await mod.GET(req('wav'));
+
+      expect(res.status).toBe(404);
+      expect(mockStreamAudioSource).not.toHaveBeenCalled();
+    });
+
+    it('still serves an unexpired or non-expiring project access link', async () => {
+      mockProject(new Date(Date.now() + 60_000).toISOString());
+      const mod = await loadRoute();
+      expect((await mod.GET(req('wav'))).status).toBe(200);
+
+      mockProject(null);
+      expect((await mod.GET(req('mp3'))).status).toBe(200);
+      expect(mockStreamAudioSource).toHaveBeenCalledTimes(2);
+    });
+  });
 });
