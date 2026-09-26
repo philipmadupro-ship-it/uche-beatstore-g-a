@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser } from '@/lib/auth/ownership';
+import { requireProducer } from '@/lib/auth/ownership';
 import { uploadImage } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
@@ -31,7 +31,7 @@ const PROVIDER_TIMEOUT_MS = 90_000;
  * this to decide what to offer and what setup hint to show.
  */
 export async function GET() {
-  const auth = await requireUser();
+  const auth = await requireProducer();
   if (!auth.ok) return auth.res;
   return NextResponse.json({ providers: availableProviders(process.env) });
 }
@@ -48,7 +48,7 @@ export async function GET() {
  */
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireUser();
+    const auth = await requireProducer();
     if (!auth.ok) return auth.res;
 
     const body = await req.json().catch(() => null);

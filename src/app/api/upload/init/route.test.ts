@@ -33,6 +33,9 @@ vi.mock('@/lib/local-store', () => ({
   isSupabaseConfigured: () => mockIsSupabaseConfigured(),
 }));
 
+const mockRequireProducer = vi.fn(async () => ({ ok: true, userId: 'user-1', admin: {} }));
+vi.mock('@/lib/auth/ownership', () => ({ requireProducer: () => mockRequireProducer() }));
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
     auth: { getUser: () => mockGetUser() },
@@ -188,5 +191,13 @@ describe('POST /api/upload/init', () => {
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({ error: 'Forbidden project destination' });
     expect(mockInitMultipart).not.toHaveBeenCalled();
+  });
+
+  it('refuses a signed-in buyer (no producer profile) before any storage work', async () => {
+    const { NextResponse } = await import('next/server');
+    mockRequireProducer.mockResolvedValueOnce({ ok: false, res: NextResponse.json({ error: 'Producer account required' }, { status: 403 }) } as never);
+    const mod = await loadRoute();
+    const res = await mod.POST(req({ fileName: 'beat.wav', fileSize: 1024 * 1024, fileType: 'audio/wav' }));
+    expect(res.status).toBe(403);
   });
 });

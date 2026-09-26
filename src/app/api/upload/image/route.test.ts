@@ -10,7 +10,7 @@ vi.mock('@/lib/storage/upload', () => ({
 }));
 
 vi.mock('@/lib/auth/ownership', () => ({
-  requireUser: () => mockRequireUser(),
+  requireProducer: () => mockRequireUser(),
 }));
 
 function requestWithFile(file?: File): NextRequest {

@@ -4,6 +4,7 @@ import { Resend } from 'resend';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured, insert } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
+import { requireProducer } from '@/lib/auth/ownership';
 import { createLogger } from '@/lib/log';
 const log = createLogger('api.email');
 import { buildBeatSendEmail, defaultSubject } from '@/lib/email/beat-send-template';
@@ -21,6 +22,10 @@ export async function POST(req: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
+    // Buyers sign in through the same Supabase auth; "signed in" is not
+    // "producer". Without this any buyer account is a relay from our domain.
+    const producer = await requireProducer();
+    if (!producer.ok) return producer.res;
 
     const { contactId, email, subject, message, trackIds, shareToken, packTitle, packMeta, coverUrl, recipientName, expiresDays, allowDownloads, tracks, campaignId } = await req.json();
 
