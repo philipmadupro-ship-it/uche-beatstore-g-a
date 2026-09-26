@@ -1090,6 +1090,32 @@ export async function POST(req: NextRequest) {
           log.info(`purchase marked ${newStatus}`, { payment_intent: charge.payment_intent });
         }
 
+        // Project bundles live in project_access_links, which is keyed by
+        // checkout session rather than payment intent and has no
+        // download_unlocked flag. Without this the refunded or disputed
+        // bundle stayed downloadable forever. Revoke by expiring the link —
+        // every grant path checks isProjectAccessActive.
+        if (charge.payment_intent) {
+          try {
+            const sessions = await stripe.checkout.sessions.list({
+              payment_intent: charge.payment_intent,
+              limit: 10,
+            });
+            const sessionIds = sessions.data.map((s) => s.id);
+            if (sessionIds.length > 0) {
+              const { error: accessErr } = await admin
+                .from('project_access_links')
+                .update({ expires_at: new Date().toISOString() })
+                .in('stripe_session_id', sessionIds);
+              if (accessErr) {
+                log.warn('project access revoke failed', { payment_intent: charge.payment_intent, error: accessErr.message });
+              }
+            }
+          } catch (err) {
+            log.warn('project access revoke threw', { payment_intent: charge.payment_intent, error: errorMessage(err) });
+          }
+        }
+
         // If refunding an exclusive, optionally re-list the track.
         // We do this on a best-effort basis — if the seller has already
         // manually relisted it, this is a no-op.
