@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { isProjectAccessActive } from '@/lib/store/project-access';
 import { streamAudioSource } from '@/lib/audio/stream-source';
 import {
   canDownloadFormat,
@@ -80,11 +81,8 @@ export async function GET(req: NextRequest) {
       if (!access) {
         return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
       }
-      // Same expiry rule as /api/store/projects/access/[token]/download. This
-      // route used to skip it, so a session_id kept serving masters and stems
-      // after the token route had already stopped.
-      if (access.expires_at && new Date(access.expires_at).getTime() < Date.now()) {
-        return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
+      if (!isProjectAccessActive(access)) {
+        return NextResponse.json({ error: 'Download access revoked (refunded, disputed or expired)' }, { status: 403 });
       }
       const { data: belongs } = await admin
         .from('project_tracks')

@@ -211,12 +211,12 @@ describe('GET /api/store/download-file', () => {
       });
     }
 
-    it('denies an expired project access link, matching the token route', async () => {
+    it('denies an expired (refunded, disputed or lapsed) project access link', async () => {
       mockProject(new Date(Date.now() - 60_000).toISOString());
       const mod = await loadRoute();
       const res = await mod.GET(req('wav'));
 
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(403);
       expect(mockStreamAudioSource).not.toHaveBeenCalled();
     });
 

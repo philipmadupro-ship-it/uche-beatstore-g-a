@@ -337,7 +337,13 @@ export async function GET(req: NextRequest) {
         // Tag-colour overrides are a Supabase-only table; the local dev store
         // has none, so generated artwork falls back to the curated defaults.
         artworkTheme: artworkThemeFromProfile(creator, {}),
-        tracks: tracks.map(redactPublicTrackMedia),
+        // Tags ride along exactly as on the Supabase path. The page re-applies
+        // genre/mood client-side over `track.tags`, so omitting them here made
+        // any genre or mood filter empty the grid in local-store mode.
+        tracks: tracks.map((track) => redactPublicTrackMedia({
+          ...track,
+          tags: localTagsByTrack[track.id] ?? [],
+        })),
         featuredPlaylists,
         featuredProjects,
         licenses: [],

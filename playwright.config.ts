@@ -27,6 +27,11 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    // Lets a machine with a pre-installed Chromium of a different build run
+    // the suite without `playwright install`. Unset = Playwright's own browser.
+    ...(process.env.PLAYWRIGHT_CHROMIUM_PATH
+      ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } }
+      : {}),
   },
 
   projects: [

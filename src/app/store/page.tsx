@@ -56,6 +56,7 @@ import { logPlay } from '@/lib/buyer-session';
 import { BeatCard } from '@/components/store/BeatCard';
 import { RowCallbackCache } from '@/lib/ui/stable-row-callbacks';
 import { canLoadMore, isCurrentRequest, mergeLoadedPage } from '@/lib/store/load-more';
+import { BPM_SENTINEL, PRICE_SENTINEL, rangeQueryParams } from '@/lib/store/range-query';
 import { BeatPreviewDrawer } from '@/components/store/BeatPreviewDrawer';
 import { trackStoreEvent } from '@/lib/store/track-event';
 
@@ -83,6 +84,8 @@ function money(value: number | null | undefined) {
 }
 
 const STORE_PAGE_SIZE = 80;
+/** Slider settle time before the range reaches /api/store. */
+const RANGE_QUERY_DEBOUNCE_MS = 250;
 const STORE_RECENT_SEARCHES_KEY = 'antigravity-store-recent-searches';
 
 type StorePageInfo = {
@@ -312,8 +315,8 @@ function StorePage() {
   const [priceMax, setPriceMax] = useState(99999);
   const [sortBy, setSortBy] = useState<'newest' | 'popular' | 'bpm-asc' | 'bpm-desc' | 'price-asc' | 'price-desc' | 'title'>('newest');
   const wishlist = useWishlist();
-  // `useWishlist` builds a fresh Set every render, so the ids are flattened to
-  // a sorted, stable array before anything depends on their identity.
+  // Flattened to a sorted string so the server query key does not change when
+  // the same ids are saved in a different order.
   const wishlistKey = [...wishlist.ids].sort().join(',');
   const wishlistIds = useMemo(
     () => (wishlistKey === '' ? [] : wishlistKey.split(',')),
@@ -353,6 +356,29 @@ function StorePage() {
     } catch { /* private mode */ }
   }, []);
 
+  const facetsQuery = useQuery({
+    queryKey: ['store-facets'],
+    queryFn: async () => {
+      const res = await fetch('/api/store/facets');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return (await res.json()) as StoreFacets;
+    },
+  });
+  // The range sliders drive the server query only once they settle. The
+  // client pass below still reads the live values, so the list responds
+  // immediately; this only stops a drag sending a request per tick.
+  const [debouncedRanges, setDebouncedRanges] = useState({ bpmMin, bpmMax, priceMin, priceMax });
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedRanges((prev) => (
+        prev.bpmMin === bpmMin && prev.bpmMax === bpmMax && prev.priceMin === priceMin && prev.priceMax === priceMax
+          ? prev
+          : { bpmMin, bpmMax, priceMin, priceMax }
+      ));
+    }, RANGE_QUERY_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [bpmMin, bpmMax, priceMin, priceMax]);
+
   const serverStoreQuery = useMemo(() => {
     const params = new URLSearchParams({ limit: String(STORE_PAGE_SIZE) });
     const q = debouncedSearch.trim();
@@ -378,18 +404,23 @@ function StorePage() {
     // which is exactly when the filter should not be sent. Resolving them
     // against the catalogue's real range happens further down, and depends on
     // the very fetch this query drives.
-    if (bpmMin !== 0) params.set('bpmMin', String(bpmMin));
-    if (bpmMax !== 999) params.set('bpmMax', String(bpmMax));
-    if (priceMin !== 0) params.set('priceMin', String(priceMin));
-    if (priceMax !== 99999) params.set('priceMax', String(priceMax));
+    //
+    // Debounced, and edge values omitted (lib/store/range-query): a slider
+    // drag used to send one catalogue request per tick, and initialising the
+    // sliders to the catalogue range re-fetched the catalogue on every visit.
+    for (const [k, v] of Object.entries(rangeQueryParams(debouncedRanges, {
+      bpm: facetsQuery.data?.bpmRange,
+      price: facetsQuery.data?.priceRange,
+    }))) params.set(k, v!);
     // An empty wishlist still sends `ids=`, because "only my favourites" with
     // none saved matches nothing — not everything.
     if (favoritesOnly) params.set('ids', wishlistIds.join(','));
 
     return params.toString();
   }, [
-    bpmMax,
-    bpmMin,
+    debouncedRanges,
+    facetsQuery.data?.bpmRange,
+    facetsQuery.data?.priceRange,
     debouncedSearch,
     durationBucket,
     favoritesOnly,
@@ -398,8 +429,6 @@ function StorePage() {
     keyFilter,
     moodFilter,
     newThisWeek,
-    priceMax,
-    priceMin,
     scaleFilter,
     sortBy,
     typeFilter,
@@ -425,14 +454,6 @@ function StorePage() {
         featuredProjects: (data.featuredProjects as FeaturedPlaylist[]) ?? [],
         pageInfo: (data.pageInfo ?? { hasMore: false, nextCursor: null }) as StorePageInfo,
       };
-    },
-  });
-  const facetsQuery = useQuery({
-    queryKey: ['store-facets'],
-    queryFn: async () => {
-      const res = await fetch('/api/store/facets');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return (await res.json()) as StoreFacets;
     },
   });
   const creator = storeQuery.data?.creator ?? null;
@@ -672,15 +693,12 @@ function StorePage() {
     return { min: Math.min(...bpms), max: Math.max(...bpms) };
   }, [facetsQuery.data?.bpmRange, tracks]);
 
-  // Initialize BPM sliders when tracks first load
-  useEffect(() => {
-    if (tracks.length > 0 && bpmMin === 0 && bpmMax === 999) {
-      setBpmMin(bpmRange.min);
-      setBpmMax(bpmRange.max);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks.length]);
 
+  // The sliders stay at their sentinels until the buyer moves them, and the
+  // sentinel always resolves against the CURRENT range. They used to be
+  // initialised to whatever range was known when the first page landed; if
+  // /api/store/facets arrived after it, that was the first page's range, and
+  // on a catalogue over one page it became a real filter hiding the rest.
   const effectiveBpmMin = bpmMin === 0 ? bpmRange.min : bpmMin;
   const effectiveBpmMax = bpmMax === 999 ? bpmRange.max : bpmMax;
 
@@ -701,13 +719,6 @@ function StorePage() {
     return { min: Math.floor(Math.min(...prices)), max: Math.ceil(Math.max(...prices)) };
   }, [facetsQuery.data?.priceRange, tracks, creator?.license_lease_price_usd]);
 
-  useEffect(() => {
-    if (tracks.length > 0 && priceMin === 0 && priceMax === 99999) {
-      setPriceMin(priceRange.min);
-      setPriceMax(priceRange.max);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks.length]);
 
   const effectivePriceMin = priceMin === 0 ? priceRange.min : priceMin;
   const effectivePriceMax = priceMax === 99999 ? priceRange.max : priceMax;
@@ -748,10 +759,10 @@ function StorePage() {
     setMoodFilter('');
     setKeyFilter('');
     setScaleFilter('');
-    setBpmMin(bpmRange.min);
-    setBpmMax(bpmRange.max);
-    setPriceMin(priceRange.min);
-    setPriceMax(priceRange.max);
+    setBpmMin(BPM_SENTINEL.min);
+    setBpmMax(BPM_SENTINEL.max);
+    setPriceMin(PRICE_SENTINEL.min);
+    setPriceMax(PRICE_SENTINEL.max);
     setFreeOnly(false);
     setFavoritesOnly(false);
     setNewThisWeek(false);

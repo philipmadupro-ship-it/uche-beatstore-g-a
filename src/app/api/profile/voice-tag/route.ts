@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireUser } from '@/lib/auth/ownership';
+import { requireProducer } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { uploadPublicAudioAsset } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
@@ -19,7 +19,7 @@ const log = createLogger('api.profile.voice-tag');
  */
 export async function POST(req: NextRequest) {
   try {
-    const auth = await requireUser();
+    const auth = await requireProducer();
     if (!auth.ok) return auth.res;
     const { userId, admin } = auth;
 

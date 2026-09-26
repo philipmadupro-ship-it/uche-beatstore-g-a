@@ -1,3 +1,4 @@
+import { isProducerUserId } from '@/lib/auth/producer';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
@@ -24,12 +25,17 @@ export async function GET(
     const admin = createServiceClient();
     const { data: track, error } = await admin
       .from('tracks')
-      .select('preview_url, audio_url, store_listed')
+      .select('preview_url, audio_url, store_listed, user_id')
       .eq('id', id)
       .eq('store_listed', true)
       .maybeSingle();
 
     if (error) throw error;
+    // Only the producer's catalogue is public. A row a buyer inserted
+    // themselves must not become a public stream of whatever it points at.
+    if (track && !(await isProducerUserId(admin, track.user_id))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     const source = track?.preview_url || (
       typeof track?.audio_url === 'string' && !track.audio_url.startsWith('r2://')
         ? track.audio_url

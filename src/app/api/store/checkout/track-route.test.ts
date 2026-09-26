@@ -359,6 +359,32 @@ describe('POST /api/store/checkout — track mode exclusive delivery metadata', 
     expect(mockRpc).not.toHaveBeenCalled();
   });
 
+  it('rejects a promo code created by another account', async () => {
+    mockTracks.push({
+      id: 'track-1', user_id: 'seller-1', title: 'Promo Beat', store_listed: true,
+      exclusive_sold: false, exclusive_price_usd: 250, lease_price_usd: 30,
+      wav_url: null, stems_status: 'done',
+    });
+    mockPromo = { code: 'FREE', user_id: 'buyer-9', active: true, discount_percent: 100, discount_amount: 0, uses_count: 0, max_uses: null };
+    const mod = await loadRoute();
+    const res = await mod.POST(postBody({ ...exclusiveBody(), promo_code: 'FREE' }));
+    expect(res.status).toBe(400);
+    expect(mockSessionsCreate).not.toHaveBeenCalled();
+  });
+
+  it('rejects any promo code on a track with no known seller', async () => {
+    mockTracks.push({
+      id: 'track-1', user_id: null, title: 'Orphan Beat', store_listed: true,
+      exclusive_sold: false, exclusive_price_usd: 250, lease_price_usd: 30,
+      wav_url: null, stems_status: 'done',
+    });
+    mockPromo = { code: 'FREE', user_id: 'buyer-9', active: true, discount_percent: 100, discount_amount: 0, uses_count: 0, max_uses: null };
+    const mod = await loadRoute();
+    const res = await mod.POST(postBody({ ...exclusiveBody(), promo_code: 'FREE' }));
+    expect(res.status).toBe(400);
+    expect(mockSessionsCreate).not.toHaveBeenCalled();
+  });
+
   it('429s before creating a Stripe session when the IP is over its limit', async () => {
     mockRateLimit.mockImplementation((key: string) => Promise.resolve(!key.startsWith('checkout:')));
     const mod = await loadRoute();

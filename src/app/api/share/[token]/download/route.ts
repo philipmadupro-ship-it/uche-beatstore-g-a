@@ -1,3 +1,4 @@
+import { projectShareOwnerId, shareGrantsTrack } from '@/lib/share/share-owner';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -67,17 +68,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     let trackBelongsToShare = false;
 
     if (shareRow) {
-      trackBelongsToShare = await projectShareIncludesTrack(admin, shareRow, trackId);
+      trackBelongsToShare = (await projectShareIncludesTrack(admin, shareRow, trackId))
+        && (await shareGrantsTrack(admin, await projectShareOwnerId(admin, shareRow), trackId));
     }
 
     if (!shareRow) {
       const { data: linkShare } = await admin
         .from('share_links')
-        .select('allow_downloads, revoked_at, expires_at, password_hash, track_ids')
+        .select('allow_downloads, revoked_at, expires_at, password_hash, track_ids, user_id')
         .eq('token', token)
         .maybeSingle();
       shareRow = linkShare ?? null;
-      trackBelongsToShare = Array.isArray(linkShare?.track_ids) && linkShare.track_ids.includes(trackId);
+      trackBelongsToShare = Array.isArray(linkShare?.track_ids) && linkShare.track_ids.includes(trackId)
+        && (await shareGrantsTrack(admin, linkShare?.user_id, trackId));
     }
 
     // Paid storefront project access (project_access_links token) — grant if track belongs to the purchased project
@@ -95,7 +98,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
           expires_at: paidAccess.expires_at ?? null,
         };
         isProjectPaidAccess = true;
-        trackBelongsToShare = await projectIncludesTrack(admin, paidAccess.project_id, trackId);
+        trackBelongsToShare = (await projectIncludesTrack(admin, paidAccess.project_id, trackId))
+          && (await shareGrantsTrack(admin, await projectShareOwnerId(admin, { project_id: paidAccess.project_id }), trackId));
       }
     }
 

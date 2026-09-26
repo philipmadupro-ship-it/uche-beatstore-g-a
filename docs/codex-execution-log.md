@@ -8505,3 +8505,28 @@ landed before trusting the result.
 Verified by rendering `/store` against the fixture and measuring computed `fontSize` on every
 leaf text node: 8 distinct sizes, all on the scale (8, 9, 10, 11, 14, 16, 20, 24), two beat
 cards present, layout intact. Plus `tsc`, `next build`, `vitest` (2092).
+
+## 2026-09-26 - Storefront at scale: 72-beat browser load test (INFRA-01)
+
+A real-browser scale suite, `e2e/storefront-scale.spec.ts` (`ENABLE_LOCAL_STORE=true npm run e2e:scale`), over a generated 72-beat fixture (`e2e/fixtures/generate-scale-db.mjs`): first load, genre / BPM-drag / free filters, full scroll, 5 plays, 390px viewport, and 50 concurrent `/api/store` calls. It is opt-in (`E2E_SCALE=1`), so `npm run e2e` and CI still run the 2-beat smoke fixture.
+
+Measurement note: audio is served by a local server the spec starts, with real cache headers, and counted there. **Any `page.route` disables Chromium's HTTP cache for the whole page**, which first made every cache hit look like a re-download.
+
+Three defects it found, fixed:
+
+- **Wishlist identity churn → background preview storm.** `useWishlist()` returned a new `Set` every render. `/store`'s `filtered` memo depends on it, so it recomputed on every render, and `usePreviewPrefetch(filtered)` re-queued another 30 previews each time. Five plays downloaded 42 extra previews; the catalogue drained in the background. The Set and `has` are now memoised. Before 42 → after 0.
+- **BPM / price sliders → one catalogue request per tick,** plus a duplicate catalogue fetch on every visit when the slider-init effect wrote the full range into the query key. The range now reaches the query through a 250ms debounce, and `lib/store/range-query.ts` omits bounds at the sentinel or the facets edge. Drag of 30 steps: before 30 requests → after 1. Per visit: before 2 → after 1.
+- **Local-store `/api/store` omitted `tracks[].tags`,** so the client genre/mood pass emptied the grid on any genre filter. This was local/e2e only; the Supabase path already attached tags.
+
+Concurrency, 50 requests against `next dev`: p50 673 → 391 ms, p95 981 → 645 ms, 0 errors both times.
+
+Follow-up, same PR: **the range sliders no longer initialise from whatever range is known first.** `/store` copied `bpmRange` / `priceRange` into slider state as soon as tracks landed. If `/api/store/facets` had not arrived yet, that range came from the first 80 beats. On a larger catalogue it then became a real filter, sent as `bpmMin=71`, which hid beats outside the first page. For example, the fixture's only 70 BPM beat could not be found even by searching its name. The init effects are gone: sliders stay at their sentinels until moved and always resolve against the current range, and `resetFilters` returns them to the sentinels. The fixture is now 96 beats, more than one page. The regression test delays facets by 2.5s: before the fix it sent 2 narrowing requests, after it sends 0.
+
+## 2026-09-26 - Public pages no longer call session-gated artwork endpoints
+
+Buyers got a 401 from `/api/tags/colors`, and could also hit `/api/profile`, on the storefront. There were two causes:
+
+- **`ArtworkThemeProvider` rendered no context while `theme` was null,** i.e. while a public page was loading its data. `useTagColors` and `useBrandArtwork` read "no context" as "dashboard" and fetched. A provider now always supplies context: null resolves to `EMPTY_ARTWORK_THEME`, the curated defaults a buyer got after the 401 anyway. This covers all nine public pages. No provider at all still means dashboard, which still fetches.
+- **The store layout's `PlayerBar` and `CartDrawer` sat outside every page's provider.** They are now wrapped in `PublicArtworkThemeProvider`, which reads the public `/api/store/theme` once per store session.
+
+Tests: `ArtworkThemeProvider.test.tsx` (jsdom) fails before the fix and passes after, and also checks that the dashboard path still fetches. The scale e2e now asserts zero calls to either endpoint, replacing the once-per-session allowance.

@@ -1099,8 +1099,10 @@ export async function POST(req: NextRequest) {
           .update({ status: newStatus, download_unlocked: false })
           .eq('stripe_payment_intent', charge.payment_intent);
 
-        // Project bundles: expiring the access link revokes it everywhere,
-        // since every project_access_links reader enforces expires_at (mig 117).
+        // Project bundles, fast path: rows written since migration 117 carry
+        // the payment intent, so they can be expired with no Stripe call. The
+        // session lookup below also covers older rows, and still revokes if
+        // this update fails. Either path alone is enough; both are idempotent.
         if (charge.payment_intent) {
           const { error: accessErr } = await admin
             .from('project_access_links')
@@ -1115,6 +1117,32 @@ export async function POST(req: NextRequest) {
           log.warn(`${newStatus} update failed`, { payment_intent: charge.payment_intent, error: errorMessage(error) });
         } else {
           log.info(`purchase marked ${newStatus}`, { payment_intent: charge.payment_intent });
+        }
+
+        // Project bundles live in project_access_links, which is keyed by
+        // checkout session rather than payment intent and has no
+        // download_unlocked flag. Without this the refunded or disputed
+        // bundle stayed downloadable forever. Revoke by expiring the link —
+        // every grant path checks isProjectAccessActive.
+        if (charge.payment_intent) {
+          try {
+            const sessions = await stripe.checkout.sessions.list({
+              payment_intent: charge.payment_intent,
+              limit: 10,
+            });
+            const sessionIds = sessions.data.map((s) => s.id);
+            if (sessionIds.length > 0) {
+              const { error: accessErr } = await admin
+                .from('project_access_links')
+                .update({ expires_at: new Date().toISOString() })
+                .in('stripe_session_id', sessionIds);
+              if (accessErr) {
+                log.warn('project access revoke failed', { payment_intent: charge.payment_intent, error: accessErr.message });
+              }
+            }
+          } catch (err) {
+            log.warn('project access revoke threw', { payment_intent: charge.payment_intent, error: errorMessage(err) });
+          }
         }
 
         // If refunding an exclusive, optionally re-list the track.

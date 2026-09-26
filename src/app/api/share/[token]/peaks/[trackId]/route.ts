@@ -1,3 +1,4 @@
+import { projectShareOwnerId, shareGrantsTrack } from '@/lib/share/share-owner';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -88,18 +89,22 @@ async function resolveShareForTrack(
 
   if (projectShare) {
     const share = projectShare as ShareRow;
-    return { share, included: await projectShareIncludesTrack(admin, share, trackId) };
+    const included = (await projectShareIncludesTrack(admin, share, trackId))
+      && (await shareGrantsTrack(admin, await projectShareOwnerId(admin, share), trackId));
+    return { share, included };
   }
 
   const { data: flatShare } = await admin
     .from('share_links')
-    .select('revoked_at, expires_at, track_ids')
+    .select('revoked_at, expires_at, track_ids, user_id')
     .eq('token', token)
     .maybeSingle();
 
   if (flatShare) {
     const share = flatShare as ShareRow;
-    return { share, included: Array.isArray(share.track_ids) && share.track_ids.includes(trackId) };
+    const included = Array.isArray(share.track_ids) && share.track_ids.includes(trackId)
+      && (await shareGrantsTrack(admin, (flatShare as { user_id?: string | null }).user_id, trackId));
+    return { share, included };
   }
 
   const { data: paidAccess } = await admin
@@ -112,7 +117,8 @@ async function resolveShareForTrack(
 
   return {
     share: { expires_at: paidAccess.expires_at ?? null },
-    included: await projectIncludesTrack(admin, paidAccess.project_id, trackId),
+    included: (await projectIncludesTrack(admin, paidAccess.project_id, trackId))
+      && (await shareGrantsTrack(admin, await projectShareOwnerId(admin, { project_id: paidAccess.project_id }), trackId)),
   };
 }
 

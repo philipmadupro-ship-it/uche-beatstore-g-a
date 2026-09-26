@@ -12,6 +12,10 @@ const mockSend = vi.fn();
 vi.mock('@/lib/auth/ownership', () => ({
   requireProducer: () => mockRequireProducer(),
 }));
+// A signed-in session exists; it just is not the producer's.
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: 'buyer-1' } } }) } }),
+}));
 vi.mock('resend', () => ({ Resend: class { emails = { send: mockSend }; } }));
 vi.mock('@/lib/local-store', async (orig) => ({ ...(await orig<object>()), isSupabaseConfigured: () => true }));
 vi.mock('@/lib/db', async (orig) => ({ ...(await orig<object>()), isSupabaseConfigured: () => true }));

@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { getAppUrl } from '@/lib/env';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { isProjectAccessActive } from '@/lib/store/project-access';
 import {
   canDownloadFormat,
   parsePurchaseLineItem,
@@ -121,6 +122,12 @@ export async function GET(req: NextRequest) {
         .select('id, project_id, buyer_email, amount_usd, created_at, stripe_session_id, expires_at')
         .eq('stripe_session_id', sessionId)
         .maybeSingle();
+      if (access && !isProjectAccessActive(access)) {
+        return NextResponse.json(
+          { error: 'Download access revoked (refunded, disputed or expired)' },
+          { status: 403 },
+        );
+      }
       if (access) {
         const expiresAt = (access as ProjectAccessRow).expires_at;
         if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {

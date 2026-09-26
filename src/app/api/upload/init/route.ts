@@ -74,10 +74,10 @@ export async function POST(req: NextRequest) {
       if (authError || !data.user) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
       }
-      // Buyers share this Supabase auth; only the producer may write storage.
+      userId = data.user.id;
+      // Buyers share this Supabase auth; only the producer may upload.
       const producer = await requireProducer();
       if (!producer.ok) return producer.res;
-      userId = data.user.id;
       if (replaceTrackId) {
         const owner = await requireRowOwnership('tracks', replaceTrackId);
         if (!owner.ok) return owner.res;

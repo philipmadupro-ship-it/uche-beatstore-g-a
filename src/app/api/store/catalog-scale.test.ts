@@ -94,6 +94,17 @@ describe('600-beat catalogue budgets', () => {
     expect(body.pageInfo).toEqual({ hasMore: false, nextCursor: null });
   });
 
+  it('returns each track with its tags, so the client genre pass keeps them', async () => {
+    const response = await storeGet(new NextRequest('http://localhost/api/store?limit=80&genre=Trap'));
+    const body = await response.json();
+    expect(body.tracks.length).toBeGreaterThan(0);
+    // /store re-filters genre/mood over `track.tags`; a track without them is
+    // dropped there, which emptied the grid on every genre filter.
+    for (const track of body.tracks as Array<{ tags?: Array<{ tag: string; category: string }> }>) {
+      expect(track.tags).toContainEqual({ tag: 'Trap', category: 'genre' });
+    }
+  });
+
   it('filters by BPM across the whole catalogue, not just the first page', async () => {
     // This is the regression the server-side move exists for. Before it, the
     // BPM filter ran in the browser over the pages already fetched, so on a

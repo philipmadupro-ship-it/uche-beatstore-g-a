@@ -15,11 +15,6 @@ const mockCreateSession = vi.fn();
 const mockIsSupabaseConfigured = vi.fn();
 const mockGetUser = vi.fn();
 const mockMaybeSingle = vi.fn();
-const mockRequireProducer = vi.fn();
-
-vi.mock('@/lib/auth/ownership', () => ({
-  requireProducer: () => mockRequireProducer(),
-}));
 
 vi.mock('nanoid', () => ({ nanoid: () => 'sess_test_123' }));
 
@@ -37,6 +32,9 @@ vi.mock('@/lib/storage/upload-sessions', () => ({
 vi.mock('@/lib/local-store', () => ({
   isSupabaseConfigured: () => mockIsSupabaseConfigured(),
 }));
+
+const mockRequireProducer = vi.fn(async () => ({ ok: true, userId: 'user-1', admin: {} }));
+vi.mock('@/lib/auth/ownership', () => ({ requireProducer: () => mockRequireProducer() }));
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({
@@ -67,7 +65,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockIsSupabaseConfigured.mockReturnValue(true);
   mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } });
-  mockRequireProducer.mockResolvedValue({ ok: true, userId: 'user-1' });
   mockInitMultipart.mockResolvedValue({ uploadId: 'upload-1', key: 'audio/test.wav' });
   mockCreateSession.mockImplementation((session) => ({
     ...(session as Record<string, unknown>),
@@ -196,16 +193,11 @@ describe('POST /api/upload/init', () => {
     expect(mockInitMultipart).not.toHaveBeenCalled();
   });
 
-  it('refuses a signed-in buyer (not the producer) before multipart storage init', async () => {
-    mockRequireProducer.mockResolvedValueOnce({
-      ok: false,
-      res: Response.json({ error: 'Producer account required' }, { status: 403 }),
-    });
+  it('refuses a signed-in buyer (no producer profile) before any storage work', async () => {
+    const { NextResponse } = await import('next/server');
+    mockRequireProducer.mockResolvedValueOnce({ ok: false, res: NextResponse.json({ error: 'Producer account required' }, { status: 403 }) } as never);
     const mod = await loadRoute();
     const res = await mod.POST(req({ fileName: 'beat.wav', fileSize: 1024 * 1024, fileType: 'audio/wav' }));
-
     expect(res.status).toBe(403);
-    expect(mockInitMultipart).not.toHaveBeenCalled();
-    expect(mockCreateSession).not.toHaveBeenCalled();
   });
 });

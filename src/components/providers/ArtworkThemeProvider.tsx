@@ -25,23 +25,29 @@ export function ArtworkThemeProvider({
   theme,
   children,
 }: {
-  /** Null / undefined renders children unchanged — the hooks keep fetching. */
+  /**
+   * Null / undefined means "not loaded yet", NOT "not a public page": the
+   * tree still gets the empty theme (curated defaults) until it arrives.
+   */
   theme?: PublicArtworkTheme | null;
   children: ReactNode;
 }) {
   // Memoised on the fields rather than object identity: API responses are
   // fresh objects on every refetch, and a new context value re-renders every
   // card that draws generated artwork.
-  const value = useMemo<PublicArtworkTheme | null>(() => {
-    if (!theme) return null;
+  //
+  // A missing theme still provides context. It used to render children bare,
+  // and the hooks read "no context" as "dashboard" — so while a public page
+  // was loading its data, useTagColors / useBrandArtwork called the
+  // session-gated /api/tags/colors and /api/profile and every buyer got a 401.
+  const value = useMemo<PublicArtworkTheme>(() => {
+    if (!theme) return EMPTY_ARTWORK_THEME;
     return {
       logo_url: theme.logo_url ?? null,
       artwork: theme.artwork ?? EMPTY_ARTWORK_THEME.artwork,
       tag_colors: theme.tag_colors ?? {},
     };
   }, [theme]);
-
-  if (!value) return <>{children}</>;
 
   return <ArtworkThemeContext.Provider value={value}>{children}</ArtworkThemeContext.Provider>;
 }

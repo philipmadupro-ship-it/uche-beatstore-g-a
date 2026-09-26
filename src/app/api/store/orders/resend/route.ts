@@ -6,6 +6,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { Resend } from 'resend';
 import { verifyBuyerToken } from '@/lib/buyer-tokens';
+import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -47,6 +48,14 @@ export async function POST(req: NextRequest) {
   }
   if (claims.email !== normalizedEmail) {
     return NextResponse.json({ error: 'Recovery token does not match email' }, { status: 403 });
+  }
+  // A valid token is reusable for its lifetime; without a cap it can loop
+  // delivery mail through our Resend account. Per-email and per-IP.
+  if (
+    !await rateLimitDurable(`orders-resend:${normalizedEmail}`, 5, 10 * 60_000) ||
+    !await rateLimitDurable(`orders-resend-ip:${clientIp(req)}`, 10, 10 * 60_000)
+  ) {
+    return NextResponse.json({ error: 'Too many requests — try again shortly.' }, { status: 429 });
   }
 
   const admin = createServiceClient();

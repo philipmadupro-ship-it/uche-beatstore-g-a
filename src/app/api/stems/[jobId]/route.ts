@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient as createServerClient } from '@/lib/supabase/server';
 import { pollJob, downloadStem } from '@/lib/stems/dispatch';
 import { isSupabaseConfigured, getAll, update, getById, createServiceClient } from '@/lib/db';
 import { uploadAudio } from '@/lib/storage/upload';
@@ -7,45 +6,10 @@ import { stemName } from '@/lib/naming';
 import { autoDeliverStems } from '@/lib/stems/auto-deliver';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { authorizeStemJob, isValidJobId } from '@/lib/stems/authorize';
 const log = createLogger('api.stems.jobId');
 
 const CORE_STEMS = ['vocals', 'drums', 'bass', 'other'] as const;
-
-/**
- * Authorize a stem-job read. A job exposes the producer's track status + stem
- * URLs, so only the track's owner may poll it. Resolves job_id → stems.track_id
- * → tracks.user_id and matches the authed user. Returns a NextResponse to
- * short-circuit (401/403), or null when the caller is allowed. Local-store dev
- * mode (no Supabase) is exempt — it's localhost-only.
- */
-async function authorizeStemJob(jobId: string): Promise<NextResponse | null> {
-  if (!isSupabaseConfigured()) return null;
-  const cookieClient = await createServerClient();
-  const { data: { user } } = await cookieClient.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-
-  const admin = createServiceClient();
-  const { data: stemRow } = await admin
-    .from('stems')
-    .select('track_id')
-    .eq('job_id', jobId)
-    .maybeSingle();
-  // No persisted row yet (job just dispatched) — being authenticated is enough.
-  const trackId = (stemRow as { track_id?: string | null } | null)?.track_id;
-  if (!trackId) return null;
-
-  const { data: track } = await admin
-    .from('tracks')
-    .select('user_id')
-    .eq('id', trackId)
-    .maybeSingle();
-  const ownerId = (track as { user_id?: string | null } | null)?.user_id;
-  // Null-owner legacy rows stay readable; an owned row must match the caller.
-  if (ownerId && ownerId !== user.id) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-  return null;
-}
 
 interface StemRow {
   id: string;
@@ -74,6 +38,7 @@ export async function GET(
 
   // Ownership gate — only the track's owner may read this job (was previously
   // resolvable by anyone who knew the opaque job id).
+  if (!isValidJobId(jobId)) return NextResponse.json({ error: 'Invalid job id' }, { status: 400 });
   const denied = await authorizeStemJob(jobId);
   if (denied) return denied;
 
