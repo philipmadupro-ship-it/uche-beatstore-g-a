@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Writes the storefront scale fixture: 72 listed beats with covers, previews,
+ * Writes the storefront scale fixture: 96 listed beats with covers, previews,
  * tags and a spread of BPM / key / price, on top of the base e2e fixture.
  *
  *   node e2e/fixtures/generate-scale-db.mjs > data/db.json
@@ -14,7 +14,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
-export const SCALE_BEATS = 72;
+// More than one /api/store page (80), so anything that treats the first page
+// as the whole catalogue shows up.
+export const SCALE_BEATS = 96;
 // A local server the spec starts (e2e/storefront-scale.spec.ts), not page.route:
 // routing disables Chromium's HTTP cache, which would count cache hits as fetches.
 export const MEDIA_HOST = process.env.SCALE_MEDIA_HOST ?? 'http://127.0.0.1:3458';

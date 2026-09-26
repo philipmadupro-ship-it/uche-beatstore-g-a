@@ -1,5 +1,5 @@
 /**
- * Storefront at catalogue scale — 72+ listed beats with covers, previews and
+ * Storefront at catalogue scale — 96 listed beats with covers, previews and
  * tags, driven through a real browser: first load, filters, a BPM slider drag,
  * a full scroll, repeated playback, a mobile viewport and a concurrent burst
  * against /api/store.
@@ -244,7 +244,18 @@ test.describe('storefront at scale', () => {
     // Each cover fetched at most once (browser cache), never per re-render.
     expect(coversAfterScroll).toBeLessThanOrEqual(total);
 
-    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+      // The fixture clip is 1s, so sampling "is anything playing" at the end
+      // is a race. Record every start and the peak number playing at once.
+      const w = window as unknown as { __plays: number; __peak: number };
+      w.__plays = 0; w.__peak = 0;
+      document.addEventListener('playing', () => {
+        w.__plays += 1;
+        const now = Array.from(document.querySelectorAll('audio')).filter((a) => !a.paused).length;
+        w.__peak = Math.max(w.__peak, now);
+      }, true);
+    });
     p.reset();
     const heap0 = await page.evaluate(() => (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0);
     for (let i = 0; i < 5; i++) {
@@ -255,20 +266,46 @@ test.describe('storefront at scale', () => {
       await page.getByRole('button', { name: 'Close beat preview' }).click();
     }
     await page.waitForLoadState('networkidle');
-    const playing = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('audio')).filter((a) => !a.paused).length);
+    const { plays, peak } = await page.evaluate(() => {
+      const w = window as unknown as { __plays: number; __peak: number };
+      return { plays: w.__plays, peak: w.__peak };
+    });
     const heap1 = await page.evaluate(() => (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory?.usedJSHeapSize ?? 0);
     if (process.env.SCALE_DEBUG) log('audio downloads by path', Object.fromEntries(served.debug));
-    log('playback x5', { audioRequests: sumOf(served.audio), playingElements: playing, heapDeltaMB: +((heap1 - heap0) / 1e6).toFixed(1) });
+    log('playback x5', { audioRequests: sumOf(served.audio), playbackStarts: plays, peakSimultaneous: peak, heapDeltaMB: +((heap1 - heap0) / 1e6).toFixed(1) });
 
-    // Five plays, at most one simultaneously audible element.
-    expect(playing).toBeLessThanOrEqual(1);
+    // Five presses really started playback, and never two clips at once.
+    expect(plays).toBeGreaterThanOrEqual(5);
+    expect(peak).toBe(1);
     // Some previews may already be cached by prefetch; never more than ~2 per play.
     expect(sumOf(served.audio)).toBeLessThanOrEqual(10);
     expect(p.serverErrors).toEqual([]);
     expect(p.consoleErrors).toEqual([]);
     // Deduped per session by useTagColorStore; more than one is a storm.
     expect(p.count(/\/api\/tags\/colors/)).toBeLessThanOrEqual(1);
+  });
+
+  test('a late facets response does not turn the first page into a filter', async ({ page }) => {
+    // Beat 001 is the catalogue's only 70 BPM beat and the oldest, so it is
+    // not on the first page (whose floor is 71). If the sliders take their
+    // range from the first page, bpmMin=71 becomes a real filter and hides it.
+    // Its own context: a route disables the HTTP cache, which the audio counts
+    // in the other tests depend on.
+    await page.route('**/api/store/facets', async (route) => {
+      await new Promise((r) => setTimeout(r, 2_500));
+      await route.continue();
+    });
+    const p = await probe(page);
+    await openStore(page);
+    await page.waitForResponse('**/api/store/facets');
+    await page.waitForLoadState('networkidle');
+
+    const narrowed = p.requests.filter((r) => /\/api\/store\?.*(bpmMin|bpmMax|priceMin|priceMax)=/.test(r.url()));
+    log('range params sent without the buyer touching a slider', narrowed.length);
+    expect(narrowed).toHaveLength(0);
+
+    await page.getByPlaceholder('Search title, key, BPM, tag…').filter({ visible: true }).first().fill('SCALE BEAT 001');
+    await expect(page.locator('[id="beat-scale-beat-001"]')).toBeVisible({ timeout: 10_000 });
   });
 
   test('mobile viewport renders the scaled catalogue without horizontal overflow', async ({ page }) => {

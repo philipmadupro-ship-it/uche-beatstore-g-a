@@ -8519,3 +8519,5 @@ Three defects it found, fixed:
 - **Local-store `/api/store` omitted `tracks[].tags`,** so the client genre/mood pass emptied the grid on any genre filter. This was local/e2e only; the Supabase path already attached tags.
 
 Concurrency, 50 requests against `next dev`: p50 673 → 391 ms, p95 981 → 645 ms, 0 errors both times.
+
+Follow-up, same PR: **the range sliders no longer initialise from whatever range is known first.** `/store` copied `bpmRange` / `priceRange` into slider state as soon as tracks landed. If `/api/store/facets` had not arrived yet, that range came from the first 80 beats. On a larger catalogue it then became a real filter, sent as `bpmMin=71`, which hid beats outside the first page. For example, the fixture's only 70 BPM beat could not be found even by searching its name. The init effects are gone: sliders stay at their sentinels until moved and always resolve against the current range, and `resetFilters` returns them to the sentinels. The fixture is now 96 beats, more than one page. The regression test delays facets by 2.5s: before the fix it sent 2 narrowing requests, after it sends 0.

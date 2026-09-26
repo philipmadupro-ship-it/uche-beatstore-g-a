@@ -56,7 +56,7 @@ import { logPlay } from '@/lib/buyer-session';
 import { BeatCard } from '@/components/store/BeatCard';
 import { RowCallbackCache } from '@/lib/ui/stable-row-callbacks';
 import { canLoadMore, isCurrentRequest, mergeLoadedPage } from '@/lib/store/load-more';
-import { rangeQueryParams } from '@/lib/store/range-query';
+import { BPM_SENTINEL, PRICE_SENTINEL, rangeQueryParams } from '@/lib/store/range-query';
 import { BeatPreviewDrawer } from '@/components/store/BeatPreviewDrawer';
 import { trackStoreEvent } from '@/lib/store/track-event';
 
@@ -693,15 +693,12 @@ function StorePage() {
     return { min: Math.min(...bpms), max: Math.max(...bpms) };
   }, [facetsQuery.data?.bpmRange, tracks]);
 
-  // Initialize BPM sliders when tracks first load
-  useEffect(() => {
-    if (tracks.length > 0 && bpmMin === 0 && bpmMax === 999) {
-      setBpmMin(bpmRange.min);
-      setBpmMax(bpmRange.max);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks.length]);
 
+  // The sliders stay at their sentinels until the buyer moves them, and the
+  // sentinel always resolves against the CURRENT range. They used to be
+  // initialised to whatever range was known when the first page landed; if
+  // /api/store/facets arrived after it, that was the first page's range, and
+  // on a catalogue over one page it became a real filter hiding the rest.
   const effectiveBpmMin = bpmMin === 0 ? bpmRange.min : bpmMin;
   const effectiveBpmMax = bpmMax === 999 ? bpmRange.max : bpmMax;
 
@@ -722,13 +719,6 @@ function StorePage() {
     return { min: Math.floor(Math.min(...prices)), max: Math.ceil(Math.max(...prices)) };
   }, [facetsQuery.data?.priceRange, tracks, creator?.license_lease_price_usd]);
 
-  useEffect(() => {
-    if (tracks.length > 0 && priceMin === 0 && priceMax === 99999) {
-      setPriceMin(priceRange.min);
-      setPriceMax(priceRange.max);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracks.length]);
 
   const effectivePriceMin = priceMin === 0 ? priceRange.min : priceMin;
   const effectivePriceMax = priceMax === 99999 ? priceRange.max : priceMax;
@@ -769,10 +759,10 @@ function StorePage() {
     setMoodFilter('');
     setKeyFilter('');
     setScaleFilter('');
-    setBpmMin(bpmRange.min);
-    setBpmMax(bpmRange.max);
-    setPriceMin(priceRange.min);
-    setPriceMax(priceRange.max);
+    setBpmMin(BPM_SENTINEL.min);
+    setBpmMax(BPM_SENTINEL.max);
+    setPriceMin(PRICE_SENTINEL.min);
+    setPriceMax(PRICE_SENTINEL.max);
     setFreeOnly(false);
     setFavoritesOnly(false);
     setNewThisWeek(false);
