@@ -66,4 +66,10 @@ describe('final RLS policy state', () => {
       expect(body, table).toMatch(/WITH CHECK[\s\S]*is_producer\(\)/i);
     }
   });
+
+  it('share_links writes through RLS require the producer', () => {
+    for (const name of ['share_links_owner_insert', 'share_links_owner_update']) {
+      expect(policies.get(`share_links.${name}`) ?? '', name).toMatch(/WITH CHECK[\s\S]*is_producer\(\)/i);
+    }
+  });
 });

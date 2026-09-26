@@ -18,6 +18,13 @@ type MockSelectChain = {
 };
 const mockFromQueue: Array<(table: string) => MockSelectChain> = [];
 
+// Ownership of shared tracks is covered by lib/share/share-owner tests.
+vi.mock('@/lib/share/share-owner', () => ({
+  projectShareOwnerId: async () => 'owner-1',
+  shareGrantsTrack: async () => true,
+  grantableTrackIds: async (_a: unknown, _o: unknown, ids: string[]) => ids,
+}));
+
 vi.mock('@/lib/db', () => ({
   isSupabaseConfigured: () => mockIsSupabaseConfigured(),
 }));

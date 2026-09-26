@@ -1,3 +1,4 @@
+import { grantableTrackIds } from '@/lib/share/share-owner';
 import { NextRequest, NextResponse } from 'next/server';
 import { isSupabaseConfigured, getAll, update, deleteRow, insert, createServiceClient } from '@/lib/db';
 import { createClient as createServerClient } from '@/lib/supabase/server';
@@ -103,6 +104,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         if (!ok) {
           return NextResponse.json({ requiresPassword: true, error: 'Incorrect password' }, { status: 401 });
         }
+      }
+
+      // Only the producer's own tracks are served through a share (see
+      // lib/share/share-owner). A buyer-made share row resolves to nothing.
+      share.track_ids = await grantableTrackIds(supabaseAdmin, share.user_id, share.track_ids ?? []);
+      if (share.track_ids.length === 0) {
+        return NextResponse.json({ error: 'Share link not found or expired' }, { status: 404 });
       }
 
       const [tracksRes, stemsRes] = await Promise.all([
