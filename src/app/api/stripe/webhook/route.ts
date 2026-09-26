@@ -37,6 +37,9 @@ type WebhookCheckoutSession = {
   payment_intent?: string | null;
   metadata?: Record<string, string> | null;
 };
+function isMissingColumnError(err: { code?: string; message?: string }): boolean {
+  return err.code === '42703' || err.code === 'PGRST204' || /stripe_payment_intent/.test(err.message ?? '');
+}
 type WebhookEvent = {
   id: string;
   type: string;
@@ -860,17 +863,29 @@ export async function POST(req: NextRequest) {
             sellerForAccess = (proj as ProjectOwnerRow | null)?.user_id ?? null;
           }
 
-          const { data: createdAccess, error: accessInsertErr } = await admin
+          const accessRow = {
+            project_id: projectId,
+            buyer_email: buyerEmail,
+            stripe_session_id: session.id,
+            amount_usd: (session.amount_total ?? 0) / 100,
+            seller_user_id: sellerForAccess,
+          };
+          // stripe_payment_intent (mig 117) lets a refund revoke this row.
+          // Retry without it when the column is missing, so a deploy that
+          // lands before the migration still delivers the bundle.
+          let { data: createdAccess, error: accessInsertErr } = await admin
             .from('project_access_links')
-            .insert({
-              project_id: projectId,
-              buyer_email: buyerEmail,
-              stripe_session_id: session.id,
-              amount_usd: (session.amount_total ?? 0) / 100,
-              seller_user_id: sellerForAccess,
-            })
+            .insert({ ...accessRow, stripe_payment_intent: session.payment_intent || null })
             .select('id, token')
             .single();
+          if (accessInsertErr && isMissingColumnError(accessInsertErr)) {
+            log.warn('project_access_links.stripe_payment_intent missing — apply migration 117');
+            ({ data: createdAccess, error: accessInsertErr } = await admin
+              .from('project_access_links')
+              .insert(accessRow)
+              .select('id, token')
+              .single());
+          }
 
           if (accessInsertErr) throw accessInsertErr;
 
@@ -1083,6 +1098,18 @@ export async function POST(req: NextRequest) {
           .from('license_purchases')
           .update({ status: newStatus, download_unlocked: false })
           .eq('stripe_payment_intent', charge.payment_intent);
+
+        // Project bundles: expiring the access link revokes it everywhere,
+        // since every project_access_links reader enforces expires_at (mig 117).
+        if (charge.payment_intent) {
+          const { error: accessErr } = await admin
+            .from('project_access_links')
+            .update({ expires_at: new Date().toISOString() })
+            .eq('stripe_payment_intent', charge.payment_intent);
+          if (accessErr) {
+            log.warn(`project access ${newStatus} revoke failed`, { payment_intent: charge.payment_intent, error: errorMessage(accessErr) });
+          }
+        }
 
         if (error) {
           log.warn(`${newStatus} update failed`, { payment_intent: charge.payment_intent, error: errorMessage(error) });

@@ -50,6 +50,7 @@ service-role key can read the schema's effects but cannot run DDL):
 | `114_share_price_overrides.sql` | no-op on prod | columns already exist, added outside migrations |
 | `115_track_collaborators.sql` | **not applied** | new table; `track_collaborators` missing |
 | `116_notifications_realtime.sql` | **not applied** | new — adds `notifications` to the realtime publication |
+| `117_project_access_payment_intent.sql` | **not applied** | new — `project_access_links.stripe_payment_intent` |
 
 What each still-pending one does:
 
@@ -67,12 +68,20 @@ What each still-pending one does:
   storefront survives without it, but the builder has nowhere to save.
 
 All are idempotent, so running the full set (`npm run db:migrate`) is safe.
+- `117_project_access_payment_intent.sql` — adds
+  `project_access_links.stripe_payment_intent` (+ partial index) so
+  `charge.refunded` / `charge.dispute.created` can revoke a bundle by setting
+  `expires_at = now()`. Safe to merge before applying: the webhook retries the
+  insert without the column, but refunds cannot revoke bundles until it is
+  applied. Rows bought before it have no intent — revoke those by hand.
+  Idempotent.
+
 Update this table when a run is confirmed.
 
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 115 (next new migration = 116). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 117 (next new migration = 118). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch

@@ -525,7 +525,35 @@ describe('POST /api/stripe/webhook — fulfillment branches', () => {
       project_id: PROJECT,
       stripe_session_id: 'cs_proj',
       amount_usd: 50,
+      stripe_payment_intent: 'pi_proj',
     });
+  });
+
+  it('project: still delivers when migration 117 is not applied (column missing)', async () => {
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_proj_old',
+      type: 'checkout.session.completed',
+      data: { object: {
+        id: 'cs_proj_old', amount_total: 5000, payment_intent: 'pi_proj_old', customer: 'cus_2',
+        metadata: { purchase_kind: 'project', project_id: PROJECT, seller_user_id: SELLER, buyer_email: 'buyer@example.com' },
+      } },
+    });
+    const writes = installDb(({ table, op, payload }) => {
+      if (table === 'processed_stripe_events' && op === 'insert') return { error: null, count: null };
+      if (table === 'project_access_links' && op === 'select') return { data: null };
+      if (table === 'project_access_links' && op === 'insert') {
+        return payload && typeof payload === 'object' && 'stripe_payment_intent' in payload
+          ? { data: null, error: { code: 'PGRST204', message: "Could not find the 'stripe_payment_intent' column" } }
+          : { data: { id: 'pal_2', token: 'tok_old' }, error: null };
+      }
+      return { data: null, error: null };
+    });
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    const inserts = writes.filter((w) => w.table === 'project_access_links' && w.op === 'insert');
+    expect(inserts).toHaveLength(2);
+    expect(inserts[1].payload).not.toHaveProperty('stripe_payment_intent');
   });
 
   it('charge.refunded: flips status to refunded and re-lists the exclusive track', async () => {
@@ -551,6 +579,21 @@ describe('POST /api/stripe/webhook — fulfillment branches', () => {
 
     const relist = writes.find((w) => w.table === 'tracks' && w.op === 'update');
     expect(relist!.payload).toMatchObject({ exclusive_sold: false, store_listed: true });
+  });
+
+  it.each(['charge.refunded', 'charge.dispute.created'])('%s: revokes project bundle access by expiring the link', async (type) => {
+    mockConstructEvent.mockReturnValue({ id: `evt_${type}_proj`, type, data: { object: { payment_intent: 'pi_proj' } } });
+    const writes = installDb(() => ({ data: null, error: null }));
+
+    const before = Date.now();
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+
+    const revoke = writes.find((w) => w.table === 'project_access_links' && w.op === 'update');
+    expect(revoke).toBeTruthy();
+    const expiresAt = new Date((revoke!.payload as { expires_at: string }).expires_at).getTime();
+    expect(expiresAt).toBeGreaterThanOrEqual(before);
+    expect(expiresAt).toBeLessThanOrEqual(Date.now());
   });
 
   it('charge.dispute.created: flips status to disputed and does NOT re-list tracks', async () => {

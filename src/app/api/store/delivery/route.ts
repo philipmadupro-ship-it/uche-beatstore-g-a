@@ -33,6 +33,7 @@ type ProjectAccessRow = {
   amount_usd?: number | string | null;
   created_at: string;
   stripe_session_id: string;
+  expires_at?: string | null;
 };
 
 type ProjectTrackRow = { track_id: string };
@@ -117,10 +118,17 @@ export async function GET(req: NextRequest) {
       // Check for project storefront purchase
       const { data: access } = await admin
         .from('project_access_links')
-        .select('id, project_id, buyer_email, amount_usd, created_at, stripe_session_id')
+        .select('id, project_id, buyer_email, amount_usd, created_at, stripe_session_id, expires_at')
         .eq('stripe_session_id', sessionId)
         .maybeSingle();
       if (access) {
+        const expiresAt = (access as ProjectAccessRow).expires_at;
+        if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {
+          return NextResponse.json(
+            { error: 'Download access revoked (refunded, disputed or expired)' },
+            { status: 403 },
+          );
+        }
         isProjectPurchase = true;
         projectAccess = access as ProjectAccessRow;
       } else {
