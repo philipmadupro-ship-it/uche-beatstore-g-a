@@ -8521,3 +8521,12 @@ Three defects it found, fixed:
 Concurrency, 50 requests against `next dev`: p50 673 → 391 ms, p95 981 → 645 ms, 0 errors both times.
 
 Follow-up, same PR: **the range sliders no longer initialise from whatever range is known first.** `/store` copied `bpmRange` / `priceRange` into slider state as soon as tracks landed. If `/api/store/facets` had not arrived yet, that range came from the first 80 beats. On a larger catalogue it then became a real filter, sent as `bpmMin=71`, which hid beats outside the first page. For example, the fixture's only 70 BPM beat could not be found even by searching its name. The init effects are gone: sliders stay at their sentinels until moved and always resolve against the current range, and `resetFilters` returns them to the sentinels. The fixture is now 96 beats, more than one page. The regression test delays facets by 2.5s: before the fix it sent 2 narrowing requests, after it sends 0.
+
+## 2026-09-26 - Public pages no longer call session-gated artwork endpoints
+
+Buyers got a 401 from `/api/tags/colors`, and could also hit `/api/profile`, on the storefront. There were two causes:
+
+- **`ArtworkThemeProvider` rendered no context while `theme` was null,** i.e. while a public page was loading its data. `useTagColors` and `useBrandArtwork` read "no context" as "dashboard" and fetched. A provider now always supplies context: null resolves to `EMPTY_ARTWORK_THEME`, the curated defaults a buyer got after the 401 anyway. This covers all nine public pages. No provider at all still means dashboard, which still fetches.
+- **The store layout's `PlayerBar` and `CartDrawer` sat outside every page's provider.** They are now wrapped in `PublicArtworkThemeProvider`, which reads the public `/api/store/theme` once per store session.
+
+Tests: `ArtworkThemeProvider.test.tsx` (jsdom) fails before the fix and passes after, and also checks that the dashboard path still fetches. The scale e2e now asserts zero calls to either endpoint, replacing the once-per-session allowance.
