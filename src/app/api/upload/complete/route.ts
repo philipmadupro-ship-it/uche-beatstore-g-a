@@ -15,6 +15,7 @@ import { persistTrackCollaborators } from '@/lib/upload/collaborators';
 import { errorMessage } from '@/lib/errors';
 import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
 import { enqueueUploadProcessingJob, processUploadProcessingJobById } from '@/lib/upload/processing';
+import { verifyStoredAudio } from '@/lib/upload/verify-stored-audio';
 
 export const runtime = 'nodejs';
 // Processing runs in after() once the response is sent, and shares this budget.
@@ -71,6 +72,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: `Storage finalize failed: ${errorMessage(err)}` },
         { status: 500 }
+      );
+    }
+
+    // The bytes went browser → R2 directly, so this is the first point the
+    // server can check they are audio. A rejected object is deleted.
+    const verified = await verifyStoredAudio(audioUrl);
+    if (!verified.ok) {
+      await markStatus(sessionId, 'aborted');
+      return NextResponse.json(
+        { error: `File does not look like a valid audio file (detected: ${verified.format})` },
+        { status: 415 },
       );
     }
 

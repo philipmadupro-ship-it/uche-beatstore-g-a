@@ -71,6 +71,11 @@ vi.mock('@/lib/storage/upload', () => ({
   uploadPublicPreview: (...args: unknown[]) => mockUploadPublicPreview(...args),
 }));
 
+const mockVerifyStoredAudio = vi.fn();
+vi.mock('@/lib/upload/verify-stored-audio', () => ({
+  verifyStoredAudio: (...args: unknown[]) => mockVerifyStoredAudio(...args),
+}));
+
 vi.mock('@/lib/upload/processing', () => ({
   enqueueUploadProcessingJob: (...args: unknown[]) => mockEnqueueUploadProcessingJob(...args),
   processUploadProcessingJobById: (...args: unknown[]) => mockProcessJobById(...args),
@@ -162,6 +167,7 @@ async function loadRoute() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockVerifyStoredAudio.mockResolvedValue({ ok: true });
   mockIsSupabaseConfigured.mockReturnValue(true);
   mockGetSession.mockReturnValue(session());
   mockCompleteMultipart.mockResolvedValue('https://cdn.example.test/beat.wav');
@@ -191,6 +197,19 @@ beforeEach(() => {
 });
 
 describe('POST /api/upload/complete', () => {
+  it('rejects an assembled object that is not audio, before any track row', async () => {
+    mockVerifyStoredAudio.mockResolvedValueOnce({ ok: false, format: 'unknown' });
+
+    const mod = await loadRoute();
+    const res = await mod.POST(post({ sessionId: 'sess-1' }));
+
+    expect(res.status).toBe(415);
+    expect(mockMarkStatus).toHaveBeenCalledWith('sess-1', 'aborted');
+    expect(mockFrom).not.toHaveBeenCalledWith('tracks');
+    expect(mockLocalInsert).not.toHaveBeenCalled();
+    expect(mockEnqueueUploadProcessingJob).not.toHaveBeenCalled();
+  });
+
   it('409s when not every part has arrived', async () => {
     mockGetSession.mockReturnValueOnce(session({ totalParts: 2 }));
 

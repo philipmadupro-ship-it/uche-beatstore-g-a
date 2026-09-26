@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { buildCsp, cspHeaderName as cspHeaderNameFor } from '@/lib/security/csp';
+import { requiresProducerForApi } from '@/lib/security/api-gate';
 
 /**
  * Next.js 16 renamed the `middleware` file convention to `proxy`. The shape
@@ -78,6 +79,24 @@ export async function proxy(request: NextRequest) {
   // auth server and triggers a refresh when needed.
   const { data: { user } } = await supabase.auth.getUser();
 
+  // The producer is the user with a creator_profiles row (RLS lets a session
+  // read only its own). Buyers share this auth, so "signed in" is not enough.
+  const isProducer = async (userId: string) => {
+    const { data: profile } = await supabase
+      .from('creator_profiles')
+      .select('user_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+    return !!profile;
+  };
+
+  // API gate: a signed-in non-producer may reach only the public/buyer routes
+  // in lib/security/api-gate.ts. Signed-out calls fall through to the route,
+  // which answers 401 itself (or checks a cron bearer / webhook signature).
+  if (user && requiresProducerForApi(request.nextUrl.pathname, true) && !(await isProducer(user.id))) {
+    return NextResponse.json({ error: 'Producer account required' }, { status: 403 });
+  }
+
   // Auth redirects are ON. Without this, unauthenticated users get to wander
   // through `/library`, `/projects`, etc. (because RLS reads are loose for
   // tracks/playlists) and only discover they're not signed in when a
@@ -115,12 +134,7 @@ export async function proxy(request: NextRequest) {
   // The anon client with a valid session cookie can read the user's own row
   // via RLS — if it returns null the logged-in user is a buyer, not the producer.
   if (user && (isProtectedPath || path === '/login')) {
-    const { data: profile } = await supabase
-      .from('creator_profiles')
-      .select('user_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
-    if (!profile) {
+    if (!(await isProducer(user.id))) {
       const url = request.nextUrl.clone();
       url.pathname = '/store/account/me';
       return NextResponse.redirect(url);
