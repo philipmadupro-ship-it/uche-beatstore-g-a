@@ -5,7 +5,7 @@ import { analyzeAudio } from '@/lib/audio/analyze.server';
 import type { AudioFeatures } from '@/lib/audio/analyze.server';
 import { getAuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
-import { uploadPublicPreview } from '@/lib/storage/upload';
+import { deleteStoredObject, uploadPublicPreview } from '@/lib/storage/upload';
 import { buildAndUploadSidecars } from '@/lib/audio/sidecars';
 import { isSupabaseConfigured, insert, update, getAll } from '@/lib/local-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
@@ -101,17 +101,45 @@ export async function POST(req: NextRequest) {
       };
 
       let track: Record<string, unknown> | null = null;
+      // Cleanup bookkeeping. `committed` flips once a durable row points at
+      // audioUrl; from then on the object belongs to that track and is never
+      // deleted here. `insertedTrackId` is a new row not yet attached to its
+      // destination, i.e. a half-completed record.
+      let committed = false;
+      let insertedTrackId: string | null = null;
+      const supabase = await createServerClient();
+      // Never throws: a cleanup failure must not replace the original error.
+      const rollback = async () => {
+        if (committed) return;
+        try {
+          if (insertedTrackId) {
+            const { error } = await supabase.from('tracks').delete().eq('id', insertedTrackId);
+            // A row that could not be removed still references the object: keep it.
+            if (error) {
+              console.error('upload/complete rollback: track delete failed', error.message);
+              return;
+            }
+          }
+          await deleteStoredObject(audioUrl);
+          await markStatus(sessionId, 'aborted');
+        } catch (err) {
+          console.error('upload/complete rollback failed', errorMessage(err));
+        }
+      };
       try {
-        const supabase = await createServerClient();
         const userId = owner.userId || session.userId;
         if (!userId) {
+          await rollback();
           return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
         }
 
         if (session.replaceTrackId) {
           const { requireRowOwnership } = await import('@/lib/db');
           const rowOwner = await requireRowOwnership('tracks', session.replaceTrackId);
-          if (!rowOwner.ok) return rowOwner.res;
+          if (!rowOwner.ok) {
+            await rollback();
+            return rowOwner.res;
+          }
 
           const { data: existing } = await supabase
             .from('tracks')
@@ -152,6 +180,7 @@ export async function POST(req: NextRequest) {
             .single();
           if (error) throw new Error(error.message);
           track = data;
+          committed = true;
         } else {
           const { data, error } = await supabase
             .from('tracks')
@@ -163,9 +192,11 @@ export async function POST(req: NextRequest) {
 
           const trackId = track && typeof track.id === 'string' ? track.id : null;
           if (!trackId) throw new Error('Upload saved without a track id');
+          insertedTrackId = trackId;
           if (session.projectId) {
             await attachTrackToDestination(supabase, session.projectId, trackId, userId);
           }
+          committed = true;
         }
 
         const trackId = track && typeof track.id === 'string' ? track.id : session.replaceTrackId;
@@ -195,6 +226,7 @@ export async function POST(req: NextRequest) {
         }
       } catch (err) {
         console.error('Supabase upload completion failed:', err);
+        await rollback();
         const message = errorMessage(err) || 'Database save failed';
         if (/destination|attach/i.test(message)) {
           const status = /forbidden/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 500;
