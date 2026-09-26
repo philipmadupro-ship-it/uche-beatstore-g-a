@@ -51,6 +51,7 @@ service-role key can read the schema's effects but cannot run DDL):
 | `115_track_collaborators.sql` | **not applied** | new table; `track_collaborators` missing |
 | `116_notifications_realtime.sql` | **not applied** | new — adds `notifications` to the realtime publication |
 | `117_project_access_payment_intent.sql` | **not applied** | new — `project_access_links.stripe_payment_intent` |
+| `118_finish_strict_owned_rows.sql` | **not applied** | new — owner-only RLS on 8 leftover tables; drops `beat_comments_public_read` |
 
 What each still-pending one does:
 
@@ -76,12 +77,20 @@ All are idempotent, so running the full set (`npm run db:migrate`) is safe.
   applied. Rows bought before it have no intent — revoke those by hand.
   Idempotent.
 
+- `118_finish_strict_owned_rows.sql` — finishes 097: owner-only policies on
+  `arrangements`, `project_shares`, `project_comments`, `project_tags`,
+  `project_folder_items`, `playlist_tags`, `playlist_folder_items`,
+  `contact_tags` (they still allowed `user_id IS NULL`). Drops
+  `beat_comments_public_read`, which exposed `author_email` / `ip_hash` to
+  the public anon key; the app reads comments via the service role only.
+  Idempotent; replayed locally before/after with a buyer + anon probe.
+
 Update this table when a run is confirmed.
 
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 117 (next new migration = 118). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 118 (next new migration = 119). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch
