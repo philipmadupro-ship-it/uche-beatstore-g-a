@@ -52,6 +52,26 @@ export async function updateCreatorProfile(payload: CreatorProfilePayload) {
       }
 
       const admin = createServiceClient();
+
+      // A creator_profiles row is what marks an account as THE producer
+      // (requireProducer, src/proxy.ts). Buyers sign in through the same
+      // Supabase auth, so an unconditional upsert let any buyer mint that row
+      // and pass every producer gate. Only the existing producer may write;
+      // a new row is created only on first run, when no producer exists yet.
+      const { data: existing } = await admin
+        .from('creator_profiles')
+        .select('user_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!existing) {
+        const { count } = await admin
+          .from('creator_profiles')
+          .select('user_id', { count: 'exact', head: true });
+        if ((count ?? 0) > 0) {
+          return { error: 'Producer account required', profile: null, forbidden: true };
+        }
+      }
+
       const { data: profile, error } = await admin
         .from('creator_profiles')
         .upsert({

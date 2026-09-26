@@ -20,6 +20,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mockConstructEvent = vi.fn();
+const mockSessionsList = vi.fn(async (..._args: unknown[]) => ({ data: [] as Array<{ id: string }> }));
 const mockFrom = vi.fn();
 const mockRpc = vi.fn();
 const mockResendSend = vi.fn();
@@ -29,6 +30,7 @@ const mockUploadContractPdf = vi.fn();
 vi.mock('@/lib/stripe/server', () => ({
   getStripe: () => ({
     webhooks: { constructEvent: (...args: unknown[]) => mockConstructEvent(...args) },
+    checkout: { sessions: { list: (...args: unknown[]) => mockSessionsList(...args) } },
   }),
 }));
 
@@ -551,6 +553,24 @@ describe('POST /api/stripe/webhook — fulfillment branches', () => {
 
     const relist = writes.find((w) => w.table === 'tracks' && w.op === 'update');
     expect(relist!.payload).toMatchObject({ exclusive_sold: false, store_listed: true });
+  });
+
+  it('charge.refunded: revokes project bundle access for the refunded session', async () => {
+    mockSessionsList.mockResolvedValueOnce({ data: [{ id: 'cs_proj' }] });
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_refund_proj',
+      type: 'charge.refunded',
+      data: { object: { payment_intent: 'pi_proj' } },
+    });
+    const writes = installDb(() => ({ data: null, error: null }));
+
+    const res = await POST(req('{}'));
+    expect(res.status).toBe(200);
+    expect(mockSessionsList).toHaveBeenCalledWith(expect.objectContaining({ payment_intent: 'pi_proj' }));
+    const revoke = writes.find((w) => w.table === 'project_access_links' && w.op === 'update');
+    expect(revoke).toBeDefined();
+    const expiresAt = Date.parse((revoke!.payload as { expires_at: string }).expires_at);
+    expect(expiresAt).toBeLessThanOrEqual(Date.now());
   });
 
   it('charge.dispute.created: flips status to disputed and does NOT re-list tracks', async () => {

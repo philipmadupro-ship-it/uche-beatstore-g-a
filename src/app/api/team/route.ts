@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireUser } from '@/lib/auth/ownership';
+import { requireProducer } from '@/lib/auth/ownership';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const result = await requireUser();
+    const result = await requireProducer();
     if (!result.ok) return result.res;
 
     if (!isSupabaseConfigured()) {

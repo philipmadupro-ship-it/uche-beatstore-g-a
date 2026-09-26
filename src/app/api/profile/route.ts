@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
 
     const result = await updateCreatorProfile(pickProvidedProfileFields(payload, body));
     if (result.error) {
-      const status = result.error === 'Not authenticated' ? 401 : 500;
+      const status = result.error === 'Not authenticated' ? 401 : 'forbidden' in result && result.forbidden ? 403 : 500;
       // A pending migration is the most common cause of a failed profile
       // write in this codebase, and PostgREST's own wording is written for
       // whoever is debugging PostgREST. Say what to actually do instead.

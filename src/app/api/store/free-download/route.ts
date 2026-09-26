@@ -1,3 +1,4 @@
+import { isProducerUserId } from '@/lib/auth/producer';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (!track) return NextResponse.json({ error: 'Track not found' }, { status: 404 });
+    if (!(await isProducerUserId(admin, track.user_id))) return NextResponse.json({ error: 'Track not found' }, { status: 404 });
     if (!track.store_listed) return NextResponse.json({ error: 'Track not listed' }, { status: 403 });
     if (!track.free_download_enabled) return NextResponse.json({ error: 'Free download not enabled' }, { status: 403 });
     if (!track.audio_url) return NextResponse.json({ error: 'Audio unavailable' }, { status: 404 });
@@ -154,11 +156,11 @@ export async function GET(req: NextRequest) {
 
     const { data: track } = await admin
       .from('tracks')
-      .select('id, title, audio_url, store_listed, free_download_enabled')
+      .select('id, title, audio_url, store_listed, free_download_enabled, user_id')
       .eq('id', trackId)
       .maybeSingle();
 
-    if (!track) {
+    if (!track || !(await isProducerUserId(admin, track.user_id))) {
       return NextResponse.json({ error: 'Track not found' }, { status: 404 });
     }
     if (!track.store_listed) {

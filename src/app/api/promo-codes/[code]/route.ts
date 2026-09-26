@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireUser } from '@/lib/auth/ownership';
+import { requireProducer } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 
@@ -17,7 +17,7 @@ const patchSchema = z.object({
  * PATCH /api/promo-codes/[code]   — toggle active, change cap or expiry
  * DELETE /api/promo-codes/[code]  — remove the code entirely
  *
- * Owner-only (requireUser + user_id match in the WHERE). uses_count
+ * Owner-only (requireProducer + user_id match in the WHERE). uses_count
  * is system-managed via the RPC (mig 048); we don't expose a setter.
  */
 
@@ -25,7 +25,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ code: string }> },
 ) {
-  const auth = await requireUser();
+  const auth = await requireProducer();
   if (!auth.ok) return auth.res;
   const { userId, admin } = auth;
   if (!isSupabaseConfigured()) {
@@ -58,7 +58,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ code: string }> },
 ) {
-  const auth = await requireUser();
+  const auth = await requireProducer();
   if (!auth.ok) return auth.res;
   const { userId, admin } = auth;
   if (!isSupabaseConfigured()) {

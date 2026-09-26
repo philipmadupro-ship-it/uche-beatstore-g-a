@@ -1,3 +1,4 @@
+import { grantableTrackIds } from '@/lib/share/share-owner';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUrl } from '@/lib/env';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/server';
@@ -231,6 +232,14 @@ export async function POST(
     }
 
     if (!share || !sellerUserId) {
+      return NextResponse.json({ error: 'Share not found' }, { status: 404 });
+    }
+    // The seller's license tiers and prices are applied to these tracks, so
+    // they must be the seller's own — and the seller must be the producer.
+    // A buyer-made share listing the producer's beats otherwise sold them
+    // under the buyer's tiers.
+    shareTrackIds = await grantableTrackIds(admin, sellerUserId, shareTrackIds);
+    if (shareTrackIds.length === 0) {
       return NextResponse.json({ error: 'Share not found' }, { status: 404 });
     }
 

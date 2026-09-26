@@ -6,6 +6,7 @@ import { isSupabaseConfigured } from '@/lib/local-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { errorMessage } from '@/lib/errors';
 import { requireRowOwnership } from '@/lib/db';
+import { requireProducer } from '@/lib/auth/ownership';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -74,6 +75,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
       }
       userId = data.user.id;
+      // Buyers share this Supabase auth; only the producer may upload.
+      const producer = await requireProducer();
+      if (!producer.ok) return producer.res;
       if (replaceTrackId) {
         const owner = await requireRowOwnership('tracks', replaceTrackId);
         if (!owner.ok) return owner.res;

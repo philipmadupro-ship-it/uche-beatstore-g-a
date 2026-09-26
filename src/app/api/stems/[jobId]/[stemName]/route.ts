@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { authorizeStemJob, isValidJobId, isValidStemName } from '@/lib/stems/authorize';
 const log = createLogger('api.stems.jobId.stemName');
 
 const DEMUCS_URL = process.env.DEMUCS_SERVICE_URL ?? 'http://localhost:8001';
@@ -16,6 +17,14 @@ export async function GET(
   { params }: { params: Promise<{ jobId: string; stemName: string }> },
 ) {
   const { jobId, stemName } = await params;
+
+  // Both params are interpolated into the upstream path, and the stem is the
+  // producer's private audio: validate shape, then owner-gate before fetching.
+  if (!isValidJobId(jobId) || !isValidStemName(stemName)) {
+    return NextResponse.json({ error: 'Invalid stem reference' }, { status: 400 });
+  }
+  const denied = await authorizeStemJob(jobId);
+  if (denied) return denied;
 
   const serviceUrl = `${DEMUCS_URL}/api/v1/stems/${jobId}/${stemName}`;
 
@@ -46,7 +55,7 @@ export async function GET(
       'Content-Type': 'audio/wav',
       'Content-Disposition': `attachment; filename="${stemName}.wav"`,
       'Content-Length': String(body.byteLength),
-      'Cache-Control': 'public, max-age=3600',
+      'Cache-Control': 'private, no-store',
     },
   });
 }

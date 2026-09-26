@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireUser, createServiceClient } from '@/lib/auth/ownership';
+import { requireProducer, createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 
@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic';
  */
 
 export async function GET() {
-  const auth = await requireUser();
+  const auth = await requireProducer();
   if (!auth.ok) return auth.res;
   const { userId, admin } = auth;
 
@@ -51,7 +51,7 @@ const createSchema = z.object({
 );
 
 export async function POST(req: NextRequest) {
-  const auth = await requireUser();
+  const auth = await requireProducer();
   if (!auth.ok) return auth.res;
   const { userId, admin } = auth;
 

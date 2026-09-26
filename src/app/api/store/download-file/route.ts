@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { isProjectAccessActive } from '@/lib/store/project-access';
 import { streamAudioSource } from '@/lib/audio/stream-source';
 import {
   canDownloadFormat,
@@ -74,11 +75,14 @@ export async function GET(req: NextRequest) {
     } else {
       const { data: access } = await admin
         .from('project_access_links')
-        .select('project_id')
+        .select('project_id, expires_at')
         .eq('stripe_session_id', sessionId)
         .maybeSingle();
       if (!access) {
         return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
+      }
+      if (!isProjectAccessActive(access)) {
+        return NextResponse.json({ error: 'Download access revoked (refunded, disputed or expired)' }, { status: 403 });
       }
       const { data: belongs } = await admin
         .from('project_tracks')

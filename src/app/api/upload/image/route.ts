@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadImage } from '@/lib/storage/upload';
-import { requireUser } from '@/lib/auth/ownership';
+import { requireProducer } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { imageUploadErrorMessage, validateImageUpload } from '@/lib/upload/image-validation';
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     // Auth: prevents drive-by writes from anonymous clients. We don't need
     // the user_id on the upload itself — the row PATCH that follows is
     // already owner-gated.
-    const auth = await requireUser();
+    const auth = await requireProducer();
     if (!auth.ok) return auth.res;
 
     const formData = await req.formData();

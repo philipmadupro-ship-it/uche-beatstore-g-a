@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid';
 import { isSupabaseConfigured, insert, createServiceClient } from '@/lib/db';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { errorMessage } from '@/lib/errors';
+import { requireProducer } from '@/lib/auth/ownership';
 import { createLogger } from '@/lib/log';
 const log = createLogger('api.invite');
 import { readBody } from '@/lib/validate';
@@ -33,6 +34,9 @@ export async function POST(req: NextRequest) {
       if (!user) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
       }
+      // A signed-in buyer is not the producer — see requireProducer.
+      const producer = await requireProducer();
+      if (!producer.ok) return producer.res;
     }
 
     const token = nanoid(16);
