@@ -50,6 +50,7 @@ service-role key can read the schema's effects but cannot run DDL):
 | `114_share_price_overrides.sql` | no-op on prod | columns already exist, added outside migrations |
 | `115_track_collaborators.sql` | **not applied** | new table; `track_collaborators` missing |
 | `116_notifications_realtime.sql` | **not applied** | new — adds `notifications` to the realtime publication |
+| `117_creator_profiles_no_self_insert.sql` | **not applied** | security — drops the RLS policy that let any signed-in buyer insert a `creator_profiles` row |
 
 What each still-pending one does:
 
@@ -62,6 +63,11 @@ What each still-pending one does:
   at upload. Nothing reads it until it is applied; the upload path treats a
   failed write as non-fatal, so an unapplied migration costs the credits, not
   the upload.
+- `117_creator_profiles_no_self_insert.sql` — **security, apply promptly.**
+  Drops `creator_profiles_insert`. A profile row is what marks the producer
+  (`requireProducer`, `src/proxy.ts`), and that policy let any buyer insert
+  one for themselves via PostgREST. Nothing in the app inserts through RLS;
+  `/api/profile` writes with the service role.
 - `113_store_layout.sql` — adds `creator_profiles.store_layout` (jsonb) for the
   Store Editor's Design mode. `/api/store` reads it in its own query, so the
   storefront survives without it, but the builder has nowhere to save.
@@ -72,7 +78,7 @@ Update this table when a run is confirmed.
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 115 (next new migration = 116). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 117 (next new migration = 118). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch
