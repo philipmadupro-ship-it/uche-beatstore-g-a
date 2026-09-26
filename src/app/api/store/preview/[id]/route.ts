@@ -3,6 +3,9 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 import { streamAudioPreviewSource } from '@/lib/audio/stream-source';
+import { createLogger } from '@/lib/log';
+
+const log = createLogger('api.store.preview');
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,7 +44,9 @@ export async function GET(
     headers.set('cache-control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=300');
     return new Response(upstream.body, { status: upstream.status, headers });
   } catch (err) {
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    // Public route: log the detail, never return it (DB/storage internals).
+    log.error('preview failed', { id, error: errorMessage(err) });
+    return NextResponse.json({ error: 'Preview unavailable' }, { status: 500 });
   }
 }
 

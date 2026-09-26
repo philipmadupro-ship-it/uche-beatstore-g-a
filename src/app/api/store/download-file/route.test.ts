@@ -231,3 +231,15 @@ describe('GET /api/store/download-file', () => {
     });
   });
 });
+
+describe('GET /api/store/download-file errors', () => {
+  it('does not echo internal error text to the buyer', async () => {
+    mockFrom.mockImplementation(() => {
+      throw new Error('relation "license_purchases" secret-internal-detail');
+    });
+    const mod = await loadRoute();
+    const res = await mod.GET(req('mp3'));
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(await res.json())).not.toContain('secret-internal-detail');
+  });
+});

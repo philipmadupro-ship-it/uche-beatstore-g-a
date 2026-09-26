@@ -149,6 +149,7 @@ export async function GET(req: NextRequest) {
     return streamAudioSource(req, source, filename);
   } catch (err) {
     log.error('download-file failed', { sessionId, trackId, error: errorMessage(err) });
-    return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
+    // Public route: log the detail, never return it (DB/storage internals).
+    return NextResponse.json({ error: 'Download failed' }, { status: 500 });
   }
 }
