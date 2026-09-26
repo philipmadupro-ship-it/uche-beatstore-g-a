@@ -99,7 +99,10 @@ async function resolvePromo(
   if (!row.active) return { valid: false, error: 'Promo code is no longer active' };
   if (row.expires_at && new Date(row.expires_at) < new Date()) return { valid: false, error: 'Promo code has expired' };
   if (row.max_uses != null && row.uses_count >= row.max_uses) return { valid: false, error: 'Promo code usage limit reached' };
-  if (sellerUserId && row.user_id !== sellerUserId) return { valid: false, error: 'Promo code not valid for this seller' };
+  // Owner-only: a code applies only to its creator's catalogue. With no known
+  // seller (a null-owner row) there is nothing to match, so refuse rather
+  // than accept any code anyone created.
+  if (!sellerUserId || row.user_id !== sellerUserId) return { valid: false, error: 'Promo code not valid for this seller' };
 
   return {
     valid: true,
