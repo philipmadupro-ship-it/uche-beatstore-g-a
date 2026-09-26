@@ -54,6 +54,8 @@ service-role key can read the schema's effects but cannot run DDL):
 | `118_strict_arrangements_rls.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — owner-only RLS on `arrangements` (097 missed it) |
 | `119_producer_only_catalogue_writes.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — RLS writes to `tracks`/`projects`/`playlists` require a producer profile (apply after 117) |
 | `120_producer_only_share_links.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — RLS writes to `share_links` require a producer profile (needs 119) |
+| `117_project_access_payment_intent.sql` | applied | reported applied by the producer 2026-09-26 |
+| `118_finish_strict_owned_rows.sql` | applied | reported applied by the producer 2026-09-26 |
 
 What each still-pending one does:
 
@@ -76,6 +78,22 @@ What each still-pending one does:
   storefront survives without it, but the builder has nowhere to save.
 
 All are idempotent, so running the full set (`npm run db:migrate`) is safe.
+- `117_project_access_payment_intent.sql` — adds
+  `project_access_links.stripe_payment_intent` (+ partial index) so
+  `charge.refunded` / `charge.dispute.created` can revoke a bundle by setting
+  `expires_at = now()`. Safe to merge before applying: the webhook retries the
+  insert without the column, but refunds cannot revoke bundles until it is
+  applied. Rows bought before it have no intent — revoke those by hand.
+  Idempotent.
+
+- `118_finish_strict_owned_rows.sql` — finishes 097: owner-only policies on
+  `arrangements`, `project_shares`, `project_comments`, `project_tags`,
+  `project_folder_items`, `playlist_tags`, `playlist_folder_items`,
+  `contact_tags` (they still allowed `user_id IS NULL`). Drops
+  `beat_comments_public_read`, which exposed `author_email` / `ip_hash` to
+  the public anon key; the app reads comments via the service role only.
+  Idempotent; replayed locally before/after with a buyer + anon probe.
+
 Update this table when a run is confirmed.
 
 If you add a new one, list it here until it's confirmed applied.
@@ -85,7 +103,10 @@ Latest applied baseline = 106; latest file on disk = 120 (next new migration = 1
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch
-collision — both sides of each pair are legitimate and applied, just
+collision (and so do 117/118: `117_creator_profiles_no_self_insert` +
+`117_project_access_payment_intent`, `118_strict_arrangements_rls` +
+`118_finish_strict_owned_rows`, from two security branches landing the same
+day) — both sides of each pair are legitimate and applied, just
 renumber the *next* new migration past 106, don't touch the existing pairs).
 
 ## Future: gate it in CI/CD

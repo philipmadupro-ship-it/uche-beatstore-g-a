@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { isStripeConfigured, getStripe } from '@/lib/stripe/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
-import { requireUser } from '@/lib/auth/ownership';
+import { requireProducer } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 
 export const runtime = 'nodejs';
@@ -164,7 +164,7 @@ export async function GET() {
   // 3+4+5: Supabase-side checks. Require a signed-in user so this
   // endpoint can show seller-scoped diagnostics.
   if (out.supabase.configured) {
-    const auth = await requireUser();
+    const auth = await requireProducer();
     if (auth.ok) {
       out.seller.authenticated = true;
       const admin = createServiceClient();

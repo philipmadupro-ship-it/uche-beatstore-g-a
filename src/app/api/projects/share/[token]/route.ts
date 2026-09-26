@@ -39,6 +39,7 @@ interface ProjectAccessRow {
   buyer_email?: string | null;
   token: string;
   created_at?: string | null;
+  expires_at?: string | null;
 }
 
 interface ProjectRow {
@@ -184,7 +185,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       // Fallback for paid storefront project purchases (migration 042)
       const { data: paidAccess } = await admin
         .from('project_access_links')
-        .select('id, project_id, buyer_email, token, created_at')
+        .select('id, project_id, buyer_email, token, created_at, expires_at')
         .eq('token', token)
         .maybeSingle();
       if (paidAccess) {
@@ -196,7 +197,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
           role: 'viewer',
           allow_downloads: true,
           revoked_at: null,
-          expires_at: null,
+          // Carry the purchase's expiry through: a refund revokes by setting it.
+          expires_at: access.expires_at ?? null,
           password_hash: null,
           invited_email: access.buyer_email,
           label: 'Storefront purchase',
