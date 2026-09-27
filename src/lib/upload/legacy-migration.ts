@@ -113,7 +113,7 @@ export async function migrateLegacyPublicMastersBatch(limit = 2): Promise<{
 
       let previewUrl: string | null = null;
       try {
-        previewUrl = await uploadPublicPreview(audioBuffer);
+        previewUrl = await uploadPublicPreview(audioBuffer, privateUrl);
       } catch (err) {
         console.warn('Legacy migration preview failed:', err);
       }

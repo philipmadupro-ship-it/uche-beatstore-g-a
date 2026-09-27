@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { isSupabaseConfigured, query, requireUser } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
+import { isUnplayableOnStore } from '@/lib/store-editor/attention-issues';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 type SummaryTrack = {
   id: string;
+  preview_url?: string | null;
+  audio_url?: string | null;
   title: string;
   type: string | null;
   cover_url: string | null;
@@ -100,6 +103,7 @@ function summarize(rows: SummaryTrack[], context: SummaryPriceContext = {}) {
     noPrice: listed.filter((track) => !hasSellablePrice(track, context, linksByTrack.get(track.id) ?? [])),
     noBpmKey: listed.filter((track) => track.bpm == null && !track.key),
     missingPeaks: listed.filter((track) => !track.peaks_url),
+    noPreview: listed.filter((track) => isUnplayableOnStore(track)),
   };
 
   return {
@@ -111,6 +115,7 @@ function summarize(rows: SummaryTrack[], context: SummaryPriceContext = {}) {
       noPrice: { count: issues.noPrice.length, firstId: issues.noPrice[0]?.id ?? null },
       noBpmKey: { count: issues.noBpmKey.length, firstId: issues.noBpmKey[0]?.id ?? null },
       missingPeaks: { count: issues.missingPeaks.length, firstId: issues.missingPeaks[0]?.id ?? null },
+      noPreview: { count: issues.noPreview.length, firstId: issues.noPreview[0]?.id ?? null },
     },
   };
 }
@@ -123,6 +128,8 @@ export async function GET() {
         title: track.title,
         type: track.type ?? null,
         cover_url: track.cover_url ?? null,
+        preview_url: track.preview_url ?? null,
+        audio_url: track.audio_url ?? null,
         bpm: track.bpm ?? null,
         key: track.key ?? null,
         scale: track.scale ?? null,
@@ -163,7 +170,7 @@ export async function GET() {
       .from('tracks')
       .select([
         'id', 'title', 'type', 'cover_url',
-        'bpm', 'key', 'scale', 'peaks_url',
+        'bpm', 'key', 'scale', 'peaks_url', 'preview_url', 'audio_url',
         'store_listed', 'store_featured', 'store_sort_order',
         'lease_price_usd', 'exclusive_price_usd',
         'free_download_enabled', 'exclusive_sold', 'voice_tag_enabled',

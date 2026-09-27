@@ -8587,3 +8587,15 @@ Not changed: `/api/store` still sends `s-maxage=300, stale-while-revalidate=8640
 
 - **Featured sort (new default).** The Store Editor's drag / arrow order wrote `store_sort_order`, but nothing on `/store` honoured it: the server picked pages by it and the browser re-sorted them by date. `lib/store/newest.ts#compareFeatured` / `FEATURED_ORDER_COLUMNS` is now the storefront default (`sort` omitted from the URL). It is shared by SQL, the local store, the browser and the Store Editor's listed rows, so the editor shows exactly what buyers see. Beats with no position come **first**, newest first, so a new listing is never pushed off page one (STORE-03); dragging it in the editor places it. "Newest first" remains a sort option. The pre-033 fallback query has no position column and orders by newest instead.
 - **Mobile list rows** were fixed on `main` by #12 while this PR was open (price buttons drop to a second row, both kept). This PR's narrower version, which hid Exclusive on phones, was dropped in the merge in favour of #12, along with its duplicate e2e case.
+
+## 2026-09-27 - Listed beats with no preview clip (404 on /store play)
+
+Found in production: 3 of 6 listed beats (the 3 newest) had `preview_url = NULL` and a private `r2://` master, so `/api/store/preview/[id]` 404'd. They appeared in the catalogue but played nothing.
+
+Causes, all in code:
+- **ffmpeg was never traced into the upload routes.** `outputFileTracingIncludes` covered `analyze` and `backfill-previews` only. Upload processing runs inside `/api/upload/complete`, `/api/upload` and `/api/cron/process-uploads`, so on Vercel it had no binary.
+- **Upload processing had no fallback.** `uploadPublicPreview` returned null without ffmpeg, while analyze and the backfill byte-truncate mp3/wav. It also never set `preview_status`.
+- **With ffmpeg, `uploadPublicPreview` published the WHOLE track** as the "preview" (a full-length 96k transcode), not the 75 s clip the other paths make.
+- **The nightly backfill's failures were invisible:** per-track reasons went to Vercel logs only. The GitHub 15-minute workflow was also inert (repo secrets `CRON_SECRET` / `APP_URL` unset).
+
+Fix: `lib/audio/preview-clip.ts` is the single rule (75 s ffmpeg MP3, else byte-truncated mp3/wav, else null), used by `uploadPublicPreview` and therefore every upload path, and by the backfill. `lib/audio/preview-backfill.ts` is the cron's loop, now shared. `POST /api/tracks/previews/backfill` (producer-only, ffmpeg traced) runs it on the producer's listed beats and returns per-beat reasons. The Store Editor shows "won't play (no preview)" in Needs attention (`isUnplayableOnStore`, counted in `/api/tracks/store-summary`) and has a "Generate missing previews" button under Previews & waveforms. `backfill-previews` was added to `frequent-crons.yml`, which still needs its secrets.

@@ -10,6 +10,22 @@ export interface StoreEditorIssueSummary {
   noPrice?: StoreEditorTrackIssueCount;
   noBpmKey?: StoreEditorTrackIssueCount;
   missingPeaks?: StoreEditorTrackIssueCount;
+  /** Listed but unplayable on /store — no preview clip and a private master. */
+  noPreview?: StoreEditorTrackIssueCount;
+}
+
+/**
+ * Would /store fail to play this beat? `/api/store/preview/[id]` streams
+ * `preview_url`, or a PUBLIC `audio_url` as a fallback, and never a private
+ * `r2://` master — so with neither, a buyer's play button 404s.
+ */
+export function isUnplayableOnStore(track: {
+  preview_url?: string | null;
+  audio_url?: string | null;
+}): boolean {
+  if (track.preview_url) return false;
+  const audio = track.audio_url ?? '';
+  return audio === '' || audio.startsWith('r2://');
 }
 
 export interface StoreEditorAttentionTrack {
@@ -70,7 +86,16 @@ export function getStoreEditorAttentionIssues<TTrack extends StoreEditorAttentio
     countIssue(listed, (track) => !track.peaks_url),
   );
 
+  // Server-only: the editor's own track rows do not carry preview_url.
+  const noPreview = summary?.noPreview ?? { count: 0, firstId: null };
+
   return [
+    noPreview.count > 0 && {
+      label: "won't play (no preview)",
+      count: noPreview.count,
+      firstId: noPreview.firstId ?? '',
+      kind: 'waveforms' as const,
+    },
     noCover.count > 0 && noCover.firstId && {
       label: 'no cover art',
       count: noCover.count,

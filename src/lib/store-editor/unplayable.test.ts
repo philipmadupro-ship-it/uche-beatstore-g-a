@@ -1,0 +1,26 @@
+import { describe, expect, it } from 'vitest';
+import { getStoreEditorAttentionIssues, isUnplayableOnStore } from './attention-issues';
+
+describe('isUnplayableOnStore', () => {
+  it('matches exactly what /api/store/preview/[id] can serve', () => {
+    expect(isUnplayableOnStore({ preview_url: 'https://pub.r2.dev/previews/a.mp3', audio_url: 'r2://p/a.wav' })).toBe(false);
+    expect(isUnplayableOnStore({ preview_url: null, audio_url: 'https://pub.r2.dev/a.mp3' })).toBe(false);
+    // The production case: no clip, private master only.
+    expect(isUnplayableOnStore({ preview_url: null, audio_url: 'r2://private/tracks/a.wav' })).toBe(true);
+    expect(isUnplayableOnStore({ preview_url: null, audio_url: null })).toBe(true);
+  });
+});
+
+describe('attention issues', () => {
+  it('surfaces unplayable beats first, from the server summary', () => {
+    const issues = getStoreEditorAttentionIssues({
+      tracks: [],
+      hasReadyPrice: () => true,
+      summary: {
+        noCover: { count: 1, firstId: 'a' },
+        noPreview: { count: 3, firstId: 'b' },
+      },
+    });
+    expect(issues[0]).toMatchObject({ label: "won't play (no preview)", count: 3, kind: 'waveforms' });
+  });
+});

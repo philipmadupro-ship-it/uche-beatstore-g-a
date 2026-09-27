@@ -2,7 +2,9 @@ name: frequent-crons
 
 # Vercel Hobby only allows crons that run once a day, which made a drop
 # scheduled for 18:00 go live at 06:00 UTC the next morning. This triggers
-# the time-sensitive cron routes every 15 minutes instead. Both routes are
+# the time-sensitive cron routes every 15 minutes instead. backfill-previews
+# is here too: a listed beat without a preview clip 404s on /store, and once a
+# day was too slow to notice. All three routes are
 # idempotent, so the daily Vercel schedule in vercel.json stays as a fallback.
 #
 # Setup (repo → Settings → Secrets and variables → Actions):
@@ -37,7 +39,7 @@ jobs:
             exit 0
           fi
           status=0
-          for route in publish-scheduled process-uploads; do
+          for route in publish-scheduled process-uploads backfill-previews; do
             code=$(curl -sS -o /tmp/out.json -w '%{http_code}' --max-time 300 \
               -H "Authorization: Bearer $CRON_SECRET" "${APP_URL%/}/api/cron/$route" || echo 000)
             echo "$route -> HTTP $code: $(head -c 300 /tmp/out.json 2>/dev/null)"

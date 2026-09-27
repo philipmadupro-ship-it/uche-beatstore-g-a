@@ -13,8 +13,8 @@ describe('GET /api/tracks/store-summary', () => {
     mockQuery.mockImplementation((table: string) => {
       if (table === 'tracks') {
         return [
-          { id: 'a', title: 'A', store_listed: true, store_featured: true, cover_url: 'cover.jpg', lease_price_usd: 25, bpm: 120, peaks_url: 'https://r2/a.peaks.json' },
-          { id: 'b', title: 'B', store_listed: true, store_featured: false, cover_url: null, lease_price_usd: null, exclusive_price_usd: null },
+          { id: 'a', title: 'A', store_listed: true, store_featured: true, cover_url: 'cover.jpg', lease_price_usd: 25, bpm: 120, peaks_url: 'https://r2/a.peaks.json', preview_url: 'https://r2/previews/a.mp3', audio_url: 'r2://private/a.wav' },
+          { id: 'b', title: 'B', store_listed: true, store_featured: false, cover_url: null, lease_price_usd: null, exclusive_price_usd: null, preview_url: null, audio_url: 'r2://private/b.wav' },
           { id: 'c', title: 'C', store_listed: false, store_featured: true, cover_url: null },
         ];
       }
@@ -39,6 +39,8 @@ describe('GET /api/tracks/store-summary', () => {
       noPrice: { count: 1, firstId: 'b' },
       noBpmKey: { count: 1, firstId: 'b' },
       missingPeaks: { count: 1, firstId: 'b' },
+      // Listed, no clip, private master: a buyer's play button would 404.
+      noPreview: { count: 1, firstId: 'b' },
     });
   });
 
