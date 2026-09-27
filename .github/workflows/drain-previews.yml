@@ -1,0 +1,64 @@
+name: drain-previews
+
+# Manual: generate every missing public preview clip now, instead of waiting
+# for the nightly backfill-previews cron (8 tracks a night). Calls the same
+# route in small batches — each track reads a master and runs ffmpeg, and the
+# route has a 60 s limit — until a run processes nothing.
+#
+# Needs the same repo secrets as frequent-crons.yml: CRON_SECRET and APP_URL.
+# Run it from the Actions tab (Run workflow), or via the API.
+
+on:
+  workflow_dispatch:
+    inputs:
+      batch:
+        description: 'Tracks per call (keep small: ~5-20 s each, 60 s route limit)'
+        default: '2'
+      max_calls:
+        description: 'Stop after this many calls'
+        default: '80'
+
+concurrency:
+  group: drain-previews
+  cancel-in-progress: false
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Drain the preview backlog
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ secrets.APP_URL }}
+          BATCH: ${{ inputs.batch }}
+          MAX_CALLS: ${{ inputs.max_calls }}
+        run: |
+          if [ -z "$CRON_SECRET" ] || [ -z "$APP_URL" ]; then
+            echo "::error::CRON_SECRET or APP_URL repo secret is not set."
+            exit 1
+          fi
+          total=0; failed=0; idle=0
+          for i in $(seq 1 "$MAX_CALLS"); do
+            code=$(curl -sS -o out.json -w '%{http_code}' --max-time 90 \
+              -H "Authorization: Bearer $CRON_SECRET" \
+              "${APP_URL%/}/api/cron/backfill-previews?limit=$BATCH" || echo 000)
+            if [ "$code" != "200" ]; then
+              echo "call $i -> HTTP $code: $(head -c 300 out.json 2>/dev/null)"
+              idle=$((idle + 1))
+            else
+              p=$(jq -r '.processed // 0' out.json)
+              f=$(jq -r '.failed // 0' out.json)
+              c=$(jq -r '.candidates // 0' out.json)
+              total=$((total + p)); failed=$((failed + f))
+              echo "call $i -> processed=$p failed=$f candidates=$c"
+              if [ "$f" != "0" ]; then jq -c '.reasons' out.json; fi
+              if [ "$c" = "0" ]; then echo "Nothing left to do."; break; fi
+              if [ "$p" = "0" ]; then idle=$((idle + 1)); else idle=0; fi
+            fi
+            # Two calls in a row that make nothing: what is left cannot be
+            # made here (see reasons above). Stop rather than spin on it.
+            if [ "$idle" -ge 2 ]; then echo "Two idle calls in a row; stopping."; break; fi
+          done
+          echo "### Preview drain: $total clips made, $failed failures" >> "$GITHUB_STEP_SUMMARY"
+          echo "Done: $total clips made, $failed failures."

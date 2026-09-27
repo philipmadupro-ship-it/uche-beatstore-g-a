@@ -44,3 +44,15 @@ describe('pickPreviewBatch', () => {
     expect(pickPreviewBatch([flac, stranded], 8).map((r) => r.id).sort()).toEqual(['flac', 'str']);
   });
 });
+
+describe('pickPreviewBatch — earlier failures go last', () => {
+  it('puts a track whose clip failed before behind ones that can still succeed', () => {
+    const rows = [
+      { id: 'failed-old', audio_url: 'r2://p/a.wav', preview_url: null, preview_status: 'failed', store_listed: true, created_at: '2020-01-01' },
+      { id: 'fresh-new', audio_url: 'r2://p/b.wav', preview_url: null, preview_status: 'none', store_listed: false, created_at: '2026-09-01' },
+    ];
+    expect(pickPreviewBatch(rows, 1).map((r) => r.id)).toEqual(['fresh-new']);
+    // Still a candidate: retried once nothing else is waiting.
+    expect(pickPreviewBatch(rows, 5).map((r) => r.id)).toEqual(['fresh-new', 'failed-old']);
+  });
+});

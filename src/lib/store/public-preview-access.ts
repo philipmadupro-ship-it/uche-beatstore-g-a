@@ -71,3 +71,86 @@ export async function canStreamPublicly(admin: any, trackId: string, track: Prev
   if (bundleErr) throw bundleErr;
   return featuredBundleCovers(track.user_id, (bundles ?? []) as BundleRow[]);
 }
+
+/**
+ * Tracks made public by a featured bundle, as `trackId → the bundle owner`.
+ *
+ * The preview backfill used to consider only listed tracks, so a track that is
+ * public only through a bundle never got a preview clip — and then 404'd on
+ * the bundle page even after the stream route learned to serve it. The
+ * backfill joins these ids back to `tracks` and keeps a row only when its
+ * `user_id` matches, which is the same owner rule `canStreamPublicly` applies.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function featuredBundleTrackOwners(admin: any, ownerId?: string): Promise<Map<string, string>> {
+  let projectQuery = admin.from('projects').select('id, user_id').eq('store_featured', true);
+  if (ownerId) projectQuery = projectQuery.eq('user_id', ownerId);
+  const { data: projects, error: pErr } = await projectQuery;
+  if (pErr) throw pErr;
+  const rows = (projects ?? []) as Array<{ id: string; user_id: string | null }>;
+  // Only the producer's bundles make anything public (same rule as streaming).
+  const producers = new Set<string>();
+  for (const owner of new Set(rows.map((p) => p.user_id).filter((u): u is string => !!u))) {
+    if (await isProducerUserId(admin, owner)) producers.add(owner);
+  }
+  const ownerByProject = new Map<string, string>();
+  for (const p of rows) {
+    if (p.user_id && producers.has(p.user_id)) ownerByProject.set(p.id, p.user_id);
+  }
+  if (ownerByProject.size === 0) return new Map();
+
+  const { data: links, error: lErr } = await admin
+    .from('project_tracks')
+    .select('project_id, track_id')
+    .in('project_id', [...ownerByProject.keys()]);
+  if (lErr) throw lErr;
+  const out = new Map<string, string>();
+  for (const l of (links ?? []) as Array<{ project_id: string; track_id: string }>) {
+    const owner = ownerByProject.get(l.project_id);
+    if (owner) out.set(l.track_id, owner);
+  }
+  return out;
+}
+
+/** Keep only rows whose owner is the owner of the bundle that listed them. */
+export function ownedByTheirBundle<T extends { id: string; user_id?: string | null }>(
+  rows: T[],
+  owners: Map<string, string>,
+): T[] {
+  return rows.filter((r) => !!r.user_id && owners.get(r.id) === r.user_id);
+}
+
+/**
+ * Preview-backfill candidates that are public only through a featured bundle.
+ * `select` must include `user_id`; `needsWorkOr` is the same PostgREST `.or()`
+ * the caller uses for listed tracks (omit it to fetch every bundle track). Ids go in chunks so the query string
+ * stays well inside URL limits on a large bundle.
+ */
+export async function bundlePreviewCandidates<T extends { id: string; user_id?: string | null }>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  select: string,
+  needsWorkOr: string | undefined,
+  ownerId?: string,
+): Promise<T[]> {
+  const owners = await featuredBundleTrackOwners(admin, ownerId);
+  const ids = [...owners.keys()];
+  const out: T[] = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    let query = admin
+      .from('tracks')
+      .select(select)
+      .in('id', ids.slice(i, i + 100));
+    if (needsWorkOr) query = query.or(needsWorkOr);
+    const { data, error } = await query;
+    if (error) throw error;
+    out.push(...ownedByTheirBundle((data ?? []) as T[], owners));
+  }
+  return out;
+}
+
+/** Listed rows first, then bundle rows not already present. */
+export function mergeCandidates<T extends { id: string }>(listed: T[], bundled: T[]): T[] {
+  const seen = new Set(listed.map((r) => r.id));
+  return [...listed, ...bundled.filter((r) => !seen.has(r.id))];
+}

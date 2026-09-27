@@ -8639,3 +8639,26 @@ Candidate causes, all addressed in `lib/audio/ffmpeg-locate.ts` (pure, tested):
 - every attempt's error, including stderr on a non-zero exit, is kept and returned by `ffmpegStatus()`.
 
 Verified against the real binary: with cwd `/tmp` and a mode-644 copy it fell through to the `/tmp` copy and produced a real MP3. The reason is now visible to the producer in `/api/audio/diagnostics` (`ffmpeg`) and in the Store Editor's "Generate missing previews" result. When ffmpeg runs, that button also re-makes listed beats' WAV preview clips as MP3.
+
+## 2026-09-27 - Preview backfill reaches bundle tracks; failures stop starving the queue
+
+After bundle previews were fixed (the stream route now serves featured-bundle tracks), 67 bundle
+tracks still 404'd on production. They have no preview clip, only a private master. Two causes:
+
+- **The backfill only looked at listed tracks.** The nightly cron's default scope and the Store
+  Editor's "Generate missing previews" button both filtered on `store_listed = true`. Both now also
+  take tracks in a featured bundle (`bundlePreviewCandidates` in
+  `lib/store/public-preview-access.ts`). The owner rule is the one the stream route applies: the
+  bundle's owner must own the track and be the producer. `scope=all` is unchanged.
+- **A failed clip was re-picked first, forever.** `runPreviewBackfill` never recorded a failure,
+  and `pickPreviewBatch` sorts oldest first, so the same unfixable masters led every batch. A
+  small batch (the drain's, or eight a night) never reached the tracks behind them. A clip that
+  can't be made is now marked `preview_status = 'failed'` and ranked last. It is still retried
+  once nothing else is waiting. Every consumer tests `!== 'ready'`, so `failed` still means
+  "needs a preview" everywhere, and no migration is needed because the column is free text.
+
+`.github/workflows/drain-previews.yml` is a manual job. It calls the cron two tracks at a time
+(ffmpeg takes about 5-20 s per track against a 60 s route limit) until a call processes nothing.
+**It needs the `CRON_SECRET` and `APP_URL` repo secrets, which are not set.** `frequent-crons` has
+logged "secret not set; skipping" on every run, so the time-sensitive crons have never run from
+GitHub either.

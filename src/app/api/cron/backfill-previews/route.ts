@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
-import { runPreviewBackfill } from '@/lib/audio/preview-backfill';
+import { runPreviewBackfill, type PreviewBackfillRow } from '@/lib/audio/preview-backfill';
+import { bundlePreviewCandidates, mergeCandidates } from '@/lib/store/public-preview-access';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('cron.backfill-previews');
@@ -25,7 +26,8 @@ const BATCH = 8;
  * but inline (~20–30s/track, blocking the request). This cron drains the
  * backlog out-of-band: a small batch every 10 minutes (see vercel.json).
  *
- * Picks store-listed mp3/wav tracks whose preview isn't ready yet, generates
+ * Picks store-listed tracks, and tracks public through a featured bundle,
+ * whose preview isn't ready yet, generates
  * the truncated clip, and flips `preview_status='ready'`. Idempotent — once a
  * track is ready it's never re-picked, so the job is a no-op when the catalogue
  * is fully backfilled.
@@ -58,10 +60,12 @@ export async function GET(req: NextRequest) {
   // peaks sidecar. `.or` covers the legacy NULL and explicit 'none'/'pending'
   // preview states; peaks_url NULL means waveform surfaces must download and
   // decode audio client-side just to draw bars.
+  const select = 'id, user_id, audio_url, duration_seconds, preview_status, preview_url, peaks_url, store_listed, created_at';
+  const needsWork = 'preview_status.is.null,preview_status.neq.ready,preview_url.is.null,peaks_url.is.null';
   let candidateQuery = admin
     .from('tracks')
-    .select('id, audio_url, duration_seconds, preview_status, preview_url, peaks_url, store_listed, created_at')
-    .or('preview_status.is.null,preview_status.neq.ready,preview_url.is.null,peaks_url.is.null');
+    .select(select)
+    .or(needsWork);
   if (scope !== 'all') candidateQuery = candidateQuery.eq('store_listed', true);
   const { data: tracks, error } = await candidateQuery
     .order('created_at', { ascending: true })
@@ -77,6 +81,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ skipped: 'candidate query failed', detail: error.message });
   }
 
-  const result = await runPreviewBackfill(admin, tracks ?? [], batch);
+  // Tracks public only through a featured bundle need a clip too, or the
+  // bundle page's Preview 404s. `scope=all` already covers them.
+  let pool = (tracks ?? []) as PreviewBackfillRow[];
+  if (scope !== 'all') {
+    try {
+      pool = mergeCandidates(pool, await bundlePreviewCandidates<PreviewBackfillRow>(admin, select, needsWork));
+    } catch (e) {
+      // Listed tracks still get their batch if the bundle lookup fails.
+      log.warn('bundle candidate lookup failed', { error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  const result = await runPreviewBackfill(admin, pool, batch);
   return NextResponse.json({ ...result, reasons: result.reasons.slice(0, 10) });
 }
