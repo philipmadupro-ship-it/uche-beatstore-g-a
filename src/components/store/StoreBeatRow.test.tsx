@@ -15,6 +15,13 @@ import { toast } from '@/hooks/useToast';
 const upload = vi.hoisted(() => ({
   uploadImageFile: vi.fn(),
   discardUploadedImage: vi.fn(),
+  // Same contract as the real helper, over the mocked upload/discard.
+  uploadAndAttachImage: async (file: File, attach: (url: string) => Promise<boolean>) => {
+    const url: string = await upload.uploadImageFile(file);
+    const ok = await attach(url);
+    if (!ok) upload.discardUploadedImage(url);
+    return ok ? url : null;
+  },
   getImageUploadPreflightError: vi.fn((): string | null => null),
 }));
 vi.mock('@/lib/upload/image-upload-client', () => upload);

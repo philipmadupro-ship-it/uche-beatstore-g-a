@@ -6,7 +6,7 @@ import { Camera, Clock, GripVertical, Loader2, Music } from 'lucide-react';
 import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
 import { InlineText } from '@/components/ui/InlineText';
 import { toast } from '@/hooks/useToast';
-import { discardUploadedImage, getImageUploadPreflightError, uploadImageFile } from '@/lib/upload/image-upload-client';
+import { getImageUploadPreflightError, uploadAndAttachImage } from '@/lib/upload/image-upload-client';
 import { beatPublishState, parsePriceInput } from '@/lib/store-editor/beat-row';
 
 export interface StoreBeatRowTrack {
@@ -100,11 +100,9 @@ export function StoreBeatRow({
     setPendingCover(localPreview);
     setUploadingCover(true);
     try {
-      const coverUrl = await uploadImageFile(file);
-      const ok = await onPatch({ cover_url: coverUrl });
-      if (ok) toast.success('Cover updated');
-      // The row did not take it; don't leave the object in the bucket.
-      else void discardUploadedImage(coverUrl);
+      // A save the row rejects discards the upload rather than orphaning it.
+      const coverUrl = await uploadAndAttachImage(file, (url) => onPatch({ cover_url: url }));
+      if (coverUrl) toast.success('Cover updated');
     } catch (err) {
       toast.error('Cover upload failed', err instanceof Error ? err.message : 'Try again');
     } finally {

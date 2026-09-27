@@ -29,7 +29,7 @@ import { StemUploader } from '@/components/tracks/StemUploader';
 import { SimilarTracks } from '@/components/tracks/SimilarTracks';
 import { ArrangementOverlay } from '@/components/tracks/ArrangementOverlay';
 import { TrackListingEditor } from '@/components/tracks/TrackListingEditor';
-import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { uploadAndAttachImage } from '@/lib/upload/image-upload-client';
 import { CoverEditor } from '@/components/ui/CoverEditor';
 // `analyzeAudio` is dynamically imported inside `handleReanalyze` so the
 // audio-decode worker chain doesn't break client/SSR bundling.
@@ -147,18 +147,19 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
     if (!file) return;
     setUploadingArt(true);
     try {
-      const coverUrl = await uploadImageFile(file);
-      const patch = await fetch(`/api/tracks/${params.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cover_url: coverUrl }),
-      });
-      if (!patch.ok) {
+      // A rejected save discards the upload rather than orphaning it.
+      const coverUrl = await uploadAndAttachImage(file, async (url) => {
+        const patch = await fetch(`/api/tracks/${params.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cover_url: url }),
+        });
+        if (patch.ok) return true;
         const e = await patch.json().catch(() => ({}));
         toast.error('Could not save cover', e.error || `HTTP ${patch.status}`);
-        return;
-      }
-      fetchData();
+        return false;
+      });
+      if (coverUrl) fetchData();
     } catch (err) {
       toast.error('Cover upload failed', err instanceof Error ? err.message : 'Try again');
     } finally {

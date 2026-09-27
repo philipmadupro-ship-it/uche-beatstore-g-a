@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { ProjectFolderSelect } from './ProjectFolderSelect';
 import { TemplatePicker } from './TemplatePicker';
-import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { uploadAndAttachImage } from '@/lib/upload/image-upload-client';
 import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
 
 interface ProjectLite {
@@ -102,9 +102,8 @@ export function ProjectOptionsMenu({
     if (!file) return;
     setBusy('cover');
     try {
-      const coverUrl = await uploadImageFile(file);
-      await patch({ cover_url: coverUrl }, 'cover');
-      toast.success('Cover updated');
+      const coverUrl = await uploadAndAttachImage(file, (url) => patch({ cover_url: url }, 'cover'));
+      if (coverUrl) toast.success('Cover updated');
     } catch (err) {
       toast.error('Cover upload failed', err instanceof Error ? err.message : 'Try again');
       setBusy(null);

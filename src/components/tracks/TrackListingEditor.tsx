@@ -9,7 +9,7 @@ import {
 import { toast } from '@/hooks/useToast';
 import { cn } from '@/lib/utils';
 import type { Track } from '@/lib/types';
-import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { uploadAndAttachImage } from '@/lib/upload/image-upload-client';
 
 /* ── Per-track license row shape from /api/track-licenses ─── */
 interface TrackLicenseRow {
@@ -176,7 +176,7 @@ export function TrackListingEditor({ track, onSaved }: Props) {
     setExclusivePrice(track.exclusive_price_usd != null ? String(track.exclusive_price_usd) : '');
   }, [track.id, track.description, track.store_listed, track.exclusive_sold, track.store_featured, track.free_download_enabled, track.voice_tag_enabled, track.store_sort_order, track.cover_url, track.bpm, track.key, track.scale, track.lease_price_usd, track.exclusive_price_usd]);
 
-  const persist = async (field: string, value: PersistValue) => {
+  const persist = async (field: string, value: PersistValue): Promise<boolean> => {
     setSaving(field);
     try {
       const payload: TrackPatchPayload = {};
@@ -185,12 +185,12 @@ export function TrackListingEditor({ track, onSaved }: Props) {
       } else if (field === 'lease') {
         const valueText = String(value).trim();
         const n = valueText === '' ? null : Number(valueText);
-        if (n !== null && (!Number.isFinite(n) || n < 0)) { toast.error('Price must be a non-negative number'); setSaving(null); return; }
+        if (n !== null && (!Number.isFinite(n) || n < 0)) { toast.error('Price must be a non-negative number'); setSaving(null); return false; }
         payload.lease_price_usd = n;
       } else if (field === 'exclusive') {
         const valueText = String(value).trim();
         const n = valueText === '' ? null : Number(valueText);
-        if (n !== null && (!Number.isFinite(n) || n < 0)) { toast.error('Price must be a non-negative number'); setSaving(null); return; }
+        if (n !== null && (!Number.isFinite(n) || n < 0)) { toast.error('Price must be a non-negative number'); setSaving(null); return false; }
         payload.exclusive_price_usd = n;
       } else if (field === 'store_listed') {
         payload.store_listed = !!value;
@@ -226,9 +226,11 @@ export function TrackListingEditor({ track, onSaved }: Props) {
       setRecentlySaved(field);
       setTimeout(() => setRecentlySaved((cur) => (cur === field ? null : cur)), 2000);
       onSaved?.();
+      return true;
     } catch (err) {
       console.error('Track update failed:', err);
       toast.error('Couldn’t save', err instanceof Error ? err.message : 'Try again');
+      return false;
     } finally {
       setSaving(null);
     }
@@ -239,10 +241,11 @@ export function TrackListingEditor({ track, onSaved }: Props) {
     if (!file) return;
     setImageUploading(true);
     try {
-      const coverUrl = await uploadImageFile(file);
-      setCoverUrlInput(coverUrl);
-      await persist('cover_url', coverUrl);
-      toast.success('Cover art uploaded');
+      const coverUrl = await uploadAndAttachImage(file, (url) => persist('cover_url', url));
+      if (coverUrl) {
+        setCoverUrlInput(coverUrl);
+        toast.success('Cover art uploaded');
+      }
     } catch (err) {
       toast.error('Upload failed: ' + (err instanceof Error ? err.message : 'Try again'));
     } finally {

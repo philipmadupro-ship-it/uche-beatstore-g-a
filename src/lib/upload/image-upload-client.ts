@@ -42,6 +42,27 @@ export async function uploadImageFile(file: File): Promise<string> {
 }
 
 /**
+ * Upload, then attach the URL to its row with `attach`. When the attach does
+ * not take (returns false or throws), the uploaded object is discarded so a
+ * failed save never leaves an orphan in the bucket. Resolves to the URL on
+ * success and null when `attach` reported failure; upload and attach errors
+ * propagate unchanged.
+ */
+export async function uploadAndAttachImage(
+  file: File,
+  attach: (url: string) => Promise<boolean>,
+): Promise<string | null> {
+  const url = await uploadImageFile(file);
+  let attached = false;
+  try {
+    attached = await attach(url);
+  } finally {
+    if (!attached) void discardUploadedImage(url);
+  }
+  return attached ? url : null;
+}
+
+/**
  * Best-effort removal of an uploaded image nothing ended up pointing at —
  * the upload succeeded but the row PATCH that would reference it failed.
  * The server refuses if any row does reference it, so a PATCH that
