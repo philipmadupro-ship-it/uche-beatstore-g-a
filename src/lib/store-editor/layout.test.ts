@@ -18,6 +18,22 @@ describe('the default layout', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
+  it('keeps the same section ids every time it is built', () => {
+    // /store keys its sections by id and gets this layout on EVERY render when
+    // the producer has never saved one. Minted ids made every render remount
+    // every section (and re-request its images) ~4 times a second during
+    // playback, and made the server and client renders disagree.
+    const ids = () => defaultStoreLayout().sections.map((section) => section.id);
+    expect(ids()).toEqual(ids());
+    expect(normalizeLayout(null).sections.map((s) => s.id)).toEqual(ids());
+  });
+
+  it('still mints fresh ids for sections added later', () => {
+    const layout = defaultStoreLayout();
+    const added = createSection('hero');
+    expect(layout.sections.map((s) => s.id)).not.toContain(added.id);
+  });
+
   it('leads with the hero and ends with the trust rail, mirroring /store today', () => {
     const kinds = defaultStoreLayout().sections.map((section) => section.kind);
     expect(kinds[0]).toBe('hero');

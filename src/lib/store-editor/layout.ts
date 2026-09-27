@@ -258,11 +258,23 @@ export function createSection(kind: StoreSectionKind, name?: string, base?: Part
   };
 }
 
+/**
+ * The layout a producer has before they arrange anything.
+ *
+ * Section ids here are DETERMINISTIC (`sec-<kind>-default`; each kind appears
+ * once). /store renders sections keyed by id, and a producer who has never
+ * saved a layout gets this on every render — with minted ids every render
+ * produced new keys, so React tore down and rebuilt the hero, featured strips,
+ * spotlight and picks on each player progress tick (~4/s), re-requesting every
+ * image in them. They also differed between the server and client renders.
+ * Sections added later still get minted ids via createSection.
+ */
 export function defaultStoreLayout(): StoreLayout {
   return {
     version: LAYOUT_VERSION,
     sections: defaultSeeds.map((seed) => ({
       ...createSection(seed.kind, seed.name, seed.base),
+      id: `sec-${seed.kind}-default`,
       locked: seed.locked ?? false,
       overrides: seed.overrides ?? {},
     })),
