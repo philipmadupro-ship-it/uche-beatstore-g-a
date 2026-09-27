@@ -54,6 +54,11 @@ interface Props {
   trackId: string;
   audioUrl?: string | null;
   peaksUrl?: string | null;
+  /**
+   * Public pages only: a same-origin URL anyone can read, used for the
+   * spectral analysis instead of the session-gated `/api/audio` proxy.
+   */
+  publicAnalysisUrl?: string | null;
   /** 0..1 playhead position. */
   progress: number;
   isPlaying: boolean;
@@ -90,7 +95,7 @@ function fmtTime(seconds: number): string {
 }
 
 export function SpectralWaveform({
-  trackId, audioUrl, peaksUrl, progress, isPlaying, canSeek, onSeek, label,
+  trackId, audioUrl, peaksUrl, publicAnalysisUrl, progress, isPlaying, canSeek, onSeek, label,
   durationSeconds, height = 132, visibleSeconds = DEFAULT_VISIBLE_SECONDS, className,
 }: Props) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -99,7 +104,7 @@ export function SpectralWaveform({
   const [dragging, setDragging] = useState(false);
   const [hovering, setHovering] = useState(false);
 
-  const { bands, db, hz, status } = useSpectralPeaks(trackId, audioUrl, ANALYSIS_SLICES);
+  const { bands, db, hz, status } = useSpectralPeaks(trackId, audioUrl, ANALYSIS_SLICES, undefined, publicAnalysisUrl);
   // Amplitude peaks are the fallback shape, and give us something to draw
   // immediately while the spectral analysis is still running.
   const { peaks } = useVisualPeaks(trackId, peaksUrl, ANALYSIS_SLICES);

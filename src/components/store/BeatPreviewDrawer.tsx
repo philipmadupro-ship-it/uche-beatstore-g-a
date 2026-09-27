@@ -215,6 +215,8 @@ export function BeatPreviewDrawer({
             <SpectralWaveform
               trackId={track.id}
               audioUrl={track.audio_url}
+              // Buyers have no session; /api/audio would 401 them.
+              publicAnalysisUrl={`/api/store/preview/${encodeURIComponent(track.id)}`}
               peaksUrl={track.peaks_url}
               progress={isCurrent ? progress : 0}
               isPlaying={isCurrent && isPlaying}
