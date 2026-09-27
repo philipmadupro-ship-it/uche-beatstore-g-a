@@ -210,6 +210,19 @@ describe('newly listed beat on /store (Supabase path)', () => {
     expect(ids.filter((id) => id === FRESH_ID)).toHaveLength(1);
   });
 
+  it("follows the producer's arrangement after the unplaced beat (default Featured sort)", async () => {
+    const first = await page();
+    expect(first.tracks.slice(1, 4).map((t) => t.title)).toEqual(['Arranged 0', 'Arranged 1', 'Arranged 2']);
+  });
+
+  it('still puts the fresh beat first under sort=newest', async () => {
+    const res = await storeGet(new NextRequest('http://localhost/api/store?limit=80&sort=newest'));
+    const body = (await res.json()) as { tracks: PublicTrack[] };
+    expect(body.tracks[0].id).toBe(FRESH_ID);
+    // Newest, not arranged: the latest-created arranged beat comes next.
+    expect(body.tracks[1].title).toBe(`Arranged ${REORDERED - 1}`);
+  });
+
   it('carries its own cover, a public audio source and its price', async () => {
     const first = await page();
     const fresh = first.tracks.find((t) => t.id === FRESH_ID)!;

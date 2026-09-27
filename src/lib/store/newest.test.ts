@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { NEWEST_ORDER_COLUMNS, compareNewest, type NewestRanked } from './newest';
+import {
+  FEATURED_ORDER_COLUMNS,
+  NEWEST_ORDER_COLUMNS,
+  compareFeatured,
+  compareNewest,
+  type FeaturedRanked,
+  type NewestRanked,
+} from './newest';
 import { filterAndSortTracks, type FilterState, type StoreTrack } from './filters';
 
 /** Applies `.order()` column specs the way Postgres would, NULLS LAST. */
@@ -52,5 +59,54 @@ describe('compareNewest', () => {
       defaultLeasePrice: null,
     };
     expect(filterAndSortTracks(tracks, state).map((t) => t.id)).toEqual(['fresh', 'old-arranged']);
+  });
+});
+
+/** Postgres semantics for FEATURED_ORDER_COLUMNS, including NULLS FIRST. */
+function sqlFeatured(rows: FeaturedRanked[]) {
+  return rows.slice().sort((a, b) => {
+    for (const { column, ascending, nullsFirst } of FEATURED_ORDER_COLUMNS) {
+      const av = (a as Record<string, unknown>)[column] as string | number | null | undefined;
+      const bv = (b as Record<string, unknown>)[column] as string | number | null | undefined;
+      if (av == null && bv == null) continue;
+      if (av == null) return nullsFirst ? -1 : 1;
+      if (bv == null) return nullsFirst ? 1 : -1;
+      if (av === bv) continue;
+      const cmp = av < bv ? -1 : 1;
+      return ascending ? cmp : -cmp;
+    }
+    return 0;
+  });
+}
+
+describe('compareFeatured', () => {
+  const arranged: FeaturedRanked[] = [
+    { id: 'p2', store_sort_order: 2, created_at: '2026-03-01T00:00:00.000Z' },
+    { id: 'p0', store_sort_order: 0, created_at: '2026-01-01T00:00:00.000Z' },
+    { id: 'new-older', store_sort_order: null, created_at: '2026-09-01T00:00:00.000Z' },
+    { id: 'p1', store_sort_order: 1, created_at: '2026-05-01T00:00:00.000Z' },
+    { id: 'new', store_sort_order: null, created_at: '2026-09-27T00:00:00.000Z' },
+  ];
+
+  it("puts not-yet-placed beats first (newest first), then the producer's order", () => {
+    expect(arranged.slice().sort(compareFeatured).map((r) => r.id))
+      .toEqual(['new', 'new-older', 'p0', 'p1', 'p2']);
+  });
+
+  it('agrees with the SQL ordering the server pages by', () => {
+    expect(arranged.slice().sort(compareFeatured)).toEqual(sqlFeatured(arranged));
+  });
+
+  it("is the browser's default display order", () => {
+    const tracks = arranged.map((r) => ({ ...r, title: r.id })) as unknown as StoreTrack[];
+    const state: FilterState = {
+      searchQuery: '', typeFilter: 'all', freeOnly: false, favoritesOnly: false,
+      newThisWeek: false, priceRangeActive: false, priceMin: 0, priceMax: 99999,
+      bpmMin: 0, bpmMax: 999, keyFilter: '', scaleFilter: '', durationBucket: '',
+      genreFilter: '', moodFilter: '', sortBy: 'featured', favoriteIds: new Set(),
+      defaultLeasePrice: null,
+    };
+    expect(filterAndSortTracks(tracks, state).map((t) => t.id))
+      .toEqual(['new', 'new-older', 'p0', 'p1', 'p2']);
   });
 });

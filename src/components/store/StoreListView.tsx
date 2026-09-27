@@ -212,20 +212,29 @@ export function StoreListView({
                   </button>
                 ) : (
                   <>
+                    {/* Below md the row has ~210px for title AND buy column.
+                        Two full "Lease $X / Exclusive $Y" buttons in Akira
+                        Expanded took all of it and the minmax(0,1fr) title
+                        column collapsed to zero width — every title vanished
+                        at 390px. So on phones: one compact lease button (the
+                        aria-label keeps the full phrase); exclusive stays in
+                        the row's ⋯ menu ("Add exclusive"). */}
                     <button
                       data-row-action
                       onClick={(e) => { e.stopPropagation(); onAddLease(t); }}
                       disabled={lp == null}
+                      aria-label={lp != null ? `Add lease for ${t.title}, $${lp}` : `Lease unavailable for ${t.title}`}
                       className="flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.08] px-2.5 text-[11px] transition-colors hover:bg-white/[0.04] disabled:opacity-30"
                     >
-                      <span className="text-white/45">Lease</span>
+                      <span className="hidden text-white/45 sm:inline">Lease</span>
                       <span className="font-semibold tabular-nums text-white">{lp != null ? `$${lp}` : '—'}</span>
                     </button>
                     <button
                       data-row-action
                       onClick={(e) => { e.stopPropagation(); onAddExclusive(t); }}
                       disabled={ep == null}
-                      className="flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.08] px-2.5 text-[11px] transition-colors hover:bg-white/[0.04] disabled:opacity-30"
+                      aria-label={ep != null ? `Add exclusive for ${t.title}, $${ep}` : `Exclusive unavailable for ${t.title}`}
+                      className="hidden md:flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.08] px-2.5 text-[11px] transition-colors hover:bg-white/[0.04] disabled:opacity-30"
                     >
                       <span className="text-white/45">Exclusive</span>
                       <span className="font-semibold tabular-nums" style={{ color: accentColor }}>{ep != null ? `$${ep}` : '—'}</span>

@@ -6,7 +6,7 @@ import { artworkThemeFromProfile, loadPublicArtworkTheme } from '@/lib/artwork/p
 import { resolveStoreOwner } from '@/lib/store/owner';
 import { redactPublicTrackMedia } from '@/lib/store/public-media';
 import { POPULAR_ORDER_COLUMNS, comparePopularity } from '@/lib/store/popularity';
-import { NEWEST_ORDER_COLUMNS, compareNewest } from '@/lib/store/newest';
+import { FEATURED_ORDER_COLUMNS, NEWEST_ORDER_COLUMNS, compareFeatured, compareNewest } from '@/lib/store/newest';
 import {
   bpmFilterExpression,
   bpmInRange,
@@ -166,7 +166,7 @@ function parseStoreFilters(req: NextRequest) {
     bpmRange: parseBpmRange(params.get('bpmMin'), params.get('bpmMax')),
     priceRange: parsePriceRange(params.get('priceMin'), params.get('priceMax')),
     ids: parseTrackIds(params.get('ids')),
-    sort: sort || 'newest',
+    sort: sort || 'featured',
   };
 }
 
@@ -237,8 +237,11 @@ function localFilterAndSortTracks(
       sorted.sort(comparePopularity);
       break;
     case 'newest':
-    default:
       sorted.sort(compareNewest);
+      break;
+    case 'featured':
+    default:
+      sorted.sort(compareFeatured);
   }
   return sorted;
 }
@@ -471,7 +474,7 @@ export async function GET(req: NextRequest) {
       return next;
     };
 
-    const applyTrackOrdering = (query: StoreQuery): StoreQuery => {
+    const applyTrackOrdering = (query: StoreQuery, hasSortOrderColumn: boolean): StoreQuery => {
       switch (filters.sort) {
         case 'bpm-asc':
           return query.order('bpm', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
@@ -495,14 +498,26 @@ export async function GET(req: NextRequest) {
           }
           return ordered;
         }
-        case 'newest':
-        default: {
+        case 'newest': {
           // Not `store_sort_order` first: a beat listed after the producer's
           // last reorder has none, sorted after every ordered beat, and missed
           // page one entirely. The browser displays "Newest first" by
           // created_at, so the page is chosen by it too — lib/store/newest.
           let ordered = query;
           for (const { column, ascending, nullsFirst } of NEWEST_ORDER_COLUMNS) {
+            ordered = ordered.order(column, { ascending, nullsFirst });
+          }
+          return ordered;
+        }
+        case 'featured':
+        default: {
+          // The producer's Store Editor arrangement, with not-yet-placed beats
+          // (NULL position) FIRST so a new listing is never pushed off page
+          // one — lib/store/newest#compareFeatured.
+          // Pre-033 schema: no position column to honour, so newest it is.
+          const columns = hasSortOrderColumn ? FEATURED_ORDER_COLUMNS : NEWEST_ORDER_COLUMNS;
+          let ordered = query;
+          for (const { column, ascending, nullsFirst } of columns) {
             ordered = ordered.order(column, { ascending, nullsFirst });
           }
           return ordered;
@@ -524,7 +539,7 @@ export async function GET(req: NextRequest) {
     if (sellerId) {
       withSortOrderQuery = withSortOrderQuery.or(`user_id.eq.${safeSeller},user_id.is.null`);
     }
-    let withSortOrderOrdered = applyTrackOrdering(withSortOrderQuery);
+    let withSortOrderOrdered = applyTrackOrdering(withSortOrderQuery, true);
     if (pagination) {
       withSortOrderOrdered = withSortOrderOrdered.range(
         pagination.offset,
@@ -548,7 +563,7 @@ export async function GET(req: NextRequest) {
       if (sellerId) {
         fallbackQuery = fallbackQuery.or(`user_id.eq.${safeSeller},user_id.is.null`);
       }
-      let fallbackOrdered = applyTrackOrdering(fallbackQuery);
+      let fallbackOrdered = applyTrackOrdering(fallbackQuery, false);
       if (pagination) {
         fallbackOrdered = fallbackOrdered.range(
           pagination.offset,

@@ -57,3 +57,40 @@ export const NEWEST_ORDER_COLUMNS = [
   { column: 'created_at', ascending: false, nullsFirst: false },
   { column: 'id', ascending: true, nullsFirst: false },
 ] as const;
+
+/**
+ * "Featured": the producer's own arrangement, and the storefront default.
+ *
+ * The Store Editor's drag / arrow reorder writes `store_sort_order`, and until
+ * this existed nothing on `/store` honoured it — the page was chosen by one
+ * rule and displayed by another, so the arrangement changed neither.
+ *
+ * A beat with NO position (listed after the last reorder) comes FIRST, newest
+ * first. That is deliberate: sorting it last is exactly what hid new uploads
+ * off page one (STORE-03). The producer places it by dragging it in the
+ * editor, which numbers every listed beat. Positioned beats follow in the
+ * producer's order; `created_at` then `id` keep the order total for paging.
+ */
+export interface FeaturedRanked extends NewestRanked {
+  store_sort_order?: number | string | null;
+}
+
+const positionOf = (t: FeaturedRanked): number | null => {
+  if (t.store_sort_order == null || t.store_sort_order === '') return null;
+  const n = Number(t.store_sort_order);
+  return Number.isFinite(n) ? n : null;
+};
+
+export function compareFeatured(a: FeaturedRanked, b: FeaturedRanked): number {
+  const pa = positionOf(a);
+  const pb = positionOf(b);
+  if (pa == null && pb != null) return -1;
+  if (pa != null && pb == null) return 1;
+  if (pa != null && pb != null && pa !== pb) return pa - pb;
+  return compareNewest(a, b);
+}
+
+export const FEATURED_ORDER_COLUMNS = [
+  { column: 'store_sort_order', ascending: true, nullsFirst: true },
+  ...NEWEST_ORDER_COLUMNS,
+] as const;

@@ -85,6 +85,19 @@ test.describe('storefront', () => {
     await expect(cards.first().or(empty).first()).toBeVisible();
   });
 
+  test('list view keeps every beat title readable at phone width', async ({ page }) => {
+    // At 390px the buy buttons used to take the whole row and collapse the
+    // title column to zero width — every title in list view vanished.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => { try { localStorage.setItem('store-view-mode', 'list'); } catch { /* private mode */ } });
+    await page.goto('/store');
+    const titles = page.locator('li p.truncate.font-semibold');
+    await titles.first().waitFor({ state: 'attached', timeout: 10_000 }).catch(() => null);
+    if (await titles.count() === 0) missingPrecondition('no beats in store');
+    const widths = await titles.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
+    expect(Math.min(...widths)).toBeGreaterThan(40);
+  });
+
   test('clicking a beat card opens the preview drawer', async ({ page }) => {
     await page.goto('/store');
     // Wait for /api/store to populate the grid before assuming we know

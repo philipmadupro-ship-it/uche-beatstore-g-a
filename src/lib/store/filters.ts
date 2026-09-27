@@ -1,6 +1,6 @@
 import { normalizeKey } from '@/lib/audio/key-normalize';
 import { comparePopularity } from './popularity';
-import { compareNewest } from './newest';
+import { compareFeatured, compareNewest } from './newest';
 import type { Track } from '@/lib/types';
 
 export interface StoreTrack extends Track {
@@ -12,6 +12,7 @@ export interface StoreTrack extends Track {
 export type TypeFilter = 'all' | 'beat' | 'instrumental' | 'song' | 'remix' | 'beats';
 export type DurationBucket = '' | 'short' | 'medium' | 'long';
 export type SortBy =
+  | 'featured'
   | 'newest'
   | 'popular'
   | 'bpm-asc'
@@ -177,9 +178,13 @@ export function filterAndSortTracks(
       sorted.sort(comparePopularity);
       break;
     case 'newest':
-    default:
       // Same rule the server pages by — see lib/store/newest.
       sorted.sort(compareNewest);
+      break;
+    case 'featured':
+    default:
+      // The producer's arrangement from the Store Editor — lib/store/newest.
+      sorted.sort(compareFeatured);
   }
 
   return sorted;
