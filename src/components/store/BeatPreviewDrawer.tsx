@@ -57,6 +57,10 @@ export function BeatPreviewDrawer({
   const similar = useMemo(() => getSimilarTracks(track, allTracks, 5), [track, allTracks]);
 
   const dur = track.duration_seconds ?? 0;
+  // Buyers have no session, so the spectral analysis must not fall back to the
+  // session-gated /api/audio proxy (it 401'd every preview). This public,
+  // edge-cached route serves the same preview bytes.
+  const publicAnalysisUrl = `/api/store/preview/${encodeURIComponent(track.id)}`;
 
   // Same analysis the waveform consumes (module-cached per track, so this is a
   // cache hit rather than a second decode). Sampled at the playhead so the
@@ -67,6 +71,7 @@ export function BeatPreviewDrawer({
   } = useAudioReactivity(
     track.id, track.audio_url, progress, isCurrent,
     bandsUrlFromPeaksUrl(track.peaks_url),
+    publicAnalysisUrl,
   );
 
   const activeLicenses: LicenseTier[] = licenses.length > 0
@@ -215,8 +220,7 @@ export function BeatPreviewDrawer({
             <SpectralWaveform
               trackId={track.id}
               audioUrl={track.audio_url}
-              // Buyers have no session; /api/audio would 401 them.
-              publicAnalysisUrl={`/api/store/preview/${encodeURIComponent(track.id)}`}
+              publicAnalysisUrl={publicAnalysisUrl}
               peaksUrl={track.peaks_url}
               progress={isCurrent ? progress : 0}
               isPlaying={isCurrent && isPlaying}

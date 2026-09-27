@@ -55,7 +55,16 @@ function readCollapsed(): boolean {
   try { return localStorage.getItem(PLAYER_COLLAPSED_KEY) === '1'; } catch { return false; }
 }
 
-export function PlayerBar() {
+export function PlayerBar({
+  publicStore = false,
+}: {
+  /**
+   * Mounted by the public store layout. Buyers have no session, so spectral
+   * analysis reads the public /api/store/preview/<id> route instead of falling
+   * back to the session-gated /api/audio proxy (a 401 for every buyer).
+   */
+  publicStore?: boolean;
+} = {}) {
   const {
     currentTrack, isPlaying, togglePlay, next, prev,
     volume, setVolume, progress, queue, seekTo, isBuffering, playbackError,
@@ -122,12 +131,16 @@ export function PlayerBar() {
   // rather than a second decode. Called before the early return below because
   // hooks must run unconditionally. Same hook as the store preview drawer, so
   // both surfaces react identically by construction rather than by coincidence.
+  const publicAnalysisUrl = publicStore && currentTrack?.id
+    ? `/api/store/preview/${encodeURIComponent(currentTrack.id)}`
+    : null;
   const { level: nowPlayingLevel, bass: nowPlayingBass } = useAudioReactivity(
     currentTrack?.id ?? null,
     currentTrack?.audio_url,
     progress,
     true,
     bandsUrlFromPeaksUrl(currentTrack?.peaks_url),
+    publicAnalysisUrl,
   );
 
   // Hand the numbers to the hero backdrops — one analysis for the whole app.
@@ -562,6 +575,7 @@ export function PlayerBar() {
                   trackId={currentTrack.id}
                   audioUrl={currentTrack.audio_url}
                   peaksUrl={currentTrack.peaks_url}
+                  publicAnalysisUrl={publicAnalysisUrl}
                   progress={progress}
                   isPlaying={isPlaying}
                   canSeek={streamStatus.canSeek && totalSeconds > 0}

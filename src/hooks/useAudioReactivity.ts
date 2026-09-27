@@ -46,8 +46,14 @@ export function useAudioReactivity(
   enabled = true,
   /** Precomputed sidecar; skips in-browser decoding when present. */
   bandsUrl?: string | null,
+  /**
+   * Public pages: a same-origin URL anyone may read, used instead of the
+   * session-gated /api/audio proxy (see useSpectralPeaks). Without it the
+   * store drawer 401'd every buyer on each preview.
+   */
+  publicFallback?: string | null,
 ): AudioReactivity {
-  const { db, bands } = useSpectralPeaks(trackId, audioUrl, SLICE_COUNT, bandsUrl);
+  const { db, bands } = useSpectralPeaks(trackId, audioUrl, SLICE_COUNT, bandsUrl, publicFallback);
 
   // Memoised because it sorts the series; the per-frame lookups below are O(1).
   const range = useMemo(() => loudnessRange(db ?? []), [db]);
