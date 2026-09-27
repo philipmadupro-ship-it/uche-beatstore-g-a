@@ -8530,3 +8530,13 @@ Buyers got a 401 from `/api/tags/colors`, and could also hit `/api/profile`, on 
 - **The store layout's `PlayerBar` and `CartDrawer` sat outside every page's provider.** They are now wrapped in `PublicArtworkThemeProvider`, which reads the public `/api/store/theme` once per store session.
 
 Tests: `ArtworkThemeProvider.test.tsx` (jsdom) fails before the fix and passes after, and also checks that the dashboard path still fetches. The scale e2e now asserts zero calls to either endpoint, replacing the once-per-session allowance.
+
+## 2026-09-27 - Newly listed beats missing from /store page one (STORE-03)
+
+A beat uploaded and listed after the producer had reordered the storefront did not show on `/store`. The write path was fine: `/api/upload/complete` inserts the row under the producer's `user_id`, the Store Editor toggle PATCHes `store_listed: true` through `TrackPatchBodySchema` / `updateOwned`, and `/api/store` filters `store_listed = true` scoped to the resolved owner.
+
+The read path's page selection was the first incorrect point. For the default "Newest first" sort, the Supabase branch ordered by `store_sort_order ASC NULLS LAST` and only then by `created_at`. Reordering (Store Editor drag or arrows, or the library's store reorder) writes a sort order to every listed beat. A later upload has `NULL`, so SQL put it after all of them, and on a catalogue over one 80-beat page it was never on page one. The browser then re-sorts each page by `created_at` (`lib/store/filters.ts`), so the manual order never decided what buyers saw within a page. It only decided which beats made the page. The local-store branch never had the rule, which is why the local-store scale tests could not see it.
+
+Fix: `lib/store/newest.ts` holds one rule (`created_at DESC, id ASC`) as both a comparator and PostgREST order columns, used by the Supabase branch (both select variants), the local branch and the browser. The `id` key makes paging total. `src/app/api/store/newly-listed.test.ts` drives the Supabase branch through an in-memory PostgREST fake, with 100 reordered beats plus one fresh upload. It fails before the fix (the fresh beat is absent from page one) and passes after. It also asserts each listed beat appears exactly once across pages, with drafts and other owners excluded.
+
+Not changed: `/api/store` still sends `s-maxage=300, stale-while-revalidate=86400`, so on production a newly listed beat can take up to ~5 minutes, plus one stale response, to reach CDN-cached visitors.

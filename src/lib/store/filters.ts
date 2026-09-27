@@ -1,5 +1,6 @@
 import { normalizeKey } from '@/lib/audio/key-normalize';
 import { comparePopularity } from './popularity';
+import { compareNewest } from './newest';
 import type { Track } from '@/lib/types';
 
 export interface StoreTrack extends Track {
@@ -177,10 +178,8 @@ export function filterAndSortTracks(
       break;
     case 'newest':
     default:
-      sorted.sort(
-        (a, b) =>
-          new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
-      );
+      // Same rule the server pages by — see lib/store/newest.
+      sorted.sort(compareNewest);
   }
 
   return sorted;

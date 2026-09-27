@@ -6,6 +6,7 @@ import { artworkThemeFromProfile, loadPublicArtworkTheme } from '@/lib/artwork/p
 import { resolveStoreOwner } from '@/lib/store/owner';
 import { redactPublicTrackMedia } from '@/lib/store/public-media';
 import { POPULAR_ORDER_COLUMNS, comparePopularity } from '@/lib/store/popularity';
+import { NEWEST_ORDER_COLUMNS, compareNewest } from '@/lib/store/newest';
 import {
   bpmFilterExpression,
   bpmInRange,
@@ -237,7 +238,7 @@ function localFilterAndSortTracks(
       break;
     case 'newest':
     default:
-      sorted.sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime());
+      sorted.sort(compareNewest);
   }
   return sorted;
 }
@@ -408,7 +409,7 @@ export async function GET(req: NextRequest) {
     const pinnedIds = filters.ids;
 
     // ── Tracks ─────────────────────────────────────────────────────────────
-    // Try with store_sort_order first (migration 033). Fall back without it.
+    // Try with the newer columns first (store_sort_order etc., migration 033+). Fall back without them.
     let tracksAny: StoreTrackRow[] = [];
     let requiredTrackIds: string[] | null = null;
 
@@ -470,7 +471,7 @@ export async function GET(req: NextRequest) {
       return next;
     };
 
-    const applyTrackOrdering = (query: StoreQuery, includeStoreOrder: boolean): StoreQuery => {
+    const applyTrackOrdering = (query: StoreQuery): StoreQuery => {
       switch (filters.sort) {
         case 'bpm-asc':
           return query.order('bpm', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
@@ -495,10 +496,17 @@ export async function GET(req: NextRequest) {
           return ordered;
         }
         case 'newest':
-        default:
-          return includeStoreOrder
-            ? query.order('store_sort_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false })
-            : query.order('created_at', { ascending: false });
+        default: {
+          // Not `store_sort_order` first: a beat listed after the producer's
+          // last reorder has none, sorted after every ordered beat, and missed
+          // page one entirely. The browser displays "Newest first" by
+          // created_at, so the page is chosen by it too — lib/store/newest.
+          let ordered = query;
+          for (const { column, ascending, nullsFirst } of NEWEST_ORDER_COLUMNS) {
+            ordered = ordered.order(column, { ascending, nullsFirst });
+          }
+          return ordered;
+        }
       }
     };
 
@@ -516,7 +524,7 @@ export async function GET(req: NextRequest) {
     if (sellerId) {
       withSortOrderQuery = withSortOrderQuery.or(`user_id.eq.${safeSeller},user_id.is.null`);
     }
-    let withSortOrderOrdered = applyTrackOrdering(withSortOrderQuery, true);
+    let withSortOrderOrdered = applyTrackOrdering(withSortOrderQuery);
     if (pagination) {
       withSortOrderOrdered = withSortOrderOrdered.range(
         pagination.offset,
@@ -540,7 +548,7 @@ export async function GET(req: NextRequest) {
       if (sellerId) {
         fallbackQuery = fallbackQuery.or(`user_id.eq.${safeSeller},user_id.is.null`);
       }
-      let fallbackOrdered = applyTrackOrdering(fallbackQuery, false);
+      let fallbackOrdered = applyTrackOrdering(fallbackQuery);
       if (pagination) {
         fallbackOrdered = fallbackOrdered.range(
           pagination.offset,
