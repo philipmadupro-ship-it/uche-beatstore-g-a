@@ -6,7 +6,9 @@ import {
   type ImageUploadValidationError,
 } from '@/lib/upload/image-validation';
 
-export const coverArtImportLimits = imageUploadLimits;
+// The studio reads imports in the browser and never posts them, so it keeps
+// its own ceiling rather than the server's upload limit.
+export const coverArtImportLimits = { ...imageUploadLimits, maxSizeBytes: 8 * 1024 * 1024 };
 
 export type CoverArtImportError = ImageUploadValidationError | 'read-failed';
 
@@ -15,7 +17,7 @@ export type CoverArtImportValidation =
   | { ok: false; error: CoverArtImportError };
 
 export function validateCoverArtImport(file: Pick<File, 'type' | 'size'>): CoverArtImportValidation {
-  const result = validateImageUpload(file);
+  const result = validateImageUpload(file, coverArtImportLimits.maxSizeBytes);
   if (!result.ok) {
     return result;
   }
@@ -27,7 +29,7 @@ export function coverArtImportErrorMessage(error: CoverArtImportError) {
   if (error === 'read-failed') {
     return 'Artwork could not be read.';
   }
-  return imageUploadErrorMessage(error);
+  return imageUploadErrorMessage(error, coverArtImportLimits.maxSizeBytes);
 }
 
 export function readCoverArtFile(file: File): Promise<CoverArtArtworkSource> {

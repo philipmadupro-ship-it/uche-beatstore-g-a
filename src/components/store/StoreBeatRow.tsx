@@ -6,7 +6,7 @@ import { Camera, Clock, GripVertical, Loader2, Music } from 'lucide-react';
 import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
 import { InlineText } from '@/components/ui/InlineText';
 import { toast } from '@/hooks/useToast';
-import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { discardUploadedImage, getImageUploadPreflightError, uploadImageFile } from '@/lib/upload/image-upload-client';
 import { beatPublishState, parsePriceInput } from '@/lib/store-editor/beat-row';
 
 export interface StoreBeatRowTrack {
@@ -77,6 +77,9 @@ export function StoreBeatRow({
   onDragStart, onDragOver, onDragEnd,
 }: Props) {
   const [uploadingCover, setUploadingCover] = useState(false);
+  // Local object URL shown while the upload runs, so the new art appears the
+  // moment it is picked instead of after the round trip.
+  const [pendingCover, setPendingCover] = useState<string | null>(null);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleDraft, setScheduleDraft] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -86,17 +89,28 @@ export function StoreBeatRow({
 
   const handleCoverFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (fileRef.current) fileRef.current.value = '';
+    if (!file || uploadingCover) return;
+    const preflightError = getImageUploadPreflightError(file);
+    if (preflightError) {
+      toast.error('Cover upload failed', preflightError);
+      return;
+    }
+    const localPreview = URL.createObjectURL(file);
+    setPendingCover(localPreview);
     setUploadingCover(true);
     try {
       const coverUrl = await uploadImageFile(file);
       const ok = await onPatch({ cover_url: coverUrl });
       if (ok) toast.success('Cover updated');
+      // The row did not take it; don't leave the object in the bucket.
+      else void discardUploadedImage(coverUrl);
     } catch (err) {
       toast.error('Cover upload failed', err instanceof Error ? err.message : 'Try again');
     } finally {
       setUploadingCover(false);
-      if (fileRef.current) fileRef.current.value = '';
+      setPendingCover(null);
+      URL.revokeObjectURL(localPreview);
     }
   };
 
@@ -196,13 +210,15 @@ export function StoreBeatRow({
       <button
         type="button"
         onClick={() => fileRef.current?.click()}
-        aria-label={`Change cover for ${track.title}`}
+        disabled={uploadingCover}
+        aria-busy={uploadingCover}
+        aria-label={uploadingCover ? `Uploading cover for ${track.title}` : `Change cover for ${track.title}`}
         className="group/cover relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-white/20 bg-white/[0.05]"
       >
-        {track.cover_url
-          ? <Image src={track.cover_url} alt="" width={36} height={36} unoptimized className="h-full w-full object-cover" />
+        {pendingCover ?? track.cover_url
+          ? <Image src={(pendingCover ?? track.cover_url)!} alt="" width={36} height={36} unoptimized className="h-full w-full object-cover" />
           : <span className="flex h-full w-full items-center justify-center text-white/30"><Music size={12} /></span>}
-        <span className="absolute inset-0 grid place-items-center bg-black/60 opacity-0 transition-opacity group-hover/cover:opacity-100">
+        <span className={`absolute inset-0 grid place-items-center bg-black/60 transition-opacity group-hover/cover:opacity-100 ${uploadingCover ? 'opacity-100' : 'opacity-0'}`}>
           {uploadingCover ? <Loader2 size={11} className="animate-spin text-white" /> : <Camera size={11} className="text-white" />}
         </span>
       </button>
