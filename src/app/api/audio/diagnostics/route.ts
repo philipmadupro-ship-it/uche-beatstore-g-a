@@ -22,6 +22,8 @@ interface AudioDiagnosticsTrackEntry extends AudioDiagnosticsTrackRow {
 }
 
 interface AudioDiagnosticsResponse {
+  /** Producer-only: whether ffmpeg runs in this function and why not. */
+  ffmpeg?: { available: boolean; bin: string | null; attempts: Array<{ bin: string; exists: boolean | null; error: string | null; copiedTo?: string }> };
   env: {
     app_url: string | null;
     r2_public_url: string | null;
@@ -116,6 +118,14 @@ export async function GET() {
   if (!auth.ok) {
     out.hints.push('Sign in to see per-track diagnostics.');
     return NextResponse.json(out, { status: 401 });
+  }
+
+  // Preview clips are MP3 only when ffmpeg runs; otherwise they fall back to
+  // multi-megabyte byte-truncated WAVs. Say which, and why.
+  const { ffmpegStatus } = await import('@/lib/audio/convert');
+  out.ffmpeg = await ffmpegStatus();
+  if (!out.ffmpeg.available) {
+    out.hints.push('ffmpeg does not run in this function — preview clips fall back to large WAVs. See ffmpeg.attempts for why.');
   }
 
   const admin = createServiceClient();

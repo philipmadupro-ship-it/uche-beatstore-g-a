@@ -3,6 +3,12 @@ import 'server-only';
 // imports here break Turbopack's app-route bundling — its stub for
 // `fs` doesn't expose the `promises` namespace, and we don't want this
 // module ever pulled into a non-Node bundle anyway.
+import {
+  ffmpegCandidatePaths,
+  probeFfmpeg,
+  type FfmpegProbe,
+  type FfmpegProbeDeps,
+} from './ffmpeg-locate';
 
 /**
  * Server-side audio conversion via ffmpeg.
@@ -43,56 +49,76 @@ function ffmpegEnv(): NodeJS.ProcessEnv {
 }
 
 /**
- * Resolve the ffmpeg binary candidates without importing `ffmpeg-static`.
+ * Locating the binary: lib/audio/ffmpeg-locate. We never import
+ * `ffmpeg-static` (its dynamic require makes Turbopack's NFT tracer pull in
+ * the whole project); next.config.ts traces the binary file itself.
  *
- * The package's JS entry point uses a dynamic require/path join that makes
- * Turbopack's NFT tracer think the whole project should be included. The
- * installed binary path is stable (`node_modules/ffmpeg-static/ffmpeg` on
- * macOS/Linux), and next.config.ts explicitly traces that file for deployment.
+ * Positive results cache forever; NEGATIVE results expire after 60s so a
+ * transient failure does not strand the process. The last probe is kept for
+ * `ffmpegStatus()`, which is how a producer can see WHY it failed.
  */
 let ffmpegBinCache: string | null = null;
-function ffmpegCandidates(): string[] {
-  const candidates: string[] = [];
-  if (process.env.FFMPEG_BIN) candidates.push(process.env.FFMPEG_BIN);
-  candidates.push(
-    `./node_modules/ffmpeg-static/ffmpeg${process.platform === 'win32' ? '.exe' : ''}`,
-    'ffmpeg',
-  );
-  return [...new Set(candidates)];
-}
-
-/**
- * Detect ffmpeg availability. Positive results cache forever (the binary
- * isn't going to vanish mid-process); NEGATIVE results expire after
- * 60s so a transient flake (zombie pid, slow brew install completing
- * mid-dev-session, etc.) doesn't permanently strand the analyze flow
- * for the rest of the process lifetime.
- */
 let ffmpegAvailable: boolean | null = null;
 let ffmpegCheckedAt = 0;
+let lastProbe: FfmpegProbe | null = null;
 const FFMPEG_NEG_TTL_MS = 60_000;
+
+async function probeDeps(): Promise<FfmpegProbeDeps> {
+  const { spawn } = await import('node:child_process');
+  const fs = await import('node:fs/promises');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  return {
+    exists: async (bin) => {
+      if (!bin.includes('/')) return null; // bare name, resolved through PATH
+      try { await fs.access(bin); return true; } catch { return false; }
+    },
+    run: (bin) => new Promise<string | null>((resolve) => {
+      let stderr = '';
+      let proc;
+      try {
+        proc = spawn(bin, ['-version'], { stdio: ['ignore', 'ignore', 'pipe'], env: ffmpegEnv() });
+      } catch (e) {
+        resolve((e as NodeJS.ErrnoException).code ?? String(e));
+        return;
+      }
+      proc.stderr?.on('data', (d: Buffer) => { if (stderr.length < 400) stderr += d.toString(); });
+      proc.on('error', (e: NodeJS.ErrnoException) => resolve(e.code ?? e.message));
+      proc.on('exit', (code, signal) => resolve(
+        code === 0 ? null : `exit ${code ?? signal}${stderr ? `: ${stderr.trim().slice(0, 200)}` : ''}`,
+      ));
+    }),
+    copyExecutable: async (bin) => {
+      const dest = path.join(os.tmpdir(), 'ffmpeg-bin');
+      await fs.copyFile(bin, dest);
+      await fs.chmod(dest, 0o755);
+      return dest;
+    },
+  };
+}
 
 async function checkFfmpeg(): Promise<boolean> {
   if (ffmpegAvailable === true) return true;
   if (ffmpegAvailable === false && Date.now() - ffmpegCheckedAt < FFMPEG_NEG_TTL_MS) {
     return false;
   }
-  const { spawn } = await import('node:child_process');
-  ffmpegAvailable = false;
-  for (const bin of ffmpegCandidates()) {
-    const ok = await new Promise<boolean>((resolve) => {
-      const proc = spawn(bin, ['-version'], { stdio: 'ignore', env: ffmpegEnv() });
-      proc.on('error', () => resolve(false));
-      proc.on('exit', (code) => resolve(code === 0));
-    });
-    if (ok) {
-      ffmpegBinCache = bin;
-      ffmpegAvailable = true;
-      break;
-    }
-  }
+  const candidates = ffmpegCandidatePaths({
+    envBin: process.env.FFMPEG_BIN,
+    cwd: process.cwd(),
+    platform: process.platform,
+  });
+  lastProbe = await probeFfmpeg(candidates, await probeDeps());
+  ffmpegBinCache = lastProbe.bin;
+  ffmpegAvailable = Boolean(lastProbe.bin);
   ffmpegCheckedAt = Date.now();
+  if (!ffmpegAvailable) console.warn('ffmpeg unavailable', JSON.stringify(lastProbe.attempts));
   return ffmpegAvailable;
+}
+
+/** Whether ffmpeg runs here, which binary, and why each candidate failed. */
+export async function ffmpegStatus(): Promise<{ available: boolean } & FfmpegProbe> {
+  const available = await checkFfmpeg();
+  return { available, bin: ffmpegBinCache, attempts: lastProbe?.attempts ?? [] };
 }
 
 async function runFfmpegToBuffer(

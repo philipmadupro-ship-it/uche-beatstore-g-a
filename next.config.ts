@@ -91,6 +91,7 @@ const nextConfig: NextConfig = {
     '/api/upload': ['./node_modules/ffmpeg-static/ffmpeg'],
     '/api/cron/process-uploads': ['./node_modules/ffmpeg-static/ffmpeg'],
     '/api/tracks/previews/backfill': ['./node_modules/ffmpeg-static/ffmpeg'],
+    '/api/audio/diagnostics': ['./node_modules/ffmpeg-static/ffmpeg'],
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {

@@ -15,6 +15,8 @@ export const maxDuration = 300;
 /** Per click. A single-producer catalogue rarely has more listed beats than this missing a clip. */
 const BATCH = 12;
 
+const isWavPreview = (url: string | null | undefined) => typeof url === 'string' && /\.wav(?:\?|$)/i.test(url);
+
 /**
  * POST /api/tracks/previews/backfill
  *
@@ -35,12 +37,17 @@ export async function POST() {
       .from('tracks')
       .select('id, title, audio_url, duration_seconds, preview_status, preview_url, peaks_url, store_listed, created_at')
       .eq('user_id', auth.userId)
-      .eq('store_listed', true)
-      .or('preview_status.is.null,preview_status.neq.ready,preview_url.is.null');
+      .eq('store_listed', true);
     if (error) throw error;
     const rows = (data ?? []) as Array<PreviewBackfillRow & { title?: string | null }>;
     // Only the preview is this button's job; peaks-only rows have their own.
-    const needing = rows.filter((r) => !r.preview_url || r.preview_status !== 'ready');
+    const { ffmpegStatus } = await import('@/lib/audio/convert');
+    const ffmpeg = await ffmpegStatus();
+    // A byte-truncated WAV clip plays, but it is tens of MB. Once ffmpeg runs,
+    // re-make those as ~1 MB MP3s; without it, redoing them changes nothing.
+    const needing = rows
+      .filter((r) => !r.preview_url || r.preview_status !== 'ready' || (ffmpeg.available && isWavPreview(r.preview_url)))
+      .map((r) => (r.preview_url && isWavPreview(r.preview_url) ? { ...r, preview_status: 'none' } : r));
     const result = await runPreviewBackfill(auth.admin, needing, BATCH);
     const titles = new Map(rows.map((r) => [r.id, r.title ?? r.id]));
     // The batch picker skips these silently; the producer needs to hear it.
@@ -50,6 +57,11 @@ export async function POST() {
     return NextResponse.json({
       ...result,
       needed: needing.length,
+      // Without ffmpeg a clip is a byte-truncated WAV (tens of MB), not a ~1 MB MP3.
+      ffmpeg: {
+        available: ffmpeg.available,
+        reason: ffmpeg.available ? null : ffmpeg.attempts.map((a) => `${a.bin}: ${a.error}`).join(' · '),
+      },
       failed: result.failed + unsupported.length,
       reasons: [...unsupported, ...result.reasons]
         .filter((r) => r.stage !== 'peaks')
