@@ -367,3 +367,37 @@ function uploadLocal(fileBuffer: Buffer, fileName: string, prefix = ''): string 
 
   return `/uploads/${prefix ? `${prefix}/` : ''}${safeName}`;
 }
+
+/**
+ * Map a URL returned by `uploadImage` back to its object key — and ONLY such
+ * a URL: our public origin (or the local fallback path), under `covers/`, in
+ * the exact nanoid.ext shape `uploadImage` mints. Anything else is null, so
+ * the delete path below can never be pointed at another object.
+ */
+export function uploadedImageKey(url: string): string | null {
+  const match = /^covers\/[A-Za-z0-9_-]{10}\.(?:jpg|png|webp)$/;
+  const localPrefix = '/uploads/';
+  if (url.startsWith(localPrefix)) {
+    const key = url.slice(localPrefix.length);
+    return match.test(key) ? key : null;
+  }
+  const publicUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, '');
+  if (!publicUrl || !url.startsWith(`${publicUrl}/`)) return null;
+  const key = url.slice(publicUrl.length + 1);
+  return match.test(key) ? key : null;
+}
+
+/** Delete an image stored by `uploadImage`. Returns false for foreign URLs. */
+export async function deleteUploadedImage(url: string): Promise<boolean> {
+  const key = uploadedImageKey(url);
+  if (!key) return false;
+  if (url.startsWith('/uploads/')) {
+    const local = path.join(process.cwd(), 'public', 'uploads', key);
+    if (fs.existsSync(local)) fs.unlinkSync(local);
+    return true;
+  }
+  const bucketName = process.env.R2_BUCKET_NAME;
+  if (!bucketName) return false;
+  await r2.send(new DeleteObjectCommand({ Bucket: bucketName, Key: key }));
+  return true;
+}

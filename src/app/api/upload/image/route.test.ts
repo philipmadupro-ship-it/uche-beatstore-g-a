@@ -5,8 +5,11 @@ import { imageUploadLimits } from '@/lib/upload/image-validation';
 const mockUploadImage = vi.fn();
 const mockRequireUser = vi.fn();
 
+const mockDeleteUploadedImage = vi.fn();
 vi.mock('@/lib/storage/upload', () => ({
   uploadImage: (...args: unknown[]) => mockUploadImage(...args),
+  deleteUploadedImage: (...args: unknown[]) => mockDeleteUploadedImage(...args),
+  uploadedImageKey: (url: string) => (url.startsWith('/uploads/covers/') ? url.slice('/uploads/'.length) : null),
 }));
 
 vi.mock('@/lib/auth/ownership', () => ({
@@ -67,7 +70,7 @@ describe('POST /api/upload/image', () => {
     )));
 
     expect(response.status).toBe(413);
-    expect(await response.json()).toEqual({ error: 'Keep artwork under 8 MB.' });
+    expect(await response.json()).toEqual({ error: 'Keep artwork under 4 MB.' });
     expect(mockUploadImage).not.toHaveBeenCalled();
   });
 
@@ -99,5 +102,70 @@ describe('POST /api/upload/image', () => {
 
     expect(response.status).toBe(415);
     expect(mockUploadImage).not.toHaveBeenCalled();
+  });
+});
+
+/** Admin stub: every reference lookup resolves with the given count/error. */
+function adminWith(result: { count: number | null; error: unknown }, seen: string[] = []) {
+  return {
+    from: (table: string) => ({
+      select: () => ({
+        eq: (column: string) => { seen.push(`${table}.${column}`); return Promise.resolve(result); },
+      }),
+    }),
+  };
+}
+
+function deleteRequest(body: unknown): NextRequest {
+  return new NextRequest('http://localhost/api/upload/image', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+describe('DELETE /api/upload/image', () => {
+  const url = '/uploads/covers/abcDEF_123.webp';
+
+  it('requires a producer', async () => {
+    mockRequireUser.mockResolvedValueOnce({ ok: false, res: Response.json({ error: 'x' }, { status: 403 }) });
+    const mod = await loadRoute();
+    const res = await mod.DELETE(deleteRequest({ url }));
+    expect(res.status).toBe(403);
+    expect(mockDeleteUploadedImage).not.toHaveBeenCalled();
+  });
+
+  it('refuses URLs that uploadImage did not mint', async () => {
+    mockRequireUser.mockResolvedValueOnce({ ok: true, userId: 'u1', admin: adminWith({ count: 0, error: null }) });
+    const mod = await loadRoute();
+    const res = await mod.DELETE(deleteRequest({ url: 'https://evil.example/covers/abcDEF_123.webp' }));
+    expect(res.status).toBe(400);
+    expect(mockDeleteUploadedImage).not.toHaveBeenCalled();
+  });
+
+  it('refuses while any row still references the image', async () => {
+    const seen: string[] = [];
+    mockRequireUser.mockResolvedValueOnce({ ok: true, userId: 'u1', admin: adminWith({ count: 1, error: null }, seen) });
+    const mod = await loadRoute();
+    const res = await mod.DELETE(deleteRequest({ url }));
+    expect(res.status).toBe(409);
+    expect(seen).toContain('tracks.cover_url');
+    expect(mockDeleteUploadedImage).not.toHaveBeenCalled();
+  });
+
+  it('fails safe when a reference lookup errors', async () => {
+    mockRequireUser.mockResolvedValueOnce({ ok: true, userId: 'u1', admin: adminWith({ count: null, error: { message: 'column does not exist' } }) });
+    const mod = await loadRoute();
+    const res = await mod.DELETE(deleteRequest({ url }));
+    expect(res.status).toBe(409);
+    expect(mockDeleteUploadedImage).not.toHaveBeenCalled();
+  });
+
+  it('deletes an unreferenced upload', async () => {
+    mockRequireUser.mockResolvedValueOnce({ ok: true, userId: 'u1', admin: adminWith({ count: 0, error: null }) });
+    const mod = await loadRoute();
+    const res = await mod.DELETE(deleteRequest({ url }));
+    expect(res.status).toBe(200);
+    expect(mockDeleteUploadedImage).toHaveBeenCalledWith(url);
   });
 });

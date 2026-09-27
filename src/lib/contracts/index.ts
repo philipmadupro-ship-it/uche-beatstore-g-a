@@ -41,6 +41,12 @@ export const TagDeleteBodySchema = z.object({
 });
 export type TagDeleteBody = z.infer<typeof TagDeleteBodySchema>;
 
+// DELETE /api/upload/image — discard an uploaded cover nothing references.
+export const UploadedImageDeleteBodySchema = z.object({
+  url: z.string().min(1).max(2000),
+}).strict();
+export type UploadedImageDeleteBody = z.infer<typeof UploadedImageDeleteBodySchema>;
+
 // PATCH /api/tracks/[id] — allow-list editable columns. Anything not
 // in this schema is dropped by readBody, which prevents callers from
 // writing to internal columns (user_id, id, analyze_status) or

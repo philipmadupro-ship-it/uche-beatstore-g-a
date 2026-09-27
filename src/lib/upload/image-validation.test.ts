@@ -23,6 +23,14 @@ describe('image upload validation', () => {
 
   it('returns producer-facing validation messages', () => {
     expect(imageUploadErrorMessage('unsupported-type')).toBe('Use JPG, PNG, or WebP artwork.');
-    expect(imageUploadErrorMessage('too-large')).toBe('Keep artwork under 8 MB.');
+    expect(imageUploadErrorMessage('too-large')).toBe('Keep artwork under 4 MB.');
+    expect(imageUploadErrorMessage('too-large', 40 * 1024 * 1024)).toBe('Keep artwork under 40 MB.');
+  });
+
+  it('keeps the stored limit under the platform request-body ceiling', () => {
+    // Vercel refuses bodies over 4.5 MB with a non-JSON 413 before the route
+    // runs; the multipart envelope needs headroom on top of the file.
+    expect(imageUploadLimits.maxSizeBytes).toBeLessThan(4.5 * 1024 * 1024 - 64 * 1024);
+    expect(imageUploadLimits.maxSourceBytes).toBeGreaterThan(imageUploadLimits.maxSizeBytes);
   });
 });

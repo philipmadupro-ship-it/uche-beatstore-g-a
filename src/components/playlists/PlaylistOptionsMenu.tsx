@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { PlaylistFolderSelect } from './PlaylistFolderSelect';
 import { PlaylistTagPicker } from './PlaylistTagPicker';
-import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { uploadAndAttachImage } from '@/lib/upload/image-upload-client';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
 
@@ -35,7 +35,8 @@ export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'r
       const res = await fetch(`/api/playlists/${playlist.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j?.error || `HTTP ${res.status}`); }
       onChanged?.();
-    } catch (err) { toast.error("Couldn't save", err instanceof Error ? err.message : ''); }
+      return true;
+    } catch (err) { toast.error("Couldn't save", err instanceof Error ? err.message : ''); return false; }
     finally { setBusy(null); }
   };
 
@@ -43,9 +44,8 @@ export function PlaylistOptionsMenu({ playlist, onChanged, onDeleted, align = 'r
     const file = e.target.files?.[0]; if (!file) return;
     setBusy('cover');
     try {
-      const coverUrl = await uploadImageFile(file);
-      await patch({ cover_url: coverUrl }, 'cover');
-      toast.success('Cover updated');
+      const coverUrl = await uploadAndAttachImage(file, (url) => patch({ cover_url: url }, 'cover'));
+      if (coverUrl) toast.success('Cover updated');
     } catch (err) { toast.error('Cover upload failed', err instanceof Error ? err.message : ''); setBusy(null); }
     finally { if (fileRef.current) fileRef.current.value = ''; }
   };

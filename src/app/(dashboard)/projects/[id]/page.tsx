@@ -24,7 +24,7 @@ import { Track } from '@/lib/types';
 import { usePlayer } from '@/hooks/usePlayer';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
-import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { uploadAndAttachImage } from '@/lib/upload/image-upload-client';
 import { CoverEditor } from '@/components/ui/CoverEditor';
 
 type ProjectStatus = 'in_progress' | 'final' | 'archived';
@@ -131,18 +131,19 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
     if (!file) return;
     setUploadingArt(true);
     try {
-      const coverUrl = await uploadImageFile(file);
-      const patch = await fetch(`/api/projects/${params.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cover_url: coverUrl }),
-      });
-      if (!patch.ok) {
+      // A rejected save discards the upload rather than orphaning it.
+      const coverUrl = await uploadAndAttachImage(file, async (url) => {
+        const patch = await fetch(`/api/projects/${params.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cover_url: url }),
+        });
+        if (patch.ok) return true;
         const e = await patch.json().catch(() => ({}));
         toast.error('Could not save cover', e.error || `HTTP ${patch.status}`);
-        return;
-      }
-      fetchData();
+        return false;
+      });
+      if (coverUrl) fetchData();
     } catch (err) {
       toast.error('Cover upload failed', err instanceof Error ? err.message : 'Try again');
     } finally {

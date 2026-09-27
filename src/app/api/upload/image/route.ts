@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { uploadImage } from '@/lib/storage/upload';
+import { deleteUploadedImage, uploadImage, uploadedImageKey } from '@/lib/storage/upload';
 import { requireProducer } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { readBody } from '@/lib/validate';
+import { UploadedImageDeleteBodySchema } from '@/lib/contracts';
 import { imageUploadErrorMessage, matchesImageSignature, validateImageUpload } from '@/lib/upload/image-validation';
 const log = createLogger('api.upload.image');
 
@@ -57,5 +59,54 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     log.error('Image Upload Error:', { error: errorMessage(error) });
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+  }
+}
+
+/**
+ * Columns that can hold a URL minted by POST above. DELETE refuses while any
+ * of them points at the image — including when the check itself errors (for
+ * example a column a pending migration has not added yet): skipping cleanup
+ * costs an orphaned object, deleting a live cover costs the producer's art.
+ */
+const IMAGE_REFERENCES: Array<{ table: string; column: string }> = [
+  { table: 'tracks', column: 'cover_url' },
+  { table: 'projects', column: 'cover_url' },
+  { table: 'playlists', column: 'cover_url' },
+  ...['hero_image_url', 'og_image_url', 'logo_url', 'default_artwork_url',
+    'default_artwork_project_url', 'default_artwork_playlist_url']
+    .map((column) => ({ table: 'creator_profiles', column })),
+];
+
+/**
+ * DELETE /api/upload/image  { url }
+ *
+ * Cleanup for an upload whose row PATCH failed, so a failed save does not
+ * leave an orphaned object in the public bucket. Only URLs in the exact shape
+ * POST returns are accepted, and only while no row references them.
+ */
+export async function DELETE(req: NextRequest) {
+  try {
+    const auth = await requireProducer();
+    if (!auth.ok) return auth.res;
+
+    const parsed = await readBody(req, UploadedImageDeleteBodySchema);
+    if (!parsed.ok) return parsed.res;
+    const { url } = parsed.data;
+    if (!uploadedImageKey(url)) {
+      return NextResponse.json({ error: 'Not an uploaded image' }, { status: 400 });
+    }
+
+    const checks = await Promise.all(IMAGE_REFERENCES.map(({ table, column }) =>
+      // Not owner-filtered on purpose: a reference from ANY row blocks deletion.
+      auth.admin.from(table).select('*', { head: true, count: 'exact' }).eq(column, url)));
+    if (checks.some(({ error, count }) => error || (count ?? 0) > 0)) {
+      return NextResponse.json({ error: 'Image is in use' }, { status: 409 });
+    }
+
+    await deleteUploadedImage(url);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    log.error('Image delete error:', { error: errorMessage(error) });
+    return NextResponse.json({ error: 'Delete failed' }, { status: 500 });
   }
 }

@@ -7,11 +7,24 @@
  * nothing, and a price that appears to save when the PATCH was rejected.
  */
 
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { StoreBeatRow, type StoreBeatRowTrack } from './StoreBeatRow';
+import { toast } from '@/hooks/useToast';
 
-vi.mock('@/lib/upload/image-upload-client', () => ({ uploadImageFile: vi.fn() }));
+const upload = vi.hoisted(() => ({
+  uploadImageFile: vi.fn(),
+  discardUploadedImage: vi.fn(),
+  // Same contract as the real helper, over the mocked upload/discard.
+  uploadAndAttachImage: async (file: File, attach: (url: string) => Promise<boolean>) => {
+    const url: string = await upload.uploadImageFile(file);
+    const ok = await attach(url);
+    if (!ok) upload.discardUploadedImage(url);
+    return ok ? url : null;
+  },
+  getImageUploadPreflightError: vi.fn((): string | null => null),
+}));
+vi.mock('@/lib/upload/image-upload-client', () => upload);
 
 afterEach(cleanup);
 
@@ -151,5 +164,64 @@ describe('StoreBeatRow', () => {
     renderRow({ lease_price_usd: null }, { defaultLeasePrice: 25 });
     expect(screen.getByRole('button', { name: 'Edit Lease price for Midnight' }).textContent)
       .toContain('$25 (default)');
+  });
+});
+
+describe('StoreBeatRow cover upload', () => {
+  const pick = (file = new File([new Uint8Array([0xff, 0xd8, 0xff])], 'cover.jpg', { type: 'image/jpeg' })) => {
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    upload.getImageUploadPreflightError.mockReturnValue(null);
+    URL.createObjectURL = vi.fn(() => 'blob:local-preview');
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  it('patches the uploaded URL, previews immediately and blocks a second pick while busy', async () => {
+    let finish!: (url: string) => void;
+    upload.uploadImageFile.mockReturnValue(new Promise<string>((r) => { finish = r; }));
+    const { onPatch } = renderRow();
+    pick();
+
+    const busy = await screen.findByRole('button', { name: 'Uploading cover for Midnight' });
+    expect((busy as HTMLButtonElement).disabled).toBe(true);
+    expect(busy.querySelector('img')?.getAttribute('src')).toBe('blob:local-preview');
+
+    pick();
+    expect(upload.uploadImageFile).toHaveBeenCalledTimes(1);
+
+    finish('https://cdn.example/covers/abcDEF_123.webp');
+    await waitFor(() => expect(onPatch).toHaveBeenCalledWith({ cover_url: 'https://cdn.example/covers/abcDEF_123.webp' }));
+    await screen.findByRole('button', { name: 'Change cover for Midnight' });
+    expect(upload.discardUploadedImage).not.toHaveBeenCalled();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:local-preview');
+  });
+
+  it('discards the uploaded object when the row save fails', async () => {
+    upload.uploadImageFile.mockResolvedValue('https://cdn.example/covers/abcDEF_123.webp');
+    const onPatch = vi.fn().mockResolvedValue(false);
+    renderRow({}, { onPatch });
+    pick();
+    await waitFor(() => expect(upload.discardUploadedImage).toHaveBeenCalledWith('https://cdn.example/covers/abcDEF_123.webp'));
+  });
+
+  it('never patches when the upload fails, and says why', async () => {
+    const spy = vi.spyOn(toast, 'error');
+    upload.uploadImageFile.mockRejectedValue(new Error('Keep artwork under 4 MB.'));
+    const { onPatch } = renderRow();
+    pick();
+    await waitFor(() => expect(spy).toHaveBeenCalledWith('Cover upload failed', 'Keep artwork under 4 MB.'));
+    expect(onPatch).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid file before any network work', async () => {
+    upload.getImageUploadPreflightError.mockReturnValue('Use JPG, PNG, or WebP artwork.');
+    const { onPatch } = renderRow();
+    pick(new File(['gif'], 'x.gif', { type: 'image/gif' }));
+    expect(upload.uploadImageFile).not.toHaveBeenCalled();
+    expect(onPatch).not.toHaveBeenCalled();
   });
 });
