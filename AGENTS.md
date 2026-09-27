@@ -5,7 +5,7 @@ Single-producer beatstore. The product is two things in one app:
 1. A **private dashboard** the producer uses to write, store, organise, and sell music.
 2. A **public storefront** buyers visit to discover, preview, and license that music — either one track at a time or as a whole project bundle.
 
-Prod: `uche-beatstore-g.vercel.app`. Internal name: `antigravity`. One human user (the producer); everyone else is a guest visitor who may or may not become a buyer.
+Prod: `uche-beatstore-g-a.vercel.app`. Internal name: `antigravity`. One human user (the producer); everyone else is a guest visitor who may or may not become a buyer.
 
 Engineering reference (stack, layout, conventions, gotchas, env vars): see **CLAUDE.md**. This document describes *what the product is*, not how it's built.
 

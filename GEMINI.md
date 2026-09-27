@@ -9,7 +9,7 @@ Working notes for Gemini CLI agent. Full product spec lives in AGENTS.md.
 ## Project
 
 **U2C Beatstore** (codename `antigravity`). Single-user producer beatstore.
-Prod: `uche-beatstore-g.vercel.app`.
+Prod: `uche-beatstore-g-a.vercel.app`.
 
 ## Stack
 Next.js 16 (App Router, Turbopack) · TypeScript strict · Tailwind · Supabase (Auth + Postgres + RLS) · Cloudflare R2 · Resend · Stripe · Wavesurfer · Zustand · Zod · Lucide React · Vitest.

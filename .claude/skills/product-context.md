@@ -7,7 +7,7 @@ Two surfaces:
 1. Private dashboard — manage tracks, projects, playlists, contacts, campaigns, calendar, store, sales, analytics, profile, settings, offline.
 2. Public storefront — browse, preview, and buy track licenses or project bundles.
 
-Prod: `uche-beatstore-g.vercel.app`. 500–600+ contacts. Library of 100+ tracks.
+Prod: `uche-beatstore-g-a.vercel.app`. 500–600+ contacts. Library of 100+ tracks.
 
 ## User model
 
