@@ -27,7 +27,7 @@ const configuredIsLocal = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(c
 const baseUrl = (
   process.env.READINESS_BASE_URL
   || (!configuredIsLocal ? configuredAppUrl : '')
-  || 'https://uche-beatstore-g.vercel.app'
+  || 'https://uche-beatstore-g-a.vercel.app'
 ).replace(/\/$/, '');
 
 if (!supabaseUrl || !serviceRoleKey) {

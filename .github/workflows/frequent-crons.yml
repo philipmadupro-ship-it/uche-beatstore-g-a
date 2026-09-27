@@ -7,7 +7,7 @@ name: frequent-crons
 #
 # Setup (repo → Settings → Secrets and variables → Actions):
 #   CRON_SECRET  — same value as the Vercel env var
-#   APP_URL      — e.g. https://uche-beatstore-g.vercel.app
+#   APP_URL      — e.g. https://uche-beatstore-g-a.vercel.app
 # Until both exist, every run exits early and does nothing.
 #
 # GitHub may start scheduled runs a few minutes late under load, and pauses
