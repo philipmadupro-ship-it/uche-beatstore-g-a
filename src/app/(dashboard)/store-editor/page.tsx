@@ -486,7 +486,7 @@ function GeneratePreviewsButton({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
       setResult(data);
-      if (data.needed === 0) toast.success('Every listed beat already has a preview');
+      if (data.needed === 0) toast.success('Every listed and bundled beat already has a preview');
       else if (data.failed === 0) toast.success(`Generated ${data.processed} preview${data.processed === 1 ? '' : 's'}`);
       else toast.warning(`${data.processed}/${data.needed} previews generated`, `${data.failed} failed — see below`);
       await onComplete?.();
@@ -511,7 +511,7 @@ function GeneratePreviewsButton({
         <div className="space-y-1 text-[11px] text-white/80" role="status">
           <p>
             {result.needed === 0
-              ? 'Nothing needed — every listed beat has a preview.'
+              ? 'Nothing needed — every listed and bundled beat has a preview.'
               : `${result.processed}/${result.needed} generated${result.failed > 0 ? ` · ${result.failed} failed` : ''}.`}
           </p>
           {result.reasons.length > 0 && (
@@ -3036,7 +3036,7 @@ export default function StoreEditorPage() {
                 : 'all ready'}
             >
               <p className="text-[11px] text-white/40">
-                A listed beat needs a short public preview clip to play on /store — the full master is never streamed. Beats without one show in the catalogue but do nothing when a buyer presses play.
+                A listed beat, or a beat in a featured bundle, needs a short public preview clip to play on /store — the full master is never streamed. Beats without one show in the catalogue or the bundle but do nothing when a buyer presses play. Each click makes up to 12.
               </p>
               <GeneratePreviewsButton
                 missingCount={listedNoPreviewCount}

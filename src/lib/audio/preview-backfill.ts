@@ -42,6 +42,7 @@ export async function runPreviewBackfill(
   let failed = 0;
   let skippedTooLarge = 0;
   const reasons: Array<{ id: string; stage: string; error: string }> = [];
+  const done = new Set<string>();
 
   // Sequential on purpose: one master buffered at a time keeps memory bounded.
   for (const track of candidates) {
@@ -133,10 +134,29 @@ export async function runPreviewBackfill(
         continue;
       }
       processed++;
+      done.add(track.id);
     } catch (err) {
       failed++;
       reasons.push({ id: track.id, stage: 'unknown', error: errorMessage(err) });
       log.warn('preview backfill failed', { trackId: track.id, error: errorMessage(err) });
+    }
+  }
+
+  // A clip that could not be made is marked 'failed' so pickPreviewBatch puts
+  // it behind everything that can still succeed. Before this, the same
+  // unfixable masters were re-picked first on every run, and a small batch
+  // (the drain workflow's, or a slow night's) never reached the rest. They are
+  // still candidates and are retried once nothing else is waiting.
+  const unmade = candidates.filter((t) => needsPreview(t) && !done.has(t.id)).map((t) => t.id);
+  if (unmade.length > 0) {
+    try {
+      const { error: markErr } = await admin
+        .from('tracks')
+        .update({ preview_status: 'failed' })
+        .in('id', unmade);
+      if (markErr) log.warn('could not mark failed previews', { error: markErr.message });
+    } catch (e) {
+      log.warn('could not mark failed previews', { error: errorMessage(e) });
     }
   }
 

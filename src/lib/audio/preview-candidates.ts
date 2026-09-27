@@ -41,12 +41,14 @@ export function canTruncateWithoutFfmpeg(audioUrl: string | null | undefined): b
 }
 
 /**
- * Order a candidate pool and take a batch: previewable masters only; tracks
- * missing a preview before tracks missing only peaks; store-listed first;
- * then oldest first. Filtering happens BEFORE the batch is cut.
+ * Order a candidate pool and take a batch: previewable masters only; earlier
+ * failures last; tracks missing a preview before tracks missing only peaks;
+ * store-listed first; then oldest first. Filtering happens BEFORE the batch is cut.
  */
 export function pickPreviewBatch<T extends PreviewCandidateRow>(rows: T[], batch: number): T[] {
-  const rank = (r: T) => (needsPreview(r) ? 0 : 2) + (r.store_listed ? 0 : 1);
+  // A previous attempt that failed goes last, so it cannot starve the tracks
+  // behind it; it is still retried when nothing else is waiting.
+  const rank = (r: T) => (r.preview_status === 'failed' ? 4 : 0) + (needsPreview(r) ? 0 : 2) + (r.store_listed ? 0 : 1);
   return rows
     .filter((r) => isPreviewableMaster(r.audio_url) && (needsPreview(r) || !r.peaks_url))
     .sort((a, b) => rank(a) - rank(b) || String(a.created_at ?? '').localeCompare(String(b.created_at ?? '')))

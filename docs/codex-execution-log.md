@@ -8628,3 +8628,26 @@ Causes, all in code:
 - **The nightly backfill's failures were invisible:** per-track reasons went to Vercel logs only. The GitHub 15-minute workflow was also inert (repo secrets `CRON_SECRET` / `APP_URL` unset).
 
 Fix: `lib/audio/preview-clip.ts` is the single rule (75 s ffmpeg MP3, else byte-truncated mp3/wav, else null), used by `uploadPublicPreview` and therefore every upload path, and by the backfill. `lib/audio/preview-backfill.ts` is the cron's loop, now shared. `POST /api/tracks/previews/backfill` (producer-only, ffmpeg traced) runs it on the producer's listed beats and returns per-beat reasons. The Store Editor shows "won't play (no preview)" in Needs attention (`isUnplayableOnStore`, counted in `/api/tracks/store-summary`) and has a "Generate missing previews" button under Previews & waveforms. `frequent-crons.yml` is unchanged; it skips every run until the `CRON_SECRET` / `APP_URL` repo secrets exist.
+
+## 2026-09-27 - Preview backfill reaches bundle tracks; failures stop starving the queue
+
+After bundle previews were fixed (the stream route now serves featured-bundle tracks), 67 bundle
+tracks still 404'd on production. They have no preview clip, only a private master. Two causes:
+
+- **The backfill only looked at listed tracks.** The nightly cron's default scope and the Store
+  Editor's "Generate missing previews" button both filtered on `store_listed = true`. Both now also
+  take tracks in a featured bundle (`bundlePreviewCandidates` in
+  `lib/store/public-preview-access.ts`). The owner rule is the one the stream route applies: the
+  bundle's owner must own the track and be the producer. `scope=all` is unchanged.
+- **A failed clip was re-picked first, forever.** `runPreviewBackfill` never recorded a failure,
+  and `pickPreviewBatch` sorts oldest first, so the same unfixable masters led every batch. A
+  small batch (the drain's, or eight a night) never reached the tracks behind them. A clip that
+  can't be made is now marked `preview_status = 'failed'` and ranked last. It is still retried
+  once nothing else is waiting. Every consumer tests `!== 'ready'`, so `failed` still means
+  "needs a preview" everywhere, and no migration is needed because the column is free text.
+
+`.github/workflows/drain-previews.yml` is a manual job. It calls the cron two tracks at a time
+(ffmpeg takes about 5-20 s per track against a 60 s route limit) until a call processes nothing.
+**It needs the `CRON_SECRET` and `APP_URL` repo secrets, which are not set.** `frequent-crons` has
+logged "secret not set; skipping" on every run, so the time-sensitive crons have never run from
+GitHub either.
