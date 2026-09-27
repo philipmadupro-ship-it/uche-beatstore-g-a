@@ -8628,3 +8628,14 @@ Causes, all in code:
 - **The nightly backfill's failures were invisible:** per-track reasons went to Vercel logs only. The GitHub 15-minute workflow was also inert (repo secrets `CRON_SECRET` / `APP_URL` unset).
 
 Fix: `lib/audio/preview-clip.ts` is the single rule (75 s ffmpeg MP3, else byte-truncated mp3/wav, else null), used by `uploadPublicPreview` and therefore every upload path, and by the backfill. `lib/audio/preview-backfill.ts` is the cron's loop, now shared. `POST /api/tracks/previews/backfill` (producer-only, ffmpeg traced) runs it on the producer's listed beats and returns per-beat reasons. The Store Editor shows "won't play (no preview)" in Needs attention (`isUnplayableOnStore`, counted in `/api/tracks/store-summary`) and has a "Generate missing previews" button under Previews & waveforms. `frequent-crons.yml` is unchanged; it skips every run until the `CRON_SECRET` / `APP_URL` repo secrets exist.
+
+## 2026-09-27 - ffmpeg on Vercel: locate it robustly, and say why when it fails
+
+After PR #17 every listed beat played, but the three repaired clips were 20–29 MB byte-truncated WAVs. The ~1 MB MP3 path had not run, which means ffmpeg failed in production, and nothing recorded why: `checkFfmpeg` discarded stderr and swallowed spawn errors.
+
+Candidate causes, all addressed in `lib/audio/ffmpeg-locate.ts` (pure, tested):
+- the only binary path was `./node_modules/...`, **relative to the working directory**, which a serverless function does not promise is the project root. Candidates are now absolute: `FFMPEG_BIN`, `<cwd>/node_modules/ffmpeg-static/ffmpeg`, `/var/task/node_modules/ffmpeg-static/ffmpeg`, then `ffmpeg` on PATH;
+- a binary that exists but lost its execute bit in packaging (`EACCES`/`EPERM`) is copied to `/tmp` and chmod 755'd, which is the standard serverless workaround;
+- every attempt's error, including stderr on a non-zero exit, is kept and returned by `ffmpegStatus()`.
+
+Verified against the real binary: with cwd `/tmp` and a mode-644 copy it fell through to the `/tmp` copy and produced a real MP3. The reason is now visible to the producer in `/api/audio/diagnostics` (`ffmpeg`) and in the Store Editor's "Generate missing previews" result. When ffmpeg runs, that button also re-makes listed beats' WAV preview clips as MP3.
