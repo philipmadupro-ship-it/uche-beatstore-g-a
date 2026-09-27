@@ -7,6 +7,7 @@ import type { AuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
 import { extractPeaks } from '@/lib/audio/peaks';
 import { makeTruncatedPreview, DEFAULT_PREVIEW_SECONDS } from '@/lib/audio/preview';
+import { needsPreview, isPreviewableMaster, canTruncateWithoutFfmpeg } from '@/lib/audio/preview-candidates';
 import { uploadPeaksSidecar, uploadPreviewAsset } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
@@ -166,7 +167,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const wantsPeaks = !track.peaks_url;
     // Re-analyze doubles as the preview backfill: fetch the buffer when the
     // protected preview clip is missing for an mp3 master.
-    const wantsPreview = track.preview_status !== 'ready' && /\.(mp3|wav)(?:\?|$)/i.test(track.audio_url);
+    const wantsPreview = needsPreview(track) && isPreviewableMaster(track.audio_url);
     if (!buf && clientUsable && (wantsAuddEnrichment || wantsPeaks || wantsPreview)) {
       try {
         const rawUrl: string = track.audio_url;
@@ -238,6 +239,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         // graph until this code path actually runs.
         const { makePreviewMp3Buffer } = await import('@/lib/audio/convert');
         const mp3 = await makePreviewMp3Buffer(buf, DEFAULT_PREVIEW_SECONDS);
+        if (!mp3 && !canTruncateWithoutFfmpeg(track.audio_url)) {
+          throw new Error('ffmpeg unavailable and master is not mp3/wav');
+        }
         const { buffer: previewBuf, ext, contentType } = mp3
           ? { buffer: mp3, ext: 'mp3' as const, contentType: 'audio/mpeg' }
           : makeTruncatedPreview(buf, dur);
