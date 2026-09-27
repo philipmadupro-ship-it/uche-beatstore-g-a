@@ -458,6 +458,77 @@ function BackfillPeaksButton({
   );
 }
 
+/**
+ * Generate the public preview clip for listed beats that have none — the beats
+ * that sit on /store and 404 when a buyer presses play. Same code as the
+ * nightly cron, but it reports what happened per beat, including WHY a clip
+ * could not be made, instead of leaving that in server logs.
+ */
+function GeneratePreviewsButton({
+  missingCount,
+  onComplete,
+}: {
+  missingCount: number;
+  onComplete?: () => void | Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{
+    processed: number;
+    failed: number;
+    needed: number;
+    reasons: Array<{ id: string; title?: string; stage: string; error: string }>;
+  } | null>(null);
+  const run = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      const res = await fetch('/api/tracks/previews/backfill', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      setResult(data);
+      if (data.needed === 0) toast.success('Every listed beat already has a preview');
+      else if (data.failed === 0) toast.success(`Generated ${data.processed} preview${data.processed === 1 ? '' : 's'}`);
+      else toast.warning(`${data.processed}/${data.needed} previews generated`, `${data.failed} failed — see below`);
+      await onComplete?.();
+    } catch (err: unknown) {
+      toast.error('Preview generation failed', err instanceof Error ? err.message : 'try again');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={run}
+        disabled={busy}
+        className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-white text-black text-[11px] font-bold uppercase tracking-wider hover:bg-white/90 transition-colors disabled:opacity-50"
+      >
+        {busy ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+        {busy ? 'Generating…' : `Generate missing previews${missingCount > 0 ? ` (${missingCount})` : ''}`}
+      </button>
+      {result && (
+        <div className="space-y-1 text-[11px] text-white/80" role="status">
+          <p>
+            {result.needed === 0
+              ? 'Nothing needed — every listed beat has a preview.'
+              : `${result.processed}/${result.needed} generated${result.failed > 0 ? ` · ${result.failed} failed` : ''}.`}
+          </p>
+          {result.reasons.length > 0 && (
+            <ul className="space-y-0.5 text-white/60">
+              {result.reasons.map((r) => (
+                <li key={`${r.id}-${r.stage}`}>
+                  <span className="text-white/80">{r.title ?? r.id}</span> — {r.error}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <div>
@@ -509,6 +580,7 @@ interface TrackStoreSummary {
     noPrice: { count: number; firstId: string | null };
     noBpmKey: { count: number; firstId: string | null };
     missingPeaks: { count: number; firstId: string | null };
+    noPreview?: { count: number; firstId: string | null };
   };
 }
 
@@ -1784,6 +1856,7 @@ export default function StoreEditorPage() {
   const availableProducerPicks = producerPickCandidates.filter((track) => !producerPickIds.has(track.id));
   const listedMissingPeaksCount = trackSummary?.issues?.missingPeaks?.count
     ?? allTracks.filter((t) => t.store_listed && !t.peaks_url).length;
+  const listedNoPreviewCount = trackSummary?.issues?.noPreview?.count ?? 0;
 
   if (loading) {
     return (
@@ -2634,7 +2707,7 @@ export default function StoreEditorPage() {
                               <span className="w-1 h-1 rounded-full bg-amber-400/60" />
                               <span className="tabular-nums font-mono text-amber-400/90">{i.count}</span>
                               <span>listed beat{i.count === 1 ? '' : 's'} {i.label}</span>
-                              <span className="opacity-0 group-hover:opacity-100 text-amber-400/80 ml-auto">Open waveforms</span>
+                              <span className="opacity-0 group-hover:opacity-100 text-amber-400/80 ml-auto">Fix</span>
                             </button>
                           ) : (
                             /* Narrow the list below to exactly these beats
@@ -2954,14 +3027,23 @@ export default function StoreEditorPage() {
                 tracks uploaded before the peaks pipeline existed. */}
             <Section
               id="waveforms"
-              title="Waveforms"
+              title="Previews & waveforms"
               icon={<Music size={15} />}
               open={openSections.has('waveforms')}
               onToggle={() => toggleSection('waveforms')}
-              badge={listedMissingPeaksCount > 0
-                ? `${listedMissingPeaksCount} missing`
+              badge={listedNoPreviewCount + listedMissingPeaksCount > 0
+                ? `${listedNoPreviewCount + listedMissingPeaksCount} missing`
                 : 'all ready'}
             >
+              <p className="text-[11px] text-white/40">
+                A listed beat needs a short public preview clip to play on /store — the full master is never streamed. Beats without one show in the catalogue but do nothing when a buyer presses play.
+              </p>
+              <GeneratePreviewsButton
+                missingCount={listedNoPreviewCount}
+                onComplete={async () => {
+                  await refreshTrackSummary();
+                }}
+              />
               <p className="text-[11px] text-white/40">
                 If your listed beats are showing generic waveforms in /store, the original peaks were not computed at upload. Regenerate them now so the player can draw the real shape of each buyer-facing file.
               </p>

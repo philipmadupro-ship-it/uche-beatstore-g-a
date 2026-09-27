@@ -294,7 +294,7 @@ export async function POST(req: NextRequest) {
     let previewUrl: string | null = null;
     try {
       if (!audioBuffer) audioBuffer = await readAssembledBuffer(audioUrl).catch(() => null);
-      if (audioBuffer) previewUrl = await uploadPublicPreview(audioBuffer);
+      if (audioBuffer) previewUrl = await uploadPublicPreview(audioBuffer, session.fileName);
     } catch (err) {
       console.warn('Preview generation/upload failed, track remains private:', err);
     }

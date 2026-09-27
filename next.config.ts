@@ -85,6 +85,12 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/api/tracks/[id]/analyze': ['./node_modules/ffmpeg-static/ffmpeg'],
     '/api/cron/backfill-previews': ['./node_modules/ffmpeg-static/ffmpeg'],
+    // Upload processing (lib/upload/processing) runs inside these three. They
+    // were missing, so every production upload got no preview clip at all.
+    '/api/upload/complete': ['./node_modules/ffmpeg-static/ffmpeg'],
+    '/api/upload': ['./node_modules/ffmpeg-static/ffmpeg'],
+    '/api/cron/process-uploads': ['./node_modules/ffmpeg-static/ffmpeg'],
+    '/api/tracks/previews/backfill': ['./node_modules/ffmpeg-static/ffmpeg'],
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {

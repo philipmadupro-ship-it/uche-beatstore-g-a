@@ -176,7 +176,7 @@ export async function POST(req: NextRequest) {
     let previewUrl: string | null = null;
     if (!isSupabaseConfigured()) {
       try {
-        previewUrl = await uploadPublicPreview(buffer);
+        previewUrl = await uploadPublicPreview(buffer, file.name);
       } catch (err) {
         console.warn('Preview generation/upload failed, track remains private:', err);
       }

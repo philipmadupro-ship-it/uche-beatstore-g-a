@@ -187,13 +187,6 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
       console.warn('Upload processing peaks failed:', err);
     }
 
-    let previewUrl: string | null = null;
-    try {
-      previewUrl = await uploadPublicPreview(audioBuffer);
-    } catch (err) {
-      console.warn('Upload processing preview failed:', err);
-    }
-
     // Re-read the filename here too: this update runs after the track row
     // exists, so without it a detected tempo would overwrite the one the
     // producer wrote in the name.
@@ -204,12 +197,26 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
       audd,
     });
 
+    // The public 75 s clip /store streams (lib/audio/preview-clip). Without it
+    // the beat is listed but 404s on play. Failure is non-fatal: the nightly
+    // backfill and "Analyze N" retry any track left without one.
+    let previewUrl: string | null = null;
+    try {
+      previewUrl = await uploadPublicPreview(audioBuffer, job.audio_url, merged.duration_seconds);
+      if (!previewUrl) console.warn('Upload processing: no preview clip (ffmpeg unavailable and master not mp3/wav)');
+    } catch (err) {
+      console.warn('Upload processing preview failed:', err);
+    }
+
     const { error: trackError } = await admin
       .from('tracks')
       .update({
         ...merged,
         peaks_url: peaksUrl,
         preview_url: previewUrl,
+        // Mig 099. Without 'ready' the backfill keeps re-picking a track that
+        // already has its clip; 'none' is what makes it retry one that does not.
+        preview_status: previewUrl ? 'ready' : 'none',
       })
       .eq('id', job.track_id)
       .eq('user_id', job.user_id);

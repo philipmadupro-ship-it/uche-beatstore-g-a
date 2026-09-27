@@ -142,11 +142,18 @@ export async function uploadPublicAudioAsset(
   return `${publicUrl.replace(/\/$/, '')}/${objectKey}`;
 }
 
-export async function uploadPublicPreview(source: Buffer): Promise<string | null> {
-  const { createPreviewMp3Buffer } = await import('@/lib/audio/convert');
-  const preview = await createPreviewMp3Buffer(source);
-  if (!preview) return null;
-  return uploadPublicAudioAsset(preview, 'preview.mp3', 'audio/mpeg', 'previews');
+export async function uploadPublicPreview(
+  source: Buffer,
+  /** The master's name or URL; its extension decides whether byte-truncation may stand in for ffmpeg. */
+  sourceRef?: string | null,
+  durationSeconds?: number | null,
+): Promise<string | null> {
+  // The 75 s clip, never the whole track — this used to transcode the full
+  // master and publish it as the "preview". See lib/audio/preview-clip.
+  const { buildPreviewClip } = await import('@/lib/audio/preview-clip');
+  const clip = await buildPreviewClip(source, sourceRef ?? null, durationSeconds ?? null);
+  if (!clip) return null;
+  return uploadPublicAudioAsset(clip.buffer, `preview.${clip.ext}`, clip.contentType, 'previews');
 }
 
 /**
