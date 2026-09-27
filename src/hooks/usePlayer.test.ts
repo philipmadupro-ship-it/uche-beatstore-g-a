@@ -47,6 +47,7 @@ beforeEach(async () => {
     playbackError: null,
     progress: 0,
     volume: 0.8,
+    muted: false,
     shuffle: false,
     shuffleOrder: [],
     repeat: 'off',
@@ -80,5 +81,77 @@ describe('usePlayer buffering and error state', () => {
 
     expect(usePlayer.getState().isPlaying).toBe(true);
     expect(usePlayer.getState().playbackError).toBeNull();
+  });
+});
+
+describe('usePlayer playback, volume and mute stay independent', () => {
+  const a = makeTrack({ id: 'a', title: 'A' });
+  const b = makeTrack({ id: 'b', title: 'B' });
+
+  it('survives volume, mute, pause/resume and track switches without crosstalk', () => {
+    const p = () => usePlayer.getState();
+    p().setQueue([a, b]);
+    p().setTrack(a);
+    p().setProgress(0.4);
+
+    // Volume change while playing: playback untouched.
+    p().setVolume(0.35);
+    expect(p()).toMatchObject({ isPlaying: true, volume: 0.35, muted: false, progress: 0.4 });
+    expect(p().currentTrack?.id).toBe('a');
+
+    // Mute: level kept, playback untouched.
+    p().toggleMute();
+    expect(p()).toMatchObject({ isPlaying: true, volume: 0.35, muted: true, progress: 0.4 });
+
+    // Pause/resume while muted: mute and level untouched.
+    p().togglePlay();
+    expect(p()).toMatchObject({ isPlaying: false, volume: 0.35, muted: true });
+    p().togglePlay();
+    expect(p()).toMatchObject({ isPlaying: true, volume: 0.35, muted: true });
+
+    // Switch tracks while muted: still muted at the same level.
+    p().next();
+    expect(p().currentTrack?.id).toBe('b');
+    expect(p()).toMatchObject({ isPlaying: true, volume: 0.35, muted: true });
+    p().setTrack(a);
+    expect(p()).toMatchObject({ isPlaying: true, volume: 0.35, muted: true });
+
+    // Unmute: back to the kept level, still playing.
+    p().toggleMute();
+    expect(p()).toMatchObject({ isPlaying: true, volume: 0.35, muted: false });
+    expect(p().currentTrack?.id).toBe('a');
+  });
+
+  it('setMuted is idempotent and never changes the level', () => {
+    usePlayer.getState().setVolume(0.5);
+    usePlayer.getState().setMuted(true);
+    usePlayer.getState().setMuted(true);
+    expect(usePlayer.getState()).toMatchObject({ volume: 0.5, muted: true });
+    usePlayer.getState().setMuted(false);
+    expect(usePlayer.getState()).toMatchObject({ volume: 0.5, muted: false });
+  });
+
+  it('persists the mute flag and the kept level separately', () => {
+    usePlayer.getState().setVolume(0.35);
+    usePlayer.getState().toggleMute();
+    const saved = JSON.parse(storage['antigravity-player']);
+    expect(saved.state).toMatchObject({ volume: 0.35, muted: true });
+    expect(saved.state.isPlaying).toBeUndefined();
+  });
+
+  it('restores mute and level after a reload', async () => {
+    storage['antigravity-player'] = JSON.stringify({ state: { volume: 0.35, muted: true }, version: 1 });
+    vi.resetModules();
+    const { usePlayer: reloaded } = await import('./usePlayer');
+    await reloaded.persist.rehydrate();
+    expect(reloaded.getState()).toMatchObject({ volume: 0.35, muted: true, isPlaying: false });
+  });
+
+  it('migrates a pre-flag mute (stored as volume 0) to muted at an audible level', async () => {
+    storage['antigravity-player'] = JSON.stringify({ state: { volume: 0, repeat: 'all' }, version: 0 });
+    vi.resetModules();
+    const { usePlayer: reloaded } = await import('./usePlayer');
+    await reloaded.persist.rehydrate();
+    expect(reloaded.getState()).toMatchObject({ volume: 0.8, muted: true, repeat: 'all' });
   });
 });

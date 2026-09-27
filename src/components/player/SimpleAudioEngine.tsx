@@ -17,7 +17,7 @@
  * Responsibilities (mirrors what WavePlayer used to do for the global bar):
  *   - Load currentTrack.audio_url (preferring an IndexedDB offline blob).
  *   - Play / pause from the global `isPlaying`.
- *   - Apply volume × duckGain.
+ *   - Apply volume × duckGain (0 while muted — mute is its own flag).
  *   - Report progress (0..1 fraction) every timeupdate.
  *   - Consume seekTarget (0..1) written by MiniWaveform / keyboard shortcuts.
  *   - Advance to the next track on `ended`.
@@ -29,6 +29,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { playbackAudioSrc } from '@/lib/audio/cdn';
 import { normalizationGain } from '@/lib/audio/loudness';
+import { outputVolume } from '@/lib/audio/player-volume';
 import { getOfflineSrc } from '@/lib/offline/audio-cache';
 import { getPreviewSrc, peekPreviewSrc } from '@/lib/audio/preview-cache';
 import { useSessionContext } from '@/hooks/useSessionContext';
@@ -40,7 +41,7 @@ export function SimpleAudioEngine() {
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const {
-    currentTrack, isPlaying, volume, duckGain, seekTarget,
+    currentTrack, isPlaying, volume, muted, duckGain, seekTarget,
     setProgress, setPlaying, setBuffering, setPlaybackError, next,
   } = usePlayer();
 
@@ -158,8 +159,8 @@ export function SimpleAudioEngine() {
   useEffect(() => {
     const a = audioRef.current;
     if (!a) return;
-    a.volume = Math.max(0, Math.min(1, volume * duckGain * normGain));
-  }, [volume, duckGain, normGain]);
+    a.volume = outputVolume({ volume, muted }, duckGain, normGain);
+  }, [volume, muted, duckGain, normGain]);
 
   // ── Seek — consume seekTarget (0..1) from the store ───────────────────
   useEffect(() => {

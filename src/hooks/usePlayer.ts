@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware';
 import { Track } from '@/lib/types';
 import { buildShuffleOrder, nextInShuffle, newShuffleSeed } from '@/lib/audio/shuffle';
+import { DEFAULT_VOLUME, applyVolume, migratePersistedVolume, toggleMuted } from '@/lib/audio/player-volume';
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
@@ -13,7 +14,13 @@ interface PlayerState {
   isBuffering: boolean;
   playbackError: string | null;
   progress: number;
+  /** The listener's chosen level (0..1). Kept while muted. */
   volume: number;
+  /**
+   * Independent of `volume` and of playback — see lib/audio/player-volume.ts.
+   * Engines output `outputVolume({ volume, muted }, …)`, never `volume` alone.
+   */
+  muted: boolean;
   shuffle: boolean;
   /** Seeded play order (track ids) for the current shuffle cycle — a bag that
    *  plays every track once before any repeat. Empty when shuffle is off. */
@@ -48,7 +55,11 @@ interface PlayerState {
   setBuffering: (isBuffering: boolean) => void;
   setPlaybackError: (message: string | null) => void;
   setProgress: (progress: number) => void;
+  /** Set the level. Raising it above zero while muted unmutes. */
   setVolume: (volume: number) => void;
+  setMuted: (muted: boolean) => void;
+  /** Flip mute without touching the level or playback. */
+  toggleMute: () => void;
   /** Set the transient duck gain (0..1). Used by the voice-tag overlay. */
   setDuckGain: (g: number) => void;
   /** Seek the active audio engine to a fraction 0..1 of the track. */
@@ -80,7 +91,8 @@ export const usePlayer = create<PlayerState>()(
       isBuffering: false,
       playbackError: null,
       progress: 0,
-      volume: 0.8,
+      volume: DEFAULT_VOLUME,
+      muted: false,
       shuffle: false,
       shuffleOrder: [],
       shuffleSeed: newShuffleSeed(),
@@ -165,7 +177,9 @@ export const usePlayer = create<PlayerState>()(
       setBuffering: (isBuffering) => set({ isBuffering }),
       setPlaybackError: (message) => set({ playbackError: message, isBuffering: false }),
       setProgress: (progress) => set({ progress }),
-      setVolume: (volume) => set({ volume: Math.max(0, Math.min(1, volume)) }),
+      setVolume: (volume) => set((state) => applyVolume(state, volume)),
+      setMuted: (muted) => set((state) => (muted === state.muted ? state : toggleMuted(state))),
+      toggleMute: () => set((state) => toggleMuted(state)),
       setDuckGain: (g) => set({ duckGain: Math.max(0, Math.min(1, g)) }),
       seekTo: (fraction) => set({ seekTarget: Math.max(0, Math.min(1, fraction)) }),
 
@@ -285,10 +299,17 @@ export const usePlayer = create<PlayerState>()(
     }),
     {
       name: 'antigravity-player',
+      // v1 added `muted`. v0 stored a mute as `volume: 0`.
+      version: 1,
+      migrate: (persisted) => ({
+        ...(persisted as object),
+        ...migratePersistedVolume(persisted),
+      }) as unknown as PlayerState,
       storage: createJSONStorage(() => (typeof window !== 'undefined' ? localStorage : serverStorage)),
       // Don't persist transient playback state
       partialize: (state) => ({
         volume: state.volume,
+        muted: state.muted,
         shuffle: state.shuffle,
         shuffleOrder: state.shuffleOrder,
         shuffleSeed: state.shuffleSeed,
