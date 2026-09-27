@@ -38,7 +38,11 @@ fi
 echo "Applying ${#files[@]} migration(s) from $MIGRATIONS_DIR"
 for f in "${files[@]}"; do
   echo "→ $(basename "$f")"
-  psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -q -f "$f"
+  # --single-transaction: each file is atomic, and the `CREATE TEMP TABLE
+  # ... ON COMMIT DROP` in 096/110/112 survives past its own statement. In
+  # autocommit it was dropped immediately and the next line failed, which
+  # stopped this runner at 096.
+  psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -q --single-transaction -f "$f"
 done
 
 echo "✓ All migrations applied. PostgREST schema reloaded (wait ~10s for cache)."

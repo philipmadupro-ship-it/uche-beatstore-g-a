@@ -3,7 +3,7 @@ import { uploadImage } from '@/lib/storage/upload';
 import { requireProducer } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { imageUploadErrorMessage, validateImageUpload } from '@/lib/upload/image-validation';
+import { imageUploadErrorMessage, matchesImageSignature, validateImageUpload } from '@/lib/upload/image-validation';
 const log = createLogger('api.upload.image');
 
 export const runtime = 'nodejs';
@@ -22,9 +22,9 @@ export const runtime = 'nodejs';
  */
 export async function POST(req: NextRequest) {
   try {
-    // Auth: prevents drive-by writes from anonymous clients. We don't need
-    // the user_id on the upload itself — the row PATCH that follows is
-    // already owner-gated.
+    // Producer only: buyers sign in through the same Supabase auth, and this
+    // writes to the PUBLIC bucket — "authenticated" would let any buyer host
+    // files on the producer's R2. The row PATCH that follows is owner-gated.
     const auth = await requireProducer();
     if (!auth.ok) return auth.res;
 
@@ -45,6 +45,10 @@ export async function POST(req: NextRequest) {
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    // The declared MIME type is client-controlled; check the bytes agree.
+    if (!matchesImageSignature(buffer, validation.mimeType)) {
+      return NextResponse.json({ error: imageUploadErrorMessage('unsupported-type') }, { status: 415 });
+    }
 
     // Delegate to shared uploadImage — handles R2 vs local fallback,
     // uses the shared r2 client, and sets correct cache headers.
@@ -52,6 +56,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, url });
   } catch (error) {
     log.error('Image Upload Error:', { error: errorMessage(error) });
-    return NextResponse.json({ error: errorMessage(error) || 'Upload failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   }
 }

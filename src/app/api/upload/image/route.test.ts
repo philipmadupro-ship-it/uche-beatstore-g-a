@@ -13,6 +13,9 @@ vi.mock('@/lib/auth/ownership', () => ({
   requireProducer: () => mockRequireUser(),
 }));
 
+const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+const WEBP = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
+
 function requestWithFile(file?: File): NextRequest {
   const formData = new FormData();
   if (file) {
@@ -40,7 +43,7 @@ describe('POST /api/upload/image', () => {
     mockRequireUser.mockResolvedValueOnce({ ok: false, res });
 
     const mod = await loadRoute();
-    const response = await mod.POST(requestWithFile(new File(['x'], 'cover.png', { type: 'image/png' })));
+    const response = await mod.POST(requestWithFile(new File([PNG], 'cover.png', { type: 'image/png' })));
 
     expect(response.status).toBe(401);
     expect(mockUploadImage).not.toHaveBeenCalled();
@@ -70,10 +73,31 @@ describe('POST /api/upload/image', () => {
 
   it('uploads valid covers with the normalized extension and mime type', async () => {
     const mod = await loadRoute();
-    const response = await mod.POST(requestWithFile(new File(['webp'], 'cover.webp', { type: 'image/webp' })));
+    const response = await mod.POST(requestWithFile(new File([WEBP], 'cover.webp', { type: 'image/webp' })));
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ success: true, url: '/uploads/covers/test.webp' });
     expect(mockUploadImage).toHaveBeenCalledWith(expect.any(Buffer), 'webp', 'image/webp');
+  });
+
+  it('refuses a signed-in buyer (not the producer) before storage upload', async () => {
+    mockRequireUser.mockResolvedValueOnce({
+      ok: false,
+      res: Response.json({ error: 'Producer account required' }, { status: 403 }),
+    });
+    const mod = await loadRoute();
+    const response = await mod.POST(requestWithFile(new File([PNG], 'cover.png', { type: 'image/png' })));
+
+    expect(response.status).toBe(403);
+    expect(mockUploadImage).not.toHaveBeenCalled();
+  });
+
+  it('rejects a file whose bytes do not match its declared image type', async () => {
+    const mod = await loadRoute();
+    const html = new File(['<html><script>alert(1)</script></html>'], 'cover.png', { type: 'image/png' });
+    const response = await mod.POST(requestWithFile(html));
+
+    expect(response.status).toBe(415);
+    expect(mockUploadImage).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { nanoid } from 'nanoid';
 import fs from 'node:fs';
@@ -50,6 +50,20 @@ export async function getStoredObject(
     Key: ref.key,
     Range: range || undefined,
   }));
+}
+
+/** First `bytes` of an r2:// object via a ranged GET, or null for non-R2 sources. */
+export async function readStoredObjectHead(source: string, bytes = 16): Promise<Buffer | null> {
+  const object = await getStoredObject(source, `bytes=0-${bytes - 1}`);
+  if (!object?.Body) return null;
+  return Buffer.from(await object.Body.transformToByteArray());
+}
+
+/** Delete an r2:// object. Non-R2 sources are ignored. */
+export async function deleteStoredObject(source: string): Promise<void> {
+  const ref = parseR2ObjectRef(source);
+  if (!ref) return;
+  await r2.send(new DeleteObjectCommand({ Bucket: ref.bucket, Key: ref.key }));
 }
 
 export async function readStoredObject(source: string): Promise<Buffer> {

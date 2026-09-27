@@ -5,7 +5,7 @@ import { analyzeAudio } from '@/lib/audio/analyze.server';
 import type { AudioFeatures } from '@/lib/audio/analyze.server';
 import { getAuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
-import { uploadPublicPreview } from '@/lib/storage/upload';
+import { deleteStoredObject, uploadPublicPreview } from '@/lib/storage/upload';
 import { buildAndUploadSidecars } from '@/lib/audio/sidecars';
 import { isSupabaseConfigured, insert, update, getAll } from '@/lib/local-store';
 import { createClient as createServerClient } from '@/lib/supabase/server';
@@ -15,6 +15,7 @@ import { persistTrackCollaborators } from '@/lib/upload/collaborators';
 import { errorMessage } from '@/lib/errors';
 import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
 import { enqueueUploadProcessingJob, processUploadProcessingJobById } from '@/lib/upload/processing';
+import { verifyStoredAudio } from '@/lib/upload/verify-stored-audio';
 
 export const runtime = 'nodejs';
 // Processing runs in after() once the response is sent, and shares this budget.
@@ -74,6 +75,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // The bytes went browser → R2 directly, so this is the first point the
+    // server can check they are audio. A rejected object is deleted.
+    const verified = await verifyStoredAudio(audioUrl);
+    if (!verified.ok) {
+      await markStatus(sessionId, 'aborted');
+      return NextResponse.json(
+        { error: `File does not look like a valid audio file (detected: ${verified.format})` },
+        { status: 415 },
+      );
+    }
+
     await markStatus(sessionId, 'completed');
 
     if (isSupabaseConfigured()) {
@@ -89,17 +101,45 @@ export async function POST(req: NextRequest) {
       };
 
       let track: Record<string, unknown> | null = null;
+      // Cleanup bookkeeping. `committed` flips once a durable row points at
+      // audioUrl; from then on the object belongs to that track and is never
+      // deleted here. `insertedTrackId` is a new row not yet attached to its
+      // destination, i.e. a half-completed record.
+      let committed = false;
+      let insertedTrackId: string | null = null;
+      const supabase = await createServerClient();
+      // Never throws: a cleanup failure must not replace the original error.
+      const rollback = async () => {
+        if (committed) return;
+        try {
+          if (insertedTrackId) {
+            const { error } = await supabase.from('tracks').delete().eq('id', insertedTrackId);
+            // A row that could not be removed still references the object: keep it.
+            if (error) {
+              console.error('upload/complete rollback: track delete failed', error.message);
+              return;
+            }
+          }
+          await deleteStoredObject(audioUrl);
+          await markStatus(sessionId, 'aborted');
+        } catch (err) {
+          console.error('upload/complete rollback failed', errorMessage(err));
+        }
+      };
       try {
-        const supabase = await createServerClient();
         const userId = owner.userId || session.userId;
         if (!userId) {
+          await rollback();
           return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
         }
 
         if (session.replaceTrackId) {
           const { requireRowOwnership } = await import('@/lib/db');
           const rowOwner = await requireRowOwnership('tracks', session.replaceTrackId);
-          if (!rowOwner.ok) return rowOwner.res;
+          if (!rowOwner.ok) {
+            await rollback();
+            return rowOwner.res;
+          }
 
           const { data: existing } = await supabase
             .from('tracks')
@@ -140,6 +180,7 @@ export async function POST(req: NextRequest) {
             .single();
           if (error) throw new Error(error.message);
           track = data;
+          committed = true;
         } else {
           const { data, error } = await supabase
             .from('tracks')
@@ -151,9 +192,11 @@ export async function POST(req: NextRequest) {
 
           const trackId = track && typeof track.id === 'string' ? track.id : null;
           if (!trackId) throw new Error('Upload saved without a track id');
+          insertedTrackId = trackId;
           if (session.projectId) {
             await attachTrackToDestination(supabase, session.projectId, trackId, userId);
           }
+          committed = true;
         }
 
         const trackId = track && typeof track.id === 'string' ? track.id : session.replaceTrackId;
@@ -183,6 +226,7 @@ export async function POST(req: NextRequest) {
         }
       } catch (err) {
         console.error('Supabase upload completion failed:', err);
+        await rollback();
         const message = errorMessage(err) || 'Database save failed';
         if (/destination|attach/i.test(message)) {
           const status = /forbidden/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 500;
@@ -267,91 +311,9 @@ export async function POST(req: NextRequest) {
       stems_status: 'none' as const,
     };
 
-    // 3. Persist track row (replace-with-versioning OR insert new)
-    let track: Record<string, unknown> | null = null;
-
-    if (isSupabaseConfigured()) {
-      try {
-        const supabase = await createServerClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        const userId = user?.id || session.userId || null;
-
-        if (session.replaceTrackId) {
-          // Same auth gate as /api/upload/route.ts — verify the caller
-          // owns the target before overwriting. Without this, a
-          // legitimate multipart session id paired with a forged
-          // `replaceTrackId` from a different user lets an attacker
-          // replace audio they don't own.
-          const { requireRowOwnership } = await import('@/lib/db');
-          const owner = await requireRowOwnership('tracks', session.replaceTrackId);
-          if (!owner.ok) return owner.res;
-
-          const { data: existing } = await supabase
-            .from('tracks')
-            .select('*')
-            .eq('id', session.replaceTrackId)
-            .single();
-          if (existing) {
-            const { data: vs } = await supabase
-              .from('track_versions')
-              .select('version_number')
-              .eq('track_id', session.replaceTrackId);
-            const { number, label } = nextVersionLabel(vs ?? []);
-            await supabase.from('track_versions').insert({
-              track_id: session.replaceTrackId,
-              version_number: number,
-              version_label: label,
-              audio_url: existing.audio_url,
-              preview_url: existing.preview_url,
-              duration_seconds: existing.duration_seconds,
-              bpm: existing.bpm,
-              key: existing.key,
-              scale: existing.scale,
-              loudness: existing.loudness,
-              energy: existing.energy,
-              danceability: existing.danceability,
-              valence: existing.valence,
-              acousticness: existing.acousticness,
-              notes: existing.notes,
-              created_by: userId,
-            });
-          }
-          const { data, error } = await supabase
-            .from('tracks')
-            .update({ ...trackData, stems_status: 'none' })
-            .eq('id', session.replaceTrackId)
-            .select()
-            .single();
-          if (error) throw new Error(error.message);
-          track = data;
-        } else {
-          const { data, error } = await supabase
-            .from('tracks')
-            .insert({ user_id: userId, ...trackData })
-            .select()
-            .single();
-          if (error) throw new Error(`DB Insert Error: ${error.message}`);
-          track = data;
-
-          if (session.projectId) {
-            const savedTrack = track;
-            const trackId = savedTrack && typeof savedTrack.id === 'string' ? savedTrack.id : null;
-            if (!trackId) throw new Error('Upload saved without a track id');
-            await attachTrackToDestination(supabase, session.projectId, trackId, userId);
-          }
-        }
-      } catch (err) {
-        console.error('Supabase op failed, falling back to local store:', err);
-        const message = errorMessage(err) || 'Database save failed';
-        if (/destination|attach/i.test(message)) {
-          const status = /forbidden/i.test(message) ? 403 : /not found/i.test(message) ? 404 : 500;
-          return NextResponse.json({ error: message }, { status });
-        }
-        track = writeLocal(trackData, session.replaceTrackId, session.projectId);
-      }
-    } else {
-      track = writeLocal(trackData, session.replaceTrackId, session.projectId);
-    }
+    // 3. Persist track row. Only local no-database dev reaches this point:
+    // the Supabase branch above always returns.
+    const track = writeLocal(trackData, session.replaceTrackId, session.projectId);
 
     await deleteSession(sessionId);
     return NextResponse.json({ success: true, track });

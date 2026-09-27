@@ -30,6 +30,8 @@ function req(sessionId = 'cs_test_123'): NextRequest {
   return new NextRequest(`http://localhost/api/store/delivery?session_id=${sessionId}`);
 }
 
+let projectExpiresAt: string | null = null;
+
 function tableForProjectDelivery(table: string) {
   if (table === 'license_purchases') {
     return {
@@ -52,6 +54,7 @@ function tableForProjectDelivery(table: string) {
               amount_usd: 49,
               created_at: '2026-01-01T00:00:00Z',
               stripe_session_id: 'cs_test_123',
+              expires_at: projectExpiresAt,
             },
             error: null,
           }),
@@ -235,5 +238,19 @@ describe('GET /api/store/delivery', () => {
     expect(res.status).toBe(200);
     expect(body.tracks[0].downloads.map((download: { format: string }) => download.format)).toEqual(['mp3']);
     expect(body.tracks[0].file_types).toEqual(['MP3']);
+  });
+
+  it('refuses a project purchase whose access was revoked (expired link)', async () => {
+    mockIsSupabaseConfigured.mockReturnValue(true);
+    projectExpiresAt = new Date(Date.now() - 1000).toISOString();
+    mockFrom.mockImplementation(tableForProjectDelivery);
+    try {
+      const { GET } = await import('./route');
+      const res = await GET(req());
+      expect(res.status).toBe(403);
+      expect(JSON.stringify(await res.json())).not.toContain('track-1');
+    } finally {
+      projectExpiresAt = null;
+    }
   });
 });

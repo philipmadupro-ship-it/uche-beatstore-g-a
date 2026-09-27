@@ -66,9 +66,16 @@ vi.mock('@/lib/audio/peaks', () => ({
   extractPeaks: (...args: unknown[]) => mockExtractPeaks(...args),
 }));
 
+const mockDeleteStoredObject = vi.fn();
 vi.mock('@/lib/storage/upload', () => ({
+  deleteStoredObject: (...args: unknown[]) => mockDeleteStoredObject(...args),
   uploadPeaksSidecar: (...args: unknown[]) => mockUploadPeaksSidecar(...args),
   uploadPublicPreview: (...args: unknown[]) => mockUploadPublicPreview(...args),
+}));
+
+const mockVerifyStoredAudio = vi.fn();
+vi.mock('@/lib/upload/verify-stored-audio', () => ({
+  verifyStoredAudio: (...args: unknown[]) => mockVerifyStoredAudio(...args),
 }));
 
 vi.mock('@/lib/upload/processing', () => ({
@@ -120,14 +127,18 @@ function session(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const mockTrackDeleteEq = vi.fn<(...args: unknown[]) => Promise<{ error: { message: string } | null }>>(() => Promise.resolve({ error: null }));
+let trackInsertResult: { data: unknown; error: { message: string } | null } = { data: { id: 'track-1', title: 'Beat' }, error: null };
+
 function supabaseTable(table: string) {
   if (table === 'tracks') {
     return {
       insert: vi.fn(() => ({
         select: () => ({
-          single: () => Promise.resolve({ data: { id: 'track-1', title: 'Beat' }, error: null }),
+          single: () => Promise.resolve(trackInsertResult),
         }),
       })),
+      delete: () => ({ eq: (...args: unknown[]) => mockTrackDeleteEq(...args) }),
     };
   }
   if (table === 'projects') {
@@ -162,6 +173,9 @@ async function loadRoute() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockVerifyStoredAudio.mockResolvedValue({ ok: true });
+  mockDeleteStoredObject.mockResolvedValue(undefined);
+  trackInsertResult = { data: { id: 'track-1', title: 'Beat' }, error: null };
   mockIsSupabaseConfigured.mockReturnValue(true);
   mockGetSession.mockReturnValue(session());
   mockCompleteMultipart.mockResolvedValue('https://cdn.example.test/beat.wav');
@@ -190,7 +204,89 @@ beforeEach(() => {
   mockFrom.mockImplementation((table: string) => supabaseTable(table));
 });
 
+describe('POST /api/upload/complete — local no-database mode', () => {
+  it('writes the track to the local store and never touches Supabase', async () => {
+    mockIsSupabaseConfigured.mockReturnValue(false);
+    mockLocalInsert.mockReturnValue({ id: 'local-1', title: 'Beat' });
+    const mod = await loadRoute();
+    const res = await mod.POST(post({ sessionId: 'sess-1' }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true, track: { id: 'local-1' } });
+    expect(mockLocalInsert).toHaveBeenCalledWith('tracks', expect.objectContaining({ audio_url: expect.any(String) }));
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockDeleteSession).toHaveBeenCalledWith('sess-1');
+  });
+});
+
+describe('POST /api/upload/complete — failure cleanup', () => {
+  it('removes the half-created track and the object when the destination attach fails', async () => {
+    mockGetSession.mockReturnValueOnce(session({ projectId: 'missing-destination' }));
+    const mod = await loadRoute();
+    const res = await mod.POST(post({ sessionId: 'sess-1' }));
+
+    expect(res.status).toBe(404);
+    expect(mockTrackDeleteEq).toHaveBeenCalledWith('id', 'track-1');
+    expect(mockDeleteStoredObject).toHaveBeenCalledTimes(1);
+    expect(mockMarkStatus).toHaveBeenLastCalledWith('sess-1', 'aborted');
+    expect(mockEnqueueUploadProcessingJob).not.toHaveBeenCalled();
+  });
+
+  it('deletes the object when the track insert itself fails (no row to remove)', async () => {
+    trackInsertResult = { data: null, error: { message: 'insert failed' } };
+    const mod = await loadRoute();
+    const res = await mod.POST(post({ sessionId: 'sess-1' }));
+
+    expect(res.status).toBe(500);
+    expect(mockTrackDeleteEq).not.toHaveBeenCalled();
+    expect(mockDeleteStoredObject).toHaveBeenCalledTimes(1);
+    expect(mockMarkStatus).toHaveBeenLastCalledWith('sess-1', 'aborted');
+  });
+
+  it('keeps the object when the track row cannot be removed (it still references it)', async () => {
+    mockGetSession.mockReturnValueOnce(session({ projectId: 'missing-destination' }));
+    mockTrackDeleteEq.mockResolvedValueOnce({ error: { message: 'rls' } });
+    const mod = await loadRoute();
+    await mod.POST(post({ sessionId: 'sess-1' }));
+
+    expect(mockDeleteStoredObject).not.toHaveBeenCalled();
+  });
+
+  it('never deletes anything once the track is committed, even if a later step fails', async () => {
+    mockEnqueueUploadProcessingJob.mockRejectedValueOnce(new Error('queue down'));
+    const mod = await loadRoute();
+    const res = await mod.POST(post({ sessionId: 'sess-1' }));
+
+    expect(res.status).toBe(500);
+    expect(mockTrackDeleteEq).not.toHaveBeenCalled();
+    expect(mockDeleteStoredObject).not.toHaveBeenCalled();
+  });
+
+  it('returns the original error even when cleanup itself throws', async () => {
+    trackInsertResult = { data: null, error: { message: 'insert failed' } };
+    mockDeleteStoredObject.mockRejectedValueOnce(new Error('r2 down'));
+    const mod = await loadRoute();
+    const res = await mod.POST(post({ sessionId: 'sess-1' }));
+
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(await res.json())).toContain('insert failed');
+  });
+});
+
 describe('POST /api/upload/complete', () => {
+  it('rejects an assembled object that is not audio, before any track row', async () => {
+    mockVerifyStoredAudio.mockResolvedValueOnce({ ok: false, format: 'unknown' });
+
+    const mod = await loadRoute();
+    const res = await mod.POST(post({ sessionId: 'sess-1' }));
+
+    expect(res.status).toBe(415);
+    expect(mockMarkStatus).toHaveBeenCalledWith('sess-1', 'aborted');
+    expect(mockFrom).not.toHaveBeenCalledWith('tracks');
+    expect(mockLocalInsert).not.toHaveBeenCalled();
+    expect(mockEnqueueUploadProcessingJob).not.toHaveBeenCalled();
+  });
+
   it('409s when not every part has arrived', async () => {
     mockGetSession.mockReturnValueOnce(session({ totalParts: 2 }));
 
