@@ -44,7 +44,7 @@ export function StoreLayoutClient({ children }: { children: React.ReactNode }) {
         // provider. Without one, their artwork hooks took the dashboard path
         // and called session-gated endpoints — a 401 for every buyer.
         <PublicArtworkThemeProvider>
-          <PlayerBar />
+          <PlayerBar publicStore />
           <VoiceTagPlayer />
           <FloatingCartButton />
           <InstallAppButton />
