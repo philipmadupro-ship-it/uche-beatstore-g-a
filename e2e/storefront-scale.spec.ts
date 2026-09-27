@@ -241,6 +241,12 @@ test.describe('storefront at scale', () => {
     expect(coversAfterScroll).toBeLessThanOrEqual(total);
 
     await page.evaluate(() => {
+      // Tag the storefront's section roots. A section that is remounted is a
+      // NEW node, so the tagged original ends up detached. That is how the
+      // default layout's per-render section ids showed up in production: the
+      // hero, strips, spotlight and picks rebuilt on every progress tick.
+      const w0 = window as unknown as { __sections: Element[] };
+      w0.__sections = Array.from(document.querySelector('.store-ui')?.children ?? []);
       window.scrollTo(0, 0);
       // The fixture clip is 1s, so sampling "is anything playing" at the end
       // is a race. Record every start and the peak number playing at once.
@@ -262,6 +268,13 @@ test.describe('storefront at scale', () => {
       await page.getByRole('button', { name: 'Close beat preview' }).click();
     }
     await page.waitForLoadState('networkidle');
+    const sections = await page.evaluate(() => {
+      const w0 = window as unknown as { __sections: Element[] };
+      return { total: w0.__sections.length, remounted: w0.__sections.filter((el) => !el.isConnected).length };
+    });
+    log('storefront sections remounted during playback', sections);
+    expect(sections.total).toBeGreaterThan(0);
+    expect(sections.remounted).toBe(0);
     const { plays, peak } = await page.evaluate(() => {
       const w = window as unknown as { __plays: number; __peak: number };
       return { plays: w.__plays, peak: w.__peak };
