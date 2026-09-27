@@ -477,6 +477,7 @@ function GeneratePreviewsButton({
     failed: number;
     needed: number;
     reasons: Array<{ id: string; title?: string; stage: string; error: string }>;
+    ffmpeg?: { available: boolean; reason: string | null };
   } | null>(null);
   const run = async () => {
     setBusy(true);
@@ -514,6 +515,12 @@ function GeneratePreviewsButton({
               ? 'Nothing needed — every listed and bundled beat has a preview.'
               : `${result.processed}/${result.needed} generated${result.failed > 0 ? ` · ${result.failed} failed` : ''}.`}
           </p>
+          {result.ffmpeg && !result.ffmpeg.available && (
+            <p className="text-white/60">
+              Audio converter unavailable on the server, so clips are large WAV files instead of small MP3s.
+              <span className="block break-all font-mono text-[10px] text-white/40">{result.ffmpeg.reason}</span>
+            </p>
+          )}
           {result.reasons.length > 0 && (
             <ul className="space-y-0.5 text-white/60">
               {result.reasons.map((r) => (

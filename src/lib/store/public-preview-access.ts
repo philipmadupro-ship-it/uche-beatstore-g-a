@@ -123,25 +123,26 @@ export function ownedByTheirBundle<T extends { id: string; user_id?: string | nu
 /**
  * Preview-backfill candidates that are public only through a featured bundle.
  * `select` must include `user_id`; `needsWorkOr` is the same PostgREST `.or()`
- * the caller uses for listed tracks. Ids go in chunks so the query string
+ * the caller uses for listed tracks (omit it to fetch every bundle track). Ids go in chunks so the query string
  * stays well inside URL limits on a large bundle.
  */
 export async function bundlePreviewCandidates<T extends { id: string; user_id?: string | null }>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any,
   select: string,
-  needsWorkOr: string,
+  needsWorkOr: string | undefined,
   ownerId?: string,
 ): Promise<T[]> {
   const owners = await featuredBundleTrackOwners(admin, ownerId);
   const ids = [...owners.keys()];
   const out: T[] = [];
   for (let i = 0; i < ids.length; i += 100) {
-    const { data, error } = await admin
+    let query = admin
       .from('tracks')
       .select(select)
-      .in('id', ids.slice(i, i + 100))
-      .or(needsWorkOr);
+      .in('id', ids.slice(i, i + 100));
+    if (needsWorkOr) query = query.or(needsWorkOr);
+    const { data, error } = await query;
     if (error) throw error;
     out.push(...ownedByTheirBundle((data ?? []) as T[], owners));
   }
