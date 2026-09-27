@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { analysisKey, parseBandsSidecar } from './useSpectralPeaks';
+import { analysisKey, parseBandsSidecar, resolveAnalysisUrl } from './useSpectralPeaks';
 
 /**
  * The analysis cache is a module-level Map that lives for the whole session.
@@ -95,5 +95,35 @@ describe('parseBandsSidecar', () => {
     expect(noHz!.hz).toEqual([null, null, null]);
     const shortHz = parseBandsSidecar({ ...valid, hz: [110] });
     expect(shortHz!.hz).toEqual([null, null, null]);
+  });
+});
+
+/**
+ * The public R2 bucket sends no CORS headers, so its clips are playable but not
+ * readable, and the hook falls back to a proxy to decode them. The dashboard's
+ * proxy, /api/audio, is session-gated: on the storefront it answered 401 to
+ * every buyer who opened a preview. A public surface supplies its own readable
+ * URL for the same bytes.
+ */
+describe('resolveAnalysisUrl', () => {
+  const r2 = 'https://pub-abc123.r2.dev/previews/beat.mp3';
+
+  it('uses the public fallback instead of /api/audio for an unreadable clip', () => {
+    expect(resolveAnalysisUrl(r2, '/api/store/preview/t1')).toBe('/api/store/preview/t1');
+  });
+
+  it('keeps the dashboard proxy when no public fallback is given', () => {
+    expect(resolveAnalysisUrl(r2)).toBe(`/api/audio?src=${encodeURIComponent(r2)}`);
+  });
+
+  it('leaves a same-origin URL alone even when a fallback exists', () => {
+    expect(resolveAnalysisUrl('/api/share/tok/preview/t1', '/api/store/preview/t1')).toBe('/api/share/tok/preview/t1');
+  });
+
+  it('keeps a private master on the proxy rather than swapping in the public URL', () => {
+    // r2:// is private: it resolves to /api/audio (same-origin) and must stay
+    // there, never to a public URL.
+    expect(resolveAnalysisUrl('r2://private/master.wav', '/api/store/preview/t1'))
+      .toBe(`/api/audio?src=${encodeURIComponent('r2://private/master.wav')}`);
   });
 });

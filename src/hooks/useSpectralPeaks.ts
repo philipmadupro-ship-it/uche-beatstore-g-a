@@ -103,12 +103,16 @@ export function analysisKey(trackId: string, audioUrl: string): string {
  *
  * Returns null when there's nothing analysable at all.
  */
-function resolveAnalysisUrl(audioUrl: string): string | null {
+export function resolveAnalysisUrl(audioUrl: string, publicFallback?: string | null): string | null {
   const direct = cdnAudioSrc(audioUrl);
   if (!direct) return null;
   // Already same-origin (local uploads, or the proxy) — readable as-is.
   if (direct.startsWith('/')) return direct;
   if (canFetchReadableAudio(direct)) return direct;
+  // A PUBLIC surface (the storefront) must not reach for /api/audio: it is
+  // session-gated and answers 401 to every buyer. Such a surface passes a
+  // same-origin URL anyone may read for the same bytes instead.
+  if (publicFallback) return publicFallback;
   if (/^https?:\/\//i.test(direct)) {
     return `/api/audio?src=${encodeURIComponent(direct)}`;
   }
@@ -204,6 +208,13 @@ export function useSpectralPeaks(
    * still fall back to analysing locally.
    */
   bandsUrl?: string | null,
+  /**
+   * For public surfaces: a same-origin URL anyone may read, used instead of
+   * the session-gated `/api/audio` proxy when the direct URL is not readable
+   * (the public R2 bucket sends no CORS headers). The storefront passes
+   * `/api/store/preview/<id>`.
+   */
+  publicFallback?: string | null,
 ): SpectralPeaksResult {
   const [bands, setBands] = useState<SpectralBands | null>(null);
   const [db, setDb] = useState<number[] | null>(null);
@@ -280,7 +291,7 @@ export function useSpectralPeaks(
       return () => { cancelled = true; controller.abort(); };
     }
 
-    const analysisUrl = resolveAnalysisUrl(audioUrl);
+    const analysisUrl = resolveAnalysisUrl(audioUrl, publicFallback);
     if (!analysisUrl) {
       setBands(null); setDb(null); setHz(null);
       setStatus('unavailable');
@@ -379,7 +390,7 @@ export function useSpectralPeaks(
       cancelled = true;
       controller.abort();
     };
-  }, [trackId, audioUrl, sliceCount]);
+  }, [trackId, audioUrl, sliceCount, publicFallback]);
 
   return { bands, db, hz, status };
 }
