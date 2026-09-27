@@ -3,6 +3,7 @@ import { isSupabaseConfigured, getById } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { streamAudioPreviewSource } from '@/lib/audio/stream-source';
 import { errorMessage } from '@/lib/errors';
+import { canStreamPublicly } from '@/lib/store/public-preview-access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,6 +11,7 @@ export const revalidate = 3600;
 
 interface TrackPeaksRow {
   id: string;
+  user_id?: string | null;
   peaks_url?: string | null;
   store_listed?: boolean | null;
 }
@@ -23,13 +25,17 @@ async function resolveStorePeaks(trackId: string): Promise<string | null> {
     const admin = createServiceClient();
     const { data, error } = await admin
       .from('tracks')
-      .select('id, peaks_url, store_listed')
+      .select('id, user_id, peaks_url, store_listed')
       .eq('id', trackId)
-      .eq('store_listed', true)
       .maybeSingle();
     if (error) throw error;
     const row = data as TrackPeaksRow | null;
-    return row?.peaks_url || null;
+    // Same rule as the preview it draws: listed or in a featured bundle.
+    if (!row || !(await canStreamPublicly(admin, trackId, {
+      user_id: row.user_id ?? null,
+      store_listed: row.store_listed ?? null,
+    }))) return null;
+    return row.peaks_url || null;
   }
 
   const row = getById<TrackPeaksRow>('tracks', trackId);
