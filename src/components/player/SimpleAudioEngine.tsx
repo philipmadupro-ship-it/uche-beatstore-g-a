@@ -25,7 +25,7 @@
  * Headless: renders only a hidden <audio>. Mount once, near the PlayerBar.
  */
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
 import { playbackAudioSrc } from '@/lib/audio/cdn';
 import { normalizationGain } from '@/lib/audio/loudness';
@@ -34,6 +34,7 @@ import { getPreviewSrc, peekPreviewSrc } from '@/lib/audio/preview-cache';
 import { useSessionContext } from '@/hooks/useSessionContext';
 import { previewAdjustment } from '@/lib/audio/session-match';
 import { seekSeconds } from '@/lib/audio/waveform-path';
+import { classifyPlayRejection, holdsSource } from '@/lib/audio/play-rejection';
 
 export function SimpleAudioEngine() {
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -59,6 +60,18 @@ export function SimpleAudioEngine() {
     )
     : null;
 
+  // Every play() goes through here. A rejection is not always a blocked
+  // autoplay — see `classifyPlayRejection`.
+  const onPlayRejected = useCallback((err: unknown) => {
+    const kind = classifyPlayRejection(err);
+    if (kind === 'ignore') return;
+    setBuffering(false);
+    if (kind === 'needs-gesture') {
+      setPlaybackError('Tap play to start this preview.');
+      setPlaying(false);
+    }
+  }, [setBuffering, setPlaybackError, setPlaying]);
+
   // ── Load source when the track changes ────────────────────────────────
   // Latency-critical: nothing async may sit between the tap and play().
   // Awaiting IndexedDB before setting src added tens/hundreds of ms per tap
@@ -74,19 +87,13 @@ export function SimpleAudioEngine() {
     const instant = peekPreviewSrc(trackId) ?? playbackAudioSrc(url);
     // Only reset src when it actually changes — avoids re-buffering on
     // unrelated re-renders.
-    if (a.src !== instant) {
+    if (!holdsSource(a, instant)) {
       setBuffering(true);
       setPlaybackError(null);
       a.src = instant;
       a.load();
     }
-    if (isPlaying) {
-      a.play().catch(() => {
-        setBuffering(false);
-        setPlaybackError('Tap play to start this preview.');
-        setPlaying(false);
-      });
-    }
+    if (isPlaying) a.play().catch(onPlayRejected);
 
     // Background: prefer an explicit offline download, then a persisted (but
     // not yet memory-warmed) preview blob. Swap only while nothing has played
@@ -96,15 +103,11 @@ export function SimpleAudioEngine() {
         try {
           const offline = await getOfflineSrc(trackId);
           const blob = offline ?? (await getPreviewSrc(trackId));
-          if (cancelled || !blob || a.src === blob) return;
+          if (cancelled || !blob || holdsSource(a, blob)) return;
           if (a.currentTime > 0 && !a.paused) return; // already audible — leave it
           a.src = blob;
           a.load();
-          if (isPlaying) a.play().catch(() => {
-            setBuffering(false);
-            setPlaybackError('Tap play to start this preview.');
-            setPlaying(false);
-          });
+          if (isPlaying) a.play().catch(onPlayRejected);
         } catch {
           // best-effort; the network stream is already loading
         }
@@ -121,16 +124,12 @@ export function SimpleAudioEngine() {
     if (!a) return;
     if (isPlaying) {
       setPlaybackError(null);
-      a.play().catch(() => {
-        setBuffering(false);
-        setPlaybackError('Tap play to start this preview.');
-        setPlaying(false);
-      });
+      a.play().catch(onPlayRejected);
     } else {
       a.pause();
       setBuffering(false);
     }
-  }, [isPlaying, trackId, setBuffering, setPlaybackError, setPlaying]);
+  }, [isPlaying, trackId, setBuffering, setPlaybackError, onPlayRejected]);
 
   // ── Session tempo (time-stretch, pitch preserved) ─────────────────────
   // Applied in its own effect, after the source effect, because loading a new

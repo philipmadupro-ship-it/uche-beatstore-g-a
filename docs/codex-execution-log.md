@@ -8553,3 +8553,23 @@ The e2e stubs `/api/store/projects/<id>` (the local fixture store has no project
 generated WAV so playback actually ticks; headless Chromium needs the autoplay flag and
 sometimes still lands on the player's "tap play" fallback, which the spec handles by pressing
 the overlay's Play button.
+
+**Follow-up, same PR: the "Tap play" prompt was the engine interrupting itself.** Instrumenting
+`play()` / `load()` / `pause()` in the browser showed every rejection was `AbortError`, never
+`NotAllowedError`. `SimpleAudioEngine` treated any rejection as a blocked autoplay: it showed
+"Tap play to start this preview.", set `isPlaying` false, and the resulting `pause()` aborted
+the retry as well. Two causes of the abort:
+
+- `a.src !== instant` never matched a relative source, because `a.src` is always absolute. The
+  store's own preview route (`/api/store/preview/[id]`) is relative, so every re-run of the
+  source effect reloaded. That included React's dev double-invoke, and the reload aborted the
+  `play()` that had just started.
+- The background swap to a cached preview blob calls `load()` before sound starts. This is the
+  production path for a returning buyer.
+
+`lib/audio/play-rejection.ts` now classifies each rejection: `AbortError` is ignored because the
+newer request owns the outcome, `NotAllowedError` is a real block and still asks for a tap, and
+anything else stops the spinner and leaves reporting to the element's `error` event. `holdsSource`
+compares against the `src` attribute. The e2e drops both workarounds (the autoplay flag and the
+Play-button press) and gains "one tap on Preview plays, with no Tap play prompt", which fails on
+the old engine.

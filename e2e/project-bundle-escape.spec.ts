@@ -16,15 +16,6 @@ import { test, expect, type Page } from '@playwright/test';
 
 const BUNDLE_ID = 'e2e-bundle-escape';
 
-// Headless Chromium refuses play() that the player issues from an effect after
-// the Preview click. Real playback is what exercises the per-tick re-renders.
-test.use({
-  launchOptions: {
-    args: ['--autoplay-policy=no-user-gesture-required'],
-    ...(process.env.PLAYWRIGHT_CHROMIUM_PATH ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH } : {}),
-  },
-});
-
 const bundle = {
   project: {
     id: BUNDLE_ID,
@@ -128,16 +119,25 @@ test.describe('project bundle escape behaviour', () => {
     await expect(opener).toBeFocused();
   });
 
+  test('one tap on Preview plays, with no "Tap play" prompt', async ({ page }) => {
+    // The engine read every rejected play() as a blocked autoplay. A play()
+    // interrupted by its own reload (AbortError) put "Tap play to start this
+    // preview." on a preview the buyer had just tapped, and left it paused.
+    await openBundleFromStore(page);
+    await page.getByRole('button', { name: 'Preview' }).click();
+
+    await expect
+      .poll(() => page.evaluate(() => Array.from(document.querySelectorAll('audio')).some((a) => !a.paused && a.currentTime > 0.5)))
+      .toBe(true);
+    await expect(page.getByText('Ready to resume')).toHaveCount(0);
+    await expect(page.getByText('Tap play', { exact: true })).toHaveCount(0);
+  });
+
   test('keyboard focus is not snapped back to Close inside Now Playing', async ({ page }) => {
     await openBundleFromStore(page);
     const { dialog } = await openNowPlaying(page);
 
     // Playback must actually be ticking — that is what re-rendered the player.
-    // Headless Chromium sometimes lands on the player's "tap play" fallback;
-    // the overlay's own Play button is the tap.
-    const play = dialog.getByRole('button', { name: 'Play', exact: true });
-    if (await play.isVisible()) await play.click();
-    await dialog.getByRole('button', { name: 'Close', exact: true }).focus();
     await expect
       .poll(() => page.evaluate(() => Array.from(document.querySelectorAll('audio')).some((a) => a.currentTime > 0)))
       .toBe(true);
