@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getStoreEditorAttentionIssues, isUnplayableOnStore } from './attention-issues';
+import { publicPreviewSource } from '@/lib/store/public-preview-access';
 
 describe('isUnplayableOnStore', () => {
   it('matches exactly what /api/store/preview/[id] can serve', () => {
@@ -8,6 +9,18 @@ describe('isUnplayableOnStore', () => {
     // The production case: no clip, private master only.
     expect(isUnplayableOnStore({ preview_url: null, audio_url: 'r2://private/tracks/a.wav' })).toBe(true);
     expect(isUnplayableOnStore({ preview_url: null, audio_url: null })).toBe(true);
+  });
+
+  it('agrees with the preview route on every shape of row', () => {
+    const rows = [
+      { preview_url: 'https://pub/p.mp3', audio_url: 'r2://p/a.wav' },
+      { preview_url: null, audio_url: 'https://pub/a.mp3' },
+      { preview_url: null, audio_url: 'r2://p/a.wav' },
+      { preview_url: null, audio_url: null },
+      { preview_url: null, audio_url: '' },
+      { preview_url: '', audio_url: 'r2://p/a.wav' },
+    ];
+    for (const row of rows) expect(isUnplayableOnStore(row)).toBe(publicPreviewSource(row) == null);
   });
 });
 

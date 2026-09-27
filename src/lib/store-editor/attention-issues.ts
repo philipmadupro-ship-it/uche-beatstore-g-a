@@ -23,6 +23,9 @@ export function isUnplayableOnStore(track: {
   preview_url?: string | null;
   audio_url?: string | null;
 }): boolean {
+  // Mirrors lib/store/public-preview-access#publicPreviewSource, which this
+  // client-imported module cannot import (it pulls in server auth code).
+  // unplayable.test.ts holds the two to the same answers.
   if (track.preview_url) return false;
   const audio = track.audio_url ?? '';
   return audio === '' || audio.startsWith('r2://');
