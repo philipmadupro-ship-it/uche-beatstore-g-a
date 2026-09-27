@@ -3,7 +3,7 @@ import type { DurationBucket, SortBy } from './filters';
 type StoreUrlTypeFilter = 'all' | 'beats' | 'song' | 'remix';
 
 const TYPE_FILTERS: StoreUrlTypeFilter[] = ['all', 'beats', 'song', 'remix'];
-const SORT_VALUES: SortBy[] = ['newest', 'popular', 'bpm-asc', 'bpm-desc', 'price-asc', 'price-desc', 'title'];
+const SORT_VALUES: SortBy[] = ['featured', 'newest', 'popular', 'bpm-asc', 'bpm-desc', 'price-asc', 'price-desc', 'title'];
 const SCALE_VALUES = ['major', 'minor'] as const;
 const DURATION_VALUES: DurationBucket[] = ['', 'short', 'medium', 'long'];
 
@@ -80,7 +80,7 @@ export function parseStoreFilterParams(params: URLSearchParams): StoreUrlFilters
     freeOnly: params.get('free') === '1',
     favoritesOnly: params.get('favorites') === '1',
     newThisWeek: params.get('new') === '1',
-    sortBy: SORT_VALUES.includes(sort as SortBy) ? (sort as SortBy) : 'newest',
+    sortBy: SORT_VALUES.includes(sort as SortBy) ? (sort as SortBy) : 'featured',
     bpmMin: readNumber(params, 'bpm_min'),
     bpmMax: readNumber(params, 'bpm_max'),
     priceMin: readNumber(params, 'price_min'),
@@ -103,7 +103,7 @@ export function buildStoreFilterParams(baseParams: URLSearchParams, filters: Sto
   if (filters.freeOnly) next.set('free', '1');
   if (filters.favoritesOnly) next.set('favorites', '1');
   if (filters.newThisWeek) next.set('new', '1');
-  if (filters.sortBy !== 'newest') next.set('sort', filters.sortBy);
+  if (filters.sortBy !== 'featured') next.set('sort', filters.sortBy);
   if (filters.bpmRangeActive) {
     next.set('bpm_min', String(filters.bpmMin));
     next.set('bpm_max', String(filters.bpmMax));

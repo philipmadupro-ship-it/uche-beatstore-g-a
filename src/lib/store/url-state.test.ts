@@ -49,7 +49,7 @@ describe('store URL filter state', () => {
     expect(invalid.typeFilter).toBe('all');
     expect(invalid.scaleFilter).toBe('');
     expect(invalid.durationBucket).toBe('');
-    expect(invalid.sortBy).toBe('newest');
+    expect(invalid.sortBy).toBe('featured');
     expect(invalid.bpmMin).toBeNull();
   });
 
@@ -100,7 +100,7 @@ describe('store URL filter state', () => {
       freeOnly: false,
       favoritesOnly: false,
       newThisWeek: false,
-      sortBy: 'newest',
+      sortBy: 'featured',
       bpmMin: 60,
       bpmMax: 180,
       bpmRangeActive: false,

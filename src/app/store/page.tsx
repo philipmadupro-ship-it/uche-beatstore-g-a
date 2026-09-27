@@ -313,7 +313,7 @@ function StorePage() {
   const [durationBucket, setDurationBucket] = useState<'' | 'short' | 'medium' | 'long'>('');
   const [priceMin, setPriceMin] = useState(0);
   const [priceMax, setPriceMax] = useState(99999);
-  const [sortBy, setSortBy] = useState<'newest' | 'popular' | 'bpm-asc' | 'bpm-desc' | 'price-asc' | 'price-desc' | 'title'>('newest');
+  const [sortBy, setSortBy] = useState<'featured' | 'newest' | 'popular' | 'bpm-asc' | 'bpm-desc' | 'price-asc' | 'price-desc' | 'title'>('featured');
   const wishlist = useWishlist();
   // Flattened to a sorted string so the server query key does not change when
   // the same ids are saved in a different order.
@@ -391,7 +391,7 @@ function StorePage() {
     if (durationBucket) params.set('duration', durationBucket);
     if (freeOnly) params.set('free', '1');
     if (newThisWeek) params.set('new', '1');
-    if (sortBy !== 'newest') params.set('sort', sortBy);
+    if (sortBy !== 'featured') params.set('sort', sortBy);
 
     // BPM, price and favourites now go to the server too. They used to be
     // applied only below, over `tracks` — the pages fetched so far — so on a

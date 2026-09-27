@@ -6,6 +6,7 @@ import { artworkThemeFromProfile, loadPublicArtworkTheme } from '@/lib/artwork/p
 import { resolveStoreOwner } from '@/lib/store/owner';
 import { redactPublicTrackMedia } from '@/lib/store/public-media';
 import { POPULAR_ORDER_COLUMNS, comparePopularity } from '@/lib/store/popularity';
+import { FEATURED_ORDER_COLUMNS, NEWEST_ORDER_COLUMNS, compareFeatured, compareNewest } from '@/lib/store/newest';
 import {
   bpmFilterExpression,
   bpmInRange,
@@ -165,7 +166,7 @@ function parseStoreFilters(req: NextRequest) {
     bpmRange: parseBpmRange(params.get('bpmMin'), params.get('bpmMax')),
     priceRange: parsePriceRange(params.get('priceMin'), params.get('priceMax')),
     ids: parseTrackIds(params.get('ids')),
-    sort: sort || 'newest',
+    sort: sort || 'featured',
   };
 }
 
@@ -236,8 +237,11 @@ function localFilterAndSortTracks(
       sorted.sort(comparePopularity);
       break;
     case 'newest':
+      sorted.sort(compareNewest);
+      break;
+    case 'featured':
     default:
-      sorted.sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime());
+      sorted.sort(compareFeatured);
   }
   return sorted;
 }
@@ -408,7 +412,7 @@ export async function GET(req: NextRequest) {
     const pinnedIds = filters.ids;
 
     // ── Tracks ─────────────────────────────────────────────────────────────
-    // Try with store_sort_order first (migration 033). Fall back without it.
+    // Try with the newer columns first (store_sort_order etc., migration 033+). Fall back without them.
     let tracksAny: StoreTrackRow[] = [];
     let requiredTrackIds: string[] | null = null;
 
@@ -470,7 +474,7 @@ export async function GET(req: NextRequest) {
       return next;
     };
 
-    const applyTrackOrdering = (query: StoreQuery, includeStoreOrder: boolean): StoreQuery => {
+    const applyTrackOrdering = (query: StoreQuery, hasSortOrderColumn: boolean): StoreQuery => {
       switch (filters.sort) {
         case 'bpm-asc':
           return query.order('bpm', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
@@ -494,11 +498,30 @@ export async function GET(req: NextRequest) {
           }
           return ordered;
         }
-        case 'newest':
-        default:
-          return includeStoreOrder
-            ? query.order('store_sort_order', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false })
-            : query.order('created_at', { ascending: false });
+        case 'newest': {
+          // Not `store_sort_order` first: a beat listed after the producer's
+          // last reorder has none, sorted after every ordered beat, and missed
+          // page one entirely. The browser displays "Newest first" by
+          // created_at, so the page is chosen by it too — lib/store/newest.
+          let ordered = query;
+          for (const { column, ascending, nullsFirst } of NEWEST_ORDER_COLUMNS) {
+            ordered = ordered.order(column, { ascending, nullsFirst });
+          }
+          return ordered;
+        }
+        case 'featured':
+        default: {
+          // The producer's Store Editor arrangement, with not-yet-placed beats
+          // (NULL position) FIRST so a new listing is never pushed off page
+          // one — lib/store/newest#compareFeatured.
+          // Pre-033 schema: no position column to honour, so newest it is.
+          const columns = hasSortOrderColumn ? FEATURED_ORDER_COLUMNS : NEWEST_ORDER_COLUMNS;
+          let ordered = query;
+          for (const { column, ascending, nullsFirst } of columns) {
+            ordered = ordered.order(column, { ascending, nullsFirst });
+          }
+          return ordered;
+        }
       }
     };
 

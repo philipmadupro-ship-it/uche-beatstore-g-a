@@ -17,6 +17,7 @@
  */
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { compareFeatured } from '@/lib/store/newest';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
@@ -495,6 +496,8 @@ interface TrackRow {
   exclusive_sold: boolean;
   voice_tag_enabled: boolean;
   scheduled_publish_at: string | null;
+  /** Ties among not-yet-placed listed beats resolve newest first, as on /store. */
+  created_at?: string | null;
 }
 
 interface TrackStoreSummary {
@@ -530,6 +533,7 @@ type ApiTrackRow = {
   free_download_enabled?: boolean | null;
   exclusive_sold?: boolean | null;
   voice_tag_enabled?: boolean | null;
+  created_at?: string | null;
 };
 
 type ApiProjectRow = {
@@ -555,6 +559,7 @@ function mapTrackRow(t: ApiTrackRow): TrackRow {
     store_featured: !!t.store_featured,
     store_sort_order: t.store_sort_order ?? null,
     scheduled_publish_at: t.scheduled_publish_at ?? null,
+    created_at: t.created_at ?? null,
     lease_price_usd: t.lease_price_usd ?? null,
     exclusive_price_usd: t.exclusive_price_usd ?? null,
     free_download_enabled: !!t.free_download_enabled,
@@ -990,7 +995,9 @@ export default function StoreEditorPage() {
       const rows = ((data.tracks ?? []) as ApiTrackRow[]).map(mapTrackRow).sort((a, b) => {
         if (a.store_listed && !b.store_listed) return -1;
         if (!a.store_listed && b.store_listed) return 1;
-        if (a.store_sort_order != null && b.store_sort_order != null) return a.store_sort_order - b.store_sort_order;
+        // Listed beats in exactly the order /store shows them ("Featured"),
+        // so what the producer arranges here is what buyers see.
+        if (a.store_listed) return compareFeatured(a, b);
         return a.title.localeCompare(b.title);
       });
       setAllTracks((prev) => {

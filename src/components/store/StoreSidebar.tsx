@@ -99,6 +99,7 @@ function PillButton({
 }
 
 const SORT_LABELS: Record<string, string> = {
+  featured: 'Featured',
   newest: 'Newest first',
   popular: 'Popular first',
   'bpm-asc': 'BPM: low → high',
@@ -110,7 +111,7 @@ const SORT_LABELS: Record<string, string> = {
 
 /* ───────── Main sidebar ───────── */
 
-type SortBy = 'newest' | 'popular' | 'bpm-asc' | 'bpm-desc' | 'price-asc' | 'price-desc' | 'title';
+type SortBy = 'featured' | 'newest' | 'popular' | 'bpm-asc' | 'bpm-desc' | 'price-asc' | 'price-desc' | 'title';
 
 interface Props {
   open: boolean;
