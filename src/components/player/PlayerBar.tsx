@@ -15,8 +15,10 @@ import { AsciiCoverArt } from './AsciiCoverArt';
 import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { routeBoundOverlay } from '@/lib/ui/route-bound-overlay';
 import { useState, useRef, useSyncExternalStore, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { getPlayerStreamStatus } from '@/lib/audio/player-status';
@@ -88,7 +90,16 @@ export function PlayerBar() {
     try { localStorage.setItem(PLAYER_COLLAPSED_KEY, value ? '1' : '0'); } catch { /* storage denied */ }
     collapsedListeners.forEach((l) => l());
   };
-  const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
+  // Bound to the route it was opened on: this bar lives in the layout, so a
+  // plain boolean kept the overlay up after browser Back changed the page.
+  const pathname = usePathname();
+  const [nowPlayingOpenedOn, setNowPlayingOpenedOn] = useState<string | null>(null);
+  const nowPlayingRoute = routeBoundOverlay(nowPlayingOpenedOn, pathname);
+  const nowPlayingOpen = nowPlayingRoute.open;
+  // Render-phase reset (React's "adjust state when a prop changes" pattern):
+  // forget the route once it has moved, so Forward cannot reopen the overlay.
+  if (nowPlayingRoute.openedOn !== nowPlayingOpenedOn) setNowPlayingOpenedOn(nowPlayingRoute.openedOn);
+  const setNowPlayingOpen = (open: boolean) => setNowPlayingOpenedOn(open ? pathname : null);
   const nowPlayingPanelRef = useDialogBehavior({ open: nowPlayingOpen, onClose: () => setNowPlayingOpen(false) });
   const mounted = useSyncExternalStore(subscribeToClientSnapshot, getClientSnapshot, getServerSnapshot);
 

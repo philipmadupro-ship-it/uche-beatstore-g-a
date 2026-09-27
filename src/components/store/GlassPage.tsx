@@ -25,6 +25,7 @@
  */
 
 import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import type { ReactNode, CSSProperties } from 'react';
 import { slugify } from '@/lib/slug';
 
@@ -37,6 +38,8 @@ interface GlassPageProps {
   children: ReactNode;
   /** Max width on the card. Defaults to 5xl. */
   maxWidth?: 'max-w-4xl' | 'max-w-5xl' | 'max-w-6xl';
+  /** Explicit way out, above the card. Same treatment as the track page's. */
+  back?: { href: string; label: string };
 }
 
 export function GlassPage({
@@ -44,6 +47,7 @@ export function GlassPage({
   accentColor,
   children,
   maxWidth = 'max-w-5xl',
+  back,
 }: GlassPageProps) {
   return (
     <div className="min-h-screen bg-[#090907] text-white px-4 md:px-6 pt-8 md:pt-12 pb-24">
@@ -64,6 +68,17 @@ export function GlassPage({
         </>
       )}
       <div className={`${maxWidth} mx-auto`}>
+        {back && (
+          <div className="mb-4 -mt-2 md:-mt-4">
+            <Link
+              href={back.href}
+              className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-wider text-white/40 hover:text-white/80 transition-colors"
+            >
+              <ArrowLeft size={11} aria-hidden="true" />
+              {back.label}
+            </Link>
+          </div>
+        )}
         <div className="rounded-[28px] border border-white/[0.08] bg-white/[0.04] backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.55)] overflow-hidden">
           {children}
         </div>

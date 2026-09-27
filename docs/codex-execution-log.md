@@ -8530,3 +8530,46 @@ Buyers got a 401 from `/api/tags/colors`, and could also hit `/api/profile`, on 
 - **The store layout's `PlayerBar` and `CartDrawer` sat outside every page's provider.** They are now wrapped in `PublicArtworkThemeProvider`, which reads the public `/api/store/theme` once per store session.
 
 Tests: `ArtworkThemeProvider.test.tsx` (jsdom) fails before the fix and passes after, and also checks that the dashboard path still fetches. The scale e2e now asserts zero calls to either endpoint, replacing the once-per-session allowance.
+
+## 2026-09-27 - Project bundle + Now Playing: the ways out (STORE-08)
+
+Three escape paths from a project bundle and its Now Playing waveform, each reproduced in a
+browser before the fix (`e2e/project-bundle-escape.spec.ts` fails 3 of 5 on the old code):
+
+- **No explicit way out of `/store/projects/[id]`.** It was the only store detail page without
+  a "Back to store" link, so a buyer arriving from a shared link had nothing but the browser.
+  `GlassPage` takes an optional `back` prop; only the bundle page passes it.
+- **Browser Back left Now Playing covering the next page.** The overlay lives in the store
+  layout's `PlayerBar`, which survives client navigation, and its state was a plain boolean.
+  It now stores the pathname it was opened on (`lib/ui/route-bound-overlay.ts`) and forgets it
+  when the route moves — deriving "closed" alone was not enough, Forward then reopened it.
+- **Focus snapped back to Close several times a second.** `useDialogBehavior` depended on
+  `onClose`, and callers pass an inline arrow; `PlayerBar` re-renders on every playback tick, so
+  the effect tore down (focus → opener) and re-ran (focus → first control) continuously. A
+  keyboard user could not reach the waveform scrubber. `onClose` is now read through a ref.
+  This fixes the same latent bug in every other caller of the hook.
+
+The e2e stubs `/api/store/projects/<id>` (the local fixture store has no projects) and serves a
+generated WAV so playback actually ticks; headless Chromium needs the autoplay flag and
+sometimes still lands on the player's "tap play" fallback, which the spec handles by pressing
+the overlay's Play button.
+
+**Follow-up, same PR: the "Tap play" prompt was the engine interrupting itself.** Instrumenting
+`play()` / `load()` / `pause()` in the browser showed every rejection was `AbortError`, never
+`NotAllowedError`. `SimpleAudioEngine` treated any rejection as a blocked autoplay: it showed
+"Tap play to start this preview.", set `isPlaying` false, and the resulting `pause()` aborted
+the retry as well. Two causes of the abort:
+
+- `a.src !== instant` never matched a relative source, because `a.src` is always absolute. The
+  store's own preview route (`/api/store/preview/[id]`) is relative, so every re-run of the
+  source effect reloaded. That included React's dev double-invoke, and the reload aborted the
+  `play()` that had just started.
+- The background swap to a cached preview blob calls `load()` before sound starts. This is the
+  production path for a returning buyer.
+
+`lib/audio/play-rejection.ts` now classifies each rejection: `AbortError` is ignored because the
+newer request owns the outcome, `NotAllowedError` is a real block and still asks for a tap, and
+anything else stops the spinner and leaves reporting to the element's `error` event. `holdsSource`
+compares against the `src` attribute. The e2e drops both workarounds (the autoplay flag and the
+Play-button press) and gains "one tap on Preview plays, with no Tap play prompt", which fails on
+the old engine.
