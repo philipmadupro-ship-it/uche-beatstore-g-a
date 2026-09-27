@@ -1,5 +1,14 @@
+/**
+ * `maxSizeBytes` is what the server stores. It sits under Vercel's 4.5 MB
+ * request-body ceiling: at the old 8 MB, a 5–8 MB cover passed every check
+ * in this file and was then refused by the platform with a non-JSON 413
+ * before the route ran. `maxSourceBytes` is what the picker accepts — the
+ * browser shrinks anything larger than `maxSizeBytes` (see image-resize.ts)
+ * before it is sent.
+ */
 export const imageUploadLimits = {
-  maxSizeBytes: 8 * 1024 * 1024,
+  maxSizeBytes: 4 * 1024 * 1024,
+  maxSourceBytes: 40 * 1024 * 1024,
   acceptedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'] as const,
 } as const;
 
@@ -16,12 +25,15 @@ const mimeToExtension: Record<AcceptedImageMimeType, 'jpg' | 'png' | 'webp'> = {
   'image/webp': 'webp',
 };
 
-export function validateImageUpload(file: Pick<File, 'type' | 'size'>): ImageUploadValidation {
+export function validateImageUpload(
+  file: Pick<File, 'type' | 'size'>,
+  maxBytes: number = imageUploadLimits.maxSizeBytes,
+): ImageUploadValidation {
   if (!imageUploadLimits.acceptedMimeTypes.includes(file.type as AcceptedImageMimeType)) {
     return { ok: false, error: 'unsupported-type' };
   }
 
-  if (file.size > imageUploadLimits.maxSizeBytes) {
+  if (file.size > maxBytes) {
     return { ok: false, error: 'too-large' };
   }
 
@@ -29,11 +41,14 @@ export function validateImageUpload(file: Pick<File, 'type' | 'size'>): ImageUpl
   return { ok: true, extension: mimeToExtension[mimeType], mimeType };
 }
 
-export function imageUploadErrorMessage(error: ImageUploadValidationError) {
+export function imageUploadErrorMessage(
+  error: ImageUploadValidationError,
+  maxBytes: number = imageUploadLimits.maxSizeBytes,
+) {
   if (error === 'unsupported-type') {
     return 'Use JPG, PNG, or WebP artwork.';
   }
-  return 'Keep artwork under 8 MB.';
+  return `Keep artwork under ${Math.round(maxBytes / (1024 * 1024))} MB.`;
 }
 
 /**

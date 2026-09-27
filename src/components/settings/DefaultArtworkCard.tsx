@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ImagePlus, Loader2, Trash2, Plus, X } from 'lucide-react';
-import { uploadImageFile, getImageUploadPreflightError } from '@/lib/upload/image-upload-client';
+import { uploadAndAttachImage, getImageUploadPreflightError } from '@/lib/upload/image-upload-client';
 import { extractPaletteFromFile, extractPaletteFromUrl } from '@/lib/artwork/extract.client';
 import { generateGradient, type ArtworkKind } from '@/lib/artwork/gradient';
 import {
@@ -87,22 +87,26 @@ export function DefaultArtworkCard() {
     setBusySlot(slot);
     try {
       if (slot === 'logo') {
-        const url = await uploadImageFile(cropped);
-        await save({ logo_url: url }, () => apply({ logoUrl: url }));
+        await uploadAndAttachImage(cropped, async (url) => {
+          await save({ logo_url: url }, () => apply({ logoUrl: url }));
+          return true;
+        });
         toast.success('Logo saved');
         return;
       }
       // Extract from the CROPPED file: colours should describe what will
       // actually be shown, not the discarded edges of the original.
       const palette = await extractPaletteFromFile(cropped).catch(() => [] as PaletteEntry[]);
-      const url = await uploadImageFile(cropped);
       const f = FIELDS[slot];
-      await save(
-        { [f.url]: url, [f.palette]: palette.length > 0 ? palette : null },
-        () => apply({
-          artwork: { ...useBrandArtworkStore.getState().artwork, [slot]: { url, palette: normalisePalette(palette) } },
-        }),
-      );
+      await uploadAndAttachImage(cropped, async (url) => {
+        await save(
+          { [f.url]: url, [f.palette]: palette.length > 0 ? palette : null },
+          () => apply({
+            artwork: { ...useBrandArtworkStore.getState().artwork, [slot]: { url, palette: normalisePalette(palette) } },
+          }),
+        );
+        return true;
+      });
       toast.success('Artwork saved');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Upload failed');

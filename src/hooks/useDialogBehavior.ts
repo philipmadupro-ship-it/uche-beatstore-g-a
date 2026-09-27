@@ -61,6 +61,15 @@ export function useDialogBehavior<T extends HTMLElement = HTMLDivElement>({
 }: Options) {
   const panelRef = useRef<T | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  // Callers pass inline `() => setOpen(false)`, a new function every render.
+  // If the effect below depended on it, every re-render would tear the dialog
+  // down (focus back to the opener) and set it up again (focus to the first
+  // control). The Now Playing overlay re-renders on every playback tick, so a
+  // keyboard user could never tab past its Close button to the waveform.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -82,7 +91,7 @@ export function useDialogBehavior<T extends HTMLElement = HTMLDivElement>({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -126,7 +135,7 @@ export function useDialogBehavior<T extends HTMLElement = HTMLDivElement>({
       const inPanel = panel?.contains(active as Node) ?? false;
       if (inPanel || active === document.body) previousFocusRef.current?.focus?.();
     };
-  }, [open, onClose, trapFocus]);
+  }, [open, trapFocus]);
 
   return panelRef;
 }

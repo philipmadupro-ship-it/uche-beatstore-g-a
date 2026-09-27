@@ -97,7 +97,7 @@ export function StoreListView({
               }}
               onMouseEnter={() => setHovered(t.id)}
               onMouseLeave={() => setHovered((v) => (v === t.id ? null : v))}
-              className={`relative grid grid-cols-[44px_minmax(0,1fr)_auto_32px] md:grid-cols-[44px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_32px_32px] gap-3 md:gap-4 items-center px-4 md:px-6 py-3 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/60 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
+              className={`relative grid grid-cols-[44px_minmax(0,1fr)_32px] md:grid-cols-[44px_minmax(0,1.5fr)_minmax(0,1fr)_64px_220px_32px_32px] gap-x-3 gap-y-2 md:gap-4 items-center px-4 md:px-6 py-3 cursor-pointer transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-white/60 ${isPreview ? 'bg-white/[0.07]' : isCur ? 'bg-white/[0.05]' : 'hover:bg-white/[0.04]'}`}
               style={isPreview ? { boxShadow: `inset 2px 0 0 ${accentColor}` } : isCur ? { boxShadow: `inset 2px 0 0 ${accentColor}80` } : {}}
             >
               {/* Cover w/ hover-play */}
@@ -181,8 +181,12 @@ export function StoreListView({
                 {fmtDur(t.duration_seconds)}
               </div>
 
-              {/* Per-track price buttons */}
-              <div className="flex items-center gap-1.5 justify-end shrink-0">
+              {/* Per-track price buttons. Below md they drop to a second
+                  row under the title: sharing row one with an `auto` column,
+                  the two buttons claimed every free pixel and the title's
+                  `minmax(0,1fr)` track collapsed to 0px at 390px — buyers saw
+                  a thumbnail and two prices with no beat name. */}
+              <div className="col-[2/4] row-start-2 flex items-center gap-1.5 justify-start md:col-auto md:row-auto md:justify-end shrink-0">
                 {t.free_download_enabled ? (
                   <button
                     data-row-action
@@ -212,29 +216,20 @@ export function StoreListView({
                   </button>
                 ) : (
                   <>
-                    {/* Below md the row has ~210px for title AND buy column.
-                        Two full "Lease $X / Exclusive $Y" buttons in Akira
-                        Expanded took all of it and the minmax(0,1fr) title
-                        column collapsed to zero width — every title vanished
-                        at 390px. So on phones: one compact lease button (the
-                        aria-label keeps the full phrase); exclusive stays in
-                        the row's ⋯ menu ("Add exclusive"). */}
                     <button
                       data-row-action
                       onClick={(e) => { e.stopPropagation(); onAddLease(t); }}
                       disabled={lp == null}
-                      aria-label={lp != null ? `Add lease for ${t.title}, $${lp}` : `Lease unavailable for ${t.title}`}
                       className="flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.08] px-2.5 text-[11px] transition-colors hover:bg-white/[0.04] disabled:opacity-30"
                     >
-                      <span className="hidden text-white/45 sm:inline">Lease</span>
+                      <span className="text-white/45">Lease</span>
                       <span className="font-semibold tabular-nums text-white">{lp != null ? `$${lp}` : '—'}</span>
                     </button>
                     <button
                       data-row-action
                       onClick={(e) => { e.stopPropagation(); onAddExclusive(t); }}
                       disabled={ep == null}
-                      aria-label={ep != null ? `Add exclusive for ${t.title}, $${ep}` : `Exclusive unavailable for ${t.title}`}
-                      className="hidden md:flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.08] px-2.5 text-[11px] transition-colors hover:bg-white/[0.04] disabled:opacity-30"
+                      className="flex min-h-10 items-center gap-1.5 whitespace-nowrap rounded-lg border border-white/[0.08] px-2.5 text-[11px] transition-colors hover:bg-white/[0.04] disabled:opacity-30"
                     >
                       <span className="text-white/45">Exclusive</span>
                       <span className="font-semibold tabular-nums" style={{ color: accentColor }}>{ep != null ? `$${ep}` : '—'}</span>
@@ -259,7 +254,7 @@ export function StoreListView({
               {/* Menu. `data-row-action` keeps the row's own click handler
                   from treating a press on the trigger as "open this beat" —
                   see the closest() guard on the <li>. */}
-              <div className="relative" data-row-action>
+              <div className="relative col-start-3 row-start-1 md:col-auto md:row-auto" data-row-action>
                 <ActionMenu
                   align="right"
                   width={208}

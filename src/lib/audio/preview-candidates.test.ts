@@ -1,0 +1,46 @@
+import { describe, it, expect } from 'vitest';
+import { needsPreview, isPreviewableMaster, canTruncateWithoutFfmpeg, pickPreviewBatch } from './preview-candidates';
+
+const row = (id: string, o: Record<string, unknown> = {}) => ({
+  id, audio_url: `r2://priv/tracks/${id}.wav`, preview_url: null, preview_status: 'none',
+  peaks_url: 'p', store_listed: true, created_at: `2026-01-0${id.length}`, ...o,
+});
+
+describe('needsPreview', () => {
+  it("treats 'ready' with no preview_url as missing — the stranded case", () => {
+    expect(needsPreview({ id: 'a', preview_status: 'ready', preview_url: null })).toBe(true);
+  });
+  it('is satisfied only by ready + url', () => {
+    expect(needsPreview({ id: 'a', preview_status: 'ready', preview_url: 'https://x/p.mp3' })).toBe(false);
+  });
+});
+
+describe('formats', () => {
+  it('accepts every uploadable format', () => {
+    for (const e of ['mp3', 'wav', 'flac', 'aiff', 'aif', 'm4a', 'ogg']) expect(isPreviewableMaster(`r2://b/t.${e}`)).toBe(true);
+    expect(isPreviewableMaster('r2://b/t')).toBe(false);
+  });
+  it('only byte-truncates mp3/wav', () => {
+    expect(canTruncateWithoutFfmpeg('r2://b/t.wav')).toBe(true);
+    expect(canTruncateWithoutFfmpeg('r2://b/t.flac')).toBe(false);
+  });
+});
+
+describe('pickPreviewBatch', () => {
+  it('filters unusable rows BEFORE cutting the batch, so they cannot starve it', () => {
+    const junk = Array.from({ length: 10 }, (_, i) => row(`j${i}`, { audio_url: 'https://elsewhere/no-ext', created_at: '2000-01-01' }));
+    const want = row('want', { created_at: '2026-09-01' });
+    expect(pickPreviewBatch([...junk, want], 8).map((r) => r.id)).toEqual(['want']);
+  });
+  it('puts missing previews ahead of peaks-only rows, and listed ahead of unlisted', () => {
+    const peaksOnly = row('peaks', { preview_url: 'u', preview_status: 'ready', peaks_url: null, created_at: '2000' });
+    const unlisted = row('unl', { store_listed: false, created_at: '2001' });
+    const listed = row('lst', { created_at: '2026' });
+    expect(pickPreviewBatch([peaksOnly, unlisted, listed], 3).map((r) => r.id)).toEqual(['lst', 'unl', 'peaks']);
+  });
+  it('picks up a flac master and a ready-but-urlless row', () => {
+    const flac = row('flac', { audio_url: 'r2://b/x.flac' });
+    const stranded = row('str', { preview_status: 'ready' });
+    expect(pickPreviewBatch([flac, stranded], 8).map((r) => r.id).sort()).toEqual(['flac', 'str']);
+  });
+});

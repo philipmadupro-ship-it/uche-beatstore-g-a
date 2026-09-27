@@ -1085,7 +1085,10 @@ function StorePage() {
    * default layout, which is this page's original section order — so a
    * storefront that has never been arranged renders exactly as it always has.
    */
-  const storeLayout = normalizeLayout(creator?.store_layout);
+  // Memoised on the stored document: normalising builds new section objects,
+  // and the page re-renders on every player progress tick.
+  const storedLayout = creator?.store_layout;
+  const storeLayout = useMemo(() => normalizeLayout(storedLayout), [storedLayout]);
   /**
    * The viewer's device, for the one thing CSS cannot express: the hero's
    * particle-vs-plain title picks a different COMPONENT, and hiding one with

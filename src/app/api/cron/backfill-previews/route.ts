@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { makeTruncatedPreview, DEFAULT_PREVIEW_SECONDS } from '@/lib/audio/preview';
 import { uploadPreviewAsset, uploadPeaksSidecar, readStoredObject } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
+import { pickPreviewBatch, needsPreview, canTruncateWithoutFfmpeg } from '@/lib/audio/preview-candidates';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('cron.backfill-previews');
@@ -67,12 +68,14 @@ export async function GET(req: NextRequest) {
   // decode audio client-side just to draw bars.
   let candidateQuery = admin
     .from('tracks')
-    .select('id, audio_url, duration_seconds, preview_status, peaks_url')
-    .or('preview_status.is.null,preview_status.neq.ready,peaks_url.is.null');
+    .select('id, audio_url, duration_seconds, preview_status, preview_url, peaks_url, store_listed, created_at')
+    .or('preview_status.is.null,preview_status.neq.ready,preview_url.is.null,peaks_url.is.null');
   if (scope !== 'all') candidateQuery = candidateQuery.eq('store_listed', true);
   const { data: tracks, error } = await candidateQuery
     .order('created_at', { ascending: true })
-    .limit(batch);
+    // Over-fetch a pool and choose the batch in pickPreviewBatch, so rows we
+    // can't process (or that only need peaks) can't fill every slot.
+    .limit(Math.min(batch * 25, 500));
 
   if (error) {
     // Most likely the preview_status column isn't in PostgREST's schema cache
@@ -82,7 +85,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ skipped: 'candidate query failed', detail: error.message });
   }
 
-  const candidates = (tracks ?? []).filter((t) => /\.(mp3|wav)(?:\?|$)/i.test(t.audio_url ?? ''));
+  const candidates = pickPreviewBatch(tracks ?? [], batch);
 
   let processed = 0;
   let failed = 0;
@@ -117,13 +120,17 @@ export async function GET(req: NextRequest) {
       const patch: Record<string, string> = {};
 
       // ── Preview clip (only when not already ready) ──────────────────────
-      if (track.preview_status !== 'ready') {
+      if (needsPreview(track)) {
         // Prefer a small 96 kbps MP3 clip (ffmpeg); fall back to byte-truncation
         // when ffmpeg is unavailable so a preview is still produced.
         const { makePreviewMp3Buffer } = await import('@/lib/audio/convert');
         let previewBuf: Buffer, ext: 'mp3' | 'wav', contentType: string;
         try {
           const mp3 = await makePreviewMp3Buffer(buf, DEFAULT_PREVIEW_SECONDS);
+          if (!mp3 && !canTruncateWithoutFfmpeg(track.audio_url)) {
+            // flac/aiff/m4a/ogg can't be byte-sliced into a playable clip.
+            throw new Error('ffmpeg unavailable and master is not mp3/wav');
+          }
           ({ buffer: previewBuf, ext, contentType } = mp3
             ? { buffer: mp3, ext: 'mp3' as const, contentType: 'audio/mpeg' }
             : makeTruncatedPreview(buf, track.duration_seconds ?? null));

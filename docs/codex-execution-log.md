@@ -8531,6 +8531,48 @@ Buyers got a 401 from `/api/tags/colors`, and could also hit `/api/profile`, on 
 
 Tests: `ArtworkThemeProvider.test.tsx` (jsdom) fails before the fix and passes after, and also checks that the dashboard path still fetches. The scale e2e now asserts zero calls to either endpoint, replacing the once-per-session allowance.
 
+## 2026-09-27 - Project bundle + Now Playing: the ways out (STORE-08)
+
+Three escape paths from a project bundle and its Now Playing waveform, each reproduced in a
+browser before the fix (`e2e/project-bundle-escape.spec.ts` fails 3 of 5 on the old code):
+
+- **No explicit way out of `/store/projects/[id]`.** It was the only store detail page without
+  a "Back to store" link, so a buyer arriving from a shared link had nothing but the browser.
+  `GlassPage` takes an optional `back` prop; only the bundle page passes it.
+- **Browser Back left Now Playing covering the next page.** The overlay lives in the store
+  layout's `PlayerBar`, which survives client navigation, and its state was a plain boolean.
+  It now stores the pathname it was opened on (`lib/ui/route-bound-overlay.ts`) and forgets it
+  when the route moves — deriving "closed" alone was not enough, Forward then reopened it.
+- **Focus snapped back to Close several times a second.** `useDialogBehavior` depended on
+  `onClose`, and callers pass an inline arrow; `PlayerBar` re-renders on every playback tick, so
+  the effect tore down (focus → opener) and re-ran (focus → first control) continuously. A
+  keyboard user could not reach the waveform scrubber. `onClose` is now read through a ref.
+  This fixes the same latent bug in every other caller of the hook.
+
+The e2e stubs `/api/store/projects/<id>` (the local fixture store has no projects) and serves a
+generated WAV so playback actually ticks; headless Chromium needs the autoplay flag and
+sometimes still lands on the player's "tap play" fallback, which the spec handles by pressing
+the overlay's Play button.
+
+**Follow-up, same PR: the "Tap play" prompt was the engine interrupting itself.** Instrumenting
+`play()` / `load()` / `pause()` in the browser showed every rejection was `AbortError`, never
+`NotAllowedError`. `SimpleAudioEngine` treated any rejection as a blocked autoplay: it showed
+"Tap play to start this preview.", set `isPlaying` false, and the resulting `pause()` aborted
+the retry as well. Two causes of the abort:
+
+- `a.src !== instant` never matched a relative source, because `a.src` is always absolute. The
+  store's own preview route (`/api/store/preview/[id]`) is relative, so every re-run of the
+  source effect reloaded. That included React's dev double-invoke, and the reload aborted the
+  `play()` that had just started.
+- The background swap to a cached preview blob calls `load()` before sound starts. This is the
+  production path for a returning buyer.
+
+`lib/audio/play-rejection.ts` now classifies each rejection: `AbortError` is ignored because the
+newer request owns the outcome, `NotAllowedError` is a real block and still asks for a tap, and
+anything else stops the spinner and leaves reporting to the element's `error` event. `holdsSource`
+compares against the `src` attribute. The e2e drops both workarounds (the autoplay flag and the
+Play-button press) and gains "one tap on Preview plays, with no Tap play prompt", which fails on
+the old engine.
 ## 2026-09-27 - Newly listed beats missing from /store page one (STORE-03)
 
 A beat uploaded and listed after the producer had reordered the storefront did not show on `/store`. The write path was fine: `/api/upload/complete` inserts the row under the producer's `user_id`, the Store Editor toggle PATCHes `store_listed: true` through `TrackPatchBodySchema` / `updateOwned`, and `/api/store` filters `store_listed = true` scoped to the resolved owner.
@@ -8544,4 +8586,4 @@ Not changed: `/api/store` still sends `s-maxage=300, stale-while-revalidate=8640
 ### Follow-up, same PR: the producer's order now reaches /store, and mobile list titles are back
 
 - **Featured sort (new default).** The Store Editor's drag / arrow order wrote `store_sort_order`, but nothing on `/store` honoured it: the server picked pages by it and the browser re-sorted them by date. `lib/store/newest.ts#compareFeatured` / `FEATURED_ORDER_COLUMNS` is now the storefront default (`sort` omitted from the URL). It is shared by SQL, the local store, the browser and the Store Editor's listed rows, so the editor shows exactly what buyers see. Beats with no position come **first**, newest first, so a new listing is never pushed off page one (STORE-03); dragging it in the editor places it. "Newest first" remains a sort option. The pre-033 fallback query has no position column and orders by newest instead.
-- **Mobile list rows.** Below `md`, `StoreListView`'s `auto` buy column held two full "Lease $X / Exclusive $Y" buttons in Akira Expanded, which took the ~210px available, so the `minmax(0,1fr)` title column collapsed to 0. 74 of 80 titles measured 0px at 390px. Phones now get one compact lease button with a full aria-label, and exclusive stays in the row's ⋯ menu. A new `e2e/storefront.spec.ts` case asserts title width > 40px at 390px. It fails before (0px) and passes after; on the 99-beat fixture the minimum is now 136px.
+- **Mobile list rows** were fixed on `main` by #12 while this PR was open (price buttons drop to a second row, both kept). This PR's narrower version, which hid Exclusive on phones, was dropped in the merge in favour of #12, along with its duplicate e2e case.

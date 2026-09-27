@@ -102,6 +102,36 @@ describe('useDialogBehavior', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('keeps focus where the user put it when the parent re-renders with a new onClose', () => {
+    // The Now Playing overlay passes an inline `() => setOpen(false)` and
+    // re-renders on every playback tick. When the effect depended on onClose,
+    // each render tore it down (focus back to the opener behind the overlay)
+    // and set it up again (focus to the first control). A keyboard user who
+    // tabbed to the waveform scrubber was yanked back to Close several times
+    // a second and could never reach it.
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+
+    const { getByText, rerender } = render(<Dialog onClose={() => {}} />);
+    getByText('middle').focus();
+    rerender(<Dialog onClose={() => {}} />);
+    rerender(<Dialog onClose={() => {}} />);
+
+    expect(document.activeElement).toBe(getByText('middle'));
+    opener.remove();
+  });
+
+  it('calls the latest onClose on Escape after a re-render', () => {
+    const stale = vi.fn();
+    const latest = vi.fn();
+    const { rerender } = render(<Dialog onClose={stale} />);
+    rerender(<Dialog onClose={latest} />);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(latest).toHaveBeenCalledTimes(1);
+    expect(stale).not.toHaveBeenCalled();
+  });
+
   it('does nothing while closed', () => {
     const onClose = vi.fn();
     function Closed() {

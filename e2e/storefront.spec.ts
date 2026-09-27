@@ -85,19 +85,6 @@ test.describe('storefront', () => {
     await expect(cards.first().or(empty).first()).toBeVisible();
   });
 
-  test('list view keeps every beat title readable at phone width', async ({ page }) => {
-    // At 390px the buy buttons used to take the whole row and collapse the
-    // title column to zero width — every title in list view vanished.
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.addInitScript(() => { try { localStorage.setItem('store-view-mode', 'list'); } catch { /* private mode */ } });
-    await page.goto('/store');
-    const titles = page.locator('li p.truncate.font-semibold');
-    await titles.first().waitFor({ state: 'attached', timeout: 10_000 }).catch(() => null);
-    if (await titles.count() === 0) missingPrecondition('no beats in store');
-    const widths = await titles.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
-    expect(Math.min(...widths)).toBeGreaterThan(40);
-  });
-
   test('clicking a beat card opens the preview drawer', async ({ page }) => {
     await page.goto('/store');
     // Wait for /api/store to populate the grid before assuming we know
@@ -143,5 +130,30 @@ test.describe('storefront', () => {
     await checkoutBtn.click();
 
     await page.waitForURL(/\/store\/checkout/);
+  });
+
+  test('list view keeps every row title readable at 390px', async ({ page }) => {
+    // At phone width the Lease / Exclusive buttons used to share row one with
+    // the title in an `auto` grid column, took all the free width and
+    // collapsed the title's `minmax(0,1fr)` track to 0px. The row still
+    // rendered — thumbnail and two prices — so only a measurement catches it.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/store');
+    const firstRow = page.locator('[id^="beat-"]').first();
+    await firstRow.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => null);
+    if (await firstRow.count() === 0) missingPrecondition('no beats in store');
+
+    const listToggle = page.getByRole('button', { name: 'List view' });
+    if ((await listToggle.getAttribute('aria-pressed')) !== 'true') await listToggle.click();
+    await expect(listToggle).toHaveAttribute('aria-pressed', 'true');
+
+    const titles = page.locator('li[id^="beat-"] p.truncate.font-semibold');
+    await expect(titles.first()).toBeVisible();
+    const widths = await titles.evaluateAll((els) =>
+      els.map((el) => ({ text: el.textContent ?? '', width: el.getBoundingClientRect().width })),
+    );
+    expect(widths.length).toBeGreaterThan(0);
+    const collapsed = widths.filter((w) => w.width <= 0);
+    expect(collapsed, `row titles with zero width: ${collapsed.map((c) => c.text).join(', ')}`).toEqual([]);
   });
 });
