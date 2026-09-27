@@ -8588,6 +8588,35 @@ Not changed: `/api/store` still sends `s-maxage=300, stale-while-revalidate=8640
 - **Featured sort (new default).** The Store Editor's drag / arrow order wrote `store_sort_order`, but nothing on `/store` honoured it: the server picked pages by it and the browser re-sorted them by date. `lib/store/newest.ts#compareFeatured` / `FEATURED_ORDER_COLUMNS` is now the storefront default (`sort` omitted from the URL). It is shared by SQL, the local store, the browser and the Store Editor's listed rows, so the editor shows exactly what buyers see. Beats with no position come **first**, newest first, so a new listing is never pushed off page one (STORE-03); dragging it in the editor places it. "Newest first" remains a sort option. The pre-033 fallback query has no position column and orders by newest instead.
 - **Mobile list rows** were fixed on `main` by #12 while this PR was open (price buttons drop to a second row, both kept). This PR's narrower version, which hid Exclusive on phones, was dropped in the merge in favour of #12, along with its duplicate e2e case.
 
+## 2026-09-27 - Bundle previews: tracks in a featured bundle are previewable
+
+Found by trying the merged STORE-08 build on production. One-tap playback worked on a listed beat
+with a preview file. But almost every Preview on a project bundle was silent: **125 of the 131
+tracks across the 4 featured bundles returned 404** from `/api/store/preview/[id]`, and the player
+reported `NotSupportedError` because it was handed a JSON body. Two defects compounded:
+
+- **The preview and peaks routes served only `store_listed = true`.** A featured bundle is public
+  (`/store/projects/[id]` lists its tracks and offers Preview), but its tracks are usually not
+  listed on their own. The access rule, in `lib/store/public-preview-access.ts`, is now: listed, OR
+  in a featured bundle that the track's owner also owns. Either way the owner must be the producer.
+  The owner match matters because `project_tracks` is a plain junction, and a bundle must not
+  publish someone else's track just by linking it.
+- **The bundle route never selected `preview_url`,** so `redactPublicTrackMedia` could not hand
+  out the public preview derivative and every bundle track went through the proxy. The `/store`
+  catalogue already selected it.
+
+What is streamed does not change: the preview derivative, or a non-private `audio_url`, never an
+`r2://` master (`publicPreviewSource`, tested). Listed tracks short-circuit before the two extra
+queries, and responses keep their CDN cache headers.
+
+The route tests needed their mock to honour `.eq()` the way PostgREST does. The first version
+ignored the old route's in-query `store_listed` filter, so the tests failed the wrong way round
+against the old code. With the fix, on the old routes exactly the two "bundle track is served"
+tests fail, and every refusal passes on both. `peaks/[id]/route.test.ts` is updated for the new
+gate shape (single `.eq`, plus the producer lookup).
+
+Not code: three listed tracks (ALIENS, BE alright, PUSH IT YN) have no generated preview
+derivative and a private master, so they still 404 by design until previews are generated.
 ## 2026-09-27 - Listed beats with no preview clip (404 on /store play)
 
 Found in production: 3 of 6 listed beats (the 3 newest) had `preview_url = NULL` and a private `r2://` master, so `/api/store/preview/[id]` 404'd. They appeared in the catalogue but played nothing.

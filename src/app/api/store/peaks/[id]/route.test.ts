@@ -85,30 +85,35 @@ describe('GET /api/store/peaks/[id]', () => {
     expect(mockStreamAudioPreviewSource).not.toHaveBeenCalled();
   });
 
-  it('queries Supabase with the store_listed gate', async () => {
+  it('queries Supabase and serves a listed producer track', async () => {
+    // The gate is the shared public-preview rule now (listed or in a featured
+    // bundle, owner must be the producer), so the query no longer filters
+    // store_listed itself and the owner is looked up in creator_profiles.
     mockIsSupabaseConfigured.mockReturnValue(true);
-    mockFrom.mockReturnValue({
+    mockFrom.mockImplementation((table: string) => ({
       select: () => ({
         eq: () => ({
-          eq: () => ({
-            maybeSingle: () => Promise.resolve({
+          maybeSingle: () => Promise.resolve(table === 'tracks'
+            ? {
               data: {
                 id: 'track-1',
+                user_id: 'producer-1',
                 store_listed: true,
                 peaks_url: 'https://pub.r2.dev/peaks/a.json',
               },
               error: null,
-            }),
-          }),
+            }
+            : { data: { user_id: 'producer-1' }, error: null }),
         }),
       }),
-    });
+    }));
 
     const mod = await loadRoute();
     const res = await mod.GET(req(), { params: Promise.resolve({ id: 'track-1' }) });
 
     expect(res.status).toBe(200);
     expect(mockFrom).toHaveBeenCalledWith('tracks');
+    expect(mockFrom).toHaveBeenCalledWith('creator_profiles');
     expect(mockStreamAudioPreviewSource).toHaveBeenCalledWith(expect.any(NextRequest), 'https://pub.r2.dev/peaks/a.json');
   });
 });

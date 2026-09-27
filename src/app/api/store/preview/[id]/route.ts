@@ -1,10 +1,10 @@
-import { isProducerUserId } from '@/lib/auth/producer';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { errorMessage } from '@/lib/errors';
 import { streamAudioPreviewSource } from '@/lib/audio/stream-source';
 import { createLogger } from '@/lib/log';
+import { canStreamPublicly, publicPreviewSource, type PreviewTrackRow } from '@/lib/store/public-preview-access';
 
 const log = createLogger('api.store.preview');
 
@@ -27,20 +27,16 @@ export async function GET(
       .from('tracks')
       .select('preview_url, audio_url, store_listed, user_id')
       .eq('id', id)
-      .eq('store_listed', true)
       .maybeSingle();
 
     if (error) throw error;
-    // Only the producer's catalogue is public. A row a buyer inserted
-    // themselves must not become a public stream of whatever it points at.
-    if (track && !(await isProducerUserId(admin, track.user_id))) {
+    // Listed, or in a featured bundle — and the producer's own track either
+    // way. A row a buyer inserted must not become a public stream.
+    const row = track as PreviewTrackRow | null;
+    if (!row || !(await canStreamPublicly(admin, id, row))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
-    const source = track?.preview_url || (
-      typeof track?.audio_url === 'string' && !track.audio_url.startsWith('r2://')
-        ? track.audio_url
-        : null
-    );
+    const source = publicPreviewSource(row);
     if (!source) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }

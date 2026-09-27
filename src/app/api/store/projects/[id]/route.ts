@@ -60,7 +60,9 @@ function sanitizeUrl(url: string | null | undefined): string | null {
 
 const TRACK_FIELDS = [
   'id', 'title', 'type',
-  'audio_url', 'peaks_url', 'cover_url',
+  // preview_url lets redactPublicTrackMedia hand out the public preview
+  // derivative directly; without it every bundle track went through the proxy.
+  'audio_url', 'preview_url', 'peaks_url', 'cover_url',
   'duration_seconds', 'bpm', 'key', 'scale',
   'lease_price_usd', 'exclusive_price_usd', 'free_download_enabled',
 ].join(', ');
