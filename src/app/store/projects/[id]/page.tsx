@@ -202,7 +202,13 @@ export default function StoreProjectPage({
   return (
     <ArtworkThemeProvider theme={artworkTheme}>
     <>
-      <GlassPage coverUrl={project.cover_url} accentColor={accent}>
+      <GlassPage
+        coverUrl={project.cover_url}
+        accentColor={accent}
+        // The bundle page had no way out but the browser's own Back, and a
+        // buyer who landed from a shared link had no history to go back to.
+        back={{ href: '/store', label: 'Back to store' }}
+      >
         <GlassPage.TabNav
           tabs={[
             ['overview', 'Overview'],
