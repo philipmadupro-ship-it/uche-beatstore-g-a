@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { buildBuyerLibraryShape, collectBuyerLibraryTrackIds, type BuyerLibraryTrackSummary } from './buyer-library';
+import {
+  buildBuyerLibraryShape,
+  buyerPlaylistMembership,
+  collectBuyerLibraryTrackIds,
+  playlistNameFromTrack,
+  purchasedTrackIdSet,
+  visibleBuyerLibraryTracks,
+  type BuyerLibraryTrackSummary,
+} from './buyer-library';
 
 const track = (id: string, title: string): BuyerLibraryTrackSummary => ({
   id,
@@ -41,5 +49,54 @@ describe('buyer library shaping', () => {
     expect(shaped.favorites[0].track?.title).toBe('Basement Run');
     expect(shaped.playlists[0].track_ids).toEqual(['b', 'a']);
     expect(shaped.playlists[0].tracks.map((item) => item.title)).toEqual(['Basement Run', 'After Hours']);
+  });
+});
+
+describe('visibleBuyerLibraryTracks', () => {
+  const t = (id: string, store_listed: boolean | null) => ({
+    id, title: id, cover_url: null, type: null, bpm: null, key: null, scale: null, duration_seconds: null, store_listed,
+  });
+
+  it('keeps listed beats and drops unlisted ones the buyer never bought', () => {
+    const out = visibleBuyerLibraryTracks([t('listed', true), t('private', false), t('unknown', null)], new Set());
+    expect(out.map((x) => x.id)).toEqual(['listed']);
+  });
+
+  it('keeps an unlisted beat this buyer paid for (an exclusive delists it)', () => {
+    const out = visibleBuyerLibraryTracks([t('bought', false)], new Set(['bought']));
+    expect(out.map((x) => x.id)).toEqual(['bought']);
+  });
+
+  it('never leaks the store_listed flag into the response shape', () => {
+    const [out] = visibleBuyerLibraryTracks([t('listed', true)], new Set());
+    expect(out).not.toHaveProperty('store_listed');
+  });
+});
+
+describe('purchasedTrackIdSet', () => {
+  it('flattens track_ids arrays and ignores malformed rows', () => {
+    expect([...purchasedTrackIdSet([{ track_ids: ['a', 'b'] }, { track_ids: null }, { track_ids: ['b', 3] }, {}])])
+      .toEqual(['a', 'b']);
+  });
+});
+
+describe('buyerPlaylistMembership', () => {
+  it('marks the playlists that already hold the track', () => {
+    expect(buyerPlaylistMembership([
+      { id: 'p1', name: 'Late night', track_ids: ['x', 'y'] },
+      { id: 'p2', name: 'Gym', track_ids: [] },
+    ], 'x')).toEqual([
+      { id: 'p1', name: 'Late night', contains: true, count: 2 },
+      { id: 'p2', name: 'Gym', contains: false, count: 0 },
+    ]);
+  });
+});
+
+describe('playlistNameFromTrack', () => {
+  it('names the playlist after the beat, within the 80-char limit', () => {
+    expect(playlistNameFromTrack('  Night Shift ')).toBe('Night Shift');
+    expect(playlistNameFromTrack('x'.repeat(120))).toHaveLength(80);
+    expect(playlistNameFromTrack(null)).toBe('My playlist');
+    expect(playlistNameFromTrack('   ')).toBe('My playlist');
   });
 });

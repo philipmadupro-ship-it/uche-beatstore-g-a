@@ -14,6 +14,8 @@
  * the stored token so the next visit goes back to anonymous mode.
  */
 
+import type { BuyerLibraryShape } from '@/lib/store/buyer-library';
+
 const KEY = 'antigravity-buyer-token';
 const SESSION_MODE_KEY = 'antigravity-buyer-session-mode';
 
@@ -132,11 +134,11 @@ export const deletePlaylist = (playlist_id: string) =>
   dispatch({ action: 'delete_playlist', playlist_id });
 
 /**
- * The account's favourite track ids, or null when there is no buyer
- * identity on this device or the read failed. Null means "unknown", never
- * "none" — callers must not treat it as an empty account.
+ * The buyer's whole library (history, favourites, playlists) for whichever
+ * identity this device holds, or null when there is none or the read
+ * failed. Null means "unknown", never "empty".
  */
-export async function fetchBuyerFavoriteIds(): Promise<string[] | null> {
+export async function fetchBuyerLibrary(): Promise<BuyerLibraryShape | null> {
   const identity = buyerIdentityQuery();
   if (!identity) return null;
   try {
@@ -147,12 +149,23 @@ export async function fetchBuyerFavoriteIds(): Promise<string[] | null> {
       return null;
     }
     if (!res.ok) return null;
-    const data = (await res.json()) as { favorites?: Array<{ track_id?: unknown }> };
-    if (!Array.isArray(data.favorites)) return null;
-    return data.favorites
-      .map((f) => f.track_id)
-      .filter((id): id is string => typeof id === 'string');
+    const data = (await res.json()) as Partial<BuyerLibraryShape>;
+    if (!Array.isArray(data.favorites) || !Array.isArray(data.playlists)) return null;
+    return data as BuyerLibraryShape;
   } catch {
     return null;
   }
+}
+
+/**
+ * The account's favourite track ids, or null when there is no buyer
+ * identity on this device or the read failed. Null means "unknown", never
+ * "none" — callers must not treat it as an empty account.
+ */
+export async function fetchBuyerFavoriteIds(): Promise<string[] | null> {
+  const library = await fetchBuyerLibrary();
+  if (!library) return null;
+  return library.favorites
+    .map((f) => f.track_id)
+    .filter((id): id is string => typeof id === 'string');
 }

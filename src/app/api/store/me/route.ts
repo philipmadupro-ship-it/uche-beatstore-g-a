@@ -9,6 +9,8 @@ import { normalizeEmail } from '@/lib/contacts/email';
 import {
   buildBuyerLibraryShape,
   collectBuyerLibraryTrackIds,
+  purchasedTrackIdSet,
+  visibleBuyerLibraryTracks,
   type BuyerLibraryFavoriteRow,
   type BuyerLibraryHistoryRow,
   type BuyerLibraryTrackJoinRow,
@@ -187,11 +189,22 @@ export async function GET(req: NextRequest) {
     const trackIds = collectBuyerLibraryTrackIds({ history, favorites, playlistTracks });
     let tracks: BuyerLibraryTrackSummary[] = [];
     if (trackIds.length > 0) {
-      const { data: trackRows } = await admin
-        .from('tracks')
-        .select('id,title,cover_url,type,bpm,key,scale,duration_seconds')
-        .in('id', trackIds);
-      tracks = (trackRows ?? []) as BuyerLibraryTrackSummary[];
+      const [{ data: trackRows }, { data: purchaseRows }] = await Promise.all([
+        admin
+          .from('tracks')
+          .select('id,title,cover_url,type,bpm,key,scale,duration_seconds,store_listed')
+          .in('id', trackIds),
+        admin
+          .from('license_purchases')
+          .select('track_ids')
+          .eq('buyer_email', email),
+      ]);
+      // Rows written before the store_listed write gate can name any track;
+      // only listed or purchased ones may have their metadata read back.
+      tracks = visibleBuyerLibraryTracks(
+        (trackRows ?? []) as Array<BuyerLibraryTrackSummary & { store_listed?: boolean | null }>,
+        purchasedTrackIdSet((purchaseRows ?? []) as Array<{ track_ids?: unknown }>),
+      );
     }
 
     return NextResponse.json(buildBuyerLibraryShape({

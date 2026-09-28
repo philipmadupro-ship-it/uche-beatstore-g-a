@@ -22,12 +22,14 @@ type Op = { table: string; op: string; payload?: unknown; filters: Array<[string
 const ops: Op[] = [];
 /** Rows a `select … maybeSingle()` returns, keyed by table. */
 const singles: Record<string, unknown> = {};
+/** Rows a list `select` resolves with, keyed by table. */
+const lists: Record<string, unknown[]> = {};
 
 function builder(table: string) {
   const make = (op: string, payload?: unknown) => {
     const rec: Op = { table, op, payload, filters: [] };
     ops.push(rec);
-    const result = () => Promise.resolve({ data: op === 'select' ? [] : null, error: null });
+    const result = () => Promise.resolve({ data: op === 'select' ? (lists[table] ?? []) : null, error: null });
     const q: Record<string, unknown> = {
       eq: (c: string, v: unknown) => { rec.filters.push([c, v]); return q; },
       in: () => q,
@@ -75,6 +77,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   ops.length = 0;
   for (const k of Object.keys(singles)) delete singles[k];
+  for (const k of Object.keys(lists)) delete lists[k];
   session.userId = null;
   session.email = null;
   mockVerify.mockImplementation((t: string) => (t === 'good' ? { email: 'buyer@example.test' } : null));
@@ -233,5 +236,28 @@ describe('GET /api/store/me', () => {
       const read = ops.find((o) => o.table === table)!;
       expect(read.filters).toEqual([['email', 'buyer@example.test']]);
     }
+  });
+
+  it('does not read back metadata for an unlisted beat a pre-gate row names, unless the buyer bought it', async () => {
+    session.userId = 'buyer-user';
+    session.email = 'buyer@example.test';
+    lists.buyer_favorites = [
+      { track_id: 'listed', created_at: '2026-01-03' },
+      { track_id: 'private', created_at: '2026-01-02' },
+      { track_id: 'bought', created_at: '2026-01-01' },
+    ];
+    lists.tracks = [
+      { id: 'listed', title: 'Listed', store_listed: true },
+      { id: 'private', title: 'Unreleased demo', store_listed: false },
+      { id: 'bought', title: 'Bought exclusive', store_listed: false },
+    ];
+    lists.license_purchases = [{ track_ids: ['bought'] }];
+    const { GET } = await import('./route');
+    const body = await (await GET(get('?session=1'))).json();
+    expect(body.favorites.map((f: { track: { title: string } | null }) => f.track?.title ?? null))
+      .toEqual(['Listed', null, 'Bought exclusive']);
+    expect(JSON.stringify(body)).not.toContain('Unreleased demo');
+    const purchases = ops.find((o) => o.table === 'license_purchases')!;
+    expect(purchases.filters).toEqual([['buyer_email', 'buyer@example.test']]);
   });
 });
