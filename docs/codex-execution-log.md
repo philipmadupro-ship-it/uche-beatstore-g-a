@@ -8751,3 +8751,13 @@ both rects in one frame after the box stops moving, because a drawer that is sti
 
 Checked and left alone: `store/[id]/share` passes `src={null}`, so it never renders an image, and
 `PlayerBar`'s Now Playing backdrop sits in an `absolute inset-0` parent on purpose.
+
+## 2026-09-28 - Profile saves no longer fail after picking a photo (PROFILE-01)
+
+Clicking the photo on `/profile` read the file with `FileReader.readAsDataURL` and put the `data:` URL into `hero_image_url`. `CreatorProfilePatchSchema` caps that column at 2000 characters, so `POST /api/profile` answered 400 `hero_image_url: Too big…` and nothing was written. That included the bio, prices and socials in the same save. A reload then showed the old values.
+
+- The photo now goes through the existing `/api/upload/image` path (`uploadImageFile`), and only its URL goes into the form. Replacing an unsaved upload discards the previous object. Save is disabled while an upload is in flight. The tile is now a real `<button>`, so it is keyboard-reachable.
+- `lib/profile/save-body.ts` builds the request body. It also refuses to send inline image data, such as a pasted `data:` URL, with a message saying to upload instead. The server would otherwise reject the entire profile over that one field.
+- The contract, route, write path and RLS are unchanged. Ownership still comes from the session in `updateCreatorProfile`, never from the body.
+
+Tests: `lib/profile/save-body.test.ts`, `app/api/profile/route.test.ts`.

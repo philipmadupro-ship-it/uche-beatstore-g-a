@@ -11,8 +11,10 @@ import {
 } from 'lucide-react';
 import { toast } from '@/hooks/useToast';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { discardUploadedImage, uploadImageFile } from '@/lib/upload/image-upload-client';
+import { profileSaveBody, profileSaveError, type ProfileFormState } from '@/lib/profile/save-body';
 
-const EMPTY_PROFILE = {
+const EMPTY_PROFILE: ProfileFormState = {
   display_name: '',
   bio: '',
   hero_image_url: '',
@@ -32,7 +34,7 @@ const EMPTY_PROFILE = {
   font_style: 'default',
 };
 
-type Profile = typeof EMPTY_PROFILE;
+type Profile = ProfileFormState;
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
@@ -74,6 +76,10 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [uploadingHero, setUploadingHero] = useState(false);
+  // A photo uploaded since the last save. Replacing it before saving discards
+  // it, so picking three photos doesn't leave two orphans in the bucket.
+  const unsavedHeroUrl = useRef<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [previewView, setPreviewView] = useState<'client' | 'rapper' | 'friend'>('client');
   const heroInputRef = useRef<HTMLInputElement>(null);
@@ -115,30 +121,43 @@ export default function ProfilePage() {
   const setValue = (key: keyof Profile, value: string) =>
     setProfile((p) => ({ ...p, [key]: value }));
 
-  const handleHeroFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onloadend = () => setProfile((p) => ({ ...p, hero_image_url: reader.result as string }));
-    reader.readAsDataURL(file);
+  // Upload the photo and keep only its URL. It used to be read into a data:
+  // URL, which the profile contract rejects (URL columns cap at 2000 chars),
+  // so picking a photo made every later save fail — see lib/profile/save-body.
+  const handleHeroFile = async (file: File) => {
+    setUploadingHero(true);
+    try {
+      const url = await uploadImageFile(file);
+      if (unsavedHeroUrl.current) void discardUploadedImage(unsavedHeroUrl.current);
+      unsavedHeroUrl.current = url;
+      setProfile((p) => ({ ...p, hero_image_url: url }));
+    } catch (err: unknown) {
+      toast.error('Photo upload failed', errorMessage(err, 'Unknown error'));
+    } finally {
+      setUploadingHero(false);
+      if (heroInputRef.current) heroInputRef.current.value = '';
+    }
   };
 
   const handleSave = async () => {
+    const invalid = profileSaveError(profile);
+    if (invalid) {
+      toast.error('Save failed', invalid);
+      return;
+    }
     setSaving(true);
     setSaved(false);
     try {
       const res = await fetch('/api/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...profile,
-          license_lease_price_usd: profile.license_lease_price_usd ? Number(profile.license_lease_price_usd) : null,
-          license_exclusive_price_usd: profile.license_exclusive_price_usd ? Number(profile.license_exclusive_price_usd) : null,
-          default_discount_percent: profile.default_discount_percent ? Number(profile.default_discount_percent) : null,
-        }),
+        body: JSON.stringify(profileSaveBody(profile)),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error || `HTTP ${res.status}`);
       }
+      unsavedHeroUrl.current = null;
       setSaved(true);
       toast.success('Profile saved');
       setTimeout(() => setSaved(false), 3000);
@@ -175,7 +194,7 @@ export default function ProfilePage() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || saved}
+                disabled={saving || saved || uploadingHero}
                 className={`flex h-9 items-center gap-2 rounded-full px-4 text-[11px] font-medium transition-all ${
                   saved
                     ? 'bg-green-500/10 text-green-400 border border-green-500/20'
@@ -203,9 +222,13 @@ export default function ProfilePage() {
 
             {/* Hero image */}
             <div className="flex gap-5 items-start">
-              <div
+              <button
+                type="button"
                 onClick={() => heroInputRef.current?.click()}
-                className="w-28 h-28 rounded-2xl bg-[#0D0D0A] border border-white/10 overflow-hidden shrink-0 cursor-pointer hover:border-white/20 transition-colors group relative"
+                disabled={uploadingHero}
+                aria-label={profile.hero_image_url ? 'Replace hero photo' : 'Upload hero photo'}
+                aria-busy={uploadingHero}
+                className="w-28 h-28 rounded-2xl bg-[#0D0D0A] border border-white/10 overflow-hidden shrink-0 cursor-pointer hover:border-white/20 focus-visible:outline-none focus-visible:border-white/30 transition-colors group relative disabled:cursor-wait"
               >
                 {profile.hero_image_url ? (
                   <img src={profile.hero_image_url} alt="" className="w-full h-full object-cover" />
@@ -215,12 +238,14 @@ export default function ProfilePage() {
                     <span className="text-[9px] font-mono uppercase tracking-wider">Photo</span>
                   </div>
                 )}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <Camera size={18} className="text-white" />
+                <div className={`absolute inset-0 bg-black/40 transition-opacity flex items-center justify-center ${uploadingHero ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                  {uploadingHero
+                    ? <Loader2 size={18} className="animate-spin text-white" />
+                    : <Camera size={18} className="text-white" />}
                 </div>
-              </div>
-              <input ref={heroInputRef} type="file" accept="image/*" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleHeroFile(f); }} />
+              </button>
+              <input ref={heroInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleHeroFile(f); }} />
               <div className="flex-1 space-y-3">
                 <Field label="Display Name">
                   <input type="text" value={profile.display_name} onChange={set('display_name')}
