@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Download, Volume2, VolumeX, Music, Lock, Loader2, Shield } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Download, Music, Lock, Loader2, Shield } from 'lucide-react';
 import { Track } from '@/lib/types';
 // Type-only import — runtime import is deferred to the load effect so
 // the ~150 KB WaveSurfer bundle doesn't ship in this page's initial JS.
@@ -17,6 +17,8 @@ import { RapperShareVariant } from '@/components/share/variants/RapperShareVaria
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useVolumeState } from '@/hooks/useVolumeState';
+import { VolumeControl } from '@/components/player/VolumeControl';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
@@ -105,8 +107,11 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [ready, setReady] = useState(false);
-  const [volume, setVolume] = useState(0.8);
-  const [muted, setMuted] = useState(false);
+  const { volume, muted, output: outputVol, silent, setVolume, toggleMute } = useVolumeState();
+  // Read by WaveSurfer's 'ready' handler, which is bound once per track and
+  // would otherwise apply the level from when the track started loading.
+  const outputVolRef = useRef(outputVol);
+  useEffect(() => { outputVolRef.current = outputVol; }, [outputVol]);
   // When WaveSurfer can't decode (no peaks + a CORS/decode hiccup on an
   // externally-opened link), the waveform dies — but the artist must still
   // hear the beat. This flag flips playback to a plain <audio> fallback.
@@ -232,7 +237,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         if (cancelled) return;
         setDuration(w.getDuration() || 0);
         setReady(true);
-        w.setVolume(muted ? 0 : volume);
+        w.setVolume(outputVolRef.current);
       });
       w.on('audioprocess', (t: number) => {
         if (!cancelled) setCurrentTime(t);
@@ -266,7 +271,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
     else ws.current.pause();
   }, [isPlaying, ready]);
 
-  useEffect(() => { ws.current?.setVolume(muted ? 0 : volume); }, [volume, muted]);
+  useEffect(() => { ws.current?.setVolume(outputVol); }, [outputVol]);
 
   // ── Plain-audio fallback (WaveSurfer decode failed) ─────────────────────
   // Drive the hidden <audio> from the same isPlaying / volume / track state so
@@ -276,10 +281,10 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
     if (!a || !wsFailed) return;
     const want = cdnAudioSrc(activeTrack?.audio_url);
     if (want && a.getAttribute('src') !== want) { a.src = want; a.load(); }
-    a.volume = muted ? 0 : volume;
+    a.volume = outputVol;
     if (isPlaying) a.play().catch(() => {});
     else a.pause();
-  }, [wsFailed, isPlaying, volume, muted, activeTrack?.audio_url]);
+  }, [wsFailed, isPlaying, outputVol, activeTrack?.audio_url]);
 
   const togglePlay = () => setIsPlaying((p) => !p);
   const prevTrack = () => { if (activeIndex > 0) { setActiveIndex(activeIndex - 1); setIsPlaying(true); } };
@@ -669,15 +674,11 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
                 <SkipForward size={16} fill="currentColor" />
               </button>
 
-              <div className="flex items-center gap-2 ml-1 sm:ml-3 shrink-0">
-                <button onClick={() => setMuted(!muted)} className="text-white/40 hover:text-white transition-colors" aria-label={muted ? 'Unmute' : 'Mute'}>
-                  {muted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                </button>
-                <input type="range" min="0" max="1" step="0.01" value={muted ? 0 : volume}
-                  onChange={(e) => { setMuted(false); setVolume(parseFloat(e.target.value)); }}
-                  aria-label="Volume"
-                  className="hidden sm:block w-20 cursor-pointer" />
-              </div>
+              <VolumeControl
+                volume={volume} muted={muted} silent={silent}
+                onVolumeChange={setVolume} onToggleMute={toggleMute}
+                className="ml-1 sm:ml-3 shrink-0"
+              />
 
               <div className="flex-1" />
 
