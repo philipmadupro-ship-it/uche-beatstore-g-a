@@ -8681,4 +8681,4 @@ This follows LIB-01. `/studio?track=<id>` already preselected a track, and the d
 
 - `lib/library/studio-link.ts#studioHref` is now the one builder. The drawer and the track page use it instead of their hand-built template strings, and it encodes the id.
 - List, grid and portfolio menus gain **Send to studio** (`S`) right after Lyrics Studio. Like lyrics, it only shows when the caller passes `onOpenStudio`, and only the Library page does.
-- The grid menu is 224px, up from 200, to match the list: "Send to studio" was cut off at 200 in Akira Expanded. "Delete from library" is still cut off in both the list and grid menus; that was already true before this change.
+- The list and grid row menus are now 248px wide (list was 224, grid 200). In Akira Expanded, 200px cut off "Send to studio", and 224px cut off "Delete from library" by 8px and "Remove from project" (project/playlist rows) by 19px. Measured in Chromium: nothing in any row menu is cut off at 1440px or 390px.

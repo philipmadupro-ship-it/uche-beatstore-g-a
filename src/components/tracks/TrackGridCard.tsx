@@ -213,7 +213,7 @@ function TrackGridCardImpl({
           >
             <ActionMenu
               align="right"
-              width={224}
+              width={248}
               label="Track actions"
               triggerClassName="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/70 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
               sections={[
