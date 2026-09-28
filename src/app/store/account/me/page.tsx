@@ -18,11 +18,12 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Loader2, AlertCircle, Music, Layers, Download, ExternalLink,
-  CreditCard, Heart, History, ListMusic, Plus, Trash2, LogOut,
+  CreditCard, Heart, History, ListMusic, Plus, Trash2, LogOut, X,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import { toast } from '@/hooks/useToast';
-import { setPersistentBuyerSession } from '@/lib/buyer-session';
+import { toast, confirmToast } from '@/hooks/useToast';
+import { clearBuyerIdentity, setPersistentBuyerSession } from '@/lib/buyer-session';
+import { useWishlistStore } from '@/hooks/useWishlist';
 import { BuyerLibraryTile, buyerTrackTitles } from '@/components/store/BuyerLibraryTile';
 import { CoverImage } from '@/components/ui/CoverImage';
 import type { BuyerLibraryShape, BuyerLibraryPlaylist } from '@/lib/store/buyer-library';
@@ -89,7 +90,12 @@ export default function BuyerMePage() {
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    setPersistentBuyerSession(false);
+    // The account's hearts were merged into this browser's wishlist; leaving
+    // them would show the next person on this device someone else's saved
+    // beats, and push them into whichever account signs in next. They are
+    // safe in buyer_favorites and come back on the next sign-in.
+    clearBuyerIdentity();
+    useWishlistStore.getState().clear();
     router.push('/store');
   };
 
@@ -375,6 +381,22 @@ function SessionLibrary() {
     onError: (e: Error) => toast.error('Could not delete', e.message),
   });
 
+  const removeTrackMut = useMutation({
+    mutationFn: async ({ playlist_id, track_id }: { playlist_id: string; track_id: string }) => {
+      const res = await fetch('/api/store/me?session=1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'remove_from_playlist', playlist_id, track_id }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error ?? `HTTP ${res.status}`);
+      }
+    },
+    onSuccess: () => refresh(),
+    onError: (e: Error) => toast.error('Could not remove', e.message),
+  });
+
   if (isLoading) {
     return (
       <section className="mt-10 pt-6 border-t border-white/10">
@@ -455,28 +477,62 @@ function SessionLibrary() {
           </button>
         </div>
         {data.playlists.length === 0 ? (
-          <p className="text-[11px] text-white/40">Build your own mixtapes from the producer&apos;s catalogue.</p>
+          <p className="text-[11px] text-white/40">
+            Create one here, or use the playlist button on any beat&apos;s page to add it.
+          </p>
         ) : (
           <ul className="space-y-1.5">
             {data.playlists.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/10">
-                <ListMusic size={12} className="text-white/40" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-medium text-white truncate">{p.name}</p>
-                  <p className="text-[10px] font-mono text-white/40">
-                    {p.track_ids.length} tracks · {buyerTrackTitles(p.tracks)} · updated {new Date(p.updated_at).toLocaleDateString()}
-                  </p>
+              <li key={p.id} className="px-3 py-2 rounded-lg bg-white/[0.03] border border-white/10">
+                <div className="flex items-center gap-3">
+                  <ListMusic size={12} className="text-white/40" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-medium text-white truncate">{p.name}</p>
+                    <p className="text-[10px] font-mono text-white/40">
+                      {p.track_ids.length} tracks · {buyerTrackTitles(p.tracks)} · updated {new Date(p.updated_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const ok = await confirmToast(
+                        `Delete "${p.name}"?`,
+                        'The playlist is removed from your account on every device.',
+                        { confirmLabel: 'Delete', danger: true },
+                      );
+                      if (ok) deleteMut.mutate(p.id);
+                    }}
+                    aria-label={`Delete playlist ${p.name}`}
+                    title="Delete"
+                    className="w-7 h-7 rounded-md border border-white/10 flex items-center justify-center text-white/40 hover:text-red-400 hover:border-red-900/40 transition-colors"
+                  >
+                    <Trash2 size={11} />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`Delete playlist "${p.name}"?`)) deleteMut.mutate(p.id);
-                  }}
-                  title="Delete"
-                  className="w-7 h-7 rounded-md border border-white/10 flex items-center justify-center text-white/40 hover:text-red-400 hover:border-red-900/40 transition-colors"
-                >
-                  <Trash2 size={11} />
-                </button>
+                {p.tracks.length > 0 && (
+                  <ul className="mt-2 space-y-1 pl-6">
+                    {p.tracks.map((t) => (
+                      <li key={t.id} className="flex items-center gap-2">
+                        <Link
+                          href={`/store/${t.id}`}
+                          className="flex-1 min-w-0 truncate text-[10px] text-white/60 hover:text-white transition-colors"
+                        >
+                          {t.title?.trim() || 'Untitled beat'}
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => removeTrackMut.mutate({ playlist_id: p.id, track_id: t.id })}
+                          disabled={removeTrackMut.isPending}
+                          aria-label={`Remove ${t.title?.trim() || 'beat'} from ${p.name}`}
+                          title="Remove from playlist"
+                          className="w-6 h-6 rounded-md flex items-center justify-center text-white/40 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-40"
+                        >
+                          <X size={11} />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>

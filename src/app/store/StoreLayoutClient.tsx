@@ -17,6 +17,8 @@ import { VoiceTagPlayer } from '@/components/player/VoiceTagPlayer';
 import { CartDrawer, FloatingCartButton } from '@/components/store/CartDrawer';
 import { InstallAppButton } from '@/components/store/InstallAppButton';
 import { useCart } from '@/hooks/useCart';
+import { useWishlistStore } from '@/hooks/useWishlist';
+import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { PublicArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 
@@ -26,6 +28,14 @@ export function StoreLayoutClient({ children }: { children: React.ReactNode }) {
   const isTransactional = pathname.startsWith('/store/checkout')
     || pathname.startsWith('/store/download')
     || pathname.startsWith('/store/projects/access');
+
+  // Pull a signed-in buyer's account hearts into this browser's wishlist.
+  // Keyed on the path because signing in happens inside /store (the account
+  // page sets the identity), so the first sync after it is the next
+  // navigation. The store no-ops once it has synced for that identity.
+  useEffect(() => {
+    void useWishlistStore.getState().syncWithAccount();
+  }, [pathname]);
 
   return (
     <div className="min-h-screen">

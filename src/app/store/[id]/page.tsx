@@ -20,6 +20,7 @@ import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { slugify } from '@/lib/slug';
 import { BeatComments } from '@/components/store/BeatComments';
 import { ShareMenu } from '@/components/store/ShareMenu';
+import { AddToPlaylistMenu } from '@/components/store/AddToPlaylistMenu';
 import { normalizeThemeColor } from '@/lib/theme/colors';
 import type { Track } from '@/lib/types';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
@@ -433,6 +434,7 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                   producerName={creator?.display_name ?? null}
                   accentColor={accent}
                 />
+                <AddToPlaylistMenu trackId={track.id} trackTitle={track.title} />
               </div>
             </div>
           </div>

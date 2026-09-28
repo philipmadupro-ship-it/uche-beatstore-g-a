@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearBuyerToken, logPlay, setBuyerToken, setPersistentBuyerSession } from './buyer-session';
+import {
+  clearBuyerIdentity,
+  clearBuyerToken,
+  fetchBuyerFavoriteIds,
+  logPlay,
+  setBuyerToken,
+  setFavorite,
+  setPersistentBuyerSession,
+} from './buyer-session';
 
 const storage: Record<string, string> = {};
 
@@ -57,6 +65,72 @@ describe('buyer session dispatch', () => {
 
     expect(result.ok).toBe(false);
     clearBuyerToken();
+    expect(storage['antigravity-buyer-session-mode']).toBeUndefined();
+  });
+
+  it('prefers the signed-in account over a legacy delivery token for another email', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    setBuyerToken('token-for-some-other-address');
+    setPersistentBuyerSession(true);
+
+    await logPlay('11111111-1111-4111-8111-111111111111');
+
+    expect(fetch).toHaveBeenCalledWith('/api/store/me?session=1', expect.anything());
+  });
+
+  it('sends the heart state, not a toggle', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    setPersistentBuyerSession(true);
+
+    await setFavorite('11111111-1111-4111-8111-111111111111', true);
+
+    const init = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(init.body))).toEqual({
+      action: 'set_favorite',
+      track_id: '11111111-1111-4111-8111-111111111111',
+      favorited: true,
+    });
+  });
+
+  it('clearBuyerIdentity forgets both the token and the account marker', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    setBuyerToken('t');
+    setPersistentBuyerSession(true);
+    clearBuyerIdentity();
+
+    expect((await logPlay('11111111-1111-4111-8111-111111111111')).ok).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('fetchBuyerFavoriteIds', () => {
+  it('returns null (unknown), not [], when there is no buyer identity', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    expect(await fetchBuyerFavoriteIds()).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns the account favourite ids', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      email: 'b@x.test', history: [], playlists: [],
+      favorites: [{ track_id: 'a', created_at: '' }, { track_id: 'b', created_at: '' }],
+    }), { status: 200 }));
+    setPersistentBuyerSession(true);
+
+    expect(await fetchBuyerFavoriteIds()).toEqual(['a', 'b']);
+    expect(fetch).toHaveBeenCalledWith('/api/store/me?session=1');
+  });
+
+  it('returns null on a server error so the caller does not wipe local hearts', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 500 }));
+    setPersistentBuyerSession(true);
+    expect(await fetchBuyerFavoriteIds()).toBeNull();
+  });
+
+  it('drops an expired session marker on 400', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 400 }));
+    setPersistentBuyerSession(true);
+    expect(await fetchBuyerFavoriteIds()).toBeNull();
     expect(storage['antigravity-buyer-session-mode']).toBeUndefined();
   });
 });
