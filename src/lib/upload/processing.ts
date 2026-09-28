@@ -9,6 +9,7 @@ import { extractPeaks } from '@/lib/audio/peaks';
 import { readStoredObject, uploadPeaksSidecar, uploadPublicPreview } from '@/lib/storage/upload';
 import { errorMessage } from '@/lib/errors';
 import { parseTitleMetadata } from '@/lib/upload/title-metadata';
+import { compareFilenameWithDetected } from '@/lib/audio/metadata-agreement';
 
 type UploadProcessingJob = {
   id: string;
@@ -190,12 +191,26 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
     // Re-read the filename here too: this update runs after the track row
     // exists, so without it a detected tempo would overwrite the one the
     // producer wrote in the name.
+    const titleMeta = parseTitleMetadata(job.file_name);
     const merged = mergeFeatures({
-      title: parseTitleMetadata(job.file_name),
+      title: titleMeta,
       client: job.client_analysis,
       server: serverAnalysis,
       audd,
     });
+    // Tempo and harmony as the enqueuing route already wrote them: filename +
+    // browser analysis, no server. Recomputed rather than read back so there
+    // is nothing extra to store.
+    const written = mergeFeatures({ title: titleMeta, client: job.client_analysis });
+
+    // A disagreement the filename wins is still a disagreement; leave a trace.
+    const disagreement = compareFilenameWithDetected(titleMeta, serverAnalysis);
+    if (disagreement.conflicts.length) {
+      console.warn('Upload processing: filename disagrees with server analysis (filename kept)', {
+        trackId: job.track_id,
+        conflicts: disagreement.conflicts,
+      });
+    }
 
     // The public 75 s clip /store streams (lib/audio/preview-clip). Without it
     // the beat is listed but 404s on play. Failure is non-fatal: the nightly
@@ -208,10 +223,11 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
       console.warn('Upload processing preview failed:', err);
     }
 
+    const { bpm, key, scale, ...rest } = merged;
     const { error: trackError } = await admin
       .from('tracks')
       .update({
-        ...merged,
+        ...rest,
         peaks_url: peaksUrl,
         preview_url: previewUrl,
         // Mig 099. Without 'ready' the backfill keeps re-picking a track that
@@ -221,6 +237,15 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
       .eq('id', job.track_id)
       .eq('user_id', job.user_id);
     if (trackError) throw new Error(`Track update failed: ${trackError.message}`);
+
+    // Tempo and harmony are compare-and-set: written only if the row still
+    // holds what the enqueuing route wrote. This pass runs seconds to minutes
+    // after the upload returned, and in that window the producer may have set
+    // BPM or key themselves — one click in the uploads tray, or the track
+    // drawer. Overwriting that with a detector's reading is exactly the
+    // silent guess this pipeline must not make.
+    await compareAndSet(admin, job, { bpm }, { bpm: written.bpm });
+    await compareAndSet(admin, job, { key, scale }, { key: written.key, scale: written.scale });
 
     const { error: doneError } = await admin
       .from('upload_processing_jobs')
@@ -248,3 +273,33 @@ async function processOneJob(job: UploadProcessingJob): Promise<{
     return { id: job.id, trackId: job.track_id, ok: false, error: message };
   }
 }
+
+type ServiceClient = ReturnType<typeof createServiceClient>;
+type Scalar = string | number | null;
+
+/**
+ * `UPDATE tracks SET <next> WHERE id AND user_id AND <each column = expected>`.
+ * One statement, so there is no read-then-write window. A null expectation
+ * matches with `IS NULL` (`= NULL` matches nothing in SQL).
+ */
+export async function compareAndSet(
+  admin: ServiceClient,
+  job: Pick<UploadProcessingJob, 'track_id' | 'user_id'>,
+  next: Record<string, Scalar>,
+  expected: Record<string, Scalar>,
+): Promise<boolean> {
+  const unchanged = Object.keys(next).every((k) => next[k] === expected[k]);
+  if (unchanged) return true;
+  let query = admin.from('tracks').update(next).eq('id', job.track_id).eq('user_id', job.user_id);
+  for (const [column, value] of Object.entries(expected)) {
+    query = value == null ? query.is(column, null) : query.eq(column, value);
+  }
+  const { data, error } = await query.select('id');
+  if (error) throw new Error(`Track ${Object.keys(next).join('/')} update failed: ${error.message}`);
+  const applied = Array.isArray(data) && data.length > 0;
+  if (!applied) {
+    console.info('Upload processing: kept a value set since upload', { trackId: job.track_id, fields: Object.keys(next) });
+  }
+  return applied;
+}
+

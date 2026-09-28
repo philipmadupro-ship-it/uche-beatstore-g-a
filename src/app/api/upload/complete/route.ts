@@ -16,6 +16,7 @@ import { errorMessage } from '@/lib/errors';
 import { requireUploadSessionOwner } from '@/lib/storage/upload-session-auth';
 import { enqueueUploadProcessingJob, processUploadProcessingJobById } from '@/lib/upload/processing';
 import { verifyStoredAudio } from '@/lib/upload/verify-stored-audio';
+import { parseClientAnalysis } from '@/lib/contracts/client-analysis';
 
 export const runtime = 'nodejs';
 // Processing runs in after() once the response is sent, and shares this budget.
@@ -26,7 +27,13 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const sessionId: string = body.sessionId;
-    const clientAnalysis = body.analysis ?? null;
+    // Browser analysis is a claim, not a fact: validated per field, and a bad
+    // field falls through to the server's own analysis.
+    const parsedAnalysis = parseClientAnalysis(body.analysis);
+    if (parsedAnalysis.rejected.length) {
+      console.warn('upload/complete: dropped invalid client analysis fields', parsedAnalysis.rejected);
+    }
+    const clientAnalysis = parsedAnalysis.analysis;
     if (!sessionId) {
       return NextResponse.json({ error: 'sessionId required' }, { status: 400 });
     }

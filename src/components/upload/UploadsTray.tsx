@@ -15,11 +15,8 @@ import {
   type UploadRowAction,
 } from '@/lib/upload/row-actions';
 import { InlineText } from '@/components/ui/InlineText';
-import {
-  parseTitleMetadata,
-  describeTitleMetadata,
-  describeUncertainTitleMetadata,
-} from '@/lib/upload/title-metadata';
+import { parseTitleMetadata, describeTitleMetadata } from '@/lib/upload/title-metadata';
+import { FilenameChecks } from './FilenameChecks';
 import { InlineTagStrip, type TagGroup } from '@/components/ui/InlineTagStrip';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { useTags } from '@/hooks/useTags';
@@ -140,12 +137,8 @@ function UploadRow({ u }: { u: UploadItem }) {
   const editable = canEditUploadedTrack(u);
   const trackId = (u.track?.id as string | undefined) ?? '';
   const trackTitle = (u.track?.title as string | undefined) ?? u.fileName.replace(/\.[^.]+$/, '');
-  const parsedName = parseTitleMetadata(u.fileName);
+  const parsedName = useMemo(() => parseTitleMetadata(u.fileName), [u.fileName]);
   const filenameMeta = describeTitleMetadata(parsedName);
-  // What the name mentions but does not settle. Nothing here was written to
-  // the track — say so, rather than letting a detector's value pass for the
-  // producer's.
-  const filenameDoubt = describeUncertainTitleMetadata(parsedName);
 
   /**
    * Rename the track this row created.
@@ -259,11 +252,16 @@ function UploadRow({ u }: { u: UploadItem }) {
       {u.status === 'success' && filenameMeta && (
         <p className="mt-1 text-[10px] text-white/40">{filenameMeta}</p>
       )}
-      {u.status === 'success' && filenameDoubt && (
-        <p className="mt-1 text-[10px] text-amber-300 flex items-start gap-1">
-          <AlertTriangle size={9} className="mt-0.5 shrink-0" aria-hidden />
-          <span>{filenameDoubt}</span>
-        </p>
+      {/* What the name left unsettled, or disagreed with the analyser about —
+          never guessed, and settled here in one click. */}
+      {u.status === 'success' && (
+        <FilenameChecks
+          meta={parsedName}
+          detected={u.analysis}
+          trackId={trackId}
+          editable={editable}
+          onApplied={(p) => patch(u.id, { track: { ...(u.track ?? {}), ...p } })}
+        />
       )}
 
       {/* error/info detail */}

@@ -177,4 +177,22 @@ describe('POST /api/tracks/[id]/analyze', () => {
     expect(body.source).toBe('client');
     expect(body.track.bpm).toBe(142);
   });
+
+  it('drops invalid client fields before they reach the merge', async () => {
+    const mod = await loadRoute();
+    await mod.POST(req({
+      features: { bpm: 99999, key: '<b>', scale: 'minor', duration: 124, user_id: 'someone-else' },
+    }), ctx());
+
+    // bpm and the half-a-key are gone; the stray column never gets through.
+    // Only duration survives, which carries no BPM/key, so the route falls
+    // back to its own analysis rather than trusting the payload.
+    // (The server fetch is not stubbed here, so the route may stop before
+    // merging; either way no client value may be passed through.)
+    for (const [args] of mockMergeFeatures.mock.calls) {
+      expect((args as { client: unknown }).client).toBeNull();
+    }
+    expect(mockUpdate).not.toHaveBeenCalledWith('tracks', 'track-1', expect.objectContaining({ bpm: 99999 }));
+    expect(mockUpdate).not.toHaveBeenCalledWith('tracks', 'track-1', expect.objectContaining({ user_id: expect.anything() }));
+  });
 });

@@ -32,6 +32,9 @@ type UploadAnalysis = {
   danceability?: number | null;
   valence?: number | null;
   acousticness?: number | null;
+  /** Essentia's own confidence; lets the tray say how sure the analyser was. */
+  bpmConfidence?: number | null;
+  keyStrength?: number | null;
 };
 type UploadedTrack = { id?: string; [key: string]: unknown };
 
