@@ -2,7 +2,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
-vi.mock('@/lib/buyer-session', () => ({ toggleFavorite: vi.fn() }));
+vi.mock('@/lib/buyer-session', () => ({
+  setFavorite: vi.fn(),
+  buyerIdentityQuery: () => null,
+  fetchBuyerFavoriteIds: async () => null,
+}));
 
 import { useWishlist, useWishlistStore } from './useWishlist';
 
