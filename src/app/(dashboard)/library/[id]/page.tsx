@@ -31,6 +31,8 @@ import { ArrangementOverlay } from '@/components/tracks/ArrangementOverlay';
 import { TrackListingEditor } from '@/components/tracks/TrackListingEditor';
 import { uploadAndAttachImage } from '@/lib/upload/image-upload-client';
 import { CoverEditor } from '@/components/ui/CoverEditor';
+import { LYRICS_ANCHOR, focusLyricsSection } from '@/lib/library/lyrics-link';
+import { studioHref } from '@/lib/library/studio-link';
 // `analyzeAudio` is dynamically imported inside `handleReanalyze` so the
 // audio-decode worker chain doesn't break client/SSR bundling.
 
@@ -141,6 +143,15 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
   useEffect(() => {
     fetchData();
   }, [params.id]);
+
+  // The ⋯ menus' "Lyrics Studio" item links here with `#lyrics`, but the section only
+  // exists once the track has loaded, so the router's own hash scroll finds
+  // nothing. Honour the hash once per track, after the section mounts.
+  const lyricsFocusedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!track || lyricsFocusedFor.current === track.id) return;
+    if (focusLyricsSection(document, window.location.hash)) lyricsFocusedFor.current = track.id;
+  }, [track]);
 
   const handleArtChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -469,7 +480,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 Share
               </button>
               <button
-                onClick={() => router.push(`/studio?track=${track.id}`)}
+                onClick={() => router.push(studioHref(track.id))}
                 title="Open this track in the studio (loop / pitch / stems / record)"
                 className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[11px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/20 hover:bg-white/10"
               >
@@ -581,9 +592,14 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
         </div>
 
         {/* Lyrics studio */}
-        <div id="lyrics" className="mb-16 scroll-mt-10">
+        <section
+          id={LYRICS_ANCHOR}
+          tabIndex={-1}
+          aria-label="Lyrics Studio"
+          className="mb-16 scroll-mt-10 outline-none"
+        >
           <LyricsStudio trackId={track.id} />
-        </div>
+        </section>
           </div>
           {/* end right column */}
         </div>

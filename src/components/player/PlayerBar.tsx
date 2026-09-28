@@ -16,12 +16,13 @@ import { MiniWaveform } from './MiniWaveform';
 import { QueueDrawer } from './QueueDrawer';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { routeBoundOverlay } from '@/lib/ui/route-bound-overlay';
-import { useState, useRef, useSyncExternalStore, useMemo, useEffect } from 'react';
+import { useState, useSyncExternalStore, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { CoverImage } from '@/components/ui/CoverImage';
 import { getPlayerStreamStatus } from '@/lib/audio/player-status';
+import { isSilent } from '@/lib/audio/player-volume';
 import { useAudioReactivity } from '@/hooks/useAudioReactivity';
 import { bandsUrlFromPeaksUrl } from '@/lib/audio/sidecar-url';
 import { useNextTrackPreload } from '@/hooks/useNextTrackPreload';
@@ -67,7 +68,7 @@ export function PlayerBar({
 } = {}) {
   const {
     currentTrack, isPlaying, togglePlay, next, prev,
-    volume, setVolume, progress, queue, seekTo, isBuffering, playbackError,
+    volume, muted: mutedFlag, setVolume, toggleMute, progress, queue, seekTo, isBuffering, playbackError,
     // Pulled from the store now, not local useState — local state
     // was decorative; the playback engine in usePlayer reads these
     // values to decide auto-advance / shuffle order.
@@ -76,20 +77,12 @@ export function PlayerBar({
 
   useNextTrackPreload({ currentTrack, queue, isPlaying, shuffle, repeat });
 
-  // Mute is implemented by setting engine volume to 0 and stashing
-  // the previous level so we can restore it on unmute. Without this,
-  // clicking mute just flipped a local boolean — the audio kept
-  // playing at the previous volume.
-  const muted = volume === 0;
-  const prevVolumeRef = useRef(volume || 0.8);
-  const toggleMute = () => {
-    if (volume > 0) {
-      prevVolumeRef.current = volume;
-      setVolume(0);
-    } else {
-      setVolume(prevVolumeRef.current || 0.8);
-    }
-  };
+  // Mute is its own flag in the store (lib/audio/player-volume.ts), not a
+  // volume of zero: muting keeps the level (restored on unmute), and
+  // both survive a refresh. The icon shows silence either way.
+  const muted = isSilent({ volume, muted: mutedFlag });
+  // What the slider shows: the level while audible, the bottom while muted.
+  const sliderValue = mutedFlag ? 0 : volume;
   const [queueOpen, setQueueOpen] = useState(false);
   // Tucked away into a small pill in the corner, so the bar stops covering
   // the bottom of long pages. Playback carries on; the choice persists per
@@ -123,7 +116,7 @@ export function PlayerBar({
   }, [currentTrack]);
 
   usePlayerKeyboardShortcuts({
-    currentTrack, progress, volume, togglePlay, next, prev, seekTo, setVolume, prevVolumeRef,
+    currentTrack, progress, volume, togglePlay, next, prev, seekTo, setVolume, toggleMute,
   });
 
   // Analysis for the reactive cover art. Module-cached per track, so when the
@@ -424,10 +417,11 @@ export function PlayerBar({
                   min="0"
                   max="1"
                   step="0.01"
-                  value={volume}
+                  value={sliderValue}
                   onChange={(e) => setVolume(parseFloat(e.target.value))}
                   className="w-full h-1 cursor-pointer accent-white rounded-full"
                   aria-label="Volume"
+                  aria-valuetext={mutedFlag ? 'Muted' : `${Math.round(volume * 100)} percent`}
                 />
               </div>
             </div>
@@ -659,11 +653,11 @@ export function PlayerBar({
                   {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
                 </button>
                 <input
-                  type="range" min="0" max="1" step="0.01" value={volume}
+                  type="range" min="0" max="1" step="0.01" value={sliderValue}
                   onChange={(e) => setVolume(parseFloat(e.target.value))}
                   className="flex-1 h-1 cursor-pointer accent-white rounded-full"
                   aria-label="Volume"
-                  aria-valuetext={`${Math.round(volume * 100)} percent`}
+                  aria-valuetext={mutedFlag ? 'Muted' : `${Math.round(volume * 100)} percent`}
                 />
                 <Volume2 size={15} className="text-white/60 opacity-80" />
               </div>

@@ -20,6 +20,10 @@ interface TrackGridCardProps {
   removeLabel?: string;
   onDelete?: (track: Track) => void;
   onShare?: (track: Track) => void;
+  /** Exposes "Lyrics Studio" when provided — library only. */
+  onOpenLyrics?: (track: Track) => void;
+  /** Exposes "Send to studio" when provided — library only. */
+  onOpenStudio?: (track: Track) => void;
   selectable?: boolean;
   selected?: boolean;
   onSelectChange?: (track: Track, selected: boolean) => void;
@@ -42,6 +46,8 @@ function TrackGridCardImpl({
   removeLabel = 'Remove from project',
   onDelete,
   onShare,
+  onOpenLyrics,
+  onOpenStudio,
   selectable = false,
   selected = false,
   onSelectChange,
@@ -197,15 +203,17 @@ function TrackGridCardImpl({
         </div>
 
         {/* More button — top right on hover. Portaled via Popover so the menu
-            escapes the artwork's overflow-hidden clip (was invisible before). */}
+            escapes the artwork's overflow-hidden clip (was invisible before).
+            `focus-within` too: hover-only meant a keyboard user tabbed onto a
+            trigger they could not see. */}
         {!selectable && (
           <div
-            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
             onClick={(e) => e.stopPropagation()}
           >
             <ActionMenu
               align="right"
-              width={200}
+              width={248}
               label="Track actions"
               triggerClassName="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/70 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
               sections={[
@@ -215,6 +223,14 @@ function TrackGridCardImpl({
                     {
                       id: 'details', label: 'View details', shortcut: 'I', shortcutKey: 'i',
                       hidden: !onClickDetails, onSelect: () => onClickDetails?.(track),
+                    },
+                    {
+                      id: 'lyrics', label: 'Lyrics Studio', shortcut: 'L', shortcutKey: 'l',
+                      hidden: !onOpenLyrics, onSelect: () => onOpenLyrics?.(track),
+                    },
+                    {
+                      id: 'studio', label: 'Send to studio', shortcut: 'S', shortcutKey: 's',
+                      hidden: !onOpenStudio, onSelect: () => onOpenStudio?.(track),
                     },
                     { id: 'share', label: 'Share track', hidden: !onShare, onSelect: () => onShare?.(track) },
                   ],

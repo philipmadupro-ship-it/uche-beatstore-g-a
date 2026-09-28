@@ -53,6 +53,9 @@ import { RowCallbackCache } from '@/lib/ui/stable-row-callbacks';
 import { useListKeyboardNavigation } from '@/hooks/useListKeyboardNavigation';
 import { enqueuePrefetch } from '@/lib/audio/preview-cache';
 import { prefetchItemsFor } from '@/lib/audio/prefetch-items';
+import { lyricsStudioHref } from '@/lib/library/lyrics-link';
+import { studioHref } from '@/lib/library/studio-link';
+import type { MenuSection } from '@/lib/ui/action-menu';
 
 // Sort modes — added so the library is browsable beyond "newest first."
 // `recent` reflects upload time; `recently_played` would need a history
@@ -936,6 +939,10 @@ export default function LibraryPage() {
   // guaranteed stable by React.
   const handleClickDetails = useCallback((track: Track) => setSelectedTrack(track), []);
   const handleShareTrack = useCallback((track: Track) => setShareTarget(track), []);
+  // Lyrics Studio lives on the track page; the page scrolls to and focuses it
+  // from the hash once the track has loaded (lib/library/lyrics-link).
+  const handleOpenLyrics = useCallback((track: Track) => router.push(lyricsStudioHref(track.id)), [router]);
+  const handleOpenStudio = useCallback((track: Track) => router.push(studioHref(track.id)), [router]);
   const handleDeleteTrackRow = useCallback((track: Track) => { void handleDeleteTrackRef.current(track); }, []);
   const handleSelectChange = useCallback((track: Track, sel: boolean) => {
     setSelectedIds((prev) => {
@@ -1001,6 +1008,22 @@ export default function LibraryPage() {
     if (track) playTrack(track);
   }, [filtered]);
 
+  // Portfolio's ⋯ menu. The details drawer is not mounted in this immersive
+  // mode, so it offers what the mode can actually honour: Lyrics Studio, the
+  // studio, and Share (the share modal IS mounted below).
+  const portfolioMenuSections = useCallback((trackId: string): MenuSection[] => {
+    const track = filtered.find((t) => t.id === trackId);
+    if (!track) return [];
+    return [{
+      id: 'content',
+      items: [
+        { id: 'lyrics', label: 'Lyrics Studio', shortcut: 'L', shortcutKey: 'l', onSelect: () => handleOpenLyrics(track) },
+        { id: 'studio', label: 'Send to studio', shortcut: 'S', shortcutKey: 's', onSelect: () => handleOpenStudio(track) },
+        { id: 'share', label: 'Share track', onSelect: () => handleShareTrack(track) },
+      ],
+    }];
+  }, [filtered, handleOpenLyrics, handleOpenStudio, handleShareTrack]);
+
   // Portfolio is an immersive full-bleed mode — early-return replaces
   // the entire library page chrome with just MusicPortfolio (which
   // exposes its own onExit chip to come back to list view).
@@ -1022,6 +1045,7 @@ export default function LibraryPage() {
           currentTrackId={currentTrack?.id ?? null}
           isPlaying={isPlaying}
           onExit={() => setViewMode('list')}
+          trackMenuSections={portfolioMenuSections}
         />
         {shareTarget && (
           <ContentShareModal
@@ -1584,6 +1608,8 @@ export default function LibraryPage() {
                   onPlayClick={getPlayClickHandler(t)}
                   onDelete={handleDeleteTrackRow}
                   onShare={handleShareTrack}
+                  onOpenLyrics={handleOpenLyrics}
+                  onOpenStudio={handleOpenStudio}
                   editable
                   onChanged={handleChangedRow}
                   selectable={selectMode && sortMode !== 'store_order'}
@@ -1611,6 +1637,8 @@ export default function LibraryPage() {
                 onPlayClick={getPlayClickHandler(t)}
                 onDelete={handleDeleteTrackRow}
                 onShare={handleShareTrack}
+                onOpenLyrics={handleOpenLyrics}
+                onOpenStudio={handleOpenStudio}
                 selectable={selectMode}
                 selected={selectedIds.has(t.id)}
                 onSelectChange={handleSelectChange}

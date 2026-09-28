@@ -39,6 +39,11 @@ interface TrackCardProps {
   onDelete?: (track: Track) => void;
   /** When provided, exposes "Share track" in the context menu. */
   onShare?: (track: Track) => void;
+  /** When provided, exposes "Lyrics Studio". Only the library passes
+   *  it; the caller owns navigation (see `lib/library/lyrics-link`). */
+  onOpenLyrics?: (track: Track) => void;
+  /** When provided, exposes "Send to studio". Library only, like lyrics. */
+  onOpenStudio?: (track: Track) => void;
   /** Dashboard rows only. Turns on inline rename — the title cell becomes a
    *  field and the ⋯ menu grows a Rename item that focuses it. The public
    *  storefront row omits it, so a visitor never gets an editor. */
@@ -120,6 +125,8 @@ function TrackCardImpl({
   removeLabel = 'Remove from project',
   onDelete,
   onShare,
+  onOpenLyrics,
+  onOpenStudio,
   editable = false,
   onChanged,
   selectable = false,
@@ -288,6 +295,16 @@ function TrackCardImpl({
           id: 'details', label: 'View details', shortcut: 'I', shortcutKey: 'i',
           hidden: !onClickDetails,
           onSelect: () => onClickDetails?.(track),
+        },
+        {
+          id: 'lyrics', label: 'Lyrics Studio', shortcut: 'L', shortcutKey: 'l',
+          hidden: !onOpenLyrics,
+          onSelect: () => onOpenLyrics?.(track),
+        },
+        {
+          id: 'studio', label: 'Send to studio', shortcut: 'S', shortcutKey: 's',
+          hidden: !onOpenStudio,
+          onSelect: () => onOpenStudio?.(track),
         },
       ],
     },
@@ -727,7 +744,7 @@ function TrackCardImpl({
           sections={rowMenuSections}
           align="right"
           label="Track actions"
-          width={224}
+          width={248}
           triggerClassName="flex h-9 w-9 items-center justify-center rounded-full border border-transparent text-[#8B8273] transition-colors hover:bg-white/[0.06] hover:text-white"
         />
       </div>
