@@ -11,7 +11,7 @@ import { isValidEmail, isUUID } from '@/lib/validate';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 import { licenseAvailability } from '@/lib/store/license-availability';
 import { shareCheckoutBlock, tracksOutsideShare, type ShareSaleState } from '@/lib/share/checkout-access';
-import bcrypt from 'bcryptjs';
+import { resolveShareToken, shareAccessFailure, shareGateResponse, sharePasswordFrom } from '@/lib/share/token-access';
 
 const log = createLogger('api.share.checkout');
 export const runtime = 'nodejs';
@@ -179,14 +179,12 @@ export async function POST(
     let isProjectShare = true;
     let shareTrackIds: string[] = [];
 
-    const { data: projShare } = await admin
-      .from('project_shares')
-      .select('*')
-      .eq('token', token)
-      .maybeSingle();
+    // Purchase tokens (project_access_links) are not a storefront: they
+    // deliver a bundle already bought, so checkout does not resolve them.
+    const resolved = await resolveShareToken(admin, token, ['project_share', 'share_link']);
 
-    if (projShare) {
-      const row = projShare as ProjectShareCheckoutRow;
+    if (resolved?.kind === 'project_share') {
+      const row = resolved.row as unknown as ProjectShareCheckoutRow;
       share = row;
       const kind = row.content_type ?? 'project';
       // project_shares has no user_id: the seller is whoever owns the thing
@@ -214,21 +212,13 @@ export async function POST(
         projectName = (owner as OwnedNamedRow | null)?.name ?? null;
         shareTrackIds = ((junction ?? []) as Array<{ track_id: string }>).map((j) => j.track_id);
       }
-    } else {
-      const { data: linkShare } = await admin
-        .from('share_links')
-        .select('*')
-        .eq('token', token)
-        .maybeSingle();
-
-      if (linkShare) {
-        const row = linkShare as LinkShareCheckoutRow;
-        share = row;
-        sellerUserId = row.user_id ?? null;
-        projectName = row.title ?? null;
-        shareTrackIds = row.track_ids ?? [];
-        isProjectShare = false;
-      }
+    } else if (resolved?.kind === 'share_link') {
+      const row = resolved.row as unknown as LinkShareCheckoutRow;
+      share = row;
+      sellerUserId = row.user_id ?? null;
+      projectName = row.title ?? null;
+      shareTrackIds = row.track_ids ?? [];
+      isProjectShare = false;
     }
 
     if (!share || !sellerUserId) {
@@ -248,12 +238,8 @@ export async function POST(
     if (block) {
       return NextResponse.json({ error: block.error }, { status: block.status });
     }
-    if (share.password_hash) {
-      const submitted = req.headers.get('x-share-password') ?? '';
-      if (!submitted || !(await bcrypt.compare(submitted, share.password_hash))) {
-        return NextResponse.json({ requiresPassword: true, error: 'This link needs its password.' }, { status: 401 });
-      }
-    }
+    const locked = await shareAccessFailure(share, { password: sharePasswordFrom(req) });
+    if (locked) return shareGateResponse(locked);
     const foreign = tracksOutsideShare(rawItems.map((i) => i.track_id), shareTrackIds);
     if (foreign.length) {
       return NextResponse.json({ error: 'Your cart has beats that are not part of this link.' }, { status: 400 });

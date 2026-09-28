@@ -119,7 +119,8 @@ describe('GET /api/share/[token]/download', () => {
       maybeSingleResult(null),
       maybeSingleResult(null),
       maybeSingleResult({ project_id: 'project-1', expires_at: past }),
-      maybeSingleResult({ track_id: 'track-a' }),
+      // No project_tracks lookup: a dead link is refused before membership
+      // is checked (lib/share/token-access), so the queue must drain here.
     );
 
     const mod = await loadRoute();

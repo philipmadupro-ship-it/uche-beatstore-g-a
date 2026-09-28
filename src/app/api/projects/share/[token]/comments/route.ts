@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
+import {
+  isWellFormedShareToken,
+  resolveShareToken,
+  shareAccessFailure,
+  shareGateResponse,
+  shareNotFoundResponse,
+  sharePasswordFrom,
+} from '@/lib/share/token-access';
 import { isSupabaseConfigured, getAll, insert } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
@@ -32,34 +39,28 @@ interface LocalProjectCommentRow {
  * via the normal project-comments endpoint (TODO when we expose it).
  */
 
-async function resolveShare(token: string, password: string | null) {
+async function resolveShare(token: string, password: string) {
   const admin = createServiceClient();
-  const { data: share } = await admin
-    .from('project_shares')
-    .select('*')
-    .eq('token', token)
-    .maybeSingle();
-  if (!share) return { ok: false as const, status: 404, error: 'Link not found' };
-  if (share.revoked_at) return { ok: false as const, status: 410, error: 'Link revoked' };
-  if (share.expires_at && new Date(share.expires_at).getTime() < Date.now()) {
-    return { ok: false as const, status: 410, error: 'Link expired' };
-  }
-  if (share.password_hash) {
-    if (!password) return { ok: false as const, status: 401, error: 'Password required' };
-    const okPw = await bcrypt.compare(password, share.password_hash);
-    if (!okPw) return { ok: false as const, status: 401, error: 'Bad password' };
-  }
+  const resolved = await resolveShareToken(admin, token, ['project_share']);
+  if (resolved?.kind !== 'project_share') return { ok: false as const, response: shareNotFoundResponse() };
+  const share = resolved.row;
+  const failure = await shareAccessFailure(share, { password });
+  if (failure) return { ok: false as const, response: shareGateResponse(failure) };
   return { ok: true as const, share, admin };
+}
+
+function localShare(token: string): LocalProjectShareRow | undefined {
+  if (!isWellFormedShareToken(token)) return undefined;
+  return getAll<LocalProjectShareRow>('project_shares').find((s) => s.token === token);
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const password = req.headers.get('x-share-password');
+  const password = sharePasswordFrom(req);
   try {
     if (!isSupabaseConfigured()) {
-      const shares = getAll<LocalProjectShareRow>('project_shares');
-      const share = shares.find((s) => s.token === token);
-      if (!share) return NextResponse.json({ error: 'Link not found' }, { status: 404 });
+      const share = localShare(token);
+      if (!share) return shareNotFoundResponse();
       const comments = getAll<LocalProjectCommentRow>('project_comments')
         .filter((c) => c.project_id === share.project_id && !c.deleted_at)
         .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
@@ -67,7 +68,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     }
 
     const gate = await resolveShare(token, password);
-    if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
+    if (!gate.ok) return gate.response;
 
     const { data, error } = await gate.admin
       .from('project_comments')
@@ -84,7 +85,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const password = req.headers.get('x-share-password');
+  const password = sharePasswordFrom(req);
   // Public (token-gated) comment endpoint — throttle per IP to blunt spam.
   if (!await rateLimitDurable(`sharecomment:${clientIp(req)}`, 10, 60_000)) {
     return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
@@ -106,8 +107,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     if (text.length > 5000) return NextResponse.json({ error: 'Comment too long' }, { status: 400 });
 
     if (!isSupabaseConfigured()) {
-      const share = getAll<LocalProjectShareRow>('project_shares').find((s) => s.token === token);
-      if (!share) return NextResponse.json({ error: 'Link not found' }, { status: 404 });
+      const share = localShare(token);
+      if (!share) return shareNotFoundResponse();
       const row = insert('project_comments', {
         project_id: share.project_id,
         track_id: trackId,
@@ -125,7 +126,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     }
 
     const gate = await resolveShare(token, password);
-    if (!gate.ok) return NextResponse.json({ error: gate.error }, { status: gate.status });
+    if (!gate.ok) return gate.response;
 
     // Role gate: viewer is read-only.
     if (gate.share.role === 'viewer') {

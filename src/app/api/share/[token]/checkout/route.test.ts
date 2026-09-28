@@ -49,7 +49,7 @@ vi.mock('@/lib/auth/ownership', () => ({
 
 function openProjectShare(overrides: Record<string, unknown> = {}) {
   db.project_shares = {
-    token: 'tok', content_type: 'project', project_id: 'p1', sales_enabled: true,
+    token: 'tok-share-1', content_type: 'project', project_id: 'p1', sales_enabled: true,
     revoked_at: null, expires_at: null, password_hash: null, ...overrides,
   };
   db.projects = { user_id: 'seller-1', name: 'Tape' };
@@ -58,7 +58,7 @@ function openProjectShare(overrides: Record<string, unknown> = {}) {
 }
 
 function post(licenseId: string, opts: { trackId?: string; password?: string } = {}) {
-  const req = new NextRequest('http://localhost/api/share/tok/checkout', {
+  const req = new NextRequest('http://localhost/api/share/tok-share-1/checkout', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -69,7 +69,7 @@ function post(licenseId: string, opts: { trackId?: string; password?: string } =
       cart_items: [{ track_id: opts.trackId ?? 'track-1', license_id: licenseId }],
     }),
   });
-  return { req, ctx: { params: Promise.resolve({ token: 'tok' }) } };
+  return { req, ctx: { params: Promise.resolve({ token: 'tok-share-1' }) } };
 }
 
 function track(overrides: Record<string, unknown>) {
@@ -174,7 +174,7 @@ describe('share checkout enforces the share settings', () => {
 
   it('sells from a playlist share, taking the seller from the playlist owner', async () => {
     delete db.projects;
-    db.project_shares = { token: 'tok', content_type: 'playlist', playlist_id: 'pl1', sales_enabled: true };
+    db.project_shares = { token: 'tok-share-1', content_type: 'playlist', playlist_id: 'pl1', sales_enabled: true };
     db.playlists = { user_id: 'seller-1', name: 'Mix' };
     db.playlist_tracks = [{ track_id: 'track-1' }];
     const { POST } = await import('./route');
@@ -186,7 +186,7 @@ describe('share checkout enforces the share settings', () => {
 
   it('sells from a legacy share link limited to its track_ids', async () => {
     delete db.project_shares;
-    db.share_links = { token: 'tok', user_id: 'seller-1', title: 'Pack', track_ids: ['track-1'], sales_enabled: true };
+    db.share_links = { token: 'tok-share-1', user_id: 'seller-1', title: 'Pack', track_ids: ['track-1'], sales_enabled: true };
     const { POST } = await import('./route');
     const ok = post('lease');
     expect((await POST(ok.req, ok.ctx)).status).toBe(200);

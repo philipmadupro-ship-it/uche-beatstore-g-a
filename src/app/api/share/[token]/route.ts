@@ -10,6 +10,14 @@ import { createLogger } from '@/lib/log';
 import { signedSharePeaksUrl, signedSharePreviewUrl } from '@/lib/share-media-token';
 import { cdnAudioSrc } from '@/lib/audio/cdn';
 import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
+import {
+  isWellFormedShareToken,
+  resolveShareToken,
+  shareAccessFailure,
+  shareGateResponse,
+  shareNotFoundResponse,
+  sharePasswordFrom,
+} from '@/lib/share/token-access';
 
 const log = createLogger('api.share.token');
 
@@ -22,6 +30,7 @@ type ShareAudioTrack = {
 type LocalShareLink = {
   id: string;
   token: string;
+  user_id?: string | null;
   track_ids?: string[] | null;
   allow_downloads?: boolean | null;
   revoked_at?: string | null;
@@ -73,45 +82,22 @@ function hashIp(req: NextRequest): string {
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const passwordHeader = req.headers.get('x-share-password') || '';
+  const password = sharePasswordFrom(req);
   try {
     if (isSupabaseConfigured()) {
       const supabaseAdmin = createServiceClient();
 
-      const { data: share, error: shareError } = await supabaseAdmin
-        .from('share_links')
-        .select('*')
-        .eq('token', token)
-        .single();
+      const resolved = await resolveShareToken(supabaseAdmin, token, ['share_link']);
+      if (resolved?.kind !== 'share_link') return shareNotFoundResponse();
+      const share = resolved.row as unknown as LocalShareLink;
 
-      if (shareError || !share) {
-        return NextResponse.json({ error: 'Share link not found or expired' }, { status: 404 });
-      }
-
-      if (share.revoked_at) {
-        return NextResponse.json({ error: 'This link has been revoked' }, { status: 410 });
-      }
-
-      if (share.expires_at && new Date(share.expires_at) < new Date()) {
-        return NextResponse.json({ error: 'This link has expired' }, { status: 410 });
-      }
-
-      if (share.password_hash) {
-        if (!passwordHeader) {
-          return NextResponse.json({ requiresPassword: true }, { status: 401 });
-        }
-        const ok = await bcrypt.compare(passwordHeader, share.password_hash);
-        if (!ok) {
-          return NextResponse.json({ requiresPassword: true, error: 'Incorrect password' }, { status: 401 });
-        }
-      }
+      const failure = await shareAccessFailure(share, { password });
+      if (failure) return shareGateResponse(failure);
 
       // Only the producer's own tracks are served through a share (see
       // lib/share/share-owner). A buyer-made share row resolves to nothing.
       share.track_ids = await grantableTrackIds(supabaseAdmin, share.user_id, share.track_ids ?? []);
-      if (share.track_ids.length === 0) {
-        return NextResponse.json({ error: 'Share link not found or expired' }, { status: 404 });
-      }
+      if (share.track_ids.length === 0) return shareNotFoundResponse();
 
       const [tracksRes, stemsRes] = await Promise.all([
         supabaseAdmin
@@ -171,30 +157,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     }
 
     // Local fallback
-    const allLinks = getAll<LocalShareLink>('share_links');
-    const share = allLinks.find((s) => s.token === token);
+    const share = isWellFormedShareToken(token)
+      ? getAll<LocalShareLink>('share_links').find((s) => s.token === token)
+      : undefined;
+    if (!share) return shareNotFoundResponse();
 
-    if (!share) {
-      return NextResponse.json({ error: 'Share link not found or expired' }, { status: 404 });
-    }
-
-    if (share.revoked_at) {
-      return NextResponse.json({ error: 'This link has been revoked' }, { status: 410 });
-    }
-
-    if (share.expires_at && new Date(share.expires_at) < new Date()) {
-      return NextResponse.json({ error: 'This link has expired' }, { status: 410 });
-    }
-
-    if (share.password_hash) {
-      if (!passwordHeader) {
-        return NextResponse.json({ requiresPassword: true }, { status: 401 });
-      }
-      const ok = await bcrypt.compare(passwordHeader, share.password_hash);
-      if (!ok) {
-        return NextResponse.json({ requiresPassword: true, error: 'Incorrect password' }, { status: 401 });
-      }
-    }
+    const failure = await shareAccessFailure(share, { password });
+    if (failure) return shareGateResponse(failure);
 
     const allTracks = getAll<LocalShareTrack>('tracks');
     const trackIdSet = new Set(share.track_ids || []);

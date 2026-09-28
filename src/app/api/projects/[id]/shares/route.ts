@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppUrl } from '@/lib/env';
-import { nanoid } from 'nanoid';
+import { newShareToken } from '@/lib/share/token-access';
 import bcrypt from 'bcryptjs';
 import { isSupabaseConfigured, insert, query, requireRowOwnership } from '@/lib/db';
 import { readBody } from '@/lib/validate';
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // explicitly flips the For-sale toggle.
   const salesEnabled = body.sales_enabled === true;
 
-  const token = nanoid(12);
+  const token = newShareToken();
   const password_hash = password ? await bcrypt.hash(password, 10) : null;
   const expires_at = expiresDays && expiresDays > 0
     ? new Date(Date.now() + expiresDays * 86400000).toISOString()
