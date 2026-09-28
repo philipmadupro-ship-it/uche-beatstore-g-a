@@ -1,7 +1,7 @@
 /**
  * A signed-in buyer's follow must persist under their account email. The
  * route used to resolve identity only from the legacy 24h token or a body
- * email, so a buyer signed in at /store/account/me (no token, or an expired
+ * email (which proved nothing — see the last cases), so a buyer signed in at /store/account/me (no token, or an expired
  * one) got `needsEmail` and the follow stayed in localStorage only.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -96,11 +96,34 @@ describe('POST /api/store/follow — buyer identity', () => {
     expect(upserts[0].email).toBe('token-buyer@example.test');
   });
 
-  it('signed out with an expired token and no email: not persisted, asks for email', async () => {
+  it('signed out with an expired token: not persisted, asks for sign-in', async () => {
     const { POST } = await import('./route');
     const body = await (await POST(follow({ token: 'expired' }))).json();
 
-    expect(body).toMatchObject({ ok: true, persisted: false, needsEmail: true });
+    expect(body).toMatchObject({ ok: true, persisted: false, needsSignIn: true });
     expect(upserts).toHaveLength(0);
+  });
+
+  it("an email typed into the body cannot follow on a stranger's behalf", async () => {
+    const { POST } = await import('./route');
+    const body = await (await POST(follow({ email: 'victim@example.test' }))).json();
+
+    expect(body).toMatchObject({ persisted: false });
+    expect(upserts).toHaveLength(0);
+  });
+
+  it("an email typed into the body cannot unfollow someone else", async () => {
+    const { POST } = await import('./route');
+    await POST(follow({ action: 'unfollow', email: 'victim@example.test' }));
+
+    expect(deletes).toHaveLength(0);
+  });
+
+  it('a signed-in buyer who also sends another email still acts only as themselves', async () => {
+    sessionUser = { id: 'b1', email: 'buyer@example.test' };
+    const { POST } = await import('./route');
+    await POST(follow({ email: 'victim@example.test' }));
+
+    expect(upserts).toEqual([{ producer_user_id: PRODUCER, email: 'buyer@example.test' }]);
   });
 });

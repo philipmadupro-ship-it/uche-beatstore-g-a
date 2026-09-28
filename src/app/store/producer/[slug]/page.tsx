@@ -142,7 +142,7 @@ export default function ProducerPage({
 
     // Best-effort DB persistence so the producer can see + notify followers.
     // The API takes a signed-in buyer's session cookie first, then this
-    // legacy token. With neither it returns needsEmail and we silently keep
+    // legacy token. With neither it returns needsSignIn and we silently keep
     // the localStorage follow — no friction.
     const token = getBuyerToken();
     fetch('/api/store/follow', {

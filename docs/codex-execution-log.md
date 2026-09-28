@@ -8805,3 +8805,10 @@ These three were found during the trace and fixed after the user asked for them:
 - **Follow ignored the signed-in session.** `/api/store/follow` now resolves identity from the session first (canonical email via `sessionBuyerEmail`), then the legacy token, then a body email.
 
 Tests: 2 cases in `account-routes.test.ts`, 3 project-share cases in `app/api/email/expiry.test.ts`, and a new `app/api/store/follow/route.test.ts` (5). Each new behaviour fails on the previous code.
+
+### BUYER-06 follow-ups, round 2 (same PR)
+
+- **Order recovery exposed revoked bundle tokens.** `/api/store/orders` now returns `token: null, access_revoked: true` for a refunded or disputed bundle. `/api/store/orders/resend` answers 410 instead of re-emailing that link. Both use `isProjectAccessActive`.
+- **Follow accepted any typed email as identity.** Anyone could subscribe a stranger to drop announcements (`cron/announce-drops` emails every follower), or unfollow them. The body `email` is no longer an identity. A follow now needs the buyer's session or a valid link token; without either the route returns `needsSignIn`. No client ever sent an email.
+
+Tests: `orders/route.test.ts` (+1), new `orders/resend/route.test.ts` (2), and `follow/route.test.ts` (+3 abuse cases). Each fails on the previous code.

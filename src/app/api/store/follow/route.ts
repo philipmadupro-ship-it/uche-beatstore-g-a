@@ -13,12 +13,18 @@ export const dynamic = 'force-dynamic';
 /**
  * POST /api/store/follow — follow or unfollow a producer.
  *
- * Body: { producer_user_id, action: 'follow' | 'unfollow', email?, token? }
+ * Body: { producer_user_id, action: 'follow' | 'unfollow', token? }
  *
  * Buyer identity (email) resolves from, in order:
  *   1. the signed-in buyer's Supabase session (persistent account)
  *   2. a magic-link `token` (HMAC, mig 060 buyer accounts)
- *   3. an explicit `email` in the body (anonymous follow with email capture)
+ *
+ * An email typed into the body is NOT an identity. It used to be, which let
+ * anyone subscribe a stranger's address to drop announcements
+ * (cron/announce-drops mails every follower) or silently unfollow someone
+ * else. No client ever sent one: the producer page sends only the token.
+ * With neither identity the caller gets `needsSignIn` and keeps its
+ * localStorage follow.
  *
  * The session comes first for the same reason it does in
  * lib/buyer-session.ts: the 24h token outlives its expiry in localStorage, and
@@ -32,7 +38,6 @@ export const dynamic = 'force-dynamic';
 const bodySchema = z.object({
   producer_user_id: z.string().uuid(),
   action: z.enum(['follow', 'unfollow']),
-  email: z.string().email().optional(),
   token: z.string().optional(),
 });
 
@@ -48,7 +53,6 @@ function resolveEmail(body: z.infer<typeof bodySchema>): string | null {
     const claims = verifyBuyerToken(body.token);
     if (claims?.email) return claims.email;
   }
-  if (body.email) return body.email.trim().toLowerCase();
   return null;
 }
 
@@ -68,9 +72,9 @@ export async function POST(req: NextRequest) {
 
     const email = (await sessionEmail()) ?? resolveEmail(parsed.data);
     if (!email) {
-      // No identity — the client keeps its localStorage follow, but we
-      // can't persist or notify. Tell the caller so it can prompt for email.
-      return NextResponse.json({ ok: true, persisted: false, needsEmail: true });
+      // No verified identity. The client keeps its localStorage follow, but
+      // we can't persist or notify. Signing in at /store/account fixes that.
+      return NextResponse.json({ ok: true, persisted: false, needsSignIn: true });
     }
 
     const admin = createServiceClient();
