@@ -8831,3 +8831,19 @@ Follow-up to the entry above. `describeUncertainTitleMetadata` from that entry i
 **Licence:** essentia.js is AGPL-3.0 and ships to browsers. That was already true before this change. It is flagged here, not resolved.
 
 Tests (new): `essentia-extract.test.ts` (real package), `essentia-worker.test.ts` (real worker file vs. shared extractor), `metadata-agreement.test.ts`, `filename-check.test.ts`, `client-analysis.test.ts`. Also `compareAndSet` in `processing.test.ts`, an invalid-features case in the analyze route test, 5 tray tests, and parser tests for the missed readings. Out of scope: `lib/audio/chords.client.ts` has the same broken CDN loader.
+
+## 2026-09-28 - Chord detection actually runs (AUDIO-05)
+
+`lib/audio/chords.client.ts` ran HPCP in a blob worker that `importScripts`-ed `essentia.js-core.js` from jsDelivr and called `self.EssentiaWASM.EssentiaWASM ?? self.EssentiaWASM` as a factory. That file defines the `Essentia` class, not `EssentiaWASM`; `EssentiaWASM` is the instantiated module; and jsDelivr is not in the CSP (a blob worker inherits the page's policy, which is enforced on /store). It could not have returned a chord anywhere.
+
+It now follows AUDIO-04: `lib/audio/chord-extract.ts` holds the extraction, `lib/audio/chords.worker.js` is its classic-worker copy, and the client loads the worker and both UMD builds from `/_next/static/media` via `new URL(…, import.meta.url)`. Audio is decoded through `OfflineAudioContext(1, 1, 44100)` and every channel is downmixed (was channel 0 at the device rate).
+
+Three more defects found while testing against the real package, fixed in both copies:
+
+- **`FrameGenerator` drops silent frames**, and throws when every frame is silent. With a 2 s silent intro, 4 s of audio produced 45 frames instead of ~85, so every chord after a quiet intro was stamped early. Frames are cut in JS, one per hop.
+- **Hann window + absolute peak threshold smeared the chroma.** A pure C-E-G triad read A/A#/G# at ~0.6; with a little noise every bin sat near 0.5 and a I-vi-IV-V came back as one chord. `blackmanharris62` (Essentia's tonal-extractor window) plus a peak floor at -40 dB below the frame's loudest bin gives a clean chroma. Silent frames skip HPCP, which throws on an empty peak list.
+- **Bucket edges.** Frames are bucketed by centre, and a bucket where fewer than half the frames carry sound is "N", so a frame reaching into the next second no longer names this one's chord.
+
+Every WASM vector is freed per frame.
+
+Verified: `chord-extract.test.ts` (real package: I-vi-IV-V in C, sharps/minor, silent intro timing, silence), `chords-worker.test.ts` (the worker file in a `vm` sandbox with the real UMD builds, equal to the shared extractor). Chromium via Playwright against `next start` on a temporary `/store` page (enforced CSP): a 48 kHz stereo WAV gave `C@0 Am@2 F@4 G@6`, no jsDelivr request, no CSP violation. `detectChordsFromUrl` has no caller in the UI; the analyze route still accepts `chords`.

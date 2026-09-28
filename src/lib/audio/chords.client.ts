@@ -1,22 +1,32 @@
 /**
- * Browser-only chord detection using Essentia.js HPCP framewise chromagram
- * + 24-template (major/minor) matching. No recurring cost — runs entirely in
- * the visitor's browser in a Web Worker, mirroring analyze.client.ts.
+ * Browser-only chord detection: Essentia.js HPCP chromagram + 24 major/minor
+ * triad templates, in a Web Worker so a long track doesn't lock the UI.
  *
  * Output: an ordered array of { time, chord } segments where `chord` is a
  * label like "C", "Am", "F#m" (or "N" for no/low-confidence chord). Adjacent
  * identical chords are merged so the timeline is compact.
  *
- * NOTE: HPCP bin 0 corresponds to the reference pitch class (A at 440 Hz in
- * Essentia's default config). If a future calibration shows a constant
- * semitone offset, adjust PITCH_CLASSES rotation — every chord would be wrong
- * by the same fixed interval, which is the tell-tale sign.
+ * The extraction lives in `chord-extract.ts` (tested against the real
+ * package); `chords.worker.js` is its classic-worker copy. The worker and the
+ * two essentia.js UMD builds are same-origin `/_next/static/media` files, like
+ * `analyze.client.ts` — the old version loaded essentia.js from jsDelivr, which
+ * the CSP does not allow, and could not have worked even where it loaded.
  */
 
-export interface ChordSegment {
-  time: number;
-  chord: string;
-}
+import { downmix, ESSENTIA_SAMPLE_RATE } from './essentia-extract';
+import type { ChordSegment } from './chord-extract';
+
+export type { ChordSegment } from './chord-extract';
+
+/** ~20 ms of work per second of audio; this is a generous ceiling for a long track. */
+const WORKER_TIMEOUT_MS = 120_000;
+
+/** See the header of `essentia.worker.js` for why these are `new URL(…)` rather than imports. */
+const CHORDS_WORKER_URL = () => new URL('./chords.worker.js', import.meta.url);
+const ESSENTIA_WASM_URL = () =>
+  new URL('../../../node_modules/essentia.js/dist/essentia-wasm.umd.js', import.meta.url).href;
+const ESSENTIA_CORE_URL = () =>
+  new URL('../../../node_modules/essentia.js/dist/essentia.js-core.umd.js', import.meta.url).href;
 
 export async function detectChordsFromUrl(rawUrl: string): Promise<ChordSegment[]> {
   if (typeof window === 'undefined') return [];
@@ -33,150 +43,53 @@ export async function detectChordsFromUrl(rawUrl: string): Promise<ChordSegment[
     return [];
   }
 
-  let ctx: AudioContext | null = null;
+  // Decode AND resample in one step, as analyze.client.ts does: an
+  // OfflineAudioContext decodes to its own rate, so frames and timestamps are
+  // the same on a 44.1 kHz and a 48 kHz device.
+  let mono: Float32Array;
   try {
-    ctx = new AudioContext();
-    const decoded = await ctx.decodeAudioData(buffer.slice(0));
-    const channelData = decoded.getChannelData(0).slice(0); // copy → transferable
-    const sampleRate = decoded.sampleRate;
-    await ctx.close();
-    ctx = null;
-    return await runChordWorker(channelData, sampleRate);
+    const ctx = new OfflineAudioContext(1, 1, ESSENTIA_SAMPLE_RATE);
+    const decoded = await ctx.decodeAudioData(buffer);
+    const channels: Float32Array[] = [];
+    for (let c = 0; c < decoded.numberOfChannels; c++) channels.push(decoded.getChannelData(c));
+    // Copy: the worker takes ownership of the buffer.
+    mono = downmix(channels).slice();
+  } catch (err) {
+    console.warn('Chord detection: decode failed', err);
+    return [];
+  }
+
+  try {
+    return await runChordWorker(mono);
   } catch (err) {
     console.warn('Chord detection failed', err);
-    if (ctx) {
-      try { await ctx.close(); } catch {}
-    }
     return [];
   }
 }
 
-function runChordWorker(channelData: Float32Array, sampleRate: number): Promise<ChordSegment[]> {
-  return new Promise((resolve) => {
-    const workerCode = `
-      // Pitch classes ordered from HPCP bin 0 (A at 440Hz reference).
-      const PC = ['A','A#','B','C','C#','D','D#','E','F','F#','G','G#'];
-
-      // Binary chord templates over 12 pitch classes (relative to root).
-      // Major = root + major third (4) + fifth (7); minor = root + (3) + (7).
-      function buildTemplates() {
-        const out = [];
-        for (let root = 0; root < 12; root++) {
-          const maj = new Array(12).fill(0);
-          maj[root] = 1; maj[(root + 4) % 12] = 1; maj[(root + 7) % 12] = 1;
-          out.push({ label: PC[root], v: maj });
-          const min = new Array(12).fill(0);
-          min[root] = 1; min[(root + 3) % 12] = 1; min[(root + 7) % 12] = 1;
-          out.push({ label: PC[root] + 'm', v: min });
-        }
-        return out;
-      }
-
-      function classify(chroma, templates) {
-        const sum = chroma.reduce((a, b) => a + b, 0);
-        if (sum < 1e-6) return 'N';
-        // Normalize chroma to unit sum for scale-invariant correlation.
-        const norm = chroma.map((x) => x / sum);
-        let best = 'N', bestScore = -1;
-        for (const t of templates) {
-          let dot = 0;
-          for (let i = 0; i < 12; i++) dot += norm[i] * t.v[i];
-          if (dot > bestScore) { bestScore = dot; best = t.label; }
-        }
-        // Require the matched triad to carry a meaningful share of energy.
-        return bestScore < 0.45 ? 'N' : best;
-      }
-
-      self.onmessage = async (e) => {
-        try {
-          const { channelData, sampleRate, essentiaUrl } = e.data;
-          self.importScripts(essentiaUrl);
-          const factory = self.EssentiaWASM.EssentiaWASM ?? self.EssentiaWASM;
-          const essentia = await factory();
-
-          const frameSize = 4096;
-          const hopSize = 2048;
-          const templates = buildTemplates();
-
-          const frames = essentia.FrameGenerator(channelData, frameSize, hopSize);
-          const perFrame = []; // { time, chroma:[12] }
-          for (let i = 0; i < frames.size(); i++) {
-            const frame = frames.get(i);
-            const windowed = essentia.Windowing(frame, true, frameSize, 'hann').frame;
-            const spectrum = essentia.Spectrum(windowed).spectrum;
-            const peaks = essentia.SpectralPeaks(spectrum, 0, 5000, 100, 0, 'frequency', sampleRate);
-            const hpcp = essentia.HPCP(peaks.frequencies, peaks.magnitudes).hpcp;
-            const chroma = essentia.vectorToArray(hpcp);
-            const time = (i * hopSize) / sampleRate;
-            perFrame.push({ time, chroma: Array.from(chroma) });
-          }
-          frames.delete();
-          essentia.delete();
-
-          // Aggregate into ~1s windows (majority chroma sum) to denoise.
-          const windowSec = 1.0;
-          const segments = [];
-          let bucketStart = 0;
-          let acc = new Array(12).fill(0);
-          let bucketTime = 0;
-          const flush = (tEnd) => {
-            const label = classify(acc, templates);
-            segments.push({ time: +bucketTime.toFixed(2), chord: label });
-          };
-          for (let i = 0; i < perFrame.length; i++) {
-            const f = perFrame[i];
-            if (f.time - bucketStart >= windowSec && acc.some((x) => x > 0)) {
-              flush(f.time);
-              bucketStart = f.time;
-              bucketTime = f.time;
-              acc = new Array(12).fill(0);
-            }
-            if (acc.every((x) => x === 0)) bucketTime = f.time;
-            for (let j = 0; j < 12; j++) acc[j] += f.chroma[j] || 0;
-          }
-          if (acc.some((x) => x > 0)) flush(perFrame.length ? perFrame[perFrame.length - 1].time : 0);
-
-          // Merge consecutive identical chords; drop leading/trailing 'N'.
-          const merged = [];
-          for (const s of segments) {
-            if (merged.length && merged[merged.length - 1].chord === s.chord) continue;
-            merged.push(s);
-          }
-          while (merged.length && merged[0].chord === 'N') merged.shift();
-          while (merged.length && merged[merged.length - 1].chord === 'N') merged.pop();
-
-          self.postMessage({ success: true, chords: merged });
-        } catch (err) {
-          self.postMessage({ success: false, error: (err && err.message) || String(err) });
-        }
-      };
-    `;
-
-    const blob = new Blob([workerCode], { type: 'application/javascript' });
-    const workerUrl = URL.createObjectURL(blob);
-    const worker = new Worker(workerUrl);
-    const essentiaUrl = 'https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.js';
-
-    const cleanup = () => {
-      URL.revokeObjectURL(workerUrl);
+function runChordWorker(signal: Float32Array): Promise<ChordSegment[]> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(CHORDS_WORKER_URL());
+    const done = () => {
+      clearTimeout(timer);
       worker.terminate();
     };
-
-    worker.onmessage = (ev) => {
-      cleanup();
-      if (ev.data?.success && Array.isArray(ev.data.chords)) {
-        resolve(ev.data.chords as ChordSegment[]);
-      } else {
-        console.warn('Chord worker error:', ev.data?.error);
-        resolve([]);
-      }
+    const timer = setTimeout(() => {
+      done();
+      reject(new Error('Chord worker timed out'));
+    }, WORKER_TIMEOUT_MS);
+    worker.onmessage = (e: MessageEvent<{ ok: boolean; chords?: ChordSegment[]; error?: string }>) => {
+      done();
+      if (e.data?.ok && Array.isArray(e.data.chords)) resolve(e.data.chords);
+      else reject(new Error(e.data?.error || 'Chord worker error'));
     };
-    worker.onerror = (err) => {
-      cleanup();
-      console.warn('Chord worker crashed:', err.message);
-      resolve([]);
+    worker.onerror = (e) => {
+      done();
+      reject(new Error(e.message || 'Chord worker failed to load'));
     };
-
-    worker.postMessage({ channelData, sampleRate, essentiaUrl }, [channelData.buffer]);
+    worker.postMessage(
+      { id: 1, wasmUrl: ESSENTIA_WASM_URL(), coreUrl: ESSENTIA_CORE_URL(), signal },
+      [signal.buffer],
+    );
   });
 }
