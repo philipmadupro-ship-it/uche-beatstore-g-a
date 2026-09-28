@@ -8771,3 +8771,9 @@ A guest checkout is stored under the lowercased email: the Stripe webhook normal
 - `/store/orders` needs no change. It is already a sign-in funnel into `/store/account/me`.
 
 `src/app/api/store/account/account-routes.test.ts` (9 tests) runs against a fake DB that really filters on `eq`. It covers casing, session and token returning identical payloads, cross-buyer isolation, 401 with no session and 400 on a bad token (both with no DB read), 500 on a query failure, and library reads keyed on the canonical email. 5 of the 9 fail with the source changes reverted.
+
+## 2026-09-28 - Login redirect keeps a deep link's query
+
+When a signed-out visitor hit a protected page, `src/proxy.ts` set `next` to the pathname alone and left the original query on `/login`. So `/studio?track=<id>` became `/login?track=<id>&next=/studio`, and signing in opened an empty studio. Any other deep link with a query (library sort/filter) lost it the same way.
+
+`next` is now `pathname + search`, and the login URL keeps no other params. Nothing downstream needed changing. The password path does `window.location.assign(next)`, OAuth URL-encodes `next` into the callback, and both keep their existing same-origin-path check, which a path with a query still passes. Tests in `src/proxy.test.ts` cover this; two of them fail on the old code.
