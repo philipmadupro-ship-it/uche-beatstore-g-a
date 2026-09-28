@@ -42,6 +42,8 @@ interface TrackCardProps {
   /** When provided, exposes "Lyrics Studio". Only the library passes
    *  it; the caller owns navigation (see `lib/library/lyrics-link`). */
   onOpenLyrics?: (track: Track) => void;
+  /** When provided, exposes "Send to studio". Library only, like lyrics. */
+  onOpenStudio?: (track: Track) => void;
   /** Dashboard rows only. Turns on inline rename — the title cell becomes a
    *  field and the ⋯ menu grows a Rename item that focuses it. The public
    *  storefront row omits it, so a visitor never gets an editor. */
@@ -124,6 +126,7 @@ function TrackCardImpl({
   onDelete,
   onShare,
   onOpenLyrics,
+  onOpenStudio,
   editable = false,
   onChanged,
   selectable = false,
@@ -297,6 +300,11 @@ function TrackCardImpl({
           id: 'lyrics', label: 'Lyrics Studio', shortcut: 'L', shortcutKey: 'l',
           hidden: !onOpenLyrics,
           onSelect: () => onOpenLyrics?.(track),
+        },
+        {
+          id: 'studio', label: 'Send to studio', shortcut: 'S', shortcutKey: 's',
+          hidden: !onOpenStudio,
+          onSelect: () => onOpenStudio?.(track),
         },
       ],
     },
