@@ -8662,3 +8662,22 @@ tracks still 404'd on production. They have no preview clip, only a private mast
 **It needs the `CRON_SECRET` and `APP_URL` repo secrets, which are not set.** `frequent-crons` has
 logged "secret not set; skipping" on every run, so the time-sensitive crons have never run from
 GitHub either.
+
+## 2026-09-28 - Library hero cover escaped its tile
+
+The `/library` hero's cover tile had `overflow-hidden` but no positioning. Its cover is a next/image
+`fill` (absolute, inset 0), which resolves against the nearest positioned ancestor and is not clipped
+by a static parent's overflow, so any R2 or same-origin cover escaped the 100/132px tile and covered
+the whole hero row, title and buttons included. Every other `ArtworkFallback`/`CoverImage` caller
+already had a `relative` parent; this one did not. Fix: `relative` on the tile.
+
+Covers next/image can't optimise (pasted URLs on other hosts, blob:/data:) go through `CoverImage`'s
+plain `<img>`, which had no size, so `object-cover` had nothing to act on: a portrait cover showed
+its top-left corner, a landscape one left the tile half empty. It is now `block h-full w-full`, in
+flow rather than absolute so a parent without `relative` still contains it. The hero backdrop's
+`url()` is quoted, and the tile passes a real `sizes` hint.
+
+`e2e/library-hero-cover.spec.ts` checks square / portrait / landscape / missing covers on both
+image branches at 1440 / 820 / 390px (image box equals tile, `object-fit: cover`, centred, title not
+painted over). `/library` is auth-gated when Supabase env is set, so it skips in CI; run it against
+local-store dev with no Supabase env. `CoverImage.test.tsx` pins the plain-img classes in CI.

@@ -1051,7 +1051,9 @@ export default function LibraryPage() {
           <div
             className="absolute inset-0 z-0 bg-cover bg-center scale-110 transition-all duration-700"
             style={{
-              backgroundImage: heroCoverUrl ? `url(${heroCoverUrl})` : "url('/images/hero-abstract-1.png')",
+              // Quoted: a pasted cover URL containing `)` or a space would
+              // otherwise end the unquoted url() early and drop the backdrop.
+              backgroundImage: heroCoverUrl ? `url(${JSON.stringify(heroCoverUrl)})` : "url('/images/hero-abstract-1.png')",
               filter: 'blur(48px) saturate(1.3)',
               opacity: heroCoverUrl ? 0.55 : 0.3,
             }}
@@ -1061,7 +1063,12 @@ export default function LibraryPage() {
 
           <div className="relative z-10 flex items-end gap-5 md:gap-7 p-5 sm:p-7">
             {/* Square cover tile — like Spotify playlist header */}
-            <div className={`w-[100px] h-[100px] sm:w-[132px] sm:h-[132px] rounded-2xl overflow-hidden shrink-0 border border-white/[0.08] bg-white/[0.04] transition-all duration-500 ${isPlaying ? 'ring-2 ring-white/20' : ''}`}>
+            {/* `relative` is load-bearing: the cover is a next/image `fill`
+                (absolute, inset 0), which resolves against the nearest
+                positioned ancestor. Without it the cover escaped this tile,
+                ignored its overflow-hidden and blanketed the whole hero row,
+                title and buttons included. e2e/library-hero-cover.spec.ts. */}
+            <div data-testid="library-hero-cover" className={`relative w-[100px] h-[100px] sm:w-[132px] sm:h-[132px] rounded-2xl overflow-hidden shrink-0 border border-white/[0.08] bg-white/[0.04] transition-all duration-500 ${isPlaying ? 'ring-2 ring-white/20' : ''}`}>
               {/* The hero is the largest cover on the page, so it was the most
                   visible thing still falling back to a generic disc while every
                   card below it showed generated artwork. */}
@@ -1071,6 +1078,7 @@ export default function LibraryPage() {
                 tags={heroArtworkTags}
                 kind="track"
                 className="object-cover"
+                sizes="(min-width: 640px) 132px, 100px"
                 priority
               >
                 <Disc3 size={36} className={isPlaying ? 'animate-[spin_6s_linear_infinite]' : ''} strokeWidth={0.75} />
