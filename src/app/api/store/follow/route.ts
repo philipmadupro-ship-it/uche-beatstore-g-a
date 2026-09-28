@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createServiceClient } from '@/lib/auth/ownership';
+import { createServiceClient, requireUser } from '@/lib/auth/ownership';
+import { sessionBuyerEmail } from '@/lib/store/buyer-purchases';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { publicError } from '@/lib/api-error';
@@ -15,8 +16,15 @@ export const dynamic = 'force-dynamic';
  * Body: { producer_user_id, action: 'follow' | 'unfollow', email?, token? }
  *
  * Buyer identity (email) resolves from, in order:
- *   1. a magic-link `token` (HMAC, mig 060 buyer accounts)
- *   2. an explicit `email` in the body (anonymous follow with email capture)
+ *   1. the signed-in buyer's Supabase session (persistent account)
+ *   2. a magic-link `token` (HMAC, mig 060 buyer accounts)
+ *   3. an explicit `email` in the body (anonymous follow with email capture)
+ *
+ * The session comes first for the same reason it does in
+ * lib/buyer-session.ts: the 24h token outlives its expiry in localStorage, and
+ * a signed-in buyer whose follow depended on it was silently not persisted
+ * once it lapsed. That session is also the only identity a buyer who signed
+ * in without ever opening a delivery link has at all.
  *
  * Persists to producer_follows (mig 066) via the service-role client so
  * the producer can later notify followers when a new beat drops.
@@ -27,6 +35,13 @@ const bodySchema = z.object({
   email: z.string().email().optional(),
   token: z.string().optional(),
 });
+
+/** The canonical email behind the request's Supabase session, if any. */
+async function sessionEmail(): Promise<string | null> {
+  const auth = await requireUser();
+  if (!auth.ok) return null;
+  return sessionBuyerEmail(auth.admin, auth.userId);
+}
 
 function resolveEmail(body: z.infer<typeof bodySchema>): string | null {
   if (body.token) {
@@ -51,7 +66,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, persisted: false });
     }
 
-    const email = resolveEmail(parsed.data);
+    const email = (await sessionEmail()) ?? resolveEmail(parsed.data);
     if (!email) {
       // No identity — the client keeps its localStorage follow, but we
       // can't persist or notify. Tell the caller so it can prompt for email.

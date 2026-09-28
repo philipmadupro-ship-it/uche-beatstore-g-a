@@ -8789,3 +8789,13 @@ Traced every expiry that touches a buyer or a share recipient before changing an
 - **Follow-up emails claimed every link expired in 30 days.** `NudgeModal` re-sends an existing share without `expiresDays`, and `/api/email` fell back to `30`. So a never-expiring link, one with two days left and one already dead were all described as "Link expires in 30 days". The route now reads `expires_at` / `revoked_at` / `allow_downloads` from the share row. The lookup is owner-filtered on the service client after `requireProducer`. The template prints the absolute date (`shareExpiryText`, UTC). The route refuses with 409 to email a revoked or expired link and returns 404 for a token the producer does not own. The request's `expiresDays` is used only in local-store dev mode.
 
 Tests: `app/api/email/expiry.test.ts` (6, all fail on the old route), `lib/email/beat-send-template.test.ts`, and 2 new cases in `lib/buyer-session.test.ts`.
+
+### BUYER-06 follow-ups (same PR)
+
+These three were found during the trace and fixed after the user asked for them:
+
+- **Refunded or revoked purchases linked to a 403.** `lib/store/buyer-purchases.ts` now sets `access_revoked` using the rules the download routes enforce: `license_purchases.download_unlocked` and `isProjectAccessActive`. Revoked rows stay in the account history but have no `download_url`, and both account pages show "Access revoked".
+- **Nudging a project send built a `/share/` URL.** Project sends store a `project_shares` token. `lib/share/email-share.ts` resolves the token in either table, with ownership checked through `share_links.user_id` or through the project's `user_id`. It returns the right page (`/projects/share/<token>`), the email kind, the expiry and the downloads flag.
+- **Follow ignored the signed-in session.** `/api/store/follow` now resolves identity from the session first (canonical email via `sessionBuyerEmail`), then the legacy token, then a body email.
+
+Tests: 2 cases in `account-routes.test.ts`, 3 project-share cases in `app/api/email/expiry.test.ts`, and a new `app/api/store/follow/route.test.ts` (5). Each new behaviour fails on the previous code.
