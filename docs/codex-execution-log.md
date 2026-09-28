@@ -8790,6 +8790,14 @@ Follow-up, same PR: `/api/store/me` GET now filters the track join to listed-or-
 
 Second follow-up: bundle buyers — GET also counts `project_tracks` of every `project_access_links` project for this email as purchased (same set bundle delivery hands out), so an unlisted beat from a bought bundle no longer shows "Beat unavailable". Playlist order — remove renumbers the remaining rows to 0…n-1 (`compactPlaylistPositions`, only changed rows written) and add appends at max + 1 rather than the row count, which collided with an occupied slot whenever an older list already had a gap.
 
+## 2026-09-28 - Sections cards get Lyrics Studio and Send to studio
+
+The Library's Sections (browse) rows were the last track surface with no ⋯ menu. `MiniTrackCard` was a private function inside `app/(dashboard)/library/page.tsx`, so it could not be tested. It moved unchanged to `components/library/MiniTrackCard.tsx`. The only addition is an `ActionMenu` with **Lyrics Studio** (`L`) and **Send to studio** (`S`), wired from the page's existing `handleOpenLyrics` / `handleOpenStudio` through `HomeRow`.
+
+- The trigger sits at `z-10`, above the cover-sized play button. Its wrapper stops the click, so choosing an item neither plays the track nor opens the details drawer.
+- It is revealed on hover like the grid card, and also on `focus-within` and on `@media (hover: none)`. On a touch tablet there is no hover to reveal it. Phones never show Sections, which is forced to "All" below the mobile breakpoint.
+- Tests: `components/library/MiniTrackCard.test.tsx`.
+
 ## 2026-09-28 - Expiry semantics per flow: buyer account, legacy link, orders, project access, shares (BUYER-06)
 
 Traced every expiry that touches a buyer or a share recipient before changing any of them. Each lifetime was already set per flow. Two places reported or applied one flow's clock to another.
