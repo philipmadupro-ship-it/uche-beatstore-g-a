@@ -8777,3 +8777,11 @@ A guest checkout is stored under the lowercased email: the Stripe webhook normal
 When a signed-out visitor hit a protected page, `src/proxy.ts` set `next` to the pathname alone and left the original query on `/login`. So `/studio?track=<id>` became `/login?track=<id>&next=/studio`, and signing in opened an empty studio. Any other deep link with a query (library sort/filter) lost it the same way.
 
 `next` is now `pathname + search`, and the login URL keeps no other params. Nothing downstream needed changing. The password path does `window.location.assign(next)`, OAuth URL-encodes `next` into the callback, and both keep their existing same-origin-path check, which a path with a query still passes. Tests in `src/proxy.test.ts` cover this; two of them fail on the old code.
+
+## 2026-09-28 - Sections cards get Lyrics Studio and Send to studio
+
+The Library's Sections (browse) rows were the last track surface with no ⋯ menu. `MiniTrackCard` was a private function inside `app/(dashboard)/library/page.tsx`, so it could not be tested. It moved unchanged to `components/library/MiniTrackCard.tsx`. The only addition is an `ActionMenu` with **Lyrics Studio** (`L`) and **Send to studio** (`S`), wired from the page's existing `handleOpenLyrics` / `handleOpenStudio` through `HomeRow`.
+
+- The trigger sits at `z-10`, above the cover-sized play button. Its wrapper stops the click, so choosing an item neither plays the track nor opens the details drawer.
+- It is revealed on hover like the grid card, and also on `focus-within` and on `@media (hover: none)`. On a touch tablet there is no hover to reveal it. Phones never show Sections, which is forced to "All" below the mobile breakpoint.
+- Tests: `components/library/MiniTrackCard.test.tsx`.

@@ -20,7 +20,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_HOME_ROWS, type HomeRowConfig } from '@/lib/dashboard/home-config';
 import { getCached, setCached } from '@/lib/client-cache';
 import { usePlayer } from '@/hooks/usePlayer';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { DropZone } from '@/components/upload/DropZone';
 import { TrackCard } from '@/components/tracks/TrackCard';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
@@ -35,6 +34,7 @@ import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { listCached } from '@/lib/offline/audio-cache';
 import { TrackGridCard } from '@/components/tracks/TrackGridCard';
 import MusicPortfolio, { type PortfolioTrack } from '@/components/library/MusicPortfolio';
+import { MiniTrackCard } from '@/components/library/MiniTrackCard';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
@@ -1318,6 +1318,8 @@ export default function LibraryPage() {
                   isPlaying={isPlaying}
                   onPlayTrack={(t) => { setTrack(t); setQueue(row.tracks); }}
                   onOpenTrack={(t) => setSelectedTrack(t)}
+                  onOpenLyrics={handleOpenLyrics}
+                  onOpenStudio={handleOpenStudio}
                   onSeeAll={() => setBrowseMode('all')}
                 />
               ))}
@@ -1917,72 +1919,6 @@ export default function LibraryPage() {
   );
 }
 
-// ── MiniTrackCard — compact card for the sections/browse row ─────
-function MiniTrackCard({
-  track,
-  isCurrent,
-  isPlaying,
-  onPlay,
-  onOpen,
-}: {
-  track: Track;
-  isCurrent: boolean;
-  isPlaying: boolean;
-  onPlay: () => void;
-  onOpen: () => void;
-}) {
-  const reducedMotion = useReducedMotion();
-  // Genre first, then mood — the gradient leads on the first entry, so a
-  // Browse row of one genre comes out as one colour family.
-  const artworkTags = useMemo(() => {
-    const tags = (track as TrackWithInlineTags).track_tags ?? [];
-    return [
-      ...tags.filter((t) => t.category === 'genre').map((t) => t.tag),
-      ...tags.filter((t) => t.category === 'mood').map((t) => t.tag),
-    ];
-  }, [track]);
-  return (
-    <div
-      className="group relative shrink-0 w-[112px] sm:w-[132px] cursor-pointer"
-      onClick={onOpen}
-    >
-      {/* Cover art + overlays */}
-      <div className={`relative w-full aspect-square rounded-xl overflow-hidden bg-white/[0.04] border mb-2 transition-all ${isCurrent ? 'border-white/60 ring-1 ring-white/30' : 'border-white/10 group-hover:border-white/20'}`}>
-        <ArtworkFallback src={track.cover_url} seed={track.id} alt={track.title} kind="track" tags={artworkTags} className="object-cover">
-          <Music size={24} aria-hidden />
-        </ArtworkFallback>
-        {/* State badge */}
-        {track.status && track.status !== 'archived' && (
-          <span className={`absolute top-1.5 left-1.5 text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
-            track.status === 'maq'        ? 'bg-[#1f1a10] text-[#c8a47a] border-[#3d3020]/40' :
-            track.status === 'finished'   ? 'bg-[#0a1f0a] text-[#8ecf9f] border-[#1f3a1f]'   :
-            track.status === 'needs_work' ? 'bg-[#1f1a0a] text-white border-[#3a2f1f]'   : ''
-          }`}>
-            {track.status === 'maq' ? 'MAQ' : track.status === 'finished' ? '✓' : 'WIP'}
-          </span>
-        )}
-        {/* Play overlay */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onPlay(); }}
-          className={`absolute inset-0 flex items-center justify-center transition-all ${isPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
-          aria-label="Play"
-        >
-          <div className="w-10 h-10 rounded-full bg-black/60 backdrop-blur flex items-center justify-center">
-            {isPlaying
-              ? <div className="flex items-end gap-[2px] h-4">{[3,5,7,5,3].map((h,i)=><span key={i} className={`w-[3px] rounded-sm bg-white ${reducedMotion ? '' : 'animate-bounce'}`} style={{height:h,animationDelay:`${i*80}ms`}}/>)}</div>
-              : <PlayGlyph size={15} className="text-white ml-0.5" />}
-          </div>
-        </button>
-      </div>
-      {/* Meta */}
-      <p className={`text-[11px] font-medium truncate leading-tight ${isCurrent ? 'text-white' : 'text-white'}`}>{track.title}</p>
-      <p className="text-[9px] font-mono text-white/50 mt-0.5 truncate">
-        {[track.bpm && `${track.bpm}`, track.key && `${track.key}${track.scale === 'minor' ? 'm' : ''}`].filter(Boolean).join(' · ') || track.type || '—'}
-      </p>
-    </div>
-  );
-}
-
 // ── MiniPlaylistCard ─────────────────────────────────────────────
 function MiniPlaylistCard({ playlist }: { playlist: HomePlaylist }) {
   return (
@@ -2026,7 +1962,7 @@ function MiniProjectCard({ project }: { project: HomeProject }) {
 // ── HomeRow — one horizontal scrollable section ──────────────────
 function HomeRow({
   cfg, tracks, playlists, projects, recentHistory,
-  currentTrackId, isPlaying, onPlayTrack, onOpenTrack, onSeeAll,
+  currentTrackId, isPlaying, onPlayTrack, onOpenTrack, onOpenLyrics, onOpenStudio, onSeeAll,
 }: {
   cfg: HomeRowConfig;
   tracks: Track[];
@@ -2037,6 +1973,8 @@ function HomeRow({
   isPlaying: boolean;
   onPlayTrack: (t: Track) => void;
   onOpenTrack: (t: Track) => void;
+  onOpenLyrics: (t: Track) => void;
+  onOpenStudio: (t: Track) => void;
   onSeeAll: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -2079,12 +2017,14 @@ function HomeRow({
         {cfg.source === 'recent' && recentHistory?.map((t) => (
           <MiniTrackCard key={t.id} track={t} isCurrent={currentTrackId === t.id}
             isPlaying={isPlaying && currentTrackId === t.id}
-            onPlay={() => onPlayTrack(t)} onOpen={() => onOpenTrack(t)} />
+            onPlay={() => onPlayTrack(t)} onOpen={() => onOpenTrack(t)}
+            onOpenLyrics={onOpenLyrics} onOpenStudio={onOpenStudio} />
         ))}
         {cfg.source === 'tracks' && tracks.map((t) => (
           <MiniTrackCard key={t.id} track={t} isCurrent={currentTrackId === t.id}
             isPlaying={isPlaying && currentTrackId === t.id}
-            onPlay={() => onPlayTrack(t)} onOpen={() => onOpenTrack(t)} />
+            onPlay={() => onPlayTrack(t)} onOpen={() => onOpenTrack(t)}
+            onOpenLyrics={onOpenLyrics} onOpenStudio={onOpenStudio} />
         ))}
         {cfg.source === 'playlists' && playlists.map((pl) => <MiniPlaylistCard key={pl.id} playlist={pl} />)}
         {cfg.source === 'projects' && projects.map((pr) => <MiniProjectCard key={pr.id} project={pr} />)}
