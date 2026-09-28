@@ -8,7 +8,7 @@ import { requireProducer } from '@/lib/auth/ownership';
 import { createLogger } from '@/lib/log';
 const log = createLogger('api.email');
 import { buildBeatSendEmail, defaultSubject } from '@/lib/email/beat-send-template';
-import { shareLifecycleFailure, type ShareLifecycle } from '@/lib/share/token-access';
+import { resolveEmailShare } from '@/lib/share/email-share';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -37,43 +37,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid share token' }, { status: 400 });
     }
 
-    // The permissions row (expiry, downloads) describes THIS link, so it is
-    // read from the link's own row — never from the request. The follow-up
-    // nudge re-sends an existing share without either field, and the old
-    // `?? 30` fallback told every nudged recipient their link expired in 30
-    // days: a never-expiring link, one with two days left, one already dead.
+    // Which page the link opens and what its permissions row says both come
+    // from the link's own row (lib/share/email-share.ts), never the request.
+    // The follow-up nudge re-sends an existing token with neither: it used to
+    // print "Link expires in 30 days" for every link, and a /share/ URL even
+    // for project shares, which that page cannot open.
+    let sharePath = `/share/${shareToken}`;
+    let emailKind: 'tracks' | 'project' = 'tracks';
     let expiresAt: string | null = null;
     let linkAllowsDownloads = allowDownloads !== false;
     if (isSupabaseConfigured()) {
-      // Service role only after requireProducer, with the owner filter
-      // applied explicitly: a producer may only email their own links.
-      const { data: share, error: shareErr } = await producer.admin
-        .from('share_links')
-        .select('expires_at, revoked_at, allow_downloads')
-        .eq('token', String(shareToken))
-        .eq('user_id', producer.userId)
-        .maybeSingle();
-      if (shareErr) throw shareErr;
-      if (!share) {
-        return NextResponse.json({ error: 'Share link not found' }, { status: 404 });
-      }
-      const dead = shareLifecycleFailure(share as ShareLifecycle);
-      if (dead) {
-        // Emailing a link the recipient cannot open is worse than not sending.
-        return NextResponse.json({ error: `${dead.error} Create a new link to send.` }, { status: 409 });
-      }
-      expiresAt = (share as { expires_at?: string | null }).expires_at ?? null;
-      linkAllowsDownloads = (share as { allow_downloads?: boolean | null }).allow_downloads !== false;
+      const share = await resolveEmailShare(producer.admin, producer.userId, String(shareToken));
+      if (!share.ok) return NextResponse.json({ error: share.error }, { status: share.status });
+      sharePath = share.path;
+      emailKind = share.kind;
+      expiresAt = share.expiresAt;
+      linkAllowsDownloads = share.allowDownloads;
     } else if (typeof expiresDays === 'number' && expiresDays > 0) {
       // Local-store dev mode has no share row to read.
       expiresAt = new Date(Date.now() + expiresDays * 86400000).toISOString();
     }
 
-    const shareUrl = `${getAppUrl()}/share/${shareToken}`;
+    const shareUrl = `${getAppUrl()}${sharePath}`;
     const resolvedTitle = typeof packTitle === 'string' && packTitle.trim() ? packTitle.trim() : 'New music';
     const resolvedSubject = (typeof subject === 'string' && subject.trim())
       ? subject.trim().slice(0, 200)
-      : defaultSubject('U2C Beatstore', resolvedTitle);
+      : defaultSubject('U2C Beatstore', resolvedTitle, emailKind);
 
     const html = buildBeatSendEmail({
       recipientName: typeof recipientName === 'string' && recipientName.trim() ? recipientName : email.split('@')[0],
@@ -84,6 +73,7 @@ export async function POST(req: NextRequest) {
       message: typeof message === 'string' ? message : '',
       allowDownloads: linkAllowsDownloads,
       expiresAt,
+      kind: emailKind,
       tracks: Array.isArray(tracks) ? tracks : [],
     });
 

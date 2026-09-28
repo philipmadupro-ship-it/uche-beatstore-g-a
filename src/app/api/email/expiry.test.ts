@@ -8,25 +8,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mockSend = vi.fn();
-let shareRow: Record<string, unknown> | null = null;
-const shareFilters: Array<[string, unknown]> = [];
+type Row = Record<string, unknown>;
+const tables: Record<string, Row[]> = {};
+const reads: Array<{ table: string; filters: Array<[string, unknown]> }> = [];
+let shareRow: Row | null = null;
 
-function shareQuery() {
+/** PostgREST stand-in that really filters on `eq`. */
+function from(table: string) {
+  const filters: Array<[string, unknown]> = [];
+  reads.push({ table, filters });
   const q = {
     select: () => q,
-    eq: (col: string, val: unknown) => { shareFilters.push([col, val]); return q; },
+    eq: (col: string, val: unknown) => { filters.push([col, val]); return q; },
     maybeSingle: async () => {
-      // Mirror the owner filter: a row belonging to someone else is not found.
-      const owner = shareFilters.find(([c]) => c === 'user_id')?.[1];
-      if (!shareRow || shareRow.user_id !== owner) return { data: null, error: null };
-      return { data: shareRow, error: null };
+      const rows = table === 'share_links' && shareRow ? [shareRow] : (tables[table] ?? []);
+      return { data: rows.find((r) => filters.every(([c, v]) => r[c] === v)) ?? null, error: null };
     },
   };
   return q;
 }
 
 vi.mock('@/lib/auth/ownership', () => ({
-  requireProducer: async () => ({ ok: true, userId: 'producer-1', admin: { from: () => shareQuery() } }),
+  requireProducer: async () => ({ ok: true, userId: 'producer-1', admin: { from } }),
 }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => {
@@ -62,14 +65,17 @@ function sentHtml(): string {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  shareFilters.length = 0;
+  reads.length = 0;
+  shareRow = null;
+  tables.project_shares = [];
+  tables.projects = [];
   vi.stubEnv('RESEND_API_KEY', 're_test');
   mockSend.mockResolvedValue({ data: { id: 'resend-1' }, error: null });
 });
 
 describe('POST /api/email — link expiry comes from the share row', () => {
   it('a never-expiring link is described as having no expiry, not 30 days', async () => {
-    shareRow = { user_id: 'producer-1', expires_at: null, revoked_at: null, allow_downloads: true };
+    shareRow = { token: 'abcdef123', user_id: 'producer-1', expires_at: null, revoked_at: null, allow_downloads: true };
     const { POST } = await import('./route');
     const res = await POST(nudge());
 
@@ -79,7 +85,7 @@ describe('POST /api/email — link expiry comes from the share row', () => {
   });
 
   it('a long-lived link shows its real expiry date, beyond 30 days', async () => {
-    shareRow = { user_id: 'producer-1', expires_at: '2027-03-15T12:00:00.000Z', revoked_at: null, allow_downloads: true };
+    shareRow = { token: 'abcdef123', user_id: 'producer-1', expires_at: '2027-03-15T12:00:00.000Z', revoked_at: null, allow_downloads: true };
     const { POST } = await import('./route');
     const res = await POST(nudge());
 
@@ -88,7 +94,7 @@ describe('POST /api/email — link expiry comes from the share row', () => {
   });
 
   it('ignores a client-supplied day count that contradicts the row', async () => {
-    shareRow = { user_id: 'producer-1', expires_at: null, revoked_at: null, allow_downloads: false };
+    shareRow = { token: 'abcdef123', user_id: 'producer-1', expires_at: null, revoked_at: null, allow_downloads: false };
     const { POST } = await import('./route');
     await POST(nudge({ expiresDays: 7, allowDownloads: true }));
 
@@ -97,7 +103,7 @@ describe('POST /api/email — link expiry comes from the share row', () => {
   });
 
   it('refuses to email a link that has already expired', async () => {
-    shareRow = { user_id: 'producer-1', expires_at: '2020-01-01T00:00:00.000Z', revoked_at: null, allow_downloads: true };
+    shareRow = { token: 'abcdef123', user_id: 'producer-1', expires_at: '2020-01-01T00:00:00.000Z', revoked_at: null, allow_downloads: true };
     const { POST } = await import('./route');
     const res = await POST(nudge());
 
@@ -106,7 +112,7 @@ describe('POST /api/email — link expiry comes from the share row', () => {
   });
 
   it('refuses to email a revoked link', async () => {
-    shareRow = { user_id: 'producer-1', expires_at: null, revoked_at: '2026-01-01T00:00:00.000Z', allow_downloads: true };
+    shareRow = { token: 'abcdef123', user_id: 'producer-1', expires_at: null, revoked_at: '2026-01-01T00:00:00.000Z', allow_downloads: true };
     const { POST } = await import('./route');
     const res = await POST(nudge());
 
@@ -115,12 +121,50 @@ describe('POST /api/email — link expiry comes from the share row', () => {
   });
 
   it("will not email another owner's link (owner filter applied)", async () => {
-    shareRow = { user_id: 'someone-else', expires_at: null, revoked_at: null, allow_downloads: true };
+    shareRow = { token: 'abcdef123', user_id: 'someone-else', expires_at: null, revoked_at: null, allow_downloads: true };
     const { POST } = await import('./route');
     const res = await POST(nudge());
 
     expect(res.status).toBe(404);
-    expect(shareFilters).toContainEqual(['user_id', 'producer-1']);
+    const shareRead = reads.find((r) => r.table === 'share_links');
+    expect(shareRead?.filters).toContainEqual(['user_id', 'producer-1']);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/email — project share tokens', () => {
+  const PROJECT = '33333333-3333-4333-8333-333333333333';
+
+  it('a project share is emailed as its /projects/share/ link, not /share/', async () => {
+    tables.project_shares = [{ token: 'abcdef123', project_id: PROJECT, expires_at: null, revoked_at: null, allow_downloads: false }];
+    tables.projects = [{ id: PROJECT, user_id: 'producer-1' }];
+    const { POST } = await import('./route');
+    const res = await POST(nudge());
+
+    expect(res.status).toBe(200);
+    expect(sentHtml()).toContain('/projects/share/abcdef123');
+    expect(sentHtml()).not.toMatch(/(?<!\/projects)\/share\/abcdef123/);
+    expect(sentHtml()).toContain('No expiry');
+    expect(sentHtml()).toContain('Open project');
+  });
+
+  it("another producer's project share is not found", async () => {
+    tables.project_shares = [{ token: 'abcdef123', project_id: PROJECT, expires_at: null, revoked_at: null }];
+    tables.projects = [{ id: PROJECT, user_id: 'someone-else' }];
+    const { POST } = await import('./route');
+    const res = await POST(nudge());
+
+    expect(res.status).toBe(404);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('an expired project share is refused', async () => {
+    tables.project_shares = [{ token: 'abcdef123', project_id: PROJECT, expires_at: '2020-01-01T00:00:00Z', revoked_at: null }];
+    tables.projects = [{ id: PROJECT, user_id: 'producer-1' }];
+    const { POST } = await import('./route');
+    const res = await POST(nudge());
+
+    expect(res.status).toBe(409);
     expect(mockSend).not.toHaveBeenCalled();
   });
 });
