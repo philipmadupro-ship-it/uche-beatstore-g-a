@@ -8681,3 +8681,21 @@ flow rather than absolute so a parent without `relative` still contains it. The 
 image branches at 1440 / 820 / 390px (image box equals tile, `object-fit: cover`, centred, title not
 painted over). `/library` is auth-gated when Supabase env is set, so it skips in CI; run it against
 local-store dev with no Supabase env. `CoverImage.test.tsx` pins the plain-img classes in CI.
+
+## 2026-09-28 - Project and playlist covers: same containment rule
+
+The "Recently opened" chips on `/projects` and `/playlists` had the Library hero's bug: a
+`w-8 h-8 overflow-hidden` wrapper with no positioning, so the next/image `fill` cover escaped the
+32px chip and covered the whole page. Both are `relative` now. The grid cards (`MediaCard`), folder
+cards and the detail-page covers (`CoverEditor`) were already positioned; the detail covers still
+showed only the top of a portrait cover (or left half the box empty for a landscape one) when the
+cover skipped the optimizer, which the `CoverImage` fill fix above resolves.
+
+`e2e/collection-covers.spec.ts` covers the grid card, the chip and the detail cover for both kinds,
+square / portrait / landscape / missing, both image branches, at 1440 / 820 / 390px (84 tests).
+With the fixes reverted, 16 of the 28 desktop cases fail.
+
+The cover specs no longer skip in CI. `e2e/fixtures/stub-supabase.ts` listens on the stub URL the
+e2e job already configures (`127.0.0.1:54321`) and answers `/auth/v1/user` plus the
+`creator_profiles` producer check, and the specs set the matching `sb-127-auth-token` cookie, so the
+proxy lets the dashboard render. Data still comes from per-test `/api/*` stubs.
