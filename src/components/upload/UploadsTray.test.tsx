@@ -108,4 +108,23 @@ describe('UploadsTray', () => {
     renderTray(item({ fileName: 'Night Shift 140 Fm.wav', status: 'uploading' as UploadStatus, track: undefined }));
     expect(screen.queryByText(/from the filename/)).toBeNull();
   });
+
+  it('flags a filename it could not settle instead of claiming a value', () => {
+    renderTray(item({ fileName: 'beat 90 140 Am Fm.wav' }));
+    expect(screen.getByText(
+      'BPM 90 or 140? · key A minor or F minor? — not read from the filename; set it in the track details',
+    )).toBeTruthy();
+    expect(screen.queryByText(/ from the filename$/)).toBeNull();
+  });
+
+  it('shows what it read and what it could not, side by side', () => {
+    renderTray(item({ fileName: 'beat Gm 140 Fm.wav' }));
+    expect(screen.getByText('140 BPM from the filename')).toBeTruthy();
+    expect(screen.getByText(/^key G minor or F minor\?/)).toBeTruthy();
+  });
+
+  it('raises no doubt for a clear filename', () => {
+    renderTray(item({ fileName: 'Night Shift 140 Fm.wav' }));
+    expect(screen.queryByText(/set it in the track details/)).toBeNull();
+  });
 });
