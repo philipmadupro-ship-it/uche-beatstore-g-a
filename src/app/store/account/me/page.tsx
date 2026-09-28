@@ -22,7 +22,8 @@ import {
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from '@/hooks/useToast';
-import { setPersistentBuyerSession } from '@/lib/buyer-session';
+import { clearBuyerIdentity, setPersistentBuyerSession } from '@/lib/buyer-session';
+import { useWishlistStore } from '@/hooks/useWishlist';
 import { BuyerLibraryTile, buyerTrackTitles } from '@/components/store/BuyerLibraryTile';
 import { CoverImage } from '@/components/ui/CoverImage';
 import type { BuyerLibraryShape, BuyerLibraryPlaylist } from '@/lib/store/buyer-library';
@@ -85,7 +86,12 @@ export default function BuyerMePage() {
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    setPersistentBuyerSession(false);
+    // The account's hearts were merged into this browser's wishlist; leaving
+    // them would show the next person on this device someone else's saved
+    // beats, and push them into whichever account signs in next. They are
+    // safe in buyer_favorites and come back on the next sign-in.
+    clearBuyerIdentity();
+    useWishlistStore.getState().clear();
     router.push('/store');
   };
 

@@ -77,7 +77,8 @@ async function upsertLeadContact(
  *                                    one "buyer does a thing" surface:
  *
  *     { action: 'log_play',         track_id }
- *     { action: 'toggle_favorite',  track_id }
+ *     { action: 'set_favorite',     track_id, favorited }
+ *     { action: 'toggle_favorite',  track_id }   (legacy clients)
  *     { action: 'create_playlist',  name }
  *     { action: 'add_to_playlist',  playlist_id, track_id }
  *     { action: 'remove_from_playlist', playlist_id, track_id }
@@ -98,9 +99,12 @@ async function resolveEmail(req: NextRequest): Promise<{ email: string } | null>
   const token = searchParams.get('token');
   const sessionMode = searchParams.get('session') === '1';
 
+  // Every buyer_* row is keyed on the canonical email, whichever proof of
+  // identity the caller brings — a token and a session for the same person
+  // must land on the same rows.
   if (token) {
     const claims = await readClaims(token);
-    return claims ? { email: claims.email } : null;
+    return claims ? { email: normalizeEmail(claims.email) } : null;
   }
   if (sessionMode) {
     const result = await requireUser();
@@ -108,10 +112,32 @@ async function resolveEmail(req: NextRequest): Promise<{ email: string } | null>
     const admin = createServiceClient();
     const { data: authUser } = await admin.auth.admin.getUserById(result.userId);
     const email = authUser?.user?.email;
-    return email ? { email } : null;
+    return email ? { email: normalizeEmail(email) } : null;
   }
   return null;
 }
+
+/**
+ * A buyer can only put a track into their library that the storefront
+ * actually shows. Without this, any uuid was accepted, and GET then read
+ * that track's title, cover and key back out of `tracks` — an unlisted
+ * (private) beat's metadata for anyone who knew its id. Removing is never
+ * gated, so a beat delisted after it was saved can still be cleaned up.
+ */
+async function isStoreListedTrack(
+  admin: ReturnType<typeof createServiceClient>,
+  trackId: string,
+): Promise<boolean> {
+  const { data } = await admin
+    .from('tracks')
+    .select('id')
+    .eq('id', trackId)
+    .eq('store_listed', true)
+    .maybeSingle();
+  return Boolean(data);
+}
+
+const trackNotFound = () => NextResponse.json({ error: 'Track not found' }, { status: 404 });
 
 export async function GET(req: NextRequest) {
   try {
@@ -183,6 +209,7 @@ export async function GET(req: NextRequest) {
 
 const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('log_play'), track_id: z.string().uuid() }),
+  z.object({ action: z.literal('set_favorite'), track_id: z.string().uuid(), favorited: z.boolean() }),
   z.object({ action: z.literal('toggle_favorite'), track_id: z.string().uuid() }),
   z.object({ action: z.literal('create_playlist'), name: z.string().trim().min(1).max(80) }),
   z.object({ action: z.literal('add_to_playlist'), playlist_id: z.string().uuid(), track_id: z.string().uuid() }),
@@ -209,11 +236,35 @@ export async function POST(req: NextRequest) {
       case 'log_play': {
         // Append-only history. We do NOT dedupe — repeated plays are
         // signal, not noise. Trim handled at read time via LIMIT.
+        if (!(await isStoreListedTrack(admin, parsed.data.track_id))) return trackNotFound();
         const { error } = await admin
           .from('buyer_listening_history')
           .insert({ email, track_id: parsed.data.track_id });
         if (error) throw error;
         return NextResponse.json({ ok: true });
+      }
+      case 'set_favorite': {
+        // Idempotent: the client says what the heart now shows. A toggle
+        // flipped whatever the server held, so a device whose local hearts
+        // had not caught up (a second device, a cleared browser) turned
+        // "favorite this" into "unfavorite this" on the account.
+        const { track_id, favorited } = parsed.data;
+        if (!favorited) {
+          const { error } = await admin
+            .from('buyer_favorites')
+            .delete()
+            .eq('email', email)
+            .eq('track_id', track_id);
+          if (error) throw error;
+          return NextResponse.json({ ok: true, favorited: false });
+        }
+        if (!(await isStoreListedTrack(admin, track_id))) return trackNotFound();
+        const { error } = await admin
+          .from('buyer_favorites')
+          .upsert({ email, track_id }, { onConflict: 'email,track_id', ignoreDuplicates: true });
+        if (error) throw error;
+        await upsertLeadContact(admin, email, track_id);
+        return NextResponse.json({ ok: true, favorited: true });
       }
       case 'toggle_favorite': {
         const { data: existing } = await admin
@@ -231,6 +282,7 @@ export async function POST(req: NextRequest) {
           if (error) throw error;
           return NextResponse.json({ ok: true, favorited: false });
         }
+        if (!(await isStoreListedTrack(admin, parsed.data.track_id))) return trackNotFound();
         const { error } = await admin
           .from('buyer_favorites')
           .insert({ email, track_id: parsed.data.track_id });
@@ -259,6 +311,7 @@ export async function POST(req: NextRequest) {
           .eq('email', email)
           .maybeSingle();
         if (!own) return NextResponse.json({ error: 'Playlist not found' }, { status: 404 });
+        if (!(await isStoreListedTrack(admin, parsed.data.track_id))) return trackNotFound();
 
         // Position = current count
         const { data: tracksInList } = await admin

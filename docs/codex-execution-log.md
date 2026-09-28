@@ -8751,3 +8751,11 @@ both rects in one frame after the box stops moving, because a drawer that is sti
 
 Checked and left alone: `store/[id]/share` passes `src={null}`, so it never renders an image, and
 `PlayerBar`'s Now Playing backdrop sits in an `absolute inset-0` parent on purpose.
+
+## 2026-09-28 — BUYER-02: buyer favourites / history / playlists persist correctly
+
+Root cause (first incorrect layer: the client→API favourite contract). `useWishlist.toggle` mirrored a heart with `toggle_favorite`, which flips whatever row the server holds, and nothing ever read `buyer_favorites` back into the wishlist. On any device whose local wishlist had not seen a heart (second device, cleared browser, after sign-out/in) the beat showed empty; tapping it to save it deleted the account's favourite. Reproduced against the old route: an existing row + `toggle_favorite` → `{ favorited: false }` and a `buyer_favorites` delete.
+
+Also on the same path: `/store` grid/list plays were logged twice (`trackStoreEvent('preview_play')` already calls `logPlay`, and `handlePlay` called it again); a legacy delivery token outranked the signed-in session, so hearts/plays went to the token's email; writes accepted any track uuid, and GET then returned that track's title/cover/key — an unlisted beat's metadata for anyone with its id; session/token emails were not run through `normalizeEmail`.
+
+Fix: `set_favorite` (idempotent, explicit state) + `reconcileFavorites` merge on the next /store navigation per identity (guest hearts pushed up, never dropped); session outranks token; sign-out clears identity and the local wishlist; `store_listed` gate on every write that adds a track (removals are never gated); duplicate `logPlay` removed. No schema change. Tests: route (listing gate, set semantics, session email canonicalisation, GET scoping), buyer-session (precedence, set body, null-vs-empty favourites), wishlist account-sync regression, pure `favorites-sync`.
