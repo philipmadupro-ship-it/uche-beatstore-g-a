@@ -61,3 +61,33 @@ describe('proxy API producer gate', () => {
     expect((await run('/api/email')).status).toBe(200);
   });
 });
+
+describe('proxy login redirect', () => {
+  const loginTarget = (res: Response) => new URL(res.headers.get('location')!);
+
+  // The regression: `next` used to be the pathname only, so ?track= was left
+  // on /login as a stray param and signing in opened an empty studio.
+  it('keeps the query string of a deep link inside `next`', async () => {
+    const res = await run('/studio?track=abc-123');
+    expect(res.status).toBe(307);
+    const url = loginTarget(res);
+    expect(url.pathname).toBe('/login');
+    expect(url.searchParams.get('next')).toBe('/studio?track=abc-123');
+    // Nothing else leaks onto the login URL itself.
+    expect([...url.searchParams.keys()]).toEqual(['next']);
+  });
+
+  it('keeps several params and their encoding intact', async () => {
+    const res = await run('/library?q=a%26b&sort=bpm');
+    expect(loginTarget(res).searchParams.get('next')).toBe('/library?q=a%26b&sort=bpm');
+  });
+
+  it('sends a plain path unchanged', async () => {
+    const res = await run('/library/track-1');
+    expect(loginTarget(res).searchParams.get('next')).toBe('/library/track-1');
+  });
+
+  it('still never redirects a public share page', async () => {
+    expect((await run('/projects/share/tok?x=1')).status).toBe(200);
+  });
+});

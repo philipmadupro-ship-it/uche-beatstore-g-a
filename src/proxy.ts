@@ -123,9 +123,14 @@ export async function proxy(request: NextRequest) {
     !isPublicShare && protectedPaths.some((p) => path.startsWith(p));
 
   if (isProtectedPath && !user) {
+    // `next` carries the query too. With the path alone, a deep link like
+    // /studio?track=<id> left `track` behind as a stray param on /login and
+    // the producer landed in an empty studio after signing in. The original
+    // query is cleared from the login URL so it lives only inside `next`.
     const url = request.nextUrl.clone();
     url.pathname = '/login';
-    url.searchParams.set('next', path);
+    url.search = '';
+    url.searchParams.set('next', path + request.nextUrl.search);
     return NextResponse.redirect(url);
   }
 
