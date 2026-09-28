@@ -8697,3 +8697,9 @@ This follows LIB-01. `/studio?track=<id>` already preselected a track, and the d
 - `lib/library/studio-link.ts#studioHref` is now the one builder. The drawer and the track page use it instead of their hand-built template strings, and it encodes the id.
 - List, grid and portfolio menus gain **Send to studio** (`S`) right after Lyrics Studio. Like lyrics, it only shows when the caller passes `onOpenStudio`, and only the Library page does.
 - The list and grid row menus are now 248px wide (list was 224, grid 200). In Akira Expanded, 200px cut off "Send to studio", and 224px cut off "Delete from library" by 8px and "Remove from project" (project/playlist rows) by 19px. Measured in Chromium: nothing in any row menu is cut off at 1440px or 390px.
+
+## 2026-09-28 - Login redirect keeps a deep link's query
+
+When a signed-out visitor hit a protected page, `src/proxy.ts` set `next` to the pathname alone and left the original query on `/login`. So `/studio?track=<id>` became `/login?track=<id>&next=/studio`, and signing in opened an empty studio. Any other deep link with a query (library sort/filter) lost it the same way.
+
+`next` is now `pathname + search`, and the login URL keeps no other params. Nothing downstream needed changing. The password path does `window.location.assign(next)`, OAuth URL-encodes `next` into the callback, and both keep their existing same-origin-path check, which a path with a query still passes. Tests in `src/proxy.test.ts` cover this; two of them fail on the old code.
