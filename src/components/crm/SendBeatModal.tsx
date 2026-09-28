@@ -500,7 +500,9 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
     coverUrl: summary.cover,
     message: message.trim(),
     allowDownloads,
-    expiresDays,
+    // The share row is created at send time, so its expires_at will be
+    // now + N days — the same date the server reads back for the real email.
+    expiresAt: expiresDays > 0 ? new Date(Date.now() + expiresDays * 86400000).toISOString() : null,
     kind: mode,
     tracks: mode === 'tracks' ? selectedTracks.map((t) => ({ title: t.title, bpm: t.bpm, key: t.key, type: t.type })) : [],
   }), [previewRecipient, summary, message, mode, allowDownloads, expiresDays, selectedTracks]);

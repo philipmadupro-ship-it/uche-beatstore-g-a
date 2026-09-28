@@ -8771,3 +8771,21 @@ A guest checkout is stored under the lowercased email: the Stripe webhook normal
 - `/store/orders` needs no change. It is already a sign-in funnel into `/store/account/me`.
 
 `src/app/api/store/account/account-routes.test.ts` (9 tests) runs against a fake DB that really filters on `eq`. It covers casing, session and token returning identical payloads, cross-buyer isolation, 401 with no session and 400 on a bad token (both with no DB read), 500 on a query failure, and library reads keyed on the canonical email. 5 of the 9 fail with the source changes reverted.
+
+## 2026-09-28 - Expiry semantics per flow: buyer account, legacy link, orders, project access, shares (BUYER-06)
+
+Traced every expiry that touches a buyer or a share recipient before changing any of them. Each lifetime was already set per flow. Two places reported or applied one flow's clock to another.
+
+| Flow | Lifetime | Where | Changed? |
+|---|---|---|---|
+| Persistent buyer account (`/store/account/me`) | Supabase session, refreshed in `src/proxy.ts`; `@supabase/ssr` cookies keep their defaults | auth | client precedence fixed |
+| Legacy account link (`/store/account/[token]`) | 24h HMAC (`lib/buyer-tokens.ts`) | stateless | no |
+| Order lookup recovery (`/api/store/orders`) | same 24h token, bound to the email | stateless | no |
+| Project bundle access (`project_access_links.expires_at`) | NULL = permanent; set to now() only by refund/dispute (mig 117) | webhook | no |
+| Track-license delivery (`/store/download?session_id`) | permanent; R2 signed URL minted per click (1h) | `license_purchases.status` | no |
+| Share links (`share_links.expires_at`) | producer-chosen N days, or never (contract caps 365 / 3650) | producer | email copy fixed |
+
+- **Stale legacy token shadowed the persistent account.** `lib/buyer-session.ts#dispatch` sent the localStorage token whenever one existed and used the session only as a fallback. The 24h delivery link stores that token. A buyer who opened a link and later signed in still had it there, so the first favourite or play after it expired was sent with a dead token, rejected with 400, and dropped. The session now wins when the persistent marker is set, and a rejected session clears only its own marker.
+- **Follow-up emails claimed every link expired in 30 days.** `NudgeModal` re-sends an existing share without `expiresDays`, and `/api/email` fell back to `30`. So a never-expiring link, one with two days left and one already dead were all described as "Link expires in 30 days". The route now reads `expires_at` / `revoked_at` / `allow_downloads` from the share row. The lookup is owner-filtered on the service client after `requireProducer`. The template prints the absolute date (`shareExpiryText`, UTC). The route refuses with 409 to email a revoked or expired link and returns 404 for a token the producer does not own. The request's `expiresDays` is used only in local-store dev mode.
+
+Tests: `app/api/email/expiry.test.ts` (6, all fail on the old route), `lib/email/beat-send-template.test.ts`, and 2 new cases in `lib/buyer-session.test.ts`.

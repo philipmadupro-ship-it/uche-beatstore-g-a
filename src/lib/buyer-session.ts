@@ -12,6 +12,10 @@
  * The token expires after 24h (see lib/buyer-tokens.ts). When that
  * happens the API returns 400 'Invalid or expired link' and we clear
  * the stored token so the next visit goes back to anonymous mode.
+ *
+ * A signed-in buyer (/store/account/me sets the persistent marker) is
+ * identified by their Supabase session instead, which does not share the
+ * token's 24h lifetime. When both exist the session wins.
  */
 
 const KEY = 'antigravity-buyer-token';
@@ -75,8 +79,12 @@ interface BuyerActionResult {
  * no token or the API rejects.
  */
 async function dispatch(action: Record<string, unknown>): Promise<BuyerActionResult> {
-  const token = getBuyerToken();
-  const sessionMode = !token && hasPersistentBuyerSession();
+  // A persistent account outranks a legacy link. The 24h token stays in
+  // localStorage after the buyer later signs in, so letting it win meant the
+  // first action a day after the link expired was sent with the dead token,
+  // rejected and dropped — the account itself never expires on that clock.
+  const sessionMode = hasPersistentBuyerSession();
+  const token = sessionMode ? null : getBuyerToken();
   if (!token && !sessionMode) return { ok: false, error: 'No buyer session' };
   const query = token
     ? `token=${encodeURIComponent(token)}`
