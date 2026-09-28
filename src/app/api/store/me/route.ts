@@ -6,6 +6,7 @@ import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 import { normalizeEmail } from '@/lib/contacts/email';
+import { sessionBuyerEmail } from '@/lib/store/buyer-purchases';
 import {
   buildBuyerLibraryShape,
   collectBuyerLibraryTrackIds,
@@ -113,10 +114,10 @@ async function resolveEmail(req: NextRequest): Promise<{ email: string } | null>
   if (sessionMode) {
     const result = await requireUser();
     if (!result.ok) return null;
-    const admin = createServiceClient();
-    const { data: authUser } = await admin.auth.admin.getUserById(result.userId);
-    const email = authUser?.user?.email;
-    return email ? { email: normalizeEmail(email) } : null;
+    // Same canonical email the token path carries (tokens are signed over a
+    // lowercased email), so a session and a token share one library.
+    const email = await sessionBuyerEmail(createServiceClient(), result.userId);
+    return email ? { email } : null;
   }
   return null;
 }
