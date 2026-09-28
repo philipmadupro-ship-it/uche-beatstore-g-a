@@ -8751,3 +8751,13 @@ both rects in one frame after the box stops moving, because a drawer that is sti
 
 Checked and left alone: `store/[id]/share` passes `src={null}`, so it never renders an image, and
 `PlayerBar`'s Now Playing backdrop sits in an `absolute inset-0` parent on purpose.
+
+## 2026-09-28 - Order history and buyer account on one identity (BUYER-03)
+
+A guest checkout is stored under the lowercased email: the Stripe webhook normalises `buyer_email` once before writing `license_purchases` / `project_access_links`, and mig 110 repaired older rows. The 24h account link signs a lowercased email too. The persistent account did not follow that rule. `/api/store/account/me` and the `session=1` branch of `/api/store/me` read `auth.users.email` and used it as-is, so an account whose stored email had any capitals (an OAuth provider's casing, a user created by an admin) found none of its own orders and started a second favourites/history/playlist library beside the one the token link showed.
+
+- `lib/store/buyer-purchases.ts` is now the one place for both steps. `sessionBuyerEmail` returns the normalised session email, and `loadBuyerPurchases` normalises again and runs the purchase query. The token route and the session route were copy-pasted copies of that query; both now call the helper, so they cannot drift apart.
+- A failed purchase query now returns a 500 (generic `publicError`). Before, both routes ignored `.error`, so a DB failure showed a paying buyer "No purchases yet".
+- `/store/orders` needs no change. It is already a sign-in funnel into `/store/account/me`.
+
+`src/app/api/store/account/account-routes.test.ts` (9 tests) runs against a fake DB that really filters on `eq`. It covers casing, session and token returning identical payloads, cross-buyer isolation, 401 with no session and 400 on a bad token (both with no DB read), 500 on a query failure, and library reads keyed on the canonical email. 5 of the 9 fail with the source changes reverted.
