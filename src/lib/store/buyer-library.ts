@@ -126,14 +126,48 @@ export function visibleBuyerLibraryTracks(
     }));
 }
 
-/** Track ids across a buyer's `license_purchases.track_ids` arrays. */
-export function purchasedTrackIdSet(rows: Array<{ track_ids?: unknown }>): Set<string> {
+/**
+ * Every track id this buyer paid for: each `license_purchases.track_ids`
+ * array, plus the `project_tracks` rows of every bundle they bought.
+ */
+export function purchasedTrackIdSet(
+  licenseRows: Array<{ track_ids?: unknown }>,
+  bundleTrackRows: Array<{ track_id?: unknown }> = [],
+): Set<string> {
   const ids = new Set<string>();
-  for (const row of rows) {
+  for (const row of licenseRows) {
     if (!Array.isArray(row.track_ids)) continue;
     for (const id of row.track_ids) if (typeof id === 'string') ids.add(id);
   }
+  for (const row of bundleTrackRows) {
+    if (typeof row.track_id === 'string') ids.add(row.track_id);
+  }
   return ids;
+}
+
+/** Position for a track appended to a playlist: one past the highest in use. */
+export function nextPlaylistPosition(rows: Array<{ position?: number | null }>): number {
+  let max = -1;
+  for (const row of rows) {
+    if (typeof row.position === 'number' && row.position > max) max = row.position;
+  }
+  return max + 1;
+}
+
+/**
+ * The position updates that make a playlist's rows contiguous (0…n-1) in
+ * their current order. Only rows whose position actually changes are
+ * returned, so removing the last track writes nothing.
+ */
+export function compactPlaylistPositions(
+  rows: Array<{ track_id: string; position?: number | null }>,
+): Array<{ track_id: string; position: number }> {
+  const ordered = [...rows].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const moves: Array<{ track_id: string; position: number }> = [];
+  ordered.forEach((row, index) => {
+    if (row.position !== index) moves.push({ track_id: row.track_id, position: index });
+  });
+  return moves;
 }
 
 export interface BuyerPlaylistMembership {

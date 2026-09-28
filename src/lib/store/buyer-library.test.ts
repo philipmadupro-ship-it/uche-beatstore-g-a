@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildBuyerLibraryShape,
   buyerPlaylistMembership,
+  compactPlaylistPositions,
+  nextPlaylistPosition,
   collectBuyerLibraryTrackIds,
   playlistNameFromTrack,
   purchasedTrackIdSet,
@@ -98,5 +100,51 @@ describe('playlistNameFromTrack', () => {
     expect(playlistNameFromTrack('x'.repeat(120))).toHaveLength(80);
     expect(playlistNameFromTrack(null)).toBe('My playlist');
     expect(playlistNameFromTrack('   ')).toBe('My playlist');
+  });
+});
+
+describe('purchasedTrackIdSet with bundles', () => {
+  it('counts every track of a bought project bundle as purchased', () => {
+    expect([...purchasedTrackIdSet([{ track_ids: ['lic'] }], [{ track_id: 'b1' }, { track_id: 'b2' }, { track_id: null }])])
+      .toEqual(['lic', 'b1', 'b2']);
+  });
+});
+
+describe('nextPlaylistPosition', () => {
+  it('appends after the highest position, not at the row count', () => {
+    // rows 0 and 2 (a gap at 1): count would give 2 and collide
+    expect(nextPlaylistPosition([{ position: 0 }, { position: 2 }])).toBe(3);
+    expect(nextPlaylistPosition([])).toBe(0);
+    expect(nextPlaylistPosition([{ position: null }])).toBe(0);
+  });
+});
+
+describe('compactPlaylistPositions', () => {
+  it('closes the gap a removal leaves, keeping order', () => {
+    expect(compactPlaylistPositions([
+      { track_id: 'a', position: 0 },
+      { track_id: 'c', position: 2 },
+      { track_id: 'd', position: 3 },
+    ])).toEqual([
+      { track_id: 'c', position: 1 },
+      { track_id: 'd', position: 2 },
+    ]);
+  });
+
+  it('writes nothing when the list is already contiguous (removed the last track)', () => {
+    expect(compactPlaylistPositions([
+      { track_id: 'a', position: 0 },
+      { track_id: 'b', position: 1 },
+    ])).toEqual([]);
+  });
+
+  it('orders by position, not by the order rows arrive in', () => {
+    expect(compactPlaylistPositions([
+      { track_id: 'late', position: 5 },
+      { track_id: 'early', position: 1 },
+    ])).toEqual([
+      { track_id: 'early', position: 0 },
+      { track_id: 'late', position: 1 },
+    ]);
   });
 });

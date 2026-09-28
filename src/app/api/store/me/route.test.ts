@@ -132,6 +132,29 @@ describe('POST /api/store/me', () => {
     ]);
   });
 
+  it('appends after the highest position when the playlist has a gap', async () => {
+    singles.buyer_playlists = { id: PL };
+    singles.tracks = { id: TRACK };
+    lists.buyer_playlist_tracks = [{ track_id: 'a', position: 0 }, { track_id: 'c', position: 2 }];
+    const { POST } = await import('./route');
+    await POST(post({ action: 'add_to_playlist', playlist_id: PL, track_id: TRACK }));
+    const upsert = writes().find((w) => w.op === 'upsert')!;
+    expect(upsert.payload).toEqual({ playlist_id: PL, track_id: TRACK, position: 3 });
+  });
+
+  it('renumbers the remaining tracks after a removal', async () => {
+    singles.buyer_playlists = { id: PL };
+    // what is left after the delete: a gap at position 1
+    lists.buyer_playlist_tracks = [{ track_id: 'a', position: 0 }, { track_id: 'c', position: 2 }];
+    const { POST } = await import('./route');
+    const res = await POST(post({ action: 'remove_from_playlist', playlist_id: PL, track_id: TRACK }));
+    expect(res.status).toBe(200);
+    expect(writes().filter((w) => w.table === 'buyer_playlist_tracks')).toEqual([
+      { table: 'buyer_playlist_tracks', op: 'delete', payload: undefined, filters: [['playlist_id', PL], ['track_id', TRACK]] },
+      { table: 'buyer_playlist_tracks', op: 'update', payload: { position: 1 }, filters: [['playlist_id', PL], ['track_id', 'c']] },
+    ]);
+  });
+
   it('scopes delete_playlist by email', async () => {
     const { POST } = await import('./route');
     await POST(post({ action: 'delete_playlist', playlist_id: PL }));
@@ -259,5 +282,19 @@ describe('GET /api/store/me', () => {
     expect(JSON.stringify(body)).not.toContain('Unreleased demo');
     const purchases = ops.find((o) => o.table === 'license_purchases')!;
     expect(purchases.filters).toEqual([['buyer_email', 'buyer@example.test']]);
+  });
+
+  it('shows an unlisted beat the buyer got in a project bundle', async () => {
+    session.userId = 'buyer-user';
+    session.email = 'buyer@example.test';
+    lists.buyer_favorites = [{ track_id: 'bundled', created_at: '2026-01-01' }];
+    lists.tracks = [{ id: 'bundled', title: 'From the bundle', store_listed: false }];
+    lists.project_access_links = [{ project_id: 'proj-1' }];
+    lists.project_tracks = [{ track_id: 'bundled' }];
+    const { GET } = await import('./route');
+    const body = await (await GET(get('?session=1'))).json();
+    expect(body.favorites[0].track?.title).toBe('From the bundle');
+    const links = ops.find((o) => o.table === 'project_access_links')!;
+    expect(links.filters).toEqual([['buyer_email', 'buyer@example.test']]);
   });
 });
