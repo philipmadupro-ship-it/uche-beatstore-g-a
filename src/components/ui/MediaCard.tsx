@@ -84,6 +84,7 @@ export function MediaCard({
 
   const coverBlock = (
     <div
+      data-testid="media-card-cover"
       className={cn(
         'relative mb-2.5 aspect-square overflow-hidden rounded-xl border bg-white/[0.02] transition-all duration-200 group-hover:-translate-y-0.5',
         selected ? 'border-white/40' : 'border-white/10 group-hover:border-white/20',

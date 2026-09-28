@@ -214,7 +214,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
             style={{ background: 'radial-gradient(circle, #FFFFFF 0%, transparent 70%)' }}
           />
           <div className="relative z-10 flex items-start gap-4">
-            <div className="w-14 h-14 bg-white/[0.05] rounded-xl overflow-hidden shrink-0 border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
+            <div data-testid="share-content-cover" className="relative w-14 h-14 bg-white/[0.05] rounded-xl overflow-hidden shrink-0 border border-white/[0.08] shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
               <ArtworkFallback
                 src={coverUrl}
                 seed={contentId}

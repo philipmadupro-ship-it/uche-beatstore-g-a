@@ -182,7 +182,7 @@ export function PlayerBar({
             <button
               type="button"
               onClick={() => setCollapsedPersisted(false)}
-              className="size-9 overflow-hidden rounded-full border border-white/[0.08]"
+              className="relative size-9 overflow-hidden rounded-full border border-white/[0.08]"
               aria-label={`Expand player — ${currentTrack.title || 'Untitled'}`}
               title="Expand player"
             >

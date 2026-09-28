@@ -112,7 +112,7 @@ export function CartDrawer({ shareToken, sharePassword }: CartDrawerProps) {
                   className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/10 group"
                 >
                   {/* Cover */}
-                  <div className="w-11 h-11 rounded-lg overflow-hidden bg-white/[0.05] border border-white/20 shrink-0">
+                  <div data-testid="cart-item-cover" className="relative w-11 h-11 rounded-lg overflow-hidden bg-white/[0.05] border border-white/20 shrink-0">
                     <ArtworkFallback src={item.track.cover_url} seed={item.track.id} kind="track" sizes="48px" className="object-cover">
                       <Music size={14} aria-hidden="true" />
                     </ArtworkFallback>
