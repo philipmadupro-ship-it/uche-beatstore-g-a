@@ -8797,3 +8797,14 @@ The Library's Sections (browse) rows were the last track surface with no ⋯ men
 - The trigger sits at `z-10`, above the cover-sized play button. Its wrapper stops the click, so choosing an item neither plays the track nor opens the details drawer.
 - It is revealed on hover like the grid card, and also on `focus-within` and on `@media (hover: none)`. On a touch tablet there is no hover to reveal it. Phones never show Sections, which is forced to "All" below the mobile breakpoint.
 - Tests: `components/library/MiniTrackCard.test.tsx`.
+
+## 2026-09-28 - Filename parser never silently guesses (AUDIO-04)
+
+`parseTitleMetadata` stopped at the first match for BPM and key. `beat 90 140.wav` became 90 BPM, `beat Am Fm.wav` became A minor, `Cold 140bpm 70bpm.wav` became 140. Two-letter words were read as keys: `BB gun` became B♭, `AB test` A♭, `db mix` D♭. `A Major Problem` became A major. `mergeFeatures` treats the filename as the highest-precedence source, so each of these was written to `tracks` above Essentia and the server detector, and it was also cut out of the title.
+
+- The parser now collects every candidate before it applies anything. `fields.bpm` / `fields.key` hold `{ value, source: 'filename', confidence, status, candidates, reason }`. A field whose candidates disagree, or whose only reading could be a word, is `needs_confirmation`. Its top-level value stays null, so the detector's reading stands in all three upload paths (`/api/upload`, `/api/upload/complete`, `lib/upload/processing`) without touching them. Its text also stays in the title. Readings that agree still apply: `F minor Fm`, enharmonic `Gb`/`F#m`, `140 140`.
+- Confidence: a marked tempo or key is `high`, a bare tempo is `medium`, and an unconfirmed field is `low`.
+- The uploads tray shows a flag for an unconfirmed field, e.g. "BPM 90 or 140? — not read from the filename; set it in the track details" (`describeUncertainTitleMetadata`).
+- No schema, route, contract or RLS change. `mergeFeatures` is unchanged.
+
+Tests: `lib/upload/title-metadata.test.ts` (+20: clear / empty / conflicting / word-collision / context), `lib/audio/merge.test.ts` (new: an uncertain filename does not outrank the detector), `components/upload/UploadsTray.test.tsx` (+3). With the old parser, 23 of them fail.
