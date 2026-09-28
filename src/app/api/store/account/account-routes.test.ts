@@ -221,3 +221,34 @@ describe('GET /api/store/me?session=1 — buyer library', () => {
     }
   });
 });
+
+describe('revoked purchases stay listed but lose their download link', () => {
+  it('a refunded license and a revoked bundle carry access_revoked and no link, on both routes', async () => {
+    // What the webhook writes on charge.refunded / dispute: download_unlocked
+    // false on the license, expires_at = now() on the bundle (mig 117).
+    tables.license_purchases[0] = { ...tables.license_purchases[0], status: 'refunded', download_unlocked: false };
+    tables.project_access_links[0] = { ...tables.project_access_links[0], expires_at: '2026-09-23T00:00:00Z' };
+
+    sessionUser = { id: 'u1', email: 'buyer@example.test' };
+    const me = await (await import('./me/route')).GET();
+    const tok = await (await import('./[token]/route')).GET(tokenReq('good'), tokenCtx('good'));
+
+    for (const res of [me, tok]) {
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.track_licenses[0]).toMatchObject({ id: 'lp-mine', access_revoked: true, download_url: null });
+      expect(body.project_bundles[0]).toMatchObject({ id: 'pa-mine', access_revoked: true, download_url: null });
+    }
+  });
+
+  it('an active purchase keeps its link, however old, when the bundle has no expiry', async () => {
+    tables.license_purchases[0] = { ...tables.license_purchases[0], created_at: '2024-01-01T00:00:00Z', download_unlocked: true };
+    tables.project_access_links[0] = { ...tables.project_access_links[0], created_at: '2024-01-01T00:00:00Z', expires_at: null };
+
+    sessionUser = { id: 'u1', email: 'buyer@example.test' };
+    const body = await (await (await import('./me/route')).GET()).json();
+
+    expect(body.track_licenses[0]).toMatchObject({ access_revoked: false, download_url: '/store/download?session_id=cs_mine' });
+    expect(body.project_bundles[0]).toMatchObject({ access_revoked: false, download_url: '/store/projects/access/access-token-mine' });
+  });
+});

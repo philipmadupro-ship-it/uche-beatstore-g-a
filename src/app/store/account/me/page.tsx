@@ -36,6 +36,8 @@ interface TrackLicense {
   status: string | null;
   stripe_session_id: string | null;
   download_url: string | null;
+  /** Refunded, disputed or revoked: listed, but no downloads. */
+  access_revoked?: boolean;
 }
 
 interface ProjectBundle {
@@ -47,6 +49,8 @@ interface ProjectBundle {
   created_at: string;
   stripe_session_id: string | null;
   download_url: string | null;
+  /** Refunded, disputed or revoked: listed, but no downloads. */
+  access_revoked?: boolean;
 }
 
 interface AccountData {
@@ -220,6 +224,11 @@ export default function BuyerMePage() {
                           {fmtDate(b.created_at)} · {fmtMoney(b.amount_usd)}
                         </p>
                       </div>
+                      {b.access_revoked && (
+                        <span className="shrink-0 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
+                          Access revoked
+                        </span>
+                      )}
                       {b.download_url && (
                         <a
                           href={b.download_url}
@@ -256,6 +265,11 @@ export default function BuyerMePage() {
                             {r.status ? ` · ${r.status}` : ''}
                           </p>
                         </div>
+                        {r.access_revoked && (
+                          <span className="shrink-0 text-[10px] font-mono uppercase tracking-[0.2em] text-white/40">
+                            Access revoked
+                          </span>
+                        )}
                         {r.download_url && (
                           <a
                             href={r.download_url}
