@@ -8698,6 +8698,60 @@ This follows LIB-01. `/studio?track=<id>` already preselected a track, and the d
 - List, grid and portfolio menus gain **Send to studio** (`S`) right after Lyrics Studio. Like lyrics, it only shows when the caller passes `onOpenStudio`, and only the Library page does.
 - The list and grid row menus are now 248px wide (list was 224, grid 200). In Akira Expanded, 200px cut off "Send to studio", and 224px cut off "Delete from library" by 8px and "Remove from project" (project/playlist rows) by 19px. Measured in Chromium: nothing in any row menu is cut off at 1440px or 390px.
 
+## 2026-09-28 - Library hero cover escaped its tile
+
+The `/library` hero's cover tile had `overflow-hidden` but no positioning. Its cover is a next/image
+`fill` (absolute, inset 0), which resolves against the nearest positioned ancestor and is not clipped
+by a static parent's overflow, so any R2 or same-origin cover escaped the 100/132px tile and covered
+the whole hero row, title and buttons included. Every other `ArtworkFallback`/`CoverImage` caller
+already had a `relative` parent; this one did not. Fix: `relative` on the tile.
+
+Covers next/image can't optimise (pasted URLs on other hosts, blob:/data:) go through `CoverImage`'s
+plain `<img>`, which had no size, so `object-cover` had nothing to act on: a portrait cover showed
+its top-left corner, a landscape one left the tile half empty. It is now `block h-full w-full`, in
+flow rather than absolute so a parent without `relative` still contains it. The hero backdrop's
+`url()` is quoted, and the tile passes a real `sizes` hint.
+
+`e2e/library-hero-cover.spec.ts` checks square / portrait / landscape / missing covers on both
+image branches at 1440 / 820 / 390px (image box equals tile, `object-fit: cover`, centred, title not
+painted over). `/library` is auth-gated when Supabase env is set, so it skips in CI; run it against
+local-store dev with no Supabase env. `CoverImage.test.tsx` pins the plain-img classes in CI.
+
+## 2026-09-28 - Project and playlist covers: same containment rule
+
+The "Recently opened" chips on `/projects` and `/playlists` had the Library hero's bug: a
+`w-8 h-8 overflow-hidden` wrapper with no positioning, so the next/image `fill` cover escaped the
+32px chip and covered the whole page. Both are `relative` now. The grid cards (`MediaCard`), folder
+cards and the detail-page covers (`CoverEditor`) were already positioned; the detail covers still
+showed only the top of a portrait cover (or left half the box empty for a landscape one) when the
+cover skipped the optimizer, which the `CoverImage` fill fix above resolves.
+
+`e2e/collection-covers.spec.ts` covers the grid card, the chip and the detail cover for both kinds,
+square / portrait / landscape / missing, both image branches, at 1440 / 820 / 390px (84 tests).
+With the fixes reverted, 16 of the 28 desktop cases fail.
+
+The cover specs no longer skip in CI. `e2e/fixtures/stub-supabase.ts` listens on the stub URL the
+e2e job already configures (`127.0.0.1:54321`) and answers `/auth/v1/user` plus the
+`creator_profiles` producer check, and the specs set the matching `sb-127-auth-token` cookie, so the
+proxy lets the dashboard render. Data still comes from per-test `/api/*` stubs.
+
+## 2026-09-28 - Three more escaped covers: share cart, share modal, collapsed player
+
+Same missing-`relative` bug in three more cover boxes: the share-link cart drawer's line item
+(`components/share/CartDrawer`; the storefront's `components/store/CartDrawer` was already fine), the
+cover in `ContentShareModal`, and the collapsed player pill in `PlayerBar`. Each now has `relative`.
+Production evidence for the chip version of this bug: `/projects` rendered a huge blurred grey panel,
+which was a 32px cover image stretched across the page.
+
+`e2e/shared-covers.spec.ts` (63 tests) covers all three at 1440 / 820 / 390px. With `relative` removed,
+every next/image case fails; the plain-img cases still pass, because the in-flow `<img>` from the
+CoverImage fix cannot escape. The shared assertions moved to `e2e/fixtures/cover-assert.ts`. They take
+both rects in one frame after the box stops moving, because a drawer that is still sliding in moved
+~28px between two separate `boundingBox()` reads.
+
+Checked and left alone: `store/[id]/share` passes `src={null}`, so it never renders an image, and
+`PlayerBar`'s Now Playing backdrop sits in an `absolute inset-0` parent on purpose.
+
 ## 2026-09-28 - Profile saves no longer fail after picking a photo (PROFILE-01)
 
 Clicking the photo on `/profile` read the file with `FileReader.readAsDataURL` and put the `data:` URL into `hero_image_url`. `CreatorProfilePatchSchema` caps that column at 2000 characters, so `POST /api/profile` answered 400 `hero_image_url: Too big…` and nothing was written. That included the bio, prices and socials in the same save. A reload then showed the old values.
