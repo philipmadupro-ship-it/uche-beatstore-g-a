@@ -18,8 +18,9 @@
  * under test is layout only. Sign-in goes through e2e/fixtures/stub-supabase.ts
  * exactly as in the Library spec.
  */
-import { test, expect, type Locator, type Page } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 import { SHAPES, type Shape } from './fixtures/cover-png';
+import { expectCoverFills, expectFallbackFills, shoot } from './fixtures/cover-assert';
 import { startStubSupabase, signInCookie, stubSupabaseConfigured } from './fixtures/stub-supabase';
 
 // Sign in as the fixture producer where the app points at the stub Supabase
@@ -105,50 +106,6 @@ async function goto(page: Page, path: string) {
     new URL(page.url()).pathname.startsWith('/login'),
     'dashboard is auth-gated here; run against local-store dev with no Supabase env',
   );
-}
-
-/** The cover image fills `box` exactly, cropped to cover, centred. */
-async function expectCoverFills(box: Locator) {
-  await expect(box).toBeVisible();
-  const img = box.locator('img').first();
-  await expect(img).toBeVisible();
-  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
-
-  const b = (await box.boundingBox())!;
-  const i = (await img.boundingBox())!;
-  // 1–2px tolerance for borders.
-  expect(Math.abs(i.x - b.x)).toBeLessThanOrEqual(1.5);
-  expect(Math.abs(i.y - b.y)).toBeLessThanOrEqual(1.5);
-  expect(Math.abs(i.width - b.width)).toBeLessThanOrEqual(3);
-  expect(Math.abs(i.height - b.height)).toBeLessThanOrEqual(3);
-
-  const fit = await img.evaluate((el) => {
-    const s = getComputedStyle(el);
-    return { objectFit: s.objectFit, objectPosition: s.objectPosition };
-  });
-  expect(fit.objectFit).toBe('cover');
-  expect(fit.objectPosition).toBe('50% 50%');
-}
-
-/** A missing cover renders generated artwork that fills `box`, and no <img> of ours. */
-async function expectFallbackFills(box: Locator) {
-  await expect(box).toBeVisible();
-  await expect(box.locator('img[src^="/e2e-cover"], img[src^="data:"]')).toHaveCount(0);
-  const fallback = box.locator('[role="presentation"]').first();
-  await expect(fallback).toBeVisible();
-  const b = (await box.boundingBox())!;
-  const f = (await fallback.boundingBox())!;
-  expect(Math.abs(f.width - b.width)).toBeLessThanOrEqual(3);
-  expect(Math.abs(f.height - b.height)).toBeLessThanOrEqual(3);
-}
-
-async function shoot(page: Page, name: string, box: Locator) {
-  const b = (await box.boundingBox())!;
-  const vp = page.viewportSize()!;
-  await page.screenshot({
-    path: test.info().outputPath(`${name}.png`),
-    clip: { x: 0, y: Math.max(0, b.y - 24), width: vp.width, height: Math.min(vp.height, b.height + 48) },
-  });
 }
 
 const CASES: { shape: Shape | null; optimized: boolean; label: string }[] = [

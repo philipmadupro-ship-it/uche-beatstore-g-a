@@ -8699,3 +8699,20 @@ The cover specs no longer skip in CI. `e2e/fixtures/stub-supabase.ts` listens on
 e2e job already configures (`127.0.0.1:54321`) and answers `/auth/v1/user` plus the
 `creator_profiles` producer check, and the specs set the matching `sb-127-auth-token` cookie, so the
 proxy lets the dashboard render. Data still comes from per-test `/api/*` stubs.
+
+## 2026-09-28 - Three more escaped covers: share cart, share modal, collapsed player
+
+Same missing-`relative` bug in three more cover boxes: the share-link cart drawer's line item
+(`components/share/CartDrawer`; the storefront's `components/store/CartDrawer` was already fine), the
+cover in `ContentShareModal`, and the collapsed player pill in `PlayerBar`. Each now has `relative`.
+Production evidence for the chip version of this bug: `/projects` rendered a huge blurred grey panel,
+which was a 32px cover image stretched across the page.
+
+`e2e/shared-covers.spec.ts` (63 tests) covers all three at 1440 / 820 / 390px. With `relative` removed,
+every next/image case fails; the plain-img cases still pass, because the in-flow `<img>` from the
+CoverImage fix cannot escape. The shared assertions moved to `e2e/fixtures/cover-assert.ts`. They take
+both rects in one frame after the box stops moving, because a drawer that is still sliding in moved
+~28px between two separate `boundingBox()` reads.
+
+Checked and left alone: `store/[id]/share` passes `src={null}`, so it never renders an image, and
+`PlayerBar`'s Now Playing backdrop sits in an `absolute inset-0` parent on purpose.
