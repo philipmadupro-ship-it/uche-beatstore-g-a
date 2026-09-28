@@ -22,6 +22,8 @@ interface TrackGridCardProps {
   onShare?: (track: Track) => void;
   /** Exposes "Lyrics Studio" when provided — library only. */
   onOpenLyrics?: (track: Track) => void;
+  /** Exposes "Send to studio" when provided — library only. */
+  onOpenStudio?: (track: Track) => void;
   selectable?: boolean;
   selected?: boolean;
   onSelectChange?: (track: Track, selected: boolean) => void;
@@ -45,6 +47,7 @@ function TrackGridCardImpl({
   onDelete,
   onShare,
   onOpenLyrics,
+  onOpenStudio,
   selectable = false,
   selected = false,
   onSelectChange,
@@ -210,7 +213,7 @@ function TrackGridCardImpl({
           >
             <ActionMenu
               align="right"
-              width={200}
+              width={248}
               label="Track actions"
               triggerClassName="flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/70 backdrop-blur-sm transition-colors hover:bg-black/80 hover:text-white"
               sections={[
@@ -224,6 +227,10 @@ function TrackGridCardImpl({
                     {
                       id: 'lyrics', label: 'Lyrics Studio', shortcut: 'L', shortcutKey: 'l',
                       hidden: !onOpenLyrics, onSelect: () => onOpenLyrics?.(track),
+                    },
+                    {
+                      id: 'studio', label: 'Send to studio', shortcut: 'S', shortcutKey: 's',
+                      hidden: !onOpenStudio, onSelect: () => onOpenStudio?.(track),
                     },
                     { id: 'share', label: 'Share track', hidden: !onShare, onSelect: () => onShare?.(track) },
                   ],

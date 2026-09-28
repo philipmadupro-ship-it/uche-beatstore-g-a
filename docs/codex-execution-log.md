@@ -8689,3 +8689,11 @@ None of the Library ⋯ menus reached the lyrics editor. The only way in was the
 - The label is "Lyrics Studio", not "Open in Lyrics Studio". The longer label truncated in the 200–224px menus, since Akira Expanded is very wide.
 
 Tests: `lib/library/lyrics-link.test.ts`, `components/tracks/track-menu-lyrics.test.tsx`. Six of them fail against the old components.
+
+## 2026-09-28 - Library ⋯ menus also send a track to the studio
+
+This follows LIB-01. `/studio?track=<id>` already preselected a track, and the drawer's "Send to studio" and the track page's Studio button both linked to it. No ⋯ menu did.
+
+- `lib/library/studio-link.ts#studioHref` is now the one builder. The drawer and the track page use it instead of their hand-built template strings, and it encodes the id.
+- List, grid and portfolio menus gain **Send to studio** (`S`) right after Lyrics Studio. Like lyrics, it only shows when the caller passes `onOpenStudio`, and only the Library page does.
+- The list and grid row menus are now 248px wide (list was 224, grid 200). In Akira Expanded, 200px cut off "Send to studio", and 224px cut off "Delete from library" by 8px and "Remove from project" (project/playlist rows) by 19px. Measured in Chromium: nothing in any row menu is cut off at 1440px or 390px.
