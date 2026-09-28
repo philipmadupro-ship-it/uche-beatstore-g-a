@@ -8663,6 +8663,21 @@ tracks still 404'd on production. They have no preview clip, only a private mast
 logged "secret not set; skipping" on every run, so the time-sensitive crons have never run from
 GitHub either.
 
+## 2026-09-27 - Player: mute is its own flag, not a volume of zero (LIB-03)
+
+Mute was encoded as `volume === 0` in `usePlayer`, with the pre-mute level in a `useRef` inside
+`PlayerBar` that the keyboard `m` shortcut shared. Mute and volume were one value: muting wiped
+the level and dropped the slider to zero, and since only `volume` was persisted, a reload while
+muted lost the level and unmute came back at the 0.8 default.
+
+`usePlayer` now holds `muted` beside `volume` (both persisted, `toggleMute` / `setMuted`), and
+the rules are pure in `lib/audio/player-volume.ts`: muting keeps the level; raising the level
+while muted unmutes; unmuting a zero level restores the default; engines output
+`outputVolume({ volume, muted }, duck, norm)`. `SimpleAudioEngine`, `WavePlayer` (WaveSurfer and
+its `<audio>` fallback) and `VoiceTagPlayer` read it, so the voice tag is silenced by mute too.
+Persist version 1 migrates a v0 `volume: 0` to muted at 0.8. No playback field
+(`isPlaying`, `currentTrack`, `progress`) is read or written by any volume/mute action.
+
 ## 2026-09-28 - Library ⋯ menus open Lyrics Studio (LIB-01)
 
 None of the Library ⋯ menus reached the lyrics editor. The only way in was the details drawer's card, which links to `/library/[id]#lyrics`, and that landed at the top of the page. The track page fetches on the client and shows a spinner first, so `#lyrics` did not exist when the router looked for it.
@@ -8674,6 +8689,14 @@ None of the Library ⋯ menus reached the lyrics editor. The only way in was the
 - The label is "Lyrics Studio", not "Open in Lyrics Studio". The longer label truncated in the 200–224px menus, since Akira Expanded is very wide.
 
 Tests: `lib/library/lyrics-link.test.ts`, `components/tracks/track-menu-lyrics.test.tsx`. Six of them fail against the old components.
+
+## 2026-09-28 - Library ⋯ menus also send a track to the studio
+
+This follows LIB-01. `/studio?track=<id>` already preselected a track, and the drawer's "Send to studio" and the track page's Studio button both linked to it. No ⋯ menu did.
+
+- `lib/library/studio-link.ts#studioHref` is now the one builder. The drawer and the track page use it instead of their hand-built template strings, and it encodes the id.
+- List, grid and portfolio menus gain **Send to studio** (`S`) right after Lyrics Studio. Like lyrics, it only shows when the caller passes `onOpenStudio`, and only the Library page does.
+- The list and grid row menus are now 248px wide (list was 224, grid 200). In Akira Expanded, 200px cut off "Send to studio", and 224px cut off "Delete from library" by 8px and "Remove from project" (project/playlist rows) by 19px. Measured in Chromium: nothing in any row menu is cut off at 1440px or 390px.
 
 ## 2026-09-28 - Profile saves no longer fail after picking a photo (PROFILE-01)
 

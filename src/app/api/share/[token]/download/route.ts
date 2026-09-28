@@ -1,4 +1,3 @@
-import { projectShareOwnerId, shareGrantsTrack } from '@/lib/share/share-owner';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
@@ -6,23 +5,20 @@ import { errorMessage } from '@/lib/errors';
 import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
 import { streamAudioSource } from '@/lib/audio/stream-source';
-import bcrypt from 'bcryptjs';
+import {
+  lockableOf,
+  resolveShareToken,
+  resolvedShareIncludesTrack,
+  shareAccessFailure,
+  shareGateResponse,
+  shareLifecycleFailure,
+  shareNotFoundResponse,
+  sharePasswordFrom,
+} from '@/lib/share/token-access';
 
 const log = createLogger('api.share.download');
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-type DownloadShareRow = {
-  allow_downloads: boolean;
-  revoked_at: string | null;
-  expires_at: string | null;
-  content_type?: string | null;
-  project_id?: string | null;
-  playlist_id?: string | null;
-  track_id?: string | null;
-  track_ids?: string[] | null;
-  password_hash?: string | null;
-};
 
 /**
  * GET /api/share/[token]/download?track_id=<uuid>&session_id=<cs_xxx>
@@ -38,8 +34,8 @@ type DownloadShareRow = {
  * On grant we stream the file directly from this gated route. The raw storage
  * URL never appears in JSON, DOM, or redirect Location.
  *
- * Token resolution mirrors checkout: project_shares first, share_links
- * fallback. Both project and flat share variants hit this same endpoint.
+ * Token resolution and the revoked / expired / password gate come from
+ * `lib/share/token-access`, shared with every other public share route.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -57,77 +53,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
   try {
     const admin = createServiceClient();
 
-    // Resolve the share token. project_shares first, then share_links.
-    const { data: projShare } = await admin
-      .from('project_shares')
-      .select('allow_downloads, revoked_at, expires_at, password_hash, content_type, project_id, playlist_id, track_id')
-      .eq('token', token)
-      .maybeSingle();
+    const resolved = await resolveShareToken(admin, token, ['project_share', 'share_link', 'paid_access']);
+    if (!resolved) return shareNotFoundResponse();
 
-    let shareRow: DownloadShareRow | null = projShare ?? null;
-    let trackBelongsToShare = false;
-
-    if (shareRow) {
-      trackBelongsToShare = (await projectShareIncludesTrack(admin, shareRow, trackId))
-        && (await shareGrantsTrack(admin, await projectShareOwnerId(admin, shareRow), trackId));
-    }
-
-    if (!shareRow) {
-      const { data: linkShare } = await admin
-        .from('share_links')
-        .select('allow_downloads, revoked_at, expires_at, password_hash, track_ids, user_id')
-        .eq('token', token)
-        .maybeSingle();
-      shareRow = linkShare ?? null;
-      trackBelongsToShare = Array.isArray(linkShare?.track_ids) && linkShare.track_ids.includes(trackId)
-        && (await shareGrantsTrack(admin, linkShare?.user_id, trackId));
-    }
-
-    // Paid storefront project access (project_access_links token) — grant if track belongs to the purchased project
-    let isProjectPaidAccess = false;
-    if (!shareRow) {
-      const { data: paidAccess } = await admin
-        .from('project_access_links')
-        .select('project_id, expires_at')
-        .eq('token', token)
-        .maybeSingle();
-      if (paidAccess) {
-        shareRow = {
-          allow_downloads: true,
-          revoked_at: null,
-          expires_at: paidAccess.expires_at ?? null,
-        };
-        isProjectPaidAccess = true;
-        trackBelongsToShare = (await projectIncludesTrack(admin, paidAccess.project_id, trackId))
-          && (await shareGrantsTrack(admin, await projectShareOwnerId(admin, { project_id: paidAccess.project_id }), trackId));
-      }
-    }
-
-    if (!shareRow) {
-      return NextResponse.json({ error: 'Share not found' }, { status: 404 });
-    }
-    if (shareRow.revoked_at) {
-      return NextResponse.json({ error: 'Share revoked' }, { status: 410 });
-    }
-    if (shareRow.expires_at && new Date(shareRow.expires_at).getTime() < Date.now()) {
-      return NextResponse.json({ error: 'Share expired' }, { status: 410 });
-    }
-    if (!trackBelongsToShare) {
+    // Order is part of the contract: a dead link says so (410) before
+    // anything else, and membership (403) is decided before the password.
+    const lifecycle = shareLifecycleFailure(lockableOf(resolved));
+    if (lifecycle) return shareGateResponse(lifecycle);
+    if (!(await resolvedShareIncludesTrack(admin, resolved, trackId))) {
       return NextResponse.json({ error: 'Download not permitted for this track' }, { status: 403 });
     }
-    if (shareRow.password_hash) {
-      const submittedPassword = req.headers.get('x-share-password') ?? '';
-      if (!submittedPassword || !(await bcrypt.compare(submittedPassword, shareRow.password_hash))) {
-        return NextResponse.json({ error: 'Share password required' }, { status: 401 });
-      }
-    }
+    const locked = await shareAccessFailure(lockableOf(resolved), { password: sharePasswordFrom(req) });
+    if (locked) return shareGateResponse(locked);
 
-    // Free pass when the producer allowed downloads at the share level.
-    let granted = shareRow.allow_downloads === true;
-
-    if (isProjectPaidAccess) {
-      granted = true; // token itself proves the purchase for this project's tracks
-    }
+    // A purchase token proves the purchase for its project's tracks; any
+    // other share is a free pass only when the producer allowed downloads.
+    let granted = resolved.kind === 'paid_access' || resolved.row.allow_downloads === true;
 
     // Paid pass: a purchase row covering this share + session + track.
     // We require session_id so a random visitor can't probe another buyer's
@@ -174,42 +115,4 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     log.error('download gate failed', { token, trackId, error: errorMessage(err) });
     return publicError(err);
   }
-}
-
-async function projectShareIncludesTrack(
-  admin: ReturnType<typeof createServiceClient>,
-  share: DownloadShareRow,
-  trackId: string,
-): Promise<boolean> {
-  const contentType = share.content_type ?? 'project';
-  if (contentType === 'track') {
-    return share.track_id === trackId;
-  }
-  if (contentType === 'playlist' && share.playlist_id) {
-    const { data } = await admin
-      .from('playlist_tracks')
-      .select('track_id')
-      .eq('playlist_id', share.playlist_id)
-      .eq('track_id', trackId)
-      .maybeSingle();
-    return !!data;
-  }
-  if (share.project_id) {
-    return projectIncludesTrack(admin, share.project_id, trackId);
-  }
-  return false;
-}
-
-async function projectIncludesTrack(
-  admin: ReturnType<typeof createServiceClient>,
-  projectId: string,
-  trackId: string,
-): Promise<boolean> {
-  const { data } = await admin
-    .from('project_tracks')
-    .select('track_id')
-    .eq('project_id', projectId)
-    .eq('track_id', trackId)
-    .maybeSingle();
-  return !!data;
 }

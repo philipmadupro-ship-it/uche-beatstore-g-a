@@ -32,6 +32,7 @@ import { TrackListingEditor } from '@/components/tracks/TrackListingEditor';
 import { uploadAndAttachImage } from '@/lib/upload/image-upload-client';
 import { CoverEditor } from '@/components/ui/CoverEditor';
 import { LYRICS_ANCHOR, focusLyricsSection } from '@/lib/library/lyrics-link';
+import { studioHref } from '@/lib/library/studio-link';
 // `analyzeAudio` is dynamically imported inside `handleReanalyze` so the
 // audio-decode worker chain doesn't break client/SSR bundling.
 
@@ -479,7 +480,7 @@ export default function TrackDetailPage({ params: paramsPromise }: { params: Pro
                 Share
               </button>
               <button
-                onClick={() => router.push(`/studio?track=${track.id}`)}
+                onClick={() => router.push(studioHref(track.id))}
                 title="Open this track in the studio (loop / pitch / stems / record)"
                 className="inline-flex items-center justify-center gap-1.5 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 rounded-md text-[11px] sm:text-[11px] font-medium transition-colors bg-white/[0.04] border border-white/10 text-white hover:border-white/20 hover:bg-white/10"
               >

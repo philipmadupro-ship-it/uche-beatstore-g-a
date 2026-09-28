@@ -27,6 +27,7 @@ import { TrackCollaboratorStrip } from '@/components/tracks/TrackCollaboratorStr
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { useTags } from '@/hooks/useTags';
 import { lyricsStudioHref } from '@/lib/library/lyrics-link';
+import { studioHref } from '@/lib/library/studio-link';
 
 /** Track tag vocabulary — the shared taxonomy, in scanning order. */
 const TRACK_TAG_GROUPS: TagGroup[] = Object.entries(TAG_TAXONOMY).map(([category, options]) => ({
@@ -369,7 +370,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
       label: 'Send to studio',
       color: 'text-white',
       action: () => {
-        router.push(`/studio?track=${track.id}`);
+        router.push(studioHref(track.id));
         onClose();
       },
     },

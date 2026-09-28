@@ -9,6 +9,8 @@
  * checkout and its tests read one definition.
  */
 
+import { shareLifecycleFailure } from '@/lib/share/token-access';
+
 export interface ShareSaleState {
   sales_enabled?: boolean | null;
   revoked_at?: string | null;
@@ -19,12 +21,9 @@ export type ShareCheckoutBlock = { status: 403 | 410; error: string };
 
 /** Null when the share may sell; otherwise the response to send. */
 export function shareCheckoutBlock(share: ShareSaleState, now: number): ShareCheckoutBlock | null {
-  if (share.revoked_at) {
-    return { status: 410, error: 'This link has been revoked.' };
-  }
-  if (share.expires_at && new Date(share.expires_at).getTime() < now) {
-    return { status: 410, error: 'This link has expired.' };
-  }
+  // Revoked / expired: the same rule and wording as every public share route.
+  const lifecycle = shareLifecycleFailure(share, now);
+  if (lifecycle) return { status: 410, error: lifecycle.error };
   if (share.sales_enabled !== true) {
     return { status: 403, error: 'Purchases are not enabled on this link.' };
   }

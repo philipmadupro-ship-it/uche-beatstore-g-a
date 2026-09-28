@@ -140,3 +140,37 @@ describe('portfolio mode — MusicPortfolio ⋯ menu', () => {
     expect(screen.queryByRole('button', { name: /Actions for/ })).toBeNull();
   });
 });
+
+// "Send to studio" rides the same rails: library-only prop, one item per
+// menu, keyboard reachable. /studio?track=<id> was already a deep link (the
+// drawer and the track page use it) but no ⋯ menu reached it.
+describe('Send to studio', () => {
+  const STUDIO = 'Send to studio';
+
+  it('list: sits right after Lyrics Studio, fires with the row track, and answers S', () => {
+    const onOpenStudio = vi.fn();
+    wrap(<TrackCard track={track} index={1} onClickDetails={() => {}} onOpenLyrics={() => {}} onOpenStudio={onOpenStudio} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Track actions' }));
+    const labels = screen.getAllByRole('menuitem').map((el) => el.textContent ?? '');
+    const lyrics = labels.findIndex((l) => l.startsWith(LYRICS));
+    expect(labels[lyrics + 1]).toMatch(new RegExp(STUDIO));
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 's' });
+    expect(onOpenStudio).toHaveBeenCalledWith(track);
+  });
+
+  it('list: absent where the caller does not wire it', () => {
+    wrap(<TrackCard track={track} index={1} onClickDetails={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Track actions' }));
+    expect(screen.queryByRole('menuitem', { name: new RegExp(STUDIO) })).toBeNull();
+  });
+
+  it('grid: fires with the card track without opening the drawer', () => {
+    const onOpenStudio = vi.fn();
+    const onClickDetails = vi.fn();
+    wrap(<TrackGridCard track={track} onClickDetails={onClickDetails} onOpenStudio={onOpenStudio} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Track actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(STUDIO) }));
+    expect(onOpenStudio).toHaveBeenCalledWith(track);
+    expect(onClickDetails).not.toHaveBeenCalled();
+  });
+});

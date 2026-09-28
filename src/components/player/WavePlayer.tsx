@@ -31,6 +31,7 @@ import { PlayGlyph, PauseGlyph } from './TransportIcons';
 import { audioSrc, publicAudioSrc } from '@/lib/audio/url';
 import { cdnAudioSrc } from '@/lib/audio/cdn';
 import { normalizationGain } from '@/lib/audio/loudness';
+import { outputVolume } from '@/lib/audio/player-volume';
 import { getOfflineSrc } from '@/lib/offline/audio-cache';
 import { useRef } from 'react';
 import type { Track } from '@/lib/types';
@@ -76,7 +77,7 @@ export function WavePlayer({
 }: WavePlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { isPlaying, setPlaying, setProgress, volume, currentTrack, setTrack,
+  const { isPlaying, setPlaying, setProgress, volume, muted, currentTrack, setTrack,
           seekTarget, duckGain } = usePlayer();
 
   // A WavePlayer is the "active" audio source for the app only when its
@@ -137,7 +138,7 @@ export function WavePlayer({
     barWidth: 2,
     barGap: 1.6,
     barRadius: 3,
-    initialVolume: isActiveAudio ? volume : 0,
+    initialVolume: isActiveAudio ? outputVolume({ volume, muted }) : 0,
     // Don't auto-play in the hook — we drive play/pause manually below
     // so the active-audio guard fully controls when this instance sounds.
     autoPlay: false,
@@ -180,10 +181,10 @@ export function WavePlayer({
       setVolume(0);
       return;
     }
-    setVolume(volume * normGain * duckGain);
+    setVolume(outputVolume({ volume, muted }, duckGain, normGain));
     if (isPlaying) play();
     else pause();
-  }, [ready, isActiveAudio, isPlaying, volume, normGain, duckGain, play, pause, setVolume]);
+  }, [ready, isActiveAudio, isPlaying, volume, muted, normGain, duckGain, play, pause, setVolume]);
 
   // Consume seekTarget from the store — external components (store grid
   // waveform, share page) write a 0..1 fraction here to seek the active
@@ -213,10 +214,10 @@ export function WavePlayer({
     if (!fallbackActive) { a.pause(); return; }
     const want = cdnAudioSrc(url);
     if (want && a.getAttribute('src') !== want) { a.src = want; a.load(); }
-    a.volume = Math.max(0, Math.min(1, volume * normGain * duckGain));
+    a.volume = outputVolume({ volume, muted }, duckGain, normGain);
     if (isPlaying) a.play().catch(() => {});
     else a.pause();
-  }, [fallbackActive, isPlaying, volume, normGain, duckGain, url]);
+  }, [fallbackActive, isPlaying, volume, muted, normGain, duckGain, url]);
 
   // Seek the fallback element when a seekTarget arrives while it's active.
   useEffect(() => {

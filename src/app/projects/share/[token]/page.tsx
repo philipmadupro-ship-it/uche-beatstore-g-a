@@ -5,12 +5,14 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import Image from 'next/image';
 import {
-  Play, Pause, SkipBack, SkipForward, Download, Volume2, VolumeX,
+  Play, Pause, SkipBack, SkipForward, Download,
   Music, Lock, Loader2, Shield, MessageSquare, Send, Eye, Edit3,
   ChevronUp, ChevronDown, Check, X as XIcon, Pencil,
 } from 'lucide-react';
 import { publicAudioSrc } from '@/lib/audio/url';
 import { useWaveSurfer } from '@/hooks/useWaveSurfer';
+import { useVolumeState } from '@/hooks/useVolumeState';
+import { VolumeControl } from '@/components/player/VolumeControl';
 import { PlayerCanvas } from '@/components/player/PlayerCanvas';
 import { toast } from '@/hooks/useToast';
 import { ClientShareVariant } from '@/components/share/variants/ClientShareVariant';
@@ -197,8 +199,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   // currentTime / duration / ready come from useWaveSurfer below.
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(0.8);
-  const [muted, setMuted] = useState(false);
+  const { volume, muted, output: outputVol, silent, setVolume, toggleMute } = useVolumeState();
 
   const waveRef = useRef<HTMLDivElement>(null);
 
@@ -231,7 +232,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     url: (activeTrack && !useDawCanvas) ? publicAudioSrc(activeTrack.audio_url) : null,
     peaksUrl: activeTrack?.peaks_url ?? null,
     height: 56,
-    initialVolume: 0.8,
+    initialVolume: outputVol,
     onFinish: () => {
       // Auto-advance to next track when the current one ends.
       setActiveIndex((i) => (i < tracks.length - 1 ? (setIsPlaying(true), i + 1) : (setIsPlaying(false), i)));
@@ -376,8 +377,8 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   // Volume + mute sync.
   useEffect(() => {
     if (!ready) return;
-    wsSetVolume(muted ? 0 : volume);
-  }, [volume, muted, ready, wsSetVolume]);
+    wsSetVolume(outputVol);
+  }, [outputVol, ready, wsSetVolume]);
 
   // ── controls ────────────────────────────────────────────────────────
   const togglePlay = () => setIsPlaying((p) => !p);
@@ -941,17 +942,11 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
                   </div>
                   <span className="text-[10px] font-mono text-white/40 tabular-nums">{fmt(duration)}</span>
 
-                  <div className="flex items-center gap-2 pl-3 border-l border-white/10">
-                    <button onClick={() => setMuted((m) => !m)} className="text-white/40 hover:text-white" aria-label={muted ? 'Unmute' : 'Mute'}>
-                      {muted || volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                    </button>
-                    <input
-                      type="range" min="0" max="1" step="0.01" value={muted ? 0 : volume}
-                      onChange={(e) => { setMuted(false); setVolume(parseFloat(e.target.value)); }}
-                      aria-label="Volume"
-                      className="hidden sm:block w-20 cursor-pointer"
-                    />
-                  </div>
+                  <VolumeControl
+                    volume={volume} muted={muted} silent={silent}
+                    onVolumeChange={setVolume} onToggleMute={toggleMute}
+                    className="pl-3 border-l border-white/10"
+                  />
                 </>
               )}
 

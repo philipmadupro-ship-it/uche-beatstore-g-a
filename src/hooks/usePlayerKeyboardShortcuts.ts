@@ -11,8 +11,8 @@
  */
 
 import { useEffect } from 'react';
-import type { RefObject } from 'react';
 import type { Track } from '@/lib/types';
+import { VOLUME_STEP } from '@/lib/audio/player-volume';
 
 interface Options {
   currentTrack: Track | null;
@@ -23,12 +23,12 @@ interface Options {
   prev: () => void;
   seekTo: (fraction: number) => void;
   setVolume: (v: number) => void;
-  /** Stashes the pre-mute level so `m` can restore it. Shared with the mute button. */
-  prevVolumeRef: RefObject<number>;
+  /** Flips the store's mute flag — the same action as the mute button. */
+  toggleMute: () => void;
 }
 
 export function usePlayerKeyboardShortcuts({
-  currentTrack, progress, volume, togglePlay, next, prev, seekTo, setVolume, prevVolumeRef,
+  currentTrack, progress, volume, togglePlay, next, prev, seekTo, setVolume, toggleMute,
 }: Options) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -54,17 +54,15 @@ export function usePlayerKeyboardShortcuts({
           break;
         case 'ArrowRight': if (dur > 0) { e.preventDefault(); seekTo(Math.min(1, progress + 5 / dur)); } break;
         case 'ArrowLeft':  if (dur > 0) { e.preventDefault(); seekTo(Math.max(0, progress - 5 / dur)); } break;
-        case 'ArrowUp':   e.preventDefault(); setVolume(Math.min(1, volume + 0.1)); break;
-        case 'ArrowDown': e.preventDefault(); setVolume(Math.max(0, volume - 0.1)); break;
+        // Steps the kept level; ↑ while muted also unmutes (see applyVolume).
+        case 'ArrowUp':   e.preventDefault(); setVolume(Math.min(1, volume + VOLUME_STEP)); break;
+        case 'ArrowDown': e.preventDefault(); setVolume(Math.max(0, volume - VOLUME_STEP)); break;
         case 'n': case 'N': next(); break;
         case 'p': case 'P': prev(); break;
-        case 'm': case 'M':
-          if (volume > 0) { prevVolumeRef.current = volume; setVolume(0); }
-          else setVolume(prevVolumeRef.current || 0.8);
-          break;
+        case 'm': case 'M': toggleMute(); break;
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [currentTrack, progress, volume, togglePlay, next, prev, seekTo, setVolume, prevVolumeRef]);
+  }, [currentTrack, progress, volume, togglePlay, next, prev, seekTo, setVolume, toggleMute]);
 }

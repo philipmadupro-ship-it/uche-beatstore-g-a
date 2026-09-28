@@ -4,6 +4,7 @@ import { createHash } from 'crypto';
 import { errorMessage } from '@/lib/errors';
 import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
+import { isWellFormedShareToken, shareNotFoundResponse } from '@/lib/share/token-access';
 const log = createLogger('api.share.token.play');
 
 function hashIp(req: NextRequest): string {
@@ -20,6 +21,8 @@ function hashIp(req: NextRequest): string {
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+  // Anything that cannot be one of our tokens never reaches share_plays.
+  if (!isWellFormedShareToken(token)) return shareNotFoundResponse();
   try {
     const body = await req.json().catch(() => ({}));
     const track_id = typeof body.track_id === 'string' ? body.track_id : null;

@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
+import {
+  resolveShareToken,
+  shareAccessFailure,
+  shareGateResponse,
+  shareNotFoundResponse,
+  sharePasswordFrom,
+} from '@/lib/share/token-access';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
@@ -41,7 +47,7 @@ interface ProjectTrackPositionRow {
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const submittedPassword = req.headers.get('x-share-password') ?? '';
+  const submittedPassword = sharePasswordFrom(req);
 
   try {
     if (!isSupabaseConfigured()) {
@@ -56,23 +62,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     const ordered = trackIds;
 
     const admin = createServiceClient();
-    const { data: share, error: sErr } = await admin
-      .from('project_shares')
-      .select('*')
-      .eq('token', token)
-      .maybeSingle();
-    if (sErr) throw sErr;
-    if (!share) return NextResponse.json({ error: 'Link not found' }, { status: 404 });
-    const editorShare = share as ProjectShareEditorRow;
-    if (editorShare.revoked_at) return NextResponse.json({ error: 'Link revoked' }, { status: 410 });
-    if (editorShare.expires_at && new Date(editorShare.expires_at).getTime() < Date.now()) {
-      return NextResponse.json({ error: 'Link expired' }, { status: 410 });
-    }
-    if (editorShare.password_hash) {
-      if (!submittedPassword) return NextResponse.json({ requiresPassword: true }, { status: 401 });
-      const ok = await bcrypt.compare(submittedPassword, editorShare.password_hash);
-      if (!ok) return NextResponse.json({ requiresPassword: true, error: 'Bad password' }, { status: 401 });
-    }
+    const resolved = await resolveShareToken(admin, token, ['project_share']);
+    if (resolved?.kind !== 'project_share') return shareNotFoundResponse();
+    const editorShare = resolved.row as unknown as ProjectShareEditorRow;
+    const failure = await shareAccessFailure(editorShare, { password: submittedPassword });
+    if (failure) return shareGateResponse(failure);
     if (editorShare.role !== 'editor') {
       return NextResponse.json({ error: 'This link does not grant edit access.' }, { status: 403 });
     }
