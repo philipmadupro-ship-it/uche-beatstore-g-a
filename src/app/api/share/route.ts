@@ -3,7 +3,7 @@ import { getAppUrl } from '@/lib/env';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { isSupabaseConfigured, insert, getAll, createServiceClient } from '@/lib/db';
 import { requireProducer } from '@/lib/auth/ownership';
-import { nanoid } from 'nanoid';
+import { newShareToken } from '@/lib/share/token-access';
 import bcrypt from 'bcryptjs';
 import { errorMessage } from '@/lib/errors';
 
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid track_ids' }, { status: 400 });
     }
 
-    const token = nanoid(12);
+    const token = newShareToken();
     let password_hash: string | null = null;
     if (password) {
       password_hash = await bcrypt.hash(password, 10);

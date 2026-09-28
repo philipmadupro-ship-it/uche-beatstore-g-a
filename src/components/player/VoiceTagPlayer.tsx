@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePlayer } from '@/hooks/usePlayer';
+import { outputVolume } from '@/lib/audio/player-volume';
 import type { Track } from '@/lib/types';
 
 /**
@@ -27,6 +28,7 @@ export function VoiceTagPlayer() {
   const isPlaying = usePlayer((s) => s.isPlaying);
   const progress = usePlayer((s) => s.progress);
   const volume = usePlayer((s) => s.volume);
+  const muted = usePlayer((s) => s.muted);
   const setDuckGain = usePlayer((s) => s.setDuckGain);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -67,8 +69,9 @@ export function VoiceTagPlayer() {
 
   // Keep the tag at a sensible level relative to the player volume.
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = Math.min(1, volume * 0.9);
-  }, [volume]);
+    // Muted silences the tag too; it is part of what the listener hears.
+    if (audioRef.current) audioRef.current.volume = outputVolume({ volume, muted }, 0.9);
+  }, [volume, muted]);
 
   // Fire the tag at each interval bucket while a tagged track is playing.
   useEffect(() => {

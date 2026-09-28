@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
+import {
+  isWellFormedShareToken,
+  resolveShareToken,
+  shareAccessFailure,
+  shareGateResponse,
+  shareNotFoundResponse,
+  sharePasswordFrom,
+} from '@/lib/share/token-access';
 import { isSupabaseConfigured, getAll, query } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { signedSharePeaksUrl, signedSharePreviewUrl } from '@/lib/share-media-token';
@@ -156,12 +163,17 @@ function errorMessage(error: unknown) {
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const submittedPassword = req.headers.get('x-share-password') ?? '';
+  const submittedPassword = sharePasswordFrom(req);
 
   try {
     if (!isSupabaseConfigured()) {
-      const share = getAll<ProjectShareRow>('project_shares').find((s) => s.token === token);
-      if (!share) return NextResponse.json({ error: 'Link not found' }, { status: 404 });
+      const share = isWellFormedShareToken(token)
+        ? getAll<ProjectShareRow>('project_shares').find((s) => s.token === token)
+        : undefined;
+      if (!share) return shareNotFoundResponse();
+      // The local reader used to skip the gate entirely.
+      const localFailure = await shareAccessFailure(share, { password: submittedPassword });
+      if (localFailure) return shareGateResponse(localFailure);
       if (!share.project_id) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
       const tracks = resolveLocalTracks(share.project_id).map((track) => publicShareTrack(track, token));
       return NextResponse.json({
@@ -173,61 +185,38 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     }
 
     const admin = createServiceClient();
-    const { data: dbShare, error } = await admin
-      .from('project_shares')
-      .select('*')
-      .eq('token', token)
-      .maybeSingle();
-    if (error) throw error;
+    // A paid storefront purchase (migration 042) reads through the same page
+    // as a viewer share with downloads on.
+    const resolved = await resolveShareToken(admin, token, ['project_share', 'paid_access']);
 
-    let share = dbShare as ProjectShareRow | null;
-    if (!share) {
-      // Fallback for paid storefront project purchases (migration 042)
-      const { data: paidAccess } = await admin
-        .from('project_access_links')
-        .select('id, project_id, buyer_email, token, created_at, expires_at')
-        .eq('token', token)
-        .maybeSingle();
-      if (paidAccess) {
-        const access = paidAccess as ProjectAccessRow;
-        share = {
-          id: access.id,
-          project_id: access.project_id,
-          token: access.token,
-          role: 'viewer',
-          allow_downloads: true,
-          revoked_at: null,
-          // Carry the purchase's expiry through: a refund revokes by setting it.
-          expires_at: access.expires_at ?? null,
-          password_hash: null,
-          invited_email: access.buyer_email,
-          label: 'Storefront purchase',
-          plays: 0,
-          created_at: access.created_at,
-          recipient_kind: 'client',
-          sales_enabled: false,
-          content_type: 'project',
-        };
-      }
+    let share: ProjectShareRow | null = null;
+    if (resolved?.kind === 'project_share') {
+      share = resolved.row as unknown as ProjectShareRow;
+    } else if (resolved?.kind === 'paid_access') {
+      const access = resolved.row as unknown as ProjectAccessRow;
+      share = {
+        id: access.id,
+        project_id: access.project_id,
+        token: access.token,
+        role: 'viewer',
+        allow_downloads: true,
+        revoked_at: null,
+        // Carry the purchase's expiry through: a refund revokes by setting it.
+        expires_at: access.expires_at ?? null,
+        password_hash: null,
+        invited_email: access.buyer_email,
+        label: 'Storefront purchase',
+        plays: 0,
+        created_at: access.created_at,
+        recipient_kind: 'client',
+        sales_enabled: false,
+        content_type: 'project',
+      };
     }
-    if (!share) return NextResponse.json({ error: 'Link not found' }, { status: 404 });
+    if (!share) return shareNotFoundResponse();
 
-    if (share.revoked_at) {
-      return NextResponse.json({ error: 'This link has been revoked.' }, { status: 410 });
-    }
-    if (share.expires_at && new Date(share.expires_at).getTime() < Date.now()) {
-      return NextResponse.json({ error: 'This link has expired.' }, { status: 410 });
-    }
-
-    if (share.password_hash) {
-      if (!submittedPassword) {
-        return NextResponse.json({ requiresPassword: true }, { status: 401 });
-      }
-      const ok = await bcrypt.compare(submittedPassword, share.password_hash);
-      if (!ok) {
-        return NextResponse.json({ requiresPassword: true, error: 'Incorrect password' }, { status: 401 });
-      }
-    }
+    const failure = await shareAccessFailure(share, { password: submittedPassword });
+    if (failure) return shareGateResponse(failure);
 
     const CREATOR_FIELDS = 'display_name, bio, hero_image_url, credits, license_lease_price_usd, license_exclusive_price_usd, license_notes, instagram_handle, twitter_handle, spotify_url, soundcloud_url, website_url, contact_email';
     const TRACK_FIELDS = 'id, title, type, audio_url, preview_url, peaks_url, cover_url, duration_seconds, bpm, key, scale, lyrics, description, lease_price_usd, exclusive_price_usd';
@@ -238,7 +227,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     }
 
     // Fire-and-forget play counter (only for real project_shares rows, not paid access tokens)
-    if (dbShare && share.id === dbShare.id) {
+    if (resolved?.kind === 'project_share') {
       admin.from('project_shares').update({ plays: (share.plays ?? 0) + 1 }).eq('id', share.id).then(() => {});
     }
 
@@ -383,7 +372,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const submittedPassword = req.headers.get('x-share-password') ?? '';
 
   try {
     if (!isSupabaseConfigured()) {
@@ -391,22 +379,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     }
 
     const admin = createServiceClient();
-    const { data: share, error: sErr } = await admin
-      .from('project_shares')
-      .select('*')
-      .eq('token', token)
-      .maybeSingle();
-    if (sErr) throw sErr;
-    if (!share) return NextResponse.json({ error: 'Link not found' }, { status: 404 });
-    if (share.revoked_at) return NextResponse.json({ error: 'Link revoked' }, { status: 410 });
-    if (share.expires_at && new Date(share.expires_at).getTime() < Date.now()) {
-      return NextResponse.json({ error: 'Link expired' }, { status: 410 });
-    }
-    if (share.password_hash) {
-      if (!submittedPassword) return NextResponse.json({ requiresPassword: true }, { status: 401 });
-      const ok = await bcrypt.compare(submittedPassword, share.password_hash);
-      if (!ok) return NextResponse.json({ requiresPassword: true, error: 'Bad password' }, { status: 401 });
-    }
+    const resolved = await resolveShareToken(admin, token, ['project_share']);
+    if (resolved?.kind !== 'project_share') return shareNotFoundResponse();
+    const share = resolved.row as unknown as ProjectShareRow;
+    const failure = await shareAccessFailure(share, { password: sharePasswordFrom(req) });
+    if (failure) return shareGateResponse(failure);
     if (share.role !== 'editor') {
       return NextResponse.json(
         { error: 'This link does not grant edit access.' },
