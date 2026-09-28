@@ -8674,3 +8674,13 @@ None of the Library ⋯ menus reached the lyrics editor. The only way in was the
 - The label is "Lyrics Studio", not "Open in Lyrics Studio". The longer label truncated in the 200–224px menus, since Akira Expanded is very wide.
 
 Tests: `lib/library/lyrics-link.test.ts`, `components/tracks/track-menu-lyrics.test.tsx`. Six of them fail against the old components.
+
+## 2026-09-28 - Profile saves no longer fail after picking a photo (PROFILE-01)
+
+Clicking the photo on `/profile` read the file with `FileReader.readAsDataURL` and put the `data:` URL into `hero_image_url`. `CreatorProfilePatchSchema` caps that column at 2000 characters, so `POST /api/profile` answered 400 `hero_image_url: Too big…` and nothing was written. That included the bio, prices and socials in the same save. A reload then showed the old values.
+
+- The photo now goes through the existing `/api/upload/image` path (`uploadImageFile`), and only its URL goes into the form. Replacing an unsaved upload discards the previous object. Save is disabled while an upload is in flight. The tile is now a real `<button>`, so it is keyboard-reachable.
+- `lib/profile/save-body.ts` builds the request body. It also refuses to send inline image data, such as a pasted `data:` URL, with a message saying to upload instead. The server would otherwise reject the entire profile over that one field.
+- The contract, route, write path and RLS are unchanged. Ownership still comes from the session in `updateCreatorProfile`, never from the body.
+
+Tests: `lib/profile/save-body.test.ts`, `app/api/profile/route.test.ts`.
