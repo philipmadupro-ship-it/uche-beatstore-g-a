@@ -14,6 +14,8 @@
  * the stored token so the next visit goes back to anonymous mode.
  */
 
+import type { BuyerLibraryShape } from '@/lib/store/buyer-library';
+
 const KEY = 'antigravity-buyer-token';
 const SESSION_MODE_KEY = 'antigravity-buyer-session-mode';
 
@@ -74,22 +76,40 @@ interface BuyerActionResult {
  * connection never breaks playback. Returns { ok: false } when there's
  * no token or the API rejects.
  */
-async function dispatch(action: Record<string, unknown>): Promise<BuyerActionResult> {
+/**
+ * Which identity /api/store/me should key this device's writes on.
+ *
+ * The signed-in account wins over a legacy delivery token. A token is
+ * whatever email the last delivery link was for; the session is who is
+ * actually signed in. Preferring the token meant a buyer who opened an
+ * order link for one address and then signed in as another kept writing
+ * hearts and plays into the first address's library.
+ */
+export function buyerIdentityQuery(): { query: string; mode: 'session' | 'token' } | null {
+  if (hasPersistentBuyerSession()) return { query: 'session=1', mode: 'session' };
   const token = getBuyerToken();
-  const sessionMode = !token && hasPersistentBuyerSession();
-  if (!token && !sessionMode) return { ok: false, error: 'No buyer session' };
-  const query = token
-    ? `token=${encodeURIComponent(token)}`
-    : 'session=1';
+  if (token) return { query: `token=${encodeURIComponent(token)}`, mode: 'token' };
+  return null;
+}
+
+/** Sign-out: forget every buyer identity this device holds. */
+export function clearBuyerIdentity(): void {
+  clearBuyerToken();
+  setPersistentBuyerSession(false);
+}
+
+async function dispatch(action: Record<string, unknown>): Promise<BuyerActionResult> {
+  const identity = buyerIdentityQuery();
+  if (!identity) return { ok: false, error: 'No buyer session' };
   try {
-    const res = await fetch(`/api/store/me?${query}`, {
+    const res = await fetch(`/api/store/me?${identity.query}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(action),
     });
     if (res.status === 400) {
       // Token expired or invalid → wipe so future calls are no-ops.
-      if (token) clearBuyerToken();
+      if (identity.mode === 'token') clearBuyerToken();
       else setPersistentBuyerSession(false);
       return { ok: false, error: 'Token expired' };
     }
@@ -102,7 +122,9 @@ async function dispatch(action: Record<string, unknown>): Promise<BuyerActionRes
 }
 
 export const logPlay = (track_id: string) => dispatch({ action: 'log_play', track_id });
-export const toggleFavorite = (track_id: string) => dispatch({ action: 'toggle_favorite', track_id });
+/** Idempotent: sends the state the heart now shows, never a flip. */
+export const setFavorite = (track_id: string, favorited: boolean) =>
+  dispatch({ action: 'set_favorite', track_id, favorited });
 export const createPlaylist = (name: string) => dispatch({ action: 'create_playlist', name });
 export const addToPlaylist = (playlist_id: string, track_id: string) =>
   dispatch({ action: 'add_to_playlist', playlist_id, track_id });
@@ -110,3 +132,40 @@ export const removeFromPlaylist = (playlist_id: string, track_id: string) =>
   dispatch({ action: 'remove_from_playlist', playlist_id, track_id });
 export const deletePlaylist = (playlist_id: string) =>
   dispatch({ action: 'delete_playlist', playlist_id });
+
+/**
+ * The buyer's whole library (history, favourites, playlists) for whichever
+ * identity this device holds, or null when there is none or the read
+ * failed. Null means "unknown", never "empty".
+ */
+export async function fetchBuyerLibrary(): Promise<BuyerLibraryShape | null> {
+  const identity = buyerIdentityQuery();
+  if (!identity) return null;
+  try {
+    const res = await fetch(`/api/store/me?${identity.query}`);
+    if (res.status === 400) {
+      if (identity.mode === 'token') clearBuyerToken();
+      else setPersistentBuyerSession(false);
+      return null;
+    }
+    if (!res.ok) return null;
+    const data = (await res.json()) as Partial<BuyerLibraryShape>;
+    if (!Array.isArray(data.favorites) || !Array.isArray(data.playlists)) return null;
+    return data as BuyerLibraryShape;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The account's favourite track ids, or null when there is no buyer
+ * identity on this device or the read failed. Null means "unknown", never
+ * "none" — callers must not treat it as an empty account.
+ */
+export async function fetchBuyerFavoriteIds(): Promise<string[] | null> {
+  const library = await fetchBuyerLibrary();
+  if (!library) return null;
+  return library.favorites
+    .map((f) => f.track_id)
+    .filter((id): id is string => typeof id === 'string');
+}

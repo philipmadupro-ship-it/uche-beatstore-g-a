@@ -96,3 +96,111 @@ export function collectBuyerLibraryTrackIds(input: {
     ].filter(Boolean)),
   ];
 }
+
+/**
+ * Which tracks' metadata a buyer's library may show.
+ *
+ * GET joins every track id in the buyer's rows against `tracks`. Rows written
+ * before `/api/store/me` checked `store_listed` can name any track, so the
+ * join is filtered too: a beat shows if the storefront lists it, or if this
+ * buyer paid for it (an exclusive delists the beat, and the buyer who bought
+ * it should not see it turn into "Beat unavailable" in their own library).
+ * Everything else renders as unavailable — the row survives, the metadata
+ * does not.
+ */
+export function visibleBuyerLibraryTracks(
+  tracks: Array<BuyerLibraryTrackSummary & { store_listed?: boolean | null }>,
+  purchasedTrackIds: ReadonlySet<string>,
+): BuyerLibraryTrackSummary[] {
+  return tracks
+    .filter((t) => t.store_listed === true || purchasedTrackIds.has(t.id))
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      cover_url: t.cover_url,
+      type: t.type,
+      bpm: t.bpm,
+      key: t.key,
+      scale: t.scale,
+      duration_seconds: t.duration_seconds,
+    }));
+}
+
+/**
+ * Every track id this buyer paid for: each `license_purchases.track_ids`
+ * array, plus the `project_tracks` rows of every bundle they bought.
+ */
+export function purchasedTrackIdSet(
+  licenseRows: Array<{ track_ids?: unknown }>,
+  bundleTrackRows: Array<{ track_id?: unknown }> = [],
+): Set<string> {
+  const ids = new Set<string>();
+  for (const row of licenseRows) {
+    if (!Array.isArray(row.track_ids)) continue;
+    for (const id of row.track_ids) if (typeof id === 'string') ids.add(id);
+  }
+  for (const row of bundleTrackRows) {
+    if (typeof row.track_id === 'string') ids.add(row.track_id);
+  }
+  return ids;
+}
+
+/** Position for a track appended to a playlist: one past the highest in use. */
+export function nextPlaylistPosition(rows: Array<{ position?: number | null }>): number {
+  let max = -1;
+  for (const row of rows) {
+    if (typeof row.position === 'number' && row.position > max) max = row.position;
+  }
+  return max + 1;
+}
+
+/**
+ * The position updates that make a playlist's rows contiguous (0…n-1) in
+ * their current order. Only rows whose position actually changes are
+ * returned, so removing the last track writes nothing.
+ */
+export function compactPlaylistPositions(
+  rows: Array<{ track_id: string; position?: number | null }>,
+): Array<{ track_id: string; position: number }> {
+  const ordered = [...rows].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+  const moves: Array<{ track_id: string; position: number }> = [];
+  ordered.forEach((row, index) => {
+    if (row.position !== index) moves.push({ track_id: row.track_id, position: index });
+  });
+  return moves;
+}
+
+export interface BuyerPlaylistMembership {
+  id: string;
+  name: string;
+  /** True when the track is already in this playlist — selecting removes it. */
+  contains: boolean;
+  count: number;
+}
+
+/**
+ * The rows of the storefront's "Add to playlist" menu: every playlist the
+ * buyer owns, most recently updated first (the order GET returns), marked
+ * with whether this track is already in it.
+ */
+export function buyerPlaylistMembership(
+  playlists: Array<Pick<BuyerLibraryPlaylist, 'id' | 'name' | 'track_ids'>>,
+  trackId: string,
+): BuyerPlaylistMembership[] {
+  return playlists.map((p) => ({
+    id: p.id,
+    name: p.name,
+    contains: p.track_ids.includes(trackId),
+    count: p.track_ids.length,
+  }));
+}
+
+/**
+ * Name for a playlist created from a beat's menu. The storefront has no
+ * text field to ask for one, so it is named after the beat, trimmed to the
+ * 80-character limit `buyer_playlists.name` enforces.
+ */
+export function playlistNameFromTrack(title: string | null | undefined): string {
+  const base = title?.trim() || 'My playlist';
+  return base.slice(0, 80);
+}

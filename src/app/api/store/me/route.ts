@@ -10,6 +10,10 @@ import { sessionBuyerEmail } from '@/lib/store/buyer-purchases';
 import {
   buildBuyerLibraryShape,
   collectBuyerLibraryTrackIds,
+  compactPlaylistPositions,
+  nextPlaylistPosition,
+  purchasedTrackIdSet,
+  visibleBuyerLibraryTracks,
   type BuyerLibraryFavoriteRow,
   type BuyerLibraryHistoryRow,
   type BuyerLibraryTrackJoinRow,
@@ -78,7 +82,8 @@ async function upsertLeadContact(
  *                                    one "buyer does a thing" surface:
  *
  *     { action: 'log_play',         track_id }
- *     { action: 'toggle_favorite',  track_id }
+ *     { action: 'set_favorite',     track_id, favorited }
+ *     { action: 'toggle_favorite',  track_id }   (legacy clients)
  *     { action: 'create_playlist',  name }
  *     { action: 'add_to_playlist',  playlist_id, track_id }
  *     { action: 'remove_from_playlist', playlist_id, track_id }
@@ -99,9 +104,12 @@ async function resolveEmail(req: NextRequest): Promise<{ email: string } | null>
   const token = searchParams.get('token');
   const sessionMode = searchParams.get('session') === '1';
 
+  // Every buyer_* row is keyed on the canonical email, whichever proof of
+  // identity the caller brings — a token and a session for the same person
+  // must land on the same rows.
   if (token) {
     const claims = await readClaims(token);
-    return claims ? { email: claims.email } : null;
+    return claims ? { email: normalizeEmail(claims.email) } : null;
   }
   if (sessionMode) {
     const result = await requireUser();
@@ -113,6 +121,28 @@ async function resolveEmail(req: NextRequest): Promise<{ email: string } | null>
   }
   return null;
 }
+
+/**
+ * A buyer can only put a track into their library that the storefront
+ * actually shows. Without this, any uuid was accepted, and GET then read
+ * that track's title, cover and key back out of `tracks` — an unlisted
+ * (private) beat's metadata for anyone who knew its id. Removing is never
+ * gated, so a beat delisted after it was saved can still be cleaned up.
+ */
+async function isStoreListedTrack(
+  admin: ReturnType<typeof createServiceClient>,
+  trackId: string,
+): Promise<boolean> {
+  const { data } = await admin
+    .from('tracks')
+    .select('id')
+    .eq('id', trackId)
+    .eq('store_listed', true)
+    .maybeSingle();
+  return Boolean(data);
+}
+
+const trackNotFound = () => NextResponse.json({ error: 'Track not found' }, { status: 404 });
 
 export async function GET(req: NextRequest) {
   try {
@@ -162,11 +192,45 @@ export async function GET(req: NextRequest) {
     const trackIds = collectBuyerLibraryTrackIds({ history, favorites, playlistTracks });
     let tracks: BuyerLibraryTrackSummary[] = [];
     if (trackIds.length > 0) {
-      const { data: trackRows } = await admin
-        .from('tracks')
-        .select('id,title,cover_url,type,bpm,key,scale,duration_seconds')
-        .in('id', trackIds);
-      tracks = (trackRows ?? []) as BuyerLibraryTrackSummary[];
+      const [{ data: trackRows }, { data: purchaseRows }, { data: bundleRows }] = await Promise.all([
+        admin
+          .from('tracks')
+          .select('id,title,cover_url,type,bpm,key,scale,duration_seconds,store_listed')
+          .in('id', trackIds),
+        admin
+          .from('license_purchases')
+          .select('track_ids')
+          .eq('buyer_email', email),
+        admin
+          .from('project_access_links')
+          .select('project_id')
+          .eq('buyer_email', email),
+      ]);
+      // A bundle buyer owns every track in the project — the same set
+      // /api/store/projects/access delivers — so those count as bought too.
+      const bundleProjectIds = [...new Set(
+        ((bundleRows ?? []) as Array<{ project_id?: unknown }>)
+          .map((r) => r.project_id)
+          .filter((id): id is string => typeof id === 'string'),
+      )];
+      let bundleTrackRows: Array<{ track_id?: unknown }> = [];
+      if (bundleProjectIds.length > 0) {
+        const { data } = await admin
+          .from('project_tracks')
+          .select('track_id')
+          .in('project_id', bundleProjectIds)
+          .in('track_id', trackIds);
+        bundleTrackRows = (data ?? []) as Array<{ track_id?: unknown }>;
+      }
+      // Rows written before the store_listed write gate can name any track;
+      // only listed or purchased ones may have their metadata read back.
+      tracks = visibleBuyerLibraryTracks(
+        (trackRows ?? []) as Array<BuyerLibraryTrackSummary & { store_listed?: boolean | null }>,
+        purchasedTrackIdSet(
+          (purchaseRows ?? []) as Array<{ track_ids?: unknown }>,
+          bundleTrackRows,
+        ),
+      );
     }
 
     return NextResponse.json(buildBuyerLibraryShape({
@@ -184,6 +248,7 @@ export async function GET(req: NextRequest) {
 
 const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('log_play'), track_id: z.string().uuid() }),
+  z.object({ action: z.literal('set_favorite'), track_id: z.string().uuid(), favorited: z.boolean() }),
   z.object({ action: z.literal('toggle_favorite'), track_id: z.string().uuid() }),
   z.object({ action: z.literal('create_playlist'), name: z.string().trim().min(1).max(80) }),
   z.object({ action: z.literal('add_to_playlist'), playlist_id: z.string().uuid(), track_id: z.string().uuid() }),
@@ -210,11 +275,35 @@ export async function POST(req: NextRequest) {
       case 'log_play': {
         // Append-only history. We do NOT dedupe — repeated plays are
         // signal, not noise. Trim handled at read time via LIMIT.
+        if (!(await isStoreListedTrack(admin, parsed.data.track_id))) return trackNotFound();
         const { error } = await admin
           .from('buyer_listening_history')
           .insert({ email, track_id: parsed.data.track_id });
         if (error) throw error;
         return NextResponse.json({ ok: true });
+      }
+      case 'set_favorite': {
+        // Idempotent: the client says what the heart now shows. A toggle
+        // flipped whatever the server held, so a device whose local hearts
+        // had not caught up (a second device, a cleared browser) turned
+        // "favorite this" into "unfavorite this" on the account.
+        const { track_id, favorited } = parsed.data;
+        if (!favorited) {
+          const { error } = await admin
+            .from('buyer_favorites')
+            .delete()
+            .eq('email', email)
+            .eq('track_id', track_id);
+          if (error) throw error;
+          return NextResponse.json({ ok: true, favorited: false });
+        }
+        if (!(await isStoreListedTrack(admin, track_id))) return trackNotFound();
+        const { error } = await admin
+          .from('buyer_favorites')
+          .upsert({ email, track_id }, { onConflict: 'email,track_id', ignoreDuplicates: true });
+        if (error) throw error;
+        await upsertLeadContact(admin, email, track_id);
+        return NextResponse.json({ ok: true, favorited: true });
       }
       case 'toggle_favorite': {
         const { data: existing } = await admin
@@ -232,6 +321,7 @@ export async function POST(req: NextRequest) {
           if (error) throw error;
           return NextResponse.json({ ok: true, favorited: false });
         }
+        if (!(await isStoreListedTrack(admin, parsed.data.track_id))) return trackNotFound();
         const { error } = await admin
           .from('buyer_favorites')
           .insert({ email, track_id: parsed.data.track_id });
@@ -260,13 +350,15 @@ export async function POST(req: NextRequest) {
           .eq('email', email)
           .maybeSingle();
         if (!own) return NextResponse.json({ error: 'Playlist not found' }, { status: 404 });
+        if (!(await isStoreListedTrack(admin, parsed.data.track_id))) return trackNotFound();
 
-        // Position = current count
+        // Append after the highest position, not at the row count: a count
+        // lands on an occupied slot whenever the list has a gap.
         const { data: tracksInList } = await admin
           .from('buyer_playlist_tracks')
-          .select('track_id')
+          .select('track_id, position')
           .eq('playlist_id', parsed.data.playlist_id);
-        const position = (tracksInList?.length ?? 0);
+        const position = nextPlaylistPosition((tracksInList ?? []) as BuyerLibraryTrackJoinRow[]);
         const { error } = await admin
           .from('buyer_playlist_tracks')
           .upsert(
@@ -295,6 +387,25 @@ export async function POST(req: NextRequest) {
           .eq('playlist_id', parsed.data.playlist_id)
           .eq('track_id', parsed.data.track_id);
         if (error) throw error;
+        // Close the gap the removal left, so positions stay 0…n-1.
+        const { data: remaining } = await admin
+          .from('buyer_playlist_tracks')
+          .select('track_id, position')
+          .eq('playlist_id', parsed.data.playlist_id)
+          .order('position', { ascending: true });
+        for (const move of compactPlaylistPositions((remaining ?? []) as BuyerLibraryTrackJoinRow[])) {
+          const { error: moveError } = await admin
+            .from('buyer_playlist_tracks')
+            .update({ position: move.position })
+            .eq('playlist_id', parsed.data.playlist_id)
+            .eq('track_id', move.track_id);
+          if (moveError) throw moveError;
+        }
+        await admin
+          .from('buyer_playlists')
+          .update({ updated_at: new Date().toISOString() })
+          .eq('id', parsed.data.playlist_id)
+          .eq('email', email);
         return NextResponse.json({ ok: true });
       }
       case 'delete_playlist': {
