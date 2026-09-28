@@ -11,6 +11,7 @@ import { requireProducer } from '@/lib/auth/ownership';
 import { createClient as createServerClient } from '@/lib/supabase/server';
 import { nextVersionLabel } from '@/lib/naming';
 import { parseTitleMetadata } from '@/lib/upload/title-metadata';
+import { parseClientAnalysis, type ClientAnalysis } from '@/lib/contracts/client-analysis';
 import { persistTrackCollaborators } from '@/lib/upload/collaborators';
 import { errorMessage } from '@/lib/errors';
 import { enqueueUploadProcessingJob } from '@/lib/upload/processing';
@@ -119,9 +120,14 @@ export async function POST(req: NextRequest) {
     const safeContentType = detectContentType(ext, file.type);
 
     // 3. Parse optional client analysis
-    let clientAnalysis: Partial<AudioFeatures> | null = null;
+    // Validated per field; see lib/contracts/client-analysis.
+    let clientAnalysis: ClientAnalysis | null = null;
     if (clientAnalysisRaw) {
-      try { clientAnalysis = JSON.parse(clientAnalysisRaw) as Partial<AudioFeatures>; } catch {}
+      let raw: unknown = null;
+      try { raw = JSON.parse(clientAnalysisRaw); } catch { raw = '(unparseable)'; }
+      const parsed = parseClientAnalysis(raw);
+      if (parsed.rejected.length) console.warn('upload: dropped invalid client analysis fields', parsed.rejected);
+      clientAnalysis = parsed.analysis;
     }
 
     // 4. Upload to storage

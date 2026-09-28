@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import type { UploadItem, UploadStatus } from '@/lib/upload/manager';
 
 const noop = () => {};
@@ -109,22 +109,41 @@ describe('UploadsTray', () => {
     expect(screen.queryByText(/from the filename/)).toBeNull();
   });
 
-  it('flags a filename it could not settle instead of claiming a value', () => {
-    renderTray(item({ fileName: 'beat 90 140 Am Fm.wav' }));
-    expect(screen.getByText(
-      'BPM 90 or 140? · key A minor or F minor? — not read from the filename; set it in the track details',
-    )).toBeTruthy();
+  it('offers each candidate of an ambiguous name and marks the one analysis backs', () => {
+    renderTray(item({ fileName: 'beat 90 140.wav', analysis: { bpm: 140.2 } }));
+    expect(screen.getByText('Filename gives BPM 90 or 140 — not applied; analysis heard 140')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Set BPM to 90' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Set BPM to 140' }).textContent).toContain('analysis agrees');
+    // Nothing is claimed as read from the name.
     expect(screen.queryByText(/ from the filename$/)).toBeNull();
   });
 
-  it('shows what it read and what it could not, side by side', () => {
-    renderTray(item({ fileName: 'beat Gm 140 Fm.wav' }));
-    expect(screen.getByText('140 BPM from the filename')).toBeTruthy();
-    expect(screen.getByText(/^key G minor or F minor\?/)).toBeTruthy();
+  it('surfaces a disagreement with the analyser and offers its value', () => {
+    renderTray(item({ fileName: 'Night Shift 140 Fm.wav', analysis: { bpm: 97, bpmConfidence: 3.9 } }));
+    expect(screen.getByText('Filename says 140 BPM, analysis heard 97 (confident) — kept 140')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Set BPM to 97, as analysed' })).toBeTruthy();
   });
 
-  it('raises no doubt for a clear filename', () => {
-    renderTray(item({ fileName: 'Night Shift 140 Fm.wav' }));
-    expect(screen.queryByText(/set it in the track details/)).toBeNull();
+  it('one click sets the value on the track and confirms it', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal('fetch', fetchMock);
+    renderTray(item({ fileName: 'beat 90 140.wav', analysis: null }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set BPM to 140' }));
+    await waitFor(() => expect(screen.getByText('BPM set to 140')).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledWith('/api/tracks/track-1', expect.objectContaining({
+      method: 'PATCH', body: JSON.stringify({ bpm: 140 }),
+    }));
+    vi.unstubAllGlobals();
+  });
+
+  it('shows the question but no buttons when there is no track to edit', () => {
+    renderTray(item({ fileName: 'beat 90 140.wav', track: null }));
+    expect(screen.getByText(/Filename gives BPM 90 or 140/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Set BPM/ })).toBeNull();
+  });
+
+  it('raises nothing for a clear filename the analyser agrees with', () => {
+    renderTray(item({ fileName: 'Night Shift 140 Fm.wav', analysis: { bpm: 70, key: 'F', scale: 'minor' } }));
+    expect(screen.queryByLabelText('Filename and analysis checks')).toBeNull();
   });
 });

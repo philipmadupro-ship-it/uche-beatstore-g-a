@@ -124,10 +124,17 @@ const BARE_NUMBER = /(?:^|[\s\-–—|([{,])(\d{2,3})(?=$|[\s\-–—|)\]},.])/g
  * and every such filename would get a key it never claimed.
  */
 const SPELLED_QUALITY = '(?:min(?:or)?|maj(?:or)?)';
+/**
+ * Where a key reading must end: at anything that is not a letter or digit.
+ * Not `\\b` — a word boundary needs a word character on one side, so after a
+ * `♭` or `♯` at the very end of a name (`beat B♭.wav`) there is none and the
+ * key was never read.
+ */
+const KEY_END = '(?![A-Za-z0-9])';
 const KEY_PATTERNS: Array<{ re: RegExp; marked: boolean }> = [
-  { re: new RegExp(`\\bkey[\\s._-]*(?:of[\\s._-]*)?(${NOTE})(${ACCIDENTAL})?[\\s._-]*(${SPELLED_QUALITY}|m)?\\b`, 'gi'), marked: true },
-  { re: new RegExp(`\\b(${NOTE})(${ACCIDENTAL})[\\s._-]*(${SPELLED_QUALITY}|m)?\\b`, 'gi'), marked: false },
-  { re: new RegExp(`\\b(${NOTE})()[\\s._-]*(${SPELLED_QUALITY})\\b`, 'gi'), marked: false },
+  { re: new RegExp(`\\bkey[\\s._-]*(?:of[\\s._-]*)?(${NOTE})(${ACCIDENTAL})?[\\s._-]*(${SPELLED_QUALITY}|m)?${KEY_END}`, 'gi'), marked: true },
+  { re: new RegExp(`\\b(${NOTE})(${ACCIDENTAL})[\\s._-]*(${SPELLED_QUALITY}|m)?${KEY_END}`, 'gi'), marked: false },
+  { re: new RegExp(`\\b(${NOTE})()[\\s._-]*(${SPELLED_QUALITY})${KEY_END}`, 'gi'), marked: false },
   // Case-sensitive shorthand: `Fm`, `C#m` handled above, `Gm`.
   { re: new RegExp(`\\b([A-G])()(m)\\b`, 'g'), marked: false },
 ];
@@ -135,8 +142,9 @@ const KEY_PATTERNS: Array<{ re: RegExp; marked: boolean }> = [
 /**
  * Why a single key reading should not be trusted on its own, or null.
  *
- *   - A note plus the LETTER `b` with nothing after it (`Bb`, `ab`, `db`) is a
- *     two-letter word as often as a key: `BB gun`, `AB test`, `db mix`. With a
+ *   - A note plus the LETTER `b` with nothing after it is a two-letter word
+ *     as often as a key — `BB gun`, `AB test`, `db mix` — unless it is written
+ *     as notation, capital note and lower-case `b` (`Bb`, `Eb`). With a
  *     quality (`Bbm`, `Bb maj`), a key marker, `♭` or `flat`, it is a key.
  *   - `A` plus a spelled-out quality is also English: `A Major Problem`,
  *     `a minor thing`. Preceded by `in` (`in A minor`) it is a key.
@@ -146,7 +154,10 @@ function keyDoubt(m: RegExpMatchArray, marked: boolean, before: string): string 
   const note = m[1];
   const accidental = m[2] ?? '';
   const quality = m[3] ?? '';
-  if (accidental.toLowerCase() === 'b' && !quality) {
+  // `Bb`, `Eb`, `Ab` — capital note, lower-case b — is how a key is written.
+  // `BB`, `AB`, `db`, `bb` are how words and initials are written.
+  const notation = /^[A-G]$/.test(note) && accidental === 'b';
+  if (accidental.toLowerCase() === 'b' && !quality && !notation) {
     return `"${m[0].trim()}" could be a word rather than a key`;
   }
   if (/^a$/i.test(note) && !accidental && quality.length > 1 && !/\bin\s*$/i.test(before)) {
@@ -362,8 +373,11 @@ export function parseTitleMetadata(filename: string): TitleMetadata {
     for (const { re, marked: isMarked } of KEY_PATTERNS) {
       for (const m of [...scan.matchAll(re)]) {
         const start = m.index ?? 0;
-        // A note letter glued to digits ("A1", "C4") is a sample name, not a key.
-        if (/^\d/.test(scan.slice(start + m[0].length))) continue;
+        // A note letter glued to digits ("A1", "C4") is a sample name, not a
+        // key. Measured from the end of the reading itself: the match can also
+        // swallow the separator after it, and `Bb 140` is a key and a tempo.
+        const reading = m[0].replace(/[\s._-]+$/, '');
+        if (/^\d/.test(scan.slice(start + reading.length))) continue;
         hits.push({
           text: m[0],
           value: { key: m[1].toUpperCase() + normaliseAccidental(m[2]), scale: normaliseScale(m[3]) },
@@ -432,20 +446,4 @@ export function describeTitleMetadata(meta: TitleMetadata): string | null {
     parts.push(`with ${meta.collaborators.map((c) => c.name).join(', ')}`);
   }
   return parts.length ? `${parts.join(' · ')} from the filename` : null;
-}
-
-/**
- * One line naming what the filename left unsettled, or null when nothing was.
- * "BPM 90 or 140? · key Bb? — not applied from the filename; set it in the track details".
- */
-export function describeUncertainTitleMetadata(meta: TitleMetadata): string | null {
-  if (!meta.uncertain.length) return null;
-  const parts: string[] = [];
-  if (meta.fields.bpm.status === 'needs_confirmation') {
-    parts.push(`BPM ${meta.fields.bpm.candidates.join(' or ')}?`);
-  }
-  if (meta.fields.key.status === 'needs_confirmation') {
-    parts.push(`key ${meta.fields.key.candidates.map(keyLabel).join(' or ')}?`);
-  }
-  return `${parts.join(' · ')} — not read from the filename; set it in the track details`;
 }

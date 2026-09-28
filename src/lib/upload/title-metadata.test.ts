@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseTitleMetadata, describeTitleMetadata, describeUncertainTitleMetadata } from './title-metadata';
+import { parseTitleMetadata, describeTitleMetadata } from './title-metadata';
 
 const parse = parseTitleMetadata;
 
@@ -266,7 +266,6 @@ describe('never silently guesses', () => {
     expect(meta.fields.bpm).toMatchObject({ value: null, status: 'absent', confidence: null, candidates: [] });
     expect(meta.fields.key).toMatchObject({ value: null, status: 'absent', confidence: null, candidates: [] });
     expect(meta.uncertain).toEqual([]);
-    expect(describeUncertainTitleMetadata(meta)).toBeNull();
   });
 
   it.each([
@@ -308,7 +307,7 @@ describe('never silently guesses', () => {
     expect(parse('Loop 140 140.wav')).toMatchObject({ bpm: 140, uncertain: [] });
   });
 
-  it.each(['BB gun.wav', 'AB test.wav', 'db mix.wav', 'Eb.wav', 'A Major Problem.wav', 'a minor thing.wav'])(
+  it.each(['BB gun.wav', 'AB test.wav', 'db mix.wav', 'bb.wav', 'A Major Problem.wav', 'a minor thing.wav'])(
     'ambiguous: %s is a possible key, flagged rather than applied',
     (file) => {
       const meta = parse(file);
@@ -331,10 +330,36 @@ describe('never silently guesses', () => {
     expect(parse('beat key of Bb.wav')).toMatchObject({ key: 'Bb', uncertain: [] });
   });
 
-  it('describes what needs confirming', () => {
-    expect(describeUncertainTitleMetadata(parse('beat 90 140 Am Fm.wav'))).toBe(
-      'BPM 90 or 140? · key A minor or F minor? — not read from the filename; set it in the track details',
-    );
-    expect(describeUncertainTitleMetadata(parse('Night Shift 140 Fm.wav'))).toBeNull();
+});
+
+describe('readings the parser used to miss', () => {
+  it('reads a key followed by a tempo', () => {
+    // The separator after `Bb` was inside the match, so the digit after it
+    // looked "glued" and the key was thrown away as a sample name.
+    expect(parse('Bb 140.wav')).toMatchObject({ key: 'Bb', bpm: 140, title: 'Bb 140', uncertain: [] });
+    expect(parse('Night Shift F# 140.wav')).toMatchObject({ key: 'F#', bpm: 140, title: 'Night Shift' });
+    expect(parse('Night Shift Fm 140.wav')).toMatchObject({ key: 'F', scale: 'minor', bpm: 140 });
+  });
+
+  it('reads a unicode accidental at the end of the name', () => {
+    expect(parse('beat B♭.wav')).toMatchObject({ key: 'Bb', uncertain: [] });
+    expect(parse('beat F♯m.wav')).toMatchObject({ key: 'F#', scale: 'minor' });
+    expect(parse('beat E♭ minor.wav')).toMatchObject({ key: 'Eb', scale: 'minor' });
+  });
+
+  it('treats capital-note lower-case-b as notation, other casings as words', () => {
+    expect(parse('Eb.wav')).toMatchObject({ key: 'Eb', uncertain: [] });
+    expect(parse('beat Ab.wav').key).toBe('Ab');
+    for (const name of ['BB gun.wav', 'AB test.wav', 'db mix.wav', 'eb.wav']) {
+      expect(parse(name).key).toBeNull();
+      expect(parse(name).uncertain).toEqual(['key']);
+    }
+  });
+
+  it('still leaves sample note names and chord names alone', () => {
+    expect(parse('kick C4.wav').key).toBeNull();
+    expect(parse('sub A1 long.wav').key).toBeNull();
+    expect(parse('Dm7 loop.wav').key).toBeNull();
+    expect(parse('F#m7 pad.wav').key).toBeNull();
   });
 });
