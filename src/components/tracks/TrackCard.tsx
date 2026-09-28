@@ -39,6 +39,9 @@ interface TrackCardProps {
   onDelete?: (track: Track) => void;
   /** When provided, exposes "Share track" in the context menu. */
   onShare?: (track: Track) => void;
+  /** When provided, exposes "Lyrics Studio". Only the library passes
+   *  it; the caller owns navigation (see `lib/library/lyrics-link`). */
+  onOpenLyrics?: (track: Track) => void;
   /** Dashboard rows only. Turns on inline rename — the title cell becomes a
    *  field and the ⋯ menu grows a Rename item that focuses it. The public
    *  storefront row omits it, so a visitor never gets an editor. */
@@ -120,6 +123,7 @@ function TrackCardImpl({
   removeLabel = 'Remove from project',
   onDelete,
   onShare,
+  onOpenLyrics,
   editable = false,
   onChanged,
   selectable = false,
@@ -288,6 +292,11 @@ function TrackCardImpl({
           id: 'details', label: 'View details', shortcut: 'I', shortcutKey: 'i',
           hidden: !onClickDetails,
           onSelect: () => onClickDetails?.(track),
+        },
+        {
+          id: 'lyrics', label: 'Lyrics Studio', shortcut: 'L', shortcutKey: 'l',
+          hidden: !onOpenLyrics,
+          onSelect: () => onOpenLyrics?.(track),
         },
       ],
     },

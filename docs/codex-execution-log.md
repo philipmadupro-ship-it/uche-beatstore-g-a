@@ -8677,3 +8677,15 @@ while muted unmutes; unmuting a zero level restores the default; engines output
 its `<audio>` fallback) and `VoiceTagPlayer` read it, so the voice tag is silenced by mute too.
 Persist version 1 migrates a v0 `volume: 0` to muted at 0.8. No playback field
 (`isPlaying`, `currentTrack`, `progress`) is read or written by any volume/mute action.
+
+## 2026-09-28 - Library ⋯ menus open Lyrics Studio (LIB-01)
+
+None of the Library ⋯ menus reached the lyrics editor. The only way in was the details drawer's card, which links to `/library/[id]#lyrics`, and that landed at the top of the page. The track page fetches on the client and shows a spinner first, so `#lyrics` did not exist when the router looked for it.
+
+- `lib/library/lyrics-link.ts` holds the one href (`lyricsStudioHref`) and `focusLyricsSection`. The track page calls it once per track after the section mounts. It scrolls the section into view and moves focus there, so keyboard users land in the editor as well.
+- List (`TrackCard`) and grid (`TrackGridCard`) menus gain **Lyrics Studio** (`L`) after View details, shown only when the caller passes `onOpenLyrics`. Only the library passes it; project and playlist rows are unchanged.
+- Portfolio had no ⋯ menu. `MusicPortfolio` takes an optional `trackMenuSections`, which the storefront never passes. The library supplies Lyrics Studio + Share, because the details drawer is not mounted in that mode.
+- Grid's hover-only trigger now also shows on `focus-within`. Before, Tab landed on an invisible button.
+- The label is "Lyrics Studio", not "Open in Lyrics Studio". The longer label truncated in the 200–224px menus, since Akira Expanded is very wide.
+
+Tests: `lib/library/lyrics-link.test.ts`, `components/tracks/track-menu-lyrics.test.tsx`. Six of them fail against the old components.

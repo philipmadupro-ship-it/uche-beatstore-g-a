@@ -4,6 +4,7 @@ import { useRef, useEffect, useCallback, useState, useSyncExternalStore } from '
 import { gsap } from 'gsap';
 import { ScrambleTextPlugin } from 'gsap/ScrambleTextPlugin';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { ActionMenu, type MenuSection } from '@/components/ui/ActionMenu';
 
 gsap.registerPlugin(ScrambleTextPlugin);
 
@@ -53,6 +54,10 @@ interface MusicPortfolioProps {
      *  embedded row renders a heart in the right-side cluster. */
     isWishlisted?: (trackId: string) => boolean;
     onToggleWishlist?: (trackId: string) => void;
+    /** Optional per-row ⋯ menu. The library passes it; the storefront does
+     *  not, so visitors never get one. A row whose sections resolve to no
+     *  visible items renders no trigger (ActionMenu's own rule). */
+    trackMenuSections?: (trackId: string) => MenuSection[];
 }
 
 function fmtDuration(secs: number | null | undefined): string {
@@ -84,6 +89,7 @@ export default function MusicPortfolio({
     onTrackOpen,
     isWishlisted,
     onToggleWishlist,
+    trackMenuSections,
 }: MusicPortfolioProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const bgRef = useRef<HTMLDivElement>(null);
@@ -480,6 +486,20 @@ export default function MusicPortfolio({
                                                 </svg>
                                             </button>
                                         )}
+                                    </div>
+                                )}
+
+                                {/* Row actions. The wrapper swallows the click
+                                    so opening the menu never plays the row. */}
+                                {trackMenuSections && (
+                                    <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                                        <ActionMenu
+                                            sections={trackMenuSections(track.id)}
+                                            align="right"
+                                            width={224}
+                                            label={`Actions for ${track.title}`}
+                                            triggerClassName="flex h-8 w-8 items-center justify-center rounded-full text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:text-white"
+                                        />
                                     </div>
                                 )}
                             </div>
