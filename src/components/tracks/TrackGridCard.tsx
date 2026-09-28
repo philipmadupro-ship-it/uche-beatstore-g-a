@@ -20,6 +20,8 @@ interface TrackGridCardProps {
   removeLabel?: string;
   onDelete?: (track: Track) => void;
   onShare?: (track: Track) => void;
+  /** Exposes "Lyrics Studio" when provided — library only. */
+  onOpenLyrics?: (track: Track) => void;
   selectable?: boolean;
   selected?: boolean;
   onSelectChange?: (track: Track, selected: boolean) => void;
@@ -42,6 +44,7 @@ function TrackGridCardImpl({
   removeLabel = 'Remove from project',
   onDelete,
   onShare,
+  onOpenLyrics,
   selectable = false,
   selected = false,
   onSelectChange,
@@ -197,10 +200,12 @@ function TrackGridCardImpl({
         </div>
 
         {/* More button — top right on hover. Portaled via Popover so the menu
-            escapes the artwork's overflow-hidden clip (was invisible before). */}
+            escapes the artwork's overflow-hidden clip (was invisible before).
+            `focus-within` too: hover-only meant a keyboard user tabbed onto a
+            trigger they could not see. */}
         {!selectable && (
           <div
-            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
             onClick={(e) => e.stopPropagation()}
           >
             <ActionMenu
@@ -215,6 +220,10 @@ function TrackGridCardImpl({
                     {
                       id: 'details', label: 'View details', shortcut: 'I', shortcutKey: 'i',
                       hidden: !onClickDetails, onSelect: () => onClickDetails?.(track),
+                    },
+                    {
+                      id: 'lyrics', label: 'Lyrics Studio', shortcut: 'L', shortcutKey: 'l',
+                      hidden: !onOpenLyrics, onSelect: () => onOpenLyrics?.(track),
                     },
                     { id: 'share', label: 'Share track', hidden: !onShare, onSelect: () => onShare?.(track) },
                   ],

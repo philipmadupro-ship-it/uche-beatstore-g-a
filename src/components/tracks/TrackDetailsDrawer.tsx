@@ -26,6 +26,7 @@ import { InlineTagStrip, type TagGroup } from '@/components/ui/InlineTagStrip';
 import { TrackCollaboratorStrip } from '@/components/tracks/TrackCollaboratorStrip';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { useTags } from '@/hooks/useTags';
+import { lyricsStudioHref } from '@/lib/library/lyrics-link';
 
 /** Track tag vocabulary — the shared taxonomy, in scanning order. */
 const TRACK_TAG_GROUPS: TagGroup[] = Object.entries(TAG_TAXONOMY).map(([category, options]) => ({
@@ -565,7 +566,7 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
               {/* Lyrics + word tools entry point */}
               <div className="px-8 pt-6 pb-4 border-b border-white/10">
                 <Link
-                  href={`/library/${track.id}#lyrics`}
+                  href={lyricsStudioHref(track.id)}
                   onClick={onClose}
                   className="group flex items-center gap-4 p-4 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/20 transition-colors"
                 >
