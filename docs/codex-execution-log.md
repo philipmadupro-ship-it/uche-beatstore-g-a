@@ -8797,3 +8797,11 @@ The Library's Sections (browse) rows were the last track surface with no ⋯ men
 - The trigger sits at `z-10`, above the cover-sized play button. Its wrapper stops the click, so choosing an item neither plays the track nor opens the details drawer.
 - It is revealed on hover like the grid card, and also on `focus-within` and on `@media (hover: none)`. On a touch tablet there is no hover to reveal it. Phones never show Sections, which is forced to "All" below the mobile breakpoint.
 - Tests: `components/library/MiniTrackCard.test.tsx`.
+
+## 2026-09-28 - Project and playlist track menus: Lyrics Studio and Send to studio
+
+`TrackCard` has had both items since LIB-01, but they show only when the caller passes `onOpenLyrics` / `onOpenStudio`, and only the Library did. The project page (through `ProjectTrackList`, which forwards them as optional props because the parent owns every row action) and the playlist page now pass both, built with the same `lyricsStudioHref` / `studioHref` helpers.
+
+- `components/projects/ProjectTrackList.test.tsx` pins the forwarding. One case fails on the old component.
+- `e2e/track-menu-destinations.spec.ts` drives the real `/projects/[id]` and `/playlists/[id]` pages through the stub-Supabase sign-in. For each page it chooses both items and checks the destination. Lyrics Studio is followed to the track page, which must focus `#lyrics` in the viewport, so it covers the LIB-01 hash fix end to end. With the page wiring reverted, all 4 cases fail.
+- Measured on the real pages at 1440px and 390px: no menu label is cut off, and the menu stays in the viewport.
