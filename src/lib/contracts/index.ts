@@ -568,6 +568,9 @@ export const CreatorProfilePatchSchema = z.object({
   contact_email: z.string().max(200).nullish(),
   accent_color: z.string().max(40).nullish(),
   font_style: z.string().max(40).nullish(),
+  // Without this key the object schema strips it, and the Store Editor's text
+  // colour was dropped from every save (STORE-06).
+  text_color_primary: z.string().max(40).nullish(),
   seo_title: z.string().max(200).nullish(),
   seo_description: z.string().max(500).nullish(),
   og_image_url: z.string().max(2000).nullish(),

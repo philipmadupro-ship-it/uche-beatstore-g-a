@@ -8960,6 +8960,40 @@ Not changed: the email route from earlier in this conversation (`lib/share/email
 
 Tests: `lib/share/playback.test.ts` (15), `lib/share/download-filename.test.ts` (6), grant TTL cases, and `e2e/share-options.spec.ts` (28, all fail on the old code).
 
+## 2026-09-29 - Store Editor loads the whole catalogue, not the newest 100 (STORE-02)
+
+**Reproduced** with 250 stubbed beats behind `/api/tracks`'s real paging contract, the 30 listed ones being the oldest (all on API page three). On `/store-editor` → Beat Listing, the header said "30 listed · 250 total" and the list showed none of them. They appeared only after pressing "Load next 100 beats" twice.
+
+**Root cause.** `loadTrackPage` fetched one `paged=1&lean=1&limit=100` page (newest first) and stopped. The 100 is `/api/tracks`'s per-request ceiling (`parsePositiveInt(…, 50, 100)`), a server protection and not a product rule, but the editor treated it as the list. Everything downstream saw only that page:
+- **Reorder corrupted `/store` order.** Drag and Move up/down write `store_sort_order` 0..n for `allTracks.filter(store_listed)`, the *loaded* listed beats only. Unloaded listed beats kept their old positions and collided with the new ones, so `/store` showed an order nobody chose.
+- **Search** went to the server (`q=`) and *replaced* the list with the matches, so a reorder during a search renumbered only the matches.
+- The Needs-attention filter, the storefront preview and the license-link prices all covered the loaded page only.
+
+**Fix.**
+- `lib/store-editor/track-catalogue.ts#fetchAllTrackPages` follows `nextCursor` to the end, 100 rows per request. It de-duplicates by id, stops on a cursor that does not advance, stops at 200 pages (20,000 beats), and reports `complete`. The editor fills in page by page and is not blocked on the walk. The client-side render window (80 rows, "Load more beats") is unchanged.
+- Search is client-side over the whole catalogue (title / key / BPM, the fields the row filter already used). The server search also matched `description`, which the lean rows do not carry.
+- Reordering waits for `complete`. Before that it shows a toast instead of renumbering a subset.
+- License-link loading now covers every listed beat, 8 requests at a time (`mapWithConcurrency`) instead of all at once.
+- `/api/tracks` orders by `created_at DESC, id ASC`. Without the `id` tiebreak, beats sharing a timestamp (bulk upload) could be skipped or repeated across offset pages.
+
+**Tests.** `track-catalogue.test.ts` (250 → 3 requests, exact multiple, empty, progress, dedupe, stuck cursor, page cap, failure, bounded concurrency). `e2e/store-editor-catalogue.spec.ts` at 1440px and 390px: all 30 page-three listed beats render, no "Load next 100" control, search finds beat 150 without a request, and Move down PATCHes `/api/tracks/reorder` with all 30 listed beats and distinct positions. With the old page it fails at the first assertion.
+
+## 2026-09-29 - /api/tracks is owner-only again (STORE-02 follow-up)
+
+Found while fixing STORE-02. `/api/tracks` reads with the service role, which bypasses RLS, so it has to apply the owner rule itself. Migration 097 made `tracks` RLS owner-only and retired the legacy `user_id IS NULL` allowance. The route put it back in both of its branches:
+- **Bounded branch** (`paged` / `limit` / `cursor` / `q` / `lean`, used by the library, Store Editor and pickers): `.or('user_id.eq.X,user_id.is.null')`.
+- **Legacy unbounded branch**: `scopedList('tracks')`, whose `includeNullOwner` defaults to `true`, the same filter.
+
+Any producer was therefore shown every orphan track. Those rows were not editable, because the owned-row helpers 403 them, so each one was a row whose toggles failed.
+
+Fix: the bounded query uses `.eq('user_id', owner)` and both `scopedList` calls pass `includeNullOwner: false`. `scopedList`'s default is unchanged, because calendar and smart-playlists still rely on it; see "Not changed".
+
+Tests: `route.owner-filter.test.ts` drives the Supabase branch through a query-builder fake that records every filter. It covers the bounded list, the bounded list with search and `store_listed`, and the unbounded list. All three fail on the old route.
+
+**Data note.** No migration adopts orphan tracks (111 did so for contacts only). If production has `tracks` rows with `user_id IS NULL`, they stop appearing in the dashboard. The RLS already hid them from every non-service read. Check with `SELECT count(*) FROM tracks WHERE user_id IS NULL;` and adopt them in a migration if any matter.
+
+**Not changed** (same pattern, other routes): `api/activity`, `api/events`, `api/tracks/[id]/similar`, `api/tracks/tags`, `api/tracks/tags/bulk`, `api/store` (catalogue, playlists, projects), `api/store/facets`, and the `scopedList` default used by `api/calendar` and `api/smart-playlists`.
+
 ## 2026-09-29 - Project playback through one player (STORE-07)
 
 Task: a project with several tracks should play like a music player — play / pause / seek / switch, navigate away and back — with the player bar and the page never fighting or doubling audio.

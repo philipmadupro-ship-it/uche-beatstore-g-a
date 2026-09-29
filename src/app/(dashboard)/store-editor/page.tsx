@@ -18,6 +18,7 @@
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { compareFeatured } from '@/lib/store/newest';
+import { storefrontThemeStyle } from '@/lib/store/typography';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
@@ -53,6 +54,7 @@ import type { StorefrontData } from '@/components/store-editor/SectionRenderer';
 import type { StoreLayout } from '@/lib/store-editor/layout';
 import { uploadImageFile } from '@/lib/upload/image-upload-client';
 import { getStoreEditorAttentionIssues } from '@/lib/store-editor/attention-issues';
+import { fetchAllTrackPages, mapWithConcurrency, TRACK_PAGE_SIZE } from '@/lib/store-editor/track-catalogue';
 
 const TRACK_LIST_BATCH_SIZE = 80;
 
@@ -706,9 +708,12 @@ function StorePreview({
   const previewStoreTracks = asTracks(tracks);
 
   return (
+    // Font style, text colour and accent from the unsaved form — the same
+    // style object /store spreads, so the preview cannot drift from it.
     <div
-      className="rounded-xl overflow-hidden border border-white/10 bg-[#090907] text-white"
-      style={{ '--store-accent': accent } as React.CSSProperties}
+      data-testid="store-editor-preview"
+      className="rounded-xl overflow-hidden border border-white/10 bg-[#090907]"
+      style={storefrontThemeStyle(creator)}
     >
       {/* Real ArtistBioBlock — mirrors what buyers see */}
       <ArtistBioBlock creator={creator} accentColor={accent} />
@@ -813,9 +818,10 @@ export default function StoreEditorPage() {
   // issue is about. Null = show everything.
   const [attentionFilter, setAttentionFilter] = useState<AttentionFilter | null>(null);
   const [visibleTrackRows, setVisibleTrackRows] = useState(TRACK_LIST_BATCH_SIZE);
-  const [trackNextCursor, setTrackNextCursor] = useState<string | null>(null);
-  const [trackHasMore, setTrackHasMore] = useState(false);
-  const [trackLoadingMore, setTrackLoadingMore] = useState(false);
+  // The whole catalogue is loaded (see lib/store-editor/track-catalogue).
+  // Reordering renumbers every listed beat, so it waits for `complete`.
+  const [trackCatalogueLoading, setTrackCatalogueLoading] = useState(true);
+  const [trackCatalogueComplete, setTrackCatalogueComplete] = useState(false);
   const [producerPickSearch, setProducerPickSearch] = useState('');
   const [producerPickCandidates, setProducerPickCandidates] = useState<TrackRow[]>([]);
   const [producerPickNextCursor, setProducerPickNextCursor] = useState<string | null>(null);
@@ -887,8 +893,7 @@ export default function StoreEditorPage() {
   const dragIdx = useRef<number | null>(null);
   // Drag state for project reorder
   const projectDragIdx = useRef<number | null>(null);
-  const trackSearchRequestRef = useRef(0);
-  const loadedTrackSearchRef = useRef<string | null>(null);
+  const trackCatalogueRequestRef = useRef(0);
   const producerPickRequestRef = useRef(0);
 
   const toggleSection = (id: string) =>
@@ -1051,45 +1056,45 @@ export default function StoreEditorPage() {
     [filteredTrackRows, visibleTrackRows],
   );
 
-  const loadTrackPage = useCallback(async ({ cursor = null, append = false, search = '' }: {
-    cursor?: string | null;
-    append?: boolean;
-    search?: string;
-  } = {}) => {
-    const normalizedSearch = search.trim();
-    const requestId = append ? trackSearchRequestRef.current : ++trackSearchRequestRef.current;
-    if (append) setTrackLoadingMore(true);
+  const loadTrackCatalogue = useCallback(async (): Promise<TrackRow[]> => {
+    const requestId = ++trackCatalogueRequestRef.current;
+    const isCurrent = () => requestId === trackCatalogueRequestRef.current;
+    const sortRows = (rows: TrackRow[]) => [...rows].sort((a, b) => {
+      if (a.store_listed && !b.store_listed) return -1;
+      if (!a.store_listed && b.store_listed) return 1;
+      // Listed beats in exactly the order /store shows them ("Featured"),
+      // so what the producer arranges here is what buyers see.
+      if (a.store_listed) return compareFeatured(a, b);
+      return a.title.localeCompare(b.title);
+    });
+    setTrackCatalogueLoading(true);
+    setTrackCatalogueComplete(false);
     try {
-      const params = new URLSearchParams({
-        paged: '1',
-        lean: '1',
-        limit: '100',
-      });
-      if (cursor) params.set('cursor', cursor);
-      if (normalizedSearch) params.set('q', normalizedSearch);
-      const res = await fetch(`/api/tracks?${params.toString()}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
-      if (requestId !== trackSearchRequestRef.current) return [];
-      const rows = ((data.tracks ?? []) as ApiTrackRow[]).map(mapTrackRow).sort((a, b) => {
-        if (a.store_listed && !b.store_listed) return -1;
-        if (!a.store_listed && b.store_listed) return 1;
-        // Listed beats in exactly the order /store shows them ("Featured"),
-        // so what the producer arranges here is what buyers see.
-        if (a.store_listed) return compareFeatured(a, b);
-        return a.title.localeCompare(b.title);
-      });
-      setAllTracks((prev) => {
-        if (!append) return rows;
-        const seen = new Set(prev.map((track) => track.id));
-        return [...prev, ...rows.filter((track) => !seen.has(track.id))];
-      });
-      setTrackHasMore(Boolean(data.pageInfo?.hasMore));
-      setTrackNextCursor(data.pageInfo?.nextCursor ?? null);
-      loadedTrackSearchRef.current = normalizedSearch;
-      return rows;
+      const { tracks, complete } = await fetchAllTrackPages<TrackRow>(
+        async (cursor) => {
+          const params = new URLSearchParams({
+            paged: '1',
+            lean: '1',
+            limit: String(TRACK_PAGE_SIZE),
+          });
+          if (cursor) params.set('cursor', cursor);
+          const res = await fetch(`/api/tracks?${params.toString()}`);
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+          return {
+            tracks: ((data.tracks ?? []) as ApiTrackRow[]).map(mapTrackRow),
+            pageInfo: data.pageInfo,
+          };
+        },
+        { onPage: (rows) => { if (isCurrent()) setAllTracks(sortRows(rows)); } },
+      );
+      if (!isCurrent()) return [];
+      const sorted = sortRows(tracks);
+      setAllTracks(sorted);
+      setTrackCatalogueComplete(complete);
+      return sorted;
     } finally {
-      if (append) setTrackLoadingMore(false);
+      if (isCurrent()) setTrackCatalogueLoading(false);
     }
   }, []);
 
@@ -1156,18 +1161,6 @@ export default function StoreEditorPage() {
   }, []);
 
   useEffect(() => {
-    if (loading) return;
-    const normalizedSearch = trackSearch.trim();
-    if (loadedTrackSearchRef.current === normalizedSearch) return;
-    const timer = setTimeout(() => {
-      loadTrackPage({ search: trackSearch }).catch((err) => {
-        toast.error('Could not search beats', err instanceof Error ? err.message : 'try again');
-      });
-    }, 220);
-    return () => clearTimeout(timer);
-  }, [loadTrackPage, loading, trackSearch]);
-
-  useEffect(() => {
     if (!producerPicksOpen) return;
     const timer = setTimeout(() => {
       loadProducerPickPage({ search: producerPickSearch }).catch((err) => {
@@ -1186,8 +1179,10 @@ export default function StoreEditorPage() {
 
   const loadTrackLicenseLinks = useCallback(async (trackIds: string[]) => {
     if (trackIds.length === 0) return;
-    const entries = await Promise.all(
-      trackIds.map(async (trackId) => {
+    const entries = await mapWithConcurrency(
+      trackIds,
+      8,
+      async (trackId) => {
         try {
           const res = await fetch(`/api/track-licenses?track_id=${trackId}`);
           if (!res.ok) return [trackId, []] as const;
@@ -1205,7 +1200,7 @@ export default function StoreEditorPage() {
         } catch {
           return [trackId, []] as const;
         }
-      }),
+      },
     );
     setTrackLicenseLinks((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
   }, []);
@@ -1244,8 +1239,13 @@ export default function StoreEditorPage() {
           console.error('store-summary failed; falling back to client-side counts', summaryData);
           setTrackSummary(null);
         }
-        const firstTrackPage = await loadTrackPage({ search: '' });
-        void loadTrackLicenseLinks(firstTrackPage.filter((t) => t.store_listed).map((t) => t.id));
+        // Not awaited: the rest of the editor should not wait on a large
+        // catalogue. Rows fill in page by page.
+        loadTrackCatalogue()
+          .then((tracks) => loadTrackLicenseLinks(tracks.filter((t) => t.store_listed).map((t) => t.id)))
+          .catch((err) => {
+            toast.error('Could not load your beats', err instanceof Error ? err.message : 'try again');
+          });
         setPreviewTracks(((summaryData.producerPicks ?? []) as ApiTrackRow[]).slice(0, 3).map(mapTrackRow));
         const p = pd.profile ?? {};
         setStoreLayout(p.store_layout ?? null);
@@ -1307,7 +1307,7 @@ export default function StoreEditorPage() {
         setLoading(false);
       }
     })();
-  }, [loadTrackLicenseLinks, loadTrackPage]);
+  }, [loadTrackLicenseLinks, loadTrackCatalogue]);
 
   /* ── Hero image upload ── */
   const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1410,7 +1410,20 @@ export default function StoreEditorPage() {
       toast.error('Order save failed', err instanceof Error ? err.message : 'try again');
     }
   };
-  const handleTrackDragStart = (idx: number) => { trackDragIdx.current = idx; };
+  // A reorder renumbers every listed beat. Before the whole catalogue has
+  // loaded it would renumber only the loaded ones and collide with the rest.
+  const canReorderListed = () => {
+    if (trackCatalogueComplete) return true;
+    toast.info(
+      trackCatalogueLoading ? 'Still loading your beats' : 'Your full catalogue did not load',
+      trackCatalogueLoading ? 'Reorder once every beat has loaded.' : 'Reload the page before reordering.',
+    );
+    return false;
+  };
+  const handleTrackDragStart = (idx: number) => {
+    if (!canReorderListed()) return;
+    trackDragIdx.current = idx;
+  };
   const handleTrackDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
     const from = trackDragIdx.current;
@@ -1441,6 +1454,7 @@ export default function StoreEditorPage() {
   };
 
   const moveListedTrack = (idx: number, direction: -1 | 1) => {
+    if (!canReorderListed()) return;
     const listed = allTracks.filter((t) => t.store_listed);
     const moved = moveArrayItem(listed, idx, direction);
     if (moved === listed) return;
@@ -2094,12 +2108,14 @@ export default function StoreEditorPage() {
                       type="color"
                       value={form.accent_color}
                       onChange={set('accent_color')}
+                      aria-label="Pick storefront accent colour"
                       className="w-6 h-6 rounded cursor-pointer border-none bg-transparent p-0"
                     />
                     <input
                       type="text"
                       value={form.accent_color}
                       onChange={set('accent_color')}
+                      aria-label="Storefront accent colour"
                       maxLength={7}
                       placeholder="#FFFFFF"
                       className="w-20 bg-transparent text-[11px] text-white focus:outline-none font-mono"
@@ -2137,6 +2153,7 @@ export default function StoreEditorPage() {
                       key={fs}
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, font_style: fs }))}
+                      aria-pressed={form.font_style === fs}
                       className={`px-4 py-2 rounded-lg text-[11px] font-medium border transition-colors capitalize ${
                         form.font_style === fs
                           ? 'bg-white/10 border-white/20 text-white'
@@ -2157,12 +2174,14 @@ export default function StoreEditorPage() {
                       type="color"
                       value={form.text_color_primary}
                       onChange={set('text_color_primary')}
+                      aria-label="Pick storefront text colour"
                       className="w-6 h-6 rounded cursor-pointer border-none bg-transparent p-0"
                     />
                     <input
                       type="text"
                       value={form.text_color_primary}
                       onChange={set('text_color_primary')}
+                      aria-label="Storefront text colour"
                       maxLength={7}
                       placeholder="#FFFFFF"
                       className="w-20 bg-transparent text-[11px] text-white focus:outline-none font-mono"
@@ -2769,7 +2788,10 @@ export default function StoreEditorPage() {
                   {/* A filter that matches nothing must say so. An empty
                       scroll box reads as a loading fault, and the producer who
                       just fixed the last unpriced beat deserves to be told. */}
-                  {renderedTrackRows.length === 0 && (
+                  {renderedTrackRows.length === 0 && trackCatalogueLoading && (
+                    <p role="status" className="py-8 text-center text-[11px] text-white/40">Loading beats…</p>
+                  )}
+                  {renderedTrackRows.length === 0 && !trackCatalogueLoading && (
                     <div className="rounded-xl border border-dashed border-white/10 py-8 text-center">
                       <p className="text-[11px] text-white/40">
                         {attentionFilter ? 'Nothing left to fix here.' : 'No beats match that search.'}
@@ -2846,21 +2868,6 @@ export default function StoreEditorPage() {
                       className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-[10px] font-mono uppercase tracking-[0.18em] text-white/80 transition-colors hover:border-white/20 hover:text-white"
                     >
                       Load more beats · {Math.min(TRACK_LIST_BATCH_SIZE, filteredTrackRows.length - visibleTrackRows)} more
-                    </button>
-                  )}
-                  {trackHasMore && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!trackNextCursor || trackLoadingMore) return;
-                        loadTrackPage({ cursor: trackNextCursor, append: true }).catch((err) => {
-                          toast.error('Could not load more beats', err instanceof Error ? err.message : 'try again');
-                        });
-                      }}
-                      disabled={trackLoadingMore}
-                      className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-[10px] font-mono uppercase tracking-[0.18em] text-white/80 transition-colors hover:border-white/20 hover:text-white disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {trackLoadingMore ? 'Loading beats...' : 'Load next 100 beats'}
                     </button>
                   )}
                 </div>
@@ -3059,7 +3066,7 @@ export default function StoreEditorPage() {
                 missingCount={listedMissingPeaksCount}
                 onComplete={async () => {
                   await refreshTrackSummary();
-                  await loadTrackPage({ search: loadedTrackSearchRef.current ?? trackSearch });
+                  await loadTrackCatalogue();
                 }}
               />
             </Section>
