@@ -35,9 +35,7 @@ import {
 } from '@/components/store/types';
 import { appearanceStyle } from '@/lib/store/typography';
 import { sanitizeUrl } from '@/components/store/helpers';
-import { effectiveStoreTheme, resolveStoreAppearance } from '@/lib/store/appearance';
-import { hasPublicContent, isAuthoredSection } from '@/lib/store-editor/public-content';
-import { SectionRenderer, type StorefrontData } from '@/components/store-editor/SectionRenderer';
+import { resolveStoreAppearance } from '@/lib/store/appearance';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
@@ -1103,16 +1101,6 @@ function StorePage() {
   const appearance = useMemo(() => resolveStoreAppearance(creator, storeLayout.theme), [creator, storeLayout.theme]);
   const accentColor = appearance.accent;
   const themeStyle = useMemo(() => appearanceStyle(appearance), [appearance]);
-  /**
-   * For the producer-authored sections (text / image / video / links /
-   * canvas), drawn by the same `SectionRenderer` the Design canvas uses, in
-   * `live` mode. Those kinds read only the creator, so the lists stay empty.
-   */
-  const authoredTheme = useMemo(() => effectiveStoreTheme(storeLayout.theme, creator), [storeLayout.theme, creator]);
-  const authoredData = useMemo<StorefrontData>(
-    () => ({ creator, tracks: [], playlists: [], projects: [], picks: [] }),
-    [creator],
-  );
 
   /**
    * Storefront sections, drawn in the order the producer arranged them.
@@ -1287,23 +1275,7 @@ function StorePage() {
       {storeLayout.sections.map((section) => {
         if (isPinnedSection(section.kind)) return null;
         if (isFullyHidden(section)) return null;
-        let node: React.ReactNode;
-        if (isAuthoredSection(section.kind)) {
-          // Nothing to show a buyer (empty, or a URL the store can't load) →
-          // no wrapper at all, rather than an empty padded block.
-          if (!hasPublicContent(section, creator)) return null;
-          node = (
-            <SectionRenderer
-              section={section}
-              breakpoint={viewerBreakpoint}
-              theme={authoredTheme}
-              data={authoredData}
-              live
-            />
-          );
-        } else {
-          node = renderStoreSection(section.kind, resolveSection(section, viewerBreakpoint));
-        }
+        const node = renderStoreSection(section.kind, resolveSection(section, viewerBreakpoint));
         if (!node) return null;
         const hidden = visibilityClasses(section);
         return hidden ? <div key={section.id} className={hidden}>{node}</div> : <Fragment key={section.id}>{node}</Fragment>;

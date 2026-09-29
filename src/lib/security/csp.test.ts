@@ -38,14 +38,6 @@ describe('buildCsp', () => {
     expect(directive('frame-src')).toContain('https://*.stripe.com');
   });
 
-  it('lets the video players a Design video section can emit load, and nothing wider', () => {
-    const frame = directive('frame-src');
-    expect(frame).toContain('https://www.youtube-nocookie.com');
-    expect(frame).toContain('https://player.vimeo.com');
-    expect(frame).not.toMatch(/(^|\s)https:(\s|$)/);
-    expect(frame).not.toContain('*.youtube');
-  });
-
   it('allows blob: workers', () => {
     expect(directive('worker-src')).toBe("worker-src 'self' blob:");
   });
