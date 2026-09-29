@@ -9004,6 +9004,16 @@ Follow-ups found while writing the STORE-02 spec.
 - **Cache delay is stated, not fixed.** `/api/store` stays `s-maxage=30, stale-while-revalidate=60`. The save toast now says a change is live within about a minute and a half.
 - **`next dev` no longer edits AGENTS.md.** Next 16.3 appends a managed agent-rules block whenever it detects an AI agent; `agentRules: false` in `next.config.ts` turns that off.
 
-Not changed: `/store` still renders only the built-in section kinds. `text` / `image` / `video` / `links` / `canvas` sections added in Design show in the builder and not on the live page.
+Not changed in that pass: `/store` rendered only the built-in section kinds (fixed in the next entry).
 
 Tests: `initial-load.test.ts` (11), `appearance.test.ts` (10), `e2e/store-editor-load.spec.ts` (2; both fail on the old page). Browser check against `next dev`: a themed layout gives `/store` the theme accent and text, and the producer page the profile text colour and font.
+
+## 2026-09-29 - Design-mode authored sections render on /store (STORE-03 follow-up)
+
+`/store`'s section switch knew only the built-in kinds and returned null for `text`, `image`, `video`, `links` and `canvas`, so everything a producer composed in Design showed in the builder and nowhere else.
+
+- `/store` now draws those kinds with the same `SectionRenderer` the Design canvas uses, in a new `live` mode, with the resolved theme (`effectiveStoreTheme`) and per-device visibility left to `visibilityClasses` as for every other section.
+- `lib/store-editor/public-content.ts` decides what a buyer may see. `hasPublicContent` drops a section with nothing to show, so no builder hint ("Add your text in the inspector") reaches the page. `publicHref` accepts http(s) and site paths only: the CTA and profile links become real anchors, and a `javascript:` / `data:` / `//host` target renders nothing (not a dead button). `publicImageUrl` accepts https and site paths. `creatorLinks` builds Instagram / X hrefs from handles and validates them.
+- **Video and the CSP.** `frame-src` on `/store` is enforced and named only Stripe, so any embed would have been blocked in production. `publicVideoEmbed` accepts YouTube (watch, youtu.be, shorts, embed) and Vimeo URLs, rewrites them to `youtube-nocookie.com/embed/…` and `player.vimeo.com/video/…`, and returns null for anything else. `VIDEO_EMBED_ORIGINS` is imported by `buildCsp()`, so the policy and the rewrite cannot drift. The builder now says "Use a YouTube or Vimeo link — this one won't play on your store" instead of framing an arbitrary URL, and the inspector labels say what is accepted.
+
+Tests: `public-content.test.ts` (11), a `csp.test.ts` case (the two players allowed, no bare `https:` in frame-src), and `e2e/store-authored-sections.spec.ts` at 1440px and 390px (heading, body, CTA href, profile links, exactly one no-cookie iframe for two video sections, `javascript:` CTA absent, canvas block, no builder hints, a mobile-hidden section hidden at 390px only, no horizontal overflow, no page errors). Both e2e cases fail on the previous `/store`.

@@ -324,21 +324,22 @@ export function SectionInspector({
             ) : null}
             {section.kind === 'image' ? (
               <label className="grid gap-1.5">
-                <Label>Image URL</Label>
+                <Label>Image URL (https://)</Label>
                 <input
                   value={section.content?.imageUrl ?? ''}
                   onChange={(event) => onContent({ imageUrl: event.target.value })}
-                  className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
+                  placeholder="https://…"
+                  className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none placeholder:text-white/25 focus:border-white/40"
                 />
               </label>
             ) : null}
             {section.kind === 'video' ? (
               <label className="grid gap-1.5">
-                <Label>Embed URL</Label>
+                <Label>YouTube or Vimeo link</Label>
                 <input
                   value={section.content?.videoUrl ?? ''}
                   onChange={(event) => onContent({ videoUrl: event.target.value })}
-                  placeholder="https://www.youtube.com/embed/…"
+                  placeholder="https://youtu.be/…"
                   className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none placeholder:text-white/25 focus:border-white/40"
                 />
               </label>

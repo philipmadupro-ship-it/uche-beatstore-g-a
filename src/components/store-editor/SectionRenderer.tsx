@@ -23,6 +23,14 @@ import type { CreatorProfile, StoreTrack } from '@/components/store/types';
 import { resolveSection, type SectionSettings, type StoreBreakpoint, type StoreSection, type StoreTheme } from '@/lib/store-editor/layout';
 import { cn } from '@/lib/utils';
 import { pointToPercent } from '@/lib/store-editor/canvas-blocks';
+import {
+  creatorLinks,
+  hasPublicContent,
+  isVisibleBlock,
+  publicHref,
+  publicImageUrl,
+  publicVideoEmbed,
+} from '@/lib/store-editor/public-content';
 
 export type BuilderPlaylist = {
   id: string;
@@ -71,7 +79,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 export function SectionRenderer({
-  section, breakpoint, theme, data, editBlocks,
+  section, breakpoint, theme, data, editBlocks, live = false,
 }: {
   section: StoreSection;
   breakpoint: StoreBreakpoint;
@@ -88,9 +96,17 @@ export function SectionRenderer({
     onSelect: (id: string | null) => void;
     onMove: (id: string, x: number, y: number, commit: boolean) => void;
   };
+  /**
+   * Set by `/store`. No builder hints, real links, and only content
+   * `lib/store-editor/public-content.ts` accepts; a section with nothing to
+   * show renders nothing. Per-device visibility is left to the caller's CSS
+   * classes, because the storefront HTML is cached for every device.
+   */
+  live?: boolean;
 }) {
   const settings = resolveSection(section, breakpoint);
-  if (!settings.visible) return null;
+  if (!live && !settings.visible) return null;
+  if (live && !hasPublicContent(section, data.creator)) return null;
 
   const pad = spacingFor(settings, theme);
   const inner = cn('mx-auto w-full', widthClass(settings.width));
@@ -300,33 +316,49 @@ export function SectionRenderer({
                 {section.content.heading}
               </h2>
             ) : null}
-            <p
-              className="mx-auto whitespace-pre-wrap leading-relaxed"
-              style={{ color: theme.muted, fontSize: theme.typeScale, maxWidth: settings.width === 'narrow' ? '60ch' : undefined }}
-            >
-              {section.content?.body || 'Add your text in the inspector.'}
-            </p>
-            {section.content?.ctaLabel ? (
-              <span
-                className="mt-4 inline-block border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.16em]"
-                style={{
-                  borderColor: theme.buttonStyle === 'ghost' ? 'transparent' : theme.accent,
-                  background: theme.buttonStyle === 'solid' ? theme.accent : 'transparent',
-                  color: theme.buttonStyle === 'solid' ? '#0b0b09' : theme.accent,
-                  borderRadius: theme.radius,
-                  borderWidth: theme.borderWidth,
-                }}
+            {section.content?.body || !live ? (
+              <p
+                className="mx-auto whitespace-pre-wrap leading-relaxed"
+                style={{ color: theme.muted, fontSize: theme.typeScale, maxWidth: settings.width === 'narrow' ? '60ch' : undefined }}
               >
-                {section.content.ctaLabel}
-              </span>
+                {section.content?.body || 'Add your text in the inspector.'}
+              </p>
             ) : null}
+            {section.content?.ctaLabel ? (() => {
+              const style = {
+                borderColor: theme.buttonStyle === 'ghost' ? 'transparent' : theme.accent,
+                background: theme.buttonStyle === 'solid' ? theme.accent : 'transparent',
+                color: theme.buttonStyle === 'solid' ? '#0b0b09' : theme.accent,
+                borderRadius: theme.radius,
+                borderWidth: theme.borderWidth,
+              };
+              const className = 'mt-4 inline-block border px-4 py-2 font-mono text-[11px] uppercase tracking-[0.16em]';
+              // A real link only on the live page, and only to a safe target;
+              // in the builder a click would navigate the preview frame.
+              const href = live ? publicHref(section.content.ctaHref) : null;
+              // Live, with no safe target: no button at all. A button-shaped
+              // label that does nothing is worse than none.
+              if (live && !href) return null;
+              return href ? (
+                <a
+                  href={href}
+                  className={cn(className, 'transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2')}
+                  style={style}
+                  {...(href.startsWith('/') ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
+                >
+                  {section.content.ctaLabel}
+                </a>
+              ) : (
+                <span className={className} style={style}>{section.content.ctaLabel}</span>
+              );
+            })() : null}
           </div>
         );
 
       case 'image':
         return (
           <div className={cn(inner, 'px-4')}>
-            {section.content?.imageUrl ? (
+            {publicImageUrl(section.content?.imageUrl) ? (
               /**
                * Reserved box rather than a bare <img>.
                *
@@ -343,15 +375,19 @@ export function SectionRenderer({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary producer-supplied URL, not a known-size asset. */}
                 <img
-                  src={section.content.imageUrl}
-                  alt={section.content.heading || ''}
+                  src={publicImageUrl(section.content?.imageUrl)!}
+                  alt={section.content?.heading || ''}
                   loading="lazy"
                   decoding="async"
                   className="h-full w-full object-cover"
                 />
               </div>
             ) : (
-              <EmptyNote icon={Music}>Add an image URL in the inspector</EmptyNote>
+              <EmptyNote icon={Music}>
+                {section.content?.imageUrl?.trim()
+                  ? 'Use an https:// image URL — this one won’t show on your store'
+                  : 'Add an image URL in the inspector'}
+              </EmptyNote>
             )}
           </div>
         );
@@ -359,20 +395,29 @@ export function SectionRenderer({
       case 'video':
         return (
           <div className={cn(inner, 'px-4')}>
-            {section.content?.videoUrl ? (
+            {publicVideoEmbed(section.content?.videoUrl) ? (
               <div
-                className="aspect-video w-full border"
+                className="aspect-video w-full overflow-hidden border"
                 style={{ borderColor: theme.border, background: theme.surface, borderRadius: theme.radius }}
               >
+                {/* Only YouTube / Vimeo players, rewritten to their embed URL:
+                    frame-src on /store names exactly those origins. */}
                 <iframe
-                  src={section.content.videoUrl}
-                  title={section.content.heading || 'Video'}
+                  src={publicVideoEmbed(section.content?.videoUrl)!}
+                  title={section.content?.heading || 'Video'}
                   className="h-full w-full"
+                  loading="lazy"
+                  referrerPolicy="strict-origin-when-cross-origin"
                   allow="accelerometer; clipboard-write; encrypted-media; picture-in-picture"
+                  allowFullScreen
                 />
               </div>
             ) : (
-              <EmptyNote icon={Music}>Add an embed URL in the inspector</EmptyNote>
+              <EmptyNote icon={Music}>
+                {section.content?.videoUrl?.trim()
+                  ? 'Use a YouTube or Vimeo link — this one won’t play on your store'
+                  : 'Add a YouTube or Vimeo link in the inspector'}
+              </EmptyNote>
             )}
           </div>
         );
@@ -381,30 +426,29 @@ export function SectionRenderer({
         return (
           <div className={cn(inner, 'px-4', align)}>
             <div className="flex flex-wrap items-center gap-3" style={{ justifyContent: settings.align === 'center' ? 'center' : settings.align === 'right' ? 'flex-end' : 'flex-start' }}>
-              {[
-                data.creator?.instagram_handle && 'Instagram',
-                data.creator?.twitter_handle && 'X',
-                data.creator?.spotify_url && 'Spotify',
-                data.creator?.soundcloud_url && 'SoundCloud',
-                data.creator?.website_url && 'Website',
-              ].filter(Boolean).length === 0 ? (
+              {creatorLinks(data.creator).length === 0 ? (
                 <EmptyNote icon={Music}>No social links set on your profile</EmptyNote>
               ) : (
-                [
-                  data.creator?.instagram_handle && 'Instagram',
-                  data.creator?.twitter_handle && 'X',
-                  data.creator?.spotify_url && 'Spotify',
-                  data.creator?.soundcloud_url && 'SoundCloud',
-                  data.creator?.website_url && 'Website',
-                ].filter(Boolean).map((label) => (
-                  <span
-                    key={String(label)}
-                    className="border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em]"
-                    style={{ borderColor: theme.border, color: theme.muted, borderRadius: theme.radius }}
-                  >
-                    {String(label)}
-                  </span>
-                ))
+                creatorLinks(data.creator).map((link) => {
+                  const className = 'border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em]';
+                  const style = { borderColor: theme.border, color: theme.muted, borderRadius: theme.radius };
+                  // Anchors only on the live page: in the builder a click
+                  // would navigate the preview frame away from the editor.
+                  return live ? (
+                    <a
+                      key={link.label}
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={cn(className, 'transition-colors hover:border-white/30 hover:text-white focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2')}
+                      style={style}
+                    >
+                      {link.label}
+                    </a>
+                  ) : (
+                    <span key={link.label} className={className} style={style}>{link.label}</span>
+                  );
+                })
               )}
             </div>
           </div>
@@ -425,7 +469,7 @@ export function SectionRenderer({
                 borderRadius: theme.radius,
               }}
             >
-              {(section.content?.blocks ?? []).map((block) => (
+              {(section.content?.blocks ?? []).filter((block) => !live || isVisibleBlock(block)).map((block) => (
                 <div
                   key={block.id}
                   role={editBlocks ? 'button' : undefined}
@@ -493,10 +537,10 @@ export function SectionRenderer({
                   {block.kind === 'shape' ? (
                     <span className="block h-full w-full" style={{ background: block.color ?? theme.accent }} />
                   ) : null}
-                  {block.kind === 'image' && block.imageUrl ? (
+                  {block.kind === 'image' && publicImageUrl(block.imageUrl) ? (
                     // eslint-disable-next-line @next/next/no-img-element -- arbitrary producer-supplied URL.
                     <img
-                      src={block.imageUrl}
+                      src={publicImageUrl(block.imageUrl)!}
                       alt=""
                       loading="lazy"
                       decoding="async"
