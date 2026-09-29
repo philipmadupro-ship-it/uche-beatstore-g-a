@@ -8959,3 +8959,21 @@ Changes:
 Not changed: the email route from earlier in this conversation (`lib/share/email-share.ts`) was re-checked. It requires `share_links.user_id` = producer, and `/api/share` sets it on insert.
 
 Tests: `lib/share/playback.test.ts` (15), `lib/share/download-filename.test.ts` (6), grant TTL cases, and `e2e/share-options.spec.ts` (28, all fail on the old code).
+
+## 2026-09-29 - Project playback through one player (STORE-07)
+
+Task: a project with several tracks should play like a music player — play / pause / seek / switch, navigate away and back — with the player bar and the page never fighting or doubling audio.
+
+Reproduced in Chromium against the old code (stubbed bundle + access payloads, real pages and player):
+- **Delivery page played nothing.** `/store/projects/access/[token]` drives `usePlayer` (Play all, every row), but `StoreLayoutClient` treated it as transactional and did not mount `PlayerBar`, which owns `SimpleAudioEngine`. After Play all: zero `<audio>` elements in the document, the button read "Pause", and `MediaSessionBridge` told the OS it was playing.
+- **Leaving the layout lied, and coming back auto-played from 0:00.** Bundle → Buy bundle → `/store/checkout` unmounts the player; the detached `<audio>` stops, but the store kept `isPlaying: true`. Back mounted a fresh element that started the track by itself from the top (≈9 s in → 0 s).
+- Browsing inside the store (bundle → producer → Back) was already one continuous stream; kept as a guard.
+
+Changes:
+- `StoreLayoutClient`: only checkout/download hide the player. The delivery page mounts `PlayerBar` (and gets the bar's bottom padding) but still no cart, install button or voice tag — it is a listening surface for something already bought, not a shopping one.
+- `SimpleAudioEngine`: on a real unmount (its element is disconnected — StrictMode's rehearsal unmount leaves it attached and must not pause the first track) it sets `isPlaying/isBuffering` false. A new engine resumes the current track at the store's `progress` (set before metadata, so it becomes the default start position; reapplied after the background offline/preview blob swap). `progress` is reset by every track change, so a stale position can't land on another track.
+- `VoiceTagPlayer`: its tag is a detached `new Audio()`, so unmounting never stopped it; the unmount cleanup now pauses it.
+
+No API, contract, schema or storage change. The delivery page's stream is the existing token-gated `/api/store/projects/access/[token]/download?format=mp3` URL the page already rendered as a download link (Range-capable; `<audio>` ignores the attachment disposition).
+
+Tests: `SimpleAudioEngine.test.tsx` (+3: unmount marks paused; remount resumes at position without auto-play; a track picked while unmounted starts at 0 — first two fail on the old engine). `e2e/project-playback.spec.ts` (4: delivery page play all / pause / keyboard seek / next with one element; in-store navigation continuity; checkout → Back pauses honestly and resumes at position; 390 px delivery page) — three fail on the old code. The WAV stub serves Range requests: Chromium cannot seek a resource served without them and restarts at 0.

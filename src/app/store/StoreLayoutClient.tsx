@@ -25,9 +25,12 @@ import { PublicArtworkThemeProvider } from '@/components/providers/ArtworkThemeP
 export function StoreLayoutClient({ children }: { children: React.ReactNode }) {
   const { items, removeItem, isOpen, setIsOpen, cartTotal } = useCart();
   const pathname = usePathname();
-  const isTransactional = pathname.startsWith('/store/checkout')
-    || pathname.startsWith('/store/download')
-    || pathname.startsWith('/store/projects/access');
+  const isCheckoutFlow = pathname.startsWith('/store/checkout')
+    || pathname.startsWith('/store/download');
+  // A bought bundle's delivery page is not a shopping surface (no cart), but
+  // it IS a listening one: Play all and every row drive the global player,
+  // so the player has to be mounted there or they play nothing.
+  const isDelivery = pathname.startsWith('/store/projects/access');
 
   // Pull a signed-in buyer's account hearts into this browser's wishlist.
   // Keyed on the path because signing in happens inside /store (the account
@@ -45,26 +48,30 @@ export function StoreLayoutClient({ children }: { children: React.ReactNode }) {
       >
         Skip to main content
       </a>
-      <main id="store-main-content" tabIndex={-1} className={isTransactional ? 'pb-0' : 'pb-28'}>
+      <main id="store-main-content" tabIndex={-1} className={isCheckoutFlow ? 'pb-0' : 'pb-28'}>
         {children}
       </main>
       <MediaSessionBridge />
-      {!isTransactional && (
+      {!isCheckoutFlow && (
         // The player and cart draw track artwork but sit outside every page's
         // provider. Without one, their artwork hooks took the dashboard path
         // and called session-gated endpoints — a 401 for every buyer.
         <PublicArtworkThemeProvider>
           <PlayerBar publicStore />
-          <VoiceTagPlayer />
-          <FloatingCartButton />
-          <InstallAppButton />
-          <CartDrawer
-            open={isOpen}
-            onClose={() => setIsOpen(false)}
-            items={items}
-            removeItem={removeItem}
-            total={cartTotal()}
-          />
+          {!isDelivery && (
+            <>
+              <VoiceTagPlayer />
+              <FloatingCartButton />
+              <InstallAppButton />
+              <CartDrawer
+                open={isOpen}
+                onClose={() => setIsOpen(false)}
+                items={items}
+                removeItem={removeItem}
+                total={cartTotal()}
+              />
+            </>
+          )}
         </PublicArtworkThemeProvider>
       )}
     </div>
