@@ -8978,6 +8978,22 @@ Tests: `lib/share/playback.test.ts` (15), `lib/share/download-filename.test.ts` 
 
 **Tests.** `track-catalogue.test.ts` (250 → 3 requests, exact multiple, empty, progress, dedupe, stuck cursor, page cap, failure, bounded concurrency). `e2e/store-editor-catalogue.spec.ts` at 1440px and 390px: all 30 page-three listed beats render, no "Load next 100" control, search finds beat 150 without a request, and Move down PATCHes `/api/tracks/reorder` with all 30 listed beats and distinct positions. With the old page it fails at the first assertion.
 
+## 2026-09-29 - /api/tracks is owner-only again (STORE-02 follow-up)
+
+Found while fixing STORE-02. `/api/tracks` reads with the service role, which bypasses RLS, so it has to apply the owner rule itself. Migration 097 made `tracks` RLS owner-only and retired the legacy `user_id IS NULL` allowance. The route put it back in both of its branches:
+- **Bounded branch** (`paged` / `limit` / `cursor` / `q` / `lean`, used by the library, Store Editor and pickers): `.or('user_id.eq.X,user_id.is.null')`.
+- **Legacy unbounded branch**: `scopedList('tracks')`, whose `includeNullOwner` defaults to `true`, the same filter.
+
+Any producer was therefore shown every orphan track. Those rows were not editable, because the owned-row helpers 403 them, so each one was a row whose toggles failed.
+
+Fix: the bounded query uses `.eq('user_id', owner)` and both `scopedList` calls pass `includeNullOwner: false`. `scopedList`'s default is unchanged, because calendar and smart-playlists still rely on it; see "Not changed".
+
+Tests: `route.owner-filter.test.ts` drives the Supabase branch through a query-builder fake that records every filter. It covers the bounded list, the bounded list with search and `store_listed`, and the unbounded list. All three fail on the old route.
+
+**Data note.** No migration adopts orphan tracks (111 did so for contacts only). If production has `tracks` rows with `user_id IS NULL`, they stop appearing in the dashboard. The RLS already hid them from every non-service read. Check with `SELECT count(*) FROM tracks WHERE user_id IS NULL;` and adopt them in a migration if any matter.
+
+**Not changed** (same pattern, other routes): `api/activity`, `api/events`, `api/tracks/[id]/similar`, `api/tracks/tags`, `api/tracks/tags/bulk`, `api/store` (catalogue, playlists, projects), `api/store/facets`, and the `scopedList` default used by `api/calendar` and `api/smart-playlists`.
+
 ## 2026-09-29 - Content sections render on /store (STORE-07)
 
 **Reproduced.** A layout with a `text` and a `canvas` section, injected into the real `/api/store` response: both render in the builder, and neither appears on `/store` at 1440 or 390. `renderStoreSection` in `src/app/store/page.tsx` handled only the built-in kinds and returned `null` for `text` / `image` / `video` / `links` / `canvas`.
