@@ -46,7 +46,7 @@ service-role key can read the schema's effects but cannot run DDL):
 | `110_normalize_contact_emails.sql` | effect present | no contact emails with uppercase letters found |
 | `111_adopt_orphan_contacts.sql` | effect present | 0 contacts with `user_id IS NULL` |
 | `112_backfill_buyer_contacts.sql` | **not applied** | 1 paid buyer email has no contact |
-| `113_store_layout.sql` | **not applied** | `creator_profiles.store_layout` missing |
+| `113_store_layout.sql` | applied (seen 2026-09-29) | prod `/api/store` returns a `store_layout` key, which only its own `select('store_layout')` can supply — that select fails when the column is missing |
 | `114_share_price_overrides.sql` | no-op on prod | columns already exist, added outside migrations |
 | `115_track_collaborators.sql` | **not applied** | new table; `track_collaborators` missing |
 | `116_notifications_realtime.sql` | **not applied** | new — adds `notifications` to the realtime publication |

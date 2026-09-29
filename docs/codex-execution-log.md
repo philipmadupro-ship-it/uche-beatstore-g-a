@@ -9035,3 +9035,19 @@ Producer report: in Design, a video section's size couldn't be changed and a URL
 
 Tests: `content-sections.test.ts` (size clamp and default, align margins); `layout.test.ts` (no Columns on content kinds); `SectionRenderer.test.tsx` (live video at 60% right-aligned; unset image at 100%); `e2e/store-editor-video-section.spec.ts` at 1366×768 (link on screen without scrolling, a real ⌘V/Ctrl+V paste, the no-cookie embed on the canvas, no Columns, the slider halves the drawn width, the panel wheel-scrolls, `mediaSize: 50` in the autosaved layout). The e2e fails on the old code at the first assertion (link at 842 > 768).
 
+## 2026-09-29 - Design layouts were never saved: `/api/profile` dropped `store_layout` (STORE-08, part 2)
+
+Reported: "the video doesn't appear on the final store". CSP and rendering were fine (prod `/store` `frame-src` already lists `youtube-nocookie.com` and `player.vimeo.com`; STORE-07 renders content sections). Prod `/api/store` returned `creator.store_layout: null`.
+
+Root cause: `POST/PATCH /api/profile` builds its row from a destructured whitelist and `pickProvidedProfileFields` keeps only those keys. `CreatorProfilePatchSchema` has accepted `store_layout` since it was added, but the route never named it, so it was discarded and the route still answered 200 with the profile. The builder trusted the status, showed "saved", and nothing arranged in Design ever reached the database. `git log -S store_layout -- src/app/api/profile/route.ts` is empty: it was never there. A schema-vs-route diff found no other dropped field.
+
+Changes:
+- `src/app/api/profile/route.ts` names `store_layout` (null clears it; absent leaves it alone).
+- `lib/store-editor/layout-save.ts#layoutSaveProblem`: the builder's `persistStoreLayout` now fails the save when the returned row does not hold the sent section ids in order, so a silent drop can never read as saved again. Ids, not bytes: `jsonb` reorders keys.
+- `e2e/store-layout-persistence.spec.ts`: Design → video → autosave through the real route into the local store → row read back → reload shows it in the builder → `/store` renders the `youtube-nocookie` iframe at the chosen size. Verified it fails without the route change (200, no layout). `store-editor-video-section.spec.ts`'s stub now echoes the layout like the real route.
+- `supabase/MIGRATIONS.md`: 113 marked applied; the prod `store_layout` key can only come from its own select, which fails without the column.
+
+Note for the producer: layouts arranged before this deploy were never on the server. Store Editor → Design → History (IndexedDB, per browser) may hold snapshots of them to restore; restoring autosaves. `/store` is edge-cached for up to ~90 s after a save.
+
+In this sandbox the embed itself shows Chromium's error page: `ERR_CERT_AUTHORITY_INVALID` from the sandbox's TLS proxy, reproduced on a blank page with no CSP. Not an app issue.
+

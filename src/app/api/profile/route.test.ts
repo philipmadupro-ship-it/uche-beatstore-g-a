@@ -81,6 +81,33 @@ describe('POST /api/profile', () => {
     });
   });
 
+  it('writes the Store Editor Design layout (STORE-08)', async () => {
+    // The route's whitelist never named store_layout: the builder's autosave
+    // got a 200 and the layout was dropped, so no Design section ever reached /store.
+    const layout = {
+      version: 1,
+      sections: [{
+        id: 'video-1',
+        kind: 'video',
+        visible: { desktop: true, tablet: true, mobile: true },
+        base: {},
+        content: { videoUrl: 'https://youtu.be/dQw4w9WgXcQ', mediaSize: 50 },
+      }],
+      theme: { accent: '#c8a47a' },
+      updatedAt: '2026-09-29T00:00:00.000Z',
+    };
+    const res = await post({ store_layout: layout });
+    expect(res.status).toBe(200);
+    expect(mockUpdate.mock.calls[0][0]).toEqual({ store_layout: layout });
+  });
+
+  it('clears the Design layout on null and leaves it alone when not named', async () => {
+    await post({ store_layout: null });
+    expect(mockUpdate.mock.calls[0][0]).toEqual({ store_layout: null });
+    await post(profileSaveBody(form));
+    expect(mockUpdate.mock.calls[1][0]).not.toHaveProperty('store_layout');
+  });
+
   it('clears the text colour back to the default on an empty value', async () => {
     await post({ text_color_primary: '' });
     expect(mockUpdate.mock.calls[0][0]).toEqual({ text_color_primary: null });

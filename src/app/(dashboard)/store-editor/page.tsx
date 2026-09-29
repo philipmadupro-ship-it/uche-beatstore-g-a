@@ -52,6 +52,7 @@ import type { StoreTrack, CreatorProfile } from '@/components/store/types';
 import { StorefrontBuilder } from '@/components/store-editor/StorefrontBuilder';
 import type { StorefrontData } from '@/components/store-editor/SectionRenderer';
 import { normalizeLayout, type StoreLayout, type StoreTheme } from '@/lib/store-editor/layout';
+import { layoutSaveProblem } from '@/lib/store-editor/layout-save';
 import { failedSourceLabels, loadStoreEditor, saveScope, type SaveScope } from '@/lib/store-editor/initial-load';
 import { normalizeFontStyle, resolveStoreAppearance, STORE_FONT_LABELS, STORE_FONT_STYLES } from '@/lib/store/appearance';
 import { uploadImageFile } from '@/lib/upload/image-upload-client';
@@ -1020,10 +1021,13 @@ export default function StoreEditorPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ store_layout: layout }),
     });
+    const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
       throw new Error(body?.error || 'Could not save the storefront layout.');
     }
+    // A 200 is not proof: the route once dropped store_layout and still said OK.
+    const problem = layoutSaveProblem(layout, body);
+    if (problem) throw new Error(problem);
     setStoreLayout(layout);
   }, []);
 

@@ -31,8 +31,10 @@ test('a video section can be pasted into and resized on a 768px-tall screen', as
   const layoutSaves: unknown[] = [];
   await page.route(/\/api\/profile(\?.*)?$/, (route) => {
     if (route.request().method() === 'GET') return route.fulfill(json({ profile: { display_name: 'E2E Producer' } }));
-    layoutSaves.push(route.request().postDataJSON());
-    return route.fulfill(json({ profile: {} }));
+    const saved = route.request().postDataJSON();
+    layoutSaves.push(saved);
+    // Echo it as the real route does; the builder checks the row it gets back.
+    return route.fulfill(json({ profile: { store_layout: saved.store_layout } }));
   });
   for (const [pattern, body] of [
     [/\/api\/playlists(\?.*)?$/, { playlists: [] }],
