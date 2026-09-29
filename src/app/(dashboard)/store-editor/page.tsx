@@ -18,6 +18,7 @@
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { compareFeatured } from '@/lib/store/newest';
+import { appearanceStyle } from '@/lib/store/typography';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
@@ -664,7 +665,8 @@ function StorePreview({
   /** The Design mode theme, so this preview resolves colours as /store does. */
   theme: StoreTheme;
 }) {
-  const { accent, text, fontFamily } = resolveStoreAppearance(profile, theme);
+  const appearance = resolveStoreAppearance(profile, theme);
+  const { accent } = appearance;
 
   // Map ProfileForm → CreatorProfile so the real ArtistBioBlock can render.
   const creator: CreatorProfile = {
@@ -712,9 +714,12 @@ function StorePreview({
   const previewStoreTracks = asTracks(tracks);
 
   return (
+    // Font style, text colour and accent from the unsaved form — the same
+    // style object /store spreads, so the preview cannot drift from it.
     <div
+      data-testid="store-editor-preview"
       className="rounded-xl overflow-hidden border border-white/10 bg-[#090907]"
-      style={{ '--store-accent': accent, '--store-text': text, fontFamily, color: text } as React.CSSProperties}
+      style={appearanceStyle(appearance)}
     >
       {/* Real ArtistBioBlock — mirrors what buyers see */}
       <ArtistBioBlock creator={creator} accentColor={accent} />
@@ -2138,12 +2143,14 @@ export default function StoreEditorPage() {
                       type="color"
                       value={form.accent_color}
                       onChange={set('accent_color')}
+                      aria-label="Pick storefront accent colour"
                       className="w-6 h-6 rounded cursor-pointer border-none bg-transparent p-0"
                     />
                     <input
                       type="text"
                       value={form.accent_color}
                       onChange={set('accent_color')}
+                      aria-label="Storefront accent colour"
                       maxLength={7}
                       placeholder="#FFFFFF"
                       className="w-20 bg-transparent text-[11px] text-white focus:outline-none font-mono"
@@ -2181,6 +2188,7 @@ export default function StoreEditorPage() {
                       key={fs}
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, font_style: fs }))}
+                      aria-pressed={form.font_style === fs}
                       className={`px-4 py-2 rounded-lg text-[11px] font-medium border transition-colors capitalize ${
                         form.font_style === fs
                           ? 'bg-white/10 border-white/20 text-white'
@@ -2201,12 +2209,14 @@ export default function StoreEditorPage() {
                       type="color"
                       value={form.text_color_primary}
                       onChange={set('text_color_primary')}
+                      aria-label="Pick storefront text colour"
                       className="w-6 h-6 rounded cursor-pointer border-none bg-transparent p-0"
                     />
                     <input
                       type="text"
                       value={form.text_color_primary}
                       onChange={set('text_color_primary')}
+                      aria-label="Storefront text colour"
                       maxLength={7}
                       placeholder="#FFFFFF"
                       className="w-20 bg-transparent text-[11px] text-white focus:outline-none font-mono"

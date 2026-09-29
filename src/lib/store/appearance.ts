@@ -46,6 +46,23 @@ export function normalizeFontStyle(value: string | null | undefined): StoreFontS
 
 export const DEFAULT_STORE_TEXT_COLOR = '#FFFFFF';
 
+/** `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa` — what the editor's picker and field produce. */
+const HEX_COLOR = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+
+/**
+ * The text colour to draw, or white.
+ *
+ * The editor's text field accepts anything while it is being typed, and the
+ * value goes into a CSS custom property. A half-typed `#12` would make every
+ * `var(--store-text)` consumer invalid at computed-value time — i.e. fall back
+ * to `inherit`/transparent rather than white — so anything that is not a
+ * complete hex colour reads as the default instead.
+ */
+export function storeTextColor(value: string | null | undefined): string {
+  const v = value?.trim();
+  return v && HEX_COLOR.test(v) ? v : DEFAULT_STORE_TEXT_COLOR;
+}
+
 export type StoreAppearanceProfile = {
   accent_color?: string | null;
   text_color_primary?: string | null;
@@ -78,8 +95,7 @@ export function resolveStoreAppearance(
   return {
     accent: themeOverride(theme?.accent, defaultStoreTheme.accent)
       ?? normalizeThemeColor(profile?.accent_color),
-    text: themeOverride(theme?.text, defaultStoreTheme.text)
-      ?? (profile?.text_color_primary?.trim() || DEFAULT_STORE_TEXT_COLOR),
+    text: storeTextColor(themeOverride(theme?.text, defaultStoreTheme.text) ?? profile?.text_color_primary),
     fontStyle,
     fontFamily: STORE_FONT_FAMILIES[fontStyle],
   };

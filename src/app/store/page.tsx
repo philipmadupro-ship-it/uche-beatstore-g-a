@@ -33,6 +33,7 @@ import {
   type TypeFilter, type ViewMode, type LicenseTier,
   TYPE_FILTERS,
 } from '@/components/store/types';
+import { appearanceStyle } from '@/lib/store/typography';
 import { sanitizeUrl } from '@/components/store/helpers';
 import { resolveStoreAppearance } from '@/lib/store/appearance';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
@@ -1095,8 +1096,11 @@ function StorePage() {
    */
   const viewerBreakpoint = useStoreBreakpoint();
   // Profile colours, overridden by any theme colour the producer changed in
-  // the Store Editor's Design mode (`lib/store/appearance.ts`).
-  const { accent: accentColor, text: textColor, fontFamily } = resolveStoreAppearance(creator, storeLayout.theme);
+  // Design (`lib/store/appearance.ts`), spread on the root as the same style
+  // object the Store Editor's previews use.
+  const appearance = useMemo(() => resolveStoreAppearance(creator, storeLayout.theme), [creator, storeLayout.theme]);
+  const accentColor = appearance.accent;
+  const themeStyle = useMemo(() => appearanceStyle(appearance), [appearance]);
 
   /**
    * Storefront sections, drawn in the order the producer arranged them.
@@ -1234,12 +1238,7 @@ function StorePage() {
     <ArtworkThemeProvider theme={artworkTheme}>
     <div
       className="store-ui min-h-screen bg-[#090907] pb-28"
-      style={{
-        '--store-accent': accentColor,
-        '--store-text': textColor,
-        fontFamily,
-        color: textColor,
-      } as React.CSSProperties}
+      style={themeStyle}
     >
       {/* ── Purchase return banner ─────────────────────────────── */}
       {bannerOpen && (

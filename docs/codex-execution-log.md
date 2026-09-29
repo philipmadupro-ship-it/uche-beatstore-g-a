@@ -8978,13 +8978,29 @@ Tests: `lib/share/playback.test.ts` (15), `lib/share/download-filename.test.ts` 
 
 **Tests.** `track-catalogue.test.ts` (250 → 3 requests, exact multiple, empty, progress, dedupe, stuck cursor, page cap, failure, bounded concurrency). `e2e/store-editor-catalogue.spec.ts` at 1440px and 390px: all 30 page-three listed beats render, no "Load next 100" control, search finds beat 150 without a request, and Move down PATCHes `/api/tracks/reorder` with all 30 listed beats and distinct positions. With the old page it fails at the first assertion.
 
+## 2026-09-29 - /api/tracks is owner-only again (STORE-02 follow-up)
+
+Found while fixing STORE-02. `/api/tracks` reads with the service role, which bypasses RLS, so it has to apply the owner rule itself. Migration 097 made `tracks` RLS owner-only and retired the legacy `user_id IS NULL` allowance. The route put it back in both of its branches:
+- **Bounded branch** (`paged` / `limit` / `cursor` / `q` / `lean`, used by the library, Store Editor and pickers): `.or('user_id.eq.X,user_id.is.null')`.
+- **Legacy unbounded branch**: `scopedList('tracks')`, whose `includeNullOwner` defaults to `true`, the same filter.
+
+Any producer was therefore shown every orphan track. Those rows were not editable, because the owned-row helpers 403 them, so each one was a row whose toggles failed.
+
+Fix: the bounded query uses `.eq('user_id', owner)` and both `scopedList` calls pass `includeNullOwner: false`. `scopedList`'s default is unchanged, because calendar and smart-playlists still rely on it; see "Not changed".
+
+Tests: `route.owner-filter.test.ts` drives the Supabase branch through a query-builder fake that records every filter. It covers the bounded list, the bounded list with search and `store_listed`, and the unbounded list. All three fail on the old route.
+
+**Data note.** No migration adopts orphan tracks (111 did so for contacts only). If production has `tracks` rows with `user_id IS NULL`, they stop appearing in the dashboard. The RLS already hid them from every non-service read. Check with `SELECT count(*) FROM tracks WHERE user_id IS NULL;` and adopt them in a migration if any matter.
+
+**Not changed** (same pattern, other routes): `api/activity`, `api/events`, `api/tracks/[id]/similar`, `api/tracks/tags`, `api/tracks/tags/bulk`, `api/store` (catalogue, playlists, projects), `api/store/facets`, and the `scopedList` default used by `api/calendar` and `api/smart-playlists`.
+
 ## 2026-09-29 - Store Editor load/save safety, one storefront appearance rule (STORE-03)
 
 Follow-ups found while writing the STORE-02 spec.
 
 - **A failed side-request could wipe the profile.** The Store Editor fetched six endpoints with `Promise.all` and parsed all six bodies with a second `Promise.all`. One non-JSON body (in the e2e environment, `/api/promo-codes` and `/api/licenses`) rejected the lot. The form stayed on `EMPTY_PROFILE`, and the next **Save changes** PATCHed those blanks over the saved bio, socials and prices. `lib/store-editor/initial-load.ts` now loads each source on its own (`loadSource` never throws: a non-2xx, a non-object body and a network error are all `ok: false`). `saveScope` says what Save may write. The profile PATCH needs the profile to have loaded, and the featured-playlist and featured-project writes need their lists. Save is disabled (and refuses in the handler) when the profile did not load. One toast names whatever else failed.
 - **Font options.** `/profile` offered `modern` and `minimal`, which the storefront never mapped, so both drew the default face. Both editors now offer the same three (`STORE_FONT_STYLES`: default / serif / mono), and a saved legacy value reads as `default`.
-- **One appearance rule** (`lib/store/appearance.ts#resolveStoreAppearance`). `/store`, `/store/producer/[slug]`, the Content-mode preview and the Design canvas all resolve accent, text colour and font the same way. A Design theme colour wins only when it differs from the stock theme. Every saved layout carries a full theme, so a producer who only reordered sections keeps their profile accent. The producer page now applies the text colour (it only applied the font), and its API returns `store_layout` from a separate query, as `/api/store` does. The theme panel gained a **Text** swatch. There was no control for theme text before.
+- **One appearance rule** (`lib/store/appearance.ts#resolveStoreAppearance`). STORE-06 (#38) had landed `lib/store/typography.ts#storefrontThemeStyle` for the same three fields; on merge it became the CSS half (it now calls the resolver and takes the layout theme), and its hex check for text moved into the resolver. `/store`, `/store/producer/[slug]`, the Content-mode preview and the Design canvas all resolve accent, text colour and font the same way. A Design theme colour wins only when it differs from the stock theme. Every saved layout carries a full theme, so a producer who only reordered sections keeps their profile accent. The producer page now applies the text colour (it only applied the font), and its API returns `store_layout` from a separate query, as `/api/store` does. The theme panel gained a **Text** swatch. There was no control for theme text before.
 - **Cache delay is stated, not fixed.** `/api/store` stays `s-maxage=30, stale-while-revalidate=60`. The save toast now says a change is live within about a minute and a half.
 - **`next dev` no longer edits AGENTS.md.** Next 16.3 appends a managed agent-rules block whenever it detects an AI agent; `agentRules: false` in `next.config.ts` turns that off.
 

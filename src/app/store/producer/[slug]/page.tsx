@@ -12,7 +12,7 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { toast } from '@/hooks/useToast';
 import { getBuyerToken } from '@/lib/buyer-session';
 import type { Track } from '@/lib/types';
-import { resolveStoreAppearance } from '@/lib/store/appearance';
+import { storefrontThemeStyle } from '@/lib/store/typography';
 import { normalizeLayout } from '@/lib/store-editor/layout';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { MusicReactiveBackdrop } from '@/components/ui/MusicReactiveBackdrop';
@@ -167,7 +167,7 @@ export default function ProducerPage({
   // Same rule as /store: profile colours, overridden by any theme colour
   // changed in the Store Editor's Design mode. This page used to apply the
   // font and ignore the text colour.
-  const { text: textColor, fontFamily } = resolveStoreAppearance(creator, normalizeLayout(creator?.store_layout).theme);
+  const themeStyle = storefrontThemeStyle(creator, normalizeLayout(creator?.store_layout).theme);
   const signatureLine = formatSignature(producerSignature(tracks));
   const creditLines = (creator?.credits ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
 
@@ -193,7 +193,7 @@ export default function ProducerPage({
     <ArtworkThemeProvider theme={artworkTheme}>
     <div
       className="store-ui min-h-screen bg-[#090907]"
-      style={{ '--store-text': textColor, fontFamily, color: textColor } as React.CSSProperties}
+      style={themeStyle}
     >
       {/* ── Hero ── */}
       <div className="relative isolate">
