@@ -8772,6 +8772,67 @@ A guest checkout is stored under the lowercased email: the Stripe webhook normal
 
 `src/app/api/store/account/account-routes.test.ts` (9 tests) runs against a fake DB that really filters on `eq`. It covers casing, session and token returning identical payloads, cross-buyer isolation, 401 with no session and 400 on a bad token (both with no DB read), 500 on a query failure, and library reads keyed on the canonical email. 5 of the 9 fail with the source changes reverted.
 
+## 2026-09-28 - Login redirect keeps a deep link's query
+
+When a signed-out visitor hit a protected page, `src/proxy.ts` set `next` to the pathname alone and left the original query on `/login`. So `/studio?track=<id>` became `/login?track=<id>&next=/studio`, and signing in opened an empty studio. Any other deep link with a query (library sort/filter) lost it the same way.
+
+`next` is now `pathname + search`, and the login URL keeps no other params. Nothing downstream needed changing. The password path does `window.location.assign(next)`, OAuth URL-encodes `next` into the callback, and both keep their existing same-origin-path check, which a path with a query still passes. Tests in `src/proxy.test.ts` cover this; two of them fail on the old code.
+
+## 2026-09-28 — BUYER-02: buyer favourites / history / playlists persist correctly
+
+Root cause (first incorrect layer: the client→API favourite contract). `useWishlist.toggle` mirrored a heart with `toggle_favorite`, which flips whatever row the server holds, and nothing ever read `buyer_favorites` back into the wishlist. On any device whose local wishlist had not seen a heart (second device, cleared browser, after sign-out/in) the beat showed empty; tapping it to save it deleted the account's favourite. Reproduced against the old route: an existing row + `toggle_favorite` → `{ favorited: false }` and a `buyer_favorites` delete.
+
+Also on the same path: `/store` grid/list plays were logged twice (`trackStoreEvent('preview_play')` already calls `logPlay`, and `handlePlay` called it again); a legacy delivery token outranked the signed-in session, so hearts/plays went to the token's email; writes accepted any track uuid, and GET then returned that track's title/cover/key — an unlisted beat's metadata for anyone with its id; session/token emails were not run through `normalizeEmail`.
+
+Fix: `set_favorite` (idempotent, explicit state) + `reconcileFavorites` merge on the next /store navigation per identity (guest hearts pushed up, never dropped); session outranks token; sign-out clears identity and the local wishlist; `store_listed` gate on every write that adds a track (removals are never gated); duplicate `logPlay` removed. No schema change. Tests: route (listing gate, set semantics, session email canonicalisation, GET scoping), buyer-session (precedence, set body, null-vs-empty favourites), wishlist account-sync regression, pure `favorites-sync`.
+
+Follow-up, same PR: `/api/store/me` GET now filters the track join to listed-or-purchased (`visibleBuyerLibraryTracks` + `license_purchases.track_ids` for this email), so rows written before the write gate can't read an unlisted beat's metadata; they render as "Beat unavailable". `add_to_playlist` / `remove_from_playlist` had no caller: `/store/[id]` gets an `AddToPlaylistMenu` (ActionMenu; checked rows remove, "New playlist with this beat" names it after the beat), and `/store/account/me` lists each playlist's beats with a remove button. Playlist delete on `/me` uses `confirmToast` instead of native `confirm()`.
+
+Second follow-up: bundle buyers — GET also counts `project_tracks` of every `project_access_links` project for this email as purchased (same set bundle delivery hands out), so an unlisted beat from a bought bundle no longer shows "Beat unavailable". Playlist order — remove renumbers the remaining rows to 0…n-1 (`compactPlaylistPositions`, only changed rows written) and add appends at max + 1 rather than the row count, which collided with an occupied slot whenever an older list already had a gap.
+
+## 2026-09-28 - Sections cards get Lyrics Studio and Send to studio
+
+The Library's Sections (browse) rows were the last track surface with no ⋯ menu. `MiniTrackCard` was a private function inside `app/(dashboard)/library/page.tsx`, so it could not be tested. It moved unchanged to `components/library/MiniTrackCard.tsx`. The only addition is an `ActionMenu` with **Lyrics Studio** (`L`) and **Send to studio** (`S`), wired from the page's existing `handleOpenLyrics` / `handleOpenStudio` through `HomeRow`.
+
+- The trigger sits at `z-10`, above the cover-sized play button. Its wrapper stops the click, so choosing an item neither plays the track nor opens the details drawer.
+- It is revealed on hover like the grid card, and also on `focus-within` and on `@media (hover: none)`. On a touch tablet there is no hover to reveal it. Phones never show Sections, which is forced to "All" below the mobile breakpoint.
+- Tests: `components/library/MiniTrackCard.test.tsx`.
+
+## 2026-09-28 - Expiry semantics per flow: buyer account, legacy link, orders, project access, shares (BUYER-06)
+
+Traced every expiry that touches a buyer or a share recipient before changing any of them. Each lifetime was already set per flow. Two places reported or applied one flow's clock to another.
+
+| Flow | Lifetime | Where | Changed? |
+|---|---|---|---|
+| Persistent buyer account (`/store/account/me`) | Supabase session, refreshed in `src/proxy.ts`; `@supabase/ssr` cookies keep their defaults | auth | client precedence fixed |
+| Legacy account link (`/store/account/[token]`) | 24h HMAC (`lib/buyer-tokens.ts`) | stateless | no |
+| Order lookup recovery (`/api/store/orders`) | same 24h token, bound to the email | stateless | no |
+| Project bundle access (`project_access_links.expires_at`) | NULL = permanent; set to now() only by refund/dispute (mig 117) | webhook | no |
+| Track-license delivery (`/store/download?session_id`) | permanent; R2 signed URL minted per click (1h) | `license_purchases.status` | no |
+| Share links (`share_links.expires_at`) | producer-chosen N days, or never (contract caps 365 / 3650) | producer | email copy fixed |
+
+- **Stale legacy token shadowed the persistent account.** `lib/buyer-session.ts#dispatch` sent the localStorage token whenever one existed and used the session only as a fallback. The 24h delivery link stores that token, so after it expired a signed-in buyer's next favourite or play went out with the dead token and was dropped. BUYER-02 (#27) landed the same fix, `buyerIdentityQuery` (session first), while this PR was open. The merge keeps that implementation, plus this PR's two tests: the session wins over a stale token, and a rejected session clears only its own marker.
+- **Follow-up emails claimed every link expired in 30 days.** `NudgeModal` re-sends an existing share without `expiresDays`, and `/api/email` fell back to `30`. So a never-expiring link, one with two days left and one already dead were all described as "Link expires in 30 days". The route now reads `expires_at` / `revoked_at` / `allow_downloads` from the share row. The lookup is owner-filtered on the service client after `requireProducer`. The template prints the absolute date (`shareExpiryText`, UTC). The route refuses with 409 to email a revoked or expired link and returns 404 for a token the producer does not own. The request's `expiresDays` is used only in local-store dev mode.
+
+Tests: `app/api/email/expiry.test.ts` (6, all fail on the old route), `lib/email/beat-send-template.test.ts`, and 2 new cases in `lib/buyer-session.test.ts`.
+
+### BUYER-06 follow-ups (same PR)
+
+These three were found during the trace and fixed after the user asked for them:
+
+- **Refunded or revoked purchases linked to a 403.** `lib/store/buyer-purchases.ts` now sets `access_revoked` using the rules the download routes enforce: `license_purchases.download_unlocked` and `isProjectAccessActive`. Revoked rows stay in the account history but have no `download_url`, and both account pages show "Access revoked".
+- **Nudging a project send built a `/share/` URL.** Project sends store a `project_shares` token. `lib/share/email-share.ts` resolves the token in either table, with ownership checked through `share_links.user_id` or through the project's `user_id`. It returns the right page (`/projects/share/<token>`), the email kind, the expiry and the downloads flag.
+- **Follow ignored the signed-in session.** `/api/store/follow` now resolves identity from the session first (canonical email via `sessionBuyerEmail`), then the legacy token, then a body email.
+
+Tests: 2 cases in `account-routes.test.ts`, 3 project-share cases in `app/api/email/expiry.test.ts`, and a new `app/api/store/follow/route.test.ts` (5). Each new behaviour fails on the previous code.
+
+### BUYER-06 follow-ups, round 2 (same PR)
+
+- **Order recovery exposed revoked bundle tokens.** `/api/store/orders` now returns `token: null, access_revoked: true` for a refunded or disputed bundle. `/api/store/orders/resend` answers 410 instead of re-emailing that link. Both use `isProjectAccessActive`.
+- **Follow accepted any typed email as identity.** Anyone could subscribe a stranger to drop announcements (`cron/announce-drops` emails every follower), or unfollow them. The body `email` is no longer an identity. A follow now needs the buyer's session or a valid link token; without either the route returns `needsSignIn`. No client ever sent an email.
+
+Tests: `orders/route.test.ts` (+1), new `orders/resend/route.test.ts` (2), and `follow/route.test.ts` (+3 abuse cases). Each fails on the previous code.
+
 ## 2026-09-28 - Filename parser never silently guesses (AUDIO-04)
 
 `parseTitleMetadata` stopped at the first match for BPM and key. `beat 90 140.wav` became 90 BPM, `beat Am Fm.wav` became A minor, `Cold 140bpm 70bpm.wav` became 140. Two-letter words were read as keys: `BB gun` became B♭, `AB test` A♭, `db mix` D♭. `A Major Problem` became A major. `mergeFeatures` treats the filename as the highest-precedence source, so each of these was written to `tracks` above Essentia and the server detector, and it was also cut out of the title.

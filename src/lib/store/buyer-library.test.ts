@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { buildBuyerLibraryShape, collectBuyerLibraryTrackIds, type BuyerLibraryTrackSummary } from './buyer-library';
+import {
+  buildBuyerLibraryShape,
+  buyerPlaylistMembership,
+  compactPlaylistPositions,
+  nextPlaylistPosition,
+  collectBuyerLibraryTrackIds,
+  playlistNameFromTrack,
+  purchasedTrackIdSet,
+  visibleBuyerLibraryTracks,
+  type BuyerLibraryTrackSummary,
+} from './buyer-library';
 
 const track = (id: string, title: string): BuyerLibraryTrackSummary => ({
   id,
@@ -41,5 +51,100 @@ describe('buyer library shaping', () => {
     expect(shaped.favorites[0].track?.title).toBe('Basement Run');
     expect(shaped.playlists[0].track_ids).toEqual(['b', 'a']);
     expect(shaped.playlists[0].tracks.map((item) => item.title)).toEqual(['Basement Run', 'After Hours']);
+  });
+});
+
+describe('visibleBuyerLibraryTracks', () => {
+  const t = (id: string, store_listed: boolean | null) => ({
+    id, title: id, cover_url: null, type: null, bpm: null, key: null, scale: null, duration_seconds: null, store_listed,
+  });
+
+  it('keeps listed beats and drops unlisted ones the buyer never bought', () => {
+    const out = visibleBuyerLibraryTracks([t('listed', true), t('private', false), t('unknown', null)], new Set());
+    expect(out.map((x) => x.id)).toEqual(['listed']);
+  });
+
+  it('keeps an unlisted beat this buyer paid for (an exclusive delists it)', () => {
+    const out = visibleBuyerLibraryTracks([t('bought', false)], new Set(['bought']));
+    expect(out.map((x) => x.id)).toEqual(['bought']);
+  });
+
+  it('never leaks the store_listed flag into the response shape', () => {
+    const [out] = visibleBuyerLibraryTracks([t('listed', true)], new Set());
+    expect(out).not.toHaveProperty('store_listed');
+  });
+});
+
+describe('purchasedTrackIdSet', () => {
+  it('flattens track_ids arrays and ignores malformed rows', () => {
+    expect([...purchasedTrackIdSet([{ track_ids: ['a', 'b'] }, { track_ids: null }, { track_ids: ['b', 3] }, {}])])
+      .toEqual(['a', 'b']);
+  });
+});
+
+describe('buyerPlaylistMembership', () => {
+  it('marks the playlists that already hold the track', () => {
+    expect(buyerPlaylistMembership([
+      { id: 'p1', name: 'Late night', track_ids: ['x', 'y'] },
+      { id: 'p2', name: 'Gym', track_ids: [] },
+    ], 'x')).toEqual([
+      { id: 'p1', name: 'Late night', contains: true, count: 2 },
+      { id: 'p2', name: 'Gym', contains: false, count: 0 },
+    ]);
+  });
+});
+
+describe('playlistNameFromTrack', () => {
+  it('names the playlist after the beat, within the 80-char limit', () => {
+    expect(playlistNameFromTrack('  Night Shift ')).toBe('Night Shift');
+    expect(playlistNameFromTrack('x'.repeat(120))).toHaveLength(80);
+    expect(playlistNameFromTrack(null)).toBe('My playlist');
+    expect(playlistNameFromTrack('   ')).toBe('My playlist');
+  });
+});
+
+describe('purchasedTrackIdSet with bundles', () => {
+  it('counts every track of a bought project bundle as purchased', () => {
+    expect([...purchasedTrackIdSet([{ track_ids: ['lic'] }], [{ track_id: 'b1' }, { track_id: 'b2' }, { track_id: null }])])
+      .toEqual(['lic', 'b1', 'b2']);
+  });
+});
+
+describe('nextPlaylistPosition', () => {
+  it('appends after the highest position, not at the row count', () => {
+    // rows 0 and 2 (a gap at 1): count would give 2 and collide
+    expect(nextPlaylistPosition([{ position: 0 }, { position: 2 }])).toBe(3);
+    expect(nextPlaylistPosition([])).toBe(0);
+    expect(nextPlaylistPosition([{ position: null }])).toBe(0);
+  });
+});
+
+describe('compactPlaylistPositions', () => {
+  it('closes the gap a removal leaves, keeping order', () => {
+    expect(compactPlaylistPositions([
+      { track_id: 'a', position: 0 },
+      { track_id: 'c', position: 2 },
+      { track_id: 'd', position: 3 },
+    ])).toEqual([
+      { track_id: 'c', position: 1 },
+      { track_id: 'd', position: 2 },
+    ]);
+  });
+
+  it('writes nothing when the list is already contiguous (removed the last track)', () => {
+    expect(compactPlaylistPositions([
+      { track_id: 'a', position: 0 },
+      { track_id: 'b', position: 1 },
+    ])).toEqual([]);
+  });
+
+  it('orders by position, not by the order rows arrive in', () => {
+    expect(compactPlaylistPositions([
+      { track_id: 'late', position: 5 },
+      { track_id: 'early', position: 1 },
+    ])).toEqual([
+      { track_id: 'early', position: 0 },
+      { track_id: 'late', position: 1 },
+    ]);
   });
 });

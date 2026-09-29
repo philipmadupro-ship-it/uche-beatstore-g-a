@@ -52,7 +52,6 @@ import {
   StoreSidebar, BeatCardSkeleton, BeatListRowSkeleton,
 } from '@/components/store/StoreSidebar';
 import { DropCountdown } from '@/components/store/DropCountdown';
-import { logPlay } from '@/lib/buyer-session';
 import { BeatCard } from '@/components/store/BeatCard';
 import { RowCallbackCache } from '@/lib/ui/stable-row-callbacks';
 import { canLoadMore, isCurrentRequest, mergeLoadedPage } from '@/lib/store/load-more';
@@ -944,9 +943,9 @@ function StorePage() {
         source: viewMode === 'grid' ? 'store-grid' : 'store-list',
       }),
     }).catch(() => undefined);
-    // If the buyer has a magic-link token on this device, also log to
-    // their personal listening history (mig 060). No-op when anonymous.
-    void logPlay(t.id);
+    // The buyer's listening history (mig 060) is written by
+    // trackStoreEvent('preview_play') above. Calling logPlay here as well
+    // wrote every play from the grid/list twice.
   };
 
   const priceFor = (t: StoreTrack, type: 'lease' | 'exclusive'): number | null => {

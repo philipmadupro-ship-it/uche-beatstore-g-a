@@ -19,6 +19,7 @@
 import type { createServiceClient } from '@/lib/auth/ownership';
 import { parsePurchaseLineItems } from '@/lib/contracts';
 import { normalizeEmailOrNull } from '@/lib/contacts/email';
+import { isProjectAccessActive } from '@/lib/store/project-access';
 
 type Admin = ReturnType<typeof createServiceClient>;
 
@@ -38,6 +39,7 @@ interface LicensePurchaseAccountRow {
   stripe_session_id: string | null;
   created_at: string | null;
   status: string | null;
+  download_unlocked?: boolean | null;
 }
 
 interface ProjectAccessAccountRow {
@@ -47,6 +49,18 @@ interface ProjectAccessAccountRow {
   amount_usd: number | string | null;
   stripe_session_id: string | null;
   created_at: string | null;
+  expires_at?: string | null;
+}
+
+/**
+ * Whether a license purchase still grants downloads. Same rule the delivery
+ * and download-file routes enforce: a refund or dispute flips
+ * `download_unlocked` to false (it defaults to true). A missing value means
+ * an older select or row, so it is treated as unlocked, like the column
+ * default.
+ */
+export function isLicenseDownloadActive(row: { download_unlocked?: boolean | null }): boolean {
+  return row.download_unlocked !== false;
 }
 
 function isNonEmptyString(value: string | null | undefined): value is string {
@@ -59,6 +73,10 @@ function isNonEmptyString(value: string | null | undefined): value is string {
  *
  *   { email, track_licenses, project_bundles }
  *
+ * Refunded, disputed or revoked purchases stay in the history, since the
+ * buyer did pay and should see that, but carry `access_revoked: true` and no
+ * `download_url`. Linking them led to a delivery page that answered 403.
+ *
  * The email is normalised here as well, so a caller cannot forget. A failed
  * purchase query THROWS rather than returning an empty list: "No purchases
  * yet" in front of a buyer who has paid is worse than an error they can retry.
@@ -70,12 +88,12 @@ export async function loadBuyerPurchases(admin: Admin, rawEmail: string) {
   const [lpRes, paRes] = await Promise.all([
     admin
       .from('license_purchases')
-      .select('id, amount_usd, line_items, stripe_session_id, created_at, status')
+      .select('id, amount_usd, line_items, stripe_session_id, created_at, status, download_unlocked')
       .eq('buyer_email', email)
       .order('created_at', { ascending: false }),
     admin
       .from('project_access_links')
-      .select('id, project_id, token, amount_usd, stripe_session_id, created_at')
+      .select('id, project_id, token, amount_usd, stripe_session_id, created_at, expires_at')
       .eq('buyer_email', email)
       .order('created_at', { ascending: false }),
   ]);
@@ -92,21 +110,25 @@ export async function loadBuyerPurchases(admin: Admin, rawEmail: string) {
     for (const t of (tracks ?? []) as Array<{ id: string; title: string }>) titleMap.set(t.id, t.title);
   }
 
-  const trackLicenses = licenseRows.map((row) => ({
-    id: row.id,
-    kind: 'track' as const,
-    items: parsePurchaseLineItems(row.line_items).map((i) => ({
-      ...i,
-      title: titleMap.get(i.track_id) ?? null,
-    })),
-    amount_usd: Number(row.amount_usd ?? 0),
-    created_at: row.created_at,
-    status: row.status,
-    stripe_session_id: row.stripe_session_id,
-    download_url: row.stripe_session_id
-      ? `/store/download?session_id=${row.stripe_session_id}`
-      : null,
-  }));
+  const trackLicenses = licenseRows.map((row) => {
+    const revoked = !isLicenseDownloadActive(row);
+    return {
+      id: row.id,
+      kind: 'track' as const,
+      items: parsePurchaseLineItems(row.line_items).map((i) => ({
+        ...i,
+        title: titleMap.get(i.track_id) ?? null,
+      })),
+      amount_usd: Number(row.amount_usd ?? 0),
+      created_at: row.created_at,
+      status: row.status,
+      stripe_session_id: row.stripe_session_id,
+      access_revoked: revoked,
+      download_url: row.stripe_session_id && !revoked
+        ? `/store/download?session_id=${row.stripe_session_id}`
+        : null,
+    };
+  });
 
   // Resolve project name + cover for each bundle in one round-trip.
   const projectAccessRows = (paRes.data ?? []) as ProjectAccessAccountRow[];
@@ -122,16 +144,20 @@ export async function loadBuyerPurchases(admin: Admin, rawEmail: string) {
     }
   }
 
-  const projectBundles = projectAccessRows.map((row) => ({
-    id: row.id,
-    kind: 'project' as const,
-    project: projectMap.get(row.project_id) ?? { name: 'Untitled project', cover_url: null },
-    project_id: row.project_id,
-    amount_usd: Number(row.amount_usd ?? 0),
-    created_at: row.created_at,
-    stripe_session_id: row.stripe_session_id,
-    download_url: row.token ? `/store/projects/access/${row.token}` : null,
-  }));
+  const projectBundles = projectAccessRows.map((row) => {
+    const revoked = !isProjectAccessActive(row);
+    return {
+      id: row.id,
+      kind: 'project' as const,
+      project: projectMap.get(row.project_id) ?? { name: 'Untitled project', cover_url: null },
+      project_id: row.project_id,
+      amount_usd: Number(row.amount_usd ?? 0),
+      created_at: row.created_at,
+      stripe_session_id: row.stripe_session_id,
+      access_revoked: revoked,
+      download_url: row.token && !revoked ? `/store/projects/access/${row.token}` : null,
+    };
+  });
 
   return { email, track_licenses: trackLicenses, project_bundles: projectBundles };
 }
