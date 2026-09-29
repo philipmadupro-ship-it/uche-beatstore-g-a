@@ -7,8 +7,9 @@ import { createHash } from 'crypto';
 import { errorMessage } from '@/lib/errors';
 import { publicError } from '@/lib/api-error';
 import { createLogger } from '@/lib/log';
-import { signedSharePeaksUrl, signedSharePreviewUrl } from '@/lib/share-media-token';
-import { cdnAudioSrc } from '@/lib/audio/cdn';
+import { signedSharePeaksUrl } from '@/lib/share-media-token';
+import { isFullPlayback, writeWithPlayback } from '@/lib/share/playback';
+import { sharePlaybackUrl } from '@/lib/share/playback-url';
 import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
 import {
   isWellFormedShareToken,
@@ -37,6 +38,8 @@ type LocalShareLink = {
   expires_at?: string | null;
   password_hash?: string | null;
   plays?: number | null;
+  /** Mig 121. Absent / null = full track; false = 75 s preview only. */
+  full_playback?: boolean | null;
 };
 
 type LocalShareTrack = ShareAudioTrack & Record<string, unknown>;
@@ -56,22 +59,16 @@ function withoutPasswordHash<T extends { password_hash?: unknown }>(row: T): Omi
   return safe;
 }
 
-function toPublicShareTrack(track: LocalShareTrack, token: string) {
+function toPublicShareTrack(track: LocalShareTrack, token: string, full: boolean) {
   const safe = { ...track };
   delete safe.preview_url;
   return {
     ...safe,
-    audio_url: shareAudioUrl(track, token),
+    // Full track (default) streams through the signed grant route; a
+    // preview-only share may use the public 75 s clip. lib/share/playback.
+    audio_url: sharePlaybackUrl(track, token, full),
     peaks_url: track.peaks_url ? signedSharePeaksUrl(token, track.id) : null,
   };
-}
-
-/** Prefer the direct public preview clip (fast + edge-cached + prefetchable);
- *  fall back to the signed proxy for tracks without a generated preview. */
-function shareAudioUrl(track: ShareAudioTrack, token: string): string {
-  const p = track?.preview_url;
-  if (typeof p === 'string' && /^https?:\/\//i.test(p)) return cdnAudioSrc(p);
-  return signedSharePreviewUrl(token, track.id);
 }
 
 function hashIp(req: NextRequest): string {
@@ -110,7 +107,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
           .in('track_id', share.track_ids)
       ]);
       const tracks = (tracksRes.data || []) as LocalShareTrack[];
-      const safeTracks = tracks.map((track) => toPublicShareTrack(track, token));
+      const safeTracks = tracks.map((track) => toPublicShareTrack(track, token, isFullPlayback(share)));
       const stems = share.allow_downloads
         ? ((stemsRes.data || []) as LocalStem[]).map((stem) => ({
             track_id: stem.track_id,
@@ -145,7 +142,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         log.warn('share_plays insert failed:', { error: errorMessage(err) });
       }
 
-      const safeShare = withoutPasswordHash(share);
+      const safeShare = { ...withoutPasswordHash(share), full_playback: isFullPlayback(share) };
       return NextResponse.json({
         share: safeShare,
         tracks: safeTracks,
@@ -171,7 +168,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const tracks = (share.track_ids || [])
       .map((id: string) => allTracks.find((t) => t.id === id))
       .filter((track): track is LocalShareTrack => Boolean(track))
-      .map((track) => toPublicShareTrack(track, token));
+      .map((track) => toPublicShareTrack(track, token, isFullPlayback(share)));
 
     // Fetch mock stems
     const allStems = getAll<LocalStem>('stems');
@@ -198,7 +195,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       log.warn('share_plays insert failed:', { error: errorMessage(err) });
     }
 
-    const safeShare = withoutPasswordHash(share);
+    const safeShare = { ...withoutPasswordHash(share), full_playback: isFullPlayback(share) };
     return NextResponse.json({ share: safeShare, tracks, creator, stems });
   } catch (error) {
     log.error('share GET failed', { token, error: errorMessage(error) });
@@ -267,6 +264,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     const patch: Record<string, unknown> = {};
     if (typeof body.title === 'string') patch.title = body.title.trim().slice(0, 200) || null;
     if (typeof body.allow_downloads === 'boolean') patch.allow_downloads = body.allow_downloads;
+    // Mig 121: full track (true) or the 75 s preview (false). Written through
+    // writeWithPlayback below so an unapplied migration fails loudly for
+    // "preview" instead of silently leaving the full track shared.
+    const fullPlayback: boolean | undefined =
+      typeof body.full_playback === 'boolean' ? body.full_playback : undefined;
     if (body.expires_days != null) {
       const days = Number(body.expires_days);
       patch.expires_at = days > 0
@@ -278,7 +280,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     } else if (typeof body.password === 'string' && body.password.length > 0) {
       patch.password_hash = await bcrypt.hash(body.password, 10);
     }
-    if (Object.keys(patch).length === 0) {
+    if (Object.keys(patch).length === 0 && fullPlayback === undefined) {
       return NextResponse.json({ error: 'No editable fields in body' }, { status: 400 });
     }
 
@@ -300,14 +302,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
       if (existing.user_id && existing.user_id !== user.id) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
-      const { data, error } = await supabase
-        .from('share_links')
-        .update(patch)
-        .eq('token', token)
-        .select('*')
-        .single();
+      const { data, error } = await writeWithPlayback(fullPlayback, (fields) =>
+        supabase
+          .from('share_links')
+          .update({ ...patch, ...fields })
+          .eq('token', token)
+          .select('*')
+          .single(),
+      );
+      if (error?.code === 'PLAYBACK_MIGRATION') {
+        return NextResponse.json({ error: error.message }, { status: 409 });
+      }
       if (error) throw error;
-      const safe = withoutPasswordHash(data as LocalShareLink);
+      const row = data as LocalShareLink;
+      const safe = { ...withoutPasswordHash(row), full_playback: isFullPlayback(row) };
       return NextResponse.json({ share: safe });
     }
 
@@ -315,8 +323,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ to
     const all = getAll<LocalShareLink>('share_links');
     const link = all.find((l) => l.token === token);
     if (!link) return NextResponse.json({ error: 'Share link not found' }, { status: 404 });
-    const updated = update('share_links', link.id, patch);
-    const safe = withoutPasswordHash(updated as LocalShareLink);
+    const updated = update('share_links', link.id, fullPlayback === undefined ? patch : { ...patch, full_playback: fullPlayback });
+    const safe = { ...withoutPasswordHash(updated as LocalShareLink), full_playback: isFullPlayback(updated as LocalShareLink) };
     return NextResponse.json({ share: safe });
   } catch (error) {
     log.error('share PATCH failed', { token, error: errorMessage(error) });

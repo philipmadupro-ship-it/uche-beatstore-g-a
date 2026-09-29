@@ -8832,3 +8832,23 @@ Tests: 2 cases in `account-routes.test.ts`, 3 project-share cases in `app/api/em
 - **Follow accepted any typed email as identity.** Anyone could subscribe a stranger to drop announcements (`cron/announce-drops` emails every follower), or unfollow them. The body `email` is no longer an identity. A follow now needs the buyer's session or a valid link token; without either the route returns `needsSignIn`. No client ever sent an email.
 
 Tests: `orders/route.test.ts` (+1), new `orders/resend/route.test.ts` (2), and `follow/route.test.ts` (+3 abuse cases). Each fails on the previous code.
+
+## 2026-09-29 - Every share option honoured on every share page (SHARE-01)
+
+Production report: a project shared with a friend, downloads on. The friend could not download, and every beat stopped at 1:15.
+
+Root causes, each confirmed in a browser against the old code (`e2e/share-options.spec.ts`):
+- **No downloads anywhere.** `recipient_kind` is `NOT NULL DEFAULT 'client'`, so every share renders one of four variants. None had a download control. The working button lived in a default layout no share reached.
+- **Silent Play in the project page's producer / rapper / friend variants.** Only the client variant mounted the player container. `useWaveSurfer` returned early, and `play()` was called 0 times after picking a track.
+- **1:15 everywhere.** The share stream preferred `tracks.preview_url`. PR #17 (2026-09-27) generated a 75 s clip for every beat for the storefront, so from then on every share was clipped. Nothing on the share controlled it.
+- A failed download called `setError`, which replaces the whole page.
+
+Changes:
+- `components/share/ShareActions` (downloads, playback label, collaboration entry) is rendered by every variant through a new `actions` slot. All variants mount the player container. `useWaveSurfer` takes `resetKey` so the player rebinds when a commenter/editor switches to the collaboration view and back.
+- Per-share playback (`full_playback`, migration 121): full track by default, or the 1:15 preview. `lib/share/playback.ts` holds the rules, `lib/share/playback-url.ts` the signed URL. Full never hands out the CDN clip. Create/edit routes (`/api/share`, `/api/share/[token]`, the three `/shares` create routes, both project-share PATCH routes, `/api/links`) accept it through `writeWithPlayback`, and it is set in ContentShareModal, QuickShareModal, SendBeatModal and the `/links` menu and popup via `components/share/PlaybackChoice`.
+- Share media grants: 15 min → 4 h, so a long session on a full track keeps playing after seeks. Revocation and expiry are still checked per request.
+- Downloads save under the server's Content-Disposition name (`lib/share/download-filename.ts`), so WAV masters are no longer saved as .mp3. Errors are toasts.
+
+Not changed: the email route from earlier in this conversation (`lib/share/email-share.ts`) was re-checked. It requires `share_links.user_id` = producer, and `/api/share` sets it on insert.
+
+Tests: `lib/share/playback.test.ts` (15), `lib/share/download-filename.test.ts` (6), grant TTL cases, and `e2e/share-options.spec.ts` (28, all fail on the old code).

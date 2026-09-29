@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Link2, Copy, Trash2, Check, Loader2, ExternalLink, Lock, Clock,
-  X, Share2, Music, Pencil, Download, Save, Plus, Search, BarChart3,
+  X, Share2, Music, Pencil, Download, Save, Plus, Search, BarChart3, Headphones,
 } from 'lucide-react';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { Dropdown } from '@/components/ui/Dropdown';
@@ -46,6 +46,8 @@ interface ShareLink {
   expires_at: string | null;
   revoked_at: string | null;
   allow_downloads: boolean;
+  /** Full track (default) or the 75 s preview only. Mig 121. */
+  full_playback?: boolean;
   password_protected: boolean;
   created_at: string;
   href: string;
@@ -194,6 +196,10 @@ export default function LinksPage() {
 
   const toggleDownloads = (link: ShareLink) =>
     patchLink(link, { allow_downloads: link.allow_downloads === false });
+
+  /** Full track <-> 1:15 preview. Absent means full (mig 121). */
+  const togglePlayback = (link: ShareLink) =>
+    patchLink(link, { full_playback: link.full_playback === false });
 
   const isExpired = (link: ShareLink) => isShareLinkExpired(link);
 
@@ -396,6 +402,7 @@ export default function LinksPage() {
                           onDelete={deleteLink}
                           onRename={() => setRenamingKey(key)}
                           onToggleDownloads={toggleDownloads}
+                          onTogglePlayback={togglePlayback}
                         />
                       </span>
                     </>
@@ -502,6 +509,7 @@ export default function LinksPage() {
                               onDelete={deleteLink}
                               onRename={() => setRenamingKey(key)}
                               onToggleDownloads={toggleDownloads}
+                          onTogglePlayback={togglePlayback}
                             />
                           </span>
                         </div>
@@ -551,6 +559,7 @@ export default function LinksPage() {
           onPatch={patchLink}
           onRename={renameLink}
           onToggleDownloads={toggleDownloads}
+          onTogglePlayback={togglePlayback}
           copied={copied === linkKey(active)}
           fullUrl={fullUrl(active)}
           expired={isExpired(active)}
@@ -678,7 +687,7 @@ function LinkMetric({
  * when the platform supports it (iOS / Android / mobile Safari).
  */
 function LinkPopup({
-  link, onClose, onCopy, onShare, onDelete, onPatch, onRename, onToggleDownloads,
+  link, onClose, onCopy, onShare, onDelete, onPatch, onRename, onToggleDownloads, onTogglePlayback,
   copied, fullUrl, expired, formatDate,
 }: {
   link: ShareLink;
@@ -689,6 +698,7 @@ function LinkPopup({
   onPatch: (link: ShareLink, patch: ShareLinkPatch) => Promise<boolean>;
   onRename: (link: ShareLink, next: string) => Promise<boolean>;
   onToggleDownloads: (link: ShareLink) => void;
+  onTogglePlayback: (link: ShareLink) => void;
   copied: boolean;
   fullUrl: string;
   expired: boolean;
@@ -782,6 +792,7 @@ function LinkPopup({
                 onDelete={onDelete}
                 onRename={() => setRenamingHeader(true)}
                 onToggleDownloads={onToggleDownloads}
+                onTogglePlayback={onTogglePlayback}
               />
               <button
                 onClick={onClose}
@@ -810,6 +821,7 @@ function LinkPopup({
             <FlagChip icon={<Music size={10} />} label={`${link.track_ids?.length ?? 0} track${(link.track_ids?.length ?? 0) === 1 ? '' : 's'}`} />
             {link.password_protected && <FlagChip icon={<Lock size={10} />} label="Password" tone="warn" />}
             {link.allow_downloads !== false && <FlagChip label="Downloads on" />}
+            <FlagChip icon={<Headphones size={10} />} label={link.full_playback === false ? '1:15 preview' : 'Full track'} />
             {expired ? (
               <FlagChip icon={<Clock size={10} />} label="Expired" tone="danger" />
             ) : link.expires_at ? (
@@ -980,7 +992,7 @@ function LinkPopup({
  * row carries the four things done every day.
  */
 function LinkRowMenu({
-  link, expired, onCopy, onShare, onDelete, onRename, onToggleDownloads,
+  link, expired, onCopy, onShare, onDelete, onRename, onToggleDownloads, onTogglePlayback,
 }: {
   link: ShareLink;
   expired: boolean;
@@ -989,6 +1001,7 @@ function LinkRowMenu({
   onDelete: (link: ShareLink) => void;
   onRename: () => void;
   onToggleDownloads: (link: ShareLink) => void;
+  onTogglePlayback: (link: ShareLink) => void;
 }) {
   return (
     <ActionMenu
@@ -1011,6 +1024,13 @@ function LinkRowMenu({
               label: 'Allow downloads',
               checked: link.allow_downloads !== false,
               onSelect: () => { onToggleDownloads(link); return 'keep-open'; },
+            },
+            {
+              id: 'playback',
+              label: 'Full-track playback',
+              hint: link.full_playback === false ? 'Now: 1:15 preview' : undefined,
+              checked: link.full_playback !== false,
+              onSelect: () => { onTogglePlayback(link); return 'keep-open'; },
             },
           ],
         },

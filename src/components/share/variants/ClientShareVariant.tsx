@@ -106,6 +106,8 @@ interface Props {
   progressPct: number;
   waveRef: React.RefObject<HTMLDivElement | null>;
   onSeek: (seconds: number) => void;
+  /** Share options the producer set (downloads, playback, collaboration). ShareActions. */
+  actions?: React.ReactNode;
 }
 
 function fmt(seconds: number) {
@@ -171,6 +173,7 @@ export function ClientShareVariant({
   duration,
   progressPct,
   onSeek,
+  actions,
 }: Props) {
   const { addItem, items: cartItems, setIsOpen: setCartOpen, isOpen: cartOpen } = useCart();
   const searchParams = useSearchParams();
@@ -638,6 +641,7 @@ export function ClientShareVariant({
             </div>
           </section>
         )}
+        {actions}
       </div>
 
       {/* ── Sticky Now-Playing bar ── */}

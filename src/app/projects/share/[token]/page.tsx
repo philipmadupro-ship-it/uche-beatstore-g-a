@@ -22,6 +22,8 @@ import { ProducerShareVariant } from '@/components/share/variants/ProducerShareV
 import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
+import { ShareActions } from '@/components/share/ShareActions';
+import { downloadFilename } from '@/lib/share/download-filename';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
@@ -38,6 +40,8 @@ interface ShareInfo {
   // True when the producer flipped "For sale" on this share —
   // surfaces Buy Lease / Buy Exclusive on the client variant.
   sales_enabled?: boolean;
+  // Full track (default) or the 75 s preview only (mig 121, lib/share/playback).
+  full_playback?: boolean;
 }
 
 // Owner's creator profile — bio / hero / license / social fields shown
@@ -209,6 +213,11 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   //    DAW conditional can starve the inline hook of a URL when active.
   //    Only meaningful when share?.role === 'editor'.
   const [editing, setEditing] = useState(false);
+  // Commenter / editor recipients open the collaboration view (comments,
+  // region pins, the editor) from their variant's ShareActions, and can go
+  // back. Viewers never need it: everything they may do is in ShareActions.
+  const [workspace, setWorkspace] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   // DAW chrome activates when an editor switches into edit mode. In that
   // case PlayerCanvas owns the WaveSurfer instance — we starve the inline
@@ -230,6 +239,9 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   } = useWaveSurfer({
     container: waveRef,
     url: (activeTrack && !useDawCanvas) ? publicAudioSrc(activeTrack.audio_url) : null,
+    // The variant and the collaboration view each mount their own container;
+    // rebuild the player when the recipient switches between them.
+    resetKey: workspace ? 'workspace' : 'variant',
     peaksUrl: activeTrack?.peaks_url ?? null,
     height: 56,
     initialVolume: outputVol,
@@ -389,16 +401,15 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     else { setActiveIndex(i); setIsPlaying(true); }
   };
 
-  const downloadTrack = async (t: ShareTrack) => {
-    // Route through /api/share/[token]/download — the endpoint decides
-    // whether to grant based on share.allow_downloads OR a matching
-    // license_purchases row keyed by purchaseSessionId. We always pass
-    // session_id when we have one; the server ignores it for free shares.
+  const downloadTrack = async (t: { id: string; title: string }) => {
+    // Route through /api/share/[token]/download: the endpoint decides whether
+    // to grant, from share.allow_downloads OR a license_purchases row keyed by
+    // purchaseSessionId. The password travels as a header, which is why this
+    // is a fetch and not a plain <a href>.
     const url = new URL(`/api/share/${token}/download`, window.location.origin);
     url.searchParams.set('track_id', t.id);
     if (purchaseSessionId) url.searchParams.set('session_id', purchaseSessionId);
-    const ext = (t.audio_url.match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i)?.[1] || 'mp3').toLowerCase();
-    const filename = `${t.title || 'track'}.${ext}`;
+    setDownloadingId(t.id);
     try {
       const response = await fetch(url.toString(), {
         headers: passwordRef.current ? { 'x-share-password': passwordRef.current } : {},
@@ -410,13 +421,19 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
       const objectUrl = URL.createObjectURL(await response.blob());
       const a = document.createElement('a');
       a.href = objectUrl;
-      a.download = filename;
+      // The server names the file from the master (WAV stays .wav). Guessing
+      // from audio_url failed: it is a signed stream URL with no extension.
+      a.download = downloadFilename(response.headers.get('content-disposition'), t.title);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(objectUrl);
     } catch (downloadError) {
-      setError(downloadError instanceof Error ? downloadError.message : 'Download unavailable');
+      // A toast, not setError: `error` replaces the whole page, so one failed
+      // download used to wipe the share out for the rest of the visit.
+      toast.error('Download failed', downloadError instanceof Error ? downloadError.message : 'Download unavailable');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -650,13 +667,30 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   // tracks, license card, social links. Producer / rapper / friend
   // variants continue through to the historical layout below (still
   // the default for now; we'll specialise each variant in follow-ups).
-  if (share?.recipient_kind === 'client' && displayProject) {
+  // Every option the producer set, honoured in every variant (ShareActions).
+  const shareActions = share ? (
+    <ShareActions
+      tracks={tracks}
+      allowDownloads={share.allow_downloads === true}
+      onDownload={downloadTrack}
+      downloadingId={downloadingId}
+      fullPlayback={share.full_playback !== false}
+      collaboration={share.role === 'viewer' ? null : {
+        role: share.role,
+        commentCount: comments.length,
+        onOpen: () => { setIsPlaying(false); setWorkspace(true); },
+      }}
+    />
+  ) : null;
+
+  if (!workspace && share?.recipient_kind === 'client' && displayProject) {
     return (
       <>
         {purchaseBannerNode}
         <div ref={waveRef} className="hidden" />
         <ClientShareVariant
           project={displayProject}
+          actions={shareActions}
           tracks={tracks}
           creator={creator}
           licenses={licenses}
@@ -685,12 +719,15 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     );
   }
 
-  if (share?.recipient_kind === 'producer' && displayProject) {
+  if (!workspace && share?.recipient_kind === 'producer' && displayProject) {
     return (
       <>
       {purchaseBannerNode}
+      {/* The player binds here. Without it Play did nothing in this variant. */}
+      <div ref={waveRef} className="hidden" />
       <ProducerShareVariant
         project={displayProject}
+        actions={shareActions}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}
@@ -711,12 +748,15 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     );
   }
 
-  if (share?.recipient_kind === 'rapper' && displayProject) {
+  if (!workspace && share?.recipient_kind === 'rapper' && displayProject) {
     return (
       <>
       {purchaseBannerNode}
+      {/* The player binds here. Without it Play did nothing in this variant. */}
+      <div ref={waveRef} className="hidden" />
       <RapperShareVariant
         project={displayProject}
+        actions={shareActions}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}
@@ -737,12 +777,15 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     );
   }
 
-  if (share?.recipient_kind === 'friend' && displayProject) {
+  if (!workspace && share?.recipient_kind === 'friend' && displayProject) {
     return (
       <>
       {purchaseBannerNode}
+      {/* The player binds here. Without it Play did nothing in this variant. */}
+      <div ref={waveRef} className="hidden" />
       <FriendShareVariant
         project={displayProject}
+        actions={shareActions}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}
@@ -777,6 +820,15 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
           <span className="text-[11px] font-medium tracking-[0.2em] uppercase text-white/80 truncate">U2C Beatstore</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {workspace && (
+            <button
+              type="button"
+              onClick={() => { setIsPlaying(false); setEditing(false); setWorkspace(false); }}
+              className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 hover:text-white border border-white/10 hover:border-white/20 bg-white/[0.06] hover:bg-white/[0.10] rounded-lg px-3 py-1.5 transition-colors"
+            >
+              Back
+            </button>
+          )}
           {share && <RoleBadge role={share.role} />}
         </div>
       </header>

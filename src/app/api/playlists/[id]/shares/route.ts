@@ -6,6 +6,7 @@ import { isSupabaseConfigured, requireRowOwnership } from '@/lib/db';
 import { readBody } from '@/lib/validate';
 import { ProjectShareCreateBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
+import { ownerShareRow, writeWithPlayback } from '@/lib/share/playback';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('api.playlists.shares');
@@ -31,12 +32,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     if (!owner.ok) return owner.res;
     const { data, error } = await owner.admin
       .from('project_shares')
-      .select('id, playlist_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, revoked_at, recipient_kind, sales_enabled, content_type')
+      .select('*')
       .eq('playlist_id', id)
       .eq('content_type', 'playlist')
       .order('created_at', { ascending: false });
     if (error) throw error;
-    return NextResponse.json({ shares: data ?? [] });
+    // Owner listing: `*` keeps working before mig 121; the hash never leaves.
+    return NextResponse.json({ shares: (data ?? []).map((row) => ownerShareRow(row as Record<string, unknown>)) });
   } catch (error) {
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
@@ -56,6 +58,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const label = body.label?.trim() || null;
   const recipientKind = body.recipient_kind || 'client';
   const salesEnabled = body.sales_enabled === true;
+  // Full track unless the producer explicitly chose the 75 s preview (mig 121).
+  const fullPlayback = body.full_playback === false ? false : undefined;
 
   const token = newShareToken();
   const password_hash = password ? await bcrypt.hash(password, 10) : null;
@@ -73,27 +77,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const owner = await requireRowOwnership('playlists', id);
     if (!owner.ok) return owner.res;
 
-    const { data, error } = await owner.admin
-      .from('project_shares')
-      .insert({
-        content_type: 'playlist',
-        playlist_id: id,
-        project_id: null,
-        token,
-        role,
-        allow_downloads: allowDownloads,
-        password_hash,
-        expires_at,
-        invited_email: invitedEmail,
-        label,
-        created_by: owner.userId,
-        recipient_kind: recipientKind,
-        sales_enabled: salesEnabled,
-      })
-      .select('id, playlist_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, recipient_kind, sales_enabled, content_type')
-      .single();
+    const { data, error } = await writeWithPlayback(fullPlayback, (fields) =>
+      owner.admin
+        .from('project_shares')
+        .insert({
+          content_type: 'playlist',
+          playlist_id: id,
+          project_id: null,
+          token,
+          role,
+          allow_downloads: allowDownloads,
+          password_hash,
+          expires_at,
+          invited_email: invitedEmail,
+          label,
+          created_by: owner.userId,
+          recipient_kind: recipientKind,
+          sales_enabled: salesEnabled,
+          ...fields,
+        })
+        .select('id, playlist_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, recipient_kind, sales_enabled, content_type')
+        .single(),
+    );
+    if (error?.code === 'PLAYBACK_MIGRATION') {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     if (error) throw error;
-    return NextResponse.json({ share: data, url });
+    return NextResponse.json({ share: { ...data, full_playback: fullPlayback !== false }, url });
   } catch (error) {
     log.error('create failed', { playlistId: id, error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });

@@ -14,6 +14,7 @@ import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { Modal } from '@/components/ui/Modal';
 import { buildBeatSendEmail, defaultSubject } from '@/lib/email/beat-send-template';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
+import { PlaybackChoice } from '@/components/share/PlaybackChoice';
 
 // Simple avatar color from name — used in preview recipient chip.
 const PREVIEW_PALETTES = [
@@ -116,6 +117,8 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
   const [role, setRole] = useState<ShareRole>('viewer');
   const [allowDownloads, setAllowDownloads] = useState(true);
   const [expiresDays, setExpiresDays] = useState(30);
+  // Full track by default; a rapper cannot write to a 75 s clip.
+  const [fullPlayback, setFullPlayback] = useState(true);
   // Campaign attachment — '' = none. Pre-seeded when opened from a campaign page.
   const [campaignId, setCampaignId] = useState<string>(initialCampaignId ?? '');
   const [campaigns, setCampaigns] = useState<Array<{ id: string; name: string }>>([]);
@@ -372,6 +375,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 role,
                 allow_downloads: allowDownloads,
                 expires_days: expiresDays,
+                full_playback: fullPlayback,
                 password: usePassword && password ? password : null,
                 invited_email: r.email,
                 label: r.name,
@@ -419,6 +423,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                 track_ids: selectedTrackIds,
                 expires_days: expiresDays,
                 allow_downloads: allowDownloads,
+                full_playback: fullPlayback,
                 password: usePassword && password ? password : null,
               }),
             });
@@ -957,6 +962,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                       className="col-span-2 bg-[#0D0D0A] border border-white/10 rounded-md px-3 py-2 text-[11px] text-white placeholder:text-white/50 focus:outline-none focus:border-white/40"
                     />
                   )}
+                  <PlaybackChoice className="col-span-2" fullPlayback={fullPlayback} onChange={setFullPlayback} />
                   <div className="col-span-2 flex items-center gap-2 bg-[#0D0D0A] border border-white/10 rounded-md px-3 py-2">
                     <Calendar size={11} className="text-white/70 shrink-0" />
                     <span className="text-[10px] text-white/80 uppercase tracking-wider">Expires</span>
