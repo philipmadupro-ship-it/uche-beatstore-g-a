@@ -8929,3 +8929,13 @@ Three gaps found while auditing the CRM for the artist-workspace plan. No schema
 - **"Plays" on `/links` were page opens.** Both `share_links.plays` and `project_shares.plays` go up once per share-page GET, not per track played. `/links` now labels the number "opens". The column keeps its name.
 
 Tests: `lib/crm/project-send.test.ts`, `lib/notifications/share-comment.test.ts`, new `invite/route.test.ts` (5) and `share/[token]/comments/route.test.ts` (3).
+
+## 2026-09-29 - Detect chords → MIDI in the track drawer
+
+The chord detector (#33 loader fix, AUDIO-06 basic-pitch blend) had no caller. The track details drawer (the Library's right-hand panel) now has **Detect chords** in its Asset Intelligence section (`components/tracks/drawer/TrackChordsPanel.tsx`).
+
+- Runs `detectChordsFromUrl`, shows a busy state (spinner gated on `useReducedMotion`), renders the timeline without `N` rows, and POSTs `{ chords }` to `/api/tracks/[id]/analyze` (the existing chord-only branch). A failed save is a warning toast; the MIDI download still works from the in-memory result. An empty / all-`N` result says "No confident chords found" and offers no download.
+- Saved chords: migration 078 (`tracks.chords`) is inside the applied baseline. The library list's column list doesn't include `chords` and this doesn't add it (up to 2000 entries per row, for every track in the vault); the panel fetches `GET /api/tracks/[id]` instead when the row it was handed lacks the key.
+- `lib/audio/chord-midi.ts`: `chordsToMidiNotes` (each chord ends at the next; the last at the track duration, or one bar if unknown; `N` and unrecognised labels are rests; root-position triads with roots G3–F#4) and `writeMidiFile` (format 0, track name, tempo, 4/4, note-offs before note-ons at a shared tick so a common tone re-strikes). No MIDI dependency added.
+- Tests: `chord-midi.test.ts` parses the written bytes back (header, track length, tempo bytes, VLQ, deltas, C–Am–F–G round trip, empty, all-`N`, single chord); `TrackChordsPanel.test.tsx` (jsdom) covers busy state, timeline, save payload, download bytes/filename, empty result, failed save, and loading saved chords.
+
