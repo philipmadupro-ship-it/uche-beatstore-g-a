@@ -54,9 +54,15 @@ export function SimpleAudioEngine() {
   // unmounts whenever its layout does (store → checkout, dashboard → a share
   // page) and a fresh <audio> starts at 0, so without this, coming back
   // restarted the track from the top. `progress` is reset by every track
-  // change, so a non-zero value at mount always belongs to `currentTrack`.
-  const resumeRef = useRef<number | null>(null);
-  if (resumeRef.current === null) resumeRef.current = usePlayer.getState().progress;
+  // change, so a non-zero value at mount always belongs to `currentTrack`;
+  // the id is kept with it so a track picked before it is applied never
+  // inherits it. Cleared only once applied: StrictMode's rehearsal cleanup
+  // must not use it up before the real mount runs.
+  const resumeRef = useRef<{ trackId: string | undefined; fraction: number } | null>(null);
+  if (resumeRef.current === null) {
+    const s = usePlayer.getState();
+    resumeRef.current = { trackId: s.currentTrack?.id, fraction: s.progress };
+  }
   const normGain = normalizationGain(currentTrack?.loudness);
 
   // What the producer is working in, and whether they asked previews to match
@@ -96,14 +102,28 @@ export function SimpleAudioEngine() {
     let cancelled = false;
 
     const instant = peekPreviewSrc(trackId) ?? playbackAudioSrc(url);
-    const resumeAt = resumeRef.current ?? 0;
-    resumeRef.current = 0;
-    // Setting currentTime before metadata arrives sets the element's default
-    // playback start position, so this works on a source that is still loading.
+    // `progress` is a fraction of what this element played, so it converts
+    // back with the element's own duration — never `duration_seconds`. A store
+    // track streams its 75 s preview while `duration_seconds` is the full beat,
+    // and resuming against the latter landed ~2.4× too far into the clip. With
+    // no metadata yet, wait for it (each `load()` fires it again).
+    let onMeta: (() => void) | null = null;
+    const applyResume = () => {
+      const pending = resumeRef.current;
+      if (!pending || pending.fraction <= 0) return true;
+      if (pending.trackId !== trackId) { resumeRef.current = { trackId: undefined, fraction: 0 }; return true; }
+      const seconds = seekSeconds(pending.fraction, a.duration, null);
+      if (seconds == null) return false;
+      a.currentTime = seconds;
+      resumeRef.current = { trackId: undefined, fraction: 0 };
+      return true;
+    };
     const resume = () => {
-      if (resumeAt <= 0) return;
-      const seconds = seekSeconds(resumeAt, a.duration, currentTrack?.duration_seconds);
-      if (seconds != null) a.currentTime = seconds;
+      if (onMeta) a.removeEventListener('loadedmetadata', onMeta);
+      onMeta = null;
+      if (applyResume()) return;
+      onMeta = () => { if (applyResume() && onMeta) { a.removeEventListener('loadedmetadata', onMeta); onMeta = null; } };
+      a.addEventListener('loadedmetadata', onMeta);
     };
     // Only reset src when it actually changes — avoids re-buffering on
     // unrelated re-renders.
@@ -112,8 +132,8 @@ export function SimpleAudioEngine() {
       setPlaybackError(null);
       a.src = instant;
       a.load();
-      resume();
     }
+    resume();
     if (isPlaying) a.play().catch(onPlayRejected);
 
     // Background: prefer an explicit offline download, then a persisted (but
@@ -126,6 +146,11 @@ export function SimpleAudioEngine() {
           const blob = offline ?? (await getPreviewSrc(trackId));
           if (cancelled || !blob || holdsSource(a, blob)) return;
           if (a.currentTime > 0 && !a.paused) return; // already audible — leave it
+          // load() rewinds to 0. Keep a position already applied (a paused
+          // resume) by re-arming it against the same, now-cached, audio.
+          if (a.currentTime > 0 && Number.isFinite(a.duration) && a.duration > 0) {
+            resumeRef.current = { trackId, fraction: a.currentTime / a.duration };
+          }
           a.src = blob;
           a.load();
           resume();
@@ -136,7 +161,10 @@ export function SimpleAudioEngine() {
       })();
     }
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (onMeta) a.removeEventListener('loadedmetadata', onMeta);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackId, url]);
 
