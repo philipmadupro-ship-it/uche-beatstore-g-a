@@ -36,8 +36,13 @@ export interface BeatSendEmailOpts {
   message: string;
   /** Whether downloads are enabled — shown in permissions row. */
   allowDownloads: boolean;
-  /** Expiry days (0 = never). Shown in permissions row. */
-  expiresDays: number;
+  /**
+   * The share row's `expires_at` (null = never). Shown in permissions row.
+   * An absolute timestamp, not a day count: the same link is re-sent by the
+   * follow-up nudge weeks later, and "expires in N days" computed at send
+   * time was wrong the moment it was not the day the link was created.
+   */
+  expiresAt: string | null;
   /** Subject line (returned separately so callers can pass to Resend). */
   subject?: string;
   /** "tracks" | "project" — changes the eyebrow label and button text. */
@@ -48,11 +53,23 @@ export interface BeatSendEmailOpts {
   producerName?: string;
 }
 
+/**
+ * Permissions-row copy for a share's expiry. Formatted in UTC so the date in
+ * the email does not depend on the server's region.
+ */
+export function shareExpiryText(expiresAt: string | null | undefined): string {
+  if (!expiresAt) return 'No expiry';
+  const t = new Date(expiresAt);
+  if (!Number.isFinite(t.getTime())) return 'No expiry';
+  const date = t.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+  return `Link expires ${date}`;
+}
+
 /** Returns the full email HTML string. */
 export function buildBeatSendEmail(opts: BeatSendEmailOpts): string {
   const {
     recipientName, shareUrl, packTitle, packMeta, coverUrl, message,
-    allowDownloads, expiresDays, kind = 'tracks', tracks = [], producerName = 'U2C Beatstore',
+    allowDownloads, expiresAt, kind = 'tracks', tracks = [], producerName = 'U2C Beatstore',
   } = opts;
 
   const first = escapeHtml(recipientName.split(' ')[0] || recipientName);
@@ -64,7 +81,7 @@ export function buildBeatSendEmail(opts: BeatSendEmailOpts): string {
   const eyebrow = kind === 'project' ? 'Project share' : 'New music';
   const btnLabel = kind === 'project' ? 'Open project' : 'Listen to the pack';
 
-  const expiryText = expiresDays === 0 ? 'No expiry' : `Link expires in ${expiresDays} day${expiresDays === 1 ? '' : 's'}`;
+  const expiryText = shareExpiryText(expiresAt);
 
   const coverBlock = coverUrl
     ? `<img src="${escapeHtml(coverUrl)}" alt="" style="width:100%;display:block;max-height:260px;object-fit:cover;border-bottom:1px solid ${BORDER};">`
