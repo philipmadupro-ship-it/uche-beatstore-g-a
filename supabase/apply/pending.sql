@@ -4,7 +4,12 @@
 
 BEGIN;
 
--- ═════════════ 130_artist_messages.sql ═════════════
+-- ═════════════ 130_artist_messages.sql (SQL-editor form) ═════════════
+-- SQL-EDITOR FORM (supabase/apply/editor/): same effect as the migration of
+-- the same name, without DO blocks, so every top-level statement stands on its
+-- own. Constraints are dropped-if-present and re-added instead of guarded by
+-- IF NOT EXISTS: the tables are new, so re-adding is always satisfied.
+
 -- 130_artist_messages.sql
 -- Artist Relationship Workspace, phase 3: messages and requests.
 --
@@ -38,27 +43,21 @@ CREATE TABLE IF NOT EXISTS public.artist_messages (
   created_at     timestamptz NOT NULL DEFAULT now()
 );
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'artist_messages_author_check') THEN
-    ALTER TABLE public.artist_messages ADD CONSTRAINT artist_messages_author_check
-      CHECK (author IN ('producer', 'artist'));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'artist_messages_kind_check') THEN
-    ALTER TABLE public.artist_messages ADD CONSTRAINT artist_messages_kind_check
-      CHECK (kind IN ('message', 'request'));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'artist_messages_request_check') THEN
-    ALTER TABLE public.artist_messages ADD CONSTRAINT artist_messages_request_check
-      CHECK (
-        (kind = 'message' AND request_status IS NULL)
-        OR (kind = 'request' AND author = 'artist' AND request_status IN ('open', 'done', 'declined'))
-      );
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'artist_messages_body_check') THEN
-    ALTER TABLE public.artist_messages ADD CONSTRAINT artist_messages_body_check
-      CHECK (char_length(btrim(body)) BETWEEN 1 AND 4000);
-  END IF;
-END $$;
+ALTER TABLE public.artist_messages DROP CONSTRAINT IF EXISTS artist_messages_author_check;
+ALTER TABLE public.artist_messages ADD CONSTRAINT artist_messages_author_check
+    CHECK (author IN ('producer', 'artist'));
+ALTER TABLE public.artist_messages DROP CONSTRAINT IF EXISTS artist_messages_kind_check;
+ALTER TABLE public.artist_messages ADD CONSTRAINT artist_messages_kind_check
+    CHECK (kind IN ('message', 'request'));
+ALTER TABLE public.artist_messages DROP CONSTRAINT IF EXISTS artist_messages_request_check;
+ALTER TABLE public.artist_messages ADD CONSTRAINT artist_messages_request_check
+    CHECK (
+      (kind = 'message' AND request_status IS NULL)
+      OR (kind = 'request' AND author = 'artist' AND request_status IN ('open', 'done', 'declined'))
+    );
+ALTER TABLE public.artist_messages DROP CONSTRAINT IF EXISTS artist_messages_body_check;
+ALTER TABLE public.artist_messages ADD CONSTRAINT artist_messages_body_check
+    CHECK (char_length(btrim(body)) BETWEEN 1 AND 4000);
 
 CREATE INDEX IF NOT EXISTS idx_artist_messages_contact ON public.artist_messages (contact_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_artist_messages_user ON public.artist_messages (user_id, created_at DESC);
@@ -122,7 +121,12 @@ ALTER TABLE public.artist_portals
 NOTIFY pgrst, 'reload schema';
 
 
--- ═════════════ 132_song_beats.sql ═════════════
+-- ═════════════ 132_song_beats.sql (SQL-editor form) ═════════════
+-- SQL-EDITOR FORM (supabase/apply/editor/): same effect as the migration of
+-- the same name, without DO blocks, so every top-level statement stands on its
+-- own. Constraints are dropped-if-present and re-added instead of guarded by
+-- IF NOT EXISTS: the tables are new, so re-adding is always satisfied.
+
 -- 132_song_beats.sql
 -- Artist Relationship Workspace, phase 3: a song built on several beats.
 --
@@ -142,12 +146,9 @@ CREATE TABLE IF NOT EXISTS public.song_beats (
   PRIMARY KEY (song_track_id, beat_track_id)
 );
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'song_beats_not_self') THEN
-    ALTER TABLE public.song_beats ADD CONSTRAINT song_beats_not_self
-      CHECK (song_track_id <> beat_track_id);
-  END IF;
-END $$;
+ALTER TABLE public.song_beats DROP CONSTRAINT IF EXISTS song_beats_not_self;
+ALTER TABLE public.song_beats ADD CONSTRAINT song_beats_not_self
+    CHECK (song_track_id <> beat_track_id);
 
 CREATE INDEX IF NOT EXISTS idx_song_beats_beat ON public.song_beats (beat_track_id);
 CREATE INDEX IF NOT EXISTS idx_song_beats_user ON public.song_beats (user_id);

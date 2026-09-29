@@ -118,6 +118,14 @@ the ledger; if it disagrees with this file, the ledger wins.
    before the next statement reads it (`relation "_paid_buyers" does not
    exist`), so the bundle carries a same-effect form of 112 from
    `supabase/apply/editor/`, verified to leave identical contacts.
+   130 and 132 have editor forms too, with no `DO` blocks (constraints are
+   dropped-if-present and re-added): a run that started mid-file once hit
+   `syntax error at or near "IF"` / `LINE 6: END IF;` — the submitted text
+   began inside a DO block, so its `END IF` stood alone. With the forms, no
+   `END IF` sits outside a function body. Verified: applied twice, and one
+   statement per session, leaving the same constraints as the migrations.
+   If you see that error, start a NEW query tab, paste, and run with the
+   cursor in the editor and nothing highlighted.
 5. Regenerate the bundle after new migrations:
    `scripts/ops/bundle-migrations.sh 112 113 … 129 > supabase/apply/pending.sql`.
 
