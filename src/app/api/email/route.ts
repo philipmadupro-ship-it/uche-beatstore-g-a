@@ -8,6 +8,7 @@ import { requireProducer } from '@/lib/auth/ownership';
 import { createLogger } from '@/lib/log';
 const log = createLogger('api.email');
 import { buildBeatSendEmail, defaultSubject } from '@/lib/email/beat-send-template';
+import { resolveEmailShare } from '@/lib/share/email-share';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -36,11 +37,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid share token' }, { status: 400 });
     }
 
-    const shareUrl = `${getAppUrl()}/share/${shareToken}`;
+    // Which page the link opens and what its permissions row says both come
+    // from the link's own row (lib/share/email-share.ts), never the request.
+    // The follow-up nudge re-sends an existing token with neither: it used to
+    // print "Link expires in 30 days" for every link, and a /share/ URL even
+    // for project shares, which that page cannot open.
+    let sharePath = `/share/${shareToken}`;
+    let emailKind: 'tracks' | 'project' = 'tracks';
+    let expiresAt: string | null = null;
+    let linkAllowsDownloads = allowDownloads !== false;
+    if (isSupabaseConfigured()) {
+      const share = await resolveEmailShare(producer.admin, producer.userId, String(shareToken));
+      if (!share.ok) return NextResponse.json({ error: share.error }, { status: share.status });
+      sharePath = share.path;
+      emailKind = share.kind;
+      expiresAt = share.expiresAt;
+      linkAllowsDownloads = share.allowDownloads;
+    } else if (typeof expiresDays === 'number' && expiresDays > 0) {
+      // Local-store dev mode has no share row to read.
+      expiresAt = new Date(Date.now() + expiresDays * 86400000).toISOString();
+    }
+
+    const shareUrl = `${getAppUrl()}${sharePath}`;
     const resolvedTitle = typeof packTitle === 'string' && packTitle.trim() ? packTitle.trim() : 'New music';
     const resolvedSubject = (typeof subject === 'string' && subject.trim())
       ? subject.trim().slice(0, 200)
-      : defaultSubject('U2C Beatstore', resolvedTitle);
+      : defaultSubject('U2C Beatstore', resolvedTitle, emailKind);
 
     const html = buildBeatSendEmail({
       recipientName: typeof recipientName === 'string' && recipientName.trim() ? recipientName : email.split('@')[0],
@@ -49,8 +71,9 @@ export async function POST(req: NextRequest) {
       packMeta: typeof packMeta === 'string' ? packMeta : '',
       coverUrl: typeof coverUrl === 'string' ? coverUrl : null,
       message: typeof message === 'string' ? message : '',
-      allowDownloads: allowDownloads !== false,
-      expiresDays: typeof expiresDays === 'number' ? expiresDays : 30,
+      allowDownloads: linkAllowsDownloads,
+      expiresAt,
+      kind: emailKind,
       tracks: Array.isArray(tracks) ? tracks : [],
     });
 

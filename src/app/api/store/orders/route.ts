@@ -4,6 +4,7 @@ import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { isProjectAccessActive } from '@/lib/store/project-access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -103,8 +104,10 @@ export async function GET(req: NextRequest) {
       project: { id: string; name: string; cover_url?: string | null };
       amount_usd: number | null;
       created_at: string;
-      token: string;
+      /** Null once revoked: a refunded or disputed bundle's token opens nothing. */
+      token: string | null;
       expires_at: string | null;
+      access_revoked: boolean;
     };
 
     const trackOrders: TrackOrder[] = (purchases ?? []).map((p) => ({
@@ -121,19 +124,26 @@ export async function GET(req: NextRequest) {
       stripe_session_id: p.stripe_session_id as string,
     }));
 
-    const projectOrders: ProjectOrder[] = (projectLinks ?? []).map((p) => ({
-      id: p.id as string,
-      kind: 'project_bundle',
-      project: {
-        id: p.project_id as string,
-        name: projectMap[p.project_id as string]?.name ?? 'Unknown project',
-        cover_url: projectMap[p.project_id as string]?.cover_url ?? null,
-      },
-      amount_usd: p.amount_usd as number | null,
-      created_at: p.created_at as string,
-      token: p.token as string,
-      expires_at: (p.expires_at as string) ?? null,
-    }));
+    // Refunds and disputes revoke a bundle by setting expires_at to now()
+    // (mig 117). Keep the order in the list, since it was paid, but withhold
+    // the token, the same rule lib/store/buyer-purchases.ts applies.
+    const projectOrders: ProjectOrder[] = (projectLinks ?? []).map((p) => {
+      const revoked = !isProjectAccessActive(p as { expires_at?: string | null });
+      return {
+        id: p.id as string,
+        kind: 'project_bundle',
+        project: {
+          id: p.project_id as string,
+          name: projectMap[p.project_id as string]?.name ?? 'Unknown project',
+          cover_url: projectMap[p.project_id as string]?.cover_url ?? null,
+        },
+        amount_usd: p.amount_usd as number | null,
+        created_at: p.created_at as string,
+        token: revoked ? null : (p.token as string),
+        expires_at: (p.expires_at as string) ?? null,
+        access_revoked: revoked,
+      };
+    });
 
     const orders = [...trackOrders, ...projectOrders].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),

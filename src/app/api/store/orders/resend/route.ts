@@ -7,6 +7,7 @@ import { createLogger } from '@/lib/log';
 import { Resend } from 'resend';
 import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
+import { isProjectAccessActive } from '@/lib/store/project-access';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest) {
     if (kind === 'project_bundle') {
       const { data: link, error } = await admin
         .from('project_access_links')
-        .select('id, buyer_email, token, amount_usd, project_id')
+        .select('id, buyer_email, token, amount_usd, project_id, expires_at')
         .eq('id', purchase_id)
         .eq('buyer_email', normalizedEmail)
         .maybeSingle();
@@ -122,6 +123,12 @@ export async function POST(req: NextRequest) {
       if (error) throw error;
       if (!link) {
         return NextResponse.json({ error: 'Purchase not found' }, { status: 404 });
+      }
+
+      // A refunded or disputed bundle (expires_at = now(), mig 117) must not
+      // be re-sent: the link would open an "access revoked" page.
+      if (!isProjectAccessActive(link as { expires_at?: string | null })) {
+        return NextResponse.json({ error: 'Access to this bundle has been revoked' }, { status: 410 });
       }
 
       const accessUrl = `${APP_URL}/store/projects/access/${link.token}`;

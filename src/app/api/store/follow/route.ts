@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createServiceClient } from '@/lib/auth/ownership';
+import { createServiceClient, requireUser } from '@/lib/auth/ownership';
+import { sessionBuyerEmail } from '@/lib/store/buyer-purchases';
 import { isSupabaseConfigured } from '@/lib/local-store';
 import { verifyBuyerToken } from '@/lib/buyer-tokens';
 import { publicError } from '@/lib/api-error';
@@ -12,11 +13,24 @@ export const dynamic = 'force-dynamic';
 /**
  * POST /api/store/follow — follow or unfollow a producer.
  *
- * Body: { producer_user_id, action: 'follow' | 'unfollow', email?, token? }
+ * Body: { producer_user_id, action: 'follow' | 'unfollow', token? }
  *
  * Buyer identity (email) resolves from, in order:
- *   1. a magic-link `token` (HMAC, mig 060 buyer accounts)
- *   2. an explicit `email` in the body (anonymous follow with email capture)
+ *   1. the signed-in buyer's Supabase session (persistent account)
+ *   2. a magic-link `token` (HMAC, mig 060 buyer accounts)
+ *
+ * An email typed into the body is NOT an identity. It used to be, which let
+ * anyone subscribe a stranger's address to drop announcements
+ * (cron/announce-drops mails every follower) or silently unfollow someone
+ * else. No client ever sent one: the producer page sends only the token.
+ * With neither identity the caller gets `needsSignIn` and keeps its
+ * localStorage follow.
+ *
+ * The session comes first for the same reason it does in
+ * lib/buyer-session.ts: the 24h token outlives its expiry in localStorage, and
+ * a signed-in buyer whose follow depended on it was silently not persisted
+ * once it lapsed. That session is also the only identity a buyer who signed
+ * in without ever opening a delivery link has at all.
  *
  * Persists to producer_follows (mig 066) via the service-role client so
  * the producer can later notify followers when a new beat drops.
@@ -24,16 +38,21 @@ export const dynamic = 'force-dynamic';
 const bodySchema = z.object({
   producer_user_id: z.string().uuid(),
   action: z.enum(['follow', 'unfollow']),
-  email: z.string().email().optional(),
   token: z.string().optional(),
 });
+
+/** The canonical email behind the request's Supabase session, if any. */
+async function sessionEmail(): Promise<string | null> {
+  const auth = await requireUser();
+  if (!auth.ok) return null;
+  return sessionBuyerEmail(auth.admin, auth.userId);
+}
 
 function resolveEmail(body: z.infer<typeof bodySchema>): string | null {
   if (body.token) {
     const claims = verifyBuyerToken(body.token);
     if (claims?.email) return claims.email;
   }
-  if (body.email) return body.email.trim().toLowerCase();
   return null;
 }
 
@@ -51,11 +70,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, persisted: false });
     }
 
-    const email = resolveEmail(parsed.data);
+    const email = (await sessionEmail()) ?? resolveEmail(parsed.data);
     if (!email) {
-      // No identity — the client keeps its localStorage follow, but we
-      // can't persist or notify. Tell the caller so it can prompt for email.
-      return NextResponse.json({ ok: true, persisted: false, needsEmail: true });
+      // No verified identity. The client keeps its localStorage follow, but
+      // we can't persist or notify. Signing in at /store/account fixes that.
+      return NextResponse.json({ ok: true, persisted: false, needsSignIn: true });
     }
 
     const admin = createServiceClient();
