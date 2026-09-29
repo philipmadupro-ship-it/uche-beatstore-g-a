@@ -8994,6 +8994,19 @@ Tests: `route.owner-filter.test.ts` drives the Supabase branch through a query-b
 
 **Not changed** (same pattern, other routes): `api/activity`, `api/events`, `api/tracks/[id]/similar`, `api/tracks/tags`, `api/tracks/tags/bulk`, `api/store` (catalogue, playlists, projects), `api/store/facets`, and the `scopedList` default used by `api/calendar` and `api/smart-playlists`.
 
+## 2026-09-29 - Content sections render on /store (STORE-07)
+
+**Reproduced.** A layout with a `text` and a `canvas` section, injected into the real `/api/store` response: both render in the builder, and neither appears on `/store` at 1440 or 390. `renderStoreSection` in `src/app/store/page.tsx` handled only the built-in kinds and returned `null` for `text` / `image` / `video` / `links` / `canvas`.
+
+**Fix.**
+- `/store` hands content kinds (`isContentSection`) to the builder's own `SectionRenderer` with a new `live` prop and no `editBlocks`. When `live` is set, empty sections render nothing (`hasLiveContent`) instead of the inspector hint, the text section body placeholder is gone, and the CTA and social links are real links (CTA href through `safeLinkHref`; no `javascript:`).
+- The render breakpoint is `renderBreakpointFor(section, viewer)`, not the viewer's breakpoint as-is. The renderer returns null for a hidden breakpoint, and the viewer reads `desktop` until hydration. Visibility stays CSS (`visibilityClasses`).
+- Theme: `effectiveStoreTheme` (`lib/store/appearance.ts`, new) layers the profile's accent and text colour under any Design theme colour left at the default. Both the builder canvas and `/store` use it.
+- CSP: video embeds are YouTube and Vimeo only, rewritten by `lib/store-editor/video-embed.ts` to `youtube-nocookie.com` / `player.vimeo.com`, and those origins are now in `frame-src` (read from the same module). Images are https or site-relative (`safeImageSrc`). The builder applies the same filters, so the preview no longer shows media that production `/store` would block. The inspector field now reads "YouTube or Vimeo link".
+- `links` builds hrefs through `lib/store/social-links.ts`, using the same URL shapes as the hero.
+
+**Tests.** `content-sections.test.ts`, `video-embed.test.ts` (including an assertion that every emitted origin is in `frame-src`), `appearance.test.ts`, `social-links.test.ts`, and three new live-mode cases in `SectionRenderer.test.tsx`. `e2e/store-content-sections.spec.ts` at 1440 and 390 checks the text section (heading, body, CTA link), the canvas block inside its frame, no horizontal overflow, and a phone-only section hidden by CSS. Both e2e cases fail with the old `page.tsx`. `check-store-dynamic.mjs` still passes.
+
 ## 2026-09-29 - Project playback through one player (STORE-07)
 
 Task: a project with several tracks should play like a music player — play / pause / seek / switch, navigate away and back — with the player bar and the page never fighting or doubling audio.

@@ -17,6 +17,8 @@
  * happens.
  */
 
+import { VIDEO_EMBED_ORIGINS } from '@/lib/store-editor/video-embed';
+
 export function isCspEnforcedPath(pathname: string): boolean {
   return pathname === '/store' || pathname.startsWith('/store/');
 }
@@ -59,7 +61,10 @@ export function buildCsp(nonce: string, framable = false): string {
     // tfjs + its WASM backend) and fetch the basic-pitch model from 'self'.
     // blob: stays for any worker built from a Blob; nothing third-party.
     `worker-src 'self' blob:`,
-    `frame-src https://js.stripe.com https://*.js.stripe.com https://*.stripe.com https://hooks.stripe.com`,
+    // Stripe's embedded checkout, plus the storefront `video` section's two
+    // embed origins. That section only ever emits these (see
+    // lib/store-editor/video-embed.ts), so this list and it cannot drift.
+    `frame-src https://js.stripe.com https://*.js.stripe.com https://*.stripe.com https://hooks.stripe.com ${VIDEO_EMBED_ORIGINS.join(' ')}`,
     frameAncestors,
     `base-uri 'self'`,
     `form-action 'self'`,

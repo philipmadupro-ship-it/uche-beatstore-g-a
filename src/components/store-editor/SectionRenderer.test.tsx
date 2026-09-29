@@ -206,3 +206,54 @@ describe('the same component on the live storefront', () => {
     expect(container.innerHTML).toContain('width: 20%');
   });
 });
+
+describe('content sections on the live storefront', () => {
+  it('an empty section renders nothing live, but a placeholder in the builder', () => {
+    const section = createSection('image', 'Picture');
+    const { container, rerender } = render(
+      <SectionRenderer section={section} breakpoint="desktop" theme={defaultStoreTheme} data={data} />,
+    );
+    expect(container.textContent).toMatch(/add an image url/i);
+    rerender(<SectionRenderer section={section} breakpoint="desktop" theme={defaultStoreTheme} data={data} live />);
+    expect(container.innerHTML).toBe('');
+  });
+
+  it('a text CTA is a real link only live, and never a javascript: one', () => {
+    const section = {
+      ...createSection('text', 'Intro'),
+      content: { heading: 'Hello', ctaLabel: 'Book a session', ctaHref: '/store/account' },
+    };
+    const { rerender } = render(
+      <SectionRenderer section={section} breakpoint="desktop" theme={defaultStoreTheme} data={data} />,
+    );
+    expect(screen.queryByRole('link')).toBeNull();
+    rerender(<SectionRenderer section={section} breakpoint="desktop" theme={defaultStoreTheme} data={data} live />);
+    expect(screen.getByRole('link', { name: 'Book a session' }).getAttribute('href')).toBe('/store/account');
+    // Heading only — the builder's body placeholder must not reach a buyer.
+    expect(screen.queryByText(/add your text/i)).toBeNull();
+
+    rerender(
+      <SectionRenderer
+        section={{ ...section, content: { ...section.content, ctaHref: 'javascript:alert(1)' } }}
+        breakpoint="desktop" theme={defaultStoreTheme} data={data} live
+      />,
+    );
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByText('Book a session')).toBeTruthy();
+  });
+
+  it('a video embeds only through the CSP-allowed origins', () => {
+    const section = { ...createSection('video', 'Video'), content: { videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' } };
+    const { container, rerender } = render(
+      <SectionRenderer section={section} breakpoint="desktop" theme={defaultStoreTheme} data={data} live />,
+    );
+    expect(container.querySelector('iframe')?.getAttribute('src')).toBe('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ');
+    rerender(
+      <SectionRenderer
+        section={{ ...section, content: { videoUrl: 'https://evil.example/player' } }}
+        breakpoint="desktop" theme={defaultStoreTheme} data={data} live
+      />,
+    );
+    expect(container.querySelector('iframe')).toBeNull();
+  });
+});
