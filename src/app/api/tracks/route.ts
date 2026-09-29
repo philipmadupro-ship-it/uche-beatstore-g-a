@@ -290,8 +290,12 @@ async function listBoundedTracks(
       }
     }
 
+    // `id` breaks created_at ties (a bulk upload shares timestamps), so offset
+    // pages are a total order and a caller walking every page — the Store
+    // Editor loads the whole catalogue — neither skips nor repeats a beat.
     return dbQuery
       .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
       .range(cursor, cursor + limit);
   };
 
