@@ -32,8 +32,9 @@ the ledger; if it disagrees with this file, the ledger wins.
 >    it is missing, stop and say so — do not ask for it in the chat.
 > 2. Only the migrations already in `supabase/migrations/` are applied. Do not
 >    write new SQL against production, edit a migration file, or "fix" data by
->    hand. If something fails, stop and report — the bundle is one transaction,
->    so a failure changes nothing.
+>    hand. If something fails, stop and report. `npm run db:migrate` runs each
+>    file in its own transaction, so a failing file changes nothing and the
+>    ones before it stay applied.
 > 3. Every migration is idempotent (`IF NOT EXISTS`, guarded `DO` blocks,
 >    `ON CONFLICT DO NOTHING`), so re-running an applied one is a no-op. Do not
 >    try to skip "already applied" files by hand.
@@ -103,8 +104,16 @@ the ledger; if it disagrees with this file, the ledger wins.
 3. The editor may warn about "destructive operations": the bundle contains
    `DROP POLICY IF EXISTS` / `DROP TRIGGER IF EXISTS`, which recreate
    policies and triggers in place. Nothing drops a table or data.
-4. It is one transaction: an error rolls the whole bundle back. The last
-   result is the verify table — every row should say `applied`.
+4. An error stops the run. The SQL editor does not keep one session or
+   transaction across a pasted script, so statements before the error may
+   already be applied — that is safe, because every migration is idempotent:
+   fix the cause and run the whole file again. The last result is the verify
+   table — every row should say `applied`.
+   For the same reason the bundle never relies on a TEMP table surviving from
+   one statement to the next: migration 112 builds one, which the editor drops
+   before the next statement reads it (`relation "_paid_buyers" does not
+   exist`), so the bundle carries a same-effect form of 112 from
+   `supabase/apply/editor/`, verified to leave identical contacts.
 5. Regenerate the bundle after new migrations:
    `scripts/ops/bundle-migrations.sh 112 113 … 129 > supabase/apply/pending.sql`.
 

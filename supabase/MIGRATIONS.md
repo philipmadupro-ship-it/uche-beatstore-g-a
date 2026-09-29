@@ -70,8 +70,13 @@ service-role key can read the schema's effects but cannot run DDL):
 `supabase/apply/pending.sql` (built by `scripts/ops/bundle-migrations.sh`) into
 the Supabase SQL editor with nothing selected — the editor runs only the
 highlighted text when something is selected, and a half-selected CREATE TABLE
-fails with `syntax error at or near "created_at"`. The bundle is one
-transaction and ends with `supabase/apply/verify.sql`, a read-only table of
+fails with `syntax error at or near "created_at"`. The editor does not keep
+one session across the script, so a migration whose TEMP table is read by a
+later statement (112) fails there with `relation "_paid_buyers" does not
+exist`; the bundle uses the same-effect form in `supabase/apply/editor/`
+instead, and the bundler refuses a TEMP-table migration that has none. An
+error stops the run; re-running the whole file is safe. The bundle ends with
+`supabase/apply/verify.sql`, a read-only table of
 which migrations are in effect. The step-by-step runbook (for a person or an
 agent session) is `docs/prompts/apply-migrations.md`.
 
