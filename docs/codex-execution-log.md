@@ -8832,3 +8832,13 @@ Tests: 2 cases in `account-routes.test.ts`, 3 project-share cases in `app/api/em
 - **Follow accepted any typed email as identity.** Anyone could subscribe a stranger to drop announcements (`cron/announce-drops` emails every follower), or unfollow them. The body `email` is no longer an identity. A follow now needs the buyer's session or a valid link token; without either the route returns `needsSignIn`. No client ever sent an email.
 
 Tests: `orders/route.test.ts` (+1), new `orders/resend/route.test.ts` (2), and `follow/route.test.ts` (+3 abuse cases). Each fails on the previous code.
+
+## 2026-09-29 - Artist workspace audit fixes: project sends, share comments, link opens
+
+Three gaps found while auditing the CRM for the artist-workspace plan. No schema change.
+
+- **Direct project sends left no trace.** `SendBeatModal` in project mode wrote a `beat_sends` row only when the send was part of a campaign (`/api/campaigns/[id]/targets`). Sent straight to a contact, the invite went out and nothing was recorded: the send never reached the contact's timeline or the nudge queue, and the Resend webhook had no `email_resend_id` to attach opens and clicks to. `/api/projects/[id]/shares/[shareId]/invite` now takes an optional `contact_id` (owner-checked before the email is sent) and records the send. The modal passes it only outside a campaign, so a campaign send is still recorded once, by the targets route. Both routes build the row with `lib/crm/project-send.ts`. Recording is best-effort after the email has gone out (`sendRecorded: false`, logged).
+- **Share-page comments notified nobody.** `POST /api/projects/share/[token]/comments` now inserts a `share_comment` notification for the project owner (`lib/notifications/share-comment.ts`), so it reaches the bell and desktop notifications. A failed notification never fails the comment. TopBar gives the kind its own icon.
+- **"Plays" on `/links` were page opens.** Both `share_links.plays` and `project_shares.plays` go up once per share-page GET, not per track played. `/links` now labels the number "opens". The column keeps its name.
+
+Tests: `lib/crm/project-send.test.ts`, `lib/notifications/share-comment.test.ts`, new `invite/route.test.ts` (5) and `share/[token]/comments/route.test.ts` (3).
