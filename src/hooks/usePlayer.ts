@@ -306,8 +306,13 @@ export const usePlayer = create<PlayerState>()(
         ...migratePersistedVolume(persisted),
       }) as unknown as PlayerState,
       storage: createJSONStorage(() => (typeof window !== 'undefined' ? localStorage : serverStorage)),
-      // Don't persist transient playback state
+      // Don't persist transient playback state. `progress` is kept on purpose:
+      // it belongs to `currentTrack` (every track change resets it), and a
+      // reload or a full-page Back (dashboard → share page → Back) mounts a
+      // fresh SimpleAudioEngine that resumes from it instead of 0:00.
+      // `isPlaying` stays out, so nothing starts on its own after a load.
       partialize: (state) => ({
+        progress: state.progress,
         volume: state.volume,
         muted: state.muted,
         shuffle: state.shuffle,

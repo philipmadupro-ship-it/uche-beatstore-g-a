@@ -108,8 +108,12 @@ export function VoiceTagPlayer() {
   }, [isPlaying, setDuckGain]);
 
   // Safety: always restore the beat gain on unmount (e.g. leaving the store).
+  // The tag is a detached `new Audio()`, so unmounting does not stop it the
+  // way it stops an element in the page — pause it, or it talks over the
+  // next page.
   useEffect(() => () => {
     if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
+    try { audioRef.current?.pause(); } catch { /* ignore */ }
     setDuckGain(1);
   }, [setDuckGain]);
 
