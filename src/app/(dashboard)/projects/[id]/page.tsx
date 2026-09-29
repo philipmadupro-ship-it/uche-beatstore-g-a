@@ -6,7 +6,9 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { lyricsStudioHref } from '@/lib/library/lyrics-link';
+import { studioHref } from '@/lib/library/studio-link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
@@ -49,6 +51,10 @@ function errorMessage(err: unknown, fallback: string): string {
 export default function ProjectWorkspacePage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = React.use(paramsPromise);
   const searchParams = useSearchParams();
+  // Row ⋯ menu destinations — same two the Library offers, same links.
+  const router = useRouter();
+  const openLyrics = (t: Track) => router.push(lyricsStudioHref(t.id));
+  const openStudio = (t: Track) => router.push(studioHref(t.id));
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
@@ -461,6 +467,8 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           onAddFromLibrary={() => setShowAddFromLibrary(true)}
           onShowUpload={() => setShowUpload(true)}
           onTrackChanged={fetchData}
+          onOpenLyrics={openLyrics}
+          onOpenStudio={openStudio}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelectOne}
           onSelectAll={toggleSelectAll}

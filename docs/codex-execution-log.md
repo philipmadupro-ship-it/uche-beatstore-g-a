@@ -8867,6 +8867,14 @@ Follow-up to the entry above. `describeUncertainTitleMetadata` from that entry i
 
 Tests (new): `essentia-extract.test.ts` (real package), `essentia-worker.test.ts` (real worker file vs. shared extractor), `metadata-agreement.test.ts`, `filename-check.test.ts`, `client-analysis.test.ts`. Also `compareAndSet` in `processing.test.ts`, an invalid-features case in the analyze route test, 5 tray tests, and parser tests for the missed readings. Out of scope: `lib/audio/chords.client.ts` has the same broken CDN loader.
 
+## 2026-09-28 - Project and playlist track menus: Lyrics Studio and Send to studio
+
+`TrackCard` has had both items since LIB-01, but they show only when the caller passes `onOpenLyrics` / `onOpenStudio`, and only the Library did. The project page (through `ProjectTrackList`, which forwards them as optional props because the parent owns every row action) and the playlist page now pass both, built with the same `lyricsStudioHref` / `studioHref` helpers.
+
+- `components/projects/ProjectTrackList.test.tsx` pins the forwarding. One case fails on the old component.
+- `e2e/track-menu-destinations.spec.ts` drives the real `/projects/[id]` and `/playlists/[id]` pages through the stub-Supabase sign-in. For each page it chooses both items and checks the destination. Lyrics Studio is followed to the track page, which must focus `#lyrics` in the viewport, so it covers the LIB-01 hash fix end to end. With the page wiring reverted, all 4 cases fail.
+- Measured on the real pages at 1440px and 390px: no menu label is cut off, and the menu stays in the viewport.
+
 ## 2026-09-29 - Chord detection loader fixed (AUDIO-04 follow-up)
 
 `lib/audio/chords.client.ts` carried its own inline worker with the same broken loader BPM/key had before AUDIO-04. It `importScripts`-ed essentia.js from jsDelivr, which is not in the CSP, looked for an `EssentiaWASM` global that file never defines, and called it as a factory. Every detection threw inside the worker and resolved `[]`. Two more bugs sat behind the loader:
