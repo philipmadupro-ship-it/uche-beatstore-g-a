@@ -6,7 +6,9 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { lyricsStudioHref } from '@/lib/library/lyrics-link';
+import { studioHref } from '@/lib/library/studio-link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { TrackCard, TRACK_ROW_GRID } from '@/components/tracks/TrackCard';
@@ -44,6 +46,10 @@ function trackTags(track: Track): { tag: string }[] {
 export default function PlaylistDetailPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = React.use(paramsPromise);
   const searchParams = useSearchParams();
+  // Row ⋯ menu destinations — same two the Library offers, same links.
+  const router = useRouter();
+  const openLyrics = (t: Track) => router.push(lyricsStudioHref(t.id));
+  const openStudio = (t: Track) => router.push(studioHref(t.id));
   const [playlist, setPlaylist] = useState<PlaylistDetail | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(true);
@@ -632,6 +638,8 @@ export default function PlaylistDetailPage({ params: paramsPromise }: { params: 
                   removeLabel="Remove from playlist"
                   editable
                   onChanged={fetchData}
+                  onOpenLyrics={openLyrics}
+                  onOpenStudio={openStudio}
                 />
               );
             })
