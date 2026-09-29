@@ -16,6 +16,9 @@ import { ProducerShareVariant } from '@/components/share/variants/ProducerShareV
 import { RapperShareVariant } from '@/components/share/variants/RapperShareVariant';
 import { FriendShareVariant } from '@/components/share/variants/FriendShareVariant';
 import { usePreviewPrefetch } from '@/hooks/usePreviewPrefetch';
+import { ShareActions } from '@/components/share/ShareActions';
+import { downloadFilename } from '@/lib/share/download-filename';
+import { toast } from '@/hooks/useToast';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useVolumeState } from '@/hooks/useVolumeState';
 import { VolumeControl } from '@/components/player/VolumeControl';
@@ -33,6 +36,8 @@ interface LegacyShareShape {
   lease_price_usd?: number | null;
   exclusive_price_usd?: number | null;
   discount_percent?: number | null;
+  /** Full track (default) or the 75 s preview only (mig 121). */
+  full_playback?: boolean | null;
 }
 
 interface LegacyCreatorShape {
@@ -92,6 +97,8 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
   usePreviewPrefetch(tracks);
   const [shareTitle, setShareTitle] = useState('');
   const [allowDownloads, setAllowDownloads] = useState(true);
+  const [fullPlayback, setFullPlayback] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requiresPassword, setRequiresPassword] = useState(false);
@@ -152,6 +159,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       setCreator(data.creator || null);
       setArtworkTheme(data.artworkTheme ?? null);
       setAllowDownloads(data.share?.allow_downloads !== false);
+      setFullPlayback(data.share?.full_playback !== false);
       setRequiresPassword(false);
     } catch {
       setError('Error loading shared tracks.');
@@ -294,15 +302,14 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
     setActiveIndex(i);
     setIsPlaying(true);
   };
-  const downloadTrack = async (track: Track) => {
-    // Route through /api/share/[token]/download — the endpoint grants
-    // either via share.allow_downloads (free) or via a matching
-    // license_purchases row keyed by purchaseSessionId (paid).
+  const downloadTrack = async (track: { id: string; title: string }) => {
+    // Route through /api/share/[token]/download: the endpoint grants either
+    // via share.allow_downloads (free) or via a matching license_purchases row
+    // keyed by purchaseSessionId (paid). The password goes as a header.
     const url = new URL(`/api/share/${token}/download`, window.location.origin);
     url.searchParams.set('track_id', track.id);
     if (purchaseSessionId) url.searchParams.set('session_id', purchaseSessionId);
-    const ext = (track.audio_url.match(/\.(mp3|wav|flac|aiff|aif|m4a|ogg)(?:\?|$)/i)?.[1] || 'mp3').toLowerCase();
-    const filename = `${track.title || 'track'}.${ext}`;
+    setDownloadingId(track.id);
     try {
       const response = await fetch(url.toString(), {
         headers: password ? { 'x-share-password': password } : {},
@@ -314,13 +321,18 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       const objectUrl = URL.createObjectURL(await response.blob());
       const a = document.createElement('a');
       a.href = objectUrl;
-      a.download = filename;
+      // Named by the server from the master; audio_url is a signed stream URL
+      // with no extension, so guessing from it saved every WAV as .mp3.
+      a.download = downloadFilename(response.headers.get('content-disposition'), track.title);
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(objectUrl);
     } catch (downloadError) {
-      setError(downloadError instanceof Error ? downloadError.message : 'Download unavailable');
+      // Not setError: `error` replaces the whole page.
+      toast.error('Download failed', downloadError instanceof Error ? downloadError.message : 'Download unavailable');
+    } finally {
+      setDownloadingId(null);
     }
   };
   const fmt = (s: number) => {
@@ -415,6 +427,17 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
       )
     : null;
 
+  // The producer's options, honoured in every variant (ShareActions).
+  const shareActions = share ? (
+    <ShareActions
+      tracks={tracks}
+      allowDownloads={allowDownloads}
+      onDownload={downloadTrack}
+      downloadingId={downloadingId}
+      fullPlayback={fullPlayback}
+    />
+  ) : null;
+
   if (share?.recipient_kind === 'client') {
     return (
       <>
@@ -433,6 +456,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         />
         <ClientShareVariant
           project={projectMock}
+          actions={shareActions}
           tracks={tracks}
           creator={creator}
           licenses={[]}
@@ -479,6 +503,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         />
         <ProducerShareVariant
           project={projectMock}
+          actions={shareActions}
           tracks={tracks}
           creator={creator}
           playingId={activeTrack?.id ?? null}
@@ -510,6 +535,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         />
         <RapperShareVariant
           project={projectMock}
+          actions={shareActions}
           tracks={tracks}
           creator={creator}
           playingId={activeTrack?.id ?? null}
@@ -541,6 +567,7 @@ export default function PublicSharePage({ params: paramsPromise }: { params: Pro
         />
         <FriendShareVariant
           project={projectMock}
+          actions={shareActions}
           tracks={tracks}
           creator={creator}
           playingId={activeTrack?.id ?? null}

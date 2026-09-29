@@ -71,6 +71,14 @@ export interface UseWaveSurferOptions {
   container: React.RefObject<HTMLDivElement | null>;
   /** Audio URL — pass through `audioSrc()` first if you need same-origin proxying. */
   url: string | null | undefined;
+  /**
+   * Rebuild the instance when this changes, even if `url` did not. Needed
+   * when the SAME track moves to a different container element: WaveSurfer
+   * binds to the element it was created in, and the load effect otherwise
+   * only re-runs on a new URL. The share page swaps between a variant and its
+   * collaboration view this way.
+   */
+  resetKey?: string | number;
   /** Optional peaks sidecar JSON URL. When set + reachable, skip browser decode. */
   peaksUrl?: string | null;
   /** Visual options forwarded to WaveSurfer.create */
@@ -193,6 +201,7 @@ export interface UseWaveSurferReturn {
 export function useWaveSurfer({
   container,
   url,
+  resetKey,
   peaksUrl,
   // Frosted, clearly-visible unplayed bars (warm off-white at low alpha) so
   // the played/unplayed split reads at a glance on the glass panel — the old
@@ -454,7 +463,7 @@ export function useWaveSurfer({
     // plugins). Playback position is lost across the rebuild — acceptable
     // because these toggles are deliberate user actions, not frequent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, peaksUrl, regionsEnabled, timelineEnabled, spectrogramEnabled]);
+  }, [url, peaksUrl, regionsEnabled, timelineEnabled, spectrogramEnabled, resetKey]);
 
   // Imperative controls. Stable identity via useCallback so consumer
   // effects can include them in dep arrays without churn.

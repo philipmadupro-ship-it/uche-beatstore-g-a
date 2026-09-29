@@ -71,6 +71,13 @@ Tokenized link the producer DMs to an artist. The page renders one of four **var
 
 Each variant lives in `src/components/share/variants/*` and consumes the same `/api/projects/share/[token]` shape.
 
+Whatever the variant, the options the producer set are honoured on the page:
+- **Playback** — **full track** (the default) or a **1:15 preview**, chosen per share. Rappers write to the whole beat; the 75 s clip is the storefront's, not the share's.
+- **Downloads** — when allowed, every track has a Download button that saves the original file; when not, the page says downloads are off.
+- **Password / expiry / revocation** — enforced on the page, the stream and the download.
+- **Role** — commenters and editors get a "Leave feedback" / "Comment & edit" entry into the collaboration view (region-pinned comments, the editor); viewers do not.
+- **For sale** — Buy buttons on the client variant only when `sales_enabled`.
+
 ---
 
 ## Core flows

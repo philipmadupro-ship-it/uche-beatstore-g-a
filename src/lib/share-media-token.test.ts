@@ -32,12 +32,28 @@ describe('share media grants', () => {
     ).toBe(false);
   });
 
+  it('stays valid through a long writing session on a full track', () => {
+    vi.stubEnv('SHARE_MEDIA_TOKEN_SECRET', 'test-share-secret');
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-22T12:00:00Z'));
+    const url = new URL(signedSharePreviewUrl('share-a', 'track-a'), 'http://localhost');
+    // The old 15-minute grant failed here: a seek after 16 min re-fetched a
+    // byte range and the player went silent mid-session.
+    vi.advanceTimersByTime(3 * 60 * 60 * 1000);
+
+    expect(
+      verifyShareMediaGrant('share-a', 'track-a', url.searchParams.get('expires'), url.searchParams.get('sig')),
+    ).toBe(true);
+    vi.useRealTimers();
+  });
+
   it('rejects an expired grant', () => {
     vi.stubEnv('SHARE_MEDIA_TOKEN_SECRET', 'test-share-secret');
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-22T12:00:00Z'));
     const url = new URL(signedSharePreviewUrl('share-a', 'track-a'), 'http://localhost');
-    vi.advanceTimersByTime(16 * 60 * 1000);
+    // 4 h grant (a writing session on a full track), so just past it.
+    vi.advanceTimersByTime(4 * 60 * 60 * 1000 + 60 * 1000);
 
     expect(
       verifyShareMediaGrant(

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Edit3 } from 'lucide-react';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 import { LyricsStudio } from '@/components/lyrics/LyricsStudio';
@@ -37,9 +37,11 @@ interface Props {
   onPlay: (track: Track) => void;
   playingId?: string | null;
   isPlaying?: boolean;
+  /** Share options the producer set (downloads, playback, collaboration). ShareActions. */
+  actions?: ReactNode;
 }
 
-export function RapperShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying }: Props) {
+export function RapperShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, actions }: Props) {
   const currentTrack = tracks.find((t) => t.id === playingId) || tracks[0];
   const displayName = creator?.display_name || project.name;
 
@@ -208,6 +210,7 @@ export function RapperShareVariant({ project, tracks, creator, onPlay, playingId
           )}
 
         </div>
+        {actions && <div className="lg:col-span-2">{actions}</div>}
       </div>
     </div>
   );

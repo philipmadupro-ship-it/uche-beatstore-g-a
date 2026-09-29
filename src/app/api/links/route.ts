@@ -43,6 +43,8 @@ type ShareListItem = {
   expires_at: string | null;
   revoked_at: string | null;
   allow_downloads: boolean;
+  /** Full track (default) or the 75 s preview only. Mig 121. */
+  full_playback: boolean;
   password_protected: boolean;
   created_at: string;
   href: string;
@@ -104,6 +106,7 @@ function localLinks(): ShareListItem[] {
       expires_at: share.expires_at ?? null,
       revoked_at: share.revoked_at ?? null,
       allow_downloads: share.allow_downloads !== false,
+      full_playback: share.full_playback !== false,
       password_protected: Boolean(share.password_hash),
       created_at: share.created_at,
       href: `/share/${share.token}`,
@@ -144,6 +147,7 @@ function localLinks(): ShareListItem[] {
       expires_at: share.expires_at ?? null,
       revoked_at: share.revoked_at ?? null,
       allow_downloads: share.allow_downloads !== false,
+      full_playback: share.full_playback !== false,
       password_protected: Boolean(share.password_hash),
       created_at: share.created_at,
       href: `/projects/share/${share.token}`,
@@ -169,7 +173,8 @@ export async function GET() {
     const [legacyRes, projectsRes, playlistsRes, tracksRes] = await Promise.all([
       owner.admin
         .from('share_links')
-        .select('id, token, title, kind, track_ids, plays, expires_at, revoked_at, allow_downloads, password_hash, created_at')
+        // `*` rather than a column list: full_playback (mig 121) may not exist yet.
+        .select('*')
         .eq('user_id', owner.userId),
       owner.admin.from('projects').select('id, name, cover_url').eq('user_id', owner.userId),
       owner.admin.from('playlists').select('id, name, cover_url').eq('user_id', owner.userId),
@@ -186,8 +191,9 @@ export async function GET() {
     const playlistIds = playlists.map((playlist: any) => playlist.id);
     const trackIds = tracks.map((track: any) => track.id);
 
-    const SHARE_FIELDS =
-      'id, token, content_type, project_id, playlist_id, track_id, label, plays, expires_at, revoked_at, allow_downloads, password_hash, created_at';
+    // `*` rather than a column list: full_playback (mig 121) may not exist yet,
+    // and naming it would fail the whole listing. Only derived fields leave.
+    const SHARE_FIELDS = '*';
 
     // A share is owned transitively — through the project, playlist or track
     // it points at — so ownership is expressed as three id filters rather than
@@ -263,6 +269,7 @@ export async function GET() {
         expires_at: share.expires_at ?? null,
         revoked_at: share.revoked_at ?? null,
         allow_downloads: share.allow_downloads !== false,
+        full_playback: share.full_playback !== false,
         password_protected: Boolean(share.password_hash),
         created_at: share.created_at,
         href: `/share/${share.token}`,
@@ -307,6 +314,7 @@ export async function GET() {
         expires_at: share.expires_at ?? null,
         revoked_at: share.revoked_at ?? null,
         allow_downloads: share.allow_downloads !== false,
+        full_playback: share.full_playback !== false,
         password_protected: Boolean(share.password_hash),
         created_at: share.created_at,
         href: `/projects/share/${share.token}`,

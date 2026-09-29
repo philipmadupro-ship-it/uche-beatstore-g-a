@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Music, Play, Pause, SkipBack, SkipForward, Copy, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
@@ -70,6 +70,8 @@ interface Props {
   onPlay: (track: Track) => void;
   playingId?: string | null;
   isPlaying?: boolean;
+  /** Share options the producer set (downloads, playback, collaboration). ShareActions. */
+  actions?: ReactNode;
 }
 
 function fmt(s: number) {
@@ -77,7 +79,7 @@ function fmt(s: number) {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 }
 
-export function ProducerShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying }: Props) {
+export function ProducerShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, actions }: Props) {
   const currentTrack = tracks.find((t) => t.id === playingId) ?? tracks[0];
   const displayName = creator?.display_name || project.name;
   const [bpmCopied, setBpmCopied] = useState(false);
@@ -357,6 +359,7 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
             </div>
           </div>
         </div>
+        {actions}
       </div>
     </div>
   );
