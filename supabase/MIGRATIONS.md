@@ -52,8 +52,8 @@ service-role key can read the schema's effects but cannot run DDL):
 | `116_notifications_realtime.sql` | **not applied** | new — adds `notifications` to the realtime publication |
 | `117_creator_profiles_no_self_insert.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — drops the RLS policy that let any signed-in buyer insert a `creator_profiles` row |
 | `118_strict_arrangements_rls.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — owner-only RLS on `arrangements` (097 missed it) |
-| `119_producer_only_catalogue_writes.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — RLS writes to `tracks`/`projects`/`playlists` require a producer profile (apply after 117) |
-| `120_producer_only_share_links.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — RLS writes to `share_links` require a producer profile (needs 119) |
+| `119_producer_only_catalogue_writes.sql` | **not applied** — reported applied 2026-09-26, but running 120 on 2026-09-29 failed with 42883 `is_producer() does not exist`, which 119 creates | security — RLS writes to `tracks`/`projects`/`playlists` require a producer profile (apply after 117) |
+| `120_producer_only_share_links.sql` | **not applied** — failed 2026-09-29 (42883), now self-contained | security — RLS writes to `share_links` require a producer profile. Declares `is_producer()` itself since 2026-09-29, so it no longer needs 119 first |
 | `117_project_access_payment_intent.sql` | applied | reported applied by the producer 2026-09-26 |
 | `118_finish_strict_owned_rows.sql` | applied | reported applied by the producer 2026-09-26 |
 
