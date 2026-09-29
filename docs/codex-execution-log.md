@@ -8977,3 +8977,17 @@ Tests: `lib/share/playback.test.ts` (15), `lib/share/download-filename.test.ts` 
 - `/api/tracks` orders by `created_at DESC, id ASC`. Without the `id` tiebreak, beats sharing a timestamp (bulk upload) could be skipped or repeated across offset pages.
 
 **Tests.** `track-catalogue.test.ts` (250 → 3 requests, exact multiple, empty, progress, dedupe, stuck cursor, page cap, failure, bounded concurrency). `e2e/store-editor-catalogue.spec.ts` at 1440px and 390px: all 30 page-three listed beats render, no "Load next 100" control, search finds beat 150 without a request, and Move down PATCHes `/api/tracks/reorder` with all 30 listed beats and distinct positions. With the old page it fails at the first assertion.
+
+## 2026-09-29 - Store Editor load/save safety, one storefront appearance rule (STORE-03)
+
+Follow-ups found while writing the STORE-02 spec.
+
+- **A failed side-request could wipe the profile.** The Store Editor fetched six endpoints with `Promise.all` and parsed all six bodies with a second `Promise.all`. One non-JSON body (in the e2e environment, `/api/promo-codes` and `/api/licenses`) rejected the lot. The form stayed on `EMPTY_PROFILE`, and the next **Save changes** PATCHed those blanks over the saved bio, socials and prices. `lib/store-editor/initial-load.ts` now loads each source on its own (`loadSource` never throws: a non-2xx, a non-object body and a network error are all `ok: false`). `saveScope` says what Save may write. The profile PATCH needs the profile to have loaded, and the featured-playlist and featured-project writes need their lists. Save is disabled (and refuses in the handler) when the profile did not load. One toast names whatever else failed.
+- **Font options.** `/profile` offered `modern` and `minimal`, which the storefront never mapped, so both drew the default face. Both editors now offer the same three (`STORE_FONT_STYLES`: default / serif / mono), and a saved legacy value reads as `default`.
+- **One appearance rule** (`lib/store/appearance.ts#resolveStoreAppearance`). `/store`, `/store/producer/[slug]`, the Content-mode preview and the Design canvas all resolve accent, text colour and font the same way. A Design theme colour wins only when it differs from the stock theme. Every saved layout carries a full theme, so a producer who only reordered sections keeps their profile accent. The producer page now applies the text colour (it only applied the font), and its API returns `store_layout` from a separate query, as `/api/store` does. The theme panel gained a **Text** swatch. There was no control for theme text before.
+- **Cache delay is stated, not fixed.** `/api/store` stays `s-maxage=30, stale-while-revalidate=60`. The save toast now says a change is live within about a minute and a half.
+- **`next dev` no longer edits AGENTS.md.** Next 16.3 appends a managed agent-rules block whenever it detects an AI agent; `agentRules: false` in `next.config.ts` turns that off.
+
+Not changed: `/store` still renders only the built-in section kinds. `text` / `image` / `video` / `links` / `canvas` sections added in Design show in the builder and not on the live page.
+
+Tests: `initial-load.test.ts` (11), `appearance.test.ts` (10), `e2e/store-editor-load.spec.ts` (2; both fail on the old page). Browser check against `next dev`: a themed layout gives `/store` the theme accent and text, and the producer page the profile text colour and font.

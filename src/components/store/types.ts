@@ -87,8 +87,3 @@ export const TYPE_FILTERS = ['all', 'beats', 'song', 'remix'] as const;
 export type TypeFilter = typeof TYPE_FILTERS[number];
 export type ViewMode = 'grid' | 'list';
 
-export const FONT_FAMILY_MAP: Record<string, string> = {
-  default: '"Akira Expanded", system-ui, sans-serif',
-  serif: '"Synkopy", "Akira Expanded", system-ui, sans-serif',
-  mono: '"Panchang", ui-monospace, SFMono-Regular, Menlo, monospace',
-};

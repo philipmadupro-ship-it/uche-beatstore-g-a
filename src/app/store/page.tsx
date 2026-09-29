@@ -31,10 +31,10 @@ import {
 import {
   type StoreTrack, type CreatorProfile, type FeaturedPlaylist, type PlaylistTrackItem,
   type TypeFilter, type ViewMode, type LicenseTier,
-  TYPE_FILTERS, FONT_FAMILY_MAP,
+  TYPE_FILTERS,
 } from '@/components/store/types';
 import { sanitizeUrl } from '@/components/store/helpers';
-import { normalizeThemeColor } from '@/lib/theme/colors';
+import { resolveStoreAppearance } from '@/lib/store/appearance';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
@@ -1076,7 +1076,6 @@ function StorePage() {
     }
   }
 
-  const accentColor = normalizeThemeColor(creator?.accent_color);
   /**
    * The producer's storefront layout.
    *
@@ -1095,8 +1094,9 @@ function StorePage() {
    * Visibility stays CSS-driven so the cached HTML serves every device.
    */
   const viewerBreakpoint = useStoreBreakpoint();
-  const textColor = creator?.text_color_primary || '#FFFFFF';
-  const fontFamily = FONT_FAMILY_MAP[creator?.font_style ?? 'default'] ?? FONT_FAMILY_MAP.default;
+  // Profile colours, overridden by any theme colour the producer changed in
+  // the Store Editor's Design mode (`lib/store/appearance.ts`).
+  const { accent: accentColor, text: textColor, fontFamily } = resolveStoreAppearance(creator, storeLayout.theme);
 
   /**
    * Storefront sections, drawn in the order the producer arranged them.

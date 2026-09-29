@@ -21,7 +21,7 @@
  *     shell whatever else is on screen.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check, History, Layers, Loader2, Monitor, Palette, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2,
 } from 'lucide-react';
@@ -39,6 +39,7 @@ import { moveCanvasBlock } from '@/lib/store-editor/canvas-blocks';
 import { SectionsPanel } from './SectionsPanel';
 import { SectionInspector } from './SectionInspector';
 import { ThemePanel } from './ThemePanel';
+import { effectiveStoreTheme } from '@/lib/store/appearance';
 import { HistoryPanel } from './HistoryPanel';
 import { recordSnapshot } from '@/lib/store-editor/history';
 import {
@@ -83,6 +84,9 @@ export function StorefrontBuilder({
     future: [],
   }));
   const layout = editor.doc;
+  // What /store will actually draw: an untouched theme colour defers to the
+  // profile's, so the canvas must too or it previews a colour buyers never see.
+  const renderTheme = useMemo(() => effectiveStoreTheme(layout.theme, data.creator), [layout.theme, data.creator]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [breakpoint, setBreakpoint] = useState<StoreBreakpoint>('desktop');
@@ -602,7 +606,7 @@ export function StorefrontBuilder({
                       <SectionRenderer
                         section={section}
                         breakpoint={breakpoint}
-                        theme={layout.theme}
+                        theme={renderTheme}
                         data={data}
                         editBlocks={section.kind === 'canvas' ? {
                           selectedId: selectedBlockId,

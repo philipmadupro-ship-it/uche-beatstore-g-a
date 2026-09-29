@@ -50,7 +50,9 @@ import {
 import type { StoreTrack, CreatorProfile } from '@/components/store/types';
 import { StorefrontBuilder } from '@/components/store-editor/StorefrontBuilder';
 import type { StorefrontData } from '@/components/store-editor/SectionRenderer';
-import type { StoreLayout } from '@/lib/store-editor/layout';
+import { normalizeLayout, type StoreLayout, type StoreTheme } from '@/lib/store-editor/layout';
+import { failedSourceLabels, loadStoreEditor, saveScope, type SaveScope } from '@/lib/store-editor/initial-load';
+import { normalizeFontStyle, resolveStoreAppearance, STORE_FONT_LABELS, STORE_FONT_STYLES } from '@/lib/store/appearance';
 import { uploadImageFile } from '@/lib/upload/image-upload-client';
 import { getStoreEditorAttentionIssues } from '@/lib/store-editor/attention-issues';
 import { fetchAllTrackPages, mapWithConcurrency, TRACK_PAGE_SIZE } from '@/lib/store-editor/track-catalogue';
@@ -653,13 +655,16 @@ function StorePreview({
   featuredPlaylists,
   featuredProjects,
   tracks,
+  theme,
 }: {
   profile: ProfileForm;
   featuredPlaylists: PlaylistRow[];
   featuredProjects: ProjectRow[];
   tracks: PreviewTrack[];
+  /** The Design mode theme, so this preview resolves colours as /store does. */
+  theme: StoreTheme;
 }) {
-  const accent = normalizeThemeColor(profile.accent_color);
+  const { accent, text, fontFamily } = resolveStoreAppearance(profile, theme);
 
   // Map ProfileForm → CreatorProfile so the real ArtistBioBlock can render.
   const creator: CreatorProfile = {
@@ -708,8 +713,8 @@ function StorePreview({
 
   return (
     <div
-      className="rounded-xl overflow-hidden border border-white/10 bg-[#090907] text-white"
-      style={{ '--store-accent': accent } as React.CSSProperties}
+      className="rounded-xl overflow-hidden border border-white/10 bg-[#090907]"
+      style={{ '--store-accent': accent, '--store-text': text, fontFamily, color: text } as React.CSSProperties}
     >
       {/* Real ArtistBioBlock — mirrors what buyers see */}
       <ArtistBioBlock creator={creator} accentColor={accent} />
@@ -873,6 +878,7 @@ export default function StoreEditorPage() {
    * default layout, which reproduces `/store` exactly as it renders today.
    */
   const [storeLayout, setStoreLayout] = useState<unknown>(null);
+  const previewTheme = useMemo(() => normalizeLayout(storeLayout).theme, [storeLayout]);
   /**
    * Did the profile actually load?
    *
@@ -882,6 +888,12 @@ export default function StoreEditorPage() {
    * the first slider drag. The builder is gated on this instead.
    */
   const [profileLoaded, setProfileLoaded] = useState(false);
+  /**
+   * Which writes Save may make, from what actually loaded. The form starts on
+   * EMPTY_PROFILE; saving it without the saved profile having replaced it
+   * wipes the bio, socials and prices.
+   */
+  const [saveAllowed, setSaveAllowed] = useState<SaveScope>({ profile: false, playlists: false, projects: false });
 
   const heroFileRef = useRef<HTMLInputElement>(null);
 
@@ -1205,34 +1217,41 @@ export default function StoreEditorPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [profileRes, playlistRes, trackSummaryRes, projectsRes, promoRes, licensesRes] = await Promise.all([
-          fetch('/api/profile'),
-          fetch('/api/playlists'),
-          fetch('/api/tracks/store-summary'),
-          fetch('/api/projects'),
-          fetch('/api/promo-codes'),
-          fetch('/api/licenses'),
-        ]);
-        const [pd, pld, summaryData, prd, promod, ld] = await Promise.all([
-          profileRes.json(), playlistRes.json(), trackSummaryRes.json(), projectsRes.json(), promoRes.json(), licensesRes.json(),
-        ]);
-        const loadedGlobalLicenses = ((ld.licenses ?? []) as GlobalLicense[])
+        // Each source settles on its own (`lib/store-editor/initial-load.ts`).
+        // One unparseable body used to reject all six, leave the form on its
+        // empty defaults, and let the next Save write those over the profile.
+        const load = await loadStoreEditor();
+        const scope = saveScope(load);
+        setSaveAllowed(scope);
+        const failedSources = failedSourceLabels(load);
+        if (!scope.profile) {
+          toast.error('Could not load your store profile', 'Saving is off until it loads. Reload to try again.');
+        } else if (failedSources.length > 0) {
+          toast.warning(`Could not load ${failedSources.join(', ')}`, 'Everything else is editable. Reload to try again.');
+        }
+        const pd = load.profile.ok ? load.profile.data : null;
+        const pld = load.playlists.ok ? load.playlists.data : null;
+        const summaryData = load.summary.ok ? load.summary.data : null;
+        const prd = load.projects.ok ? load.projects.data : null;
+        const promod = load.promoCodes.ok ? load.promoCodes.data : null;
+        const ld = load.licenses.ok ? load.licenses.data : null;
+
+        const loadedGlobalLicenses = (((ld?.licenses ?? []) as GlobalLicense[]))
+          .slice()
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
         setGlobalLicenses(loadedGlobalLicenses);
-        setPromoCodes(promod.codes ?? []);
-        // Only store the summary if the request actually succeeded. A failed
-        // response still parses as JSON ({ error: '…' }), and spreading that
-        // made trackSummary truthy while `issues` / `producerPicks` stayed
-        // undefined — so every `trackSummary?.x.y` below dereferenced undefined
-        // and took the whole page down with it. Leaving it null instead lets
-        // the `?? allTracks…` fallbacks that already exist do their job.
-        if (trackSummaryRes.ok) {
+        setPromoCodes((promod?.codes ?? []) as PromoCode[]);
+        // A failed summary leaves trackSummary null so the `?? allTracks…`
+        // fallbacks below do their job; a failed response spread into it made
+        // it truthy with `issues` / `producerPicks` undefined and took the
+        // page down.
+        if (summaryData) {
           setTrackSummary({
-            ...summaryData,
+            ...(summaryData as Omit<TrackStoreSummary, 'producerPicks'>),
             producerPicks: ((summaryData.producerPicks ?? []) as ApiTrackRow[]).map(mapTrackRow),
           });
         } else {
-          console.error('store-summary failed; falling back to client-side counts', summaryData);
+          console.error('store-summary failed; falling back to client-side counts', load.summary);
           setTrackSummary(null);
         }
         // Not awaited: the rest of the editor should not wait on a large
@@ -1242,8 +1261,11 @@ export default function StoreEditorPage() {
           .catch((err) => {
             toast.error('Could not load your beats', err instanceof Error ? err.message : 'try again');
           });
-        setPreviewTracks(((summaryData.producerPicks ?? []) as ApiTrackRow[]).slice(0, 3).map(mapTrackRow));
-        const p = pd.profile ?? {};
+        setPreviewTracks(((summaryData?.producerPicks ?? []) as ApiTrackRow[]).slice(0, 3).map(mapTrackRow));
+        if (pd) {
+        // Numbers (prices, intervals) come through here too; every one of
+        // them is passed through String() or a `??` below.
+        const p = (pd.profile ?? {}) as Record<string, string | null | undefined>;
         setStoreLayout(p.store_layout ?? null);
         setProfileLoaded(true);
         setForm({
@@ -1252,7 +1274,7 @@ export default function StoreEditorPage() {
           credits: p.credits ?? '',
           hero_image_url: p.hero_image_url ?? '',
           accent_color: p.accent_color ?? '#FFFFFF',
-          font_style: p.font_style ?? 'default',
+          font_style: normalizeFontStyle(p.font_style),
           text_color_primary: p.text_color_primary ?? '#FFFFFF',
           instagram_handle: p.instagram_handle ?? '',
           twitter_handle: p.twitter_handle ?? '',
@@ -1274,8 +1296,9 @@ export default function StoreEditorPage() {
           voice_tag_url: p.voice_tag_url ?? '',
           voice_tag_interval_seconds: String(p.voice_tag_interval_seconds ?? 20),
         });
+        }
 
-        const allPlaylists: PlaylistRow[] = pld.playlists ?? [];
+        const allPlaylists: PlaylistRow[] = (pld?.playlists ?? []) as PlaylistRow[];
         setPlaylists(allPlaylists);
 
         // Build featured list: playlists with store_featured=true, sorted by store_order
@@ -1284,7 +1307,7 @@ export default function StoreEditorPage() {
           .sort((a, b) => (a.store_order ?? 999) - (b.store_order ?? 999));
         setFeatured(feat);
 
-        const allProjects: ProjectRow[] = ((prd.projects ?? []) as ApiProjectRow[]).map((p) => ({
+        const allProjects: ProjectRow[] = ((prd?.projects ?? []) as ApiProjectRow[]).map((p) => ({
           id: p.id,
           name: p.name,
           cover_url: p.cover_url ?? null,
@@ -1714,6 +1737,12 @@ export default function StoreEditorPage() {
 
   /* ── Save ── */
   const handleSave = async () => {
+    if (!saveAllowed.profile) {
+      // The form never received the saved profile, so it holds EMPTY_PROFILE.
+      // Saving it would overwrite the real one with blanks.
+      toast.error('Nothing saved', 'Your store profile did not load. Reload the page and try again.');
+      return;
+    }
     setSaving(true);
     try {
       // 1. Profile fields
@@ -1758,7 +1787,8 @@ export default function StoreEditorPage() {
 
       // 2. Persist each featured playlist's order + featured flag
       const featuredIds = new Set(featured.map((f) => f.id));
-      const patchOps: Array<{ id: string; body: Record<string, unknown> }> = [
+      // Only when the playlist list loaded: un-featuring is derived from it.
+      const patchOps: Array<{ id: string; body: Record<string, unknown> }> = !saveAllowed.playlists ? [] : [
         // Featured in order
         ...featured.map((pl, i) => ({ id: pl.id, body: { store_featured: true, store_order: i } })),
         // Un-featured (was featured before, no longer in list)
@@ -1782,7 +1812,10 @@ export default function StoreEditorPage() {
         const detail = await firstFailed.json().catch(() => ({}));
         toast.warning('Store saved', `${failed} playlist update(s) failed: ${detail.error ?? `HTTP ${firstFailed.status}`}`);
       } else {
-        toast.success('Store updated');
+        // /api/store is edge-cached (s-maxage=30, stale-while-revalidate=60),
+        // so the public page can lag a save by up to ~90 s. Say so, or the
+        // producer reloads /store, sees the old copy and saves again.
+        toast.success('Store updated', 'Live on your storefront within about a minute and a half.');
       }
 
       // Update local playlist state so re-saves are idempotent
@@ -1796,7 +1829,7 @@ export default function StoreEditorPage() {
 
       // 3. Persist each featured project's order + featured flag (resilient per-call, allSettled, refetch on partial failure)
       const featuredProjectIds = new Set(featuredProjects.map((f) => f.id));
-      const projectPatchOps: Array<{ id: string; body: Record<string, unknown> }> = [
+      const projectPatchOps: Array<{ id: string; body: Record<string, unknown> }> = !saveAllowed.projects ? [] : [
         ...featuredProjects.map((pr, i) => ({ id: pr.id, body: { store_featured: true, store_order: i } })),
         ...projects
           .filter((pr) => pr.store_featured && !featuredProjectIds.has(pr.id))
@@ -1935,7 +1968,8 @@ export default function StoreEditorPage() {
             </a>
             <LiquidGlassButton
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || !saveAllowed.profile}
+              title={saveAllowed.profile ? undefined : 'Your store profile did not load. Reload to try again.'}
             >
               {saving ? 'Saving…' : 'Save changes'}
               {saving ? <Loader2 size={12} className="animate-spin ml-1.5" /> : <Save size={12} className="ml-1.5" />}
@@ -2142,7 +2176,7 @@ export default function StoreEditorPage() {
               {/* Font style */}
               <Field label="Font Style">
                 <div className="flex gap-2">
-                  {(['default', 'serif', 'mono'] as const).map((fs) => (
+                  {STORE_FONT_STYLES.map((fs) => (
                     <button
                       key={fs}
                       type="button"
@@ -2153,7 +2187,7 @@ export default function StoreEditorPage() {
                           : 'bg-white/[0.02] border-white/10 text-white/60 hover:text-white hover:border-white/20'
                       }`}
                     >
-                      {fs === 'default' ? 'Sans (default)' : fs === 'serif' ? 'Serif' : 'Mono'}
+                      {STORE_FONT_LABELS[fs]}
                     </button>
                   ))}
                 </div>
@@ -3232,7 +3266,7 @@ export default function StoreEditorPage() {
             <div className="pt-4 lg:hidden flex justify-end">
               <button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || !saveAllowed.profile}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white hover:bg-white/90 disabled:opacity-60 text-black text-[11px] font-semibold transition-all"
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
@@ -3260,6 +3294,7 @@ export default function StoreEditorPage() {
                 featuredPlaylists={featured}
                 featuredProjects={featuredProjects}
                 tracks={previewTracks}
+                theme={previewTheme}
               />
             </div>
           </div>

@@ -231,7 +231,11 @@ export function ThemePanel({ theme, onChange }: {
 
       <div className="space-y-3 border-t border-white/10 pt-4">
         <Label>Colour</Label>
+        <p className="text-[11px] leading-relaxed text-white/40">
+          Accent and text left at the House values use the colours set in Content.
+        </p>
         <Swatch label="Accent" value={theme.accent} onChange={(accent) => onChange({ accent })} />
+        <Swatch label="Text" value={theme.text} onChange={(text) => onChange({ text })} />
         <Swatch label="Background" value={theme.background} onChange={(background) => onChange({ background })} />
         <Swatch label="Surface" value={theme.surface} onChange={(surface) => onChange({ surface })} />
         <Swatch label="Border" value={theme.border} onChange={(border) => onChange({ border })} />

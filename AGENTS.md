@@ -147,7 +147,7 @@ Responsive editing is genuine. Desktop is the base and changes there flow everyw
 
 Two things are deliberately fixed. The **catalogue** and the **trust rail** are pinned to the bottom: the catalogue owns the sticky filter toolbar directly above it, and separating them produces a broken page. And a control only appears where the live storefront will honour it — the featured strips own their own responsive grids, so no column control is offered for them.
 
-Work autosaves. A producer who never opens Design gets exactly the storefront they have today.
+Work autosaves. A producer who never opens Design gets exactly the storefront they have today. Theme colours changed in Design apply to `/store` and the producer page. Accent and text left at the stock values use the colours set in Content, so opening Design to reorder sections never changes the colours. A saved change can take up to about a minute and a half to reach the public store, because the catalogue is edge-cached.
 
 ### Producer: send a beat to an artist
 `/contacts` → pick a contact → Send Beat modal → choose track + license tier + custom message → `/api/share` creates a `share_links` row (nanoid token) + `beat_sends` row (status='sent') → Resend email with `/share/<token>` → recipient opens, share variant renders based on `recipient_kind` → producer sees opens / plays / interest via `share_plays` table + `/analytics`.
