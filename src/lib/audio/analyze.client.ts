@@ -17,11 +17,10 @@
  * and lets the server's pipeline take a swing.
  */
 
+import { decodeMono44k, runEssentiaTask } from './essentia-worker-client';
 import {
   EMPTY_ESSENTIA_FEATURES,
-  ESSENTIA_SAMPLE_RATE,
   analysisWindow,
-  downmix,
   extractEssentiaFeatures,
   type EssentiaCore,
   type EssentiaFeatures,
@@ -82,19 +81,10 @@ export async function analyzeAudioFromUrl(rawUrl: string): Promise<AudioFeatures
 }
 
 async function runEssentia(buffer: ArrayBuffer): Promise<AudioFeatures> {
-  // Decode AND resample in one step: an OfflineAudioContext decodes to its own
-  // rate. A plain AudioContext decodes at the device rate (usually 48 kHz),
-  // and Essentia's extractors assume 44.1 kHz — at 48 kHz a 140 BPM F-minor
-  // beat reads as 128.6 BPM C major.
   let mono: Float32Array;
   let duration: number;
   try {
-    const ctx = new OfflineAudioContext(1, 1, ESSENTIA_SAMPLE_RATE);
-    const decoded = await ctx.decodeAudioData(buffer.slice(0));
-    duration = Math.round(decoded.duration);
-    const channels: Float32Array[] = [];
-    for (let c = 0; c < decoded.numberOfChannels; c++) channels.push(decoded.getChannelData(c));
-    mono = downmix(channels);
+    ({ mono, duration } = await decodeMono44k(buffer));
   } catch (err) {
     console.warn('Audio decode for analysis failed:', err);
     return { ...EMPTY };
@@ -106,7 +96,7 @@ async function runEssentia(buffer: ArrayBuffer): Promise<AudioFeatures> {
 
   let features: EssentiaFeatures;
   try {
-    features = await runEssentiaInWorker(excerpt.slice());
+    features = await runEssentiaTask('features', excerpt.slice(), WORKER_TIMEOUT_MS);
   } catch (err) {
     console.warn('Essentia worker failed, analysing on the main thread:', err);
     try {
@@ -139,62 +129,4 @@ async function runEssentiaOnMainThread(signal: Float32Array): Promise<EssentiaFe
     mainThreadEssentia = new Essentia(EssentiaWASM) as unknown as EssentiaCore;
   }
   return extractEssentiaFeatures(mainThreadEssentia, signal);
-}
-
-let worker: Worker | null = null;
-
-/**
- * Same-origin URLs for the classic worker and the two essentia.js UMD builds
- * it loads. The bundler copies each `new URL(…, import.meta.url)` target into
- * /_next/static/media verbatim — see the header of `essentia.worker.js`.
- */
-const ESSENTIA_WORKER_URL = () => new URL('./essentia.worker.js', import.meta.url);
-const ESSENTIA_WASM_URL = () =>
-  new URL('../../../node_modules/essentia.js/dist/essentia-wasm.umd.js', import.meta.url).href;
-const ESSENTIA_CORE_URL = () =>
-  new URL('../../../node_modules/essentia.js/dist/essentia.js-core.umd.js', import.meta.url).href;
-
-function createEssentiaWorker(): Worker {
-  return new Worker(ESSENTIA_WORKER_URL());
-}
-let nextId = 0;
-
-function runEssentiaInWorker(signal: Float32Array): Promise<EssentiaFeatures> {
-  return new Promise((resolve, reject) => {
-    try {
-      worker ??= createEssentiaWorker();
-    } catch (err) {
-      reject(err);
-      return;
-    }
-    const w = worker;
-    const id = ++nextId;
-    const cleanup = () => {
-      clearTimeout(timer);
-      w.removeEventListener('message', onMessage);
-      w.removeEventListener('error', onError);
-    };
-    const onMessage = (e: MessageEvent<{ id: number; ok: boolean; features?: EssentiaFeatures; error?: string }>) => {
-      if (e.data?.id !== id) return;
-      cleanup();
-      if (e.data.ok && e.data.features) resolve(e.data.features);
-      else reject(new Error(e.data.error || 'Essentia worker error'));
-    };
-    const onError = (e: ErrorEvent) => {
-      cleanup();
-      // A worker that failed to load stays broken; drop it so the next file retries.
-      worker?.terminate();
-      worker = null;
-      reject(new Error(e.message || 'Essentia worker failed to load'));
-    };
-    const timer = setTimeout(() => {
-      cleanup();
-      worker?.terminate();
-      worker = null;
-      reject(new Error('Essentia worker timed out'));
-    }, WORKER_TIMEOUT_MS);
-    w.addEventListener('message', onMessage);
-    w.addEventListener('error', onError);
-    w.postMessage({ id, wasmUrl: ESSENTIA_WASM_URL(), coreUrl: ESSENTIA_CORE_URL(), signal }, [signal.buffer]);
-  });
 }

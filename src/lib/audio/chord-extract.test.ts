@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
 import {
-  BASS_WEIGHT, chordsFromBuckets, classifyChroma, compactChordTimeline, extractChords, hpcpBuckets, noteBuckets,
+  BASS_WEIGHT, chordsFromBuckets, classifyChroma, compactChordTimeline, extractChords, frameOffsets, hpcpBuckets, noteBuckets,
   NOTE_ACTIVATION_FLOOR, type ChordEssentiaCore, type ChromaBucket,
 } from './chord-extract';
 import { ESSENTIA_SAMPLE_RATE } from './essentia-extract';
@@ -40,9 +40,30 @@ describe('extractChords (real essentia.js)', () => {
     ]);
   }, 30_000);
 
+  it('keeps chord times true across a silent break in the middle, and marks it N', () => {
+    const sr = ESSENTIA_SAMPLE_RATE;
+    const signal = new Float32Array(sr * 7);
+    signal.set(progression([['C', 'E', 'G']]), 0);
+    signal.set(progression([['A', 'C', 'E']]), sr * 5);
+    expect(extractChords(essentia, signal)).toEqual([
+      { time: 0, chord: 'C' },
+      { time: 2, chord: 'N' },
+      { time: 5, chord: 'Am' },
+    ]);
+  }, 30_000);
+
   it('returns nothing for silence or a clip shorter than one frame', () => {
     expect(extractChords(essentia, new Float32Array(ESSENTIA_SAMPLE_RATE * 3))).toEqual([]);
     expect(extractChords(essentia, new Float32Array(100))).toEqual([]);
+  });
+});
+
+describe('frameOffsets', () => {
+  it('steps every hop while a whole frame fits, silence or not', () => {
+    expect(frameOffsets(4096)).toEqual([0]);
+    expect(frameOffsets(4096 + 2048)).toEqual([0, 2048]);
+    expect(frameOffsets(4095)).toEqual([]);
+    expect(frameOffsets(44100 * 7)).toHaveLength(Math.floor((44100 * 7 - 4096) / 2048) + 1);
   });
 });
 

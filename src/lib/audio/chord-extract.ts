@@ -4,7 +4,7 @@
  * blended → 24 major/minor triad templates.
  *
  * No browser APIs, so the Vitest suite runs this against the real package,
- * and `chords.worker.js` carries a line-for-line copy that
+ * and the chords task in `essentia.worker.js` carries a line-for-line copy that
  * `chords-worker.test.ts` holds equal to it (the bundler cannot bundle a
  * worker entry here — see the header of `essentia.worker.js`).
  *
@@ -135,11 +135,24 @@ function newBucket(): ChromaBucket {
   return { acc: new Array<number>(12).fill(0), frames: 0, voiced: 0 };
 }
 
+/**
+ * Frame start offsets: every hop from 0 while a whole frame fits, silent or
+ * not. Framed here rather than with Essentia's `FrameGenerator`, which DROPS
+ * silent frames (a 7 s signal with a 3 s break gives 90 frames, not 149), so
+ * any time taken from a frame index lands early by every break — and an
+ * all-silent signal yields no frames at all and throws.
+ */
+export function frameOffsets(length: number): number[] {
+  const out: number[] = [];
+  for (let start = 0; start + CHORD_FRAME_SIZE <= length; start += CHORD_HOP_SIZE) out.push(start);
+  return out;
+}
+
 /** Essentia HPCP chroma per bucket, for mono audio ALREADY at 44.1 kHz. */
 export function hpcpBuckets(essentia: ChordEssentiaCore, mono44k: Float32Array): ChromaBucket[] {
   const sr = ESSENTIA_SAMPLE_RATE;
   const buckets: ChromaBucket[] = [];
-  for (let start = 0; start + CHORD_FRAME_SIZE <= mono44k.length; start += CHORD_HOP_SIZE) {
+  for (const start of frameOffsets(mono44k.length)) {
     // Bucket by the frame's centre, not its start, or a frame reaching into
     // the next second lends that second's chord to this one.
     const b = Math.floor((start + CHORD_FRAME_SIZE / 2) / sr / CHORD_WINDOW_SECONDS);

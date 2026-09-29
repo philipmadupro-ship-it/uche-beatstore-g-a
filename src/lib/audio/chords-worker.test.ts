@@ -10,15 +10,15 @@ import { progression } from './mocks/chord-signal';
 import { ESSENTIA_SAMPLE_RATE } from './essentia-extract';
 
 /**
- * `chords.worker.js` is a classic worker script with its own copy of the
- * extraction (see its header). This runs THAT FILE in a worker-like sandbox,
+ * `essentia.worker.js`'s chords task carries its own copy of the extraction
+ * (see the worker's header). This runs THAT FILE in a worker-like sandbox,
  * loading the same UMD builds, WASM binaries and model the browser loads, and
  * requires its output to equal `chord-extract.ts` + `basic-pitch.ts` on the
  * same signal. If either copy changes alone, this fails.
  */
 const root = path.resolve(__dirname, '../../..');
 const nm = (p: string) => path.join(root, 'node_modules', p);
-const workerSource = readFileSync(path.join(__dirname, 'chords.worker.js'), 'utf8');
+const workerSource = readFileSync(path.join(__dirname, 'essentia.worker.js'), 'utf8');
 
 type Reply = { id: number; ok: boolean; chords?: unknown; engine?: string; basicPitchError?: string; error?: string };
 
@@ -39,17 +39,17 @@ function bootWorker() {
     Response,
     navigator: { userAgent: 'vitest-worker', hardwareConcurrency: 1 },
     postMessage: (m: Reply) => resolveNext?.(m),
-    location: { href: 'http://localhost/_next/static/media/chords.worker.js' },
+    location: { href: 'http://localhost/_next/static/media/essentia.worker.js' },
   };
   const context = vm.createContext(sandbox);
   sandbox.self = context;
   sandbox.importScripts = (...urls: string[]) => {
     for (const url of urls) vm.runInContext(readFileSync(url, 'utf8'), context, { filename: url });
   };
-  vm.runInContext(workerSource, context, { filename: 'chords.worker.js' });
-  const send = (data: unknown): Promise<Reply> => new Promise((resolve) => {
+  vm.runInContext(workerSource, context, { filename: 'essentia.worker.js' });
+  const send = (data: object): Promise<Reply> => new Promise((resolve) => {
     resolveNext = resolve;
-    (context.onmessage as (e: { data: unknown }) => void)({ data });
+    (context.onmessage as (e: { data: unknown }) => void)({ data: { task: 'chords', ...data } });
   });
   return { send };
 }
@@ -70,7 +70,7 @@ const basicPitchUrls = {
   weightsUrl: nm('@spotify/basic-pitch/model/group1-shard1of1.bin'),
 };
 
-describe('chords.worker.js', () => {
+describe('essentia.worker.js chords task', () => {
   const worker = bootWorker();
   const require = createRequire(import.meta.url);
   const { Essentia, EssentiaWASM } = require('essentia.js') as {
@@ -131,6 +131,19 @@ describe('chords.worker.js', () => {
       .toEqual(chordsFromBuckets(hpcpBuckets(reference, signal), null));
     expect((await worker.send({ id: 7, ...essentiaUrls, signal: new Float32Array(ESSENTIA_SAMPLE_RATE * 2) })).chords).toEqual([]);
   }, 60_000);
+
+  it('keeps chord times true across a silent break, and marks it N', async () => {
+    const sr = ESSENTIA_SAMPLE_RATE;
+    const signal = new Float32Array(sr * 9);
+    signal.set(progression([['C', 'E', 'G']], 3), 0);
+    signal.set(progression([['A', 'C', 'E']], 3), sr * 6);
+    const s22 = new Float32Array(BASIC_PITCH_SAMPLE_RATE * 9);
+    s22.set(progression([['C', 'E', 'G']], 3, BASIC_PITCH_SAMPLE_RATE), 0);
+    s22.set(progression([['A', 'C', 'E']], 3, BASIC_PITCH_SAMPLE_RATE), BASIC_PITCH_SAMPLE_RATE * 6);
+    const reply = await worker.send({ id: 8, ...essentiaUrls, signal: signal.slice(), basicPitch: { signal: s22.slice(), ...basicPitchUrls } });
+    expect(reply.engine).toBe('essentia+basic-pitch');
+    expect(reply.chords).toEqual([{ time: 0, chord: 'C' }, { time: 3, chord: 'N' }, { time: 6, chord: 'Am' }]);
+  }, 120_000);
 
   it('reports a failure instead of throwing', async () => {
     const reply = await worker.send({ id: 9, ...essentiaUrls, signal: null });

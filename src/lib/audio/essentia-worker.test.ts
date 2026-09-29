@@ -16,7 +16,7 @@ const root = path.resolve(__dirname, '../../..');
 const dist = path.join(root, 'node_modules/essentia.js/dist');
 const workerSource = readFileSync(path.join(__dirname, 'essentia.worker.js'), 'utf8');
 
-type Reply = { id: number; ok: boolean; features?: unknown; error?: string };
+type Reply = { id: number; ok: boolean; features?: unknown; chords?: unknown; error?: string };
 
 function bootWorker() {
   const posted: Reply[] = [];
@@ -92,5 +92,14 @@ describe('essentia.worker.js', () => {
     const reply = worker.send({ id: 9, ...urls, signal: null });
     expect(reply).toMatchObject({ id: 9, ok: false });
     expect(typeof reply.error).toBe('string');
+  });
+
+  // The chords task (async: it may run basic-pitch) is covered by chords-worker.test.ts.
+  describe('chords task', () => {
+    it('still defaults to the features task', () => {
+      const reply = worker.send({ id: 12, ...urls, signal: beat(3, 120) });
+      expect(reply.features).toBeDefined();
+      expect((reply as { chords?: unknown }).chords).toBeUndefined();
+    }, 60_000);
   });
 });
