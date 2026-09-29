@@ -26,7 +26,8 @@ import {
   canvasBlockKinds, createCanvasBlock, removeCanvasBlock, resizeCanvasBlock,
   updateCanvasBlock, type CanvasBlockKind,
 } from '@/lib/store-editor/canvas-blocks';
-import type { CanvasBlock } from '@/lib/store-editor/layout';
+import type { CanvasBlock, SectionContent } from '@/lib/store-editor/layout';
+import { MEDIA_SIZE, mediaSizePercent } from '@/lib/store-editor/content-sections';
 import type { SectionStyle } from '@/lib/store-editor/section-style';
 
 const VARIANTS: Partial<Record<StoreSection['kind'], { value: string; label: string }[]>> = {
@@ -70,7 +71,7 @@ export function SectionInspector({
   breakpoint: StoreBreakpoint;
   onSet: <K extends keyof SectionSettings>(key: K, value: SectionSettings[K]) => void;
   onClear: (key: keyof SectionSettings) => void;
-  onContent: (patch: Record<string, string>) => void;
+  onContent: (patch: Partial<Omit<SectionContent, 'blocks'>>) => void;
   /** Free-form blocks, for `canvas` sections. */
   onBlocks?: (blocks: CanvasBlock[]) => void;
   selectedBlockId?: string | null;
@@ -103,7 +104,9 @@ export function SectionInspector({
   const variants = can('variant') ? VARIANTS[section.kind] : undefined;
 
   return (
-    <div className="min-h-0 overflow-y-auto">
+    // h-full: the aside gives this a height, so long content scrolls instead
+    // of running past the builder frame (which clips it with overflow-hidden).
+    <div className="h-full min-h-0 overflow-y-auto overscroll-contain">
       <div className="border-b border-white/10 px-4 py-3">
         <p className="truncate text-[13px] text-white/90">{section.name}</p>
         <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">
@@ -158,6 +161,98 @@ export function SectionInspector({
       ) : null}
 
       <div className="space-y-4 px-4 py-4">
+        {/* Content first: for an image or video the URL is the thing being
+            set, and it used to be the last control in the panel — below the
+            fold on a laptop, where the panel clipped instead of scrolling. */}
+        {(section.kind === 'text' || section.kind === 'image' || section.kind === 'video') ? (
+          <div className="space-y-3 border-b border-white/10 pb-4">
+            {section.kind === 'video' ? (
+              <label className="grid gap-1.5">
+                <Label>YouTube or Vimeo link</Label>
+                <input
+                  type="url"
+                  inputMode="url"
+                  value={section.content?.videoUrl ?? ''}
+                  onChange={(event) => onContent({ videoUrl: event.target.value })}
+                  placeholder="https://youtu.be/…"
+                  className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none placeholder:text-white/25 focus:border-white/40"
+                />
+              </label>
+            ) : null}
+            {section.kind === 'image' ? (
+              <label className="grid gap-1.5">
+                <Label>Image URL</Label>
+                <input
+                  type="url"
+                  inputMode="url"
+                  value={section.content?.imageUrl ?? ''}
+                  onChange={(event) => onContent({ imageUrl: event.target.value })}
+                  placeholder="https://…"
+                  className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none placeholder:text-white/25 focus:border-white/40"
+                />
+              </label>
+            ) : null}
+            {section.kind === 'image' || section.kind === 'video' ? (
+              <label className="grid gap-1.5">
+                <Label>Size</Label>
+                <span className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={MEDIA_SIZE.min}
+                    max={MEDIA_SIZE.max}
+                    step={MEDIA_SIZE.step}
+                    value={mediaSizePercent(section.content?.mediaSize)}
+                    aria-label={`${section.kind === 'video' ? 'Video' : 'Image'} size`}
+                    onChange={(event) => onContent({ mediaSize: Number(event.target.value) })}
+                    className="h-1 w-full cursor-pointer appearance-none bg-white/10 accent-white"
+                  />
+                  <span className="w-10 shrink-0 text-right font-mono text-[10px] tabular-nums text-white/60">
+                    {mediaSizePercent(section.content?.mediaSize)}%
+                  </span>
+                </span>
+              </label>
+            ) : null}
+            <label className="grid gap-1.5">
+              <Label>Heading</Label>
+              <input
+                value={section.content?.heading ?? ''}
+                onChange={(event) => onContent({ heading: event.target.value })}
+                className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
+              />
+            </label>
+            {section.kind === 'text' ? (
+              <>
+                <label className="grid gap-1.5">
+                  <Label>Body</Label>
+                  <textarea
+                    value={section.content?.body ?? ''}
+                    onChange={(event) => onContent({ body: event.target.value })}
+                    className="min-h-24 border border-white/10 bg-[#090907] p-2 text-[11px] leading-relaxed text-white/90 outline-none focus:border-white/40"
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="grid gap-1.5">
+                    <Label>Button</Label>
+                    <input
+                      value={section.content?.ctaLabel ?? ''}
+                      onChange={(event) => onContent({ ctaLabel: event.target.value })}
+                      className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
+                    />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <Label>Link</Label>
+                    <input
+                      value={section.content?.ctaHref ?? ''}
+                      onChange={(event) => onContent({ ctaHref: event.target.value })}
+                      className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
+                    />
+                  </label>
+                </div>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+
         <label className="grid gap-1.5">
           <Label overridden={isOverridden('visible')} onReset={() => onClear('visible')}>Visible</Label>
           <div className="grid grid-cols-2 gap-1">
@@ -279,71 +374,6 @@ export function SectionInspector({
             ))}
           </div>
         </div>
-        ) : null}
-
-        {/* Content fields, only for the sections that carry their own copy. */}
-        {(section.kind === 'text' || section.kind === 'image' || section.kind === 'video') ? (
-          <div className="space-y-3 border-t border-white/10 pt-4">
-            <label className="grid gap-1.5">
-              <Label>Heading</Label>
-              <input
-                value={section.content?.heading ?? ''}
-                onChange={(event) => onContent({ heading: event.target.value })}
-                className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
-              />
-            </label>
-            {section.kind === 'text' ? (
-              <>
-                <label className="grid gap-1.5">
-                  <Label>Body</Label>
-                  <textarea
-                    value={section.content?.body ?? ''}
-                    onChange={(event) => onContent({ body: event.target.value })}
-                    className="min-h-24 border border-white/10 bg-[#090907] p-2 text-[11px] leading-relaxed text-white/90 outline-none focus:border-white/40"
-                  />
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="grid gap-1.5">
-                    <Label>Button</Label>
-                    <input
-                      value={section.content?.ctaLabel ?? ''}
-                      onChange={(event) => onContent({ ctaLabel: event.target.value })}
-                      className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
-                    />
-                  </label>
-                  <label className="grid gap-1.5">
-                    <Label>Link</Label>
-                    <input
-                      value={section.content?.ctaHref ?? ''}
-                      onChange={(event) => onContent({ ctaHref: event.target.value })}
-                      className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
-                    />
-                  </label>
-                </div>
-              </>
-            ) : null}
-            {section.kind === 'image' ? (
-              <label className="grid gap-1.5">
-                <Label>Image URL</Label>
-                <input
-                  value={section.content?.imageUrl ?? ''}
-                  onChange={(event) => onContent({ imageUrl: event.target.value })}
-                  className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none focus:border-white/40"
-                />
-              </label>
-            ) : null}
-            {section.kind === 'video' ? (
-              <label className="grid gap-1.5">
-                <Label>YouTube or Vimeo link</Label>
-                <input
-                  value={section.content?.videoUrl ?? ''}
-                  onChange={(event) => onContent({ videoUrl: event.target.value })}
-                  placeholder="https://youtu.be/…"
-                  className="h-9 border border-white/10 bg-[#090907] px-2 text-[11px] text-white/90 outline-none placeholder:text-white/25 focus:border-white/40"
-                />
-              </label>
-            ) : null}
-          </div>
         ) : null}
 
         {/* Free-form blocks. Positions are percentages of the section frame, so

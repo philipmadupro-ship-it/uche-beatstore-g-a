@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   hasLiveContent, isContentSection, renderBreakpointFor, safeImageSrc, safeLinkHref,
+  MEDIA_SIZE, mediaAlignMargins, mediaSizePercent,
 } from './content-sections';
 import { createSection, setSectionSetting, storeSectionKinds, type StoreSection } from './layout';
 import { buildCsp } from '@/lib/security/csp';
@@ -93,5 +94,26 @@ describe('renderBreakpointFor', () => {
     let section = createSection('text');
     for (const bp of ['desktop', 'tablet', 'mobile'] as const) section = setSectionSetting(section, bp, 'visible', false);
     expect(renderBreakpointFor(section, 'desktop')).toBeNull();
+  });
+});
+
+describe('mediaSizePercent', () => {
+  it('defaults to full width when unset or unreadable', () => {
+    for (const v of [undefined, null, '', 'abc', NaN, {}]) expect(mediaSizePercent(v)).toBe(MEDIA_SIZE.default);
+  });
+
+  it('clamps to the slider range and rounds', () => {
+    expect(mediaSizePercent(10)).toBe(25);
+    expect(mediaSizePercent(250)).toBe(100);
+    expect(mediaSizePercent(62.4)).toBe(62);
+    expect(mediaSizePercent('50')).toBe(50);
+  });
+});
+
+describe('mediaAlignMargins', () => {
+  it('follows the section alignment', () => {
+    expect(mediaAlignMargins('left')).toEqual({ marginLeft: 0, marginRight: 'auto' });
+    expect(mediaAlignMargins('center')).toEqual({ marginLeft: 'auto', marginRight: 'auto' });
+    expect(mediaAlignMargins('right')).toEqual({ marginLeft: 'auto', marginRight: 0 });
   });
 });

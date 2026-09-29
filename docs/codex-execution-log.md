@@ -9020,3 +9020,18 @@ Follow-ups found while writing the STORE-02 spec.
 Not changed here: `/store` rendering the `text` / `image` / `video` / `links` / `canvas` sections. STORE-07 (#42) did that; a parallel implementation on this branch was reverted in favour of it on merge, and `lib/store/appearance.ts` keeps one `effectiveStoreTheme` for both.
 
 Tests: `initial-load.test.ts` (11), `appearance.test.ts` (10), `e2e/store-editor-load.spec.ts` (2; both fail on the old page). Browser check against `next dev`: a themed layout gives `/store` the theme accent and text, and the producer page the profile text colour and font.
+
+## 2026-09-29 - Store Editor video section: link reachable, real size control (STORE-08)
+
+Producer report: in Design, a video section's size couldn't be changed and a URL couldn't be pasted.
+
+**Reproduced** at 1366×768. The inspector (`SectionInspector`) had `overflow-y-auto` but no bounded height. Its `<aside>` wasn't a scroll container, so the inspector grew to its content height (626px) inside a 526px panel, and the builder frame's `overflow-hidden` clipped the rest. The video link was the last control, drawn at y=842 against a panel bottom of 768: unreachable by mouse or wheel. Paste itself was fine. The only size control was Width (Narrow 720px / Wide 1400px / Full), and Wide and Full look the same at store widths. The inspector also offered a Columns row that no content section reads.
+
+- The aside is `overflow-hidden` and the inspector `h-full`, so the panel scrolls.
+- For text, image and video, the content fields come first. For image and video that means the link, then a new **Size** slider, then Heading. The layout controls follow.
+- **Size** is `content.mediaSize`, a percentage of the section's content width (25–100, step 5, default 100), positioned by the section's Align. `mediaSizePercent` and `mediaAlignMargins` in `lib/store-editor/content-sections.ts` hold the rule. `SectionRenderer` applies it to image and video, so the canvas and `/store` agree. Missing or malformed values read as 100%, so existing layouts are unchanged.
+- `columns` is removed from `sectionCapabilities` for text / image / video / links / canvas: none of them reads it. Two existing tests asserted text supported it and were updated. A copied style no longer carries columns onto a text section.
+- The link inputs are `type="url"`.
+
+Tests: `content-sections.test.ts` (size clamp and default, align margins); `layout.test.ts` (no Columns on content kinds); `SectionRenderer.test.tsx` (live video at 60% right-aligned; unset image at 100%); `e2e/store-editor-video-section.spec.ts` at 1366×768 (link on screen without scrolling, a real ⌘V/Ctrl+V paste, the no-cookie embed on the canvas, no Columns, the slider halves the drawn width, the panel wheel-scrolls, `mediaSize: 50` in the autosaved layout). The e2e fails on the old code at the first assertion (link at 842 > 768).
+
