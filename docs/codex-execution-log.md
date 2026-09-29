@@ -9031,3 +9031,90 @@ Builds on phase 1 (migrations 122–126). Migrations **127–129**; the branch a
 - Ops: `scripts/ops/bundle-migrations.sh` + `supabase/apply/pending.sql` (112–129 for the SQL editor; 112 in a same-effect form without its TEMP table, which the editor drops between statements) + `supabase/apply/verify.sql`; `docs/prompts/apply-migrations.md` is the runbook / agent prompt.
 
 Verification: migrations replayed twice on local Postgres 16 + PostgREST 12, bundle applied twice on a production-shaped database (13/13 applied, re-run a no-op), RLS/trigger probes, every route re-checked with 127–129 removed (reads degrade, writes 503 naming the migration). `e2e/artist-workspace-phase2.spec.ts` (5 flows) + the phase 1 spec: 11/11 on three fresh databases. Unit tests 3,101, tsc, lint, CI-style build and the store-dynamic check pass.
+## 2026-09-29 - Store Editor loads the whole catalogue, not the newest 100 (STORE-02)
+
+**Reproduced** with 250 stubbed beats behind `/api/tracks`'s real paging contract, the 30 listed ones being the oldest (all on API page three). On `/store-editor` → Beat Listing, the header said "30 listed · 250 total" and the list showed none of them. They appeared only after pressing "Load next 100 beats" twice.
+
+**Root cause.** `loadTrackPage` fetched one `paged=1&lean=1&limit=100` page (newest first) and stopped. The 100 is `/api/tracks`'s per-request ceiling (`parsePositiveInt(…, 50, 100)`), a server protection and not a product rule, but the editor treated it as the list. Everything downstream saw only that page:
+- **Reorder corrupted `/store` order.** Drag and Move up/down write `store_sort_order` 0..n for `allTracks.filter(store_listed)`, the *loaded* listed beats only. Unloaded listed beats kept their old positions and collided with the new ones, so `/store` showed an order nobody chose.
+- **Search** went to the server (`q=`) and *replaced* the list with the matches, so a reorder during a search renumbered only the matches.
+- The Needs-attention filter, the storefront preview and the license-link prices all covered the loaded page only.
+
+**Fix.**
+- `lib/store-editor/track-catalogue.ts#fetchAllTrackPages` follows `nextCursor` to the end, 100 rows per request. It de-duplicates by id, stops on a cursor that does not advance, stops at 200 pages (20,000 beats), and reports `complete`. The editor fills in page by page and is not blocked on the walk. The client-side render window (80 rows, "Load more beats") is unchanged.
+- Search is client-side over the whole catalogue (title / key / BPM, the fields the row filter already used). The server search also matched `description`, which the lean rows do not carry.
+- Reordering waits for `complete`. Before that it shows a toast instead of renumbering a subset.
+- License-link loading now covers every listed beat, 8 requests at a time (`mapWithConcurrency`) instead of all at once.
+- `/api/tracks` orders by `created_at DESC, id ASC`. Without the `id` tiebreak, beats sharing a timestamp (bulk upload) could be skipped or repeated across offset pages.
+
+**Tests.** `track-catalogue.test.ts` (250 → 3 requests, exact multiple, empty, progress, dedupe, stuck cursor, page cap, failure, bounded concurrency). `e2e/store-editor-catalogue.spec.ts` at 1440px and 390px: all 30 page-three listed beats render, no "Load next 100" control, search finds beat 150 without a request, and Move down PATCHes `/api/tracks/reorder` with all 30 listed beats and distinct positions. With the old page it fails at the first assertion.
+
+## 2026-09-29 - /api/tracks is owner-only again (STORE-02 follow-up)
+
+Found while fixing STORE-02. `/api/tracks` reads with the service role, which bypasses RLS, so it has to apply the owner rule itself. Migration 097 made `tracks` RLS owner-only and retired the legacy `user_id IS NULL` allowance. The route put it back in both of its branches:
+- **Bounded branch** (`paged` / `limit` / `cursor` / `q` / `lean`, used by the library, Store Editor and pickers): `.or('user_id.eq.X,user_id.is.null')`.
+- **Legacy unbounded branch**: `scopedList('tracks')`, whose `includeNullOwner` defaults to `true`, the same filter.
+
+Any producer was therefore shown every orphan track. Those rows were not editable, because the owned-row helpers 403 them, so each one was a row whose toggles failed.
+
+Fix: the bounded query uses `.eq('user_id', owner)` and both `scopedList` calls pass `includeNullOwner: false`. `scopedList`'s default is unchanged, because calendar and smart-playlists still rely on it; see "Not changed".
+
+Tests: `route.owner-filter.test.ts` drives the Supabase branch through a query-builder fake that records every filter. It covers the bounded list, the bounded list with search and `store_listed`, and the unbounded list. All three fail on the old route.
+
+**Data note.** No migration adopts orphan tracks (111 did so for contacts only). If production has `tracks` rows with `user_id IS NULL`, they stop appearing in the dashboard. The RLS already hid them from every non-service read. Check with `SELECT count(*) FROM tracks WHERE user_id IS NULL;` and adopt them in a migration if any matter.
+
+**Not changed** (same pattern, other routes): `api/activity`, `api/events`, `api/tracks/[id]/similar`, `api/tracks/tags`, `api/tracks/tags/bulk`, `api/store` (catalogue, playlists, projects), `api/store/facets`, and the `scopedList` default used by `api/calendar` and `api/smart-playlists`.
+
+## 2026-09-29 - Content sections render on /store (STORE-07)
+
+**Reproduced.** A layout with a `text` and a `canvas` section, injected into the real `/api/store` response: both render in the builder, and neither appears on `/store` at 1440 or 390. `renderStoreSection` in `src/app/store/page.tsx` handled only the built-in kinds and returned `null` for `text` / `image` / `video` / `links` / `canvas`.
+
+**Fix.**
+- `/store` hands content kinds (`isContentSection`) to the builder's own `SectionRenderer` with a new `live` prop and no `editBlocks`. When `live` is set, empty sections render nothing (`hasLiveContent`) instead of the inspector hint, the text section body placeholder is gone, and the CTA and social links are real links (CTA href through `safeLinkHref`; no `javascript:`).
+- The render breakpoint is `renderBreakpointFor(section, viewer)`, not the viewer's breakpoint as-is. The renderer returns null for a hidden breakpoint, and the viewer reads `desktop` until hydration. Visibility stays CSS (`visibilityClasses`).
+- Theme: `effectiveStoreTheme` (`lib/store/appearance.ts`, new) layers the profile's accent and text colour under any Design theme colour left at the default. Both the builder canvas and `/store` use it.
+- CSP: video embeds are YouTube and Vimeo only, rewritten by `lib/store-editor/video-embed.ts` to `youtube-nocookie.com` / `player.vimeo.com`, and those origins are now in `frame-src` (read from the same module). Images are https or site-relative (`safeImageSrc`). The builder applies the same filters, so the preview no longer shows media that production `/store` would block. The inspector field now reads "YouTube or Vimeo link".
+- `links` builds hrefs through `lib/store/social-links.ts`, using the same URL shapes as the hero.
+
+**Tests.** `content-sections.test.ts`, `video-embed.test.ts` (including an assertion that every emitted origin is in `frame-src`), `appearance.test.ts`, `social-links.test.ts`, and three new live-mode cases in `SectionRenderer.test.tsx`. `e2e/store-content-sections.spec.ts` at 1440 and 390 checks the text section (heading, body, CTA link), the canvas block inside its frame, no horizontal overflow, and a phone-only section hidden by CSS. Both e2e cases fail with the old `page.tsx`. `check-store-dynamic.mjs` still passes.
+
+## 2026-09-29 - Store Editor load/save safety, one storefront appearance rule (STORE-03)
+
+Follow-ups found while writing the STORE-02 spec.
+
+- **A failed side-request could wipe the profile.** The Store Editor fetched six endpoints with `Promise.all` and parsed all six bodies with a second `Promise.all`. One non-JSON body (in the e2e environment, `/api/promo-codes` and `/api/licenses`) rejected the lot. The form stayed on `EMPTY_PROFILE`, and the next **Save changes** PATCHed those blanks over the saved bio, socials and prices. `lib/store-editor/initial-load.ts` now loads each source on its own (`loadSource` never throws: a non-2xx, a non-object body and a network error are all `ok: false`). `saveScope` says what Save may write. The profile PATCH needs the profile to have loaded, and the featured-playlist and featured-project writes need their lists. Save is disabled (and refuses in the handler) when the profile did not load. One toast names whatever else failed.
+- **Font options.** `/profile` offered `modern` and `minimal`, which the storefront never mapped, so both drew the default face. Both editors now offer the same three (`STORE_FONT_STYLES`: default / serif / mono), and a saved legacy value reads as `default`.
+- **One appearance rule** (`lib/store/appearance.ts#resolveStoreAppearance`). STORE-06 (#38) had landed `lib/store/typography.ts#storefrontThemeStyle` for the same three fields; on merge it became the CSS half (it now calls the resolver and takes the layout theme), and its hex check for text moved into the resolver. `/store`, `/store/producer/[slug]`, the Content-mode preview and the Design canvas all resolve accent, text colour and font the same way. A Design theme colour wins only when it differs from the stock theme. Every saved layout carries a full theme, so a producer who only reordered sections keeps their profile accent. The producer page now applies the text colour (it only applied the font), and its API returns `store_layout` from a separate query, as `/api/store` does. The theme panel gained a **Text** swatch. There was no control for theme text before.
+- **Cache delay is stated, not fixed.** `/api/store` stays `s-maxage=30, stale-while-revalidate=60`. The save toast now says a change is live within about a minute and a half.
+- **`next dev` no longer edits AGENTS.md.** Next 16.3 appends a managed agent-rules block whenever it detects an AI agent; `agentRules: false` in `next.config.ts` turns that off.
+
+Not changed here: `/store` rendering the `text` / `image` / `video` / `links` / `canvas` sections. STORE-07 (#42) did that; a parallel implementation on this branch was reverted in favour of it on merge, and `lib/store/appearance.ts` keeps one `effectiveStoreTheme` for both.
+
+Tests: `initial-load.test.ts` (11), `appearance.test.ts` (10), `e2e/store-editor-load.spec.ts` (2; both fail on the old page). Browser check against `next dev`: a themed layout gives `/store` the theme accent and text, and the producer page the profile text colour and font.
+
+## 2026-09-29 - Project playback through one player (STORE-07)
+
+Task: a project with several tracks should play like a music player — play / pause / seek / switch, navigate away and back — with the player bar and the page never fighting or doubling audio.
+
+Reproduced in Chromium against the old code (stubbed bundle + access payloads, real pages and player):
+- **Delivery page played nothing.** `/store/projects/access/[token]` drives `usePlayer` (Play all, every row), but `StoreLayoutClient` treated it as transactional and did not mount `PlayerBar`, which owns `SimpleAudioEngine`. After Play all: zero `<audio>` elements in the document, the button read "Pause", and `MediaSessionBridge` told the OS it was playing.
+- **Leaving the layout lied, and coming back auto-played from 0:00.** Bundle → Buy bundle → `/store/checkout` unmounts the player; the detached `<audio>` stops, but the store kept `isPlaying: true`. Back mounted a fresh element that started the track by itself from the top (≈9 s in → 0 s).
+- Browsing inside the store (bundle → producer → Back) was already one continuous stream; kept as a guard.
+
+Changes:
+- `StoreLayoutClient`: only checkout/download hide the player. The delivery page mounts `PlayerBar` (and gets the bar's bottom padding) but still no cart, install button or voice tag — it is a listening surface for something already bought, not a shopping one.
+- `SimpleAudioEngine`: on a real unmount (its element is disconnected — StrictMode's rehearsal unmount leaves it attached and must not pause the first track) it sets `isPlaying/isBuffering` false. A new engine resumes the current track at the store's `progress` (set before metadata, so it becomes the default start position; reapplied after the background offline/preview blob swap). `progress` is reset by every track change, so a stale position can't land on another track.
+- `VoiceTagPlayer`: its tag is a detached `new Audio()`, so unmounting never stopped it; the unmount cleanup now pauses it.
+
+No API, contract, schema or storage change. The delivery page's stream is the existing token-gated `/api/store/projects/access/[token]/download?format=mp3` URL the page already rendered as a download link (Range-capable; `<audio>` ignores the attachment disposition).
+
+Tests: `SimpleAudioEngine.test.tsx` (+3: unmount marks paused; remount resumes at position without auto-play; a track picked while unmounted starts at 0 — first two fail on the old engine). `e2e/project-playback.spec.ts` (4: delivery page play all / pause / keyboard seek / next with one element; in-store navigation continuity; checkout → Back pauses honestly and resumes at position; 390 px delivery page) — three fail on the old code. The WAV stub serves Range requests: Chromium cannot seek a resource served without them and restarts at 0.
+
+### Follow-up: dashboard → share page in the same tab
+
+Checked in Chromium against `next build && next start` and the dev server, signed in through the stub Supabase. Every dashboard entry point to a share page (`/links`, BeatLog, contact history, analytics) opens it in a NEW tab, so in one tab this is always a full page load (a pasted URL); the client-side unmount path above never runs here.
+- Going there: the dashboard's audio is gone with the page; the share page's WaveSurfer is the only media element playing (counted by hooking `HTMLMediaElement.prototype.play`, since WaveSurfer's element is never in the document).
+- Back: not restored from the back/forward cache (`pageshow.persisted` false in production too), so the dashboard reloads, paused, and the bar says Play. Nothing starts by itself.
+- **Defect found:** the track's position was lost — about 3 s in before leaving, 0:00 after Back — because `usePlayer` did not persist `progress`. It now does (alongside `currentTrack`; `isPlaying` still never), so the fresh engine resumes there.
+
+Tests: `usePlayer.test.ts` (+2: progress persisted but not `isPlaying`; restored paused after reload). `e2e/project-playback.spec.ts` +1 (dashboard → share → Back; skipped without the stub Supabase URL, like the other dashboard specs); it fails on the old store at the position check. The two resume tests now check the paused element's position BEFORE pressing Play — the first version of the new test passed on the old code because a track restarted from 0:00 reaches the old position within the poll window.

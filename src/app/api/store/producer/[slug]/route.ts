@@ -21,6 +21,7 @@ const TRACK_FIELDS = [
 interface CreatorProfileRow {
   user_id: string;
   display_name: string | null;
+  store_layout?: unknown;
 }
 
 type PublicProducerTrackRow = Record<string, unknown>;
@@ -95,6 +96,18 @@ export async function GET(
     }
 
     const sellerId = creator.user_id;
+
+    // Storefront layout (for its theme), in its own query for the same reason
+    // as /api/store: folding it into the select above would fail the whole
+    // profile lookup — a 404 page — wherever migration 113 is not applied.
+    const layoutRow = await admin
+      .from('creator_profiles')
+      .select('store_layout')
+      .eq('user_id', sellerId)
+      .maybeSingle();
+    if (!layoutRow.error && layoutRow.data) {
+      creator = { ...creator, store_layout: (layoutRow.data as { store_layout?: unknown }).store_layout ?? null };
+    }
 
     // 2. Fetch all store-listed tracks, playlists, projects in parallel
     const [tracksRes, playlistsRes, projectsRes] = await Promise.all([

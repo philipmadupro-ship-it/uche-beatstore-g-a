@@ -138,9 +138,11 @@ export async function GET(req: NextRequest) {
     // doesn't blink to "no tracks" on a transient schema hiccup.
     const richSelect = '*, track_tags(tag, category), stems(status)';
 
+    // Owner-only, as in the bounded branch below (mig 097).
     let rows = await scopedList('tracks', {
       orderBy: 'created_at',
       ascending: false,
+      includeNullOwner: false,
       select: richSelect,
       extraEq: Object.keys(extraEq).length ? extraEq : undefined,
       extraGte: Object.keys(extraGte).length ? extraGte : undefined,
@@ -155,6 +157,7 @@ export async function GET(req: NextRequest) {
       rows = await scopedList('tracks', {
         orderBy: 'created_at',
         ascending: false,
+        includeNullOwner: false,
         extraEq: Object.keys(extraEq).length ? extraEq : undefined,
         extraGte: Object.keys(extraGte).length ? extraGte : undefined,
         extraLte: Object.keys(extraLte).length ? extraLte : undefined,
@@ -272,7 +275,10 @@ async function listBoundedTracks(
     let dbQuery = owner.admin
       .from('tracks')
       .select(columns)
-      .or(`user_id.eq.${safeUserId},user_id.is.null`);
+      // Owner-only. Migration 097 retired the legacy `user_id IS NULL`
+      // allowance in RLS; this route reads with the service role, so it must
+      // apply the same rule itself rather than re-open it.
+      .eq('user_id', safeUserId);
 
     if (filters.type && filters.type !== 'all') dbQuery = dbQuery.eq('type', filters.type);
     if (filters.key) dbQuery = dbQuery.eq('key', filters.key);
@@ -290,8 +296,12 @@ async function listBoundedTracks(
       }
     }
 
+    // `id` breaks created_at ties (a bulk upload shares timestamps), so offset
+    // pages are a total order and a caller walking every page — the Store
+    // Editor loads the whole catalogue — neither skips nor repeats a beat.
     return dbQuery
       .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
       .range(cursor, cursor + limit);
   };
 

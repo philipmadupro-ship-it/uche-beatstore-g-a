@@ -82,3 +82,52 @@ describe('SimpleAudioEngine volume vs playback', () => {
     expect(usePlayer.getState().isPlaying).toBe(true);
   });
 });
+
+describe('SimpleAudioEngine remount (layout change)', () => {
+  // The engine lives in a layout. Store → checkout, or dashboard → a share
+  // page, unmounts it; an element leaving the page stops, so the store must
+  // stop claiming it plays, and the next engine must pick up where it was.
+  it('unmounting marks the store paused instead of leaving it "playing" over silence', () => {
+    const { unmount } = render(<SimpleAudioEngine />);
+    act(() => { usePlayer.getState().setTrack(track('a')); });
+    expect(usePlayer.getState().isPlaying).toBe(true);
+
+    unmount();
+    expect(usePlayer.getState()).toMatchObject({ isPlaying: false, isBuffering: false });
+    expect(usePlayer.getState().currentTrack?.id).toBe('a');
+  });
+
+  it('a remounted engine resumes the same track at its position and does not start on its own', () => {
+    const first = render(<SimpleAudioEngine />);
+    act(() => { usePlayer.getState().setTrack(track('a')); });
+    act(() => { usePlayer.getState().setProgress(0.5); });
+    first.unmount();
+
+    const playsBefore = play.mock.calls.length;
+    const { container } = render(<SimpleAudioEngine />);
+    const a = audio(container);
+    expect(a.getAttribute('src')).toContain('a.mp3');
+    // duration_seconds 60 × 0.5 — jsdom has no media metadata, so the stored
+    // duration is what the engine falls back to.
+    expect(a.currentTime).toBe(30);
+    expect(play.mock.calls.length).toBe(playsBefore);
+
+    act(() => { usePlayer.getState().togglePlay(); });
+    expect(play.mock.calls.length).toBeGreaterThan(playsBefore);
+    expect(a.currentTime).toBe(30);
+  });
+
+  it('a track picked while no engine was mounted starts from the top', () => {
+    const first = render(<SimpleAudioEngine />);
+    act(() => { usePlayer.getState().setTrack(track('a')); });
+    act(() => { usePlayer.getState().setProgress(0.5); });
+    first.unmount();
+
+    // e.g. Play all on a page without the player bar: setTrack resets progress.
+    act(() => { usePlayer.getState().setTrack(track('b')); });
+    const { container } = render(<SimpleAudioEngine />);
+    const a = audio(container);
+    expect(a.getAttribute('src')).toContain('b.mp3');
+    expect(a.currentTime).toBe(0);
+  });
+});

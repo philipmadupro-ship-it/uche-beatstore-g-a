@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
       contact_email,
       accent_color,
       font_style,
+      text_color_primary,
       seo_title,
       seo_description,
       og_image_url,
@@ -94,6 +95,8 @@ export async function POST(req: NextRequest) {
       // Storefront theme (migration 034)
       accent_color: accent_color || '#FFFFFF',
       font_style: font_style || 'default',
+      // Migration 036. Null = the storefront's default white.
+      text_color_primary: text_color_primary || null,
       // Storefront SEO + share card (migration 055)
       seo_title: seo_title || null,
       seo_description: seo_description || null,

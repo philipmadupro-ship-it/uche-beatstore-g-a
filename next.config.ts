@@ -5,6 +5,11 @@ import { allowedImageHostnames } from "./src/lib/images/remote-hosts";
 const projectRoot = fileURLToPath(new URL(".", import.meta.url)).replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
+  // `next dev` appends a managed "read node_modules/next/dist/docs" block to
+  // AGENTS.md whenever it detects an AI coding agent. AGENTS.md here is the
+  // product spec (engineering notes live in CLAUDE.md), so every agent run
+  // left an uncommitted edit to it that had to be dropped by hand.
+  agentRules: false,
   // Baseline security headers on every response. HSTS forces HTTPS;
   // nosniff blocks MIME-confusion; X-Frame-Options stops clickjacking;
   // Referrer-Policy trims referer leakage; Permissions-Policy disables

@@ -9,8 +9,8 @@ Two ways to use this file:
 - **Do it yourself.** Follow the same steps by hand; the "Without psql"
   section is the Supabase SQL editor route.
 
-Pending as of 2026-09-29: `112`, `113`, `115`, `116`, `121`, `122`–`126`
-(Artist Workspace phase 1), `127`–`129` (phase 2). `supabase/MIGRATIONS.md` is
+As of 2026-09-29 nothing is pending: 112–129 were applied with the SQL-editor bundle. Use this runbook for the next migrations (130 onwards): rebuild the bundle with only the new numbers.
+`supabase/MIGRATIONS.md` is
 the ledger; if it disagrees with this file, the ledger wins.
 
 ---

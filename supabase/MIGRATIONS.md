@@ -32,7 +32,14 @@ After applying, wait ~10s for the PostgREST schema cache to reload (the
 `NOTIFY pgrst` line). If you hit `Could not find column X in schema cache`,
 re-run `NOTIFY pgrst, 'reload schema';` and wait.
 
-## ⚠️ Currently UNAPPLIED
+## Applied status
+
+As of **2026-09-29** every migration on disk (001–129) is in effect on production:
+the owner ran the SQL-editor bundle and its verify table reported every row
+`applied`. Nothing is pending. Keep the table below as the record; add new
+migrations to it as **not applied** until they are run.
+
+## History
 Confirmed applied: **001–106**, via a full clean replay (2026-08-05).
 
 Checked against production on **2026-09-17** with read-only probes (the
@@ -45,26 +52,26 @@ service-role key can read the schema's effects but cannot run DDL):
 | `109_default_artwork.sql` | applied | `creator_profiles.default_artwork_url` exists |
 | `110_normalize_contact_emails.sql` | effect present | no contact emails with uppercase letters found |
 | `111_adopt_orphan_contacts.sql` | effect present | 0 contacts with `user_id IS NULL` |
-| `112_backfill_buyer_contacts.sql` | **not applied** | 1 paid buyer email has no contact |
-| `113_store_layout.sql` | **not applied** | `creator_profiles.store_layout` missing |
+| `112_backfill_buyer_contacts.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | 1 paid buyer email has no contact |
+| `113_store_layout.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | `creator_profiles.store_layout` missing |
 | `114_share_price_overrides.sql` | no-op on prod | columns already exist, added outside migrations |
-| `115_track_collaborators.sql` | **not applied** | new table; `track_collaborators` missing |
-| `116_notifications_realtime.sql` | **not applied** | new — adds `notifications` to the realtime publication |
+| `115_track_collaborators.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new table; `track_collaborators` missing |
+| `116_notifications_realtime.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — adds `notifications` to the realtime publication |
 | `117_creator_profiles_no_self_insert.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — drops the RLS policy that let any signed-in buyer insert a `creator_profiles` row |
 | `118_strict_arrangements_rls.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — owner-only RLS on `arrangements` (097 missed it) |
 | `119_producer_only_catalogue_writes.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — RLS writes to `tracks`/`projects`/`playlists` require a producer profile (apply after 117) |
 | `120_producer_only_share_links.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — RLS writes to `share_links` require a producer profile (needs 119) |
 | `117_project_access_payment_intent.sql` | applied | reported applied by the producer 2026-09-26 |
 | `118_finish_strict_owned_rows.sql` | applied | reported applied by the producer 2026-09-26 |
-| `122_project_contacts.sql` | **not applied** | new — Artist Relationship Workspace |
-| `123_contact_track_states.sql` | **not applied** | new — includes a one-time copy of `beat_sends.status` |
-| `124_song_beat_and_credit_links.sql` | **not applied** | new — `tracks.beat_track_id`, `track_collaborators.contact_id`, `contacts.avatar_url` |
-| `125_artist_portals.sql` | **not applied** | new — one portal per artist |
-| `126_project_shares_contact.sql` | **not applied** | new — `project_shares.contact_id` + email backfill |
-| `121_share_full_playback.sql` | **not applied** (as far as this ledger knows) | new — per-share full track vs 75 s preview (SHARE-01) |
-| `127_project_assets.sql` | **not applied** | new — project files (Artist Workspace, phase 2) |
-| `128_portal_comments.sql` | **not applied** | new — `project_comments.contact_id`: an artist's portal thread |
-| `129_artist_portal_auto_digest.sql` | **not applied** | new — `artist_portals.auto_digest` for the daily digest cron |
+| `122_project_contacts.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — Artist Relationship Workspace |
+| `123_contact_track_states.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — includes a one-time copy of `beat_sends.status` |
+| `124_song_beat_and_credit_links.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — `tracks.beat_track_id`, `track_collaborators.contact_id`, `contacts.avatar_url` |
+| `125_artist_portals.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — one portal per artist |
+| `126_project_shares_contact.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — `project_shares.contact_id` + email backfill |
+| `121_share_full_playback.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — per-share full track vs 75 s preview (SHARE-01) |
+| `127_project_assets.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — project files (Artist Workspace, phase 2) |
+| `128_portal_comments.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — `project_comments.contact_id`: an artist's portal thread |
+| `129_artist_portal_auto_digest.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — `artist_portals.auto_digest` for the daily digest cron |
 
 **To apply everything pending in one go** without `psql`, paste
 `supabase/apply/pending.sql` (built by `scripts/ops/bundle-migrations.sh`) into

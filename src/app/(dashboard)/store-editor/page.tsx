@@ -18,6 +18,7 @@
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { compareFeatured } from '@/lib/store/newest';
+import { appearanceStyle } from '@/lib/store/typography';
 import { PageContainer } from '@/components/layout/PageHeader';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
@@ -50,9 +51,12 @@ import {
 import type { StoreTrack, CreatorProfile } from '@/components/store/types';
 import { StorefrontBuilder } from '@/components/store-editor/StorefrontBuilder';
 import type { StorefrontData } from '@/components/store-editor/SectionRenderer';
-import type { StoreLayout } from '@/lib/store-editor/layout';
+import { normalizeLayout, type StoreLayout, type StoreTheme } from '@/lib/store-editor/layout';
+import { failedSourceLabels, loadStoreEditor, saveScope, type SaveScope } from '@/lib/store-editor/initial-load';
+import { normalizeFontStyle, resolveStoreAppearance, STORE_FONT_LABELS, STORE_FONT_STYLES } from '@/lib/store/appearance';
 import { uploadImageFile } from '@/lib/upload/image-upload-client';
 import { getStoreEditorAttentionIssues } from '@/lib/store-editor/attention-issues';
+import { fetchAllTrackPages, mapWithConcurrency, TRACK_PAGE_SIZE } from '@/lib/store-editor/track-catalogue';
 
 const TRACK_LIST_BATCH_SIZE = 80;
 
@@ -652,13 +656,17 @@ function StorePreview({
   featuredPlaylists,
   featuredProjects,
   tracks,
+  theme,
 }: {
   profile: ProfileForm;
   featuredPlaylists: PlaylistRow[];
   featuredProjects: ProjectRow[];
   tracks: PreviewTrack[];
+  /** The Design mode theme, so this preview resolves colours as /store does. */
+  theme: StoreTheme;
 }) {
-  const accent = normalizeThemeColor(profile.accent_color);
+  const appearance = resolveStoreAppearance(profile, theme);
+  const { accent } = appearance;
 
   // Map ProfileForm → CreatorProfile so the real ArtistBioBlock can render.
   const creator: CreatorProfile = {
@@ -706,9 +714,12 @@ function StorePreview({
   const previewStoreTracks = asTracks(tracks);
 
   return (
+    // Font style, text colour and accent from the unsaved form — the same
+    // style object /store spreads, so the preview cannot drift from it.
     <div
-      className="rounded-xl overflow-hidden border border-white/10 bg-[#090907] text-white"
-      style={{ '--store-accent': accent } as React.CSSProperties}
+      data-testid="store-editor-preview"
+      className="rounded-xl overflow-hidden border border-white/10 bg-[#090907]"
+      style={appearanceStyle(appearance)}
     >
       {/* Real ArtistBioBlock — mirrors what buyers see */}
       <ArtistBioBlock creator={creator} accentColor={accent} />
@@ -813,9 +824,10 @@ export default function StoreEditorPage() {
   // issue is about. Null = show everything.
   const [attentionFilter, setAttentionFilter] = useState<AttentionFilter | null>(null);
   const [visibleTrackRows, setVisibleTrackRows] = useState(TRACK_LIST_BATCH_SIZE);
-  const [trackNextCursor, setTrackNextCursor] = useState<string | null>(null);
-  const [trackHasMore, setTrackHasMore] = useState(false);
-  const [trackLoadingMore, setTrackLoadingMore] = useState(false);
+  // The whole catalogue is loaded (see lib/store-editor/track-catalogue).
+  // Reordering renumbers every listed beat, so it waits for `complete`.
+  const [trackCatalogueLoading, setTrackCatalogueLoading] = useState(true);
+  const [trackCatalogueComplete, setTrackCatalogueComplete] = useState(false);
   const [producerPickSearch, setProducerPickSearch] = useState('');
   const [producerPickCandidates, setProducerPickCandidates] = useState<TrackRow[]>([]);
   const [producerPickNextCursor, setProducerPickNextCursor] = useState<string | null>(null);
@@ -871,6 +883,7 @@ export default function StoreEditorPage() {
    * default layout, which reproduces `/store` exactly as it renders today.
    */
   const [storeLayout, setStoreLayout] = useState<unknown>(null);
+  const previewTheme = useMemo(() => normalizeLayout(storeLayout).theme, [storeLayout]);
   /**
    * Did the profile actually load?
    *
@@ -880,6 +893,12 @@ export default function StoreEditorPage() {
    * the first slider drag. The builder is gated on this instead.
    */
   const [profileLoaded, setProfileLoaded] = useState(false);
+  /**
+   * Which writes Save may make, from what actually loaded. The form starts on
+   * EMPTY_PROFILE; saving it without the saved profile having replaced it
+   * wipes the bio, socials and prices.
+   */
+  const [saveAllowed, setSaveAllowed] = useState<SaveScope>({ profile: false, playlists: false, projects: false });
 
   const heroFileRef = useRef<HTMLInputElement>(null);
 
@@ -887,8 +906,7 @@ export default function StoreEditorPage() {
   const dragIdx = useRef<number | null>(null);
   // Drag state for project reorder
   const projectDragIdx = useRef<number | null>(null);
-  const trackSearchRequestRef = useRef(0);
-  const loadedTrackSearchRef = useRef<string | null>(null);
+  const trackCatalogueRequestRef = useRef(0);
   const producerPickRequestRef = useRef(0);
 
   const toggleSection = (id: string) =>
@@ -1051,45 +1069,45 @@ export default function StoreEditorPage() {
     [filteredTrackRows, visibleTrackRows],
   );
 
-  const loadTrackPage = useCallback(async ({ cursor = null, append = false, search = '' }: {
-    cursor?: string | null;
-    append?: boolean;
-    search?: string;
-  } = {}) => {
-    const normalizedSearch = search.trim();
-    const requestId = append ? trackSearchRequestRef.current : ++trackSearchRequestRef.current;
-    if (append) setTrackLoadingMore(true);
+  const loadTrackCatalogue = useCallback(async (): Promise<TrackRow[]> => {
+    const requestId = ++trackCatalogueRequestRef.current;
+    const isCurrent = () => requestId === trackCatalogueRequestRef.current;
+    const sortRows = (rows: TrackRow[]) => [...rows].sort((a, b) => {
+      if (a.store_listed && !b.store_listed) return -1;
+      if (!a.store_listed && b.store_listed) return 1;
+      // Listed beats in exactly the order /store shows them ("Featured"),
+      // so what the producer arranges here is what buyers see.
+      if (a.store_listed) return compareFeatured(a, b);
+      return a.title.localeCompare(b.title);
+    });
+    setTrackCatalogueLoading(true);
+    setTrackCatalogueComplete(false);
     try {
-      const params = new URLSearchParams({
-        paged: '1',
-        lean: '1',
-        limit: '100',
-      });
-      if (cursor) params.set('cursor', cursor);
-      if (normalizedSearch) params.set('q', normalizedSearch);
-      const res = await fetch(`/api/tracks?${params.toString()}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
-      if (requestId !== trackSearchRequestRef.current) return [];
-      const rows = ((data.tracks ?? []) as ApiTrackRow[]).map(mapTrackRow).sort((a, b) => {
-        if (a.store_listed && !b.store_listed) return -1;
-        if (!a.store_listed && b.store_listed) return 1;
-        // Listed beats in exactly the order /store shows them ("Featured"),
-        // so what the producer arranges here is what buyers see.
-        if (a.store_listed) return compareFeatured(a, b);
-        return a.title.localeCompare(b.title);
-      });
-      setAllTracks((prev) => {
-        if (!append) return rows;
-        const seen = new Set(prev.map((track) => track.id));
-        return [...prev, ...rows.filter((track) => !seen.has(track.id))];
-      });
-      setTrackHasMore(Boolean(data.pageInfo?.hasMore));
-      setTrackNextCursor(data.pageInfo?.nextCursor ?? null);
-      loadedTrackSearchRef.current = normalizedSearch;
-      return rows;
+      const { tracks, complete } = await fetchAllTrackPages<TrackRow>(
+        async (cursor) => {
+          const params = new URLSearchParams({
+            paged: '1',
+            lean: '1',
+            limit: String(TRACK_PAGE_SIZE),
+          });
+          if (cursor) params.set('cursor', cursor);
+          const res = await fetch(`/api/tracks?${params.toString()}`);
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `Failed (${res.status})`);
+          return {
+            tracks: ((data.tracks ?? []) as ApiTrackRow[]).map(mapTrackRow),
+            pageInfo: data.pageInfo,
+          };
+        },
+        { onPage: (rows) => { if (isCurrent()) setAllTracks(sortRows(rows)); } },
+      );
+      if (!isCurrent()) return [];
+      const sorted = sortRows(tracks);
+      setAllTracks(sorted);
+      setTrackCatalogueComplete(complete);
+      return sorted;
     } finally {
-      if (append) setTrackLoadingMore(false);
+      if (isCurrent()) setTrackCatalogueLoading(false);
     }
   }, []);
 
@@ -1156,18 +1174,6 @@ export default function StoreEditorPage() {
   }, []);
 
   useEffect(() => {
-    if (loading) return;
-    const normalizedSearch = trackSearch.trim();
-    if (loadedTrackSearchRef.current === normalizedSearch) return;
-    const timer = setTimeout(() => {
-      loadTrackPage({ search: trackSearch }).catch((err) => {
-        toast.error('Could not search beats', err instanceof Error ? err.message : 'try again');
-      });
-    }, 220);
-    return () => clearTimeout(timer);
-  }, [loadTrackPage, loading, trackSearch]);
-
-  useEffect(() => {
     if (!producerPicksOpen) return;
     const timer = setTimeout(() => {
       loadProducerPickPage({ search: producerPickSearch }).catch((err) => {
@@ -1186,8 +1192,10 @@ export default function StoreEditorPage() {
 
   const loadTrackLicenseLinks = useCallback(async (trackIds: string[]) => {
     if (trackIds.length === 0) return;
-    const entries = await Promise.all(
-      trackIds.map(async (trackId) => {
+    const entries = await mapWithConcurrency(
+      trackIds,
+      8,
+      async (trackId) => {
         try {
           const res = await fetch(`/api/track-licenses?track_id=${trackId}`);
           if (!res.ok) return [trackId, []] as const;
@@ -1205,7 +1213,7 @@ export default function StoreEditorPage() {
         } catch {
           return [trackId, []] as const;
         }
-      }),
+      },
     );
     setTrackLicenseLinks((prev) => ({ ...prev, ...Object.fromEntries(entries) }));
   }, []);
@@ -1214,40 +1222,55 @@ export default function StoreEditorPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [profileRes, playlistRes, trackSummaryRes, projectsRes, promoRes, licensesRes] = await Promise.all([
-          fetch('/api/profile'),
-          fetch('/api/playlists'),
-          fetch('/api/tracks/store-summary'),
-          fetch('/api/projects'),
-          fetch('/api/promo-codes'),
-          fetch('/api/licenses'),
-        ]);
-        const [pd, pld, summaryData, prd, promod, ld] = await Promise.all([
-          profileRes.json(), playlistRes.json(), trackSummaryRes.json(), projectsRes.json(), promoRes.json(), licensesRes.json(),
-        ]);
-        const loadedGlobalLicenses = ((ld.licenses ?? []) as GlobalLicense[])
+        // Each source settles on its own (`lib/store-editor/initial-load.ts`).
+        // One unparseable body used to reject all six, leave the form on its
+        // empty defaults, and let the next Save write those over the profile.
+        const load = await loadStoreEditor();
+        const scope = saveScope(load);
+        setSaveAllowed(scope);
+        const failedSources = failedSourceLabels(load);
+        if (!scope.profile) {
+          toast.error('Could not load your store profile', 'Saving is off until it loads. Reload to try again.');
+        } else if (failedSources.length > 0) {
+          toast.warning(`Could not load ${failedSources.join(', ')}`, 'Everything else is editable. Reload to try again.');
+        }
+        const pd = load.profile.ok ? load.profile.data : null;
+        const pld = load.playlists.ok ? load.playlists.data : null;
+        const summaryData = load.summary.ok ? load.summary.data : null;
+        const prd = load.projects.ok ? load.projects.data : null;
+        const promod = load.promoCodes.ok ? load.promoCodes.data : null;
+        const ld = load.licenses.ok ? load.licenses.data : null;
+
+        const loadedGlobalLicenses = (((ld?.licenses ?? []) as GlobalLicense[]))
+          .slice()
           .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
         setGlobalLicenses(loadedGlobalLicenses);
-        setPromoCodes(promod.codes ?? []);
-        // Only store the summary if the request actually succeeded. A failed
-        // response still parses as JSON ({ error: '…' }), and spreading that
-        // made trackSummary truthy while `issues` / `producerPicks` stayed
-        // undefined — so every `trackSummary?.x.y` below dereferenced undefined
-        // and took the whole page down with it. Leaving it null instead lets
-        // the `?? allTracks…` fallbacks that already exist do their job.
-        if (trackSummaryRes.ok) {
+        setPromoCodes((promod?.codes ?? []) as PromoCode[]);
+        // A failed summary leaves trackSummary null so the `?? allTracks…`
+        // fallbacks below do their job; a failed response spread into it made
+        // it truthy with `issues` / `producerPicks` undefined and took the
+        // page down.
+        if (summaryData) {
           setTrackSummary({
-            ...summaryData,
+            ...(summaryData as Omit<TrackStoreSummary, 'producerPicks'>),
             producerPicks: ((summaryData.producerPicks ?? []) as ApiTrackRow[]).map(mapTrackRow),
           });
         } else {
-          console.error('store-summary failed; falling back to client-side counts', summaryData);
+          console.error('store-summary failed; falling back to client-side counts', load.summary);
           setTrackSummary(null);
         }
-        const firstTrackPage = await loadTrackPage({ search: '' });
-        void loadTrackLicenseLinks(firstTrackPage.filter((t) => t.store_listed).map((t) => t.id));
-        setPreviewTracks(((summaryData.producerPicks ?? []) as ApiTrackRow[]).slice(0, 3).map(mapTrackRow));
-        const p = pd.profile ?? {};
+        // Not awaited: the rest of the editor should not wait on a large
+        // catalogue. Rows fill in page by page.
+        loadTrackCatalogue()
+          .then((tracks) => loadTrackLicenseLinks(tracks.filter((t) => t.store_listed).map((t) => t.id)))
+          .catch((err) => {
+            toast.error('Could not load your beats', err instanceof Error ? err.message : 'try again');
+          });
+        setPreviewTracks(((summaryData?.producerPicks ?? []) as ApiTrackRow[]).slice(0, 3).map(mapTrackRow));
+        if (pd) {
+        // Numbers (prices, intervals) come through here too; every one of
+        // them is passed through String() or a `??` below.
+        const p = (pd.profile ?? {}) as Record<string, string | null | undefined>;
         setStoreLayout(p.store_layout ?? null);
         setProfileLoaded(true);
         setForm({
@@ -1256,7 +1279,7 @@ export default function StoreEditorPage() {
           credits: p.credits ?? '',
           hero_image_url: p.hero_image_url ?? '',
           accent_color: p.accent_color ?? '#FFFFFF',
-          font_style: p.font_style ?? 'default',
+          font_style: normalizeFontStyle(p.font_style),
           text_color_primary: p.text_color_primary ?? '#FFFFFF',
           instagram_handle: p.instagram_handle ?? '',
           twitter_handle: p.twitter_handle ?? '',
@@ -1278,8 +1301,9 @@ export default function StoreEditorPage() {
           voice_tag_url: p.voice_tag_url ?? '',
           voice_tag_interval_seconds: String(p.voice_tag_interval_seconds ?? 20),
         });
+        }
 
-        const allPlaylists: PlaylistRow[] = pld.playlists ?? [];
+        const allPlaylists: PlaylistRow[] = (pld?.playlists ?? []) as PlaylistRow[];
         setPlaylists(allPlaylists);
 
         // Build featured list: playlists with store_featured=true, sorted by store_order
@@ -1288,7 +1312,7 @@ export default function StoreEditorPage() {
           .sort((a, b) => (a.store_order ?? 999) - (b.store_order ?? 999));
         setFeatured(feat);
 
-        const allProjects: ProjectRow[] = ((prd.projects ?? []) as ApiProjectRow[]).map((p) => ({
+        const allProjects: ProjectRow[] = ((prd?.projects ?? []) as ApiProjectRow[]).map((p) => ({
           id: p.id,
           name: p.name,
           cover_url: p.cover_url ?? null,
@@ -1307,7 +1331,7 @@ export default function StoreEditorPage() {
         setLoading(false);
       }
     })();
-  }, [loadTrackLicenseLinks, loadTrackPage]);
+  }, [loadTrackLicenseLinks, loadTrackCatalogue]);
 
   /* ── Hero image upload ── */
   const handleHeroUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1410,7 +1434,20 @@ export default function StoreEditorPage() {
       toast.error('Order save failed', err instanceof Error ? err.message : 'try again');
     }
   };
-  const handleTrackDragStart = (idx: number) => { trackDragIdx.current = idx; };
+  // A reorder renumbers every listed beat. Before the whole catalogue has
+  // loaded it would renumber only the loaded ones and collide with the rest.
+  const canReorderListed = () => {
+    if (trackCatalogueComplete) return true;
+    toast.info(
+      trackCatalogueLoading ? 'Still loading your beats' : 'Your full catalogue did not load',
+      trackCatalogueLoading ? 'Reorder once every beat has loaded.' : 'Reload the page before reordering.',
+    );
+    return false;
+  };
+  const handleTrackDragStart = (idx: number) => {
+    if (!canReorderListed()) return;
+    trackDragIdx.current = idx;
+  };
   const handleTrackDragOver = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
     const from = trackDragIdx.current;
@@ -1441,6 +1478,7 @@ export default function StoreEditorPage() {
   };
 
   const moveListedTrack = (idx: number, direction: -1 | 1) => {
+    if (!canReorderListed()) return;
     const listed = allTracks.filter((t) => t.store_listed);
     const moved = moveArrayItem(listed, idx, direction);
     if (moved === listed) return;
@@ -1704,6 +1742,12 @@ export default function StoreEditorPage() {
 
   /* ── Save ── */
   const handleSave = async () => {
+    if (!saveAllowed.profile) {
+      // The form never received the saved profile, so it holds EMPTY_PROFILE.
+      // Saving it would overwrite the real one with blanks.
+      toast.error('Nothing saved', 'Your store profile did not load. Reload the page and try again.');
+      return;
+    }
     setSaving(true);
     try {
       // 1. Profile fields
@@ -1748,7 +1792,8 @@ export default function StoreEditorPage() {
 
       // 2. Persist each featured playlist's order + featured flag
       const featuredIds = new Set(featured.map((f) => f.id));
-      const patchOps: Array<{ id: string; body: Record<string, unknown> }> = [
+      // Only when the playlist list loaded: un-featuring is derived from it.
+      const patchOps: Array<{ id: string; body: Record<string, unknown> }> = !saveAllowed.playlists ? [] : [
         // Featured in order
         ...featured.map((pl, i) => ({ id: pl.id, body: { store_featured: true, store_order: i } })),
         // Un-featured (was featured before, no longer in list)
@@ -1772,7 +1817,10 @@ export default function StoreEditorPage() {
         const detail = await firstFailed.json().catch(() => ({}));
         toast.warning('Store saved', `${failed} playlist update(s) failed: ${detail.error ?? `HTTP ${firstFailed.status}`}`);
       } else {
-        toast.success('Store updated');
+        // /api/store is edge-cached (s-maxage=30, stale-while-revalidate=60),
+        // so the public page can lag a save by up to ~90 s. Say so, or the
+        // producer reloads /store, sees the old copy and saves again.
+        toast.success('Store updated', 'Live on your storefront within about a minute and a half.');
       }
 
       // Update local playlist state so re-saves are idempotent
@@ -1786,7 +1834,7 @@ export default function StoreEditorPage() {
 
       // 3. Persist each featured project's order + featured flag (resilient per-call, allSettled, refetch on partial failure)
       const featuredProjectIds = new Set(featuredProjects.map((f) => f.id));
-      const projectPatchOps: Array<{ id: string; body: Record<string, unknown> }> = [
+      const projectPatchOps: Array<{ id: string; body: Record<string, unknown> }> = !saveAllowed.projects ? [] : [
         ...featuredProjects.map((pr, i) => ({ id: pr.id, body: { store_featured: true, store_order: i } })),
         ...projects
           .filter((pr) => pr.store_featured && !featuredProjectIds.has(pr.id))
@@ -1925,7 +1973,8 @@ export default function StoreEditorPage() {
             </a>
             <LiquidGlassButton
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || !saveAllowed.profile}
+              title={saveAllowed.profile ? undefined : 'Your store profile did not load. Reload to try again.'}
             >
               {saving ? 'Saving…' : 'Save changes'}
               {saving ? <Loader2 size={12} className="animate-spin ml-1.5" /> : <Save size={12} className="ml-1.5" />}
@@ -2094,12 +2143,14 @@ export default function StoreEditorPage() {
                       type="color"
                       value={form.accent_color}
                       onChange={set('accent_color')}
+                      aria-label="Pick storefront accent colour"
                       className="w-6 h-6 rounded cursor-pointer border-none bg-transparent p-0"
                     />
                     <input
                       type="text"
                       value={form.accent_color}
                       onChange={set('accent_color')}
+                      aria-label="Storefront accent colour"
                       maxLength={7}
                       placeholder="#FFFFFF"
                       className="w-20 bg-transparent text-[11px] text-white focus:outline-none font-mono"
@@ -2132,18 +2183,19 @@ export default function StoreEditorPage() {
               {/* Font style */}
               <Field label="Font Style">
                 <div className="flex gap-2">
-                  {(['default', 'serif', 'mono'] as const).map((fs) => (
+                  {STORE_FONT_STYLES.map((fs) => (
                     <button
                       key={fs}
                       type="button"
                       onClick={() => setForm((f) => ({ ...f, font_style: fs }))}
+                      aria-pressed={form.font_style === fs}
                       className={`px-4 py-2 rounded-lg text-[11px] font-medium border transition-colors capitalize ${
                         form.font_style === fs
                           ? 'bg-white/10 border-white/20 text-white'
                           : 'bg-white/[0.02] border-white/10 text-white/60 hover:text-white hover:border-white/20'
                       }`}
                     >
-                      {fs === 'default' ? 'Sans (default)' : fs === 'serif' ? 'Serif' : 'Mono'}
+                      {STORE_FONT_LABELS[fs]}
                     </button>
                   ))}
                 </div>
@@ -2157,12 +2209,14 @@ export default function StoreEditorPage() {
                       type="color"
                       value={form.text_color_primary}
                       onChange={set('text_color_primary')}
+                      aria-label="Pick storefront text colour"
                       className="w-6 h-6 rounded cursor-pointer border-none bg-transparent p-0"
                     />
                     <input
                       type="text"
                       value={form.text_color_primary}
                       onChange={set('text_color_primary')}
+                      aria-label="Storefront text colour"
                       maxLength={7}
                       placeholder="#FFFFFF"
                       className="w-20 bg-transparent text-[11px] text-white focus:outline-none font-mono"
@@ -2769,7 +2823,10 @@ export default function StoreEditorPage() {
                   {/* A filter that matches nothing must say so. An empty
                       scroll box reads as a loading fault, and the producer who
                       just fixed the last unpriced beat deserves to be told. */}
-                  {renderedTrackRows.length === 0 && (
+                  {renderedTrackRows.length === 0 && trackCatalogueLoading && (
+                    <p role="status" className="py-8 text-center text-[11px] text-white/40">Loading beats…</p>
+                  )}
+                  {renderedTrackRows.length === 0 && !trackCatalogueLoading && (
                     <div className="rounded-xl border border-dashed border-white/10 py-8 text-center">
                       <p className="text-[11px] text-white/40">
                         {attentionFilter ? 'Nothing left to fix here.' : 'No beats match that search.'}
@@ -2846,21 +2903,6 @@ export default function StoreEditorPage() {
                       className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-[10px] font-mono uppercase tracking-[0.18em] text-white/80 transition-colors hover:border-white/20 hover:text-white"
                     >
                       Load more beats · {Math.min(TRACK_LIST_BATCH_SIZE, filteredTrackRows.length - visibleTrackRows)} more
-                    </button>
-                  )}
-                  {trackHasMore && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!trackNextCursor || trackLoadingMore) return;
-                        loadTrackPage({ cursor: trackNextCursor, append: true }).catch((err) => {
-                          toast.error('Could not load more beats', err instanceof Error ? err.message : 'try again');
-                        });
-                      }}
-                      disabled={trackLoadingMore}
-                      className="mt-2 w-full rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-[10px] font-mono uppercase tracking-[0.18em] text-white/80 transition-colors hover:border-white/20 hover:text-white disabled:cursor-wait disabled:opacity-60"
-                    >
-                      {trackLoadingMore ? 'Loading beats...' : 'Load next 100 beats'}
                     </button>
                   )}
                 </div>
@@ -3059,7 +3101,7 @@ export default function StoreEditorPage() {
                 missingCount={listedMissingPeaksCount}
                 onComplete={async () => {
                   await refreshTrackSummary();
-                  await loadTrackPage({ search: loadedTrackSearchRef.current ?? trackSearch });
+                  await loadTrackCatalogue();
                 }}
               />
             </Section>
@@ -3234,7 +3276,7 @@ export default function StoreEditorPage() {
             <div className="pt-4 lg:hidden flex justify-end">
               <button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || !saveAllowed.profile}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white hover:bg-white/90 disabled:opacity-60 text-black text-[11px] font-semibold transition-all"
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
@@ -3262,6 +3304,7 @@ export default function StoreEditorPage() {
                 featuredPlaylists={featured}
                 featuredProjects={featuredProjects}
                 tracks={previewTracks}
+                theme={previewTheme}
               />
             </div>
           </div>
