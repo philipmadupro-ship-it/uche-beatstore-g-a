@@ -10,6 +10,7 @@ import { Dropdown } from '@/components/ui/Dropdown';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { cn } from '@/lib/utils';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
+import { PlaybackChoice } from '@/components/share/PlaybackChoice';
 import {
   EMPTY_PICKER_FILTERS,
   filterPickerTracks,
@@ -87,6 +88,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
 
   const [title, setTitle] = useState('');
   const [allowDownloads, setAllowDownloads] = useState(true);
+  const [fullPlayback, setFullPlayback] = useState(true);
   const [expiresDays, setExpiresDays] = useState('0');
   const [creating, setCreating] = useState(false);
 
@@ -202,12 +204,14 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
               // handles the empty-string case.
               expires_days: expires,
               allow_downloads: allowDownloads,
+              full_playback: fullPlayback,
             }
           : {
               // The collection routes call the display name `label`.
               label: title.trim() || null,
               expires_days: expires,
               allow_downloads: allowDownloads,
+              full_playback: fullPlayback,
             };
 
       const res = await fetch(endpoint, {
@@ -655,6 +659,7 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
                   {allowDownloads ? 'DL on' : 'DL off'}
                 </button>
               </div>
+              <PlaybackChoice fullPlayback={fullPlayback} onChange={setFullPlayback} />
               <button
                 onClick={generateLink}
                 disabled={creating || !canSubmit}

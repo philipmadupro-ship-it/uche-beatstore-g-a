@@ -125,7 +125,7 @@ export function TrackPeopleSection({ trackId, trackType, onUpdate }: {
                 ? (p.engagement.step === 'played' && p.engagement.plays > 1 ? `played ${p.engagement.plays}×` : ENGAGEMENT_LABEL[p.engagement.step].toLowerCase())
                 : null;
               return (
-                <li key={p.contact.id} className="flex flex-wrap items-baseline gap-x-1.5 text-[12px] text-white/60">
+                <li key={p.contact.id} className="flex flex-wrap items-baseline gap-x-1.5 text-[11px] text-white/60">
                   <Link href={`/contacts/${p.contact.id}?tab=beats`} className="text-white/80 hover:text-white">{p.contact.name}</Link>
                   {p.projects.map((pr) => (
                     <span key={pr.id}>· <Link href={`/projects/${pr.id}`} className="hover:text-white">{pr.name}</Link></span>
@@ -144,7 +144,7 @@ export function TrackPeopleSection({ trackId, trackType, onUpdate }: {
           <h3 className={H3}>Songs built on this beat</h3>
           <ul className="space-y-1.5">
             {data.songs.map((s) => (
-              <li key={s.id} className="text-[12px]">
+              <li key={s.id} className="text-[11px]">
                 <Link href={`/library/${s.id}`} className="text-white/80 hover:text-white">{s.title ?? 'Untitled'}</Link>
                 {s.status && <span className="text-white/40"> · {s.status.replace('_', ' ')}</span>}
               </li>

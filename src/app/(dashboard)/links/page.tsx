@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Link2, Copy, Trash2, Check, Loader2, ExternalLink, Lock, Clock,
-  X, Share2, Music, Pencil, Download, Save, Plus, Search, BarChart3,
+  X, Share2, Music, Pencil, Download, Save, Plus, Search, BarChart3, Headphones,
 } from 'lucide-react';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { Dropdown } from '@/components/ui/Dropdown';
@@ -27,7 +27,6 @@ import {
   isShareLinkExpired,
   shareLinkEndpoint,
   shareLinkKey,
-  shareOpensLabel,
   toSharePatchBody,
   type LinkFilter,
   type ShareLinkPatch,
@@ -47,6 +46,8 @@ interface ShareLink {
   expires_at: string | null;
   revoked_at: string | null;
   allow_downloads: boolean;
+  /** Full track (default) or the 75 s preview only. Mig 121. */
+  full_playback?: boolean;
   password_protected: boolean;
   created_at: string;
   href: string;
@@ -97,8 +98,11 @@ export default function LinksPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const raw: ShareLink[] = Array.isArray(data) ? data : data.links || [];
-      // Sort by opens descending — most-visited links at the top. The column
-      // is called `plays` but counts page opens (see shareOpensLabel).
+      // Sort by opens descending — most-engaged links at the top. The column
+      // is named `plays`, but both share tables increment it once per page
+      // open (/api/share/[token] and /api/projects/share/[token] GET), not
+      // per track played, so the UI labels it "opens". Per-track listening
+      // lives in share_plays / play_head_pings.
       setLinks(raw.slice().sort((a, b) => (b.plays ?? 0) - (a.plays ?? 0)));
     } catch (err) {
       console.error('Fetch links error:', err);
@@ -197,6 +201,10 @@ export default function LinksPage() {
   const toggleDownloads = (link: ShareLink) =>
     patchLink(link, { allow_downloads: link.allow_downloads === false });
 
+  /** Full track <-> 1:15 preview. Absent means full (mig 121). */
+  const togglePlayback = (link: ShareLink) =>
+    patchLink(link, { full_playback: link.full_playback === false });
+
   const isExpired = (link: ShareLink) => isShareLinkExpired(link);
 
   const formatDate = (iso: string) =>
@@ -227,7 +235,7 @@ export default function LinksPage() {
           eyebrow="Sharing"
           title="Links"
           description="Every share you've sent. Tap a card to open and copy."
-          meta={`${links.length} link${links.length !== 1 ? 's' : ''}${links.length > 0 ? ` · ${shareOpensLabel(linkSummary.plays)}` : ''}`}
+          meta={`${links.length} link${links.length !== 1 ? 's' : ''}${links.length > 0 ? ` · ${links.reduce((s, l) => s + (l.plays ?? 0), 0).toLocaleString()} opens` : ''}`}
           actions={
             <LiquidGlassButton onClick={() => setShowQuickShare(true)}>
                 <Plus size={13} aria-hidden="true" />
@@ -371,7 +379,7 @@ export default function LinksPage() {
                   }
                   meta={
                     <>
-                      {link.kind || 'share'} · {link.track_ids?.length ?? 0} track{(link.track_ids?.length ?? 0) === 1 ? '' : 's'} · {shareOpensLabel(link.plays)}
+                      {link.kind || 'share'} · {link.track_ids?.length ?? 0} track{(link.track_ids?.length ?? 0) === 1 ? '' : 's'} · {link.plays ?? 0} open{(link.plays ?? 0) === 1 ? '' : 's'}
                       {expired ? ' · expired' : link.expires_at ? ` · until ${formatDate(link.expires_at)}` : ''}
                     </>
                   }
@@ -398,6 +406,7 @@ export default function LinksPage() {
                           onDelete={deleteLink}
                           onRename={() => setRenamingKey(key)}
                           onToggleDownloads={toggleDownloads}
+                          onTogglePlayback={togglePlayback}
                         />
                       </span>
                     </>
@@ -504,6 +513,7 @@ export default function LinksPage() {
                               onDelete={deleteLink}
                               onRename={() => setRenamingKey(key)}
                               onToggleDownloads={toggleDownloads}
+                          onTogglePlayback={togglePlayback}
                             />
                           </span>
                         </div>
@@ -511,7 +521,7 @@ export default function LinksPage() {
 
                       {/* One quiet metadata line. */}
                       <p className="mb-3 truncate text-meta">
-                        {link.kind || 'share'} · {link.track_ids?.length ?? 0} track{(link.track_ids?.length ?? 0) === 1 ? '' : 's'} · {shareOpensLabel(link.plays)}
+                        {link.kind || 'share'} · {link.track_ids?.length ?? 0} track{(link.track_ids?.length ?? 0) === 1 ? '' : 's'} · {link.plays ?? 0} open{(link.plays ?? 0) === 1 ? '' : 's'}
                         {expired ? (
                           <span className="text-red-400"> · expired</span>
                         ) : link.expires_at ? (
@@ -521,8 +531,8 @@ export default function LinksPage() {
                         )}
                       </p>
 
-                      {/* Engagement bar — thin, low-contrast relative share
-                          of opens. Pinned to the bottom so the bars line up
+                      {/* Engagement bar — thin, low-contrast relative play
+                          share. Pinned to the bottom so the bars line up
                           across a row of cards regardless of title wrap. */}
                       <div className="mt-auto h-0.5 bg-white/[0.05] rounded-full overflow-hidden">
                         <div
@@ -553,6 +563,7 @@ export default function LinksPage() {
           onPatch={patchLink}
           onRename={renameLink}
           onToggleDownloads={toggleDownloads}
+          onTogglePlayback={togglePlayback}
           copied={copied === linkKey(active)}
           fullUrl={fullUrl(active)}
           expired={isExpired(active)}
@@ -680,7 +691,7 @@ function LinkMetric({
  * when the platform supports it (iOS / Android / mobile Safari).
  */
 function LinkPopup({
-  link, onClose, onCopy, onShare, onDelete, onPatch, onRename, onToggleDownloads,
+  link, onClose, onCopy, onShare, onDelete, onPatch, onRename, onToggleDownloads, onTogglePlayback,
   copied, fullUrl, expired, formatDate,
 }: {
   link: ShareLink;
@@ -691,6 +702,7 @@ function LinkPopup({
   onPatch: (link: ShareLink, patch: ShareLinkPatch) => Promise<boolean>;
   onRename: (link: ShareLink, next: string) => Promise<boolean>;
   onToggleDownloads: (link: ShareLink) => void;
+  onTogglePlayback: (link: ShareLink) => void;
   copied: boolean;
   fullUrl: string;
   expired: boolean;
@@ -772,7 +784,7 @@ function LinkPopup({
                 inputClassName="text-[18px] font-medium"
               />
               <p className="text-[11px] text-white/60 mt-1">
-                Created {formatDate(link.created_at)} · {shareOpensLabel(link.plays)}
+                Created {formatDate(link.created_at)} · {link.plays ?? 0} open{(link.plays ?? 0) === 1 ? '' : 's'}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
@@ -784,6 +796,7 @@ function LinkPopup({
                 onDelete={onDelete}
                 onRename={() => setRenamingHeader(true)}
                 onToggleDownloads={onToggleDownloads}
+                onTogglePlayback={onTogglePlayback}
               />
               <button
                 onClick={onClose}
@@ -812,6 +825,7 @@ function LinkPopup({
             <FlagChip icon={<Music size={10} />} label={`${link.track_ids?.length ?? 0} track${(link.track_ids?.length ?? 0) === 1 ? '' : 's'}`} />
             {link.password_protected && <FlagChip icon={<Lock size={10} />} label="Password" tone="warn" />}
             {link.allow_downloads !== false && <FlagChip label="Downloads on" />}
+            <FlagChip icon={<Headphones size={10} />} label={link.full_playback === false ? '1:15 preview' : 'Full track'} />
             {expired ? (
               <FlagChip icon={<Clock size={10} />} label="Expired" tone="danger" />
             ) : link.expires_at ? (
@@ -982,7 +996,7 @@ function LinkPopup({
  * row carries the four things done every day.
  */
 function LinkRowMenu({
-  link, expired, onCopy, onShare, onDelete, onRename, onToggleDownloads,
+  link, expired, onCopy, onShare, onDelete, onRename, onToggleDownloads, onTogglePlayback,
 }: {
   link: ShareLink;
   expired: boolean;
@@ -991,6 +1005,7 @@ function LinkRowMenu({
   onDelete: (link: ShareLink) => void;
   onRename: () => void;
   onToggleDownloads: (link: ShareLink) => void;
+  onTogglePlayback: (link: ShareLink) => void;
 }) {
   return (
     <ActionMenu
@@ -1013,6 +1028,13 @@ function LinkRowMenu({
               label: 'Allow downloads',
               checked: link.allow_downloads !== false,
               onSelect: () => { onToggleDownloads(link); return 'keep-open'; },
+            },
+            {
+              id: 'playback',
+              label: 'Full-track playback',
+              hint: link.full_playback === false ? 'Now: 1:15 preview' : undefined,
+              checked: link.full_playback !== false,
+              onSelect: () => { onTogglePlayback(link); return 'keep-open'; },
             },
           ],
         },

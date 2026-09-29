@@ -1,91 +1,55 @@
 /**
- * The notification row for a comment left on a share page.
+ * Notification for a comment left through a project share link.
  *
- * Guests comment through `/api/projects/share/[token]/comments`, and until
- * this existed nothing told the producer: artist feedback sat in
- * `project_comments` until the project happened to be opened. The bell, its
- * realtime subscription and the desktop alerts all read the `notifications`
- * table, so one row here reaches all three.
- *
- * Pure so the wording and the privacy rules are tested: the row never carries
- * the share token (a bearer credential) — only ids the producer already owns.
+ * Share-page comments were written to `project_comments` and nothing else, so
+ * an artist's feedback sat unseen until the producer happened to open that
+ * project. Only purchases, buyer offers and fulfilment alerts ever reached
+ * the bell (and the desktop notifications that ride on it). Pure so the
+ * wording and truncation are tested rather than asserted inside the route.
  */
-
-export const SHARE_COMMENT_KIND = 'share_comment';
-
-/** Long enough to read the point of a note, short enough for the bell's two lines. */
-export const SHARE_COMMENT_EXCERPT_CHARS = 140;
-
 export interface ShareCommentInput {
   ownerId: string;
-  commentId: string;
-  projectId: string | null;
-  projectName?: string | null;
-  trackId?: string | null;
-  trackTitle?: string | null;
+  projectId: string;
+  projectName: string | null | undefined;
   authorName: string;
   body: string;
-  parentId?: string | null;
-  regionStart?: number | null;
-  regionEnd?: number | null;
+  commentId: string;
+  shareToken: string;
+  /** The share's owner-facing label (usually the recipient's name). */
+  shareLabel?: string | null;
+  trackId?: string | null;
+  isReply?: boolean;
 }
 
-export interface ShareCommentNotificationRow {
+export interface NotificationInsert {
   user_id: string;
-  kind: typeof SHARE_COMMENT_KIND;
+  kind: 'share_comment';
   title: string;
   body: string;
-  data: {
-    dedupe_key: string;
-    comment_id: string;
-    project_id: string | null;
-    track_id: string | null;
-    parent_id: string | null;
-    author_name: string;
-    region_start: number | null;
-    region_end: number | null;
-  };
+  data: Record<string, unknown>;
 }
 
-/** Seconds → `m:ss`. Negative or non-finite input reads as 0:00. */
-export function formatCommentTime(seconds: number): string {
-  const total = Number.isFinite(seconds) && seconds > 0 ? Math.floor(seconds) : 0;
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
-}
+const PREVIEW_MAX = 140;
 
-function excerpt(text: string): string {
+function preview(text: string): string {
   const flat = text.replace(/\s+/g, ' ').trim();
-  if (flat.length <= SHARE_COMMENT_EXCERPT_CHARS) return flat;
-  return `${flat.slice(0, SHARE_COMMENT_EXCERPT_CHARS - 1).trimEnd()}…`;
+  return flat.length > PREVIEW_MAX ? `${flat.slice(0, PREVIEW_MAX - 1)}…` : flat;
 }
 
-export function buildShareCommentNotification(input: ShareCommentInput): ShareCommentNotificationRow {
-  const author = input.authorName.trim() || 'Someone';
-  const where = input.projectName?.trim() || 'a shared project';
-  const verb = input.parentId ? 'replied on' : 'commented on';
-
-  const hasRegion = input.regionStart != null && input.regionEnd != null && input.regionEnd > input.regionStart;
-  const context = [
-    input.trackTitle?.trim() ? `“${input.trackTitle.trim()}”` : null,
-    hasRegion ? `${formatCommentTime(input.regionStart as number)}–${formatCommentTime(input.regionEnd as number)}` : null,
-  ].filter(Boolean).join(' · ');
-
+export function shareCommentNotification(input: ShareCommentInput): NotificationInsert {
+  const project = input.projectName?.trim() || 'a shared project';
+  const verb = input.isReply ? 'replied on' : 'commented on';
   return {
     user_id: input.ownerId,
-    kind: SHARE_COMMENT_KIND,
-    title: `${author} ${verb} ${where}`,
-    body: context ? `${context} · ${excerpt(input.body)}` : excerpt(input.body),
+    kind: 'share_comment',
+    title: `${input.authorName} ${verb} ${project}`,
+    body: preview(input.body),
     data: {
-      dedupe_key: `share_comment_${input.commentId}`,
-      comment_id: input.commentId,
       project_id: input.projectId,
+      comment_id: input.commentId,
+      share_token: input.shareToken,
+      share_label: input.shareLabel ?? null,
       track_id: input.trackId ?? null,
-      parent_id: input.parentId ?? null,
-      author_name: author,
-      region_start: hasRegion ? (input.regionStart as number) : null,
-      region_end: hasRegion ? (input.regionEnd as number) : null,
     },
   };
 }

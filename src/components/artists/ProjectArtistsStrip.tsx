@@ -103,7 +103,7 @@ export function ProjectArtistsStrip({ projectId, refreshKey, onDecisions }: {
                     ? <img src={a.contact.avatar_url} alt="" className="h-full w-full object-cover" />
                     : a.contact.name[0]?.toUpperCase()}
                 </span>
-                <span className="text-[12px] text-white/80">{a.contact.name}</span>
+                <span className="text-[11px] text-white/80">{a.contact.name}</span>
               </Link>
               <span className="text-[11px] text-white/40">
                 {live ? (a.portal!.last_viewed_at ? `opened ${relativeDays(a.portal!.last_viewed_at)}` : 'not opened') : 'not shared'}

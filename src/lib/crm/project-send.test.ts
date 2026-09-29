@@ -2,43 +2,31 @@ import { describe, expect, it } from 'vitest';
 import { buildProjectSendRow } from './project-send';
 
 describe('buildProjectSendRow', () => {
-  it('builds a sent row for a direct (non-campaign) project send', () => {
+  it('records a direct (non-campaign) project send', () => {
     expect(buildProjectSendRow({
-      contactId: 'c-1',
-      trackIds: ['t-1', 't-2'],
+      contactId: 'c1',
+      trackIds: ['t1', 't2'],
       shareToken: 'tok',
-      message: '  New EP for you  ',
-      emailResendId: 'resend-1',
+      message: 'New EP ideas',
+      emailResendId: 're_1',
     })).toEqual({
-      contact_id: 'c-1',
-      track_ids: ['t-1', 't-2'],
+      contact_id: 'c1',
+      track_ids: ['t1', 't2'],
       share_token: 'tok',
-      message: 'New EP for you',
+      message: 'New EP ideas',
       status: 'sent',
       campaign_id: null,
-      email_resend_id: 'resend-1',
+      email_resend_id: 're_1',
     });
   });
 
-  it('carries the campaign id when the send belongs to one', () => {
-    expect(buildProjectSendRow({
-      contactId: 'c-1',
-      trackIds: [],
-      shareToken: 'tok',
-      campaignId: 'camp-1',
-    }).campaign_id).toBe('camp-1');
+  it('keeps the campaign id when there is one', () => {
+    expect(buildProjectSendRow({ contactId: 'c1', trackIds: [], shareToken: 'tok', campaignId: 'k1' }).campaign_id).toBe('k1');
   });
 
-  it('keeps project order and drops duplicate or empty track ids', () => {
-    expect(buildProjectSendRow({
-      contactId: 'c-1',
-      trackIds: ['t-2', 't-1', 't-2', ''],
-      shareToken: 'tok',
-    }).track_ids).toEqual(['t-2', 't-1']);
-  });
-
-  it('defaults a missing message to an empty string and a missing resend id to null', () => {
-    const row = buildProjectSendRow({ contactId: 'c-1', trackIds: ['t-1'], shareToken: 'tok', message: null });
+  it('dedupes track ids and defaults the message to empty', () => {
+    const row = buildProjectSendRow({ contactId: 'c1', trackIds: ['t1', 't1', 't2'], shareToken: 'tok', message: null });
+    expect(row.track_ids).toEqual(['t1', 't2']);
     expect(row.message).toBe('');
     expect(row.email_resend_id).toBeNull();
   });

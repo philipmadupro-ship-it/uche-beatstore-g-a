@@ -84,7 +84,7 @@ export function ArtistWorkspaceTabs({
             aria-selected={tab === t}
             aria-controls={`ws-panel-${t}`}
             onClick={() => go(t)}
-            className={`-mb-px shrink-0 border-b px-3 py-2 text-[12px] transition-colors ${tab === t ? 'border-white text-white' : 'border-transparent text-white/50 hover:text-white/80'}`}
+            className={`-mb-px shrink-0 border-b px-3 py-2 text-[11px] transition-colors ${tab === t ? 'border-white text-white' : 'border-transparent text-white/50 hover:text-white/80'}`}
           >
             {TAB_LABEL[t]}
             {t === 'beats' && workspace.beats.length > 0 && <span className="ml-1.5 text-white/30">{workspace.beats.length}</span>}
@@ -126,7 +126,7 @@ function OverviewTab({ workspace, contactName, tasks, onOpen }: {
           </p>
         </div>
         {moving.length === 0 ? (
-          <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[12px] text-white/40">
+          <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/40">
             Nothing moving yet. When {contactName} taps Interested in their portal, or you set a decision on the Beats tab, it shows here.
           </p>
         ) : (
@@ -148,7 +148,7 @@ function OverviewTab({ workspace, contactName, tasks, onOpen }: {
           <button type="button" onClick={() => onOpen('projects')} className="text-[11px] text-white/50 hover:text-white">All projects</button>
         </div>
         {active.length === 0 ? (
-          <p className="text-[12px] text-white/40">No active projects.</p>
+          <p className="text-[11px] text-white/40">No active projects.</p>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {active.slice(0, 4).map((p) => <ProjectCardMini key={p.id} project={p} />)}
@@ -283,7 +283,7 @@ function ProjectsTab({ contactId, contactName, workspace, onChanged }: {
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Escape') setCreating(false); }}
                 placeholder={`${contactName} — New project`}
-                className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[12px] text-white/80 placeholder:text-white/30 focus:border-white/30 focus:outline-none"
+                className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 placeholder:text-white/30 focus:border-white/30 focus:outline-none"
               />
             </label>
             <button type="submit" disabled={busy === 'new'} className={CONTROL}>Create</button>
@@ -307,7 +307,7 @@ function ProjectsTab({ contactId, contactName, workspace, onChanged }: {
       </div>
 
       {workspace.projects.length === 0 ? (
-        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[12px] text-white/40">
+        <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/40">
           No projects yet. Create one for {contactName}, add beats, then share it — their portal shows everything you add from then on.
         </p>
       ) : (
@@ -410,7 +410,7 @@ function BeatsTab({ contactId, beats, onChanged }: { contactId: string; beats: W
   });
 
   if (beats.length === 0) {
-    return <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[12px] text-white/40">No beats yet. Beats arrive here when you send them or add them to one of this artist’s projects.</p>;
+    return <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/40">No beats yet. Beats arrive here when you send them or add them to one of this artist’s projects.</p>;
   }
 
   return (
@@ -546,7 +546,7 @@ function SongsTab({ songs, beats, onChanged }: { songs: WorkspaceSong[]; beats: 
 
   if (songs.length === 0) {
     return (
-      <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[12px] text-white/40">
+      <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-8 text-center text-[11px] text-white/40">
         No songs yet. Upload a demo as a song in the Library, add it to one of this artist’s projects, then set the beat it’s built on here.
       </p>
     );

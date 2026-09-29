@@ -20,14 +20,13 @@ vi.mock('resend', () => ({
 const PROJECT_ID = '33333333-3333-4333-8333-333333333333';
 const SHARE_ID = '44444444-4444-4444-8444-444444444444';
 const CONTACT_ID = '22222222-2222-4222-8222-222222222222';
+const TRACK_ID = '55555555-5555-4555-8555-555555555555';
 
-function maybeSingleAfter(eqs: number, result: () => unknown) {
+/** `.eq()` chain that resolves `.maybeSingle()` after any number of filters. */
+function eqChain(result: () => unknown) {
   const chain: Record<string, unknown> = {};
-  let count = 0;
-  chain.eq = () => {
-    count += 1;
-    return count >= eqs ? { maybeSingle: () => Promise.resolve(result()) } : chain;
-  };
+  chain.eq = () => chain;
+  chain.maybeSingle = () => Promise.resolve(result());
   return chain;
 }
 
@@ -36,32 +35,33 @@ function adminClient() {
     from(table: string) {
       if (table === 'project_shares') {
         return {
-          select: () => maybeSingleAfter(1, () => ({
+          select: () => eqChain(() => ({
             data: {
               id: SHARE_ID,
               project_id: PROJECT_ID,
-              token: 'share-token-abc',
+              token: 'sharetoken123',
               role: 'viewer',
-              allow_downloads: false,
+              allow_downloads: true,
               invited_email: 'artist@example.com',
               expires_at: null,
               revoked_at: null,
             },
             error: null,
           })),
+          update: () => ({ eq: () => Promise.resolve({ error: null }) }),
         };
       }
       if (table === 'projects') {
-        return { select: () => maybeSingleAfter(1, () => ({ data: { name: 'New EP', cover_url: null }, error: null })) };
+        return { select: () => eqChain(() => ({ data: { name: 'New EP', cover_url: null }, error: null })) };
       }
       if (table === 'contacts') {
-        return { select: () => maybeSingleAfter(2, () => mockContactResult()) };
+        return { select: () => eqChain(() => mockContactResult()) };
       }
       if (table === 'project_tracks') {
         return {
           select: () => ({
             eq: () => ({
-              order: () => Promise.resolve({ data: [{ track_id: 't-1' }, { track_id: 't-2' }], error: null }),
+              order: () => Promise.resolve({ data: [{ track_id: TRACK_ID }], error: null }),
             }),
           }),
         };
@@ -84,70 +84,75 @@ function inviteRequest(body: Record<string, unknown>) {
 
 const params = { params: Promise.resolve({ id: PROJECT_ID, shareId: SHARE_ID }) };
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  process.env.RESEND_API_KEY = 're_test';
-  mockEmailSend.mockResolvedValue({ data: { id: 'resend-1' }, error: null });
-  mockContactResult.mockReturnValue({ data: { id: CONTACT_ID }, error: null });
-  mockBeatSendInsert.mockReturnValue({
-    select: () => ({ single: () => Promise.resolve({ data: { id: 'send-1' }, error: null }) }),
-  });
-  mockRequireRowOwnership.mockResolvedValue({ ok: true, userId: 'user-1', admin: adminClient() });
-});
-
 describe('POST /api/projects/[id]/shares/[shareId]/invite', () => {
-  it('records a direct project send in beat_sends when given a contact id', async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.RESEND_API_KEY = 're_test';
+    mockRequireRowOwnership.mockResolvedValue({ ok: true, userId: 'owner-1', admin: adminClient() });
+    mockEmailSend.mockResolvedValue({ data: { id: 'resend-1' }, error: null });
+    mockContactResult.mockReturnValue({ data: { id: CONTACT_ID }, error: null });
+    mockBeatSendInsert.mockReturnValue({
+      select: () => ({ single: () => Promise.resolve({ data: { id: 'send-1' }, error: null }) }),
+    });
+  });
+
+  it('records a beat_sends row for a direct send to a contact', async () => {
     const { POST } = await import('./route');
-    const res = await POST(inviteRequest({ email: 'artist@example.com', message: 'Have a listen', contact_id: CONTACT_ID }), params);
+    const res = await POST(inviteRequest({ email: 'artist@example.com', message: 'Yo', contact_id: CONTACT_ID }), params);
+    const json = await res.json();
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ success: true, resendId: 'resend-1', beatSendId: 'send-1' });
+    expect(json.sendRecorded).toBe(true);
+    expect(json.sendId).toBe('send-1');
     expect(mockBeatSendInsert).toHaveBeenCalledWith({
       contact_id: CONTACT_ID,
-      track_ids: ['t-1', 't-2'],
-      share_token: 'share-token-abc',
-      message: 'Have a listen',
+      track_ids: [TRACK_ID],
+      share_token: 'sharetoken123',
+      message: 'Yo',
       status: 'sent',
       campaign_id: null,
       email_resend_id: 'resend-1',
     });
   });
 
-  it('writes no beat_sends row without a contact id (campaign sends are recorded elsewhere)', async () => {
+  it('records nothing when no contact is given (campaign sends record elsewhere)', async () => {
     const { POST } = await import('./route');
     const res = await POST(inviteRequest({ email: 'artist@example.com' }), params);
+    const json = await res.json();
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ success: true, beatSendId: null });
+    expect(json.sendRecorded).toBeUndefined();
     expect(mockBeatSendInsert).not.toHaveBeenCalled();
   });
 
-  it('does not record a send against a contact the caller does not own', async () => {
+  it('refuses a contact the producer does not own, before emailing', async () => {
     mockContactResult.mockReturnValue({ data: null, error: null });
     const { POST } = await import('./route');
-    const res = await POST(inviteRequest({ contact_id: CONTACT_ID }), params);
+    const res = await POST(inviteRequest({ email: 'artist@example.com', contact_id: CONTACT_ID }), params);
 
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ success: true, beatSendId: null });
+    expect(res.status).toBe(404);
+    expect(mockEmailSend).not.toHaveBeenCalled();
     expect(mockBeatSendInsert).not.toHaveBeenCalled();
-  });
-
-  it('still reports the invite as sent when recording the send fails', async () => {
-    mockBeatSendInsert.mockReturnValue({
-      select: () => ({ single: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }),
-    });
-    const { POST } = await import('./route');
-    const res = await POST(inviteRequest({ contact_id: CONTACT_ID }), params);
-
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({ success: true, beatSendId: null });
   });
 
   it('rejects a malformed contact id', async () => {
     const { POST } = await import('./route');
-    const res = await POST(inviteRequest({ contact_id: 'not-a-uuid' }), params);
+    const res = await POST(inviteRequest({ email: 'artist@example.com', contact_id: 'nope' }), params);
 
     expect(res.status).toBe(400);
     expect(mockEmailSend).not.toHaveBeenCalled();
+  });
+
+  it('keeps the invite successful when recording the send fails', async () => {
+    mockBeatSendInsert.mockReturnValue({
+      select: () => ({ single: () => Promise.resolve({ data: null, error: new Error('db down') }) }),
+    });
+    const { POST } = await import('./route');
+    const res = await POST(inviteRequest({ email: 'artist@example.com', contact_id: CONTACT_ID }), params);
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.success).toBe(true);
+    expect(json.sendRecorded).toBe(false);
   });
 });

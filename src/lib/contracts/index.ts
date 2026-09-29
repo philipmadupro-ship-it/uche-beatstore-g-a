@@ -242,11 +242,14 @@ export const ProjectShareCreateBodySchema = z.object({
   // card (Stripe Checkout). Off by default so a producer doesn't
   // accidentally turn a casual send into a storefront.
   sales_enabled: z.boolean().optional(),
+  // Full track (default) or the 75 s preview only. Mig 121, lib/share/playback.
+  full_playback: z.boolean().optional(),
 });
 export type ProjectShareCreateBody = z.infer<typeof ProjectShareCreateBodySchema>;
 
 export const ProjectSharePatchBodySchema = z.object({
   allow_downloads: z.boolean().optional(),
+  full_playback: z.boolean().optional(),
   role: z.enum(SHARE_ROLES).optional(),
   label: z.string().optional(),
   invited_email: z.string().optional(),
@@ -508,6 +511,7 @@ export const ShareCreateBodySchema = z.object({
   expires_days: z.number().int().min(0).max(3650).optional(),
   password: z.string().min(1).max(200).nullish(),
   recipient_kind: z.enum(['client', 'producer', 'rapper', 'friend']).optional(),
+  full_playback: z.boolean().optional(),
 });
 export type ShareCreateBody = z.infer<typeof ShareCreateBodySchema>;
 

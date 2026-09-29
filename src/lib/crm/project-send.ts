@@ -1,23 +1,20 @@
 /**
- * The `beat_sends` row for a project sent to a contact.
+ * The `beat_sends` row for a project shared with a contact.
  *
- * A project reaches a contact through two routes: the campaign path
- * (`/api/campaigns/[id]/targets`, `project_send`) and the direct path
- * (`/api/projects/[id]/shares/[shareId]/invite` with a `contact_id`). Until
- * the direct path recorded anything, a project sent outside a campaign wrote
- * no row at all, so it never reached the contact's timeline or the nudge
- * queue, and the Resend webhook, which matches on `email_resend_id`, had
- * nothing to stamp the open or click on.
+ * A project send used to be recorded only when it went out as part of a
+ * campaign (`/api/campaigns/[id]/targets`). Sending a project straight from
+ * SendBeatModal emailed the invite and wrote nothing, so the send never
+ * reached the contact's timeline, the nudge queue or the Resend open/click
+ * webhook (which correlates on `email_resend_id`). Both paths now build the
+ * row here so they cannot drift.
  *
- * Both routes build the row here so the two cannot drift apart: a column
- * added to one path and forgotten in the other is exactly how the direct
- * path ended up recording nothing.
+ * `track_ids` is the project's tracklist at send time. The share link itself
+ * stays live — it reads `project_tracks` on every open — but the send records
+ * what was actually in the project when the email went out.
  */
-
 export interface ProjectSendInput {
   contactId: string;
-  /** The project's tracks at send time, in project order. */
-  trackIds: readonly string[];
+  trackIds: string[];
   shareToken: string;
   message?: string | null;
   campaignId?: string | null;
@@ -35,14 +32,11 @@ export interface ProjectSendRow {
 }
 
 export function buildProjectSendRow(input: ProjectSendInput): ProjectSendRow {
-  // A track listed twice in a project would count twice in the timeline's
-  // "sent N beats". Keep the first position, drop the rest.
-  const trackIds = [...new Set(input.trackIds.filter((id) => typeof id === 'string' && id.length > 0))];
   return {
     contact_id: input.contactId,
-    track_ids: trackIds,
+    track_ids: [...new Set(input.trackIds)],
     share_token: input.shareToken,
-    message: (input.message ?? '').trim(),
+    message: input.message ?? '',
     status: 'sent',
     campaign_id: input.campaignId ?? null,
     email_resend_id: input.emailResendId ?? null,

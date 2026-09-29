@@ -2,8 +2,9 @@
 
 import {
   X, Lock, Link2, Download, Calendar, Check, Copy, Loader2,
-  Eye, MessageSquare, Edit3, Mail, Trash2, Send, ShoppingBag,
+  Eye, MessageSquare, Edit3, Mail, Trash2, Send, ShoppingBag, Headphones,
 } from 'lucide-react';
+import { PlaybackChoice } from '@/components/share/PlaybackChoice';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { useCallback, useEffect, useState } from 'react';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -17,6 +18,8 @@ interface ContentShare {
   token: string;
   role: 'viewer' | 'commenter' | 'editor';
   allow_downloads: boolean;
+  /** Full track (default) or the 75 s preview only. Mig 121. */
+  full_playback?: boolean;
   expires_at: string | null;
   invited_email: string | null;
   label: string | null;
@@ -66,6 +69,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
   const [recipientKind, setRecipientKind] = useState<'client' | 'producer' | 'rapper' | 'friend'>('client');
   const [salesEnabled, setSalesEnabled] = useState(false);
   const [allowDownloads, setAllowDownloads] = useState(true);
+  const [fullPlayback, setFullPlayback] = useState(true);
   const [passwordProtect, setPasswordProtect] = useState(false);
   const [password, setPassword] = useState('');
   const [expiryEnabled, setExpiryEnabled] = useState(false);
@@ -106,6 +110,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
           recipient_kind: recipientKind,
           sales_enabled: salesEnabled,
           allow_downloads: allowDownloads,
+          full_playback: fullPlayback,
           password: passwordProtect && password ? password : null,
           expires_days: expiryEnabled ? expiryDays : 0,
           invited_email: invitedEmail.trim() || null,
@@ -171,6 +176,22 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
       toast.success('Invite sent', `Email queued for ${recipient}`);
     } catch (err: unknown) {
       toast.error('Invite failed', errorDetail(err));
+    }
+  };
+
+  const togglePlayback = async (s: ContentShare) => {
+    try {
+      const res = await fetch(`/api/shares/${s.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_playback: s.full_playback === false }),
+      });
+      if (!res.ok) {
+        throw new Error(await responseError(res));
+      }
+      fetchShares();
+    } catch (err: unknown) {
+      toast.error('Update failed', errorDetail(err));
     }
   };
 
@@ -298,6 +319,8 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                 })}
               </div>
             </div>
+
+            <PlaybackChoice fullPlayback={fullPlayback} onChange={setFullPlayback} />
 
             <div className="space-y-2">
               <ToggleRow
@@ -455,6 +478,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                         <p className="text-[9px] font-mono text-white/40 mt-0.5 truncate">
                           {shareOpensLabel(s.plays)} · created {fmtDate(s.created_at)}
                           {s.expires_at ? ` · expires ${fmtDate(s.expires_at)}` : ''}
+                          {s.full_playback === false ? ' · 1:15 preview' : ''}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -464,6 +488,14 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                           title="Copy link"
                         >
                           <Copy size={11} />
+                        </button>
+                        <button
+                          onClick={() => togglePlayback(s)}
+                          className={`p-1.5 rounded hover:bg-white/[0.05] transition-colors ${s.full_playback !== false ? 'text-white' : 'text-white/40'}`}
+                          title={s.full_playback !== false ? 'Full track: click to limit to the 1:15 preview' : '1:15 preview: click to share the full track'}
+                          aria-label={s.full_playback !== false ? 'Limit to the 1:15 preview' : 'Share the full track'}
+                        >
+                          <Headphones size={11} />
                         </button>
                         <button
                           onClick={() => toggleDownloads(s)}

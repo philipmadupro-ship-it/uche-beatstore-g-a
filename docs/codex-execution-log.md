@@ -8953,3 +8953,68 @@ Every new table is owner-only under RLS (writes also need `is_producer()`), and 
 The spec is excluded from the default e2e run, which still reports 183 passed / 8 skipped. The unit suite is 3014 passing.
 
 **Not in phase 1:** project files (`project_assets`), portal comments, the Artists card view in `/contacts`, search labels, a digest cron, a credit → contact picker (the column exists), and avatar upload (the column exists).
+## 2026-09-29 - Chord detection blends basic-pitch into Essentia HPCP (AUDIO-06)
+
+**Comparison.** Synthetic progressions (clean triads, overtone-rich tones with drums, inversions + 7ths + melody, a noisy trap loop, 1 s changes) were too easy: HPCP and basic-pitch (0.3 activation floor) both scored 100%. Real audio separated them. 40 GuitarSet comping takes (CC-BY-4.0, acoustic guitar, 8 per style, fetched by HTTP range from Zenodo), lead-sheet ("instructed") chords reduced to major/minor triads; dim/hdim/aug/sus seconds and seconds where no chord covers 70% are unscored; 997 scored one-second buckets:
+
+| method | all | bossa | funk | jazz | rock | singer-songwriter |
+|---|---|---|---|---|---|---|
+| Essentia HPCP (AUDIO-05) | 52.7% | 45 | 33 | 38 | 76 | 70 |
+| basic-pitch, raw activations | 0% | | | | | |
+| basic-pitch, activations > 0.3 | 72.3% | 68 | 57 | 58 | 93 | 86 |
+| basic-pitch > 0.3, keys below E3 ×2 | 75.5% | 73 | 61 | 66 | 93 | 85 |
+| blend 75% basic-pitch (bass ×2) + 25% HPCP | **77.2%** | 81 | 58 | 68 | 92 | 86 |
+
+Raw activations fail because the model spreads a little probability over all 88 keys, which outweighs the played notes once summed over a second. Weights were chosen on this set (three weights × three bass factors), so treat the last row as optimistic by a point or two. The blend's advantage over basic-pitch with bass ×3 alone (76.4%) is small; HPCP stays in mostly as a fallback.
+
+**Speed.** basic-pitch on tfjs CPU in Node: ~1.3× slower than realtime. In Chromium under the enforced CSP: WebGL hung compiling shaders (no GPU here); CPU ~1.6× slower than realtime; **WASM ~9× faster than realtime** (131 s for 1207 s of audio in Node; 22 s take end to end in 4 s in the browser, model load included).
+
+**Integration.**
+- `lib/audio/basic-pitch.ts` reimplements `BasicPitch.evaluateModel` with the same constants and windowing. The package leaks every window's tensors and cannot run on the WASM backend at all: its `prepareData` calls `tf.zeros`, and tfjs-backend-wasm 3.21's `Fill` kernel throws "Unknown dtype undefined". `basic-pitch.test.ts` holds our frames equal to the package's own output (run on CPU) and asserts no tensors leak.
+- **On top of #33.** #33 (merged first) moved chords into the shared `essentia.worker.js` as a `chords` task behind `essentia-worker-client.ts`. That layout stays; this change replaces its HPCP loop and adds the basic-pitch stage to that task. Three HPCP defects #33 kept are fixed in both copies: a Hann window with an absolute peak threshold of 0 smeared the chroma (a pure C-E-G read A/A#/G# at ~0.6; with light noise every bin sat near 0.5 and I–vi–IV–V came back as one chord) — now `blackmanharris62` and a floor 40 dB below the frame's loudest bin; HPCP threw on a silent frame's empty peak list — silent frames now contribute nothing; frames were bucketed by their START, so a frame reaching into the next second lent it this one's chord — now by centre, and a bucket mostly silent in HPCP is "N". Every WASM vector is freed per frame.
+- `lib/audio/chord-extract.ts` now builds per-second buckets from each source (`hpcpBuckets`, `noteBuckets`) and labels them in `chordsFromBuckets`: each source is unit-normalised and blended 25/75; a second only one source heard uses that source; no note frames means HPCP alone.
+- The `chords` task in `essentia.worker.js` carries copies of both and loads `tf.min.js` + `tf-backend-wasm.min.js` with `importScripts`, the three WASM binaries through `setWasmPaths` (a file map, since the bundler hashes names) and the model through `tf.io.fromMemory` (model.json's relative weights path would not survive hashing). `tf.min.js`'s regenerator polyfill evals via `Function(...)` when assigning its global throws; declaring `self.regeneratorRuntime` first avoids it, so the CSP is unchanged. If anything in the basic-pitch path fails, the worker returns HPCP alone with `engine: 'essentia'` and the reason.
+- `chords.client.ts` decodes twice (44.1 kHz for HPCP via `decodeMono44k`, 22.05 kHz for basic-pitch) and adds `detectChordsWithEngine`; `runEssentiaTask('chords', …)` takes the basic-pitch payload and returns `{ chords, engine }`. The worker is shared and long-lived, so the model loads once per page.
+- Dependencies (exact pins): `@spotify/basic-pitch@1.0.1` (Apache-2.0; used for its model files and as the test reference), `@tensorflow/tfjs@3.21.0`, `@tensorflow/tfjs-backend-wasm@3.21.0`. Only static assets reach the browser, and only when chord detection runs (~2.9 MB). tfjs 3's `@types/webgl2` / `@types/offscreencanvas` clash with lib.dom, so `tsconfig.json` sets `"types": ["node"]`; tests load tfjs via `createRequire` because its typings pull in `@webgpu/types`.
+
+**Verified.** `chord-extract.test.ts` (bucket, bass and blend rules), `basic-pitch.test.ts` (real model: equals the package, no leak, hears C then G), `chords-worker.test.ts` (`essentia.worker.js`'s chords task in a `vm` sandbox with the real tfjs UMD + WASM backend + model equals the TS pipeline; HPCP-only fallback when the model cannot load). Chromium via Playwright against `next start` on a temporary `/store` page (CSP enforced): `engine: essentia+basic-pitch`, a 48 kHz synthetic I–vi–IV–V → `C Am F G` at 0/2/4/6 s, and GuitarSet `00_Rock1-130-A` → `A@0 D@7 A@11 E@15 D@17 A@19` against the annotation's 0 / 7.4 / 11.1 / 14.8 / 16.6 / 18.5; no console errors and no request to another origin. Re-run after merging #33, through the shared worker: same results; a second detection on the same page took 1.2 s against 2.1 s (model cached). A jazz take (`00_Jazz1-130-D`, lead sheet D / G / D / A / G / D at 0 / 7.4 / 11.1 / 14.8 / 16.6 / 18.5) read D@0 G@7 Am@11 D@12 Am@14 A@15 Dm@17 D@19: the changes land, with one-second Am errors and a Dm where the lead sheet has a G voicing with added tones.
+
+## 2026-09-29 - Artist workspace audit fixes: project sends, share comments, link opens
+
+Three gaps found while auditing the CRM for the artist-workspace plan. No schema change.
+
+- **Direct project sends left no trace.** `SendBeatModal` in project mode wrote a `beat_sends` row only when the send was part of a campaign (`/api/campaigns/[id]/targets`). Sent straight to a contact, the invite went out and nothing was recorded: the send never reached the contact's timeline or the nudge queue, and the Resend webhook had no `email_resend_id` to attach opens and clicks to. `/api/projects/[id]/shares/[shareId]/invite` now takes an optional `contact_id` (owner-checked before the email is sent) and records the send. The modal passes it only outside a campaign, so a campaign send is still recorded once, by the targets route. Both routes build the row with `lib/crm/project-send.ts`. Recording is best-effort after the email has gone out (`sendRecorded: false`, logged).
+- **Share-page comments notified nobody.** `POST /api/projects/share/[token]/comments` now inserts a `share_comment` notification for the project owner (`lib/notifications/share-comment.ts`), so it reaches the bell and desktop notifications. A failed notification never fails the comment. TopBar gives the kind its own icon.
+- **"Plays" on `/links` were page opens.** Both `share_links.plays` and `project_shares.plays` go up once per share-page GET, not per track played. `/links` now labels the number "opens". The column keeps its name.
+
+Tests: `lib/crm/project-send.test.ts`, `lib/notifications/share-comment.test.ts`, new `invite/route.test.ts` (5) and `share/[token]/comments/route.test.ts` (3).
+
+## 2026-09-29 - Detect chords → MIDI in the track drawer
+
+The chord detector (#33 loader fix, AUDIO-06 basic-pitch blend) had no caller. The track details drawer (the Library's right-hand panel) now has **Detect chords** in its Asset Intelligence section (`components/tracks/drawer/TrackChordsPanel.tsx`).
+
+- Runs `detectChordsFromUrl`, shows a busy state (spinner gated on `useReducedMotion`), renders the timeline without `N` rows, and POSTs `{ chords }` to `/api/tracks/[id]/analyze` (the existing chord-only branch). A failed save is a warning toast; the MIDI download still works from the in-memory result. An empty / all-`N` result says "No confident chords found" and offers no download.
+- Saved chords: migration 078 (`tracks.chords`) is inside the applied baseline. The library list's column list doesn't include `chords` and this doesn't add it (up to 2000 entries per row, for every track in the vault); the panel fetches `GET /api/tracks/[id]` instead when the row it was handed lacks the key.
+- `lib/audio/chord-midi.ts`: `chordsToMidiNotes` (each chord ends at the next; the last at the track duration, or one bar if unknown; `N` and unrecognised labels are rests; root-position triads with roots G3–F#4) and `writeMidiFile` (format 0, track name, tempo, 4/4, note-offs before note-ons at a shared tick so a common tone re-strikes). No MIDI dependency added.
+- Tests: `chord-midi.test.ts` parses the written bytes back (header, track length, tempo bytes, VLQ, deltas, C–Am–F–G round trip, empty, all-`N`, single chord); `TrackChordsPanel.test.tsx` (jsdom) covers busy state, timeline, save payload, download bytes/filename, empty result, failed save, and loading saved chords.
+
+
+## 2026-09-29 - Every share option honoured on every share page (SHARE-01)
+
+Production report: a project shared with a friend, downloads on. The friend could not download, and every beat stopped at 1:15.
+
+Root causes, each confirmed in a browser against the old code (`e2e/share-options.spec.ts`):
+- **No downloads anywhere.** `recipient_kind` is `NOT NULL DEFAULT 'client'`, so every share renders one of four variants. None had a download control. The working button lived in a default layout no share reached.
+- **Silent Play in the project page's producer / rapper / friend variants.** Only the client variant mounted the player container. `useWaveSurfer` returned early, and `play()` was called 0 times after picking a track.
+- **1:15 everywhere.** The share stream preferred `tracks.preview_url`. PR #17 (2026-09-27) generated a 75 s clip for every beat for the storefront, so from then on every share was clipped. Nothing on the share controlled it.
+- A failed download called `setError`, which replaces the whole page.
+
+Changes:
+- `components/share/ShareActions` (downloads, playback label, collaboration entry) is rendered by every variant through a new `actions` slot. All variants mount the player container. `useWaveSurfer` takes `resetKey` so the player rebinds when a commenter/editor switches to the collaboration view and back.
+- Per-share playback (`full_playback`, migration 121): full track by default, or the 1:15 preview. `lib/share/playback.ts` holds the rules, `lib/share/playback-url.ts` the signed URL. Full never hands out the CDN clip. Create/edit routes (`/api/share`, `/api/share/[token]`, the three `/shares` create routes, both project-share PATCH routes, `/api/links`) accept it through `writeWithPlayback`, and it is set in ContentShareModal, QuickShareModal, SendBeatModal and the `/links` menu and popup via `components/share/PlaybackChoice`.
+- Share media grants: 15 min → 4 h, so a long session on a full track keeps playing after seeks. Revocation and expiry are still checked per request.
+- Downloads save under the server's Content-Disposition name (`lib/share/download-filename.ts`), so WAV masters are no longer saved as .mp3. Errors are toasts.
+
+Not changed: the email route from earlier in this conversation (`lib/share/email-share.ts`) was re-checked. It requires `share_links.user_id` = producer, and `/api/share` sets it on insert.
+
+Tests: `lib/share/playback.test.ts` (15), `lib/share/download-filename.test.ts` (6), grant TTL cases, and `e2e/share-options.spec.ts` (28, all fail on the old code).

@@ -12,8 +12,7 @@ import { createServiceClient } from '@/lib/auth/ownership';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
-import { projectShareOwnerId } from '@/lib/share/share-owner';
-import { buildShareCommentNotification } from '@/lib/notifications/share-comment';
+import { shareCommentNotification } from '@/lib/notifications/share-comment';
 const log = createLogger('api.projects.share.token.comments');
 
 export const runtime = 'nodejs';
@@ -155,72 +154,35 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       .single();
     if (error) throw error;
 
-    await notifyOwnerOfComment(gate.admin, gate.share, {
-      commentId: (data as { id: string }).id,
-      trackId,
-      authorName,
-      body: text,
-      parentId,
-      regionStart,
-      regionEnd,
-    });
+    // Tell the producer. Best-effort: the comment is saved either way, and a
+    // failed notification must not turn a successful post into an error.
+    try {
+      const projectId = gate.share.project_id;
+      const { data: project } = projectId
+        ? await gate.admin.from('projects').select('user_id, name').eq('id', projectId).maybeSingle()
+        : { data: null };
+      if (projectId && project?.user_id) {
+        const { error: notifyErr } = await gate.admin.from('notifications').insert(shareCommentNotification({
+          ownerId: project.user_id,
+          projectId,
+          projectName: project.name,
+          authorName,
+          body: text,
+          commentId: data.id,
+          shareToken: token,
+          shareLabel: typeof gate.share.label === 'string' ? gate.share.label : null,
+          trackId,
+          isReply: parentId != null,
+        }));
+        if (notifyErr) log.warn('share comment notification insert failed', { error: notifyErr.message });
+      }
+    } catch (notifyError) {
+      log.warn('share comment notification failed', { error: errorMessage(notifyError) });
+    }
 
     return NextResponse.json({ comment: data });
   } catch (error: unknown) {
     log.error('Project comment error:', { error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
-  }
-}
-
-/**
- * Tell the producer a guest commented, through the same `notifications` row
- * the bell, its realtime subscription and desktop alerts all read. Best-effort:
- * the comment is already saved, so a failure here is logged, not returned.
- */
-async function notifyOwnerOfComment(
-  admin: ReturnType<typeof createServiceClient>,
-  share: Parameters<typeof projectShareOwnerId>[1],
-  comment: {
-    commentId: string;
-    trackId: string | null;
-    authorName: string;
-    body: string;
-    parentId: string | null;
-    regionStart: number | null;
-    regionEnd: number | null;
-  },
-) {
-  try {
-    const ownerId = await projectShareOwnerId(admin, share);
-    if (!ownerId) return;
-    const projectId = share.project_id ?? null;
-
-    const [project, track] = await Promise.all([
-      projectId
-        ? admin.from('projects').select('name').eq('id', projectId).eq('user_id', ownerId).maybeSingle()
-        : Promise.resolve({ data: null }),
-      // The track id comes from the guest, so only name a track the owner owns.
-      comment.trackId
-        ? admin.from('tracks').select('title').eq('id', comment.trackId).eq('user_id', ownerId).maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
-
-    const row = buildShareCommentNotification({
-      ownerId,
-      commentId: comment.commentId,
-      projectId,
-      projectName: (project.data as { name?: string | null } | null)?.name ?? null,
-      trackId: track.data ? comment.trackId : null,
-      trackTitle: (track.data as { title?: string | null } | null)?.title ?? null,
-      authorName: comment.authorName,
-      body: comment.body,
-      parentId: comment.parentId,
-      regionStart: comment.regionStart,
-      regionEnd: comment.regionEnd,
-    });
-    const { error } = await admin.from('notifications').insert(row);
-    if (error) throw error;
-  } catch (error: unknown) {
-    log.warn('share comment notification failed', { error: errorMessage(error) });
   }
 }

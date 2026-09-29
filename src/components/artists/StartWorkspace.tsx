@@ -51,7 +51,7 @@ export function StartWorkspace({ contactId, contactName, onStarted, onCancel }: 
   return (
     <section aria-labelledby="start-ws" className="rounded-xl border border-white/10 bg-[#0D0D0A] p-5" data-testid="start-workspace">
       <h2 id="start-ws" className="flex items-center gap-2 text-[13px] text-white/80"><Layers size={13} aria-hidden="true" /> Start a workspace for {contactName}</h2>
-      <p className="mt-1 text-[12px] text-white/40">A workspace links {contactName} to projects and gives them one private portal. Nothing is sent until you share.</p>
+      <p className="mt-1 text-[11px] text-white/40">A workspace links {contactName} to projects and gives them one private portal. Nothing is sent until you share.</p>
       <form
         className="mt-4 flex flex-wrap items-center gap-2"
         onSubmit={(e) => {
@@ -70,7 +70,7 @@ export function StartWorkspace({ contactId, contactName, onStarted, onCancel }: 
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={`${contactName} — New project`}
-            className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[12px] text-white/80 placeholder:text-white/30 focus:border-white/30 focus:outline-none"
+            className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 placeholder:text-white/30 focus:border-white/30 focus:outline-none"
           />
         </label>
         <button type="submit" disabled={busy} className="rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40">
