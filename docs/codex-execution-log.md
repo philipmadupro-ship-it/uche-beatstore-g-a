@@ -8833,6 +8833,67 @@ Tests: 2 cases in `account-routes.test.ts`, 3 project-share cases in `app/api/em
 
 Tests: `orders/route.test.ts` (+1), new `orders/resend/route.test.ts` (2), and `follow/route.test.ts` (+3 abuse cases). Each fails on the previous code.
 
+## 2026-09-28 - Filename parser never silently guesses (AUDIO-04)
+
+`parseTitleMetadata` stopped at the first match for BPM and key. `beat 90 140.wav` became 90 BPM, `beat Am Fm.wav` became A minor, `Cold 140bpm 70bpm.wav` became 140. Two-letter words were read as keys: `BB gun` became B♭, `AB test` A♭, `db mix` D♭. `A Major Problem` became A major. `mergeFeatures` treats the filename as the highest-precedence source, so each of these was written to `tracks` above Essentia and the server detector, and it was also cut out of the title.
+
+- The parser now collects every candidate before it applies anything. `fields.bpm` / `fields.key` hold `{ value, source: 'filename', confidence, status, candidates, reason }`. A field whose candidates disagree, or whose only reading could be a word, is `needs_confirmation`. Its top-level value stays null, so the detector's reading stands in all three upload paths (`/api/upload`, `/api/upload/complete`, `lib/upload/processing`) without touching them. Its text also stays in the title. Readings that agree still apply: `F minor Fm`, enharmonic `Gb`/`F#m`, `140 140`.
+- Confidence: a marked tempo or key is `high`, a bare tempo is `medium`, and an unconfirmed field is `low`.
+- The uploads tray shows a flag for an unconfirmed field, e.g. "BPM 90 or 140? — not read from the filename; set it in the track details" (`describeUncertainTitleMetadata`).
+- No schema, route, contract or RLS change. `mergeFeatures` is unchanged.
+
+Tests: `lib/upload/title-metadata.test.ts` (+20: clear / empty / conflicting / word-collision / context), `lib/audio/merge.test.ts` (new: an uncertain filename does not outrank the detector), `components/upload/UploadsTray.test.tsx` (+3). With the old parser, 23 of them fail.
+
+## 2026-09-28 - Essentia actually runs; filename vs analyser disagreements surfaced (AUDIO-04, part 2)
+
+Follow-up to the entry above. `describeUncertainTitleMetadata` from that entry is gone, superseded by `lib/upload/filename-check.ts`.
+
+**Essentia had never run client-side.** In essentia.js 0.1.3, `EssentiaWASM` is the instantiated WASM module, and the algorithms live on `new Essentia(EssentiaWASM)`. The worker `importScripts`-ed the core file from jsDelivr (not in the CSP) and looked for a global it never defines. The main-thread fallback looked for `EssentiaWASM.EssentiaWASM` and called `RhythmExtractor2013` on the raw module. Both threw, the errors were swallowed, and every upload sent duration only, so BPM/key always came from the server heuristics. `essentia.d.ts` declared the wrong shape, so tsc never objected. Separately, the extractors assume 44.1 kHz. A browser decodes at the device rate, and at 48 kHz a 140 BPM F-minor beat reads 128.6 BPM C major (reproduced in Node and in Chromium).
+
+- `lib/audio/essentia-extract.ts` is the one extraction (middle 60 s, bounds, null over a guess). It also returns Essentia's confidence: `bpmConfidence` 0–5.32 and `keyStrength` 0–1.
+- `analyze.client.ts` decodes through `OfflineAudioContext(…, 44100)` and downmixes all channels, not just channel 0. It runs Essentia in `essentia.worker.js`, falling back to the main thread. Loudness is left to the server: an excerpt cannot give integrated loudness.
+- The worker is classic JS. Turbopack copied a `new URL('./essentia.worker.ts')` target to `static/media` verbatim instead of bundling it (tried with and without `{ type: 'module' }`). The two official UMD builds are emitted the same way and loaded same-origin.
+- Verified in Chromium (Playwright, `next start`, under the enforced /store CSP): the worker returns 140 BPM, F minor, strength 0.77 in ~1.7 s off the main thread. A 48 kHz WAV decoded at 44.1 kHz reads 140 / F minor; the same audio passed raw at 48 kHz reads 128.7 / C major. No CSP violations.
+
+**Client analysis is validated.** `/api/upload`, `/api/upload/complete` and `/api/tracks/[id]/analyze` all cast the browser's payload to a type and wrote it. `lib/contracts/client-analysis.ts` validates each field and drops a bad one (logged), so the server fills it and the upload never fails over it. A key without a scale is dropped.
+
+**Filename vs analyser.** The filename still wins, but a disagreement is no longer silent. `lib/audio/metadata-agreement.ts` classifies each field as agree / tempo_multiple / relative_key / conflict. `lib/upload/filename-check.ts` turns that into tray rows with one-click PATCHes (`components/upload/FilenameChecks.tsx`). For an ambiguous name, the candidate the analyser backs is marked. `lib/upload/processing.ts` writes bpm and key/scale compare-and-set, so the background pass keeps anything the producer set after upload. Server-side conflicts are logged.
+
+**Parser.** `Bb 140` now reads a key: the digit check measured from the end of a match that had swallowed the space. A `♭`/`♯` at the end of a name now reads, using an alphanumeric lookahead instead of `\b`. Capital-note lower-case-b (`Bb`, `Eb`) counts as notation; `BB`/`AB`/`db`/`bb` are still flagged. `F#m7` is no longer read as F#.
+
+**basic-pitch: evaluated, not added.** v1.0.1, Apache-2.0, last published 2025-08. It pins `@tensorflow/tfjs` ^3 (266 MB installed); the model is 904 KB. On the F-minor triad it transcribed F / A♭ / C correctly, plus an F2 artefact, in 19.2 s for 10 s of audio (tfjs CPU backend in Node). It emits notes, not tempo or key, so it adds nothing to BPM/key that Essentia's `KeyExtractor` does not already do, at a large cost. It fits an audio-to-MIDI feature, which the app does not have.
+
+**Licence:** essentia.js is AGPL-3.0 and ships to browsers. That was already true before this change. It is flagged here, not resolved.
+
+Tests (new): `essentia-extract.test.ts` (real package), `essentia-worker.test.ts` (real worker file vs. shared extractor), `metadata-agreement.test.ts`, `filename-check.test.ts`, `client-analysis.test.ts`. Also `compareAndSet` in `processing.test.ts`, an invalid-features case in the analyze route test, 5 tray tests, and parser tests for the missed readings. Out of scope: `lib/audio/chords.client.ts` has the same broken CDN loader.
+
+## 2026-09-28 - Project and playlist track menus: Lyrics Studio and Send to studio
+
+`TrackCard` has had both items since LIB-01, but they show only when the caller passes `onOpenLyrics` / `onOpenStudio`, and only the Library did. The project page (through `ProjectTrackList`, which forwards them as optional props because the parent owns every row action) and the playlist page now pass both, built with the same `lyricsStudioHref` / `studioHref` helpers.
+
+- `components/projects/ProjectTrackList.test.tsx` pins the forwarding. One case fails on the old component.
+- `e2e/track-menu-destinations.spec.ts` drives the real `/projects/[id]` and `/playlists/[id]` pages through the stub-Supabase sign-in. For each page it chooses both items and checks the destination. Lyrics Studio is followed to the track page, which must focus `#lyrics` in the viewport, so it covers the LIB-01 hash fix end to end. With the page wiring reverted, all 4 cases fail.
+- Measured on the real pages at 1440px and 390px: no menu label is cut off, and the menu stays in the viewport.
+
+## 2026-09-29 - Chord detection loader fixed (AUDIO-04 follow-up)
+
+`lib/audio/chords.client.ts` carried its own inline worker with the same broken loader BPM/key had before AUDIO-04. It `importScripts`-ed essentia.js from jsDelivr, which is not in the CSP, looked for an `EssentiaWASM` global that file never defines, and called it as a factory. Every detection threw inside the worker and resolved `[]`. Two more bugs sat behind the loader:
+
+- **Sample rate.** The audio was decoded at the device rate (usually 48 kHz) and that rate was passed to `SpectralPeaks`, while `HPCP` defaults to 44.1 kHz, so the two disagreed about every bin. Decoding now goes through the shared `decodeMono44k` (`OfflineAudioContext` at 44.1 kHz, all channels downmixed).
+- **`FrameGenerator` drops silent frames.** Measured with the real package: 7 s of audio with a 3 s break gives 90 frames instead of 149. Chord times come from the frame index, so every chord after a break was stamped early by the length of the break. An all-silent signal gave zero frames and threw. `chord-extract.ts#frameOffsets` now frames in JS.
+
+What changed:
+- The algorithm (4096/2048 frames, HPCP, 1 s buckets, 24 triad templates, 0.45 floor) moved to `lib/audio/chord-extract.ts`. It is unchanged except that a silent bucket is now `N` instead of being skipped. Skipping it made the chord before a break read as ringing through the silence.
+- `essentia.worker.js` gained a `chords` task (default is still `features`). `essentia-worker-client.ts` holds the one worker, the same-origin URLs and the decode, and `analyze.client.ts` now uses it too.
+
+Verified with the real package: I–vi–IV–V in C reads `C, Am, F, G`, which also confirms the HPCP A-rooted bin rotation. A 3-minute track takes ~3.3 s in Node.
+
+Verified in Chromium (`next start`, enforced /store CSP): a 48 kHz WAV of C / 3 s silence / Am, decoded at 44.1 kHz and run through the built worker, returns `C@0, N@3.02, Am@5.02` in 550 ms. There were no CSP violations. The features task still works on the same worker.
+
+Tests: `chord-extract.test.ts` covers the real package: progression, timing, silent break, silence, a clip shorter than one frame, classification and segmentation. The worker drift test now covers the chords task, and it fails when the worker's copy reverts to skipping silent buckets.
+
+**Not wired:** no UI calls `detectChordsFromUrl`, before or after this change. The analyze route accepts a `chords` payload and nothing renders `tracks.chords`.
+
 ## 2026-09-29 - Every share option honoured on every share page (SHARE-01)
 
 Production report: a project shared with a friend, downloads on. The friend could not download, and every beat stopped at 1:15.

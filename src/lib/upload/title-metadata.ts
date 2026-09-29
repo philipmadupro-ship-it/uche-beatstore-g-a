@@ -18,9 +18,14 @@
  *     longer token.
  *   - A key needs a real accidental or a major/minor suffix. A lone `F` or a
  *     word like `Am` is left alone.
+ *   - It never chooses between readings. Two tempos, two keys, or a key
+ *     that is equally a word come back `needs_confirmation` (see `fields`),
+ *     with the top-level value null so no detector is outranked by a guess.
  *   - A collaborator needs an explicit credit marker (`prod. by`, `feat.`,
  *     `w/`). See `COLLAB_MARKERS` for why the `A x B` convention is not one.
  */
+
+import { normalizeKey } from '@/lib/audio/key-normalize';
 
 /** How someone named in a filename was credited. */
 export type CollaboratorRole = 'producer' | 'feature' | 'collaborator';
@@ -42,6 +47,56 @@ export interface TitleMetadata {
   collaborators: Collaborator[];
   /** Which fields came from the name. Useful for telling the producer. */
   matched: Array<'bpm' | 'key' | 'collaborators'>;
+  /**
+   * Fields the name mentions but does not settle — two tempos, two keys, or a
+   * "key" that is just as likely an ordinary word. These are NOT applied: the
+   * top-level `bpm` / `key` / `scale` stay null, so they cannot outrank a
+   * detector, and the text stays in the title. See `fields` for why.
+   */
+  uncertain: Array<'bpm' | 'key'>;
+  /** Per-field reading: value, source, confidence, status and candidates. */
+  fields: {
+    bpm: FieldReading<number>;
+    key: FieldReading<{ key: string; scale: 'major' | 'minor' | null }>;
+  };
+}
+
+/**
+ * What the filename said about one field.
+ *
+ *   - `accepted` — one clear reading; `value` is set and is what the upload
+ *     writes, above any detector.
+ *   - `needs_confirmation` — the name mentions the field but not unambiguously.
+ *     `value` is null, `candidates` holds every reading and `reason` says why.
+ *     The producer has to confirm it; the parser never picks one.
+ *   - `absent` — the name says nothing about it.
+ *
+ * `confidence` is `high` for an explicit marker (`140bpm`, `F# minor`),
+ * `medium` for a convention that is usually but not always metadata (a bare
+ * `140`), and `low` for anything left unconfirmed.
+ */
+export type FieldStatus = 'accepted' | 'needs_confirmation' | 'absent';
+export type FieldConfidence = 'high' | 'medium' | 'low';
+
+export interface FieldReading<T> {
+  value: T | null;
+  source: 'filename';
+  confidence: FieldConfidence | null;
+  status: FieldStatus;
+  candidates: T[];
+  reason: string | null;
+}
+
+function absent<T>(): FieldReading<T> {
+  return { value: null, source: 'filename', confidence: null, status: 'absent', candidates: [], reason: null };
+}
+
+function unconfirmed<T>(candidates: T[], reason: string): FieldReading<T> {
+  return { value: null, source: 'filename', confidence: 'low', status: 'needs_confirmation', candidates, reason };
+}
+
+function accepted<T>(value: T, confidence: FieldConfidence): FieldReading<T> {
+  return { value, source: 'filename', confidence, status: 'accepted', candidates: [value], reason: null };
 }
 
 /** Tempos outside this stay unmatched when the number is bare. */
@@ -55,7 +110,10 @@ const NOTE = '[A-Ga-g]';
 const ACCIDENTAL = '(?:#|♯|b|♭|\\s?sharp|\\s?flat)';
 
 /** `140bpm`, `140 bpm`, `bpm 140`, `@140`. */
-const MARKED_BPM = new RegExp(`(?:\\bbpm[\\s._-]*(\\d{2,3})\\b|\\b(\\d{2,3})[\\s._-]*bpm\\b|@[\\s]*(\\d{2,3})\\b)`, 'i');
+const MARKED_BPM = new RegExp(`(?:\\bbpm[\\s._-]*(\\d{2,3})\\b|\\b(\\d{2,3})[\\s._-]*bpm\\b|@[\\s]*(\\d{2,3})\\b)`, 'gi');
+
+/** A bare number, e.g. "Night Shift 140" — not glued to other characters (v2, 808s, 2x). */
+const BARE_NUMBER = /(?:^|[\s\-–—|([{,])(\d{2,3})(?=$|[\s\-–—|)\]},.])/g;
 
 /**
  * A key with an accidental (`F#m`, `Bb maj`, `A flat minor`), a plain note
@@ -66,13 +124,62 @@ const MARKED_BPM = new RegExp(`(?:\\bbpm[\\s._-]*(\\d{2,3})\\b|\\b(\\d{2,3})[\\s
  * and every such filename would get a key it never claimed.
  */
 const SPELLED_QUALITY = '(?:min(?:or)?|maj(?:or)?)';
-const KEY_PATTERNS: Array<{ re: RegExp }> = [
-  { re: new RegExp(`\\bkey[\\s._-]*(?:of[\\s._-]*)?(${NOTE})(${ACCIDENTAL})?[\\s._-]*(${SPELLED_QUALITY}|m)?\\b`, 'i') },
-  { re: new RegExp(`\\b(${NOTE})(${ACCIDENTAL})[\\s._-]*(${SPELLED_QUALITY}|m)?\\b`, 'i') },
-  { re: new RegExp(`\\b(${NOTE})()[\\s._-]*(${SPELLED_QUALITY})\\b`, 'i') },
+/**
+ * Where a key reading must end: at anything that is not a letter or digit.
+ * Not `\\b` — a word boundary needs a word character on one side, so after a
+ * `♭` or `♯` at the very end of a name (`beat B♭.wav`) there is none and the
+ * key was never read.
+ */
+const KEY_END = '(?![A-Za-z0-9])';
+const KEY_PATTERNS: Array<{ re: RegExp; marked: boolean }> = [
+  { re: new RegExp(`\\bkey[\\s._-]*(?:of[\\s._-]*)?(${NOTE})(${ACCIDENTAL})?[\\s._-]*(${SPELLED_QUALITY}|m)?${KEY_END}`, 'gi'), marked: true },
+  { re: new RegExp(`\\b(${NOTE})(${ACCIDENTAL})[\\s._-]*(${SPELLED_QUALITY}|m)?${KEY_END}`, 'gi'), marked: false },
+  { re: new RegExp(`\\b(${NOTE})()[\\s._-]*(${SPELLED_QUALITY})${KEY_END}`, 'gi'), marked: false },
   // Case-sensitive shorthand: `Fm`, `C#m` handled above, `Gm`.
-  { re: new RegExp(`\\b([A-G])()(m)\\b`) },
+  { re: new RegExp(`\\b([A-G])()(m)\\b`, 'g'), marked: false },
 ];
+
+/**
+ * Why a single key reading should not be trusted on its own, or null.
+ *
+ *   - A note plus the LETTER `b` with nothing after it is a two-letter word
+ *     as often as a key — `BB gun`, `AB test`, `db mix` — unless it is written
+ *     as notation, capital note and lower-case `b` (`Bb`, `Eb`). With a
+ *     quality (`Bbm`, `Bb maj`), a key marker, `♭` or `flat`, it is a key.
+ *   - `A` plus a spelled-out quality is also English: `A Major Problem`,
+ *     `a minor thing`. Preceded by `in` (`in A minor`) it is a key.
+ */
+function keyDoubt(m: RegExpMatchArray, marked: boolean, before: string): string | null {
+  if (marked) return null;
+  const note = m[1];
+  const accidental = m[2] ?? '';
+  const quality = m[3] ?? '';
+  // `Bb`, `Eb`, `Ab` — capital note, lower-case b — is how a key is written.
+  // `BB`, `AB`, `db`, `bb` are how words and initials are written.
+  const notation = /^[A-G]$/.test(note) && accidental === 'b';
+  if (accidental.toLowerCase() === 'b' && !quality && !notation) {
+    return `"${m[0].trim()}" could be a word rather than a key`;
+  }
+  if (/^a$/i.test(note) && !accidental && quality.length > 1 && !/\bin\s*$/i.test(before)) {
+    return `"${m[0].trim()}" could be ordinary words rather than a key`;
+  }
+  return null;
+}
+
+/** Two readings name the same key when their tonics are enharmonic and neither scale contradicts the other. */
+function compatibleKeys(
+  a: { key: string; scale: 'major' | 'minor' | null },
+  b: { key: string; scale: 'major' | 'minor' | null },
+): boolean {
+  const tonicA = normalizeKey(a.key, null).key ?? a.key;
+  const tonicB = normalizeKey(b.key, null).key ?? b.key;
+  if (tonicA !== tonicB) return false;
+  return a.scale == null || b.scale == null || a.scale === b.scale;
+}
+
+function keyLabel(k: { key: string; scale: 'major' | 'minor' | null }): string {
+  return k.scale ? `${k.key} ${k.scale}` : k.key;
+}
 
 function normaliseAccidental(raw: string | undefined): string {
   if (!raw) return '';
@@ -215,6 +322,10 @@ function tidy(title: string): string {
     .trim();
 }
 
+function distinct<T>(values: T[]): T[] {
+  return [...new Set(values)];
+}
+
 function looksLikeYear(n: number): boolean {
   return n >= 1900 && n <= 2199;
 }
@@ -234,48 +345,95 @@ export function parseTitleMetadata(filename: string): TitleMetadata {
     matched.push('collaborators');
   }
 
-  let bpm: number | null = null;
-  const markedBpm = working.match(MARKED_BPM);
-  if (markedBpm) {
-    const value = Number(markedBpm[1] ?? markedBpm[2] ?? markedBpm[3]);
-    if (value >= MIN_MARKED_BPM && value <= MAX_MARKED_BPM) {
-      bpm = value;
-      working = working.replace(markedBpm[0], ' ');
-      matched.push('bpm');
+  // Each field is read in full before anything is taken: every candidate the
+  // name offers is collected, and a field is only applied when they agree. The
+  // old parser stopped at the first match, so `beat 90 140` became 90 and
+  // `Am Fm` became A minor — a coin toss written as the producer's own word,
+  // above every detector.
+
+  // BPM, explicitly marked. An explicit marker outranks any bare number.
+  let bpmReading: FieldReading<number> = absent();
+  const marked = [...working.matchAll(MARKED_BPM)]
+    .map((m) => ({ text: m[0], value: Number(m[1] ?? m[2] ?? m[3]) }))
+    .filter((m) => m.value >= MIN_MARKED_BPM && m.value <= MAX_MARKED_BPM);
+  const markedValues = distinct(marked.map((m) => m.value));
+  if (markedValues.length === 1) {
+    bpmReading = accepted(markedValues[0], 'high');
+    for (const m of marked) working = working.replace(m.text, ' ');
+  } else if (markedValues.length > 1) {
+    bpmReading = unconfirmed(markedValues, `the filename marks more than one tempo (${markedValues.join(', ')})`);
+  }
+
+  let keyReading: FieldReading<{ key: string; scale: 'major' | 'minor' | null }> = absent();
+  {
+    // Scan a copy with each hit blanked out, so one span is never read twice
+    // by two patterns (`key of F#m` is also a plain `F#m`).
+    let scan = working;
+    const hits: Array<{ text: string; value: { key: string; scale: 'major' | 'minor' | null }; doubt: string | null }> = [];
+    for (const { re, marked: isMarked } of KEY_PATTERNS) {
+      for (const m of [...scan.matchAll(re)]) {
+        const start = m.index ?? 0;
+        // A note letter glued to digits ("A1", "C4") is a sample name, not a
+        // key. Measured from the end of the reading itself: the match can also
+        // swallow the separator after it, and `Bb 140` is a key and a tempo.
+        const reading = m[0].replace(/[\s._-]+$/, '');
+        if (/^\d/.test(scan.slice(start + reading.length))) continue;
+        hits.push({
+          text: m[0],
+          value: { key: m[1].toUpperCase() + normaliseAccidental(m[2]), scale: normaliseScale(m[3]) },
+          doubt: keyDoubt(m, isMarked, scan.slice(0, start)),
+        });
+        scan = scan.slice(0, start) + ' '.repeat(m[0].length) + scan.slice(start + m[0].length);
+      }
     }
-  }
 
-  let key: string | null = null;
-  let scale: 'major' | 'minor' | null = null;
-  for (const { re } of KEY_PATTERNS) {
-    const m = working.match(re);
-    if (!m) continue;
-    // A note letter glued to digits ("A1", "C4") is a sample name, not a key.
-    const after = working.slice((m.index ?? 0) + m[0].length);
-    if (/^\d/.test(after)) continue;
-    key = m[1].toUpperCase() + normaliseAccidental(m[2]);
-    scale = normaliseScale(m[3]);
-    working = working.replace(m[0], ' ');
-    matched.push('key');
-    break;
-  }
-
-  if (bpm == null) {
-    // Bare number, e.g. "Night Shift 140". Only inside a plausible range, and
-    // never a year or something glued to other characters (v2, 808s, 2x).
-    const bare = working.match(/(?:^|[\s\-–—|([{,])(\d{2,3})(?=$|[\s\-–—|)\]},.])/);
-    if (bare) {
-      const value = Number(bare[1]);
-      if (value >= MIN_BARE_BPM && value <= MAX_BARE_BPM && !looksLikeYear(value)) {
-        bpm = value;
-        working = working.replace(bare[1], ' ');
-        matched.push('bpm');
+    const agree = hits.every((h) => compatibleKeys(h.value, hits[0].value));
+    if (hits.length > 0 && !agree) {
+      const labels = distinct(hits.map((h) => keyLabel(h.value)));
+      keyReading = unconfirmed(
+        hits.map((h) => h.value).filter((v, i) => labels.indexOf(keyLabel(v)) === i),
+        `the filename names more than one key (${labels.join(', ')})`,
+      );
+    } else if (hits.length > 0) {
+      // Every reading agrees. Take the most specific one (a scale if any gave it).
+      const value = hits.find((h) => h.value.scale != null)?.value ?? hits[0].value;
+      // Doubt only stands when nothing unambiguous backs the reading up.
+      const clean = hits.find((h) => h.doubt == null);
+      if (clean) {
+        keyReading = accepted(value, 'high');
+        for (const h of hits) working = working.replace(h.text, ' ');
+      } else {
+        keyReading = unconfirmed([value], hits[0].doubt!);
       }
     }
   }
 
+  if (bpmReading.status === 'absent') {
+    // Bare number, e.g. "Night Shift 140". Only inside a plausible range, and
+    // never a year or something glued to other characters (v2, 808s, 2x).
+    const bare = [...working.matchAll(BARE_NUMBER)]
+      .map((m) => Number(m[1]))
+      .filter((v) => v >= MIN_BARE_BPM && v <= MAX_BARE_BPM && !looksLikeYear(v));
+    const bareValues = distinct(bare);
+    if (bareValues.length === 1) {
+      bpmReading = accepted(bareValues[0], 'medium');
+      working = working.replace(new RegExp(`(^|[\\s\\-–—|([{,])${bareValues[0]}(?=$|[\\s\\-–—|)\\]},.])`, 'g'), '$1 ');
+    } else if (bareValues.length > 1) {
+      bpmReading = unconfirmed(bareValues, `the filename has more than one number that could be a tempo (${bareValues.join(', ')})`);
+    }
+  }
+
+  const bpm = bpmReading.value;
+  const key = keyReading.value?.key ?? null;
+  const scale = keyReading.value?.scale ?? null;
+  if (bpmReading.status === 'accepted') matched.push('bpm');
+  if (keyReading.status === 'accepted') matched.push('key');
+  const uncertain: TitleMetadata['uncertain'] = [];
+  if (bpmReading.status === 'needs_confirmation') uncertain.push('bpm');
+  if (keyReading.status === 'needs_confirmation') uncertain.push('key');
+
   const title = tidy(working.replace(/[\-–—]+/g, ' ')) || tidy(base.replace(/[\-–—]+/g, ' ')) || 'Untagged Track';
-  return { title, bpm, key, scale, collaborators, matched };
+  return { title, bpm, key, scale, collaborators, matched, uncertain, fields: { bpm: bpmReading, key: keyReading } };
 }
 
 /** One-line summary for the UI: "140 BPM · F minor · with Metro from the filename". */

@@ -17,29 +17,36 @@
  * and lets the server's pipeline take a swing.
  */
 
+import { decodeMono44k, runEssentiaTask } from './essentia-worker-client';
+import {
+  EMPTY_ESSENTIA_FEATURES,
+  analysisWindow,
+  extractEssentiaFeatures,
+  type EssentiaCore,
+  type EssentiaFeatures,
+} from './essentia-extract';
+
 export interface AudioFeatures {
   bpm: number | null;
   key: string | null;
   scale: string | null;
+  /**
+   * Always null from the browser. Integrated loudness is a whole-file measure
+   * and the browser analyses a 60 s excerpt, so the server's full-file value
+   * (merge falls through to it) is the only honest one.
+   */
   loudness: number | null;
   duration: number | null;
+  /** Essentia's own confidence, 0–5.32. See `RELIABLE_BPM_CONFIDENCE`. */
+  bpmConfidence?: number | null;
+  /** Essentia's key strength, 0–1. See `RELIABLE_KEY_STRENGTH`. */
+  keyStrength?: number | null;
 }
 
 const EMPTY: AudioFeatures = { bpm: null, key: null, scale: null, loudness: null, duration: null };
 
-interface EssentiaRuntime {
-  arrayToVector(input: Float32Array): unknown;
-  RhythmExtractor2013(signal: unknown): { bpm: number };
-  KeyExtractor(signal: unknown): { key?: string | null; scale?: string | null };
-  LoudnessEBUR128(left: unknown, right: unknown): { integratedLoudness: number };
-  delete(): void;
-}
-
-type EssentiaFactory = () => Promise<EssentiaRuntime>;
-
-interface EssentiaModule {
-  EssentiaWASM: EssentiaFactory | { EssentiaWASM?: EssentiaFactory };
-}
+/** A worker that has not answered in this long is abandoned for the main-thread path. */
+const WORKER_TIMEOUT_MS = 45_000;
 
 export async function analyzeAudio(file: File): Promise<AudioFeatures> {
   if (typeof window === 'undefined') return { ...EMPTY };
@@ -74,153 +81,52 @@ export async function analyzeAudioFromUrl(rawUrl: string): Promise<AudioFeatures
 }
 
 async function runEssentia(buffer: ArrayBuffer): Promise<AudioFeatures> {
-  let ctx: AudioContext | null = null;
+  let mono: Float32Array;
+  let duration: number;
   try {
-    ctx = new AudioContext();
-    const decoded = await ctx.decodeAudioData(buffer.slice(0));
-    const channelData = decoded.getChannelData(0); // Float32Array
-    const duration = Math.round(decoded.duration);
-    await ctx.close();
-    ctx = null;
-
-    // Offload heavy Essentia.js calculations to a Web Worker so we don't lock the UI main thread!
-    const workerResult = await runEssentiaInWorker(channelData);
-
-    return {
-      bpm: workerResult.bpm,
-      key: workerResult.key,
-      scale: workerResult.scale,
-      loudness: workerResult.loudness,
-      duration,
-    };
+    ({ mono, duration } = await decodeMono44k(buffer));
   } catch (err) {
-    console.warn('Offloaded Essentia.js worker failed, trying local fallback:', err);
-    if (ctx) {
-      try { await ctx.close(); } catch {}
-    }
+    console.warn('Audio decode for analysis failed:', err);
+    return { ...EMPTY };
+  }
 
-    // Fallback: local direct main-thread analysis so it NEVER breaks
+  // Only the analysed window crosses to the worker; it is transferred, not copied.
+  const { start, end } = analysisWindow(mono.length);
+  const excerpt = mono.slice(start, end);
+
+  let features: EssentiaFeatures;
+  try {
+    features = await runEssentiaTask('features', excerpt.slice(), WORKER_TIMEOUT_MS);
+  } catch (err) {
+    console.warn('Essentia worker failed, analysing on the main thread:', err);
     try {
-      const { EssentiaWASM } = (await import('essentia.js') as unknown as EssentiaModule);
-      const factory = typeof EssentiaWASM === 'function'
-        ? EssentiaWASM
-        : EssentiaWASM.EssentiaWASM;
-      if (!factory) throw new Error('Essentia WASM factory not found');
-      const essentia = await factory();
-
-      const fallbackCtx = new AudioContext();
-      const decoded = await fallbackCtx.decodeAudioData(buffer.slice(0));
-      const signal = essentia.arrayToVector(decoded.getChannelData(0));
-
-      const rhythm = essentia.RhythmExtractor2013(signal);
-      const keyData = essentia.KeyExtractor(signal);
-
-      let loudness: number | null = null;
-      try {
-        const l = essentia.LoudnessEBUR128(signal, signal);
-        loudness = +l.integratedLoudness.toFixed(1);
-      } catch {}
-
-      essentia.delete();
-      await fallbackCtx.close();
-
-      return {
-        bpm: Math.round(rhythm.bpm),
-        key: keyData.key || null,
-        scale: keyData.scale || null,
-        loudness,
-        duration: Math.round(decoded.duration),
-      };
+      features = await runEssentiaOnMainThread(excerpt);
     } catch (fallbackErr) {
-      console.warn('Essentia fallback failed too:', fallbackErr);
-      // Try to at least return duration
-      try {
-        const fallbackCtx = new AudioContext();
-        const decoded = await fallbackCtx.decodeAudioData(buffer.slice(0));
-        const duration = Math.round(decoded.duration);
-        await fallbackCtx.close();
-        return { bpm: null, key: null, scale: null, loudness: null, duration };
-      } catch {
-        return { ...EMPTY };
-      }
+      console.warn('Essentia failed on the main thread too:', fallbackErr);
+      features = { ...EMPTY_ESSENTIA_FEATURES };
     }
   }
+
+  return {
+    bpm: features.bpm,
+    key: features.key,
+    scale: features.scale,
+    loudness: null,
+    duration,
+    bpmConfidence: features.bpmConfidence,
+    keyStrength: features.keyStrength,
+  };
 }
 
-interface WorkerResult {
-  bpm: number | null;
-  key: string | null;
-  scale: string | null;
-  loudness: number | null;
-}
+let mainThreadEssentia: EssentiaCore | null = null;
 
-function runEssentiaInWorker(channelData: Float32Array): Promise<WorkerResult> {
-  return new Promise((resolve, reject) => {
-    // Generate inline worker script code
-    const workerCode = `
-      self.onmessage = async (e) => {
-        try {
-          const { channelData, essentiaUrl } = e.data;
-          self.importScripts(essentiaUrl);
-          
-          const factory = self.EssentiaWASM.EssentiaWASM ?? self.EssentiaWASM;
-          const essentia = await factory();
-          
-          const signal = essentia.arrayToVector(channelData);
-          
-          const rhythm = essentia.RhythmExtractor2013(signal);
-          const keyData = essentia.KeyExtractor(signal);
-          
-          let loudness = null;
-          try {
-            const l = essentia.LoudnessEBUR128(signal, signal);
-            loudness = +l.integratedLoudness.toFixed(1);
-          } catch (lErr) {}
-          
-          essentia.delete();
-          
-          self.postMessage({
-            success: true,
-            bpm: Math.round(rhythm.bpm),
-            key: keyData.key || null,
-            scale: keyData.scale || null,
-            loudness
-          });
-        } catch (err) {
-          self.postMessage({ success: false, error: err.message });
-        }
-      };
-    `;
-
-    const blob = new Blob([workerCode], { type: 'application/javascript' });
-    const workerUrl = URL.createObjectURL(blob);
-    const worker = new Worker(workerUrl);
-
-    // Using CDN essentia-core bundle
-    const essentiaUrl = 'https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.js';
-
-    worker.onmessage = (e) => {
-      URL.revokeObjectURL(workerUrl);
-      worker.terminate();
-      if (e.data.success) {
-        resolve({
-          bpm: e.data.bpm,
-          key: e.data.key,
-          scale: e.data.scale,
-          loudness: e.data.loudness,
-        });
-      } else {
-        reject(new Error(e.data.error || 'Worker execution failed'));
-      }
-    };
-
-    worker.onerror = (err) => {
-      URL.revokeObjectURL(workerUrl);
-      worker.terminate();
-      reject(err);
-    };
-
-    // Pass as Transferable Object to avoid copying large array buffers!
-    worker.postMessage({ channelData, essentiaUrl }, [channelData.buffer]);
-  });
+async function runEssentiaOnMainThread(signal: Float32Array): Promise<EssentiaFeatures> {
+  if (!mainThreadEssentia) {
+    const [{ EssentiaWASM }, { default: Essentia }] = await Promise.all([
+      import('essentia.js/dist/essentia-wasm.es.js'),
+      import('essentia.js/dist/essentia.js-core.es.js'),
+    ]);
+    mainThreadEssentia = new Essentia(EssentiaWASM) as unknown as EssentiaCore;
+  }
+  return extractEssentiaFeatures(mainThreadEssentia, signal);
 }

@@ -27,6 +27,10 @@ interface Props {
   onReorder?: (orderedIds: string[]) => void;
   /** Refetch after a row edits a track in place (inline rename). */
   onTrackChanged?: () => void;
+  /** Row ⋯ menu destinations. The parent owns navigation, as with every
+   *  other row action here; each item stays hidden when its prop is absent. */
+  onOpenLyrics?: (t: Track) => void;
+  onOpenStudio?: (t: Track) => void;
 }
 
 type InlineTrackTag = { tag: string; category?: string | null };
@@ -46,6 +50,7 @@ export function ProjectTrackList({
   onAddFromLibrary, onShowUpload,
   selectedIds, onToggleSelect, onSelectAll,
   selectMode = false, onToggleSelectMode, onReorder, onTrackChanged,
+  onOpenLyrics, onOpenStudio,
 }: Props) {
   // Internal tag filter — derive available tags from all tracks, let user
   // narrow within the already type/search filtered list.
@@ -263,6 +268,8 @@ export function ProjectTrackList({
                 editable
                 onChanged={onTrackChanged}
                 onDelete={(t) => onDeleteTrack(t.id)}
+                onOpenLyrics={onOpenLyrics}
+                onOpenStudio={onOpenStudio}
                 selectable={selectable}
                 selected={selectable && selectedIds!.has(track.id)}
                 onSelectChange={(t) => onToggleSelect?.(t.id)}
