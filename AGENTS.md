@@ -31,7 +31,7 @@ The producer's workspace. Surfaces:
 | `/playlists` + `/playlists/[id]` | Curated sets for outreach — drag tracks into a playlist, share it, optionally feature on `/store`. |
 | `/studio` | Sketchpad: groove loops, jam, record. |
 | `/cover-art` | **Cover Art Studio.** Layer-based artwork editor — bring in your own images, generate one with AI, set type, build a collage, then export or attach it straight to a track / project / playlist / profile. See "Making cover art" below. |
-| `/contacts` + `/contacts/[id]` | CRM: artists you send beats to. A contact linked to a project (or given a portal) becomes an **artist workspace**: Overview · Projects · Beats · Songs · Activity · Notes, with a relationship stage worked out from activity and one permanent portal. See "Producer: work with an artist" below. |
+| `/contacts` + `/contacts/[id]` | CRM: artists you send beats to. A contact linked to a project (or given a portal) becomes an **artist workspace**: Overview · Projects · Beats · Songs · Files · Activity · Notes, with a relationship stage worked out from activity and one permanent portal. The **Artists** view shows every artist as a card. See "Producer: work with an artist" below. |
 | `/campaigns` | Outreach batches. Bulk-send a beat to a contact list. |
 | `/calendar` | Releases, sessions, deadlines, meetings. |
 | `/links` | Every share link you've ever generated (track + project). |
@@ -62,7 +62,7 @@ Where buyers actually buy.
 
 ### Artist portal (`/artist/[token]`)
 
-One permanent private link per artist. A small library of the projects the producer put in it — beats, songs, NEW markers since the artist's last visit, play, download where the project allows it, and **♥ Interested / ✕ Pass** on each beat. No CRM, no editing, no store chrome, no checkout. Branded with the producer's name. Revoking it makes the link stop working; reissuing gives a new link.
+One permanent private link per artist. A small library of the projects the producer put in it — beats, songs, files, NEW markers since the artist's last visit, play, download where the project allows it, **♥ Interested / ✕ Pass** on each beat, and a comment thread per beat and per project (a comment can be pinned to a moment in the beat). No CRM, no editing, no store chrome, no checkout. Branded with the producer's name. Revoking it makes the link stop working; reissuing gives a new link.
 
 ### Public share (`/share/[token]`, `/projects/share/[token]`)
 
@@ -158,13 +158,21 @@ A contact becomes an artist workspace the moment it is linked to a project: **St
 
 In the portal the artist plays beats, downloads where the producer allowed it, and taps **Interested** or **Pass**. The producer gets a notification, and the artist's Beats tab shows it. The producer moves beats on from there — interested → selected → recording → recorded → released (or passed) — per artist, per beat; once the producer has moved a beat past interested, the artist's portal shows that word instead of the buttons. What the artist has *done* with a beat (sent, opened, played, downloaded) is worked out from activity and never typed in, and so is the relationship stage: new → contacted → engaged → interested → working together → released. Marking a contact cold or archived parks them without hiding where they really are.
 
+**Files.** A project holds its own files — references, artwork, lyric sheets, split sheets — next to its tracks: drop them on the project page, rename them in place, and switch each one into or out of the portal. New files are visible to artists by default only when the project is already shared, so a contract dropped on a project never reaches a portal by accident. The artist opens or downloads them from a Files tab; the workspace's Files tab lists them with the WAVs and stems of the artist's tracks and says when the artist downloaded each one. A file put in the portal counts toward Notify like a new beat.
+
+**Conversation.** In the portal the artist comments on a beat (optionally at the moment it is playing) or leaves a note on a project, where the project allows comments. The producer is notified, sees the thread in the workspace's Activity tab and answers there; the answer shows in the portal on the artist's next visit. The thread is between the two of them — other artists and share-link holders never see it.
+
+**Daily digest.** Notify stays a button by default. Turning on **Daily digest** for an artist hands that button to a once-a-day email: sent only when something is new, never more than once a day, and never on top of a Notify the producer pressed that day.
+
+**Finding things.** ⌘K search labels a song with its artist, finds project files, and marks which contacts are artists. A credit on a track can be linked to a contact, which puts the track in that artist's workspace, and a contact can have a photo.
+
 A song is a track of type song; its **Built on** picker points it at the beat it was made on, and the beat's drawer lists the songs built on it. The track drawer's **People** section answers "who has this beat?" — each artist with the project it arrived through, their decision and how often they played it — and every row links through. The project page shows its artists in a strip with Share / Notify and a small decision pill per artist on each track row.
 
 ### Producer: send a beat to an artist
 `/contacts` → pick a contact → Send Beat modal → choose track + license tier + custom message → `/api/share` creates a `share_links` row (nanoid token) + `beat_sends` row (status='sent') → Resend email with `/share/<token>` → recipient opens, share variant renders based on `recipient_kind` → producer sees opens / plays / interest via `share_plays` table + `/analytics`.
 
 ### Producer: get told without watching the tab
-Settings → Preferences → **Desktop notifications**. Switching it on asks the browser for permission and immediately fires a confirmation alert, so the switch proves itself rather than staying silent until the next sale. From then on, new notifications surface as OS notifications while a dashboard tab is open. Four things create one today: a completed purchase, a buyer's offer, a fulfilment alert, and a comment an artist or client leaves on a shared project. Opened and clicked share links are *not* among them — the Resend webhook records `beat_sends.opened_at` / `link_clicked_at` but writes no notification row, so nothing about an open reaches the bell or the OS. Blocked in browser settings, the row says so instead of failing quietly. The choice is per device, because notification permission is granted per browser.
+Settings → Preferences → **Desktop notifications**. Switching it on asks the browser for permission and immediately fires a confirmation alert, so the switch proves itself rather than staying silent until the next sale. From then on, new notifications surface as OS notifications while a dashboard tab is open. Six things create one today: a completed purchase, a buyer's offer, a fulfilment alert, a comment an artist or client leaves on a shared project, an artist tapping Interested or Pass in their portal, and an artist commenting in their portal. Opened and clicked share links are *not* among them — the Resend webhook records `beat_sends.opened_at` / `link_clicked_at` but writes no notification row, so nothing about an open reaches the bell or the OS. Blocked in browser settings, the row says so instead of failing quietly. The choice is per device, because notification permission is granted per browser.
 
 ### Producer: see what's selling
 `/sales` lists every completed purchase (track license + project bundle, merged chronologically). `/analytics` aggregates plays per track from `share_plays`, sales count + gross from `license_purchases` + `project_access_links`, plots a 30-day sparkline, and shows the top 25 tracks by gross.
@@ -210,15 +218,21 @@ share_links(token, user_id, track_ids[], recipient_kind, sales_enabled,
             expires_at, password_hash, plays, created_at)
 share_plays(link_token, track_id, ip_hash, played_at)
 project_shares(token, project_id, contact_id, recipient_kind, sales_enabled, …)
+project_comments(project_id, track_id, author_name, body, parent_id,
+                 region_start, region_end, share_token,
+                 contact_id)   -- set = an artist's portal thread
 
 contacts(id, user_id, name, email, role, label, instagram, notes,
          buyer_pipeline_status, avatar_url, created_at)
+project_assets(id, project_id, user_id, kind[reference|artwork|lyrics|document|audio|other],
+               label, file_name, url, mime, size_bytes, position, in_portal,
+               portal_at)                                           -- project files
 project_contacts(project_id, contact_id, user_id, role, in_portal,
                  allow_downloads, can_comment, last_notified_at)   -- artist ↔ project
 contact_track_states(contact_id, track_id, project_id, decision,
                      set_by[producer|artist])                     -- artist ↔ beat decision
 artist_portals(contact_id UNIQUE, token, password_hash, revoked_at,
-               last_viewed_at, previous_viewed_at, view_count)
+               last_viewed_at, previous_viewed_at, view_count, auto_digest)
 beat_sends(id, contact_id, track_ids[], share_token, message,
            status[sent|opened|interested|negotiating|placed|pass], sent_at,
            campaign_id)

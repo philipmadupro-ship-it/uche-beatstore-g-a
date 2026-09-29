@@ -28,7 +28,24 @@ export function ArtistWorkspaceHeader({
   onChanged: () => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const { portal, relationship, notify } = workspace;
+  const { portal, relationship, notify, totals } = workspace;
+
+  const setAutoDigest = async (on: boolean) => {
+    setBusy(true);
+    try {
+      await jsonOrThrow(await fetch(`/api/contacts/${contactId}/portal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'settings', auto_digest: on }),
+      }));
+      toast.success(on ? 'Daily digest on' : 'Daily digest off', on ? `${contactName} gets one email a day when something is new.` : 'Nothing emails unless you press Notify.');
+      onChanged();
+    } catch (err) {
+      toast.error('Could not change the digest', err instanceof Error ? err.message : 'Try again');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const portalAction = async (action: 'create' | 'revoke' | 'reissue') => {
     setBusy(true);
@@ -93,7 +110,15 @@ export function ArtistWorkspaceHeader({
         {!portal && 'No portal yet'}
         {portal?.revoked_at && 'Portal revoked'}
         {live && (portal.last_viewed_at ? `Portal live · opened ${relativeDays(portal.last_viewed_at)}` : 'Portal live · not opened yet')}
+        {live && portal.auto_digest && <span className="text-white/40"> · daily digest</span>}
       </p>
+
+      {(totals.plays > 0 || totals.downloads > 0) && (
+        <p className="text-[11px] text-white/40" data-testid="artist-totals">
+          {[totals.plays > 0 ? `Played ${totals.plays}×` : null, totals.downloads > 0 ? `${totals.downloads} download${totals.downloads === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')}
+          <span className="text-white/30"> · 90 days</span>
+        </p>
+      )}
 
       <div className="flex items-center gap-2">
         <button
@@ -143,6 +168,19 @@ export function ArtistWorkspaceHeader({
                     const ok = await confirmToast('Reissue the portal link?', `The current link stops working. ${contactName} needs the new one.`, { confirmLabel: 'Reissue', cancelLabel: 'Keep' });
                     if (ok) await portalAction('reissue');
                   },
+                },
+              ],
+            },
+            {
+              id: 'digest',
+              items: [
+                {
+                  id: 'auto-digest',
+                  label: 'Daily digest',
+                  hint: 'Emails once a day when something is new',
+                  checked: !!portal?.auto_digest,
+                  hidden: !live,
+                  onSelect: () => setAutoDigest(!portal?.auto_digest),
                 },
               ],
             },

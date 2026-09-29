@@ -25,7 +25,7 @@ describe('countUnnotified', () => {
       { projectId: 'p1', trackId: 'new', addedAt: '2026-09-13T00:00:00Z' },
       { projectId: 'p1', trackId: 'new', addedAt: '2026-09-13T00:00:00Z' },
     ]);
-    expect(out).toEqual({ newProjects: [], newTracks: [{ projectId: 'p1', trackId: 'new' }], total: 1 });
+    expect(out).toEqual({ newProjects: [], newTracks: [{ projectId: 'p1', trackId: 'new' }], newFiles: [], total: 1 });
   });
 
   it('counts a never-notified project once, not once per track', () => {
@@ -35,6 +35,22 @@ describe('countUnnotified', () => {
     ]);
     expect(out.total).toBe(1);
     expect(out.newProjects).toEqual(['p1']);
+  });
+
+  it('counts files put in the portal since the last notify, including old files shared late', () => {
+    const out = countUnnotified([project], [], [
+      { projectId: 'p1', fileId: 'before', portalAt: '2026-09-11T00:00:00Z' },
+      { projectId: 'p1', fileId: 'after', portalAt: '2026-09-14T00:00:00Z' },
+      { projectId: 'p2', fileId: 'elsewhere', portalAt: '2026-09-14T00:00:00Z' },
+    ]);
+    expect(out.newFiles).toEqual([{ projectId: 'p1', fileId: 'after' }]);
+    expect(out.total).toBe(1);
+  });
+
+  it('does not count files of a never-notified project on top of the project', () => {
+    const out = countUnnotified([{ ...project, lastNotifiedAt: null }], [], [{ projectId: 'p1', fileId: 'f', portalAt: '2026-09-14T00:00:00Z' }]);
+    expect(out.total).toBe(1);
+    expect(out.newFiles).toEqual([]);
   });
 
   it('ignores tracks of projects outside the portal', () => {

@@ -597,6 +597,155 @@ WHERE ps.contact_id IS NULL
 NOTIFY pgrst, 'reload schema';
 
 
+-- ═════════════ 127_project_assets.sql ═════════════
+-- 127_project_assets.sql
+-- Artist Relationship Workspace, phase 2: project files.
+--
+-- References, artwork, lyric sheets and documents had nowhere to live: every
+-- stored file belonged to a track. A project file is a row here pointing at
+-- an object in the PRIVATE bucket (`url` is an `r2://` reference, never a
+-- public URL). Track files (WAV, stems, versions) are NOT copied in — the
+-- Files tab reads them where they already live.
+--
+-- in_portal decides whether the file appears in the portal of every artist
+-- this project is shared with. It defaults to false: a contract dropped on a
+-- project that is already in a portal must not become visible by accident.
+-- The upload form sets it explicitly. portal_at records when it last went
+-- into the portal (insert with in_portal, or switched on later), so a file
+-- that has sat on the project for a month is still NEW to the artist the day
+-- it is shared, and still counts toward "Notify · N new".
+
+CREATE TABLE IF NOT EXISTS public.project_assets (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  project_id  uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  kind        text NOT NULL DEFAULT 'other',
+  label       text NOT NULL DEFAULT '',
+  file_name   text NOT NULL DEFAULT '',
+  url         text NOT NULL,
+  mime        text,
+  size_bytes  bigint,
+  position    integer NOT NULL DEFAULT 0,
+  in_portal   boolean NOT NULL DEFAULT false,
+  portal_at   timestamptz,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'project_assets_kind_check') THEN
+    ALTER TABLE public.project_assets ADD CONSTRAINT project_assets_kind_check
+      CHECK (kind IN ('reference', 'artwork', 'lyrics', 'document', 'audio', 'other'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'project_assets_size_check') THEN
+    ALTER TABLE public.project_assets ADD CONSTRAINT project_assets_size_check
+      CHECK (size_bytes IS NULL OR size_bytes >= 0);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_project_assets_project ON public.project_assets (project_id, position);
+CREATE INDEX IF NOT EXISTS idx_project_assets_user ON public.project_assets (user_id);
+
+-- The row and its project must belong to one owner.
+CREATE OR REPLACE FUNCTION public.project_assets_same_owner()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.projects p WHERE p.id = NEW.project_id AND p.user_id = NEW.user_id) THEN
+    RAISE EXCEPTION 'project_assets: project % is not owned by %', NEW.project_id, NEW.user_id;
+  END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS project_assets_same_owner ON public.project_assets;
+CREATE TRIGGER project_assets_same_owner
+  BEFORE INSERT OR UPDATE OF user_id, project_id ON public.project_assets
+  FOR EACH ROW EXECUTE FUNCTION public.project_assets_same_owner();
+
+-- Owner-only. No anon policy: the portal reads files through the service
+-- role after checking the token and membership.
+ALTER TABLE public.project_assets ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS project_assets_owner_select ON public.project_assets;
+CREATE POLICY project_assets_owner_select ON public.project_assets
+  FOR SELECT USING ((SELECT auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS project_assets_owner_write ON public.project_assets;
+CREATE POLICY project_assets_owner_write ON public.project_assets
+  FOR ALL USING ((SELECT auth.uid()) = user_id)
+  WITH CHECK ((SELECT auth.uid()) = user_id AND (SELECT public.is_producer()));
+
+NOTIFY pgrst, 'reload schema';
+
+
+-- ═════════════ 128_portal_comments.sql ═════════════
+-- 128_portal_comments.sql
+-- Artist Relationship Workspace, phase 2: comments from the artist portal.
+--
+-- Portal comments reuse project_comments — the same rows, threading and
+-- time-range pins (region_start/end, mig 013) the share pages use — with one
+-- new column saying which artist the thread belongs to:
+--   contact_id  the artist whose portal thread this is. Set on the artist's
+--               own comments AND on the producer's replies in that thread, so
+--               a portal shows exactly its own artist's conversation and never
+--               another artist's. NULL for every share-page / owner comment.
+-- Deleting the contact keeps the comments (the producer's record of the
+-- feedback) and only loses the link — ON DELETE SET NULL. Privacy erasure
+-- deletes the artist's own comments explicitly (lib/privacy/erase-artist).
+
+ALTER TABLE public.project_comments
+  ADD COLUMN IF NOT EXISTS contact_id uuid REFERENCES public.contacts(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_project_comments_contact
+  ON public.project_comments (contact_id, created_at)
+  WHERE contact_id IS NOT NULL;
+
+-- A thread's contact must belong to the project's owner.
+CREATE OR REPLACE FUNCTION public.project_comments_contact_same_owner()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NEW.contact_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.projects p
+    JOIN public.contacts c ON c.user_id = p.user_id
+    WHERE p.id = NEW.project_id AND c.id = NEW.contact_id
+  ) THEN
+    RAISE EXCEPTION 'project_comments: contact % does not belong to the owner of project %', NEW.contact_id, NEW.project_id;
+  END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS project_comments_contact_same_owner ON public.project_comments;
+CREATE TRIGGER project_comments_contact_same_owner
+  BEFORE INSERT OR UPDATE OF contact_id, project_id ON public.project_comments
+  FOR EACH ROW EXECUTE FUNCTION public.project_comments_contact_same_owner();
+
+NOTIFY pgrst, 'reload schema';
+
+
+-- ═════════════ 129_artist_portal_auto_digest.sql ═════════════
+-- 129_artist_portal_auto_digest.sql
+-- Artist Relationship Workspace, phase 2: the optional daily digest.
+--
+-- Adding material never emails anyone by itself; the producer presses
+-- Notify. auto_digest lets the producer hand that press to the daily cron
+-- (/api/cron/artist-digest) for one artist: once a day, if anything in the
+-- portal is new since the last notify, that artist gets the same single
+-- digest Notify would send. Off by default. The cron is idempotent because a
+-- digest moves project_contacts.last_notified_at, which is what it counts
+-- from — a second run the same day finds nothing to send.
+
+ALTER TABLE public.artist_portals
+  ADD COLUMN IF NOT EXISTS auto_digest boolean NOT NULL DEFAULT false;
+
+CREATE INDEX IF NOT EXISTS idx_artist_portals_auto_digest
+  ON public.artist_portals (user_id)
+  WHERE auto_digest AND revoked_at IS NULL;
+
+NOTIFY pgrst, 'reload schema';
+
+
 COMMIT;
 
 -- ═════════════ check ═════════════
@@ -605,6 +754,11 @@ COMMIT;
 SELECT m.migration,
        CASE WHEN m.ok THEN 'applied' ELSE 'MISSING' END AS status
 FROM (VALUES
+  ('112_backfill_buyer_contacts',    NOT EXISTS (
+     SELECT 1 FROM public.license_purchases lp
+     WHERE lp.status = 'paid' AND lp.seller_user_id IS NOT NULL AND lp.buyer_email IS NOT NULL
+       AND lower(btrim(lp.buyer_email)) <> 'unknown@invalid' AND position('@' in lp.buyer_email) > 1
+       AND NOT EXISTS (SELECT 1 FROM public.contacts c WHERE c.user_id = lp.seller_user_id AND lower(btrim(c.email)) = lower(btrim(lp.buyer_email))))),
   ('113_store_layout',               EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'creator_profiles' AND column_name = 'store_layout')),
   ('115_track_collaborators',        to_regclass('public.track_collaborators') IS NOT NULL),
   ('116_notifications_realtime',     EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'notifications')),
@@ -613,6 +767,9 @@ FROM (VALUES
   ('123_contact_track_states',       to_regclass('public.contact_track_states') IS NOT NULL),
   ('124_song_beat_and_credit_links', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'tracks' AND column_name = 'beat_track_id')),
   ('125_artist_portals',             to_regclass('public.artist_portals') IS NOT NULL),
-  ('126_project_shares_contact',     EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'project_shares' AND column_name = 'contact_id'))
+  ('126_project_shares_contact',     EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'project_shares' AND column_name = 'contact_id')),
+  ('127_project_assets',             to_regclass('public.project_assets') IS NOT NULL),
+  ('128_portal_comments',            EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'project_comments' AND column_name = 'contact_id')),
+  ('129_artist_portal_auto_digest',  EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'artist_portals' AND column_name = 'auto_digest'))
 ) AS m(migration, ok)
 ORDER BY m.migration;

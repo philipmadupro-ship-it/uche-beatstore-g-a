@@ -13,13 +13,16 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Heart, Lock, Music, X } from 'lucide-react';
+import { Download, ExternalLink, FileText, Heart, Lock, MessageSquare, Music, X } from 'lucide-react';
+import { PortalThread } from './PortalComments';
+import type { PortalComment } from '@/lib/artist-portal/comments';
 import { WavePlayer } from '@/components/player/WavePlayer';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 import { usePlayer } from '@/hooks/usePlayer';
 import { DECISION_META, ARTIST_DECISIONS } from '@/lib/contacts/decisions';
-import type { PortalTrack, PortalView } from '@/lib/artist-portal/view';
+import type { PortalFile, PortalTrack, PortalView } from '@/lib/artist-portal/view';
+import { formatBytes } from '@/lib/projects/assets';
 
 type LoadState =
   | { kind: 'loading' }
@@ -28,7 +31,15 @@ type LoadState =
   | { kind: 'gone'; message: string }
   | { kind: 'error'; message: string };
 
-type Tab = 'beats' | 'songs';
+type Tab = 'beats' | 'songs' | 'files';
+
+const FILE_KIND_LABEL: Record<PortalFile['kind'], string> = {
+  reference: 'Reference', artwork: 'Artwork', lyrics: 'Lyrics', document: 'Document', audio: 'Audio', other: 'File',
+};
+
+function canPreview(f: PortalFile): boolean {
+  return !!f.mime && (/^image\/(png|jpeg|webp|gif)$/.test(f.mime) || f.mime === 'application/pdf' || f.mime === 'text/plain');
+}
 
 function fmtKey(t: PortalTrack): string | null {
   if (!t.key) return null;
@@ -65,10 +76,56 @@ export function ArtistPortal({ token }: { token: string }) {
 
   useEffect(() => { void load(); }, [load]);
 
+  const [comments, setComments] = useState<PortalComment[]>([]);
+  const [openThread, setOpenThread] = useState<string | null>(null);
+  const loadComments = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/portal/${encodeURIComponent(token)}/comments`, { headers: headers(), cache: 'no-store' });
+      if (res.ok) setComments(((await res.json()) as { comments: PortalComment[] }).comments ?? []);
+    } catch {
+      // Comments are additive; the library works without them.
+    }
+  }, [token, headers]);
+  const ready = state.kind === 'ready';
+  useEffect(() => { if (ready) void loadComments(); }, [ready, loadComments]);
+
+  const postComment = async (
+    target: { projectId: string; trackId: string | null },
+    body: string,
+    opts: { parentId: string | null; pin: { region_start: number; region_end: number } | null },
+  ): Promise<boolean> => {
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/portal/${encodeURIComponent(token)}/comments`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers() },
+        body: JSON.stringify({
+          project_id: target.projectId,
+          track_id: target.trackId,
+          parent_id: opts.parentId,
+          body,
+          ...(opts.pin ?? {}),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setNotice(data.error ?? 'Could not send that.'); return false; }
+      setComments((prev) => [...prev, data.comment as PortalComment]);
+      return true;
+    } catch {
+      setNotice('Could not reach the server.');
+      return false;
+    }
+  };
+
   const view = state.kind === 'ready' ? state.view : null;
 
-  const visible = useMemo(() => {
+  const visibleFiles = useMemo(() => {
     if (!view) return [];
+    return view.files.filter((f) => !projectFilter || f.projectId === projectFilter);
+  }, [view, projectFilter]);
+
+  const visible = useMemo(() => {
+    if (!view || tab === 'files') return [];
     return view.tracks.filter((t) =>
       (tab === 'songs' ? t.type === 'song' : t.type !== 'song')
       && (!projectFilter || t.projectIds.includes(projectFilter)));
@@ -127,6 +184,36 @@ export function ArtistPortal({ token }: { token: string }) {
       }
     } catch {
       setNotice('Could not reach the server.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** Save or open a URL; a locked portal needs the password header, which a plain link cannot send. */
+  const fetchFile = async (url: string, name: string, key: string, open: boolean) => {
+    if (!passwordRef.current) {
+      if (open) { window.open(url, '_blank', 'noopener'); return; }
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = '';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
+    setBusy(key);
+    try {
+      const res = await fetch(url, { headers: headers() });
+      if (!res.ok) { setNotice('Download failed.'); return; }
+      const href = URL.createObjectURL(await res.blob());
+      if (open) window.open(href, '_blank', 'noopener');
+      else {
+        const a = document.createElement('a');
+        a.href = href;
+        a.download = name;
+        a.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(href), 60_000);
     } finally {
       setBusy(null);
     }
@@ -200,8 +287,9 @@ export function ArtistPortal({ token }: { token: string }) {
   }
 
   const v = state.view;
-  const totalNew = v.tracks.filter((t) => t.isNew).length;
+  const totalNew = v.tracks.filter((t) => t.isNew).length + v.files.filter((f) => f.isNew).length;
   const hasSongs = v.tracks.some((t) => t.type === 'song');
+  const hasFiles = v.files.length > 0;
 
   return (
     <ArtworkThemeProvider theme={v.artworkTheme}>
@@ -248,7 +336,7 @@ export function ArtistPortal({ token }: { token: string }) {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm text-white/80">{p.name}</span>
                         <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
-                          {p.beats} beat{p.beats === 1 ? '' : 's'}{p.songs ? ` · ${p.songs} song${p.songs === 1 ? '' : 's'}` : ''}
+                          {p.beats} beat{p.beats === 1 ? '' : 's'}{p.songs ? ` · ${p.songs} song${p.songs === 1 ? '' : 's'}` : ''}{p.files ? ` · ${p.files} file${p.files === 1 ? '' : 's'}` : ''}
                         </span>
                       </span>
                       {p.newCount > 0 && (
@@ -263,7 +351,7 @@ export function ArtistPortal({ token }: { token: string }) {
             <section aria-labelledby="portal-library" className="mt-10">
               <h2 id="portal-library" className="sr-only">Library</h2>
               <div role="tablist" aria-label="Library" className="mb-4 flex gap-2">
-                {(['beats', 'songs'] as const).filter((t) => t === 'beats' || hasSongs).map((t) => (
+                {(['beats', 'songs', 'files'] as const).filter((t) => t === 'beats' || (t === 'songs' ? hasSongs : hasFiles)).map((t) => (
                   <button
                     key={t}
                     type="button"
@@ -272,7 +360,7 @@ export function ArtistPortal({ token }: { token: string }) {
                     onClick={() => setTab(t)}
                     className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${tab === t ? 'border-white/30 bg-white/[0.14] text-white' : 'border-white/10 bg-white/[0.06] text-white/60 hover:border-white/20 hover:bg-white/[0.10]'}`}
                   >
-                    {t === 'beats' ? 'Beats' : 'Songs'}
+                    {t === 'beats' ? 'Beats' : t === 'songs' ? 'Songs' : 'Files'}
                   </button>
                 ))}
               </div>
@@ -286,7 +374,50 @@ export function ArtistPortal({ token }: { token: string }) {
 
               {notice && <p role="status" className="mb-3 text-xs text-white/60">{notice}</p>}
 
-              {visible.length === 0 ? (
+              {tab === 'files' ? (
+                visibleFiles.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-white/40">No files in this project.</p>
+                ) : (
+                  <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]" data-testid="portal-files">
+                    {visibleFiles.map((f) => (
+                      <li key={f.id} className="flex items-center gap-3 px-3 py-3" data-file-id={f.id}>
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/[0.06]">
+                          <FileText size={16} className="text-white/40" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="flex items-center gap-2 truncate text-sm text-white/80">
+                            <span className="truncate">{f.label}</span>
+                            {f.isNew && <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-[#6DC6A4]">New</span>}
+                          </p>
+                          <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
+                            {[FILE_KIND_LABEL[f.kind], formatBytes(f.sizeBytes)].filter(Boolean).join(' · ')}
+                          </p>
+                        </div>
+                        {canPreview(f) && (
+                          <button
+                            type="button"
+                            onClick={() => fetchFile(`${f.url}?inline=1`, f.fileName, f.id, true)}
+                            disabled={busy === f.id}
+                            aria-label={`Open ${f.label}`}
+                            className="shrink-0 rounded-lg p-2 text-white/60 transition-colors hover:bg-white/[0.10] hover:text-white disabled:opacity-40"
+                          >
+                            <ExternalLink size={16} aria-hidden="true" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => fetchFile(f.url, f.fileName, f.id, false)}
+                          disabled={busy === f.id}
+                          aria-label={`Download ${f.label}`}
+                          className="shrink-0 rounded-lg p-2 text-white/60 transition-colors hover:bg-white/[0.10] hover:text-white disabled:opacity-40"
+                        >
+                          <Download size={16} aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : visible.length === 0 ? (
                 <p className="py-10 text-center text-sm text-white/40">{tab === 'songs' ? 'No songs yet.' : 'No beats here yet.'}</p>
               ) : (
                 <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]">
@@ -295,7 +426,8 @@ export function ArtistPortal({ token }: { token: string }) {
                     const artistCanReact = t.type !== 'song' && (t.decision === null || ARTIST_DECISIONS.includes(t.decision));
                     const key = fmtKey(t);
                     return (
-                      <li key={t.id} className="flex items-center gap-3 px-3 py-3" data-track-id={t.id}>
+                      <li key={t.id} data-track-id={t.id}>
+                        <div className="flex items-center gap-3 px-3 py-3">
                         <button
                           type="button"
                           onClick={() => choose(t)}
@@ -343,6 +475,21 @@ export function ArtistPortal({ token }: { token: string }) {
                         ) : t.decision ? (
                           <span className="shrink-0 rounded-lg border border-white/20 px-2.5 py-1.5 text-xs text-white/70">{DECISION_META[t.decision].label}</span>
                         ) : null)}
+                        {(() => {
+                          const n = comments.filter((c) => c.trackId === t.id).length;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => setOpenThread(openThread === t.id ? null : t.id)}
+                              aria-expanded={openThread === t.id}
+                              aria-label={`Comments on ${t.title}${n ? ` (${n})` : ''}`}
+                              className={`flex shrink-0 items-center gap-1 rounded-lg p-2 text-xs transition-colors hover:bg-white/[0.10] hover:text-white ${openThread === t.id ? 'text-white' : 'text-white/60'}`}
+                            >
+                              <MessageSquare size={16} aria-hidden="true" />
+                              {n > 0 && <span>{n}</span>}
+                            </button>
+                          );
+                        })()}
                         {t.canDownload && (
                           <button
                             type="button"
@@ -354,12 +501,51 @@ export function ArtistPortal({ token }: { token: string }) {
                             <Download size={16} aria-hidden="true" />
                           </button>
                         )}
+                        </div>
+                        {openThread === t.id && (() => {
+                          const projectId = projectFilter && t.projectIds.includes(projectFilter) ? projectFilter : t.projectIds[0];
+                          const project = v.projects.find((p) => p.id === projectId);
+                          return (
+                            <div className="border-t border-white/[0.06] px-3 pb-4 pt-3 sm:pl-[68px]">
+                              <PortalThread
+                                comments={comments.filter((c) => c.trackId === t.id)}
+                                canComment={!!project?.canComment}
+                                isActive={activeId === t.id}
+                                durationSeconds={t.duration_seconds}
+                                placeholder={`Comment on ${t.title}…`}
+                                onPost={(body, opts) => postComment({ projectId: projectId!, trackId: t.id }, body, opts)}
+                              />
+                            </div>
+                          );
+                        })()}
                       </li>
                     );
                   })}
                 </ul>
               )}
             </section>
+
+            {(() => {
+              const current = v.projects.find((p) => p.id === projectFilter) ?? (v.projects.length === 1 ? v.projects[0] : null);
+              if (!current) {
+                return <p className="mt-10 text-center text-xs text-white/40">Pick a project above to leave a note about it.</p>;
+              }
+              const notes = comments.filter((c) => c.projectId === current.id && !c.trackId);
+              if (!current.canComment && notes.length === 0) return null;
+              return (
+                <section aria-labelledby="portal-notes" className="mt-10 rounded-xl border border-white/10 bg-[#0D0D0A] p-4">
+                  <h2 id="portal-notes" className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">Notes on {current.name}</h2>
+                  <PortalThread
+                    comments={notes}
+                    canComment={current.canComment}
+                    isActive={false}
+                    durationSeconds={null}
+                    placeholder={`Something for ${v.producer.name || 'your producer'} about ${current.name}…`}
+                    onPost={(body, opts) => postComment({ projectId: current.id, trackId: null }, body, opts)}
+                  />
+                </section>
+              );
+            })()}
           </>
         )}
       </Shell>

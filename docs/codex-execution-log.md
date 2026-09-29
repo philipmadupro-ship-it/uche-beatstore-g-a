@@ -9018,3 +9018,16 @@ Changes:
 Not changed: the email route from earlier in this conversation (`lib/share/email-share.ts`) was re-checked. It requires `share_links.user_id` = producer, and `/api/share` sets it on insert.
 
 Tests: `lib/share/playback.test.ts` (15), `lib/share/download-filename.test.ts` (6), grant TTL cases, and `e2e/share-options.spec.ts` (28, all fail on the old code).
+
+## 2026-09-29 - Artist Relationship Workspace, phase 2
+
+Builds on phase 1 (migrations 122–126). Migrations **127–129**; the branch also merges `origin/main` (#34 SHARE-01, #35 the phase 0 fixes from another branch — main's versions kept, #36 chords).
+
+- **Project files** (127 `project_assets`): project page Files section (drop or add, rename in place, kind, per-file "In portal", delete with confirm), workspace Files tab (project files + the artist's track WAVs/stems, with "downloaded" per artist), portal Files tab (open / download). Private bucket only; extension allowlist decides the MIME; ≤4 MB through the app, larger via presigned PUT + register, and register only accepts a key this project's presign minted. New files count toward Notify and appear in the digest ("File: Lyrics").
+- **Portal comments** (128 `project_comments.contact_id`): per-beat threads (optionally pinned to the playhead) and per-project notes in the portal; `portal_comment` notification + timeline row; the producer answers from the workspace's Activity tab (and replies from the project comments panel stay in the thread). Share pages filter portal threads out; `can_comment` gates posting.
+- **Daily digest** (129 `artist_portals.auto_digest`, `/api/cron/artist-digest` 17:00 UTC): opt-in per artist from the portal ⋯ menu; sends through `sendPortalDigest`, at most once per 20 h, idempotent.
+- **Artists card view** on /contacts (`/api/contacts/artists`, pure `summarizeArtist`), **per-artist totals** (played / downloads, 90 days) in the workspace header, **search** labels (song → artist, files, artists; palette contacts now open the contact), **credit → contact** linking in the track drawer's credits, **contact photo** upload.
+- Fixes found on the way: Notify / Artists strip / digest counted archived portal projects (membership already excluded them); an INSERT into a missing table comes back from PostgREST as an empty 404, so the assets POST now probes with a read before storing anything; erasure also removes the artist's portal comments.
+- Ops: `scripts/ops/bundle-migrations.sh` + `supabase/apply/pending.sql` (112–129 in one transaction for the SQL editor) + `supabase/apply/verify.sql`; `docs/prompts/apply-migrations.md` is the runbook / agent prompt.
+
+Verification: migrations replayed twice on local Postgres 16 + PostgREST 12, bundle applied twice on a production-shaped database (13/13 applied, re-run a no-op), RLS/trigger probes, every route re-checked with 127–129 removed (reads degrade, writes 503 naming the migration). `e2e/artist-workspace-phase2.spec.ts` (5 flows) + the phase 1 spec: 11/11 on three fresh databases. Unit tests 3,101, tsc, lint, CI-style build and the store-dynamic check pass.

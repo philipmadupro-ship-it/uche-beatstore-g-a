@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Sparkles, Users, X } from 'lucide-react';
+import Link from 'next/link';
+import { Link2, Plus, Sparkles, Users, X } from 'lucide-react';
+import { Dropdown } from '@/components/ui/Dropdown';
 import { Popover } from '@/components/ui/Popover';
 import { toast } from '@/hooks/useToast';
 import { errorMessage } from '@/lib/errors';
@@ -11,6 +13,7 @@ import {
   isAutoDerived,
   roleLabel,
   sortCollaborators,
+  suggestContactForCredit,
   type TrackCollaborator,
 } from '@/lib/tracks/collaborators';
 
@@ -68,6 +71,37 @@ export function TrackCollaboratorStrip({ trackId, className }: Props) {
   }, [fetchCollaborators]);
 
   const ordered = sortCollaborators(collaborators ?? []);
+
+  // Contacts are fetched the first time a credit's link popover opens.
+  const [contacts, setContacts] = useState<Array<{ id: string; name: string }> | null>(null);
+  const loadContacts = useCallback(() => {
+    if (contacts !== null) return;
+    setContacts([]);
+    fetch('/api/contacts').then((r) => (r.ok ? r.json() : [])).then((d) => {
+      const rows = (Array.isArray(d) ? d : d.contacts ?? []) as Array<{ id: string; name: string }>;
+      setContacts(rows.map((c) => ({ id: c.id, name: c.name })));
+    }).catch(() => {});
+  }, [contacts]);
+
+  const linkContact = async (credit: TrackCollaborator, contactId: string | null) => {
+    const prev = collaborators;
+    setCollaborators((c) => (c ?? []).map((row) => (row.id === credit.id ? { ...row, contact_id: contactId } : row)));
+    try {
+      const res = await fetch(`/api/tracks/${trackId}/collaborators`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: credit.id, contact_id: contactId }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({})) as ApiErrorResponse;
+        setCollaborators(prev);
+        toast.error('Could not link the credit', json.error || `HTTP ${res.status}`);
+      }
+    } catch (err) {
+      setCollaborators(prev);
+      toast.error('Could not link the credit', errorMessage(err));
+    }
+  };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,9 +165,17 @@ export function TrackCollaboratorStrip({ trackId, className }: Props) {
             className="group/credit inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.06] py-1 pl-2.5 pr-1 text-[10px] font-medium text-white/70 transition-colors hover:border-white/20 hover:text-white"
           >
             {auto && <Sparkles size={9} className="shrink-0 text-white/40" aria-hidden="true" />}
-            <span>{c.name}</span>
+            {c.contact_id
+              ? <Link href={`/contacts/${c.contact_id}`} className="underline decoration-white/20 underline-offset-2 hover:text-white">{c.name}</Link>
+              : <span>{c.name}</span>}
             <span className="text-white/30">· {roleLabel(c.role)}</span>
             {auto && <span className="sr-only">(from filename)</span>}
+            <CreditContactLink
+              credit={c}
+              contacts={contacts}
+              onOpen={loadContacts}
+              onChange={(contactId) => void linkContact(c, contactId)}
+            />
             <button
               type="button"
               onClick={() => handleRemove(c.id)}
@@ -218,5 +260,63 @@ export function TrackCollaboratorStrip({ trackId, className }: Props) {
         </form>
       </Popover>
     </div>
+  );
+}
+
+/**
+ * Link a credit to a CRM contact, so the song shows up in that artist's
+ * workspace. Offers the one contact whose name matches the credit first.
+ */
+function CreditContactLink({ credit, contacts, onOpen, onChange }: {
+  credit: TrackCollaborator;
+  contacts: Array<{ id: string; name: string }> | null;
+  onOpen: () => void;
+  onChange: (contactId: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const suggestion = contacts && !credit.contact_id ? suggestContactForCredit(credit.name, contacts) : null;
+  const options = [
+    { value: 'none', label: 'Not linked' },
+    ...(suggestion ? [{ value: suggestion.id, label: suggestion.name, hint: 'Same name' }] : []),
+    ...(contacts ?? []).filter((c) => c.id !== suggestion?.id).map((c) => ({ value: c.id, label: c.name })),
+  ];
+  return (
+    <Popover
+      width={260}
+      open={open}
+      onOpenChange={(v) => { setOpen(v); if (v) onOpen(); }}
+      initialFocus
+      label={`Link ${credit.name} to a contact`}
+      trigger={({ toggle, ref }) => (
+        <button
+          type="button"
+          ref={ref as (el: HTMLButtonElement | null) => void}
+          onClick={toggle}
+          aria-label={credit.contact_id ? `Change the contact for ${credit.name}` : `Link ${credit.name} to a contact`}
+          className={cn(
+            'grid size-4 place-items-center rounded-full transition-colors hover:bg-white/10 hover:text-white',
+            credit.contact_id ? 'text-[#6DC6A4]' : 'text-white/30',
+          )}
+        >
+          <Link2 size={9} />
+        </button>
+      )}
+    >
+      <div className="space-y-2 p-3">
+        <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-white/40">Contact</p>
+        {contacts === null || (contacts.length === 0 && !credit.contact_id) ? (
+          <p className="text-[11px] text-white/40">{contacts === null ? 'Loading…' : 'No contacts yet.'}</p>
+        ) : (
+          <Dropdown
+            value={credit.contact_id ?? 'none'}
+            onChange={(v) => { onChange(v === 'none' ? null : v); setOpen(false); }}
+            options={options}
+            aria-label={`Contact for ${credit.name}`}
+            menuWidth={236}
+          />
+        )}
+        <p className="text-[10px] text-white/30">A linked credit puts this track in the contact’s workspace.</p>
+      </div>
+    </Popover>
   );
 }

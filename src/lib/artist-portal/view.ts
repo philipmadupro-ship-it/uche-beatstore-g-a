@@ -62,7 +62,23 @@ export interface PortalProject {
   newCount: number;
   beats: number;
   songs: number;
+  files: number;
   allowDownloads: boolean;
+  canComment: boolean;
+}
+
+/** A project file the producer put in the portal. No storage reference, ever. */
+export interface PortalFile {
+  id: string;
+  projectId: string;
+  kind: 'reference' | 'artwork' | 'lyrics' | 'document' | 'audio' | 'other';
+  label: string;
+  fileName: string;
+  mime: string | null;
+  sizeBytes: number | null;
+  isNew: boolean;
+  /** The portal's own streaming route for this file. */
+  url: string;
 }
 
 export interface PortalView {
@@ -70,6 +86,7 @@ export interface PortalView {
   producer: { name: string; logo_url: string | null; avatar_url: string | null };
   projects: PortalProject[];
   tracks: PortalTrack[];
+  files: PortalFile[];
   /** The producer's generated-artwork identity, as every public page receives it. */
   artworkTheme: PublicArtworkTheme;
 }
@@ -125,7 +142,7 @@ export function toPortalTrack(
 
 export function toPortalProject(
   row: { id: string; name: string | null; cover_url: string | null; description: string | null; [key: string]: unknown },
-  ctx: { isNew: boolean; newCount: number; beats: number; songs: number; allowDownloads: boolean },
+  ctx: { isNew: boolean; newCount: number; beats: number; songs: number; files: number; allowDownloads: boolean; canComment: boolean },
 ): PortalProject {
   return {
     id: row.id,
@@ -136,7 +153,29 @@ export function toPortalProject(
     newCount: ctx.newCount,
     beats: ctx.beats,
     songs: ctx.songs,
+    files: ctx.files,
     allowDownloads: ctx.allowDownloads,
+    canComment: ctx.canComment,
+  };
+}
+
+const FILE_KINDS: ReadonlyArray<PortalFile['kind']> = ['reference', 'artwork', 'lyrics', 'document', 'audio', 'other'];
+
+export function toPortalFile(
+  row: { id: string; project_id: string; kind: string; label: string | null; file_name: string | null; mime: string | null; size_bytes: number | string | null },
+  ctx: { token: string; isNew: boolean },
+): PortalFile {
+  const size = row.size_bytes == null ? null : Number(row.size_bytes);
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    kind: (FILE_KINDS as readonly string[]).includes(row.kind) ? (row.kind as PortalFile['kind']) : 'other',
+    label: row.label?.trim() || row.file_name?.trim() || 'Untitled file',
+    fileName: (row.file_name ?? '').split(/[\\/]/).pop() ?? '',
+    mime: typeof row.mime === 'string' ? row.mime : null,
+    sizeBytes: size != null && Number.isFinite(size) ? size : null,
+    isNew: ctx.isNew,
+    url: `/api/portal/${encodeURIComponent(ctx.token)}/files/${row.id}`,
   };
 }
 

@@ -44,4 +44,17 @@ describe('buildPortalDigest', () => {
     expect(out.itemCount).toBe(0);
     expect(out.text).not.toContain('Quiet');
   });
+  it('lists new files next to new tracks and counts both', () => {
+    const out = buildPortalDigest({ ...base, projects: [{ name: 'EP', isNewProject: false, trackTitles: ['MIDNIGHT'], fileLabels: ['Split sheet'] }] });
+    expect(out.itemCount).toBe(2);
+    expect(out.text).toContain('EP — 1 new track · 1 new file');
+    expect(out.text).toContain('– File: Split sheet');
+    expect(out.subject).toContain('2 new');
+  });
+
+  it('sends a files-only update', () => {
+    const out = buildPortalDigest({ ...base, projects: [{ name: 'EP', isNewProject: false, trackTitles: [], fileLabels: ['<Lyrics>'] }] });
+    expect(out.itemCount).toBe(1);
+    expect(out.html).toContain('File: &lt;Lyrics&gt;');
+  });
 });

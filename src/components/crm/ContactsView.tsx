@@ -18,6 +18,7 @@ import { contactsToCsv, downloadCsv } from '@/lib/contacts/export';
 import { ContactsStatsBar } from '@/components/crm/ContactsStatsBar';
 import { FollowUpsPanel } from '@/components/crm/FollowUpsPanel';
 import { ContactsToolbar, type Segment } from '@/components/crm/ContactsToolbar';
+import { ArtistsCardView } from '@/components/artists/ArtistsCardView';
 import { ContactsTable } from '@/components/crm/ContactsTable';
 import { ContactsPagination } from '@/components/crm/ContactsPagination';
 import { ContactsTableSkeleton, type ActivityTone } from '@/components/crm/contacts-shared';
@@ -67,7 +68,7 @@ export function ContactsView({
   const [sendQueue, setSendQueue] = useState<Contact[] | null>(null);
   const [historyContact, setHistoryContact] = useState<Contact | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'network' | 'activity'>('network');
+  const [activeTab, setActiveTab] = useState<'network' | 'artists' | 'activity'>('network');
   const [categoryFilter, setCategoryFilter] = useState<ContactCategoryFilter>('all');
   const [statusFilter, setStatusFilter] = useState<ContactStatusFilter>('all');
   const [sortMode, setSortMode] = useState<ContactSortMode>('recent');
@@ -428,7 +429,7 @@ export function ContactsView({
         actions={
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-md p-0.5">
-              {(['network', 'activity'] as const).map((t) => (
+              {(['network', 'artists', 'activity'] as const).map((t) => (
                 <button key={t} onClick={() => setActiveTab(t)}
                   className={`px-3 py-1.5 text-[11px] font-medium rounded capitalize transition-colors ${activeTab === t ? 'bg-white/20 text-white font-semibold' : 'text-white/60 hover:text-white'}`}>
                   {t}
@@ -571,6 +572,8 @@ export function ContactsView({
             </>
           )}
         </>
+      ) : activeTab === 'artists' ? (
+        <ArtistsCardView />
       ) : (
         <div className="border border-[var(--border)] rounded-xl overflow-hidden">
           <BeatLog sends={beatSends} contacts={contacts} />

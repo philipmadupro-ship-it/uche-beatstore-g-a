@@ -9,3 +9,4 @@ export RESEND_BASE_URL=http://127.0.0.1:54400
 export RESEND_FROM_EMAIL=studio@local.test
 export SHARE_MEDIA_TOKEN_SECRET=local-share-media-secret
 export E2E_REAL_DB=1
+export CRON_SECRET=local-cron

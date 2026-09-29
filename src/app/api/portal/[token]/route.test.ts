@@ -35,6 +35,10 @@ const hostile = {
       audio_url: 'r2://private/masters/t2.wav', wav_url: null, preview_url: null, peaks_url: null, notes: null, user_id: OWNER },
   ],
   tag_colors: [],
+  project_assets: [
+    { id: 'f1', project_id: 'p1', kind: 'lyrics', label: 'Lyrics', file_name: 'lyrics.pdf', mime: 'application/pdf', size_bytes: 2048, position: 0,
+      portal_at: '2026-09-03T00:00:00Z', created_at: '2026-09-03T00:00:00Z', in_portal: true, url: 'r2://private/project-assets/p1/abcdef123456.pdf', user_id: OWNER },
+  ],
 } as Record<string, Array<Record<string, unknown>>>;
 
 function chain(table: string) {
@@ -94,14 +98,24 @@ describe('GET /api/portal/[token]', () => {
     const song = body.tracks.find((t: { id: string }) => t.id === 't2');
     expect(beat).toMatchObject({ decision: 'interested', decisionSetBy: 'artist', isNew: true, canDownload: false });
     expect(song).toMatchObject({ type: 'song', builtOn: { id: 't1', title: 'MIDNIGHT' } });
-    expect(body.projects).toEqual([expect.objectContaining({ id: 'p1', name: 'New EP', cover_url: null, beats: 1, songs: 1, newCount: 2 })]);
+    expect(body.projects).toEqual([expect.objectContaining({ id: 'p1', name: 'New EP', cover_url: null, beats: 1, songs: 1, newCount: 3 })]);
     expect(body.producer.logo_url).toBeNull();
+  });
+
+  it('lists portal files through the portal route, never the storage reference', async () => {
+    const { GET } = await import('./route');
+    const body = await (await GET(get(), params)).json();
+    expect(body.files).toEqual([{
+      id: 'f1', projectId: 'p1', kind: 'lyrics', label: 'Lyrics', fileName: 'lyrics.pdf', mime: 'application/pdf',
+      sizeBytes: 2048, isNew: true, url: '/api/portal/portaltoken1234567890abcd/files/f1',
+    }]);
+    expect(body.projects[0]).toMatchObject({ files: 1, canComment: true });
   });
 
   it('stamps the visit and logs it on the contact timeline', async () => {
     const { GET } = await import('./route');
     await GET(get(), params);
     expect(updates.find((u) => u.table === 'artist_portals')?.patch).toMatchObject({ previous_viewed_at: null, view_count: 1 });
-    expect(inserts.find((i) => i.table === 'contact_activity')?.row).toMatchObject({ kind: 'portal_opened', contact_id: 'c1', title: 'Opened the portal · 2 new' });
+    expect(inserts.find((i) => i.table === 'contact_activity')?.row).toMatchObject({ kind: 'portal_opened', contact_id: 'c1', title: 'Opened the portal · 3 new' });
   });
 });

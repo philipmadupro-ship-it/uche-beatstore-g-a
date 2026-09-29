@@ -33,6 +33,7 @@ function fakeAdmin() {
       eq: (col: string, val: unknown) => { call.filters.push(['eq', col, val]); return q; },
       in: (col: string, val: unknown) => { call.filters.push(['in', col, val]); return q; },
       neq: (col: string, val: unknown) => { call.filters.push(['neq', col, val]); return q; },
+      is: (col: string, val: unknown) => { call.filters.push(['is', col, val]); return q; },
       select: () => Promise.resolve(
         failTable === call.table
           ? { data: null, error: { message: 'boom' } }
@@ -164,6 +165,12 @@ describe('POST /api/privacy/erase', () => {
     expect(portal.filters).toContainEqual(['eq', 'user_id', 'seller-1']);
     // Only what the ARTIST wrote goes; the producer's own decisions stay.
     expect(calls.find((c) => c.table === 'contact_track_states')!.filters).toContainEqual(['eq', 'set_by', 'artist']);
+    // Portal comments: only the ones the artist wrote (no user_id), with their timeline rows.
+    const comments = calls.find((c) => c.table === 'project_comments')!;
+    expect(comments.action).toBe('delete');
+    expect(comments.filters).toContainEqual(['in', 'contact_id', ['contact-1']]);
+    expect(comments.filters).toContainEqual(['is', 'user_id', null]);
+    expect(calls.some((c) => c.table === 'contact_activity' && c.filters.some((f) => f[1] === 'kind' && f[2] === 'portal_comment'))).toBe(true);
     // …and it happens before the contact's email is replaced.
     expect(calls.findIndex((c) => c.table === 'artist_portals')).toBeLessThan(calls.findIndex((c) => c.table === 'contacts'));
   });

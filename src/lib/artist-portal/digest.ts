@@ -13,6 +13,8 @@ export interface DigestProject {
   isNewProject: boolean;
   /** Titles of tracks new in this project (for a new project: its tracks). */
   trackTitles: string[];
+  /** Labels of project files new in this project (none are counted for a new project). */
+  fileLabels?: string[];
 }
 
 export interface DigestInput {
@@ -38,15 +40,29 @@ export function escapeHtml(s: string): string {
   );
 }
 
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
 function projectLine(p: DigestProject): string {
   const count = p.trackTitles.length;
-  if (p.isNewProject) return `${p.name} — new project${count ? ` · ${count} track${count === 1 ? '' : 's'}` : ''}`;
-  return `${p.name} — ${count} new track${count === 1 ? '' : 's'}`;
+  const files = p.fileLabels?.length ?? 0;
+  if (p.isNewProject) {
+    const parts = [count ? plural(count, 'track') : null, files ? plural(files, 'file') : null].filter(Boolean);
+    return `${p.name} — new project${parts.length ? ` · ${parts.join(' · ')}` : ''}`;
+  }
+  const parts = [count ? plural(count, 'new track') : null, files ? plural(files, 'new file') : null].filter(Boolean);
+  return `${p.name} — ${parts.join(' · ') || 'updated'}`;
+}
+
+/** Track titles, then file labels marked as files, for one project's list. */
+function projectItems(p: DigestProject): string[] {
+  return [...p.trackTitles, ...(p.fileLabels ?? []).map((l) => `File: ${l}`)];
 }
 
 export function buildPortalDigest(input: DigestInput): DigestEmail {
-  const projects = input.projects.filter((p) => p.isNewProject || p.trackTitles.length > 0);
-  const itemCount = projects.reduce((n, p) => n + (p.isNewProject ? 1 : p.trackTitles.length), 0);
+  const projects = input.projects.filter((p) => p.isNewProject || p.trackTitles.length > 0 || (p.fileLabels?.length ?? 0) > 0);
+  const itemCount = projects.reduce((n, p) => n + (p.isNewProject ? 1 : p.trackTitles.length + (p.fileLabels?.length ?? 0)), 0);
   const producer = input.producerName.trim() || 'Your producer';
   const artist = input.artistName.trim() || 'there';
 
@@ -61,8 +77,8 @@ export function buildPortalDigest(input: DigestInput): DigestEmail {
     `New in your library:`,
     ...projects.flatMap((p) => [
       `• ${projectLine(p)}`,
-      ...p.trackTitles.slice(0, MAX_TITLES_PER_PROJECT).map((t) => `    – ${t}`),
-      ...(p.trackTitles.length > MAX_TITLES_PER_PROJECT ? [`    – and ${p.trackTitles.length - MAX_TITLES_PER_PROJECT} more`] : []),
+      ...projectItems(p).slice(0, MAX_TITLES_PER_PROJECT).map((t) => `    – ${t}`),
+      ...(projectItems(p).length > MAX_TITLES_PER_PROJECT ? [`    – and ${projectItems(p).length - MAX_TITLES_PER_PROJECT} more`] : []),
     ]),
     '',
     `Open your library: ${input.portalUrl}`,
@@ -71,10 +87,11 @@ export function buildPortalDigest(input: DigestInput): DigestEmail {
   ].filter((l): l is string => l !== null);
 
   const projectHtml = projects.map((p) => {
-    const titles = p.trackTitles.slice(0, MAX_TITLES_PER_PROJECT).map((t) =>
+    const items = projectItems(p);
+    const titles = items.slice(0, MAX_TITLES_PER_PROJECT).map((t) =>
       `<li style="margin:2px 0;color:#bdbdbd;">${escapeHtml(t)}</li>`).join('');
-    const more = p.trackTitles.length > MAX_TITLES_PER_PROJECT
-      ? `<li style="margin:2px 0;color:#8a8a8a;">and ${p.trackTitles.length - MAX_TITLES_PER_PROJECT} more</li>`
+    const more = items.length > MAX_TITLES_PER_PROJECT
+      ? `<li style="margin:2px 0;color:#8a8a8a;">and ${items.length - MAX_TITLES_PER_PROJECT} more</li>`
       : '';
     return `<div style="margin:0 0 16px;">
       <p style="margin:0 0 4px;font-size:14px;color:#fff;font-weight:600;">${escapeHtml(projectLine(p))}</p>

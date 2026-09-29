@@ -10,7 +10,9 @@ import { isDecision } from '@/lib/contacts/decisions';
 import { gatePortal, hashRequestIp } from '@/lib/artist-portal/gate';
 import { portalProjectLinks } from '@/lib/artist-portal/membership';
 import { availableAt, isNewSince, nextVisitWatermarks } from '@/lib/artist-portal/new-items';
-import { publicUrlOrNull, toPortalArtworkTheme, toPortalProject, toPortalTrack, type PortalTrack, type PortalView } from '@/lib/artist-portal/view';
+import { publicUrlOrNull, toPortalArtworkTheme, toPortalFile, toPortalProject, toPortalTrack, type PortalTrack, type PortalView } from '@/lib/artist-portal/view';
+import { loadPortalAssets } from '@/lib/artist-portal/files';
+import { assetAvailableAt } from '@/lib/projects/assets';
 import { isSchemaNotReady } from '@/lib/artists/http';
 import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
 
@@ -67,7 +69,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const links = await portalProjectLinks(admin, portal);
     const projectIds = links.map((l) => l.project_id);
 
-    const [contactRes, profileRes, projects, projectTracks, statesRes] = await Promise.all([
+    const [contactRes, profileRes, projects, projectTracks, statesRes, assets] = await Promise.all([
       admin.from('contacts').select('name').eq('id', portal.contact_id).eq('user_id', ownerId).maybeSingle(),
       admin.from('creator_profiles').select('display_name, logo_url, hero_image_url').eq('user_id', ownerId).maybeSingle(),
       projectIds.length
@@ -77,6 +79,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         ? selectIn<{ project_id: string; track_id: string; added_at: string; position: number }>((ids) => admin.from('project_tracks').select('project_id, track_id, added_at, position').in('project_id', ids), projectIds)
         : Promise.resolve([]),
       admin.from('contact_track_states').select('track_id, decision, set_by').eq('contact_id', portal.contact_id).eq('user_id', ownerId),
+      loadPortalAssets(admin, ownerId, projectIds),
     ]);
     if (statesRes.error) throw statesRes.error;
 
@@ -133,6 +136,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       });
     });
 
+    const portalFiles = assets
+      .filter((a) => liveIds.has(a.project_id))
+      .map((a) => toPortalFile(a, {
+        token: portal.token,
+        isNew: isNewSince(assetAvailableAt(a, linkById.get(a.project_id)!.created_at), watermark),
+      }));
+
     const view: PortalView = {
       portal: { artistName: (contactRes.data as { name?: string } | null)?.name ?? '', lastVisitAt: watermark },
       producer: {
@@ -147,18 +157,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
           const link = linkById.get(p.id)!;
           return toPortalProject(p, {
             isNew: isNewSince(link.created_at, watermark),
-            newCount: inProject.filter((t) => t.isNew).length,
+            newCount: inProject.filter((t) => t.isNew).length + portalFiles.filter((f) => f.projectId === p.id && f.isNew).length,
             beats: inProject.filter((t) => t.type !== 'song').length,
             songs: inProject.filter((t) => t.type === 'song').length,
+            files: portalFiles.filter((f) => f.projectId === p.id).length,
             allowDownloads: link.allow_downloads,
+            canComment: link.can_comment,
           });
         }),
       tracks: portalTracks,
+      files: portalFiles,
       artworkTheme: toPortalArtworkTheme(await loadPublicArtworkTheme(admin, ownerId)),
     };
 
     // Record the visit. Failures here must not cost the artist their page.
-    const newCount = portalTracks.filter((t) => t.isNew).length;
+    const newCount = portalTracks.filter((t) => t.isNew).length + portalFiles.filter((f) => f.isNew).length;
     const { error: visitErr } = await admin
       .from('artist_portals')
       .update({

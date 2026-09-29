@@ -17,7 +17,7 @@ export default defineConfig({
   testDir: './e2e',
   // artist-workspace drives a REAL database (scripts/local-db); it is not part
   // of the default run, so CI's expected skip count is unchanged.
-  testIgnore: process.env.E2E_REAL_DB === '1' ? [] : ['**/artist-workspace.spec.ts'],
+  testIgnore: process.env.E2E_REAL_DB === '1' ? [] : ['**/artist-workspace*.spec.ts'],
   fullyParallel: false,                          // share one cart/player
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

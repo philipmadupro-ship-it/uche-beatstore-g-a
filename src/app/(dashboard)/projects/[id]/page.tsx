@@ -15,6 +15,7 @@ import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { DropZone } from '@/components/upload/DropZone';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { ProjectCommentsPanel } from '@/components/projects/ProjectCommentsPanel';
+import { ProjectFilesSection } from '@/components/projects/ProjectFilesSection';
 import { AddFromLibraryModal } from '@/components/projects/AddFromLibraryModal';
 import { ProjectDetailHeader } from '@/components/projects/ProjectDetailHeader';
 import { ProjectTrackList } from '@/components/projects/ProjectTrackList';
@@ -501,6 +502,9 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
             }
           }}
         />
+            {/* Project files (mig 127): references, artwork, lyric sheets. */}
+            {project && <div className="mt-6"><ProjectFilesSection projectId={params.id} /></div>}
+
             {/* Analytics strip */}
             {project && <ProjectAnalyticsPanel projectId={params.id} />}
 

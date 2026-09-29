@@ -26,6 +26,7 @@ import {
 } from '@/lib/contacts/track-engagement';
 import { deriveRelationshipStage, isWorkspaceMode, type Relationship } from '@/lib/contacts/relationship';
 import { availableAt, countUnnotified, isNewSince, type NotifyCount } from '@/lib/artist-portal/new-items';
+import { assetAvailableAt } from '@/lib/projects/assets';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
@@ -65,6 +66,8 @@ export interface ProjectLinkRow {
 
 export interface PortalRow {
   id: string;
+  /** Mig 129; false when the column is missing. */
+  auto_digest?: boolean;
   token: string;
   password_hash: string | null;
   revoked_at: string | null;
@@ -109,7 +112,14 @@ export async function loadArtistLinks(admin: Admin, userId: string, contactId: s
       .eq('contact_id', contactId)
       .eq('user_id', userId)),
   ]);
-  return { links, portal: portals[0] ?? null };
+  const portal = portals[0] ?? null;
+  if (portal) {
+    // Its own query: before migration 129 the column is missing, and that
+    // must not cost the producer the whole workspace (the store_layout lesson).
+    const { data, error } = await admin.from('artist_portals').select('auto_digest').eq('id', portal.id).eq('user_id', userId).maybeSingle();
+    portal.auto_digest = !error && !!(data as { auto_digest?: boolean } | null)?.auto_digest;
+  }
+  return { links, portal };
 }
 
 export interface WorkspaceBeat {
@@ -144,6 +154,42 @@ export interface WorkspaceProject {
   newForArtist: number;
 }
 
+export interface WorkspaceFile {
+  id: string;
+  projectId: string;
+  projectName: string;
+  kind: string;
+  label: string;
+  file_name: string;
+  mime: string | null;
+  size_bytes: number | null;
+  in_portal: boolean;
+  created_at: string;
+  /** In the portal and put there after the artist last looked. */
+  isNewForArtist: boolean;
+  /** When this artist last downloaded it from the portal. */
+  downloadedAt: string | null;
+  downloadUrl: string;
+}
+
+export interface WorkspaceTrackFile {
+  trackId: string;
+  title: string;
+  type: string | null;
+  hasWav: boolean;
+  stems: number;
+  inPortal: boolean;
+  downloads: number;
+}
+
+export interface WorkspaceTotals {
+  /** Portal plays across every beat and song (last 90 days). */
+  plays: number;
+  /** Portal downloads: tracks and project files (last 90 days). */
+  downloads: number;
+  portalVisits: number;
+}
+
 export interface Workspace {
   workspaceMode: boolean;
   relationship: Relationship;
@@ -152,6 +198,11 @@ export interface Workspace {
   projects: WorkspaceProject[];
   beats: WorkspaceBeat[];
   songs: WorkspaceSong[];
+  files: WorkspaceFile[];
+  trackFiles: WorkspaceTrackFile[];
+  totals: WorkspaceTotals;
+  /** False before migration 127: the Files tab says so instead of looking empty. */
+  filesReady: boolean;
   counts: { interested: number; selected: number; recording: number; recorded: number; released: number; passed: number; moving: number };
 }
 
@@ -161,6 +212,9 @@ interface StateRow { track_id: string; project_id: string | null; decision: stri
 interface SendRow { id: string; track_ids: string[] | null; sent_at: string | null; opened_at: string | null; link_clicked_at: string | null }
 interface ActivityRow { kind: string; occurred_at: string; metadata: Record<string, unknown> | null }
 interface CreditRow { track_id: string }
+interface AssetRow { id: string; project_id: string; kind: string; label: string; file_name: string; mime: string | null; size_bytes: number | null; position: number; in_portal: boolean; portal_at: string | null; created_at: string }
+interface StemRow { track_id: string }
+interface TrackFileRow { id: string; wav_url: string | null }
 
 /** Engagement is capped to recent history so an old catalogue stays cheap. */
 const ENGAGEMENT_WINDOW_DAYS = 90;
@@ -185,7 +239,7 @@ export async function loadWorkspace(
     rows<StateRow>(admin.from('contact_track_states').select('track_id, project_id, decision, set_by, updated_at').eq('contact_id', contact.id).eq('user_id', userId)),
     rows<SendRow>(admin.from('beat_sends').select('id, track_ids, sent_at, opened_at, link_clicked_at').eq('contact_id', contact.id).order('sent_at', { ascending: false }).limit(200)),
     rows<ActivityRow>(admin.from('contact_activity').select('kind, occurred_at, metadata').eq('contact_id', contact.id).eq('user_id', userId)
-      .in('kind', ['portal_opened', 'track_played', 'track_downloaded']).gte('occurred_at', since).order('occurred_at', { ascending: false }).limit(1000)),
+      .in('kind', ['portal_opened', 'track_played', 'track_downloaded', 'file_downloaded']).gte('occurred_at', since).order('occurred_at', { ascending: false }).limit(1000)),
     rows<CreditRow>(admin.from('track_collaborators').select('track_id').eq('contact_id', contact.id)),
     admin.from('project_shares').select('id', { count: 'exact', head: true }).eq('contact_id', contact.id)
       .then((r: { count: number | null; error: unknown }) => {
@@ -193,6 +247,16 @@ export async function loadWorkspace(
         return r.count ?? 0;
       }),
   ]);
+
+  // Project files: their own tolerant query, so a database without 127 keeps
+  // the rest of the workspace.
+  let filesReady = true;
+  const assets: AssetRow[] = projectIds.length
+    ? await selectIn<AssetRow>((ids) => admin.from('project_assets')
+        .select('id, project_id, kind, label, file_name, mime, size_bytes, position, in_portal, portal_at, created_at')
+        .in('project_id', ids).eq('user_id', userId).order('position', { ascending: true }), projectIds)
+        .catch((e: unknown) => { if (isMissingSchema(e)) { filesReady = false; return []; } throw e; })
+    : [];
 
   const projectById = new Map(projects.map((p) => [p.id, p]));
   const linkById = new Map(links.map((l) => [l.project_id, l]));
@@ -209,6 +273,18 @@ export async function loadWorkspace(
         .catch((e: unknown) => { if (isMissingSchema(e)) throw new SchemaNotReadyError(e); throw e; })
     : [];
   const trackById = new Map(tracks.map((t) => [t.id, t]));
+
+  const trackIdList = tracks.map((t) => t.id);
+  const [wavRows, stemRows] = trackIdList.length
+    ? await Promise.all([
+        selectIn<TrackFileRow>((ids) => admin.from('tracks').select('id, wav_url').in('id', ids).eq('user_id', userId), trackIdList),
+        selectIn<StemRow>((ids) => admin.from('track_stem_files').select('track_id').in('track_id', ids).eq('user_id', userId), trackIdList)
+          .catch(() => [] as StemRow[]),
+      ])
+    : [[] as TrackFileRow[], [] as StemRow[]];
+  const hasWav = new Set(wavRows.filter((r) => !!r.wav_url).map((r) => r.id));
+  const stemCount = new Map<string, number>();
+  for (const r of stemRows) stemCount.set(r.track_id, (stemCount.get(r.track_id) ?? 0) + 1);
 
   // Songs point at beats that may live outside this workspace; fetch those titles too.
   const missingBeatIds = tracks
@@ -316,13 +392,65 @@ export async function loadWorkspace(
     .filter((p): p is WorkspaceProject => p !== null)
     .sort((a, b) => b.link.created_at.localeCompare(a.link.created_at));
 
-  const portalLinks = links.filter((l) => l.in_portal);
+  // Archived projects leave the portal (membership.ts), so they are not news either.
+  const portalLinks = links.filter((l) => l.in_portal && projectById.get(l.project_id)?.status !== 'archived');
+  const portalAssets = assets.filter((a) => a.in_portal && portalLinks.some((l) => l.project_id === a.project_id));
   const notify = countUnnotified(
     portalLinks.map((l) => ({ projectId: l.project_id, linkedAt: l.created_at, lastNotifiedAt: l.last_notified_at })),
     projectTracks
       .filter((pt) => portalLinks.some((l) => l.project_id === pt.project_id))
       .map((pt) => ({ projectId: pt.project_id, trackId: pt.track_id, addedAt: pt.added_at })),
+    portalAssets.map((a) => ({ projectId: a.project_id, fileId: a.id, portalAt: a.portal_at ?? a.created_at })),
   );
+
+  const fileDownloads = new Map<string, string>();
+  for (const a of activity) {
+    if (a.kind !== 'file_downloaded') continue;
+    const assetId = typeof a.metadata?.asset_id === 'string' ? a.metadata.asset_id : null;
+    if (assetId && (!fileDownloads.has(assetId) || a.occurred_at > fileDownloads.get(assetId)!)) fileDownloads.set(assetId, a.occurred_at);
+  }
+  const files: WorkspaceFile[] = assets
+    .filter((a) => projectById.has(a.project_id))
+    .map((a) => {
+      const link = linkById.get(a.project_id);
+      const visibleAt = link ? assetAvailableAt(a, link.created_at) : a.created_at;
+      return {
+        id: a.id,
+        projectId: a.project_id,
+        projectName: projectById.get(a.project_id)?.name ?? 'Untitled project',
+        kind: a.kind,
+        label: a.label,
+        file_name: a.file_name,
+        mime: a.mime,
+        size_bytes: a.size_bytes == null ? null : Number(a.size_bytes),
+        in_portal: a.in_portal,
+        created_at: a.created_at,
+        isNewForArtist: a.in_portal && !!link?.in_portal && isNewSince(visibleAt, portal?.last_viewed_at),
+        downloadedAt: fileDownloads.get(a.id) ?? null,
+        downloadUrl: `/api/projects/${a.project_id}/assets/${a.id}/download`,
+      };
+    });
+
+  const trackFiles: WorkspaceTrackFile[] = tracks
+    .filter((t) => hasWav.has(t.id) || (stemCount.get(t.id) ?? 0) > 0)
+    .map((t) => ({
+      trackId: t.id,
+      title: t.title ?? 'Untitled',
+      type: t.type,
+      hasWav: hasWav.has(t.id),
+      stems: stemCount.get(t.id) ?? 0,
+      inPortal: portalTrackIds.has(t.id),
+      downloads: engagement.get(t.id)?.downloads ?? 0,
+    }));
+
+  let plays = 0;
+  let trackDownloads = 0;
+  for (const e of engagement.values()) { plays += e.plays; trackDownloads += e.downloads; }
+  const totals: WorkspaceTotals = {
+    plays,
+    downloads: trackDownloads + activity.filter((a) => a.kind === 'file_downloaded').length,
+    portalVisits: portalVisits.length,
+  };
 
   const decisions = states.map((s) => (isDecision(s.decision) ? s.decision : null));
   const counts = { interested: 0, selected: 0, recording: 0, recorded: 0, released: 0, passed: 0, moving: 0 };
@@ -353,6 +481,10 @@ export async function loadWorkspace(
     projects: workspaceProjects,
     beats,
     songs,
+    files,
+    trackFiles,
+    totals,
+    filesReady,
     counts,
   };
 }

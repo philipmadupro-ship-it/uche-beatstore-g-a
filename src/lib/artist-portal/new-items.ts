@@ -41,21 +41,35 @@ export function isNewSince(visibleAt: string, watermark: string | null | undefin
   return visibleAt > watermark;
 }
 
+/** A project file in the portal (project_assets with in_portal). */
+export interface PortalFileRow {
+  projectId: string;
+  fileId: string;
+  /** project_assets.portal_at, or created_at when it was uploaded straight into the portal. */
+  portalAt: string;
+}
+
 export interface NotifyCount {
   /** Projects in the portal the artist was never told about. */
   newProjects: string[];
   /** Tracks added to portal projects since that project's last notify. */
   newTracks: Array<{ projectId: string; trackId: string }>;
+  /** Project files put in the portal since that project's last notify. */
+  newFiles: Array<{ projectId: string; fileId: string }>;
   total: number;
 }
 
 /**
  * Items the artist has not been notified about, per project row's
  * `last_notified_at`. A project never notified counts once as a new project
- * and its tracks are not counted again on top — "New EP · 12 beats" is one
- * piece of news, not thirteen.
+ * and its tracks and files are not counted again on top — "New EP · 12
+ * beats" is one piece of news, not thirteen.
  */
-export function countUnnotified(projects: readonly PortalProjectRow[], tracks: readonly PortalTrackRow[]): NotifyCount {
+export function countUnnotified(
+  projects: readonly PortalProjectRow[],
+  tracks: readonly PortalTrackRow[],
+  files: readonly PortalFileRow[] = [],
+): NotifyCount {
   const byId = new Map(projects.map((p) => [p.projectId, p]));
   const newProjects = projects.filter((p) => !p.lastNotifiedAt).map((p) => p.projectId);
   const seen = new Set<string>();
@@ -70,7 +84,16 @@ export function countUnnotified(projects: readonly PortalProjectRow[], tracks: r
       newTracks.push({ projectId: t.projectId, trackId: t.trackId });
     }
   }
-  return { newProjects, newTracks, total: newProjects.length + newTracks.length };
+  const newFiles: Array<{ projectId: string; fileId: string }> = [];
+  for (const f of files) {
+    const p = byId.get(f.projectId);
+    if (!p || !p.lastNotifiedAt) continue;
+    const visible = f.portalAt > p.linkedAt ? f.portalAt : p.linkedAt;
+    if (visible > p.lastNotifiedAt && !newFiles.some((x) => x.fileId === f.fileId)) {
+      newFiles.push({ projectId: f.projectId, fileId: f.fileId });
+    }
+  }
+  return { newProjects, newTracks, newFiles, total: newProjects.length + newTracks.length + newFiles.length };
 }
 
 /**

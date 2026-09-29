@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { publicUrlOrNull, toPortalArtworkTheme, toPortalProject, toPortalTrack } from './view';
+import { toPortalFile, publicUrlOrNull, toPortalArtworkTheme, toPortalProject, toPortalTrack } from './view';
 
 const hostileTrack = {
   id: 't1',
@@ -49,12 +49,28 @@ describe('toPortalProject', () => {
   it('builds a project card from listed fields only', () => {
     const out = toPortalProject(
       { id: 'p1', name: 'New EP', cover_url: 'https://cdn.example.com/c.png', description: 'Six tracks', user_id: 'owner-1', price_usd: 99 },
-      { isNew: true, newCount: 3, beats: 5, songs: 1, allowDownloads: false },
+      { isNew: true, newCount: 3, beats: 5, songs: 1, files: 2, allowDownloads: false, canComment: true },
     );
     expect(out).toEqual({
       id: 'p1', name: 'New EP', cover_url: 'https://cdn.example.com/c.png', description: 'Six tracks',
-      isNew: true, newCount: 3, beats: 5, songs: 1, allowDownloads: false,
+      isNew: true, newCount: 3, beats: 5, songs: 1, files: 2, allowDownloads: false, canComment: true,
     });
+  });
+});
+
+describe('toPortalFile', () => {
+  it('emits the portal route, never the storage reference', () => {
+    const hostile = { id: 'f1', project_id: 'p1', kind: 'lyrics', label: '', file_name: 'C:\\x\\Lyrics.pdf', mime: 'application/pdf', size_bytes: '2048', url: 'r2://private/project-assets/p1/abc.pdf', user_id: 'owner-1' };
+    const out = toPortalFile(hostile, { token: 'tok', isNew: true });
+    expect(out).toEqual({
+      id: 'f1', projectId: 'p1', kind: 'lyrics', label: 'C:\\x\\Lyrics.pdf', fileName: 'Lyrics.pdf', mime: 'application/pdf',
+      sizeBytes: 2048, isNew: true, url: '/api/portal/tok/files/f1',
+    });
+    expect(JSON.stringify(out)).not.toContain('r2://');
+    expect(JSON.stringify(out)).not.toContain('owner-1');
+  });
+  it('coerces an unknown kind to other', () => {
+    expect(toPortalFile({ id: 'f', project_id: 'p', kind: 'contract', label: 'x', file_name: 'x.pdf', mime: null, size_bytes: null }, { token: 't', isNew: false }).kind).toBe('other');
   });
 });
 

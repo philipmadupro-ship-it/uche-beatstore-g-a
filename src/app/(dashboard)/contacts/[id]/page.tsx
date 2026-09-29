@@ -14,7 +14,7 @@
  * everything in one place.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -297,11 +297,11 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                 style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%)' }}
               />
               <div className="relative z-10">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-white/10 to-[#161616] border border-white/20 flex items-center justify-center mb-4 shadow-[0_4px_16px_rgba(0,0,0,0.4)]">
-                  <span className="text-[28px] font-medium text-white">
-                    {contact.name[0]?.toUpperCase() ?? '?'}
-                  </span>
-                </div>
+                <ContactAvatar
+                  name={contact.name}
+                  url={contact.avatar_url ?? null}
+                  onChange={(url) => patchField('avatar_url', url)}
+                />
                 <EditableLine
                   value={contact.name}
                   onSave={(v) => patchField('name', v)}
@@ -578,6 +578,68 @@ function DetailField({
           )}
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * The contact's avatar disc. Click to upload a photo through the shared
+ * image uploader (/api/upload/image, the same path covers use); the ✕ clears
+ * it. Without a photo it shows the initial, as before.
+ */
+function ContactAvatar({ name, url, onChange }: { name: string; url: string | null; onChange: (url: string | null) => Promise<void> }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const upload = async (file: File) => {
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch('/api/upload/image', { method: 'POST', body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.url) throw new Error(data.error ?? 'Upload failed');
+      await onChange(data.url as string);
+    } catch (err) {
+      toast.error('Could not upload the photo', err instanceof Error ? err.message : 'Try again');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="group relative mb-4 h-20 w-20">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={busy}
+        aria-label={url ? `Change ${name}'s photo` : `Add a photo of ${name}`}
+        className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-gradient-to-br from-white/10 to-[#161616] shadow-[0_4px_16px_rgba(0,0,0,0.4)] transition-colors hover:border-white/40 disabled:opacity-40"
+      >
+        {url
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={url} alt="" className="h-full w-full object-cover" data-testid="contact-avatar-img" />
+          : <span className="text-[28px] font-medium text-white">{name[0]?.toUpperCase() ?? '?'}</span>}
+      </button>
+      {url && (
+        <button
+          type="button"
+          onClick={() => void onChange(null)}
+          aria-label={`Remove ${name}'s photo`}
+          className="absolute -right-1 -top-1 hidden h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-[#0D0D0A] text-[11px] text-white/60 hover:text-white group-hover:flex group-focus-within:flex"
+        >
+          ✕
+        </button>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        aria-label={`Photo of ${name}`}
+        data-testid="contact-avatar-input"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ''; }}
+      />
     </div>
   );
 }

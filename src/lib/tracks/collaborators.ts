@@ -16,6 +16,20 @@ export interface TrackCollaborator {
   role: string;
   source: string;
   created_at: string;
+  /** The CRM contact this credit is (mig 124). */
+  contact_id?: string | null;
+}
+
+/**
+ * The contact a credit most likely is: exactly one contact whose name matches
+ * case- and space-insensitively. Two matches is a guess, so none is offered.
+ */
+export function suggestContactForCredit<T extends { id: string; name: string }>(creditName: string, contacts: readonly T[]): T | null {
+  const norm = (v: string) => v.trim().replace(/\s+/g, ' ').toLowerCase();
+  const target = norm(creditName);
+  if (!target) return null;
+  const hits = contacts.filter((c) => norm(c.name) === target);
+  return hits.length === 1 ? hits[0] : null;
 }
 
 /** Credits derived from a filename are never silently replaced — see migration 115. */

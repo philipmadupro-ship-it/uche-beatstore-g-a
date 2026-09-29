@@ -61,6 +61,19 @@ service-role key can read the schema's effects but cannot run DDL):
 | `124_song_beat_and_credit_links.sql` | **not applied** | new — `tracks.beat_track_id`, `track_collaborators.contact_id`, `contacts.avatar_url` |
 | `125_artist_portals.sql` | **not applied** | new — one portal per artist |
 | `126_project_shares_contact.sql` | **not applied** | new — `project_shares.contact_id` + email backfill |
+| `121_share_full_playback.sql` | **not applied** (as far as this ledger knows) | new — per-share full track vs 75 s preview (SHARE-01) |
+| `127_project_assets.sql` | **not applied** | new — project files (Artist Workspace, phase 2) |
+| `128_portal_comments.sql` | **not applied** | new — `project_comments.contact_id`: an artist's portal thread |
+| `129_artist_portal_auto_digest.sql` | **not applied** | new — `artist_portals.auto_digest` for the daily digest cron |
+
+**To apply everything pending in one go** without `psql`, paste
+`supabase/apply/pending.sql` (built by `scripts/ops/bundle-migrations.sh`) into
+the Supabase SQL editor with nothing selected — the editor runs only the
+highlighted text when something is selected, and a half-selected CREATE TABLE
+fails with `syntax error at or near "created_at"`. The bundle is one
+transaction and ends with `supabase/apply/verify.sql`, a read-only table of
+which migrations are in effect. The step-by-step runbook (for a person or an
+agent session) is `docs/prompts/apply-migrations.md`.
 
 What each still-pending one does:
 
@@ -122,12 +135,31 @@ All are idempotent, so running the full set (`npm run db:migrate`) is safe.
   **Numbered 122, not 121.** `121_share_full_playback.sql` was on the
   unmerged branch `claude/lucid-ride-5j0gql`.
 
+- `127`–`129` — **Artist Relationship Workspace, phase 2.** Apply after
+  122–126. Unlike 122–126, the code degrades per feature without them:
+  project files, portal comments and the daily digest each answer
+  `schemaReady: false` / 503 naming their migration, and everything else in
+  the workspace and portal keeps working.
+  - `127` — `project_assets`: references, artwork, lyric sheets and documents
+    attached to a project, stored in the PRIVATE bucket (`url` is an `r2://`
+    reference, never public). `in_portal` (default false) + `portal_at` decide
+    what artists see and what counts as NEW. Owner-only RLS + same-owner
+    trigger.
+  - `128` — `project_comments.contact_id` (ON DELETE SET NULL) + a trigger
+    refusing another owner's contact: which artist's portal thread a comment
+    belongs to. Share pages filter these out.
+  - `129` — `artist_portals.auto_digest` (default false) for
+    `/api/cron/artist-digest`.
+  - Verified 2026-09-29 on the local Postgres 16 + PostgREST 12 replay of
+    001–129 (twice), with RLS / trigger probes, and with 127–129 removed
+    again to check each route degrades.
+
 Update this table when a run is confirmed.
 
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 126, 121 is `121_share_full_playback` (SHARE-01) (next new migration = 127). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 129, 121 is `121_share_full_playback` (SHARE-01) (next new migration = 130). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch

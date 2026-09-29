@@ -97,6 +97,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         || (userRow?.user?.email ? userRow.user.email.split('@')[0] : null)
         || 'Owner';
 
+      // A reply in an artist's portal thread stays in that thread (mig 128),
+      // so the artist sees the answer in their portal. Before 128 the column
+      // is missing and the reply is an ordinary project comment.
+      let contactId: string | null = null;
+      if (parentId) {
+        const { data: parent, error: parentErr } = await owner.admin
+          .from('project_comments')
+          .select('contact_id')
+          .eq('id', parentId)
+          .eq('project_id', id)
+          .maybeSingle();
+        if (!parentErr) contactId = (parent as { contact_id?: string | null } | null)?.contact_id ?? null;
+      }
+
       const { data, error } = await owner.admin
         .from('project_comments')
         .insert({
@@ -109,6 +123,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           parent_id: parentId,
           region_start: regionStart,
           region_end: regionEnd,
+          ...(contactId ? { contact_id: contactId } : {}),
         })
         .select()
         .single();

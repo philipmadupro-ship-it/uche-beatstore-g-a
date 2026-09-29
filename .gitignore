@@ -74,3 +74,4 @@ stem-service/.venv/
 Remix:-PATTERN-MACHINE/
 public/uploads/e2e-local-db/
 scripts/local-db/.cache/
+data/project-assets/

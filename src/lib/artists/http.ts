@@ -8,7 +8,7 @@ import { SchemaNotReadyError, isMissingSchema } from './workspace-load';
  */
 export function schemaNotReadyResponse(): NextResponse {
   return NextResponse.json(
-    { error: 'The artist workspace needs migrations 122–126 applied on Supabase.', migration: '122-126', schemaReady: false },
+    { error: 'The artist workspace needs migrations 122–129 applied on Supabase.', migration: '122-129', schemaReady: false },
     { status: 503 },
   );
 }

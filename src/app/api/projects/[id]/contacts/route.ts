@@ -10,6 +10,7 @@ import { countUnnotified } from '@/lib/artist-portal/new-items';
 import { isDecision } from '@/lib/contacts/decisions';
 import { isSchemaNotReady, schemaNotReadyResponse } from '@/lib/artists/http';
 import { portalUrl } from '@/lib/artists/portal-send';
+import { loadPortalAssets, toPortalFileRows } from '@/lib/artist-portal/files';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,26 +51,35 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     ]);
     const trackIds = ((projectTracks.data ?? []) as Array<{ track_id: string }>).map((r) => r.track_id);
 
-    const portalProjectIds = [...new Set(allLinks.map((l) => l.project_id))];
-    const [portalTracks, states] = await Promise.all([
+    // Archived projects are not in any portal (membership.ts): they are not news.
+    const linkedIds = [...new Set(allLinks.map((l) => l.project_id))];
+    const archived = new Set((linkedIds.length
+      ? await selectIn<{ id: string; status: string | null }>((ids) => admin.from('projects').select('id, status').in('id', ids).eq('user_id', userId), linkedIds)
+      : []).filter((p) => p.status === 'archived').map((p) => p.id));
+    const liveLinks = allLinks.filter((l) => !archived.has(l.project_id));
+    const portalProjectIds = linkedIds.filter((pid) => !archived.has(pid));
+    const [portalTracks, states, portalAssets] = await Promise.all([
       portalProjectIds.length
         ? selectIn<{ project_id: string; track_id: string; added_at: string }>((ids) => admin.from('project_tracks').select('project_id, track_id, added_at').in('project_id', ids), portalProjectIds)
         : Promise.resolve([]),
       trackIds.length
         ? selectIn<{ contact_id: string; track_id: string; decision: string | null; set_by: string }>((ids) => admin.from('contact_track_states').select('contact_id, track_id, decision, set_by').in('track_id', ids).eq('user_id', userId).in('contact_id', contactIds), trackIds)
         : Promise.resolve([]),
+      loadPortalAssets(admin, userId, portalProjectIds),
     ]);
+    const portalFiles = toPortalFileRows(portalAssets);
 
     const byId = new Map(contacts.map((c) => [c.id, c]));
     const portalOf = new Map(portals.map((p) => [p.contact_id, p]));
     const out = links
       .filter((l) => byId.has(l.contact_id))
       .map((l) => {
-        const mine = allLinks.filter((x) => x.contact_id === l.contact_id);
+        const mine = liveLinks.filter((x) => x.contact_id === l.contact_id);
         const mineIds = new Set(mine.map((x) => x.project_id));
         const notify = countUnnotified(
           mine.map((x) => ({ projectId: x.project_id, linkedAt: x.created_at, lastNotifiedAt: x.last_notified_at })),
           portalTracks.filter((t) => mineIds.has(t.project_id)).map((t) => ({ projectId: t.project_id, trackId: t.track_id, addedAt: t.added_at })),
+          portalFiles.filter((f) => mineIds.has(f.projectId)),
         );
         const portal = portalOf.get(l.contact_id) ?? null;
         return {

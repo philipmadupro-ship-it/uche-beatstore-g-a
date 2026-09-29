@@ -3,7 +3,7 @@
 /**
  * The artist workspace — /contacts/[id] in workspace mode.
  *
- *   Overview │ Projects │ Beats │ Songs │ Activity │ Notes
+ *   Overview │ Projects │ Beats │ Songs │ Files │ Activity │ Notes
  *
  * Tabs are URL-addressable (?tab=beats). They read from one
  * /api/contacts/[id]/workspace payload; every write goes to its own route and
@@ -13,7 +13,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ExternalLink, Layers, Music, Plus, Sparkles } from 'lucide-react';
+import { Download, ExternalLink, FileText, Layers, Music, Plus, Sparkles } from 'lucide-react';
+import { ASSET_KIND_LABEL, formatBytes, type ProjectAssetKind } from '@/lib/projects/assets';
 import { Dropdown, type DropdownOption } from '@/components/ui/Dropdown';
 import { BatchActionBar } from '@/components/ui/BatchActionBar';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
@@ -23,12 +24,13 @@ import { DECISIONS, DECISION_META, MOVING_DECISIONS, type Decision } from '@/lib
 import { ENGAGEMENT_LABEL } from '@/lib/contacts/track-engagement';
 import type { WorkspaceBeat, WorkspaceProject, WorkspaceSong } from '@/lib/artists/workspace-load';
 import { jsonOrThrow, type ReadyWorkspace } from './types';
+import { ArtistCommentsPanel } from './ArtistCommentsPanel';
 
-export const WORKSPACE_TABS = ['overview', 'projects', 'beats', 'songs', 'activity', 'notes'] as const;
+export const WORKSPACE_TABS = ['overview', 'projects', 'beats', 'songs', 'files', 'activity', 'notes'] as const;
 export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
 
 const TAB_LABEL: Record<WorkspaceTab, string> = {
-  overview: 'Overview', projects: 'Projects', beats: 'Beats', songs: 'Songs', activity: 'Activity', notes: 'Notes',
+  overview: 'Overview', projects: 'Projects', beats: 'Beats', songs: 'Songs', files: 'Files', activity: 'Activity', notes: 'Notes',
 };
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
@@ -89,6 +91,7 @@ export function ArtistWorkspaceTabs({
             {TAB_LABEL[t]}
             {t === 'beats' && workspace.beats.length > 0 && <span className="ml-1.5 text-white/30">{workspace.beats.length}</span>}
             {t === 'songs' && workspace.songs.length > 0 && <span className="ml-1.5 text-white/30">{workspace.songs.length}</span>}
+            {t === 'files' && workspace.files.length > 0 && <span className="ml-1.5 text-white/30">{workspace.files.length}</span>}
           </button>
         ))}
       </div>
@@ -98,7 +101,17 @@ export function ArtistWorkspaceTabs({
         {tab === 'projects' && <ProjectsTab contactId={contactId} contactName={contactName} workspace={workspace} onChanged={onChanged} />}
         {tab === 'beats' && <BeatsTab contactId={contactId} beats={workspace.beats} onChanged={onChanged} />}
         {tab === 'songs' && <SongsTab songs={workspace.songs} beats={workspace.beats} onChanged={onChanged} />}
-        {tab === 'activity' && activity}
+        {tab === 'files' && <FilesTab contactName={contactName} workspace={workspace} onChanged={onChanged} />}
+        {tab === 'activity' && (
+          <>
+            <ArtistCommentsPanel
+              contactId={contactId}
+              contactName={contactName}
+              projects={workspace.projects.filter((p) => p.link.in_portal).map((p) => ({ id: p.id, name: p.name }))}
+            />
+            {activity}
+          </>
+        )}
         {tab === 'notes' && <div className="space-y-8">{notes}{tasks}</div>}
       </div>
     </div>
@@ -578,5 +591,101 @@ function SongsTab({ songs, beats, onChanged }: { songs: WorkspaceSong[]; beats: 
         </li>
       ))}
     </ul>
+  );
+}
+
+/* ── Files ────────────────────────────────────────────────────────────── */
+
+function FilesTab({ contactName, workspace, onChanged }: { contactName: string; workspace: ReadyWorkspace; onChanged: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const byProject = useMemo(() => {
+    const groups = new Map<string, { name: string; files: ReadyWorkspace['files'] }>();
+    for (const f of workspace.files) {
+      const g = groups.get(f.projectId) ?? { name: f.projectName, files: [] };
+      g.files.push(f);
+      groups.set(f.projectId, g);
+    }
+    return [...groups.entries()];
+  }, [workspace.files]);
+
+  const togglePortal = async (f: ReadyWorkspace['files'][number]) => {
+    setBusy(f.id);
+    try {
+      await jsonOrThrow(await fetch(`/api/projects/${f.projectId}/assets/${f.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ in_portal: !f.in_portal }),
+      }));
+      onChanged();
+    } catch (err) {
+      toast.error('Could not update the file', err instanceof Error ? err.message : 'Try again');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      <section aria-labelledby="ws-project-files">
+        <h2 id="ws-project-files" className={`${LABEL} mb-3`}>Project files</h2>
+        {!workspace.filesReady ? (
+          <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/40">
+            Project files need migration 127 applied on Supabase.
+          </p>
+        ) : byProject.length === 0 ? (
+          <p className="rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/40">
+            No project files yet. Add references, artwork or lyric sheets on a project page, switch them into the portal, and {contactName} can open them.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {byProject.map(([projectId, g]) => (
+              <div key={projectId}>
+                <Link href={`/projects/${projectId}`} className="mb-1.5 inline-block text-[11px] text-white/50 hover:text-white">{g.name}</Link>
+                <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]">
+                  {g.files.map((f) => (
+                    <li key={f.id} className="flex items-center gap-3 px-3 py-2.5" data-testid={`ws-file-${f.id}`}>
+                      <FileText size={14} className="shrink-0 text-white/40" aria-hidden="true" />
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-2 truncate text-[13px] text-white/80">
+                          <span className="truncate">{f.label}</span>
+                          {f.isNewForArtist && <span className="shrink-0 text-[10px] font-mono uppercase tracking-[0.2em] text-[#6DC6A4]">Not seen</span>}
+                        </p>
+                        <p className="truncate text-[11px] text-white/40">
+                          {[ASSET_KIND_LABEL[f.kind as ProjectAssetKind] ?? 'File', formatBytes(f.size_bytes), f.downloadedAt ? `downloaded ${relativeDays(f.downloadedAt)}` : null].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                      <Toggle label="In portal" checked={f.in_portal} disabled={busy === f.id} onChange={() => void togglePortal(f)} />
+                      <a href={f.downloadUrl} download aria-label={`Download ${f.label}`} className="shrink-0 rounded-lg p-2 text-white/50 hover:bg-white/[0.10] hover:text-white">
+                        <Download size={14} aria-hidden="true" />
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section aria-labelledby="ws-track-files">
+        <h2 id="ws-track-files" className={`${LABEL} mb-3`}>Track files</h2>
+        {workspace.trackFiles.length === 0 ? (
+          <p className="text-[11px] text-white/40">No WAVs or stems on this artist’s beats and songs yet.</p>
+        ) : (
+          <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]">
+            {workspace.trackFiles.map((t) => (
+              <li key={t.trackId} className="flex items-center gap-3 px-3 py-2.5">
+                <Music size={14} className="shrink-0 text-white/40" aria-hidden="true" />
+                <Link href={`/library/${t.trackId}`} className="min-w-0 flex-1 truncate text-[13px] text-white/80 hover:text-white">{t.title}</Link>
+                <span className="shrink-0 text-[11px] text-white/40">
+                  {[t.hasWav ? 'WAV' : null, t.stems ? `${t.stems} stem${t.stems === 1 ? '' : 's'}` : null].filter(Boolean).join(' · ')}
+                </span>
+                <span className={`w-[112px] shrink-0 text-right text-[11px] ${t.downloads > 0 ? 'text-[#6DC6A4]' : 'text-white/30'}`}>
+                  {t.downloads > 0 ? `Downloaded ${t.downloads}×` : t.inPortal ? 'In portal' : '—'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
   );
 }

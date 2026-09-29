@@ -152,6 +152,13 @@ export const CollaboratorDeleteBodySchema = z.object({
 }).strict();
 export type CollaboratorDeleteBody = z.infer<typeof CollaboratorDeleteBodySchema>;
 
+/** PATCH /api/tracks/[id]/collaborators — link a credit to a CRM contact (mig 124), or unlink with null. */
+export const CollaboratorLinkBodySchema = z.object({
+  id: z.string().min(1),
+  contact_id: z.string().uuid().nullable(),
+}).strict();
+export type CollaboratorLinkBody = z.infer<typeof CollaboratorLinkBodySchema>;
+
 // ── Projects ────────────────────────────────────────────────────────────
 
 export const PROJECT_STATUSES = ['in_progress', 'final', 'archived'] as const;
@@ -417,6 +424,10 @@ const ContactWritableFields = {
   website: z.string().max(300).nullable().optional(),
   notes: z.string().max(10000).nullable().optional(),
   crm_status: z.enum(CRM_STAGES).nullable().optional(),
+  /** Mig 124. A URL /api/upload/image returned: public http(s) or an app path, never a private reference. */
+  avatar_url: z.string().max(500)
+    .refine((v) => /^https?:\/\//.test(v) || (v.startsWith('/') && !v.startsWith('//')), { message: 'Avatar must be an uploaded image URL' })
+    .nullable().optional(),
 } as const;
 
 export const ContactCreateBodySchema = z.object({
@@ -696,9 +707,11 @@ export type ContactDecisionBody = z.infer<typeof ContactDecisionBodySchema>;
 
 /** POST /api/contacts/[id]/portal — create, revoke or reissue the artist's portal. */
 export const ArtistPortalActionBodySchema = z.object({
-  action: z.enum(['create', 'revoke', 'reissue']),
+  action: z.enum(['create', 'revoke', 'reissue', 'settings']),
   password: z.string().min(4).max(200).nullable().optional(),
-}).strict();
+  /** settings: hand Notify to the daily digest cron (mig 129). */
+  auto_digest: z.boolean().optional(),
+}).strict().refine((b) => b.action !== 'settings' || b.auto_digest !== undefined, { message: 'Nothing to update' });
 export type ArtistPortalActionBody = z.infer<typeof ArtistPortalActionBodySchema>;
 
 /** POST /api/contacts/[id]/notify — one digest email of what is new in the portal. */
@@ -719,3 +732,64 @@ export const PortalPlayBodySchema = z.object({
   track_id: z.string().uuid(),
 }).strict();
 export type PortalPlayBody = z.infer<typeof PortalPlayBodySchema>;
+
+// ── Artist workspace, phase 2 (migrations 127–129) ───────────────────────
+
+const ASSET_KINDS = ['reference', 'artwork', 'lyrics', 'document', 'audio', 'other'] as const;
+
+/** POST /api/projects/[id]/assets/presign — a presigned PUT for a large project file. */
+export const ProjectAssetPresignBodySchema = z.object({
+  file_name: z.string().min(1).max(300),
+  size_bytes: z.number().int().positive(),
+}).strict();
+export type ProjectAssetPresignBody = z.infer<typeof ProjectAssetPresignBodySchema>;
+
+/** POST /api/projects/[id]/assets (JSON) — register a file uploaded with a presigned PUT. */
+export const ProjectAssetRegisterBodySchema = z.object({
+  url: z.string().min(1).max(500),
+  file_name: z.string().min(1).max(300),
+  kind: z.enum(ASSET_KINDS).optional(),
+  label: z.string().max(200).optional(),
+  in_portal: z.boolean().optional().default(false),
+}).strict();
+export type ProjectAssetRegisterBody = z.infer<typeof ProjectAssetRegisterBodySchema>;
+
+/** Fields of a multipart POST /api/projects/[id]/assets besides the file. */
+export const ProjectAssetFormFieldsSchema = z.object({
+  kind: z.enum(ASSET_KINDS).optional(),
+  label: z.string().max(200).optional(),
+  in_portal: z.enum(['true', 'false']).optional().transform((v) => v === 'true'),
+});
+
+/** PATCH /api/projects/[id]/assets/[assetId] */
+export const ProjectAssetPatchBodySchema = z.object({
+  label: z.string().trim().min(1).max(200).optional(),
+  kind: z.enum(ASSET_KINDS).optional(),
+  in_portal: z.boolean().optional(),
+  position: z.number().int().min(0).max(100000).optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type ProjectAssetPatchBody = z.infer<typeof ProjectAssetPatchBodySchema>;
+
+const commentRegion = <T extends { region_start?: number | null; region_end?: number | null }>(b: T) =>
+  (b.region_start == null) === (b.region_end == null)
+  && (b.region_start == null || (b.region_end as number) > (b.region_start as number));
+
+/** POST /api/portal/[token]/comments — the artist comments on a portal project or beat. */
+export const PortalCommentBodySchema = z.object({
+  project_id: z.string().uuid(),
+  track_id: z.string().uuid().nullable().optional(),
+  parent_id: z.string().uuid().nullable().optional(),
+  body: z.string().trim().min(1, 'Comment cannot be empty').max(5000, 'Comment too long'),
+  region_start: z.number().min(0).max(86400).nullable().optional(),
+  region_end: z.number().min(0).max(86400).nullable().optional(),
+}).strict().refine(commentRegion, { message: 'A time range needs a start before its end' });
+export type PortalCommentBody = z.infer<typeof PortalCommentBodySchema>;
+
+/** POST /api/contacts/[id]/comments — the producer writes in an artist's portal thread. */
+export const ArtistCommentBodySchema = z.object({
+  project_id: z.string().uuid(),
+  track_id: z.string().uuid().nullable().optional(),
+  parent_id: z.string().uuid().nullable().optional(),
+  body: z.string().trim().min(1, 'Comment cannot be empty').max(5000, 'Comment too long'),
+}).strict();
+export type ArtistCommentBody = z.infer<typeof ArtistCommentBodySchema>;

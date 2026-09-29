@@ -3,6 +3,11 @@
 SELECT m.migration,
        CASE WHEN m.ok THEN 'applied' ELSE 'MISSING' END AS status
 FROM (VALUES
+  ('112_backfill_buyer_contacts',    NOT EXISTS (
+     SELECT 1 FROM public.license_purchases lp
+     WHERE lp.status = 'paid' AND lp.seller_user_id IS NOT NULL AND lp.buyer_email IS NOT NULL
+       AND lower(btrim(lp.buyer_email)) <> 'unknown@invalid' AND position('@' in lp.buyer_email) > 1
+       AND NOT EXISTS (SELECT 1 FROM public.contacts c WHERE c.user_id = lp.seller_user_id AND lower(btrim(c.email)) = lower(btrim(lp.buyer_email))))),
   ('113_store_layout',               EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'creator_profiles' AND column_name = 'store_layout')),
   ('115_track_collaborators',        to_regclass('public.track_collaborators') IS NOT NULL),
   ('116_notifications_realtime',     EXISTS (SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'notifications')),
@@ -11,6 +16,9 @@ FROM (VALUES
   ('123_contact_track_states',       to_regclass('public.contact_track_states') IS NOT NULL),
   ('124_song_beat_and_credit_links', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'tracks' AND column_name = 'beat_track_id')),
   ('125_artist_portals',             to_regclass('public.artist_portals') IS NOT NULL),
-  ('126_project_shares_contact',     EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'project_shares' AND column_name = 'contact_id'))
+  ('126_project_shares_contact',     EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'project_shares' AND column_name = 'contact_id')),
+  ('127_project_assets',             to_regclass('public.project_assets') IS NOT NULL),
+  ('128_portal_comments',            EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'project_comments' AND column_name = 'contact_id')),
+  ('129_artist_portal_auto_digest',  EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'artist_portals' AND column_name = 'auto_digest'))
 ) AS m(migration, ok)
 ORDER BY m.migration;

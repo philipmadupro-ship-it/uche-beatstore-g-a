@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isAutoDerived, roleLabel, sortCollaborators } from './collaborators';
+import { isAutoDerived, roleLabel, sortCollaborators, suggestContactForCredit } from './collaborators';
 
 describe('sortCollaborators', () => {
   it('orders producer before feature before collaborator', () => {
@@ -51,5 +51,17 @@ describe('roleLabel', () => {
 
   it('passes an unknown role through unchanged', () => {
     expect(roleLabel('engineer')).toBe('engineer');
+  });
+});
+
+describe('suggestContactForCredit', () => {
+  const contacts = [{ id: 'a', name: 'Artist  #1' }, { id: 'b', name: 'Metro' }, { id: 'c', name: 'metro' }];
+  it('matches one contact by name, ignoring case and spacing', () => {
+    expect(suggestContactForCredit(' artist #1 ', contacts)?.id).toBe('a');
+  });
+  it('offers nothing when the name is ambiguous or unknown', () => {
+    expect(suggestContactForCredit('Metro', contacts)).toBeNull();
+    expect(suggestContactForCredit('Nobody', contacts)).toBeNull();
+    expect(suggestContactForCredit('', contacts)).toBeNull();
   });
 });

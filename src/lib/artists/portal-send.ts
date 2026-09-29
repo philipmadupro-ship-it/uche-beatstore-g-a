@@ -19,6 +19,7 @@ import { selectIn } from '@/lib/db/chunked-in';
 import { buildPortalDigest } from '@/lib/artist-portal/digest';
 import { countUnnotified } from '@/lib/artist-portal/new-items';
 import { buildProjectSendRow } from '@/lib/crm/project-send';
+import { loadPortalAssets, toPortalFileRows } from '@/lib/artist-portal/files';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Admin = any;
@@ -105,18 +106,25 @@ export async function sendPortalDigest(
     .eq('user_id', userId)
     .eq('in_portal', true);
   if (linkErr) throw linkErr;
-  const links = (linkData ?? []) as LinkRow[];
+  const allLinks = (linkData ?? []) as LinkRow[];
+  // Archived projects are not in the portal (membership.ts): never announce them.
+  const liveProjects = allLinks.length
+    ? await selectIn<{ id: string; name: string | null; status: string | null }>((ids) => admin.from('projects').select('id, name, status').in('id', ids).eq('user_id', userId), allLinks.map((l) => l.project_id))
+    : [];
+  const projects = liveProjects.filter((p) => p.status !== 'archived');
+  const links = allLinks.filter((l) => projects.some((p) => p.id === l.project_id));
   if (links.length === 0) return { ok: false, status: 409, error: 'Nothing is in this artist’s portal yet. Share a project first.' };
 
   const projectIds = links.map((l) => l.project_id);
-  const [projects, projectTracks] = await Promise.all([
-    selectIn<{ id: string; name: string | null }>((ids) => admin.from('projects').select('id, name').in('id', ids).eq('user_id', userId), projectIds),
+  const [projectTracks, assets] = await Promise.all([
     selectIn<ProjectTrackRow>((ids) => admin.from('project_tracks').select('project_id, track_id, added_at').in('project_id', ids).order('position', { ascending: true }), projectIds),
+    loadPortalAssets(admin, userId, projectIds),
   ]);
 
   const count = countUnnotified(
     links.map((l) => ({ projectId: l.project_id, linkedAt: l.created_at, lastNotifiedAt: l.last_notified_at })),
     projectTracks.map((pt) => ({ projectId: pt.project_id, trackId: pt.track_id, addedAt: pt.added_at })),
+    toPortalFileRows(assets),
   );
   if (count.total === 0 && !opts.force) {
     return { ok: false, status: 409, error: 'Nothing new since the last notify.' };
@@ -134,6 +142,11 @@ export async function sendPortalDigest(
     const list = trackIdsByProject.get(pt.project_id) ?? [];
     if (!list.includes(pt.track_id)) list.push(pt.track_id);
     trackIdsByProject.set(pt.project_id, list);
+  }
+  const fileLabelsByProject = new Map<string, string[]>();
+  for (const f of count.newFiles) {
+    const label = assets.find((a) => a.id === f.fileId)?.label || 'Untitled file';
+    fileLabelsByProject.set(f.projectId, [...(fileLabelsByProject.get(f.projectId) ?? []), label]);
   }
   const allTrackIds = [...new Set([...trackIdsByProject.values()].flat())];
   const tracks = allTrackIds.length
@@ -155,11 +168,12 @@ export async function sendPortalDigest(
     portalUrl: url,
     message: opts.message,
     projects: projectIds
-      .filter((id) => newProjectSet.has(id) || trackIdsByProject.has(id))
+      .filter((id) => newProjectSet.has(id) || trackIdsByProject.has(id) || fileLabelsByProject.has(id))
       .map((id) => ({
         name: nameOf.get(id) ?? 'Untitled project',
         isNewProject: newProjectSet.has(id),
         trackTitles: (trackIdsByProject.get(id) ?? []).map((t) => title.get(t) ?? 'Untitled'),
+        fileLabels: newProjectSet.has(id) ? [] : fileLabelsByProject.get(id) ?? [],
       })),
   });
 
@@ -177,7 +191,7 @@ export async function sendPortalDigest(
   // The email went out. Record it; failures below are logged by the caller,
   // never turned into a failed notify (that would invite a second email).
   const now = (opts.now ?? new Date()).toISOString();
-  const notifiedProjectIds = projectIds.filter((id) => newProjectSet.has(id) || trackIdsByProject.has(id));
+  const notifiedProjectIds = projectIds.filter((id) => newProjectSet.has(id) || trackIdsByProject.has(id) || fileLabelsByProject.has(id));
   await admin
     .from('project_contacts')
     .update({ last_notified_at: now })
@@ -204,7 +218,7 @@ export async function sendPortalDigest(
     kind: 'artist_notified',
     title: digest.itemCount > 0 ? `Notified about ${digest.itemCount} new` : 'Sent the portal link',
     body: opts.message?.trim() || null,
-    metadata: { beat_send_id: (send as { id?: string } | null)?.id ?? null, project_ids: notifiedProjectIds, track_ids: allTrackIds },
+    metadata: { beat_send_id: (send as { id?: string } | null)?.id ?? null, project_ids: notifiedProjectIds, track_ids: allTrackIds, file_ids: count.newFiles.map((f) => f.fileId) },
     occurred_at: now,
   });
 

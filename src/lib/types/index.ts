@@ -113,6 +113,8 @@ export type ContactCategory =
 export interface Contact {
   id: string;
   name: string;
+  /** Mig 124: a photo uploaded through /api/upload/image. */
+  avatar_url?: string | null;
   email?: string | null;
   phone?: string | null;
   role?: string | null;

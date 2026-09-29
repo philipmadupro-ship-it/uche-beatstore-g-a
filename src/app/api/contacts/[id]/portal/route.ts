@@ -15,13 +15,15 @@ export const dynamic = 'force-dynamic';
 const log = createLogger('api.contacts.portal');
 
 /**
- * POST /api/contacts/[id]/portal  { action: 'create' | 'revoke' | 'reissue', password? }
+ * POST /api/contacts/[id]/portal  { action: 'create' | 'revoke' | 'reissue' | 'settings', password?, auto_digest? }
  *
  *   create  — the contact's one portal (idempotent: returns the existing one).
  *   revoke  — the link stops working (410) until reissued.
  *   reissue — a NEW token on the same row, un-revoked. The old link dies
  *             (404); history stays attached to the contact. This is the
  *             answer to a forwarded link.
+ *   settings — `auto_digest`: the daily cron sends the Notify digest when
+ *             something is new (off by default, mig 129).
  * `password` (optional, create/reissue) sets or, with null, clears the lock.
  * The token is returned to the producer only; it is a bearer credential.
  */
@@ -34,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const parsed = await readBody(req, ArtistPortalActionBodySchema);
   if (!parsed.ok) return parsed.res;
-  const { action, password } = parsed.data;
+  const { action, password, auto_digest } = parsed.data;
 
   try {
     const { portal } = await ensurePortal(admin, userId, id);
@@ -46,6 +48,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       patch.last_viewed_at = null;
       patch.previous_viewed_at = null;
     }
+    if (action === 'settings' && auto_digest !== undefined) patch.auto_digest = auto_digest;
     if (password !== undefined && action !== 'revoke') {
       patch.password_hash = password ? await bcrypt.hash(password, 10) : null;
     }
@@ -55,11 +58,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .update(patch)
       .eq('id', portal.id)
       .eq('user_id', userId)
-      .select('id, token, revoked_at, password_hash, last_viewed_at, view_count, created_at')
+      .select('id, token, revoked_at, password_hash, last_viewed_at, view_count, created_at, auto_digest')
       .single();
     if (error) throw error;
 
-    if (action !== 'create') {
+    if (action === 'revoke' || action === 'reissue') {
       await admin.from('contact_activity').insert({
         contact_id: id,
         user_id: userId,
