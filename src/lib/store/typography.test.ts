@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { FONT_FAMILY_MAP } from '@/components/store/types';
+import { defaultStoreTheme } from '@/lib/store-editor/layout';
+import { STORE_FONT_FAMILIES as FONT_FAMILY_MAP } from './appearance';
 import { storeFontFamily, storeTextColor, storefrontThemeStyle } from './typography';
 
 describe('storeFontFamily', () => {
@@ -46,5 +47,12 @@ describe('storefrontThemeStyle', () => {
       fontFamily: FONT_FAMILY_MAP.default,
       color: '#FFFFFF',
     });
+  });
+
+  it('applies a Design theme colour the producer changed, and ignores the stock one', () => {
+    const creator = { text_color_primary: '#eeeeee', accent_color: '#ff0000' };
+    expect(storefrontThemeStyle(creator, defaultStoreTheme)).toMatchObject({ '--store-accent': '#ff0000', color: '#eeeeee' });
+    expect(storefrontThemeStyle(creator, { ...defaultStoreTheme, accent: '#6DC6A4', text: '#dddddd' }))
+      .toMatchObject({ '--store-accent': '#6DC6A4', color: '#dddddd' });
   });
 });

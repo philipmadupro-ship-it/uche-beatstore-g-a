@@ -149,7 +149,7 @@ Two things are deliberately fixed. The **catalogue** and the **trust rail** are 
 
 The text, image, video, links and canvas blocks a producer adds appear on the live `/store` exactly as the canvas draws them — the same component renders both. A block with nothing in it is left off the live page rather than showing the editor's "add content" hint. Videos are YouTube or Vimeo links (any of their usual URL shapes); other video hosts are refused in the editor too, because the storefront's security policy would block them. Images need an https address.
 
-Work autosaves. A producer who never opens Design gets exactly the storefront they have today.
+Work autosaves. A producer who never opens Design gets exactly the storefront they have today. Theme colours changed in Design apply to `/store` and the producer page. Accent and text left at the stock values use the colours set in Content, so opening Design to reorder sections never changes the colours. A saved change can take up to about a minute and a half to reach the public store, because the catalogue is edge-cached.
 
 ### Producer: send a beat to an artist
 `/contacts` → pick a contact → Send Beat modal → choose track + license tier + custom message → `/api/share` creates a `share_links` row (nanoid token) + `beat_sends` row (status='sent') → Resend email with `/share/<token>` → recipient opens, share variant renders based on `recipient_kind` → producer sees opens / plays / interest via `share_plays` table + `/analytics`.

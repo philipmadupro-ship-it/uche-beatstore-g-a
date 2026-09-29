@@ -12,6 +12,7 @@ import {
 import { toast } from '@/hooks/useToast';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { discardUploadedImage, uploadImageFile } from '@/lib/upload/image-upload-client';
+import { normalizeFontStyle, STORE_FONT_LABELS, STORE_FONT_STYLES } from '@/lib/store/appearance';
 import { profileSaveBody, profileSaveError, type ProfileFormState } from '@/lib/profile/save-body';
 
 const EMPTY_PROFILE: ProfileFormState = {
@@ -107,7 +108,7 @@ export default function ProfilePage() {
             soundcloud_url: data.profile.soundcloud_url || '',
             website_url: data.profile.website_url || '',
             accent_color: data.profile.accent_color || '#FFFFFF',
-            font_style: data.profile.font_style || 'default',
+            font_style: normalizeFontStyle(data.profile.font_style),
           });
         }
       })
@@ -386,18 +387,21 @@ export default function ProfilePage() {
               </Field>
               <Field label="Font Style" hint="Typography style for your public storefront">
                 <div className="grid grid-cols-3 gap-2">
-                  {(['default', 'modern', 'minimal'] as const).map((s) => (
+                  {/* The same three styles the storefront draws. `modern` and
+                      `minimal` were offered here and mapped to nothing, so
+                      they rendered as the default; a saved one reads as that. */}
+                  {STORE_FONT_STYLES.map((s) => (
                     <button
                       key={s}
                       type="button"
                       onClick={() => setValue('font_style', s)}
                       className={`py-2.5 rounded-xl border text-[10px] font-mono uppercase tracking-wider transition-all ${
-                        (profile.font_style || 'default') === s
+                        normalizeFontStyle(profile.font_style) === s
                           ? 'border-white/20 bg-white/10 text-white'
                           : 'border-white/10 text-white/40 hover:text-white'
                       }`}
                     >
-                      {s}
+                      {STORE_FONT_LABELS[s]}
                     </button>
                   ))}
                 </div>

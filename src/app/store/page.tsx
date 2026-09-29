@@ -33,9 +33,9 @@ import {
   type TypeFilter, type ViewMode, type LicenseTier,
   TYPE_FILTERS,
 } from '@/components/store/types';
-import { storefrontThemeStyle } from '@/lib/store/typography';
+import { appearanceStyle } from '@/lib/store/typography';
 import { sanitizeUrl } from '@/components/store/helpers';
-import { normalizeThemeColor } from '@/lib/theme/colors';
+import { effectiveStoreTheme, resolveStoreAppearance } from '@/lib/store/appearance';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
@@ -49,7 +49,6 @@ import {
 } from '@/lib/store-editor/layout';
 import { hasLiveContent, isContentSection, renderBreakpointFor } from '@/lib/store-editor/content-sections';
 import { SectionRenderer, type StorefrontData } from '@/components/store-editor/SectionRenderer';
-import { effectiveStoreTheme } from '@/lib/store/appearance';
 import { useStoreBreakpoint } from '@/hooks/useStoreBreakpoint';
 import { FeaturedPlaylistsStrip } from '@/components/store/FeaturedPlaylistsStrip';
 import {
@@ -1080,7 +1079,6 @@ function StorePage() {
     }
   }
 
-  const accentColor = normalizeThemeColor(creator?.accent_color);
   /**
    * The producer's storefront layout.
    *
@@ -1099,9 +1097,12 @@ function StorePage() {
    * Visibility stays CSS-driven so the cached HTML serves every device.
    */
   const viewerBreakpoint = useStoreBreakpoint();
-  // Font style, text colour and accent — the same object the Store Editor's
-  // previews spread, so what the producer sees there is what renders here.
-  const themeStyle = useMemo(() => storefrontThemeStyle(creator), [creator]);
+  // Profile colours, overridden by any theme colour the producer changed in
+  // Design (`lib/store/appearance.ts`), spread on the root as the same style
+  // object the Store Editor's previews use.
+  const appearance = useMemo(() => resolveStoreAppearance(creator, storeLayout.theme), [creator, storeLayout.theme]);
+  const accentColor = appearance.accent;
+  const themeStyle = useMemo(() => appearanceStyle(appearance), [appearance]);
   /**
    * What the producer-authored sections (text / image / video / links /
    * canvas) draw with. They go through the builder's own `SectionRenderer`,

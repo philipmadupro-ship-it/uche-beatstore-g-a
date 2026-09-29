@@ -9,54 +9,51 @@
  * the real store. Every surface now spreads this one object on its root, so
  * the preview cannot disagree with what buyers see.
  *
+ * Which values win (profile columns vs. a Design theme colour the producer
+ * changed) is decided once, in `lib/store/appearance.ts`; this module only
+ * turns that answer into CSS.
+ *
  * Components consume the colours through `--store-text` / `--store-accent`
  * (see `storeTextColor`) and the face through inherited `font-family`.
  */
 import type { CSSProperties } from 'react';
-import { FONT_FAMILY_MAP } from '@/components/store/types';
-import { normalizeThemeColor } from '@/lib/theme/colors';
+import type { StoreTheme } from '@/lib/store-editor/layout';
+import {
+  DEFAULT_STORE_TEXT_COLOR,
+  normalizeFontStyle,
+  resolveStoreAppearance,
+  storeTextColor,
+  STORE_FONT_FAMILIES,
+  type StoreAppearance,
+  type StoreAppearanceProfile,
+} from './appearance';
 
-export const DEFAULT_STORE_TEXT_COLOR = '#FFFFFF';
+export { DEFAULT_STORE_TEXT_COLOR, storeTextColor };
 
-type ThemeFields = {
-  font_style?: string | null;
-  text_color_primary?: string | null;
-  accent_color?: string | null;
-};
-
-/** `#rgb`, `#rgba`, `#rrggbb` or `#rrggbbaa` — what the editor's picker and field produce. */
-const HEX_COLOR = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
-
-/**
- * The text colour to draw, or white.
- *
- * The editor's text field accepts anything while it is being typed, and the
- * value goes into a CSS custom property. A half-typed `#12` would make every
- * `var(--store-text)` consumer invalid at computed-value time — i.e. fall back
- * to `inherit`/transparent rather than white — so anything that is not a
- * complete hex colour reads as the default instead.
- */
-export function storeTextColor(value: string | null | undefined): string {
-  const v = value?.trim();
-  return v && HEX_COLOR.test(v) ? v : DEFAULT_STORE_TEXT_COLOR;
+/** Unknown or legacy values (`modern` / `minimal`) read as the default face. */
+export function storeFontFamily(fontStyle: string | null | undefined): string {
+  return STORE_FONT_FAMILIES[normalizeFontStyle(fontStyle)];
 }
 
-/** Unknown or legacy values (`/profile` still offers `modern`/`minimal`) read as the default face. */
-export function storeFontFamily(fontStyle: string | null | undefined): string {
-  return FONT_FAMILY_MAP[fontStyle ?? 'default'] ?? FONT_FAMILY_MAP.default;
+/** The root style for an already-resolved appearance. */
+export function appearanceStyle(appearance: StoreAppearance): CSSProperties {
+  return {
+    '--store-accent': appearance.accent,
+    '--store-text': appearance.text,
+    fontFamily: appearance.fontFamily,
+    color: appearance.text,
+  } as CSSProperties;
 }
 
 /**
  * The root style for any surface that renders the storefront: /store itself,
- * the editor's Content preview and the Design canvas.
+ * the producer page, the editor's Content preview and the Design canvas.
+ * Pass the layout's theme wherever one exists, or a colour changed in Design
+ * shows in the builder and nowhere else.
  */
-export function storefrontThemeStyle(creator: ThemeFields | null | undefined): CSSProperties {
-  const accent = normalizeThemeColor(creator?.accent_color);
-  const text = storeTextColor(creator?.text_color_primary);
-  return {
-    '--store-accent': accent,
-    '--store-text': text,
-    fontFamily: storeFontFamily(creator?.font_style),
-    color: text,
-  } as CSSProperties;
+export function storefrontThemeStyle(
+  creator: StoreAppearanceProfile | null | undefined,
+  theme?: Partial<StoreTheme> | null,
+): CSSProperties {
+  return appearanceStyle(resolveStoreAppearance(creator, theme));
 }
