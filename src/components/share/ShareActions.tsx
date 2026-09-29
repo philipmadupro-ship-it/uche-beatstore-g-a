@@ -59,7 +59,7 @@ export function ShareActions({ tracks, allowDownloads, onDownload, downloadingId
             const busy = downloadingId === t.id;
             return (
               <li key={t.id} className="flex items-center justify-between gap-3 py-2.5">
-                <span className="min-w-0 truncate text-[12px] text-white/80">{t.title}</span>
+                <span className="min-w-0 truncate text-[11px] text-white/80">{t.title}</span>
                 <button
                   type="button"
                   onClick={() => onDownload(t)}
