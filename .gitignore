@@ -72,3 +72,5 @@ stem-service/.venv/
 
 # Unrelated project folder dropped into the repo root — not part of the app
 Remix:-PATTERN-MACHINE/
+public/uploads/e2e-local-db/
+scripts/local-db/.cache/

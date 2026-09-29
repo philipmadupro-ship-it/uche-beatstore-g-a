@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:migrate": "bash scripts/apply-migrations.sh",
+    "db:local:reset": "bash scripts/local-db/reset.sh",
+    "db:local:up": "bash scripts/local-db/up.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -24,7 +26,8 @@
     "claude:data": "bash scripts/claude/supabase-data.sh",
     "claude:storefront": "bash scripts/claude/commerce-storefront.sh",
     "claude:qa": "bash scripts/claude/qa-test.sh",
-    "claude:auto": "bash scripts/claude/task-router.sh"
+    "claude:auto": "bash scripts/claude/task-router.sh",
+    "e2e:real-db": "E2E_REAL_DB=1 playwright test e2e/artist-workspace.spec.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1022.0",

@@ -21,6 +21,7 @@ type Call = {
 };
 const calls: Call[] = [];
 const rowsByTable: Record<string, number> = {};
+let contactRows: Array<{ id: string }> = [];
 let failTable: string | null = null;
 const mockRequireProducer = vi.fn();
 const logInfo = vi.fn();
@@ -30,6 +31,7 @@ function fakeAdmin() {
   const chain = (call: Call) => {
     const q = {
       eq: (col: string, val: unknown) => { call.filters.push(['eq', col, val]); return q; },
+      in: (col: string, val: unknown) => { call.filters.push(['in', col, val]); return q; },
       neq: (col: string, val: unknown) => { call.filters.push(['neq', col, val]); return q; },
       select: () => Promise.resolve(
         failTable === call.table
@@ -41,6 +43,11 @@ function fakeAdmin() {
   };
   return {
     from: (table: string) => ({
+      // Only the artist-workspace pre-step reads: it finds the contacts by email.
+      select: () => {
+        const q = { eq: () => q, then: (r: (v: unknown) => unknown) => Promise.resolve({ data: contactRows, error: null }).then(r) };
+        return q;
+      },
       update: (patch: unknown) => { const c: Call = { table, action: 'update', patch, filters: [] }; calls.push(c); return chain(c); },
       delete: () => { const c: Call = { table, action: 'delete', filters: [] }; calls.push(c); return chain(c); },
     }),
@@ -65,6 +72,7 @@ beforeEach(() => {
   calls.length = 0;
   for (const k of Object.keys(rowsByTable)) delete rowsByTable[k];
   failTable = null;
+  contactRows = [];
   vi.clearAllMocks();
   mockRequireProducer.mockResolvedValue({ ok: true, userId: 'seller-1', admin: fakeAdmin() });
 });
@@ -138,5 +146,25 @@ describe('POST /api/privacy/erase', () => {
     await POST(post({ email: 'buyer@example.test' }));
     const logged = JSON.stringify([...logInfo.mock.calls, ...logError.mock.calls]);
     expect(logged).not.toContain('buyer@example.test');
+  });
+
+  it('erases the artist workspace first: portal, artist-written reactions and portal visits', async () => {
+    contactRows = [{ id: 'contact-1' }];
+    rowsByTable.artist_portals = 1;
+    rowsByTable.contact_track_states = 2;
+    const { POST } = await import('./route');
+    const res = await POST(post({ email: 'Artist@Example.com' }));
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.artistPortals).toBe(1);
+    expect(body.artistReactions).toBe(2);
+    const portal = calls.find((c) => c.table === 'artist_portals')!;
+    expect(portal.action).toBe('delete');
+    expect(portal.filters).toContainEqual(['in', 'contact_id', ['contact-1']]);
+    expect(portal.filters).toContainEqual(['eq', 'user_id', 'seller-1']);
+    // Only what the ARTIST wrote goes; the producer's own decisions stay.
+    expect(calls.find((c) => c.table === 'contact_track_states')!.filters).toContainEqual(['eq', 'set_by', 'artist']);
+    // …and it happens before the contact's email is replaced.
+    expect(calls.findIndex((c) => c.table === 'artist_portals')).toBeLessThan(calls.findIndex((c) => c.table === 'contacts'));
   });
 });

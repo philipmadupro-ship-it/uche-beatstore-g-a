@@ -24,6 +24,7 @@ import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { InlineText } from '@/components/ui/InlineText';
 import { InlineTagStrip, type TagGroup } from '@/components/ui/InlineTagStrip';
 import { TrackCollaboratorStrip } from '@/components/tracks/TrackCollaboratorStrip';
+import { TrackPeopleSection } from '@/components/artists/TrackPeopleSection';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { useTags } from '@/hooks/useTags';
 import { lyricsStudioHref } from '@/lib/library/lyrics-link';
@@ -619,6 +620,10 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                 <h3 className="mb-3 text-[9px] font-black uppercase tracking-[0.25em] text-white/40">Credits</h3>
                 <TrackCollaboratorStrip trackId={track.id} />
               </div>
+
+              {/* People / Built on (artist workspace) — who has this beat, the
+                  songs built on it, and for a song the beat it is built on. */}
+              <TrackPeopleSection trackId={track.id} trackType={track.type} onUpdate={onUpdate} />
 
               {/* Type / Status / Rating — extracted to drawer/TrackMetadataEditor. */}
               <TrackMetadataEditor

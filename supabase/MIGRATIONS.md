@@ -56,6 +56,11 @@ service-role key can read the schema's effects but cannot run DDL):
 | `120_producer_only_share_links.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — RLS writes to `share_links` require a producer profile (needs 119) |
 | `117_project_access_payment_intent.sql` | applied | reported applied by the producer 2026-09-26 |
 | `118_finish_strict_owned_rows.sql` | applied | reported applied by the producer 2026-09-26 |
+| `122_project_contacts.sql` | **not applied** | new — Artist Relationship Workspace |
+| `123_contact_track_states.sql` | **not applied** | new — includes a one-time copy of `beat_sends.status` |
+| `124_song_beat_and_credit_links.sql` | **not applied** | new — `tracks.beat_track_id`, `track_collaborators.contact_id`, `contacts.avatar_url` |
+| `125_artist_portals.sql` | **not applied** | new — one portal per artist |
+| `126_project_shares_contact.sql` | **not applied** | new — `project_shares.contact_id` + email backfill |
 
 What each still-pending one does:
 
@@ -94,12 +99,35 @@ All are idempotent, so running the full set (`npm run db:migrate`) is safe.
   the public anon key; the app reads comments via the service role only.
   Idempotent; replayed locally before/after with a buyer + anon probe.
 
+- `122`–`126` — **Artist Relationship Workspace, phase 1.** Apply in order
+  (124 needs nothing from 122/123, but 123's copy and 126's backfill read
+  tables that must already exist, which they do from earlier migrations).
+  All five are **required before the workspace code is deployed**: the
+  workspace, portal and decision routes read these tables directly and answer
+  `503 {"error": "...", "migration": "122"}`-style errors without them, and
+  the contact page falls back to the plain CRM view. Each new table has an
+  owner-only policy and a `SECURITY DEFINER` trigger refusing a row whose
+  project / contact / track belongs to another owner.
+  - `123` copies old per-send statuses onto the (contact, track) pair, newest
+    send winning: `interested → interested`, `negotiating → selected`,
+    `placed → released`, `pass → passed`. `sent` / `opened` are engagement and
+    are not copied. `ON CONFLICT DO NOTHING`, so re-running never overwrites a
+    decision made after the first run.
+  - `126` fills `project_shares.contact_id` from `invited_email` against the
+    project owner's contacts (case-insensitive), NULLs only.
+  - Verified 2026-09-29 on a local Postgres 16 + PostgREST 12 replay of
+    001–126 (twice, for idempotency) with seeded sends and shares, plus
+    anon / buyer / producer / cross-owner probes through PostgREST.
+
+  **Numbered 122, not 121.** `121_share_full_playback.sql` exists on the
+  unmerged branch `claude/lucid-ride-5j0gql`.
+
 Update this table when a run is confirmed.
 
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 120 (next new migration = 121). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 126, and 121 is claimed by an unmerged branch (next new migration = 127). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch

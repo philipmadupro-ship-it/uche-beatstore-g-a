@@ -28,6 +28,7 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { uploadAndAttachImage } from '@/lib/upload/image-upload-client';
 import { CoverEditor } from '@/components/ui/CoverEditor';
+import { ProjectArtistsStrip, TrackDecisionPills, type TrackDecisions } from '@/components/artists/ProjectArtistsStrip';
 
 type ProjectStatus = 'in_progress' | 'final' | 'archived';
 
@@ -57,6 +58,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
   const openStudio = (t: Track) => router.push(studioHref(t.id));
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [trackDecisions, setTrackDecisions] = useState<TrackDecisions>({});
   const [loading, setLoading] = useState(true);
   const [uploadingArt, setUploadingArt] = useState(false);
   const [removingArt, setRemovingArt] = useState(false);
@@ -430,6 +432,10 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
               onDeleted={() => { window.location.href = '/projects'; }}
             />
 
+        {/* Artists linked to this project (artist workspace) — portal status,
+            Share / Notify, and the decisions shown on each row below. */}
+        <ProjectArtistsStrip projectId={params.id} refreshKey={tracks.length} onDecisions={setTrackDecisions} />
+
         {/* Upload Zone */}
         {showUpload && (
           <div className="mb-8">
@@ -469,6 +475,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           onTrackChanged={fetchData}
           onOpenLyrics={openLyrics}
           onOpenStudio={openStudio}
+          rowAddon={(t) => <TrackDecisionPills rows={trackDecisions[t.id]} />}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelectOne}
           onSelectAll={toggleSelectAll}

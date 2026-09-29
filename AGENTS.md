@@ -31,7 +31,7 @@ The producer's workspace. Surfaces:
 | `/playlists` + `/playlists/[id]` | Curated sets for outreach — drag tracks into a playlist, share it, optionally feature on `/store`. |
 | `/studio` | Sketchpad: groove loops, jam, record. |
 | `/cover-art` | **Cover Art Studio.** Layer-based artwork editor — bring in your own images, generate one with AI, set type, build a collage, then export or attach it straight to a track / project / playlist / profile. See "Making cover art" below. |
-| `/contacts` + `/contacts/[id]` | CRM: artists you send beats to. Status pipeline: sent → opened → interested → negotiating → placed / pass. |
+| `/contacts` + `/contacts/[id]` | CRM: artists you send beats to. A contact linked to a project (or given a portal) becomes an **artist workspace**: Overview · Projects · Beats · Songs · Activity · Notes, with a relationship stage worked out from activity and one permanent portal. See "Producer: work with an artist" below. |
 | `/campaigns` | Outreach batches. Bulk-send a beat to a contact list. |
 | `/calendar` | Releases, sessions, deadlines, meetings. |
 | `/links` | Every share link you've ever generated (track + project). |
@@ -59,6 +59,10 @@ Where buyers actually buy.
 | `/store/account` | Buyer sign-in — email magic link (Supabase OTP) or Google OAuth. Already-signed-in buyers redirect straight to `/store/account/me`. |
 | `/store/account/[token]` | Legacy 24h signed-token delivery view (pre-dates persistent accounts) — still the link post-purchase emails point at. Looks up purchases by email only, no session. |
 | `/store/account/me` | Persistent buyer account dashboard (session-gated). Purchases, listening history, favorites, and custom playlists that follow the buyer across devices — see "Buyer accounts" below. |
+
+### Artist portal (`/artist/[token]`)
+
+One permanent private link per artist. A small library of the projects the producer put in it — beats, songs, NEW markers since the artist's last visit, play, download where the project allows it, and **♥ Interested / ✕ Pass** on each beat. No CRM, no editing, no store chrome, no checkout. Branded with the producer's name. Revoking it makes the link stop working; reissuing gives a new link.
 
 ### Public share (`/share/[token]`, `/projects/share/[token]`)
 
@@ -139,6 +143,13 @@ Two things are deliberately fixed. The **catalogue** and the **trust rail** are 
 
 Work autosaves. A producer who never opens Design gets exactly the storefront they have today.
 
+### Producer: work with an artist
+A contact becomes an artist workspace the moment it is linked to a project: **Start workspace → New project for Artist #1**, add beats as usual, then **Share with Artist #1**. That puts the project in the artist's one permanent portal (created the first time) and sends one invite email. From then on nothing is a new link: a beat added to the project appears in the portal marked NEW on the artist's next visit. Adding material never emails anyone by itself — the **Notify · N new** button sends one digest of what the artist has not been told about yet, pointing at the same link.
+
+In the portal the artist plays beats, downloads where the producer allowed it, and taps **Interested** or **Pass**. The producer gets a notification, and the artist's Beats tab shows it. The producer moves beats on from there — interested → selected → recording → recorded → released (or passed) — per artist, per beat; once the producer has moved a beat past interested, the artist's portal shows that word instead of the buttons. What the artist has *done* with a beat (sent, opened, played, downloaded) is worked out from activity and never typed in, and so is the relationship stage: new → contacted → engaged → interested → working together → released. Marking a contact cold or archived parks them without hiding where they really are.
+
+A song is a track of type song; its **Built on** picker points it at the beat it was made on, and the beat's drawer lists the songs built on it. The track drawer's **People** section answers "who has this beat?" — each artist with the project it arrived through, their decision and how often they played it — and every row links through. The project page shows its artists in a strip with Share / Notify and a small decision pill per artist on each track row.
+
 ### Producer: send a beat to an artist
 `/contacts` → pick a contact → Send Beat modal → choose track + license tier + custom message → `/api/share` creates a `share_links` row (nanoid token) + `beat_sends` row (status='sent') → Resend email with `/share/<token>` → recipient opens, share variant renders based on `recipient_kind` → producer sees opens / plays / interest via `share_plays` table + `/analytics`.
 
@@ -158,6 +169,7 @@ tracks(id, user_id, title, type[beat|instrumental|song|remix], audio_url,
        loudness, danceability, energy, valence, acousticness, rating,
        description, lease_price_usd, exclusive_price_usd, store_listed,
        store_sort_order, free_download_enabled, stems_status, notes,
+       beat_track_id,  -- a song's main beat
        created_at)
 
 projects(id, user_id, name, cover_url, description, price_usd,
@@ -187,10 +199,16 @@ track_licenses(track_id, license_id, price_override_usd, enabled)
 share_links(token, user_id, track_ids[], recipient_kind, sales_enabled,
             expires_at, password_hash, plays, created_at)
 share_plays(link_token, track_id, ip_hash, played_at)
-project_shares(token, project_id, recipient_kind, sales_enabled, …)
+project_shares(token, project_id, contact_id, recipient_kind, sales_enabled, …)
 
 contacts(id, user_id, name, email, role, label, instagram, notes,
-         buyer_pipeline_status, created_at)
+         buyer_pipeline_status, avatar_url, created_at)
+project_contacts(project_id, contact_id, user_id, role, in_portal,
+                 allow_downloads, can_comment, last_notified_at)   -- artist ↔ project
+contact_track_states(contact_id, track_id, project_id, decision,
+                     set_by[producer|artist])                     -- artist ↔ beat decision
+artist_portals(contact_id UNIQUE, token, password_hash, revoked_at,
+               last_viewed_at, previous_viewed_at, view_count)
 beat_sends(id, contact_id, track_ids[], share_token, message,
            status[sent|opened|interested|negotiating|placed|pass], sent_at,
            campaign_id)
@@ -206,6 +224,7 @@ promo_codes(code, seller_user_id, discount_percent, discount_amount,
 processed_stripe_events(event_id, processed_at)
 
 track_tags(track_id, tag, category[genre|mood|instrument|status])
+track_collaborators(track_id, name, role, source, contact_id)
 stems(track_id, job_id, status, vocals_url, drums_url, bass_url, other_url)
 calendar_events(id, user_id, title, date, end_date, type, track_ids[],
                 notes, color)

@@ -37,6 +37,10 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { cn } from '@/lib/utils';
 import type { Contact, BeatSend } from '@/lib/types';
 import { deriveActivityTone, type ActivityTone } from '@/lib/contacts/tone';
+import { ArtistWorkspaceHeader } from '@/components/artists/ArtistWorkspaceHeader';
+import { ArtistWorkspaceTabs } from '@/components/artists/ArtistWorkspaceTabs';
+import { StartWorkspace } from '@/components/artists/StartWorkspace';
+import type { WorkspaceResponse } from '@/components/artists/types';
 
 const PIPELINE_TONES: Record<string, { dot: string; text: string; ring: string; label: string }> = {
   sent:        { dot: 'bg-white/40', text: 'text-white/60', ring: 'ring-white/20',    label: 'Sent' },
@@ -59,6 +63,23 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
   // Fed by ContactActivityTimeline's onSummary — lets the header show a Kind
   // badge + lifetime value without a second fetch of the same data.
   const [activitySummary, setActivitySummary] = useState<EngagementSummary | null>(null);
+  // Artist workspace (migrations 122–126). Null until loaded; a contact linked
+  // to a project or holding a portal switches the page into workspace mode.
+  const [workspace, setWorkspace] = useState<WorkspaceResponse | null>(null);
+  const [startingWorkspace, setStartingWorkspace] = useState(false);
+  const [timelineKey, setTimelineKey] = useState(0);
+
+  const fetchWorkspace = async () => {
+    try {
+      const res = await fetch(`/api/contacts/${params.id}/workspace`);
+      if (!res.ok) return;
+      setWorkspace(await res.json());
+      // Workspace writes (links, notifies, decisions) all land on the timeline.
+      setTimelineKey((k) => k + 1);
+    } catch {
+      // The CRM view works without it.
+    }
+  };
 
   // ── Fetch ───────────────────────────────────────────────────────────
   const fetchAll = async () => {
@@ -85,7 +106,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
       setLoading(false);
     }
   };
-  useEffect(() => { fetchAll(); }, [params.id]);
+  useEffect(() => { fetchAll(); void fetchWorkspace(); }, [params.id]);
 
   // ── Engagement + pipeline derived state ─────────────────────────────
   const engagementTone = useMemo<ActivityTone>(() => {
@@ -192,6 +213,65 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
     favorites: activitySummary?.favorites ?? 0,
     crmStatus: contact.crm_status ?? null,
   });
+
+  const ready = workspace && workspace.schemaReady ? workspace : null;
+  const workspaceMode = !!ready?.workspaceMode;
+
+  const crmNotes = (
+    <>
+            {/* Detail field grid */}
+            <section>
+              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 mb-3">Details</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <DetailField icon={<Mail size={11} />}    label="Email"     value={contact.email}     onSave={(v) => patchField('email', v)} />
+                <DetailField icon={<Phone size={11} />}   label="Phone"     value={contact.phone}     onSave={(v) => patchField('phone', v)} />
+                <DetailField icon={<Tag size={11} />}     label="Category"  value={contact.category} onSave={(v) => patchField('category', v)} />
+                <DetailField icon={<Tag size={11} />}     label="Genre"     value={contact.genre}     onSave={(v) => patchField('genre', v)} />
+                <DetailField icon={<Globe size={11} />}   label="Instagram" value={contact.instagram} onSave={(v) => patchField('instagram', v)} prefix="@" />
+                <DetailField icon={<Globe size={11} />}   label="Twitter"   value={contact.twitter}   onSave={(v) => patchField('twitter', v)} prefix="@" />
+                <DetailField icon={<MapPin size={11} />}  label="City"      value={contact.city}      onSave={(v) => patchField('city', v)} />
+                <DetailField icon={<MapPin size={11} />}  label="Country"   value={contact.country}   onSave={(v) => patchField('country', v)} />
+                {/* `website` has existed on the row and the Contact type all
+                    along with no UI anywhere and no route that accepted it. */}
+                <DetailField icon={<Globe size={11} />}   label="Website"   value={contact.website}   onSave={(v) => patchField('website', v)} />
+              </div>
+            </section>
+
+            {/* Tags — free-form CRM tags (mig 091) for find / regroup. */}
+            <section>
+              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 mb-3 flex items-center gap-2">
+                <Tag size={11} /> Tags
+              </h2>
+              <ContactTagPicker contactId={contact.id} />
+            </section>
+
+            {/* Notes — full-width textarea, autosave on blur. */}
+            <section>
+              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 mb-3 flex items-center gap-2">
+                <FileText size={11} /> Notes
+              </h2>
+              <textarea
+                defaultValue={contact.notes ?? ''}
+                onBlur={(e) => {
+                  const v = e.target.value;
+                  if (v !== (contact.notes ?? '')) patchField('notes', v || null);
+                }}
+                placeholder="Session memory, preferred genres, decisions on past sends…"
+                className="w-full min-h-[120px] bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 text-[13px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 resize-y"
+              />
+            </section>
+    </>
+  );
+
+  const timeline = (
+    <ContactActivityTimeline
+      key={timelineKey}
+      contactId={contact.id}
+      contactName={contact.name}
+      onSendBeat={() => setSendModalOpen(true)}
+      onSummary={setActivitySummary}
+    />
+  );
 
   return (
     <DashboardLayout>
@@ -313,67 +393,54 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
                     <Trash2 size={12} />
                   </button>
                 </div>
+
+                {ready && workspaceMode && (
+                  <ArtistWorkspaceHeader contactId={contact.id} contactName={contact.name} workspace={ready} onChanged={fetchWorkspace} />
+                )}
+                {ready && !workspaceMode && !startingWorkspace && (
+                  <button
+                    type="button"
+                    onClick={() => setStartingWorkspace(true)}
+                    className="mt-3 w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10]"
+                  >
+                    Start workspace
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Right column — editable detail fields + activity timeline. */}
-          <div className="min-w-0 space-y-8">
-            {/* Detail field grid */}
-            <section>
-              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 mb-3">Details</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <DetailField icon={<Mail size={11} />}    label="Email"     value={contact.email}     onSave={(v) => patchField('email', v)} />
-                <DetailField icon={<Phone size={11} />}   label="Phone"     value={contact.phone}     onSave={(v) => patchField('phone', v)} />
-                <DetailField icon={<Tag size={11} />}     label="Category"  value={contact.category} onSave={(v) => patchField('category', v)} />
-                <DetailField icon={<Tag size={11} />}     label="Genre"     value={contact.genre}     onSave={(v) => patchField('genre', v)} />
-                <DetailField icon={<Globe size={11} />}   label="Instagram" value={contact.instagram} onSave={(v) => patchField('instagram', v)} prefix="@" />
-                <DetailField icon={<Globe size={11} />}   label="Twitter"   value={contact.twitter}   onSave={(v) => patchField('twitter', v)} prefix="@" />
-                <DetailField icon={<MapPin size={11} />}  label="City"      value={contact.city}      onSave={(v) => patchField('city', v)} />
-                <DetailField icon={<MapPin size={11} />}  label="Country"   value={contact.country}   onSave={(v) => patchField('country', v)} />
-                {/* `website` has existed on the row and the Contact type all
-                    along with no UI anywhere and no route that accepted it. */}
-                <DetailField icon={<Globe size={11} />}   label="Website"   value={contact.website}   onSave={(v) => patchField('website', v)} />
-              </div>
-            </section>
-
-            {/* Tags — free-form CRM tags (mig 091) for find / regroup. */}
-            <section>
-              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 mb-3 flex items-center gap-2">
-                <Tag size={11} /> Tags
-              </h2>
-              <ContactTagPicker contactId={contact.id} />
-            </section>
-
-            {/* Notes — full-width textarea, autosave on blur. */}
-            <section>
-              <h2 className="text-[10px] font-mono uppercase tracking-[0.2em] text-white/60 mb-3 flex items-center gap-2">
-                <FileText size={11} /> Notes
-              </h2>
-              <textarea
-                defaultValue={contact.notes ?? ''}
-                onBlur={(e) => {
-                  const v = e.target.value;
-                  if (v !== (contact.notes ?? '')) patchField('notes', v || null);
-                }}
-                placeholder="Session memory, preferred genres, decisions on past sends…"
-                className="w-full min-h-[120px] bg-white/[0.02] border border-white/10 rounded-xl px-4 py-3 text-[13px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20 resize-y"
-              />
-            </section>
-
-            {/* Unified CRM activity timeline — beat sends, email opens,
-                link clicks, and purchases (buyer-email matched) merged into
-                one story, plus manual notes. Self-fetching component. */}
-            {/* Follow-up tasks / reminders for this contact. */}
-            <ContactTasks contactId={contact.id} />
-
-            <ContactActivityTimeline
+          {/* Right column — the artist workspace for an artist; otherwise the
+              CRM detail fields + activity timeline, as before. */}
+          {ready && workspaceMode ? (
+            <ArtistWorkspaceTabs
               contactId={contact.id}
               contactName={contact.name}
-              onSendBeat={() => setSendModalOpen(true)}
-              onSummary={setActivitySummary}
+              workspace={ready}
+              onChanged={fetchWorkspace}
+              activity={timeline}
+              notes={crmNotes}
+              tasks={<ContactTasks contactId={contact.id} />}
             />
-          </div>
+          ) : (
+            <div className="min-w-0 space-y-8">
+              {startingWorkspace && (
+                <StartWorkspace
+                  contactId={contact.id}
+                  contactName={contact.name}
+                  onStarted={() => { setStartingWorkspace(false); void fetchWorkspace(); }}
+                  onCancel={() => setStartingWorkspace(false)}
+                />
+              )}
+              {crmNotes}
+              {/* Follow-up tasks / reminders for this contact. */}
+              <ContactTasks contactId={contact.id} />
+              {/* Unified CRM activity timeline — beat sends, email opens,
+                  link clicks, and purchases (buyer-email matched) merged into
+                  one story, plus manual notes. Self-fetching component. */}
+              {timeline}
+            </div>
+          )}
         </div>
       </PageContainer>
 

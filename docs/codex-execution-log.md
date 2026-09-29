@@ -8910,3 +8910,46 @@ The three bugs the Artist Relationship Workspace plan found in its audit. No mig
 Tests: `lib/crm/project-send.test.ts`, `lib/notifications/share-comment.test.ts`, `shareOpensLabel` in `lib/links/share-link.test.ts`, and new route tests for the invite route (5) and the share comments route (4). 7 of those 9 route cases fail against the old routes; the other 2 pin unchanged behaviour (no row without `contact_id`, no notification for a refused view-only comment).
 
 Not changed: `/links`' "Downloads" tile counts links that allow downloads, not downloads.
+
+## 2026-09-29 - Artist Relationship Workspace, phase 1 (migrations 122–126)
+
+Builds phase 1 of the Artist Relationship Workspace plan. A contact linked to a project, or given a portal, becomes an artist workspace. Each artist gets one permanent private portal. Decisions are stored per artist and beat. Engagement and the relationship stage are worked out from activity. Rules are in CLAUDE.md "Artist workspace + portal"; product behaviour is in AGENTS.md "Producer: work with an artist".
+
+**Migrations (numbered 122–126, not the planned 121–125).** `121_share_full_playback.sql` already exists on the unmerged branch `claude/lucid-ride-5j0gql`.
+- 122 `project_contacts` (artist ↔ project, carrying the portal permissions)
+- 123 `contact_track_states`, plus a one-time copy of `beat_sends.status` (newest send wins; sent/opened not copied; `ON CONFLICT DO NOTHING`)
+- 124 `tracks.beat_track_id`, `track_collaborators.contact_id`, `contacts.avatar_url`
+- 125 `artist_portals`
+- 126 `project_shares.contact_id`, backfilled from `invited_email`
+
+Every new table is owner-only under RLS (writes also need `is_producer()`), and has a `SECURITY DEFINER` same-owner trigger. None is applied on Supabase yet (MIGRATIONS.md).
+
+**Pure logic** (Vitest):
+- `lib/contacts/{decisions,track-engagement,relationship}.ts`
+- `lib/artist-portal/{new-items,view,digest}.ts`
+- `lib/notifications/artist-reaction.ts`
+- New timeline sources in `lib/contacts/activity.ts`: project linked, and beats added since the link, grouped per project and day. Plus stored `portal_opened`, `track_downloaded`, `decision_changed` and `artist_notified` rows. A notify suppresses the derived "Sent X" for the same `beat_sends` row.
+
+**Routes:**
+- Producer: `/api/contacts/[id]/{workspace,decisions,portal,notify}`, `/api/projects/[id]/contacts` (+ `/[contactId]`, `/[contactId]/share`) and `/api/tracks/[id]/people`. `beat_track_id` is added to the track PATCH contract.
+- Public, allowlisted: `/api/portal/[token]` (+ `reaction`, `play`, `download/[trackId]`).
+- `artist_portal` is a new `resolveShareToken` kind. The signed preview and peaks routes serve portal audio with no copy of their own.
+- `/api/contacts/[id]/activity` reads the new timeline sources.
+- `/api/privacy/erase` erases the portal, artist-written reactions and portal visits before anonymising the contact.
+
+**UI:**
+- `/contacts/[id]` in workspace mode has tabs Overview · Projects · Beats · Songs · Activity · Notes, and the identity card shows the stage, portal status, Notify · N new, Copy link and revoke/reissue. Other contacts get a "Start workspace" button.
+- The project page has an Artists strip (Share / Notify / Add artist), with a decision pill per artist under each track row. `ProjectTrackList` gained an optional `rowAddon` slot.
+- The track drawer has People / Songs built on this / Built on.
+- `/artist/[token]` is the portal page: password gate, projects, Beats/Songs library, the share page's `WavePlayer`, Interested/Pass and downloads. Checked at 1280 and 390px.
+
+**Found by the redaction test:** `loadPublicArtworkTheme` returns profile URLs as stored, so a logo saved as `r2://` reached the portal JSON. The portal now passes the theme through `toPortalArtworkTheme`. The storefront and share pages use the same loader and were not changed here.
+
+**Verified against a real database, not only mocks.** `scripts/local-db/` replays 001–126 twice through `scripts/apply-migrations.sh` into Postgres 16. It serves them through PostgREST 12 with RLS, a Supabase-shaped gateway and a fake Resend. Against that stack:
+- RLS and trigger probes: anon, a buyer, the producer and cross-owner writes, 10 cases.
+- An API smoke run of every route: 42 checks.
+- `e2e/artist-workspace.spec.ts`, 6 flows, run three times: start workspace → share → the artist plays and taps Interested → the producer sees it, gets a notification and moves decisions → a later beat is NEW and counted by Notify → a song is built on a beat, the drawer's People lists the artist, the artist downloads, the portal is revoked → a signed-in buyer gets 403 on producer routes.
+
+The spec is excluded from the default e2e run, which still reports 183 passed / 8 skipped. The unit suite is 3014 passing.
+
+**Not in phase 1:** project files (`project_assets`), portal comments, the Artists card view in `/contacts`, search labels, a digest cron, a credit → contact picker (the column exists), and avatar upload (the column exists).

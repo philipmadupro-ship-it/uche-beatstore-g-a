@@ -16,6 +16,7 @@
  */
 import { z } from 'zod';
 import { STORE_EVENT_TYPES } from '@/lib/store/funnel';
+import { DECISIONS } from '@/lib/contacts/decisions';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -90,6 +91,9 @@ export const TrackPatchBodySchema = z.object({
   // route /api/cron/publish-scheduled flips store_listed=true at that
   // timestamp and clears this field. Null clears any pending schedule.
   scheduled_publish_at: z.string().datetime().nullable().optional(),
+  // A song's main beat (migration 124). Any beat the producer owns; the DB
+  // refuses another owner's beat and the song itself.
+  beat_track_id: z.string().uuid().nullable().optional(),
 }).strict();
 export type TrackPatchBody = z.infer<typeof TrackPatchBodySchema>;
 
@@ -655,3 +659,59 @@ export const StoreEventBodySchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 export type StoreEventBody = z.infer<typeof StoreEventBodySchema>;
+
+// ── Artist workspace (migrations 122–126) ───────────────────────────────
+
+export const PROJECT_CONTACT_ROLES = ['artist', 'featured', 'manager', 'engineer', 'collaborator'] as const;
+
+/** POST /api/projects/[id]/contacts — link a contact to a project. */
+export const ProjectContactLinkBodySchema = z.object({
+  contact_id: z.string().uuid(),
+  role: z.enum(PROJECT_CONTACT_ROLES).optional().default('artist'),
+  in_portal: z.boolean().optional().default(false),
+  allow_downloads: z.boolean().optional().default(false),
+}).strict();
+export type ProjectContactLinkBody = z.infer<typeof ProjectContactLinkBodySchema>;
+
+/** PATCH /api/projects/[id]/contacts/[contactId] — portal permissions and role. */
+export const ProjectContactPatchBodySchema = z.object({
+  role: z.enum(PROJECT_CONTACT_ROLES).optional(),
+  in_portal: z.boolean().optional(),
+  allow_downloads: z.boolean().optional(),
+  can_comment: z.boolean().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type ProjectContactPatchBody = z.infer<typeof ProjectContactPatchBodySchema>;
+
+/** PUT /api/contacts/[id]/decisions — the producer sets decisions on one or more beats. */
+export const ContactDecisionBodySchema = z.object({
+  track_ids: z.array(z.string().uuid()).min(1).max(200),
+  decision: z.enum(DECISIONS).nullable(),
+  project_id: z.string().uuid().nullable().optional(),
+}).strict();
+export type ContactDecisionBody = z.infer<typeof ContactDecisionBodySchema>;
+
+/** POST /api/contacts/[id]/portal — create, revoke or reissue the artist's portal. */
+export const ArtistPortalActionBodySchema = z.object({
+  action: z.enum(['create', 'revoke', 'reissue']),
+  password: z.string().min(4).max(200).nullable().optional(),
+}).strict();
+export type ArtistPortalActionBody = z.infer<typeof ArtistPortalActionBodySchema>;
+
+/** POST /api/contacts/[id]/notify — one digest email of what is new in the portal. */
+export const ArtistNotifyBodySchema = z.object({
+  message: z.string().max(2000).optional().default(''),
+}).strict();
+export type ArtistNotifyBody = z.infer<typeof ArtistNotifyBodySchema>;
+
+/** POST /api/portal/[token]/reaction — the artist's Interested / Pass (null takes it back). */
+export const PortalReactionBodySchema = z.object({
+  track_id: z.string().uuid(),
+  decision: z.enum(['interested', 'passed']).nullable(),
+}).strict();
+export type PortalReactionBody = z.infer<typeof PortalReactionBodySchema>;
+
+/** POST /api/portal/[token]/play — one play, logged once per track per visit window. */
+export const PortalPlayBodySchema = z.object({
+  track_id: z.string().uuid(),
+}).strict();
+export type PortalPlayBody = z.infer<typeof PortalPlayBodySchema>;

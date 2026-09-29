@@ -17,6 +17,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   Send, MailOpen, MousePointerClick, ShoppingBag, StickyNote,
   GitBranch, Play, Heart, Clock, Loader2, Plus,
+  Link2, ListPlus, DoorOpen, Download, CircleCheck, BellRing,
 } from 'lucide-react';
 import type { ContactActivity, EngagementSummary, ActivityKind } from '@/lib/contacts/activity';
 import { scoreLead, TIER_META } from '@/lib/contacts/scoring';
@@ -40,6 +41,12 @@ const KIND_META: Record<ActivityKind, { icon: React.ComponentType<{ size?: numbe
   purchase:     { icon: ShoppingBag,         tint: 'rgba(255,255,255,0.9)', ring: 'rgba(255,255,255,0.30)' },
   note:         { icon: StickyNote,          tint: 'rgba(255,255,255,0.8)', ring: 'rgba(255,255,255,0.20)' },
   stage_change: { icon: GitBranch,           tint: 'rgba(255,255,255,0.8)', ring: 'rgba(255,255,255,0.20)' },
+  project_linked:   { icon: Link2,       tint: 'rgba(255,255,255,0.8)', ring: 'rgba(255,255,255,0.20)' },
+  track_added:      { icon: ListPlus,    tint: 'rgba(255,255,255,0.7)', ring: 'rgba(255,255,255,0.25)' },
+  portal_opened:    { icon: DoorOpen,    tint: '#6DC6A4', ring: 'rgba(109,198,164,0.25)' },
+  track_downloaded: { icon: Download,    tint: '#6DC6A4', ring: 'rgba(109,198,164,0.25)' },
+  decision_changed: { icon: CircleCheck, tint: '#c8a47a', ring: 'rgba(200,164,122,0.25)' },
+  artist_notified:  { icon: BellRing,    tint: 'rgba(255,255,255,0.7)', ring: 'rgba(255,255,255,0.25)' },
 };
 
 function relativeTime(iso: string): string {
