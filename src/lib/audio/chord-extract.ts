@@ -1,6 +1,7 @@
 /**
- * The one place chords are extracted with Essentia.js: framewise HPCP
- * chromagram → ~1 s buckets → 24 major/minor triad templates.
+ * The one place chords are extracted: Essentia.js HPCP chroma and, when
+ * available, basic-pitch note activations (`basic-pitch.ts`) → 1 s buckets →
+ * blended → 24 major/minor triad templates.
  *
  * No browser APIs, so the Vitest suite runs this against the real package,
  * and `chords.worker.js` carries a line-for-line copy that
@@ -64,6 +65,13 @@ export const CHORD_WINDOW_SECONDS = 1;
 export const CHORD_PEAK_FLOOR = 0.01;
 /** A frame whose peak floor is below this is silence: no peaks, and HPCP throws on an empty list. */
 export const CHORD_SILENCE = 1e-5;
+/** basic-pitch activations at or below this are ignored (see `noteBuckets`). */
+export const NOTE_ACTIVATION_FLOOR = 0.3;
+/** Keys below E3 (MIDI 52) are weighted `BASS_WEIGHT` times. */
+export const BASS_KEY_MIDI = 52;
+export const BASS_WEIGHT = 2;
+/** Share of the blended chroma taken from basic-pitch; the rest is HPCP. */
+export const NOTE_WEIGHT = 0.75;
 /** Share of a bucket's chroma energy the best triad must carry, else "N". */
 export const CHORD_MIN_TRIAD_SHARE = 0.45;
 
@@ -114,33 +122,29 @@ function spectrumMax(spectrum: ArrayLike<number>): number {
   return max;
 }
 
-/** Chord timeline of a mono signal that is ALREADY at 44.1 kHz. */
-export function extractChords(essentia: ChordEssentiaCore, mono44k: Float32Array): ChordSegment[] {
+/** One `CHORD_WINDOW_SECONDS` bucket of summed chroma. */
+export interface ChromaBucket {
+  acc: number[];
+  /** Analysis frames whose centre falls in this bucket. */
+  frames: number;
+  /** Of those, frames that carried sound (HPCP) or an active note (basic-pitch). */
+  voiced: number;
+}
+
+function newBucket(): ChromaBucket {
+  return { acc: new Array<number>(12).fill(0), frames: 0, voiced: 0 };
+}
+
+/** Essentia HPCP chroma per bucket, for mono audio ALREADY at 44.1 kHz. */
+export function hpcpBuckets(essentia: ChordEssentiaCore, mono44k: Float32Array): ChromaBucket[] {
   const sr = ESSENTIA_SAMPLE_RATE;
-  const segments: ChordSegment[] = [];
-  let bucket = -1;
-  let acc = new Array<number>(12).fill(0);
-  let frames = 0;
-  let voiced = 0;
-  // HPCP is normalised per frame, so one faint frame would name a chord on
-  // its own; a bucket that is mostly silence is "N".
-  const flush = () => {
-    if (bucket < 0) return;
-    const chord = voiced * 2 >= frames ? classifyChroma(acc) : 'N';
-    segments.push({ time: bucket * CHORD_WINDOW_SECONDS, chord });
-  };
+  const buckets: ChromaBucket[] = [];
   for (let start = 0; start + CHORD_FRAME_SIZE <= mono44k.length; start += CHORD_HOP_SIZE) {
     // Bucket by the frame's centre, not its start, or a frame reaching into
     // the next second lends that second's chord to this one.
     const b = Math.floor((start + CHORD_FRAME_SIZE / 2) / sr / CHORD_WINDOW_SECONDS);
-    if (b !== bucket) {
-      flush();
-      bucket = b;
-      acc = new Array<number>(12).fill(0);
-      frames = 0;
-      voiced = 0;
-    }
-    frames++;
+    const bucket = (buckets[b] ??= newBucket());
+    bucket.frames++;
     const frame = essentia.arrayToVector(mono44k.subarray(start, start + CHORD_FRAME_SIZE));
     const windowed = essentia.Windowing(frame, true, CHORD_FRAME_SIZE, 'blackmanharris62').frame;
     const spectrum = essentia.Spectrum(windowed, CHORD_FRAME_SIZE).spectrum;
@@ -149,8 +153,8 @@ export function extractChords(essentia: ChordEssentiaCore, mono44k: Float32Array
       const peaks = essentia.SpectralPeaks(spectrum, peakFloor, 5000, 60, 40, 'frequency', sr);
       const hpcp = essentia.HPCP(peaks.frequencies, peaks.magnitudes).hpcp;
       const chroma = essentia.vectorToArray(hpcp);
-      for (let j = 0; j < 12; j++) acc[j] += chroma[j] || 0;
-      voiced++;
+      for (let j = 0; j < 12; j++) bucket.acc[j] += chroma[j] || 0;
+      bucket.voiced++;
       peaks.frequencies.delete();
       peaks.magnitudes.delete();
       hpcp.delete();
@@ -159,6 +163,90 @@ export function extractChords(essentia: ChordEssentiaCore, mono44k: Float32Array
     windowed.delete();
     spectrum.delete();
   }
-  flush();
+  return buckets;
+}
+
+/**
+ * Pitch-class chroma per bucket from basic-pitch note activations
+ * (`basic-pitch.ts`): one row per `BASIC_PITCH_FRAME_SECONDS`, 88 keys from A0.
+ *
+ * Only activations above `NOTE_ACTIVATION_FLOOR` count. The model spreads a
+ * little probability over every key, and summed raw over a second that haze
+ * outweighs the three notes actually played (0% on GuitarSet, raw).
+ * Keys below `BASS_KEY_MIDI` count `BASS_WEIGHT` times: the lowest voice is
+ * usually the root, and weighting it settles rootless jazz voicings.
+ */
+export function noteBuckets(noteFrames: ArrayLike<ArrayLike<number>>, frameSeconds: number): ChromaBucket[] {
+  const buckets: ChromaBucket[] = [];
+  for (let i = 0; i < noteFrames.length; i++) {
+    const row = noteFrames[i];
+    // Centre of the frame, as for HPCP.
+    const b = Math.floor(((i + 0.5) * frameSeconds) / CHORD_WINDOW_SECONDS);
+    const bucket = (buckets[b] ??= newBucket());
+    bucket.frames++;
+    let active = false;
+    for (let k = 0; k < row.length; k++) {
+      const p = row[k];
+      if (!(p > NOTE_ACTIVATION_FLOOR)) continue;
+      // Key 0 is A0 (MIDI 21), and PITCH_CLASSES starts at A, so the class is k % 12.
+      bucket.acc[k % 12] += 21 + k < BASS_KEY_MIDI ? p * BASS_WEIGHT : p;
+      active = true;
+    }
+    if (active) bucket.voiced++;
+  }
+  return buckets;
+}
+
+function unitSum(acc: number[]): number[] {
+  let sum = 0;
+  for (const v of acc) sum += v;
+  return sum > 0 ? acc.map((v) => v / sum) : acc;
+}
+
+/**
+ * One label per bucket. With note buckets, each source is scaled to unit sum
+ * and blended `NOTE_WEIGHT` : 1 − `NOTE_WEIGHT`; a bucket either source lacks
+ * falls back to the other. HPCP is normalised per frame, so one faint frame
+ * would name a chord on its own: a bucket mostly silent in HPCP is "N".
+ */
+export function chordsFromBuckets(hpcp: ChromaBucket[], notes?: ChromaBucket[] | null): ChordSegment[] {
+  const count = Math.max(hpcp.length, notes?.length ?? 0);
+  const segments: ChordSegment[] = [];
+  for (let b = 0; b < count; b++) {
+    const h = hpcp[b];
+    const n = notes?.[b];
+    const hVoiced = !!h && h.voiced * 2 >= h.frames;
+    const nVoiced = !!n && n.voiced > 0;
+    let chord = 'N';
+    if (notes) {
+      if (hVoiced && nVoiced) {
+        const a = unitSum(h!.acc);
+        const c = unitSum(n!.acc);
+        chord = classifyChroma(a.map((v, j) => (1 - NOTE_WEIGHT) * v + NOTE_WEIGHT * c[j]));
+      } else if (hVoiced) {
+        chord = classifyChroma(h!.acc);
+      } else if (nVoiced && n!.voiced * 2 >= n!.frames) {
+        chord = classifyChroma(n!.acc);
+      }
+    } else if (hVoiced) {
+      chord = classifyChroma(h!.acc);
+    }
+    segments.push({ time: b * CHORD_WINDOW_SECONDS, chord });
+  }
   return compactChordTimeline(segments);
+}
+
+/**
+ * Chord timeline of a mono signal that is ALREADY at 44.1 kHz. Pass basic-pitch
+ * note activations for the same audio to blend them in; without them this is
+ * HPCP alone (the fallback when the model cannot run).
+ */
+export function extractChords(
+  essentia: ChordEssentiaCore,
+  mono44k: Float32Array,
+  noteFrames?: ArrayLike<ArrayLike<number>> | null,
+  noteFrameSeconds?: number,
+): ChordSegment[] {
+  const notes = noteFrames && noteFrameSeconds ? noteBuckets(noteFrames, noteFrameSeconds) : null;
+  return chordsFromBuckets(hpcpBuckets(essentia, mono44k), notes);
 }

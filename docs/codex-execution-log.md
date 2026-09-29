@@ -8882,3 +8882,28 @@ Three more defects found while testing against the real package, fixed in both c
 Every WASM vector is freed per frame.
 
 Verified: `chord-extract.test.ts` (real package: I-vi-IV-V in C, sharps/minor, silent intro timing, silence), `chords-worker.test.ts` (the worker file in a `vm` sandbox with the real UMD builds, equal to the shared extractor). Chromium via Playwright against `next start` on a temporary `/store` page (enforced CSP): a 48 kHz stereo WAV gave `C@0 Am@2 F@4 G@6`, no jsDelivr request, no CSP violation. `detectChordsFromUrl` has no caller in the UI; the analyze route still accepts `chords`.
+
+## 2026-09-29 - Chord detection blends basic-pitch into Essentia HPCP (AUDIO-06)
+
+**Comparison.** Synthetic progressions (clean triads, overtone-rich tones with drums, inversions + 7ths + melody, a noisy trap loop, 1 s changes) were too easy: HPCP and basic-pitch (0.3 activation floor) both scored 100%. Real audio separated them. 40 GuitarSet comping takes (CC-BY-4.0, acoustic guitar, 8 per style, fetched by HTTP range from Zenodo), lead-sheet ("instructed") chords reduced to major/minor triads; dim/hdim/aug/sus seconds and seconds where no chord covers 70% are unscored; 997 scored one-second buckets:
+
+| method | all | bossa | funk | jazz | rock | singer-songwriter |
+|---|---|---|---|---|---|---|
+| Essentia HPCP (AUDIO-05) | 52.7% | 45 | 33 | 38 | 76 | 70 |
+| basic-pitch, raw activations | 0% | | | | | |
+| basic-pitch, activations > 0.3 | 72.3% | 68 | 57 | 58 | 93 | 86 |
+| basic-pitch > 0.3, keys below E3 ×2 | 75.5% | 73 | 61 | 66 | 93 | 85 |
+| blend 75% basic-pitch (bass ×2) + 25% HPCP | **77.2%** | 81 | 58 | 68 | 92 | 86 |
+
+Raw activations fail because the model spreads a little probability over all 88 keys, which outweighs the played notes once summed over a second. Weights were chosen on this set (three weights × three bass factors), so treat the last row as optimistic by a point or two. The blend's advantage over basic-pitch with bass ×3 alone (76.4%) is small; HPCP stays in mostly as a fallback.
+
+**Speed.** basic-pitch on tfjs CPU in Node: ~1.3× slower than realtime. In Chromium under the enforced CSP: WebGL hung compiling shaders (no GPU here); CPU ~1.6× slower than realtime; **WASM ~9× faster than realtime** (131 s for 1207 s of audio in Node; 22 s take end to end in 4 s in the browser, model load included).
+
+**Integration.**
+- `lib/audio/basic-pitch.ts` reimplements `BasicPitch.evaluateModel` with the same constants and windowing. The package leaks every window's tensors and cannot run on the WASM backend at all: its `prepareData` calls `tf.zeros`, and tfjs-backend-wasm 3.21's `Fill` kernel throws "Unknown dtype undefined". `basic-pitch.test.ts` holds our frames equal to the package's own output (run on CPU) and asserts no tensors leak.
+- `lib/audio/chord-extract.ts` now builds per-second buckets from each source (`hpcpBuckets`, `noteBuckets`) and labels them in `chordsFromBuckets`: each source is unit-normalised and blended 25/75; a second only one source heard uses that source; no note frames means HPCP alone.
+- `chords.worker.js` carries copies of both and loads `tf.min.js` + `tf-backend-wasm.min.js` with `importScripts`, the three WASM binaries through `setWasmPaths` (a file map, since the bundler hashes names) and the model through `tf.io.fromMemory` (model.json's relative weights path would not survive hashing). `tf.min.js`'s regenerator polyfill evals via `Function(...)` when assigning its global throws; declaring `self.regeneratorRuntime` first avoids it, so the CSP is unchanged. If anything in the basic-pitch path fails, the worker returns HPCP alone with `engine: 'essentia'` and the reason.
+- `chords.client.ts` decodes twice (44.1 kHz for HPCP, 22.05 kHz for basic-pitch) and adds `detectChordsWithEngine`.
+- Dependencies (exact pins): `@spotify/basic-pitch@1.0.1` (Apache-2.0; used for its model files and as the test reference), `@tensorflow/tfjs@3.21.0`, `@tensorflow/tfjs-backend-wasm@3.21.0`. Only static assets reach the browser, and only when chord detection runs (~2.9 MB). tfjs 3's `@types/webgl2` / `@types/offscreencanvas` clash with lib.dom, so `tsconfig.json` sets `"types": ["node"]`; tests load tfjs via `createRequire` because its typings pull in `@webgpu/types`.
+
+**Verified.** `chord-extract.test.ts` (bucket, bass and blend rules), `basic-pitch.test.ts` (real model: equals the package, no leak, hears C then G), `chords-worker.test.ts` (the worker file in a `vm` sandbox with the real tfjs UMD + WASM backend + model equals the TS pipeline; HPCP-only fallback when the model cannot load). Chromium via Playwright against `next start` on a temporary `/store` page (CSP enforced): `engine: essentia+basic-pitch`, a 48 kHz synthetic I–vi–IV–V → `C Am F G` at 0/2/4/6 s, and GuitarSet `00_Rock1-130-A` → `A@0 D@7 A@11 E@15 D@17 A@19` against the annotation's 0 / 7.4 / 11.1 / 14.8 / 16.6 / 18.5; no console errors and no request to another origin.

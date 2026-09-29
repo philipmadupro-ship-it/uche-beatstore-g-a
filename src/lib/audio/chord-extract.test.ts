@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { createRequire } from 'node:module';
-import { classifyChroma, compactChordTimeline, extractChords, type ChordEssentiaCore } from './chord-extract';
+import {
+  BASS_WEIGHT, chordsFromBuckets, classifyChroma, compactChordTimeline, extractChords, hpcpBuckets, noteBuckets,
+  NOTE_ACTIVATION_FLOOR, type ChordEssentiaCore, type ChromaBucket,
+} from './chord-extract';
 import { ESSENTIA_SAMPLE_RATE } from './essentia-extract';
 import { progression } from './mocks/chord-signal';
 
@@ -65,4 +68,80 @@ describe('compactChordTimeline', () => {
       { time: 3, chord: 'N' }, { time: 4, chord: 'G' }, { time: 5, chord: 'N' },
     ])).toEqual([{ time: 1, chord: 'C' }, { time: 3, chord: 'N' }, { time: 4, chord: 'G' }]);
   });
+});
+
+/** One 88-key activation row with the given keys set (key 0 = A0 = MIDI 21). */
+function row(keys: Record<number, number>): number[] {
+  const r = new Array(88).fill(0.05);
+  for (const [k, v] of Object.entries(keys)) r[Number(k)] = v;
+  return r;
+}
+const key = (midi: number) => midi - 21;
+
+describe('noteBuckets', () => {
+  it('folds keys onto pitch classes from A, one bucket per second by frame centre', () => {
+    // C4 = MIDI 60, E4 = 64, G4 = 67; frames of 0.25 s.
+    const frames = [0, 1, 2, 3, 4].map(() => row({ [key(60)]: 0.9, [key(64)]: 0.8, [key(67)]: 0.7 }));
+    const buckets = noteBuckets(frames, 0.25);
+    expect(buckets).toHaveLength(2);
+    expect(buckets[0].frames).toBe(4);
+    expect(buckets[1].frames).toBe(1);
+    expect(buckets[0].acc[3]).toBeCloseTo(3.6); // C
+    expect(buckets[0].acc[7]).toBeCloseTo(3.2); // E
+    expect(buckets[0].acc[10]).toBeCloseTo(2.8); // G
+    expect(classifyChroma(buckets[0].acc)).toBe('C');
+  });
+
+  it(`ignores activations at or below ${NOTE_ACTIVATION_FLOOR}; a frame with none is not voiced`, () => {
+    const [b] = noteBuckets([row({ [key(60)]: NOTE_ACTIVATION_FLOOR }), row({})], 0.5);
+    expect(b.acc.every((v) => v === 0)).toBe(true);
+    expect(b.voiced).toBe(0);
+  });
+
+  it(`weights keys below E3 ${BASS_WEIGHT}x, so the bass settles a rootless voicing`, () => {
+    // E-G-B over a C2 bass: Em by the upper notes alone, C major (C-E-G) with the bass.
+    const upper = { [key(64)]: 0.8, [key(67)]: 0.8, [key(71)]: 0.8 };
+    expect(classifyChroma(noteBuckets([row(upper)], 1)[0].acc)).toBe('Em');
+    const [b] = noteBuckets([row({ ...upper, [key(36)]: 0.8 })], 1);
+    expect(b.acc[3]).toBeCloseTo(0.8 * BASS_WEIGHT);
+    expect(classifyChroma(b.acc)).toBe('C');
+  });
+});
+
+describe('chordsFromBuckets', () => {
+  const bucket = (acc: number[], voiced = 4, frames = 4): ChromaBucket => ({ acc, frames, voiced });
+  const chroma = (bins: Record<number, number>) => Array.from({ length: 12 }, (_, i) => bins[i] ?? 0);
+  const cMajor = chroma({ 3: 1, 7: 1, 10: 1 });
+  const aMinor = chroma({ 0: 1, 3: 1, 7: 1 });
+
+  it('is HPCP alone without note buckets', () => {
+    expect(chordsFromBuckets([bucket(cMajor)], null)).toEqual([{ time: 0, chord: 'C' }]);
+  });
+
+  it('lets basic-pitch outvote HPCP where they disagree (75/25 blend)', () => {
+    expect(chordsFromBuckets([bucket(cMajor)], [bucket(aMinor)])).toEqual([{ time: 0, chord: 'Am' }]);
+  });
+
+  it('falls back to whichever source heard the bucket', () => {
+    const silentH = bucket(chroma({}), 0);
+    const silentN = bucket(chroma({}), 0);
+    expect(chordsFromBuckets([bucket(cMajor), silentH], [silentN, bucket(aMinor)]).map((s) => s.chord)).toEqual(['C', 'Am']);
+  });
+
+  it('is N where neither heard enough', () => {
+    const quiet = bucket(cMajor, 1, 4);
+    expect(chordsFromBuckets([bucket(cMajor), quiet, bucket(aMinor)], [bucket(cMajor), bucket(aMinor, 1, 4), bucket(aMinor)]))
+      .toEqual([{ time: 0, chord: 'C' }, { time: 1, chord: 'N' }, { time: 2, chord: 'Am' }]);
+  });
+});
+
+describe('extractChords with note frames', () => {
+  it('equals chordsFromBuckets over hpcpBuckets and noteBuckets', () => {
+    const signal = progression([['C', 'E', 'G'], ['A', 'C', 'E']]);
+    const frames = Array.from({ length: 344 }, (_, i) => (i < 172 ? row({ [key(60)]: 0.9, [key(64)]: 0.9, [key(67)]: 0.9 }) : row({ [key(57)]: 0.9, [key(60)]: 0.9, [key(64)]: 0.9 })));
+    expect(extractChords(essentia, signal, frames, 256 / 22050)).toEqual(
+      chordsFromBuckets(hpcpBuckets(essentia, signal), noteBuckets(frames, 256 / 22050)),
+    );
+    expect(extractChords(essentia, signal, frames, 256 / 22050).map((s) => s.chord)).toEqual(['C', 'Am']);
+  }, 30_000);
 });

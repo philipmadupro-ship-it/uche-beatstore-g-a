@@ -55,7 +55,8 @@ export function buildCsp(nonce: string, framable = false): string {
     `font-src 'self' data:`,
     `connect-src 'self' https: wss:`,
     // Essentia analysis + chord workers are same-origin classic scripts under
-    // /_next/static/media that importScripts the UMD builds from 'self'.
+    // /_next/static/media that importScripts the UMD builds (essentia.js,
+    // tfjs + its WASM backend) and fetch the basic-pitch model from 'self'.
     // blob: stays for any worker built from a Blob; nothing third-party.
     `worker-src 'self' blob:`,
     `frame-src https://js.stripe.com https://*.js.stripe.com https://*.stripe.com https://hooks.stripe.com`,

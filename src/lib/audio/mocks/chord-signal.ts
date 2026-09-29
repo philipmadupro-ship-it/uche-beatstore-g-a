@@ -10,8 +10,11 @@ function hz(pc: (typeof PITCH_CLASSES)[number]): number {
 }
 
 /** Two seconds per chord: triad + the root an octave down, a little noise. */
-export function progression(chords: Array<(typeof PITCH_CLASSES)[number][]>, secondsEach = 2): Float32Array {
-  const sr = ESSENTIA_SAMPLE_RATE;
+export function progression(
+  chords: Array<(typeof PITCH_CLASSES)[number][]>,
+  secondsEach = 2,
+  sr = ESSENTIA_SAMPLE_RATE,
+): Float32Array {
   const per = Math.round(sr * secondsEach);
   const out = new Float32Array(per * chords.length);
   let seed = 7;
