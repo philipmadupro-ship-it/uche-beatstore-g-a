@@ -383,7 +383,9 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
             const inviteRes = await fetch(`/api/projects/${selectedProjectId}/shares/${data.share.id}/invite`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: r.email, message }),
+              // Outside a campaign the invite route records the send itself;
+              // inside one, the campaign targets call below records it.
+              body: JSON.stringify({ email: r.email, message, ...(campaignId ? {} : { contact_id: contactId }) }),
             });
             if (!inviteRes.ok) {
               const e = await inviteRes.json().catch(() => ({}));

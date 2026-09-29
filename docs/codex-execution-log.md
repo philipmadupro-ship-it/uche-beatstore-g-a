@@ -8920,6 +8920,16 @@ Raw activations fail because the model spreads a little probability over all 88 
 
 **Verified.** `chord-extract.test.ts` (bucket, bass and blend rules), `basic-pitch.test.ts` (real model: equals the package, no leak, hears C then G), `chords-worker.test.ts` (`essentia.worker.js`'s chords task in a `vm` sandbox with the real tfjs UMD + WASM backend + model equals the TS pipeline; HPCP-only fallback when the model cannot load). Chromium via Playwright against `next start` on a temporary `/store` page (CSP enforced): `engine: essentia+basic-pitch`, a 48 kHz synthetic I–vi–IV–V → `C Am F G` at 0/2/4/6 s, and GuitarSet `00_Rock1-130-A` → `A@0 D@7 A@11 E@15 D@17 A@19` against the annotation's 0 / 7.4 / 11.1 / 14.8 / 16.6 / 18.5; no console errors and no request to another origin. Re-run after merging #33, through the shared worker: same results; a second detection on the same page took 1.2 s against 2.1 s (model cached). A jazz take (`00_Jazz1-130-D`, lead sheet D / G / D / A / G / D at 0 / 7.4 / 11.1 / 14.8 / 16.6 / 18.5) read D@0 G@7 Am@11 D@12 Am@14 A@15 Dm@17 D@19: the changes land, with one-second Am errors and a Dm where the lead sheet has a G voicing with added tones.
 
+## 2026-09-29 - Artist workspace audit fixes: project sends, share comments, link opens
+
+Three gaps found while auditing the CRM for the artist-workspace plan. No schema change.
+
+- **Direct project sends left no trace.** `SendBeatModal` in project mode wrote a `beat_sends` row only when the send was part of a campaign (`/api/campaigns/[id]/targets`). Sent straight to a contact, the invite went out and nothing was recorded: the send never reached the contact's timeline or the nudge queue, and the Resend webhook had no `email_resend_id` to attach opens and clicks to. `/api/projects/[id]/shares/[shareId]/invite` now takes an optional `contact_id` (owner-checked before the email is sent) and records the send. The modal passes it only outside a campaign, so a campaign send is still recorded once, by the targets route. Both routes build the row with `lib/crm/project-send.ts`. Recording is best-effort after the email has gone out (`sendRecorded: false`, logged).
+- **Share-page comments notified nobody.** `POST /api/projects/share/[token]/comments` now inserts a `share_comment` notification for the project owner (`lib/notifications/share-comment.ts`), so it reaches the bell and desktop notifications. A failed notification never fails the comment. TopBar gives the kind its own icon.
+- **"Plays" on `/links` were page opens.** Both `share_links.plays` and `project_shares.plays` go up once per share-page GET, not per track played. `/links` now labels the number "opens". The column keeps its name.
+
+Tests: `lib/crm/project-send.test.ts`, `lib/notifications/share-comment.test.ts`, new `invite/route.test.ts` (5) and `share/[token]/comments/route.test.ts` (3).
+
 ## 2026-09-29 - Detect chords → MIDI in the track drawer
 
 The chord detector (#33 loader fix, AUDIO-06 basic-pitch blend) had no caller. The track details drawer (the Library's right-hand panel) now has **Detect chords** in its Asset Intelligence section (`components/tracks/drawer/TrackChordsPanel.tsx`).

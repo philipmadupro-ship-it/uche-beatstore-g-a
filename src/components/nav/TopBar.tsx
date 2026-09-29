@@ -16,6 +16,7 @@ import {
   RotateCcw,
   AlertTriangle,
   Tag,
+  MessageSquare,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { NAV_GROUPS, ALL_GROUPS, activeGroupFor, isItemActive, type NavGroup } from './model';
@@ -47,6 +48,7 @@ function notifIcon(kind: string) {
   if (kind === 'refund') return <RotateCcw size={13} className="text-white" />;
   if (kind === 'dispute') return <AlertTriangle size={13} className="text-red-400" />;
   if (kind === 'buyer_offer') return <Tag size={13} className="text-white" />;
+  if (kind === 'share_comment') return <MessageSquare size={13} className="text-white" />;
   return <Bell size={13} className="text-white/60" />;
 }
 
