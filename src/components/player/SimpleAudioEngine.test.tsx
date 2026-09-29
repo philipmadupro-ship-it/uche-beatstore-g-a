@@ -38,6 +38,12 @@ function audio(container: HTMLElement) {
   return container.querySelector('audio') as HTMLAudioElement;
 }
 
+/** jsdom never loads media: give the element a duration and announce it. */
+function loadMetadata(a: HTMLAudioElement, seconds: number) {
+  Object.defineProperty(a, 'duration', { configurable: true, get: () => seconds });
+  act(() => { a.dispatchEvent(new Event('loadedmetadata')); });
+}
+
 describe('SimpleAudioEngine volume vs playback', () => {
   it('mute silences the element without pausing, reloading or losing the level', () => {
     const { container } = render(<SimpleAudioEngine />);
@@ -107,14 +113,30 @@ describe('SimpleAudioEngine remount (layout change)', () => {
     const { container } = render(<SimpleAudioEngine />);
     const a = audio(container);
     expect(a.getAttribute('src')).toContain('a.mp3');
-    // duration_seconds 60 × 0.5 — jsdom has no media metadata, so the stored
-    // duration is what the engine falls back to.
+    // No metadata yet: nothing is guessed from the stored duration.
+    expect(a.currentTime).toBe(0);
+    loadMetadata(a, 60);
     expect(a.currentTime).toBe(30);
     expect(play.mock.calls.length).toBe(playsBefore);
 
     act(() => { usePlayer.getState().togglePlay(); });
     expect(play.mock.calls.length).toBeGreaterThan(playsBefore);
     expect(a.currentTime).toBe(30);
+  });
+
+  it('resumes by the audio it plays, not duration_seconds (a 75 s store preview of a 179 s beat)', () => {
+    // Production: left at ~8.9 s of the preview, came back at 21.3 s, because
+    // the fraction of the 75 s clip was converted back with the full 179 s.
+    const beat = { ...track('a'), duration_seconds: 179 } as Track;
+    const first = render(<SimpleAudioEngine />);
+    act(() => { usePlayer.getState().setTrack(beat); });
+    act(() => { usePlayer.getState().setProgress(9 / 75); });
+    first.unmount();
+
+    const { container } = render(<SimpleAudioEngine />);
+    const a = audio(container);
+    loadMetadata(a, 75);
+    expect(a.currentTime).toBeCloseTo(9, 5);
   });
 
   it('a track picked while no engine was mounted starts from the top', () => {
@@ -128,6 +150,25 @@ describe('SimpleAudioEngine remount (layout change)', () => {
     const { container } = render(<SimpleAudioEngine />);
     const a = audio(container);
     expect(a.getAttribute('src')).toContain('b.mp3');
+    loadMetadata(a, 60);
+    expect(a.currentTime).toBe(0);
+  });
+
+  it('a resume still pending when another track starts is dropped, not applied to it later', () => {
+    const first = render(<SimpleAudioEngine />);
+    act(() => { usePlayer.getState().setQueue([track('a'), track('b')]); });
+    act(() => { usePlayer.getState().setTrack(track('a')); });
+    act(() => { usePlayer.getState().setProgress(0.5); });
+    first.unmount();
+
+    const { container } = render(<SimpleAudioEngine />);
+    const a = audio(container);
+    // Switch before A's metadata ever arrives, then come back to A.
+    act(() => { usePlayer.getState().setTrack(track('b')); });
+    loadMetadata(a, 60);
+    act(() => { usePlayer.getState().setTrack(track('a')); });
+    loadMetadata(a, 60);
+    expect(a.getAttribute('src')).toContain('a.mp3');
     expect(a.currentTime).toBe(0);
   });
 });
