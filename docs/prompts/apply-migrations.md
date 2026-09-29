@@ -10,8 +10,9 @@ Two ways to use this file:
   section is the Supabase SQL editor route.
 
 As of 2026-09-29, 112–129 are applied (SQL-editor bundle). **Pending: 130–132**
-(phase 3); `supabase/apply/pending.sql` holds exactly those, plus the verify
-table (which lists 112–132, so 130–132 should read `applied` after the run).
+(phase 3) and **133** (linked material); `supabase/apply/pending.sql` holds
+130–133, plus the verify table (which lists 112–133; 130–133 should read
+`applied` after the run).
 None of them rewrites existing data except 132's backfill, which only inserts
 `song_beats` rows copied from `tracks.beat_track_id`.
 `supabase/MIGRATIONS.md` is
@@ -148,6 +149,7 @@ has been ruled out.
 | 130 | `artist_messages` | — | yes (Messages hides itself; sends 503) | drop the table |
 | 131 | `artist_portals.require_sign_in`, `sign_in_sent_at` | — | yes (sign-in cannot be switched on) | drop the columns |
 | 132 | `song_beats` | one row per song with a main beat | yes (one beat per song; a second 503s) | drop the table (`beat_track_id` is untouched) |
+| 133 | `track_links`, track types `loop` / `topline` | — | yes (only "beat" links work; others 503) | drop the table; re-add the old four-type check once no loop/topline rows exist |
 
 Order matters only in one place: 122–126 need `public.is_producer()` from
 119, and 128 needs 125's portals to be useful. Running the full set in number

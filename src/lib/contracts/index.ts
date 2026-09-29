@@ -54,7 +54,7 @@ export type UploadedImageDeleteBody = z.infer<typeof UploadedImageDeleteBodySche
 // triggering DB-level "column does not exist" errors.
 export const TrackPatchBodySchema = z.object({
   title: z.string().min(1).max(200).optional(),
-  type: z.enum(['beat', 'instrumental', 'song', 'remix']).optional(),
+  type: z.enum(['beat', 'instrumental', 'song', 'remix', 'loop', 'topline']).optional(),
   // Instrumental (no vocals) flag — distinct from `type` (migration 079).
   instrumental: z.boolean().optional(),
   status: z.enum(['finished', 'needs_work', 'archived', 'maq']).nullable().optional(),
@@ -836,3 +836,17 @@ export const SongBeatsBodySchema = z.object({
   beat_ids: z.array(z.string().uuid()).max(12, 'A song can be built on at most 12 beats'),
 }).strict().refine((b) => new Set(b.beat_ids).size === b.beat_ids.length, { message: 'A beat is listed twice' });
 export type SongBeatsBody = z.infer<typeof SongBeatsBodySchema>;
+
+// ── Linked material (migs 132 + 133) ─────────────────────────────────────
+
+/**
+ * POST / DELETE /api/tracks/[id]/links — link another track to this one.
+ * `direction: 'out'` (default) reads "track_id is this track's <relation>"
+ * (this song's beat, this beat's loop); 'in' reads the other way round.
+ */
+export const TrackLinkBodySchema = z.object({
+  track_id: z.string().uuid(),
+  relation: z.enum(['beat', 'instrumental', 'loop', 'topline', 'version']),
+  direction: z.enum(['out', 'in']).optional().default('out'),
+}).strict();
+export type TrackLinkBody = z.infer<typeof TrackLinkBodySchema>;

@@ -1,6 +1,6 @@
 import type { CrmStage } from '@/lib/contracts';
 
-export type TrackType = 'beat' | 'instrumental' | 'song' | 'remix';
+export type TrackType = 'beat' | 'instrumental' | 'song' | 'remix' | 'loop' | 'topline';
 export type TrackStatus = 'finished' | 'needs_work' | 'archived' | 'maq';
 export type StemsStatus = 'none' | 'pending' | 'done' | 'failed';
 

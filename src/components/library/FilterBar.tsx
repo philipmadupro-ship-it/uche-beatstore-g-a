@@ -17,7 +17,7 @@ const STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
   { value: 'archived',   label: 'Archived', color: 'bg-[#0D0D0A] text-white/60 border-white/10'    },
 ];
 
-export type LibraryTrackType = 'all' | 'beat' | 'instrumental' | 'song' | 'remix';
+export type LibraryTrackType = 'all' | 'beat' | 'instrumental' | 'song' | 'remix' | 'loop' | 'topline';
 
 export interface LibraryFilters {
   /** Track type. Folded in from the standalone pill row so every facet that
@@ -123,7 +123,7 @@ type SerializedLibraryFilters = {
 /** Rehydrate filters from a stored JSON object (arrays → Sets). */
 export function deserializeFilters(raw: unknown): LibraryFilters {
   const r = (raw && typeof raw === 'object' ? raw : {}) as SerializedLibraryFilters;
-  const TYPES: LibraryTrackType[] = ['all', 'beat', 'instrumental', 'song', 'remix'];
+  const TYPES: LibraryTrackType[] = ['all', 'beat', 'instrumental', 'song', 'remix', 'loop', 'topline'];
   return {
     type: TYPES.includes(r.type as LibraryTrackType) ? (r.type as LibraryTrackType) : 'all',
     offlineOnly: r.offlineOnly === true,
@@ -164,6 +164,8 @@ const TYPE_OPTIONS: Array<{ value: LibraryTrackType; label: string }> = [
   { value: 'instrumental', label: 'Instrumentals' },
   { value: 'song', label: 'Songs' },
   { value: 'remix', label: 'Remixes' },
+  { value: 'loop', label: 'Loops' },
+  { value: 'topline', label: 'Toplines' },
 ];
 
 export function FilterBar({ filters, onChange, embedded = false, triageCounts = null }: FilterBarProps) {

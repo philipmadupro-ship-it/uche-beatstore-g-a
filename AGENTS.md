@@ -174,6 +174,8 @@ In the portal the artist plays beats, downloads where the producer allowed it, a
 
 **Finding things.** ⌘K search labels a song with its artist, finds project files, and marks which contacts are artists. Projects are found by what is inside them too: /projects and ⌘K match a track in the project, an artist on it, a tag or its description, and say which ("Track · MIDNIGHT", "with Nova"). A track's credits show one entry per person ("Nova · Feature, Collaborator") and fold past three people behind "+N more". A credit on a track can be linked to a contact, which puts the track in that artist's workspace, and a contact can have a photo.
 
+**Linked material.** The pieces of one record are linked in the track drawer's **Linked** panel: a song to its beat, its instrumental and the loops it uses; a beat to its loops and a topline written on it; any track to an alternate version. Loop and topline are track types of their own. Type a name and click a result to link it; what it is (Beat, Instrumental, Loop, Topline, Version) is picked from its type and can be set by hand. Every link shows from both sides — a loop lists the beats and songs that use it. **Download all** gives one zip of the track and everything linked (WAV where there is one), with a README saying what each file is; **Share all** makes one share link of the set with downloads on; **Send to…** sends the set to a contact.
+
 A song is a track of type song; its **Built on** list points it at the beats it was made on — the first is the main beat, any other can be made the main — and each beat's drawer lists the songs built on it. The track drawer's **People** section answers "who has this beat?" — each artist with the project it arrived through, their decision and how often they played it — and every row links through. The project page shows its artists in a strip with Share / Notify and a small decision pill per artist on each track row.
 
 ### Producer: send a beat to an artist
@@ -190,7 +192,7 @@ Settings → Preferences → **Desktop notifications**. Switching it on asks the
 ## Data model (the tables that matter)
 
 ```
-tracks(id, user_id, title, type[beat|instrumental|song|remix], audio_url,
+tracks(id, user_id, title, type[beat|instrumental|song|remix|loop|topline], audio_url,
        wav_url, peaks_url, cover_url, duration_seconds, bpm, key, scale,
        loudness, danceability, energy, valence, acousticness, rating,
        description, lease_price_usd, exclusive_price_usd, store_listed,
@@ -246,6 +248,8 @@ artist_messages(contact_id, project_id, author[producer|artist],
                 kind[message|request], body, request_status[open|done|declined],
                 read_at, emailed_at)                              -- one thread per artist
 song_beats(song_track_id, beat_track_id, position)                 -- a song's beats, main = 0
+track_links(from_track_id, to_track_id, relation[instrumental|loop|topline|version],
+            position)                                              -- the rest of a record's pieces
 beat_sends(id, contact_id, track_ids[], share_token, message,
            status[sent|opened|interested|negotiating|placed|pass], sent_at,
            campaign_id)

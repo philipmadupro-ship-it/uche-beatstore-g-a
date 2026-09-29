@@ -2,7 +2,7 @@ import type { TrackType } from '@/lib/types';
 
 export const UPLOAD_TYPE_DRAFT_KEY = 'antigravity:upload:type:v1';
 
-const TRACK_TYPES = new Set<TrackType>(['beat', 'instrumental', 'song', 'remix']);
+const TRACK_TYPES = new Set<TrackType>(['beat', 'instrumental', 'song', 'remix', 'loop', 'topline']);
 
 export function readUploadTypeDraft(
   fallback: TrackType,

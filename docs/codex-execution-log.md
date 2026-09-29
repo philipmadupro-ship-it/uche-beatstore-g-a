@@ -9148,3 +9148,15 @@ Owner request after phase 3: separate familiar artists from the rest of the cont
 - Credits: `groupCredits` (one person = linked contact, else normalised name) + `visibleCredits` (3, never folds a single one). Remove/link act on the person.
 
 Tests: audience (2), project search (4), credits (5 + 1 jsdom); real-DB flow 6 in `e2e/artist-workspace-phase3.spec.ts` — 17/17 real-DB flows pass. Also fixed two 12px sizes the type-scale guard caught (they were in the phase 3 commit).
+
+## 2026-09-29 - Linked material (step 1 of the roles/linking plan)
+
+Owner request: link a song to its beat, a beat to its loops, and so on, then download or send the set together; one zip. Migration 132 stays as it is.
+
+- Migration 133: `track_links` (instrumental / loop / topline / version, one per pair) + track types `loop`, `topline`. No DO blocks; verify.sql checks that exactly one type check survives.
+- `lib/tracks/links.ts`: `mergeLinks` reads `song_beats` (relation `beat`) and `track_links` as one list, both directions, labelled per side; `suggestRelation`; zip naming + README. `links-store.ts` writes `beat` through song-beats-store so the main beat stays in step.
+- `/api/tracks/[id]/links` (GET/POST/DELETE), `/api/tracks/[id]/links/zip` (streamed, `lib/tracks/zip-stream.ts`, fflate added as a direct dependency).
+- Drawer **Linked** panel: inline search-and-click linking (a Dropdown menu inside the drawer rendered off-screen — found by the e2e), Download all · zip, Share all, Send to….
+- Loop/Topline added to every type list (upload, drawer, library filter, analytics, quick share, add-from-library).
+
+Tests: links (7), zip-stream (2, unzipped and compared); `e2e/linked-material.spec.ts` 3 flows on the real database (zip compared byte for byte, share row checked); degradation with 133 dropped: GET works, non-beat links 503, zip works.

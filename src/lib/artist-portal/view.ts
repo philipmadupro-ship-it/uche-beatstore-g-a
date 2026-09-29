@@ -35,7 +35,7 @@ export interface PortalTrackSource {
 export interface PortalTrack {
   id: string;
   title: string;
-  type: 'beat' | 'song' | 'instrumental' | 'remix';
+  type: 'beat' | 'song' | 'instrumental' | 'remix' | 'loop' | 'topline';
   bpm: number | null;
   key: string | null;
   scale: string | null;
@@ -106,7 +106,7 @@ export function publicUrlOrNull(value: unknown): string | null {
 }
 
 function portalType(type: string | null): PortalTrack['type'] {
-  return type === 'song' || type === 'instrumental' || type === 'remix' ? type : 'beat';
+  return type === 'song' || type === 'instrumental' || type === 'remix' || type === 'loop' || type === 'topline' ? type : 'beat';
 }
 
 export function toPortalTrack(
