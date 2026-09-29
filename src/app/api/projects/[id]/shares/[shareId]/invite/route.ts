@@ -4,6 +4,9 @@ import { Resend } from 'resend';
 import { isSupabaseConfigured, requireRowOwnership } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import type { OwnershipOk } from '@/lib/auth/ownership';
+import { ProjectShareInviteBodySchema } from '@/lib/contracts';
+import { buildProjectSendRow } from '@/lib/crm/project-send';
 
 const log = createLogger('api.projects.shares.invite');
 
@@ -23,6 +26,13 @@ export const runtime = 'nodejs';
  *      still exists and can be copied manually.
  *
  * Owner-gated via the parent project, like every other shares route.
+ *
+ * With a `contact_id`, the send is also recorded in `beat_sends` so it reaches
+ * the contact's timeline and the nudge queue, and the Resend webhook can stamp
+ * the open and click on it. Campaign sends are recorded by
+ * `/api/campaigns/[id]/targets` instead, so callers omit `contact_id` there.
+ * Recording is best-effort: the email has already gone, so failing the request
+ * would only invite a second send.
  */
 export async function POST(
   req: NextRequest,
@@ -31,9 +41,13 @@ export async function POST(
   const { id, shareId } = await params;
 
   try {
-    const body = await req.json().catch(() => ({}));
-    const overrideEmail: string | null = typeof body.email === 'string' ? body.email.trim() : null;
-    const message: string = typeof body.message === 'string' ? body.message.trim() : '';
+    const parsed = ProjectShareInviteBodySchema.safeParse(await req.json().catch(() => ({})));
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid request body' }, { status: 400 });
+    }
+    const overrideEmail: string | null = parsed.data.email || null;
+    const message: string = parsed.data.message.trim();
+    const contactId: string | null = parsed.data.contact_id ?? null;
 
     if (!process.env.RESEND_API_KEY) {
       return NextResponse.json(
@@ -119,10 +133,15 @@ export async function POST(
         .eq('id', shareId);
     }
 
+    const beatSendId = contactId
+      ? await recordProjectSend(owner, { contactId, projectId: id, shareToken: share.token, message, emailResendId: sent?.id ?? null })
+      : null;
+
     return NextResponse.json({
       success: true,
       recipient,
       resendId: sent?.id ?? null,
+      beatSendId,
     });
   } catch (error) {
     log.error('invite failed', { error: errorMessage(error) });
@@ -131,6 +150,51 @@ export async function POST(
 }
 
 // ----------------------------------------------------------------------
+
+async function recordProjectSend(
+  owner: Pick<OwnershipOk, 'userId' | 'admin'>,
+  input: { contactId: string; projectId: string; shareToken: string; message: string; emailResendId: string | null },
+): Promise<string | null> {
+  try {
+    const [{ data: contact, error: contactErr }, { data: projectTracks, error: tracksErr }] = await Promise.all([
+      owner.admin
+        .from('contacts')
+        .select('id')
+        .eq('id', input.contactId)
+        .eq('user_id', owner.userId)
+        .maybeSingle(),
+      owner.admin
+        .from('project_tracks')
+        .select('track_id')
+        .eq('project_id', input.projectId)
+        .order('position', { ascending: true }),
+    ]);
+    if (contactErr) throw contactErr;
+    if (tracksErr) throw tracksErr;
+    if (!contact) {
+      log.warn('invite sent but contact not found for this owner; send not recorded', { contactId: input.contactId });
+      return null;
+    }
+
+    const { data: send, error: sendErr } = await owner.admin
+      .from('beat_sends')
+      .insert(buildProjectSendRow({
+        contactId: input.contactId,
+        trackIds: ((projectTracks ?? []) as Array<{ track_id: string }>).map((row) => row.track_id),
+        shareToken: input.shareToken,
+        message: input.message,
+        campaignId: null,
+        emailResendId: input.emailResendId,
+      }))
+      .select('id')
+      .single();
+    if (sendErr) throw sendErr;
+    return (send as { id: string } | null)?.id ?? null;
+  } catch (error) {
+    log.error('invite sent but beat_sends row failed', { projectId: input.projectId, error: errorMessage(error) });
+    return null;
+  }
+}
 
 function renderInviteHtml(opts: {
   projectName: string;

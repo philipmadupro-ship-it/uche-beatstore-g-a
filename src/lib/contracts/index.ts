@@ -316,6 +316,22 @@ export const CampaignTargetsDeleteBodySchema = z.object({
 });
 export type CampaignTargetsDeleteBody = z.infer<typeof CampaignTargetsDeleteBodySchema>;
 
+// ── Project share invites ───────────────────────────────────────────────
+
+/**
+ * POST /api/projects/[id]/shares/[shareId]/invite.
+ *
+ * `contact_id` asks the route to record the send in `beat_sends`. Send it only
+ * when the invite is NOT part of a campaign: a campaign send is recorded by
+ * `/api/campaigns/[id]/targets` instead, and sending both writes two rows.
+ */
+export const ProjectShareInviteBodySchema = z.object({
+  email: z.string().trim().max(320).nullable().optional(),
+  message: z.string().max(5000).optional().default(''),
+  contact_id: z.string().uuid().nullable().optional(),
+});
+export type ProjectShareInviteBody = z.infer<typeof ProjectShareInviteBodySchema>;
+
 // ── Beat sends ──────────────────────────────────────────────────────────
 
 export const BEAT_SEND_STATUSES = [

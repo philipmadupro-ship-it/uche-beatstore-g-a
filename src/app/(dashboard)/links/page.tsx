@@ -27,6 +27,7 @@ import {
   isShareLinkExpired,
   shareLinkEndpoint,
   shareLinkKey,
+  shareOpensLabel,
   toSharePatchBody,
   type LinkFilter,
   type ShareLinkPatch,
@@ -96,7 +97,8 @@ export default function LinksPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const raw: ShareLink[] = Array.isArray(data) ? data : data.links || [];
-      // Sort by plays descending — most-engaged links at the top.
+      // Sort by opens descending — most-visited links at the top. The column
+      // is called `plays` but counts page opens (see shareOpensLabel).
       setLinks(raw.slice().sort((a, b) => (b.plays ?? 0) - (a.plays ?? 0)));
     } catch (err) {
       console.error('Fetch links error:', err);
@@ -225,7 +227,7 @@ export default function LinksPage() {
           eyebrow="Sharing"
           title="Links"
           description="Every share you've sent. Tap a card to open and copy."
-          meta={`${links.length} link${links.length !== 1 ? 's' : ''}${links.length > 0 ? ` · ${links.reduce((s, l) => s + (l.plays ?? 0), 0).toLocaleString()} plays` : ''}`}
+          meta={`${links.length} link${links.length !== 1 ? 's' : ''}${links.length > 0 ? ` · ${shareOpensLabel(linkSummary.plays)}` : ''}`}
           actions={
             <LiquidGlassButton onClick={() => setShowQuickShare(true)}>
                 <Plus size={13} aria-hidden="true" />
@@ -239,7 +241,7 @@ export default function LinksPage() {
             <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
               <LinkMetric label="Links" value={links.length.toLocaleString()} icon={<Link2 size={13} />} />
               <LinkMetric label="Active" value={linkSummary.active.toLocaleString()} icon={<Clock size={13} />} />
-              <LinkMetric label="Plays" value={linkSummary.plays.toLocaleString()} icon={<BarChart3 size={13} />} tone="good" />
+              <LinkMetric label="Opens" value={linkSummary.plays.toLocaleString()} icon={<BarChart3 size={13} />} tone="good" />
               <LinkMetric label="Downloads" value={linkSummary.downloadable.toLocaleString()} icon={<Download size={13} />} />
             </div>
 
@@ -369,7 +371,7 @@ export default function LinksPage() {
                   }
                   meta={
                     <>
-                      {link.kind || 'share'} · {link.track_ids?.length ?? 0} track{(link.track_ids?.length ?? 0) === 1 ? '' : 's'} · {link.plays ?? 0} play{(link.plays ?? 0) === 1 ? '' : 's'}
+                      {link.kind || 'share'} · {link.track_ids?.length ?? 0} track{(link.track_ids?.length ?? 0) === 1 ? '' : 's'} · {shareOpensLabel(link.plays)}
                       {expired ? ' · expired' : link.expires_at ? ` · until ${formatDate(link.expires_at)}` : ''}
                     </>
                   }
@@ -509,7 +511,7 @@ export default function LinksPage() {
 
                       {/* One quiet metadata line. */}
                       <p className="mb-3 truncate text-meta">
-                        {link.kind || 'share'} · {link.track_ids?.length ?? 0} track{(link.track_ids?.length ?? 0) === 1 ? '' : 's'} · {link.plays ?? 0} play{(link.plays ?? 0) === 1 ? '' : 's'}
+                        {link.kind || 'share'} · {link.track_ids?.length ?? 0} track{(link.track_ids?.length ?? 0) === 1 ? '' : 's'} · {shareOpensLabel(link.plays)}
                         {expired ? (
                           <span className="text-red-400"> · expired</span>
                         ) : link.expires_at ? (
@@ -519,8 +521,8 @@ export default function LinksPage() {
                         )}
                       </p>
 
-                      {/* Engagement bar — thin, low-contrast relative play
-                          share. Pinned to the bottom so the bars line up
+                      {/* Engagement bar — thin, low-contrast relative share
+                          of opens. Pinned to the bottom so the bars line up
                           across a row of cards regardless of title wrap. */}
                       <div className="mt-auto h-0.5 bg-white/[0.05] rounded-full overflow-hidden">
                         <div
@@ -770,7 +772,7 @@ function LinkPopup({
                 inputClassName="text-[18px] font-medium"
               />
               <p className="text-[11px] text-white/60 mt-1">
-                Created {formatDate(link.created_at)} · {link.plays ?? 0} play{(link.plays ?? 0) === 1 ? '' : 's'}
+                Created {formatDate(link.created_at)} · {shareOpensLabel(link.plays)}
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-1">

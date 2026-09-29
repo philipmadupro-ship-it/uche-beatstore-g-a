@@ -8893,3 +8893,20 @@ Verified in Chromium (`next start`, enforced /store CSP): a 48 kHz WAV of C / 3 
 Tests: `chord-extract.test.ts` covers the real package: progression, timing, silent break, silence, a clip shorter than one frame, classification and segmentation. The worker drift test now covers the chords task, and it fails when the worker's copy reverts to skipping silent buckets.
 
 **Not wired:** no UI calls `detectChordsFromUrl`, before or after this change. The analyze route accepts a `chords` payload and nothing renders `tracks.chords`.
+
+## 2026-09-29 - CRM audit fixes (Artist Relationship Workspace, phase 0)
+
+The three bugs the Artist Relationship Workspace plan found in its audit. No migrations, no RLS change.
+
+**A project sent outside a campaign wrote no `beat_sends` row.** `SendBeatModal`'s project mode created a `project_shares` row and called the invite route. Only when a campaign was attached did it also call `/api/campaigns/[id]/targets`, which is the only place that wrote `beat_sends`. A direct send therefore never reached the contact's timeline (`lib/contacts/activity.ts` derives sends from `beat_sends`) or the nudge queue, and the Resend webhook, which matches on `beat_sends.email_resend_id`, had nothing to stamp the open or click on.
+- `lib/crm/project-send.ts#buildProjectSendRow` is the one row builder. The campaign path now uses it too.
+- The invite route takes an optional `contact_id` (Zod: `ProjectShareInviteBodySchema`). With it, after the email is sent, the route checks the contact belongs to the caller, reads the project's tracks in order, inserts the row and returns `beatSendId`. It is best-effort: the email has already gone, so a failure is logged and the invite still reports success.
+- The modal passes `contact_id` only when no campaign is attached, so a campaign send is not recorded twice. `ContentShareModal` re-sends invites without it, unchanged.
+
+**Share-page comments notified nobody.** `/api/projects/share/[token]/comments` saved the comment and returned. It now writes a `share_comment` notification to the share's owner (`projectShareOwnerId`), built by `lib/notifications/share-comment.ts`. The title names the author and project. The body names the track, the pinned region (`0:42–0:58`) and a 140-char excerpt. The track title is looked up only among the owner's tracks, because the id comes from the guest. The row never carries the share token. It reaches the bell, its realtime subscription and desktop alerts with no further change. TopBar gives the kind a speech-bubble icon. Failure is logged and the comment is still saved.
+
+**`plays` on share links counts page opens.** Both `/api/share/[token]` and `/api/projects/share/[token]` increment it on every page load. `/links` (metric tile, header meta, card and row captions, detail popup) and `ContentShareModal` now say "opens", through `lib/links/share-link.ts#shareOpensLabel`. The column is unchanged.
+
+Tests: `lib/crm/project-send.test.ts`, `lib/notifications/share-comment.test.ts`, `shareOpensLabel` in `lib/links/share-link.test.ts`, and new route tests for the invite route (5) and the share comments route (4). 7 of those 9 route cases fail against the old routes; the other 2 pin unchanged behaviour (no row without `contact_id`, no notification for a refused view-only comment).
+
+Not changed: `/links`' "Downloads" tile counts links that allow downloads, not downloads.

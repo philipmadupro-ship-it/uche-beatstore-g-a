@@ -4,6 +4,7 @@ import { errorMessage } from '@/lib/errors';
 import { readBody } from '@/lib/validate';
 import { CampaignTargetsAddBodySchema, CampaignTargetsDeleteBodySchema } from '@/lib/contracts';
 import { createLogger } from '@/lib/log';
+import { buildProjectSendRow } from '@/lib/crm/project-send';
 import { z } from 'zod';
 
 export const runtime = 'nodejs';
@@ -82,15 +83,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       const { data: send, error: sendErr } = await auth.admin
         .from('beat_sends')
-        .insert({
-          contact_id: tracked.contact_id,
-          track_ids: (projectTracks ?? []).map((row: { track_id: string }) => row.track_id),
-          share_token: tracked.share_token,
+        .insert(buildProjectSendRow({
+          contactId: tracked.contact_id,
+          trackIds: (projectTracks ?? []).map((row: { track_id: string }) => row.track_id),
+          shareToken: tracked.share_token,
           message: tracked.message,
-          status: 'sent',
-          campaign_id: id,
-          email_resend_id: tracked.email_resend_id ?? null,
-        })
+          campaignId: id,
+          emailResendId: tracked.email_resend_id ?? null,
+        }))
         .select('id, contact_id, status, sent_at')
         .single();
       if (sendErr) throw sendErr;
