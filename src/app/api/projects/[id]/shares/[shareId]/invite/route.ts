@@ -4,6 +4,8 @@ import { Resend } from 'resend';
 import { isSupabaseConfigured, requireRowOwnership } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { buildProjectSendRow } from '@/lib/crm/project-send';
+import { z } from 'zod';
 
 const log = createLogger('api.projects.shares.invite');
 
@@ -23,7 +25,17 @@ export const runtime = 'nodejs';
  *      still exists and can be copied manually.
  *
  * Owner-gated via the parent project, like every other shares route.
+ *
+ * Optional `contact_id`: when the invite goes to a CRM contact outside a
+ * campaign, the send is recorded in `beat_sends` here (campaign sends are
+ * recorded by `/api/campaigns/[id]/targets` instead, so callers pass
+ * `contact_id` only for non-campaign sends). Without this a project send left
+ * no trace on the contact's timeline and its opens/clicks were never tracked.
+ * Recording is best-effort: the email has already gone out, so a failure is
+ * reported as `sendRecorded: false` rather than failing the invite.
  */
+const ContactIdSchema = z.string().uuid();
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; shareId: string }> },
@@ -34,6 +46,14 @@ export async function POST(
     const body = await req.json().catch(() => ({}));
     const overrideEmail: string | null = typeof body.email === 'string' ? body.email.trim() : null;
     const message: string = typeof body.message === 'string' ? body.message.trim() : '';
+    let contactId: string | null = null;
+    if (body.contact_id != null) {
+      const parsedContact = ContactIdSchema.safeParse(body.contact_id);
+      if (!parsedContact.success) {
+        return NextResponse.json({ error: 'Invalid contact_id' }, { status: 400 });
+      }
+      contactId = parsedContact.data;
+    }
 
     if (!process.env.RESEND_API_KEY) {
       return NextResponse.json(
@@ -64,6 +84,19 @@ export async function POST(
     if (!share) return NextResponse.json({ error: 'Share not found' }, { status: 404 });
     if (share.project_id !== id) return NextResponse.json({ error: 'Share/project mismatch' }, { status: 400 });
     if (share.revoked_at) return NextResponse.json({ error: 'Cannot invite to a revoked link' }, { status: 409 });
+
+    // Check the contact before sending anything, so a bad id fails cleanly
+    // instead of after the email is already in the recipient's inbox.
+    if (contactId) {
+      const { data: contact, error: contactErr } = await owner.admin
+        .from('contacts')
+        .select('id')
+        .eq('id', contactId)
+        .eq('user_id', owner.userId)
+        .maybeSingle();
+      if (contactErr) throw contactErr;
+      if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+    }
 
     const recipient = overrideEmail || share.invited_email;
     if (!recipient) {
@@ -119,10 +152,39 @@ export async function POST(
         .eq('id', shareId);
     }
 
+    let sendId: string | null = null;
+    if (contactId) {
+      try {
+        const { data: projectTracks, error: tracksErr } = await owner.admin
+          .from('project_tracks')
+          .select('track_id')
+          .eq('project_id', id)
+          .order('position', { ascending: true });
+        if (tracksErr) throw tracksErr;
+        const { data: send, error: sendRowErr } = await owner.admin
+          .from('beat_sends')
+          .insert(buildProjectSendRow({
+            contactId,
+            trackIds: (projectTracks ?? []).map((row: { track_id: string }) => row.track_id),
+            shareToken: share.token,
+            message,
+            emailResendId: sent?.id ?? null,
+          }))
+          .select('id')
+          .single();
+        if (sendRowErr) throw sendRowErr;
+        sendId = send?.id ?? null;
+      } catch (recordErr) {
+        log.warn('invite sent but beat_sends row not recorded', { error: errorMessage(recordErr), shareId });
+      }
+    }
+
     return NextResponse.json({
       success: true,
       recipient,
       resendId: sent?.id ?? null,
+      sendId,
+      sendRecorded: contactId ? sendId !== null : undefined,
     });
   } catch (error) {
     log.error('invite failed', { error: errorMessage(error) });
