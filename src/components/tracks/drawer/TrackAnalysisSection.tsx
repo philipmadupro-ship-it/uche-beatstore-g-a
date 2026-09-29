@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { Track } from '@/lib/types';
 import { toast } from '@/hooks/useToast';
+import { TrackChordsPanel } from './TrackChordsPanel';
 
 interface Props {
   track: Track;
@@ -137,6 +138,8 @@ export function TrackAnalysisSection({ track, onUpdate }: Props) {
           <p className="text-sm font-black text-white font-mono">{track.key ? `${track.key} ${track.scale || ''}` : '--'}</p>
         </div>
       </div>
+
+      <TrackChordsPanel track={track} />
     </div>
   );
 }
