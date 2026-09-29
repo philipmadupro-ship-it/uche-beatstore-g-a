@@ -69,6 +69,28 @@ describe('POST /api/profile', () => {
     expect(json.profile.bio).toBe('New bio');
   });
 
+  it('persists the Store Editor theme, text colour included (STORE-06)', async () => {
+    // The contract used to omit text_color_primary, so zod stripped it and the
+    // Store Editor's text colour reset to white on every reload.
+    const res = await post({ accent_color: '#c8a47a', font_style: 'mono', text_color_primary: '#6DC6A4' });
+    expect(res.status).toBe(200);
+    expect(mockUpdate.mock.calls[0][0]).toEqual({
+      accent_color: '#c8a47a',
+      font_style: 'mono',
+      text_color_primary: '#6DC6A4',
+    });
+  });
+
+  it('clears the text colour back to the default on an empty value', async () => {
+    await post({ text_color_primary: '' });
+    expect(mockUpdate.mock.calls[0][0]).toEqual({ text_color_primary: null });
+  });
+
+  it('leaves the text colour alone when a save does not name it (the /profile page)', async () => {
+    await post(profileSaveBody(form));
+    expect(mockUpdate.mock.calls[0][0]).not.toHaveProperty('text_color_primary');
+  });
+
   it('rejects an inline hero image without writing anything', async () => {
     const res = await post(profileSaveBody({ ...form, hero_image_url: `data:image/jpeg;base64,${'A'.repeat(200_000)}` }));
     expect(res.status).toBe(400);

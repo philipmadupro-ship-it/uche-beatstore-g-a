@@ -31,8 +31,9 @@ import {
 import {
   type StoreTrack, type CreatorProfile, type FeaturedPlaylist, type PlaylistTrackItem,
   type TypeFilter, type ViewMode, type LicenseTier,
-  TYPE_FILTERS, FONT_FAMILY_MAP,
+  TYPE_FILTERS,
 } from '@/components/store/types';
+import { storefrontThemeStyle } from '@/lib/store/typography';
 import { sanitizeUrl } from '@/components/store/helpers';
 import { normalizeThemeColor } from '@/lib/theme/colors';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
@@ -1095,8 +1096,9 @@ function StorePage() {
    * Visibility stays CSS-driven so the cached HTML serves every device.
    */
   const viewerBreakpoint = useStoreBreakpoint();
-  const textColor = creator?.text_color_primary || '#FFFFFF';
-  const fontFamily = FONT_FAMILY_MAP[creator?.font_style ?? 'default'] ?? FONT_FAMILY_MAP.default;
+  // Font style, text colour and accent — the same object the Store Editor's
+  // previews spread, so what the producer sees there is what renders here.
+  const themeStyle = useMemo(() => storefrontThemeStyle(creator), [creator]);
 
   /**
    * Storefront sections, drawn in the order the producer arranged them.
@@ -1234,12 +1236,7 @@ function StorePage() {
     <ArtworkThemeProvider theme={artworkTheme}>
     <div
       className="store-ui min-h-screen bg-[#090907] pb-28"
-      style={{
-        '--store-accent': accentColor,
-        '--store-text': textColor,
-        fontFamily,
-        color: textColor,
-      } as React.CSSProperties}
+      style={themeStyle}
     >
       {/* ── Purchase return banner ─────────────────────────────── */}
       {bannerOpen && (

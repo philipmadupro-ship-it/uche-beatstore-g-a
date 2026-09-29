@@ -116,7 +116,13 @@ export function ArtistBioBlock({ creator, accentColor, plainTitle = false }: Pro
         <div className="px-4 md:px-8">
         {creator?.bio && (
           <div className="mt-4">
-            <p className={`text-[14px] text-white/80 max-w-2xl leading-relaxed transition-all ${bioIsLong && !bioExpanded ? 'line-clamp-3' : ''}`}>
+            {/* The producer's storefront text colour (`--store-text`, set by
+                `storefrontThemeStyle`) at the 80% body copy uses; outside a
+                storefront root it falls back to exactly `text-white/80`. */}
+            <p
+              className={`text-[14px] max-w-2xl leading-relaxed transition-all ${bioIsLong && !bioExpanded ? 'line-clamp-3' : ''}`}
+              style={{ color: 'color-mix(in srgb, var(--store-text, #FFFFFF) 80%, transparent)' }}
+            >
               {creator.bio}
             </p>
             {bioIsLong && (

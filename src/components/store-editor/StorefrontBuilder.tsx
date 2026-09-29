@@ -41,6 +41,7 @@ import { SectionInspector } from './SectionInspector';
 import { ThemePanel } from './ThemePanel';
 import { HistoryPanel } from './HistoryPanel';
 import { recordSnapshot } from '@/lib/store-editor/history';
+import { storefrontThemeStyle } from '@/lib/store/typography';
 import {
   deleteSavedSection, listSavedSections, loadSavedSection, saveSection,
   type SavedSectionSummary,
@@ -545,7 +546,9 @@ export function StorefrontBuilder({
               style={{ width: breakpoint === 'desktop' ? width : width + 12, transform: `scale(${zoom})`, transformOrigin: 'top left' }}
             >
               <DeviceFrame width={width} title={`Storefront preview · ${breakpoint}`} onWindow={setFrameWindow}>
-              <div onClick={() => setSelectedId(null)}>
+              {/* The producer's font style and text colour, as /store applies
+                  them on its root — the canvas is meant to be the real thing. */}
+              <div onClick={() => setSelectedId(null)} style={storefrontThemeStyle(data.creator)}>
               {layout.sections.map((section) => {
                 const settings = resolveSection(section, breakpoint);
                 const isSelected = section.id === selectedId;
