@@ -37,6 +37,10 @@ export async function eraseArtistWorkspace(admin: Admin, userId: string, email: 
     // Replies to a deleted comment go with it (parent_id ON DELETE CASCADE).
     { key: 'portalComments', run: () => admin.from('project_comments').delete().in('contact_id', ids).is('user_id', null).select('id') },
     { key: 'portalCommentActivity', run: () => admin.from('contact_activity').delete().in('contact_id', ids).eq('user_id', userId).eq('kind', 'portal_comment').select() },
+    // What the artist wrote in the message thread (mig 130), and the timeline
+    // rows that quote it. The producer's own messages stay, like their replies.
+    { key: 'artistMessages', run: () => admin.from('artist_messages').delete().in('contact_id', ids).eq('user_id', userId).eq('author', 'artist').select('id') },
+    { key: 'artistMessageActivity', run: () => admin.from('contact_activity').delete().in('contact_id', ids).eq('user_id', userId).in('kind', ['artist_message', 'artist_request', 'artist_request_resolved']).select() },
   ];
 
   const counts: Record<string, number> = {};

@@ -15,6 +15,7 @@ import { loadPortalAssets } from '@/lib/artist-portal/files';
 import { assetAvailableAt } from '@/lib/projects/assets';
 import { isSchemaNotReady } from '@/lib/artists/http';
 import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
+import { loadSongBeats } from '@/lib/tracks/song-beats-store';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -90,6 +91,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
           .in('id', ids).eq('user_id', ownerId), trackIds)
       : [];
     const trackById = new Map(tracks.map((t) => [t.id, t]));
+    const songBeats = await loadSongBeats(admin, ownerId, tracks.filter((t) => t.type === 'song'));
 
     // Watermarks: NEW is judged against the visit BEFORE this one.
     const now = new Date().toISOString();
@@ -122,7 +124,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       const t = trackById.get(trackId)!;
       const st = states.get(trackId);
       const decision = st && isDecision(st.decision) ? st.decision : null;
-      const beat = t.beat_track_id && entries.has(t.beat_track_id) ? trackById.get(t.beat_track_id) : null;
+      // Only beats that are in this portal are named (main first).
+      const builtOn = (songBeats.get(trackId) ?? [])
+        .filter((b) => entries.has(b) && trackById.has(b))
+        .map((b) => ({ id: b, title: trackById.get(b)!.title ?? 'Untitled' }));
       const hasAudio = !!(t.preview_url || t.audio_url);
       return toPortalTrack(t, {
         projectIds: e.projectIds,
@@ -130,7 +135,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         decision,
         decisionSetBy: decision ? (st!.set_by === 'artist' ? 'artist' : 'producer') : null,
         canDownload: e.canDownload && !!(t.wav_url || t.audio_url),
-        builtOn: beat ? { id: beat.id, title: beat.title ?? 'Untitled' } : null,
+        builtOn,
         streamUrl: hasAudio ? signedSharePreviewUrl(portal.token, trackId) : null,
         peaksUrl: t.peaks_url ? signedSharePeaksUrl(portal.token, trackId) : null,
       });

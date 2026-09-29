@@ -3,6 +3,7 @@ import { requireRowOwnership } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
+import { currentSongBeats, songsBuiltOn } from '@/lib/tracks/song-beats-store';
 import { selectIn } from '@/lib/db/chunked-in';
 import { isDecision } from '@/lib/contacts/decisions';
 import { engagementByTrack, signalsFromActivity, signalsFromSends } from '@/lib/contacts/track-engagement';
@@ -24,7 +25,7 @@ const log = createLogger('api.tracks.people');
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   // Local-store mode (no Supabase): the workspace tables do not exist there.
-  if (!isSupabaseConfigured()) return NextResponse.json({ schemaReady: false, people: [], songs: [], builtOn: null });
+  if (!isSupabaseConfigured()) return NextResponse.json({ schemaReady: false, people: [], songs: [], builtOn: null, beats: [] });
   const auth = await requireRowOwnership('tracks', id);
   if (!auth.ok) return auth.res;
   const { admin, userId } = auth;
@@ -35,7 +36,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       admin.from('project_tracks').select('project_id').eq('track_id', id),
       admin.from('contact_track_states').select('contact_id, project_id, decision, set_by, updated_at').eq('track_id', id).eq('user_id', userId),
       admin.from('beat_sends').select('contact_id, track_ids, sent_at, opened_at, link_clicked_at').contains('track_ids', [id]).order('sent_at', { ascending: false }).limit(200),
-      admin.from('tracks').select('id, title, status').eq('beat_track_id', id).eq('user_id', userId),
+      songsBuiltOn(admin, userId, id).then(async (ids) => ({
+        data: ids.length ? await selectIn<{ id: string; title: string | null; status: string | null }>((chunk) => admin.from('tracks').select('id, title, status').in('id', chunk).eq('user_id', userId), ids) : [],
+        error: null,
+      })),
     ]);
     for (const r of [trackRes, projectTracksRes, statesRes, sendsRes, songsRes]) if (r.error) throw r.error;
     const track = trackRes.data as { id: string; type: string | null; beat_track_id: string | null } | null;
@@ -80,20 +84,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       };
     }).sort((a, b) => Number(!!b.decision) - Number(!!a.decision) || a.contact.name.localeCompare(b.contact.name));
 
-    let builtOn: { id: string; title: string } | null = null;
-    if (track.beat_track_id) {
-      const { data: beat } = await admin.from('tracks').select('id, title').eq('id', track.beat_track_id).eq('user_id', userId).maybeSingle();
-      if (beat) builtOn = { id: beat.id, title: beat.title ?? 'Untitled' };
-    }
+    // A song's beats, main first (mig 132; just the main beat before it).
+    const beatIds = await currentSongBeats(admin, userId, track);
+    const beatRows = beatIds.length
+      ? await selectIn<{ id: string; title: string | null }>((chunk) => admin.from('tracks').select('id, title').in('id', chunk).eq('user_id', userId), beatIds)
+      : [];
+    const beatTitle = new Map(beatRows.map((b) => [b.id, b.title ?? 'Untitled']));
+    const beats = beatIds.filter((b) => beatTitle.has(b)).map((b) => ({ id: b, title: beatTitle.get(b)! }));
+    const builtOn = beats[0] ?? null;
 
     return NextResponse.json({
       schemaReady: true,
       people,
       songs: (songsRes.data ?? []) as Array<{ id: string; title: string | null; status: string | null }>,
       builtOn,
+      beats,
     });
   } catch (err) {
-    if (isSchemaNotReady(err)) return NextResponse.json({ schemaReady: false, people: [], songs: [], builtOn: null });
+    if (isSchemaNotReady(err)) return NextResponse.json({ schemaReady: false, people: [], songs: [], builtOn: null, beats: [] });
     log.error('people load failed', { id, error: errorMessage(err) });
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });
   }

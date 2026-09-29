@@ -5,7 +5,8 @@
  *
  *   People      Artist #1 · New EP · Interested · played 3×
  *   Songs       songs built on this beat
- *   Built on    (songs only) the beat this song is built on — change it here
+ *   Built on    (songs only) the beats this song is built on, main beat
+ *               first (mig 132) — add, remove, or make another the main
  *
  * Every row links through to the workspace, the project or the song, which is
  * what makes the connections navigable without a graph view. Renders nothing
@@ -32,6 +33,8 @@ interface PeopleResponse {
   people: Person[];
   songs: Array<{ id: string; title: string | null; status: string | null }>;
   builtOn: { id: string; title: string } | null;
+  /** Main first. Before mig 132 at most the main beat. */
+  beats?: Array<{ id: string; title: string }>;
 }
 
 const H3 = 'mb-3 text-[9px] font-black uppercase tracking-[0.25em] text-white/40';
@@ -65,27 +68,27 @@ export function TrackPeopleSection({ trackId, trackType, onUpdate }: {
     }).catch(() => {});
   }, [isSong, trackId]);
 
-  const beatOptions: DropdownOption[] = useMemo(() => {
-    const opts: DropdownOption[] = [{ value: 'none', label: 'Not set' }, ...beats.map((b) => ({ value: b.id, label: b.title }))];
-    // Keep the current beat selectable even if it is not in the list yet.
-    if (data?.builtOn && !beats.some((b) => b.id === data.builtOn!.id)) opts.push({ value: data.builtOn.id, label: data.builtOn.title });
-    return opts;
-  }, [beats, data?.builtOn]);
+  const current = useMemo(() => data?.beats ?? (data?.builtOn ? [data.builtOn] : []), [data?.beats, data?.builtOn]);
+  const addOptions: DropdownOption[] = useMemo(() => [
+    { value: 'none', label: current.length ? 'Add another beat…' : 'Pick the beat…' },
+    ...beats.filter((b) => !current.some((c) => c.id === b.id)).map((b) => ({ value: b.id, label: b.title })),
+  ], [beats, current]);
 
-  const setBuiltOn = async (beatId: string | null) => {
+  const saveBeats = async (ids: string[]) => {
     setSaving(true);
     try {
-      await jsonOrThrow(await fetch(`/api/tracks/${trackId}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ beat_track_id: beatId }),
+      await jsonOrThrow(await fetch(`/api/tracks/${trackId}/beats`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ beat_ids: ids }),
       }));
       await load();
       onUpdate?.();
     } catch (err) {
-      toast.error('Could not set the beat', err instanceof Error ? err.message : 'Try again');
+      toast.error('Could not change the beats', err instanceof Error ? err.message : 'Try again');
     } finally {
       setSaving(false);
     }
   };
+  const ids = current.map((b) => b.id);
 
   if (!data || !data.schemaReady) return null;
   const hasPeople = data.people.length > 0;
@@ -97,21 +100,33 @@ export function TrackPeopleSection({ trackId, trackType, onUpdate }: {
       {isSong && (
         <div className="mb-5">
           <h3 className={H3}>Built on</h3>
-          <div className="flex items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <Dropdown
-                value={data.builtOn?.id ?? 'none'}
-                onChange={(v) => void setBuiltOn(v === 'none' ? null : v)}
-                options={beatOptions}
-                disabled={saving}
-                menuWidth={260}
-                aria-label="Beat this song is built on"
-              />
-            </div>
-            {data.builtOn && (
-              <Link href={`/library/${data.builtOn.id}`} className="shrink-0 text-[11px] text-white/50 hover:text-white">Open beat</Link>
-            )}
-          </div>
+          {current.length > 0 && (
+            <ul className="mb-2 space-y-1" data-testid="song-beats">
+              {current.map((b, i) => (
+                <li key={b.id} className="flex items-center gap-2 text-[11px] text-white/60">
+                  <Link href={`/library/${b.id}`} className="min-w-0 flex-1 truncate text-white/80 hover:text-white">{b.title}</Link>
+                  {i === 0 ? (
+                    <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">Main</span>
+                  ) : (
+                    <button type="button" disabled={saving} onClick={() => void saveBeats([b.id, ...ids.filter((x) => x !== b.id)])} className="shrink-0 text-white/50 hover:text-white disabled:opacity-40">
+                      Make main
+                    </button>
+                  )}
+                  <button type="button" disabled={saving} onClick={() => void saveBeats(ids.filter((x) => x !== b.id))} aria-label={`Remove ${b.title}`} className="shrink-0 text-white/40 hover:text-white disabled:opacity-40">
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Dropdown
+            value="none"
+            onChange={(v) => { if (v !== 'none') void saveBeats([...ids, v]); }}
+            options={addOptions}
+            disabled={saving}
+            menuWidth={260}
+            aria-label="Add a beat this song is built on"
+          />
         </div>
       )}
 

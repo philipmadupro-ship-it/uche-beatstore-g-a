@@ -124,9 +124,11 @@ test('2 · the artist opens the portal, plays a beat and taps Interested', async
   await expect(row(`NIGHT DRIVE ${run}`)).toContainText('New');
   await expect(artist.getByText(`DAWN ${run}`)).toHaveCount(0);
 
-  const played = artist.waitForRequest((r) => r.url().includes('/play') && r.method() === 'POST');
+  // Wait for the response, not the request: the page closes below, and the
+  // producer's next test reads the play row this request writes.
+  const played = artist.waitForResponse((r) => r.url().includes('/play') && r.request().method() === 'POST');
   await row(`MIDNIGHT ${run}`).getByRole('button', { name: `Play MIDNIGHT ${run}` }).click();
-  await played;
+  expect((await played).ok()).toBeTruthy();
 
   await row(`MIDNIGHT ${run}`).getByRole('button', { name: /Interested/ }).click();
   await expect(row(`MIDNIGHT ${run}`).getByRole('button', { name: /Interested/ })).toHaveAttribute('aria-pressed', 'true');

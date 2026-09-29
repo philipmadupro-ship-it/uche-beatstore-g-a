@@ -22,7 +22,7 @@ describe('toPortalTrack', () => {
   it('emits only the listed fields and never a private reference', () => {
     const out = toPortalTrack(hostileTrack, {
       projectIds: ['p1'], isNew: true, decision: 'interested', decisionSetBy: 'artist', canDownload: false,
-      builtOn: null, streamUrl: '/api/share/tok/preview/t1?expires=1&sig=x', peaksUrl: null,
+      builtOn: [], streamUrl: '/api/share/tok/preview/t1?expires=1&sig=x', peaksUrl: null,
     });
     const json = JSON.stringify(out);
     expect(json).not.toContain('r2://');
@@ -30,7 +30,7 @@ describe('toPortalTrack', () => {
     expect(json).not.toContain('owner-1');
     expect(json).not.toContain('cdn.example.com');
     expect(Object.keys(out).sort()).toEqual([
-      'bpm', 'builtOn', 'canDownload', 'cover_url', 'decision', 'decisionSetBy', 'duration_seconds', 'id', 'isNew',
+      'bpm', 'builtOn', 'builtOnOthers', 'canDownload', 'cover_url', 'decision', 'decisionSetBy', 'duration_seconds', 'id', 'isNew',
       'key', 'peaksUrl', 'projectIds', 'scale', 'streamUrl', 'title', 'type',
     ]);
     expect(out.cover_url).toBeNull();
@@ -39,7 +39,7 @@ describe('toPortalTrack', () => {
   it('drops who set a decision when there is no decision', () => {
     const out = toPortalTrack(hostileTrack, {
       projectIds: ['p1'], isNew: false, decision: null, decisionSetBy: 'producer', canDownload: true,
-      builtOn: null, streamUrl: null, peaksUrl: null,
+      builtOn: [], streamUrl: null, peaksUrl: null,
     });
     expect(out.decisionSetBy).toBeNull();
   });

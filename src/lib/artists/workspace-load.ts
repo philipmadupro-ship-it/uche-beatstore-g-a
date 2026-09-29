@@ -13,6 +13,7 @@
  * 500 — the store_layout lesson in CLAUDE.md.
  */
 
+import { loadSongBeats } from '@/lib/tracks/song-beats-store';
 import { selectIn } from '@/lib/db/chunked-in';
 import type { Decision, DecisionSetBy } from '@/lib/contacts/decisions';
 import { isDecision, MOVING_DECISIONS } from '@/lib/contacts/decisions';
@@ -68,6 +69,8 @@ export interface PortalRow {
   id: string;
   /** Mig 129; false when the column is missing. */
   auto_digest?: boolean;
+  /** Mig 131; false when the column is missing. */
+  require_sign_in?: boolean;
   token: string;
   password_hash: string | null;
   revoked_at: string | null;
@@ -118,6 +121,8 @@ export async function loadArtistLinks(admin: Admin, userId: string, contactId: s
     // must not cost the producer the whole workspace (the store_layout lesson).
     const { data, error } = await admin.from('artist_portals').select('auto_digest').eq('id', portal.id).eq('user_id', userId).maybeSingle();
     portal.auto_digest = !error && !!(data as { auto_digest?: boolean } | null)?.auto_digest;
+    const signIn = await admin.from('artist_portals').select('require_sign_in').eq('id', portal.id).eq('user_id', userId).maybeSingle();
+    portal.require_sign_in = !signIn.error && !!(signIn.data as { require_sign_in?: boolean } | null)?.require_sign_in;
   }
   return { links, portal };
 }
@@ -135,7 +140,10 @@ export interface WorkspaceBeat {
 
 export interface WorkspaceSong {
   track: WorkspaceTrackRow;
+  /** The main beat (tracks.beat_track_id). */
   beat: { id: string; title: string } | null;
+  /** Every beat it is built on, main first (mig 132; just the main before it). */
+  beats: Array<{ id: string; title: string }>;
   projects: Array<{ id: string; name: string }>;
   credited: boolean;
 }
@@ -203,6 +211,8 @@ export interface Workspace {
   totals: WorkspaceTotals;
   /** False before migration 127: the Files tab says so instead of looking empty. */
   filesReady: boolean;
+  /** The message thread (mig 130): `ready` false before it is applied. */
+  messages: { ready: boolean; unread: number; openRequests: number };
   counts: { interested: number; selected: number; recording: number; recorded: number; released: number; passed: number; moving: number };
 }
 
@@ -248,6 +258,22 @@ export async function loadWorkspace(
       }),
   ]);
 
+  // Messages: counts only (the tab loads the thread). Tolerant of 130 missing.
+  // Not `head: true`: a HEAD on a missing table comes back as an empty 404
+  // that isMissingSchema cannot recognise, and would read as "ready, 0".
+  const messages = await Promise.all([
+    admin.from('artist_messages').select('id', { count: 'exact' })
+      .eq('contact_id', contact.id).eq('user_id', userId).eq('author', 'artist').is('read_at', null).limit(1),
+    admin.from('artist_messages').select('id', { count: 'exact' })
+      .eq('contact_id', contact.id).eq('user_id', userId).eq('kind', 'request').eq('request_status', 'open').limit(1),
+  ]).then(([u, r]: Array<{ count: number | null; error: unknown }>) => {
+    if (u.error || r.error) {
+      if (isMissingSchema(u.error ?? r.error)) return { ready: false, unread: 0, openRequests: 0 };
+      throw u.error ?? r.error;
+    }
+    return { ready: true, unread: u.count ?? 0, openRequests: r.count ?? 0 };
+  });
+
   // Project files: their own tolerant query, so a database without 127 keeps
   // the rest of the workspace.
   let filesReady = true;
@@ -287,9 +313,9 @@ export async function loadWorkspace(
   for (const r of stemRows) stemCount.set(r.track_id, (stemCount.get(r.track_id) ?? 0) + 1);
 
   // Songs point at beats that may live outside this workspace; fetch those titles too.
-  const missingBeatIds = tracks
-    .map((t) => t.beat_track_id)
-    .filter((id): id is string => !!id && !trackById.has(id));
+  const songBeats = await loadSongBeats(admin, userId, tracks.filter((t) => t.type === 'song'));
+  const missingBeatIds = [...new Set([...songBeats.values()].flat())]
+    .filter((id) => !trackById.has(id));
   const extraBeats = missingBeatIds.length
     ? await selectIn<{ id: string; title: string | null }>((ids) => admin.from('tracks').select('id, title').in('id', ids).eq('user_id', userId), missingBeatIds)
     : [];
@@ -342,6 +368,7 @@ export async function loadWorkspace(
       songs.push({
         track: t,
         beat: t.beat_track_id ? { id: t.beat_track_id, title: titleOf(t.beat_track_id) } : null,
+        beats: (songBeats.get(t.id) ?? []).map((id) => ({ id, title: titleOf(id) })),
         projects: projectsForTrack,
         credited: creditedIds.has(t.id),
       });
@@ -485,6 +512,7 @@ export async function loadWorkspace(
     trackFiles,
     totals,
     filesReady,
+    messages,
     counts,
   };
 }

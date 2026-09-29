@@ -23,7 +23,9 @@
  *      that it is no longer a new link.
  *   Stored: `portal_opened`, `track_played` / `track_downloaded` (portal),
  *   `decision_changed`, `artist_notified`, `file_downloaded` (a project file
- *   from the portal), `portal_comment` — real events with no other record.
+ *   from the portal), `portal_comment`, `artist_message` / `artist_request` / `producer_message` /
+ *   `artist_request_resolved` (mig 130's thread) — real events with no other
+ *   record.
  *
  * Everything here is pure (no IO) so the merge/dedupe/sort logic is unit
  * tested in isolation — the route just feeds it rows. This is the
@@ -46,7 +48,11 @@ export type ActivityKind =
   | 'decision_changed'
   | 'artist_notified'
   | 'file_downloaded'
-  | 'portal_comment';
+  | 'portal_comment'
+  | 'artist_message'
+  | 'artist_request'
+  | 'artist_request_resolved'
+  | 'producer_message';
 
 export interface ContactActivity {
   id: string;
@@ -266,7 +272,8 @@ export function activityFromStored(rows: StoredActivityRow[]): ContactActivity[]
   const known: ActivityKind[] = [
     'beat_sent', 'email_opened', 'link_clicked', 'track_played', 'favorited', 'purchase', 'note', 'stage_change',
     'project_linked', 'track_added', 'portal_opened', 'track_downloaded', 'decision_changed', 'artist_notified',
-    'file_downloaded', 'portal_comment',
+    'file_downloaded', 'portal_comment', 'artist_message', 'artist_request', 'artist_request_resolved',
+    'producer_message',
   ];
   return rows.map((r) => ({
     id: r.id,

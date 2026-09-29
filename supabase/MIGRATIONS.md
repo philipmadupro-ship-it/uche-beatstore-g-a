@@ -34,9 +34,10 @@ re-run `NOTIFY pgrst, 'reload schema';` and wait.
 
 ## Applied status
 
-As of **2026-09-29** every migration on disk (001–129) is in effect on production:
-the owner ran the SQL-editor bundle and its verify table reported every row
-`applied`. Nothing is pending. Keep the table below as the record; add new
+As of **2026-09-29** 001–129 are in effect on production: the owner ran the
+SQL-editor bundle and its verify table reported every row `applied`.
+**Pending: 130, 131, 132** (Artist Workspace, phase 3) — `supabase/apply/pending.sql`
+now carries exactly those three. Keep the table below as the record; add new
 migrations to it as **not applied** until they are run.
 
 ## History
@@ -72,6 +73,9 @@ service-role key can read the schema's effects but cannot run DDL):
 | `127_project_assets.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — project files (Artist Workspace, phase 2) |
 | `128_portal_comments.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — `project_comments.contact_id`: an artist's portal thread |
 | `129_artist_portal_auto_digest.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — `artist_portals.auto_digest` for the daily digest cron |
+| `130_artist_messages.sql` | **not applied** | new — `artist_messages`: one thread per artist, messages + requests (phase 3) |
+| `131_portal_sign_in.sql` | **not applied** | new — `artist_portals.require_sign_in` + `sign_in_sent_at` (optional email sign-in) |
+| `132_song_beats.sql` | **not applied** | new — `song_beats`: a song built on several beats; backfilled from `tracks.beat_track_id` |
 
 **To apply everything pending in one go** without `psql`, paste
 `supabase/apply/pending.sql` (built by `scripts/ops/bundle-migrations.sh`) into
@@ -166,12 +170,32 @@ All are idempotent, so running the full set (`npm run db:migrate`) is safe.
     001–129 (twice), with RLS / trigger probes, and with 127–129 removed
     again to check each route degrades.
 
+- `130`–`132` — **Artist Relationship Workspace, phase 3.** Apply after
+  122–129. Each degrades on its own without them, like phase 2: messages
+  answer `schemaReady: false` / 503 naming 130 and the portal hides its
+  Messages tab; without 131 sign-in simply cannot be switched on; without
+  132 "Built on" keeps one beat (`tracks.beat_track_id`) and a second beat
+  answers 503.
+  - `130` — `artist_messages` (author producer|artist, kind message|request,
+    request_status open|done|declined, read_at, emailed_at). A check keeps
+    requests artist-written and status-bearing. Owner-only RLS + same-owner
+    trigger (contact and project).
+  - `131` — `artist_portals.require_sign_in` (default false) and
+    `sign_in_sent_at` (one sign-in email a minute).
+  - `132` — `song_beats (song_track_id, beat_track_id, position)`, owner-only
+    RLS + same-owner trigger, no self-reference. Backfilled once from
+    `tracks.beat_track_id` (position 0), `ON CONFLICT DO NOTHING`, so a re-run
+    is a no-op. `beat_track_id` stays the main beat.
+  - Verified 2026-09-29 on the local Postgres 16 + PostgREST 12 replay of
+    001–132 (twice), in `e2e/artist-workspace-phase3.spec.ts`, and with
+    130–132 dropped again to check each route degrades.
+
 Update this table when a run is confirmed.
 
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 129, 121 is `121_share_full_playback` (SHARE-01) (next new migration = 130). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 132, 121 is `121_share_full_playback` (SHARE-01) (next new migration = 133). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch

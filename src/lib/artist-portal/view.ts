@@ -47,8 +47,10 @@ export interface PortalTrack {
   decision: Decision | null;
   decisionSetBy: 'producer' | 'artist' | null;
   canDownload: boolean;
-  /** Title of the beat a song is built on, when that beat is in this portal too. */
+  /** The first beat a song is built on (its main beat when it can be), when that beat is in this portal too. */
   builtOn: { id: string; title: string } | null;
+  /** The song's other beats that are in this portal (mig 132). */
+  builtOnOthers: Array<{ id: string; title: string }>;
   streamUrl: string | null;
   peaksUrl: string | null;
 }
@@ -115,7 +117,8 @@ export function toPortalTrack(
     decision: Decision | null;
     decisionSetBy: 'producer' | 'artist' | null;
     canDownload: boolean;
-    builtOn: { id: string; title: string } | null;
+    /** In-portal beats, main first. */
+    builtOn: ReadonlyArray<{ id: string; title: string }>;
     streamUrl: string | null;
     peaksUrl: string | null;
   },
@@ -134,7 +137,8 @@ export function toPortalTrack(
     decision: ctx.decision,
     decisionSetBy: ctx.decision ? ctx.decisionSetBy : null,
     canDownload: ctx.canDownload,
-    builtOn: ctx.builtOn,
+    builtOn: ctx.builtOn[0] ? { id: ctx.builtOn[0].id, title: ctx.builtOn[0].title } : null,
+    builtOnOthers: ctx.builtOn.slice(1).map((b) => ({ id: b.id, title: b.title })),
     streamUrl: ctx.streamUrl,
     peaksUrl: ctx.peaksUrl,
   };

@@ -18,6 +18,7 @@ import {
   Tag,
   MessageSquare,
   Heart,
+  MessageCircle, HandHelping,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { NAV_GROUPS, ALL_GROUPS, activeGroupFor, isItemActive, type NavGroup } from './model';
@@ -51,6 +52,8 @@ function notifIcon(kind: string) {
   if (kind === 'buyer_offer') return <Tag size={13} className="text-white" />;
   if (kind === 'share_comment' || kind === 'portal_comment') return <MessageSquare size={13} className="text-white" />;
   if (kind === 'artist_reaction') return <Heart size={13} className="text-[#6DC6A4]" />;
+  if (kind === 'artist_message') return <MessageCircle size={13} className="text-white" />;
+  if (kind === 'artist_request') return <HandHelping size={13} className="text-white" />;
   return <Bell size={13} className="text-white/60" />;
 }
 

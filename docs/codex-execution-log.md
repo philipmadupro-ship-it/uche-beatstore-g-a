@@ -9125,3 +9125,16 @@ Verified #40 on production (`uche-beatstore-g-a.vercel.app`, real "Beat Pack" bu
 
 - `SimpleAudioEngine` resumes with the element's own duration: immediately if metadata is there, else on `loadedmetadata`. The pending resume is keyed to its track id and cleared only once applied, so StrictMode's rehearsal cleanup cannot consume it and a track picked meanwhile never inherits it. The background cached-blob swap (which rewinds on `load()`) re-arms the position it had.
 - Tests: `SimpleAudioEngine.test.tsx` — resume waits for metadata; a 75 s preview of a 179 s beat resumes at 9 s, not 21.48 s (the old engine's answer, matching production). `e2e/project-playback.spec.ts` — the bundle page's tracks now claim 3× their clip length, as production's do, and both resume checks bound the position within ±1 s of where playback actually stopped (read from the persisted progress). The old engine fails it: stopped ≈4.9 s, came back at 14.7 s.
+
+## 2026-09-29 - Artist workspace, phase 3: messages, requests, email sign-in, live portal, songs on several beats
+
+Migrations 130–132 (pending on production; `supabase/apply/pending.sql` holds exactly them).
+
+- **Messages + requests** (130, `lib/artist-messages/`): one thread per artist beside the per-beat comments. Portal Messages tab (message, or "Ask for something" with an optional project); workspace Messages tab with open requests (Done / Decline / Reopen), Seen / Emailed markers and an overview callout. Email is a fallback: skipped while the artist is on the portal (10 min) and while an emailed message is unread (6 h). Notifications, timeline kinds and erasure extended.
+- **Email sign-in** (131, `lib/artist-portal/sign-in.ts`): per-portal switch in the workspace menu; sign-in link emailed to the contact's own address; stateless HMAC code (15 min) → 30-day httpOnly cookie, bound to portal id + token + email.
+- **Live portal** (`lib/artist-portal/pulse.ts`, `/pulse`, `hooks/useVisiblePoll`): fingerprints polled while visible; comments/messages refresh quietly, library changes offer "Show".
+- **Songs on several beats** (132, `lib/tracks/song-beats*.ts`, `PUT /api/tracks/[id]/beats`): drawer list with Make main / Remove; the single PATCH mirrors into the table; portal and workspace name all beats.
+
+Bugs found by the real-database run and fixed: PostgREST rejects `or=` on a PATCH ("column does not exist") — the sign-in throttle is a compare-and-set instead; the portal's `?signin=` redemption raced React's double mount effect in dev; a HEAD count on a missing table reads as an empty 404, so the workspace's message counts use a GET; an INSERT into a missing table (portal message) needed the read-first probe. Phase 1 spec: waited for the play request instead of its response (flaked on a cold compile).
+
+Tests: unit (messages 13, sign-in 8, pulse 4, song-beats 7, useVisiblePoll 2); `e2e/artist-workspace-phase3.spec.ts` 5 flows; all 16 real-DB flows pass; routes re-checked with 130–132 dropped.

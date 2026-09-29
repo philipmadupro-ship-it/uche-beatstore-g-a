@@ -6,6 +6,13 @@
  * Interested / Pass, and downloads where the project allows them. No CRM, no
  * editing, no store chrome, no checkout.
  *
+ * Phase 3 adds a Messages tab (one thread with the producer, plus requests),
+ * an optional email sign-in screen (lib/artist-portal/sign-in), and live
+ * updates: while the tab is visible it polls /pulse and refreshes comments
+ * and messages quietly, and offers "New from <producer> · Show" when the
+ * library itself changed (reloading moves the NEW markers, so the artist
+ * chooses when).
+ *
  * Playback reuses the share page's `WavePlayer` over the signed share-media
  * URLs the API returns. Plays are logged by watching the global player store
  * (a track counts once it actually starts), so the shared player needs no
@@ -13,8 +20,12 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, ExternalLink, FileText, Heart, Lock, MessageSquare, Music, X } from 'lucide-react';
+import { Download, ExternalLink, FileText, Heart, Lock, Mail, MessageSquare, Music, X } from 'lucide-react';
 import { PortalThread } from './PortalComments';
+import { PortalMessages } from './PortalMessages';
+import type { ArtistMessage } from '@/lib/artist-messages/messages';
+import { pulseChanges, type PulseVersions } from '@/lib/artist-portal/pulse';
+import { useVisiblePoll } from '@/hooks/useVisiblePoll';
 import type { PortalComment } from '@/lib/artist-portal/comments';
 import { WavePlayer } from '@/components/player/WavePlayer';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
@@ -28,10 +39,14 @@ type LoadState =
   | { kind: 'loading' }
   | { kind: 'ready'; view: PortalView }
   | { kind: 'password'; error: string | null }
+  | { kind: 'signin'; emailHint: string | null; canSignIn: boolean; sent: boolean; error: string | null }
   | { kind: 'gone'; message: string }
   | { kind: 'error'; message: string };
 
-type Tab = 'beats' | 'songs' | 'files';
+type Tab = 'beats' | 'songs' | 'files' | 'messages';
+
+/** How often an open, visible portal checks for news. */
+const PULSE_MS = 45_000;
 
 const FILE_KIND_LABEL: Record<PortalFile['kind'], string> = {
   reference: 'Reference', artwork: 'Artwork', lyrics: 'Lyrics', document: 'Document', audio: 'Audio', other: 'File',
@@ -64,6 +79,10 @@ export function ArtistPortal({ token }: { token: string }) {
     try {
       const res = await fetch(`/api/portal/${encodeURIComponent(token)}`, { headers: headers(), cache: 'no-store' });
       const body = await res.json().catch(() => ({}));
+      if (res.status === 401 && body.requiresSignIn) {
+        setState({ kind: 'signin', emailHint: body.emailHint ?? null, canSignIn: body.canSignIn !== false, sent: false, error: null });
+        return;
+      }
       if (res.status === 401) { setState({ kind: 'password', error: passwordRef.current ? (body.error ?? 'Incorrect password') : null }); return; }
       if (res.status === 404) { setState({ kind: 'gone', message: 'This link does not exist.' }); return; }
       if (res.status === 410) { setState({ kind: 'gone', message: 'This link is no longer active. Ask for a new one.' }); return; }
@@ -74,7 +93,55 @@ export function ArtistPortal({ token }: { token: string }) {
     }
   }, [token, headers]);
 
-  useEffect(() => { void load(); }, [load]);
+  // A sign-in link lands here as ?signin=<code>: redeem it (which sets this
+  // browser's cookie), take it out of the address bar, then load.
+  // The redemption is one promise shared by every run of the effect: React
+  // runs mount effects twice in development, and a second run that loaded
+  // without waiting would ask for sign-in before the cookie had landed.
+  const [signInError, setSignInError] = useState<string | null>(null);
+  const redeemed = useRef<Promise<string | null> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!redeemed.current) {
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get('signin');
+      if (code) {
+        url.searchParams.delete('signin');
+        window.history.replaceState(null, '', url.toString());
+      }
+      redeemed.current = !code ? Promise.resolve(null) : fetch(`/api/portal/${encodeURIComponent(token)}/sign-in`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }),
+      })
+        .then(async (res) => (res.ok ? null : ((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'That sign-in link did not work.'))
+        .catch(() => 'Could not reach the server.');
+    }
+    void redeemed.current.then((err) => {
+      if (cancelled) return;
+      if (err) setSignInError(err);
+      void load();
+    });
+    return () => { cancelled = true; };
+  }, [load, token]);
+
+  const requestSignIn = async () => {
+    if (state.kind !== 'signin') return;
+    setSignInError(null);
+    try {
+      const res = await fetch(`/api/portal/${encodeURIComponent(token)}/sign-in`, {
+        method: 'POST', headers: { 'content-type': 'application/json', ...headers() }, body: '{}',
+      });
+      const body = await res.json().catch(() => ({}));
+      setState({
+        kind: 'signin',
+        emailHint: body.emailHint ?? state.emailHint,
+        canSignIn: state.canSignIn,
+        sent: res.ok,
+        error: res.ok ? null : body.error ?? 'Could not send the link.',
+      });
+    } catch {
+      setState({ ...state, error: 'Could not reach the server.' });
+    }
+  };
 
   const [comments, setComments] = useState<PortalComment[]>([]);
   const [openThread, setOpenThread] = useState<string | null>(null);
@@ -88,6 +155,66 @@ export function ArtistPortal({ token }: { token: string }) {
   }, [token, headers]);
   const ready = state.kind === 'ready';
   useEffect(() => { if (ready) void loadComments(); }, [ready, loadComments]);
+
+  const [messages, setMessages] = useState<ArtistMessage[]>([]);
+  const [messagesOn, setMessagesOn] = useState(false);
+  const tabRef = useRef<Tab>('beats');
+  const loadMessages = useCallback(async () => {
+    try {
+      // Only an open Messages tab marks the producer's messages as seen.
+      const read = tabRef.current === 'messages' ? '?read=1' : '';
+      const res = await fetch(`/api/portal/${encodeURIComponent(token)}/messages${read}`, { headers: headers(), cache: 'no-store' });
+      if (!res.ok) return;
+      const data = await res.json() as { enabled: boolean; messages: ArtistMessage[] };
+      setMessagesOn(data.enabled);
+      setMessages(data.messages ?? []);
+    } catch {
+      // Additive, like comments.
+    }
+  }, [token, headers]);
+  useEffect(() => { if (ready) void loadMessages(); }, [ready, loadMessages]);
+  useEffect(() => { tabRef.current = tab; if (tab === 'messages') void loadMessages(); }, [tab, loadMessages]);
+
+  const sendMessage = async (input: { body: string; kind: 'message' | 'request'; projectId: string | null }): Promise<boolean> => {
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/portal/${encodeURIComponent(token)}/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers() },
+        body: JSON.stringify({ body: input.body, kind: input.kind, project_id: input.projectId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setNotice(data.error ?? 'Could not send that.'); return false; }
+      setMessages((prev) => [...prev, data.message as ArtistMessage]);
+      return true;
+    } catch {
+      setNotice('Could not reach the server.');
+      return false;
+    }
+  };
+
+  // Live updates (lib/artist-portal/pulse).
+  const pulseRef = useRef<PulseVersions | null>(null);
+  const [libraryChanged, setLibraryChanged] = useState(false);
+  const pulse = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/portal/${encodeURIComponent(token)}/pulse`, { headers: headers(), cache: 'no-store' });
+      if (!res.ok) return;
+      const next = await res.json() as PulseVersions;
+      const changed = pulseChanges(pulseRef.current, next);
+      pulseRef.current = next;
+      if (changed.comments) void loadComments();
+      if (changed.messages) void loadMessages();
+      if (changed.library) setLibraryChanged(true);
+    } catch {
+      // The next tick tries again.
+    }
+  }, [token, headers, loadComments, loadMessages]);
+  // Baseline right after each load of the library.
+  const loadedView = state.kind === 'ready' ? state.view : null;
+  useEffect(() => { if (loadedView) { pulseRef.current = null; setLibraryChanged(false); void pulse(); } }, [loadedView, pulse]);
+  useVisiblePoll(pulse, PULSE_MS, ready);
+  const unreadMessages = messages.filter((m) => m.author === 'producer' && !m.readAt).length;
 
   const postComment = async (
     target: { projectId: string; trackId: string | null },
@@ -125,7 +252,7 @@ export function ArtistPortal({ token }: { token: string }) {
   }, [view, projectFilter]);
 
   const visible = useMemo(() => {
-    if (!view || tab === 'files') return [];
+    if (!view || tab === 'files' || tab === 'messages') return [];
     return view.tracks.filter((t) =>
       (tab === 'songs' ? t.type === 'song' : t.type !== 'song')
       && (!projectFilter || t.projectIds.includes(projectFilter)));
@@ -259,6 +386,35 @@ export function ArtistPortal({ token }: { token: string }) {
       </Shell>
     );
   }
+  if (state.kind === 'signin') {
+    return (
+      <Shell>
+        <div className="mx-auto max-w-sm space-y-4 py-24 text-center" data-testid="portal-sign-in">
+          <Mail size={20} className="mx-auto text-white/60" aria-hidden="true" />
+          <h1 className="text-sm text-white/80">Confirm it’s you</h1>
+          {state.canSignIn ? (
+            state.sent ? (
+              <p role="status" className="text-xs text-white/60">
+                Sent. Open the link in the email to {state.emailHint ?? 'your address'} — in this browser — within 15 minutes.
+              </p>
+            ) : (
+              <p className="text-xs text-white/60">
+                This library asks you to confirm your email. We’ll send a sign-in link to {state.emailHint ?? 'the address your producer has for you'}.
+              </p>
+            )
+          ) : (
+            <p className="text-xs text-white/60">This library needs an email to confirm. Ask your producer.</p>
+          )}
+          {(state.error || signInError) && <p role="alert" className="text-xs text-[var(--error-text)]">{state.error ?? signInError}</p>}
+          {state.canSignIn && (
+            <button type="button" onClick={() => void requestSignIn()} className="w-full rounded-lg bg-white px-4 py-3 text-sm font-medium text-[#090907] hover:bg-white/90">
+              {state.sent ? 'Send again' : 'Email me a sign-in link'}
+            </button>
+          )}
+        </div>
+      </Shell>
+    );
+  }
   if (state.kind === 'password') {
     return (
       <Shell>
@@ -303,6 +459,13 @@ export function ArtistPortal({ token }: { token: string }) {
             <p className="shrink-0 pb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">for {v.portal.artistName}</p>
           )}
         </header>
+
+        {libraryChanged && (
+          <div role="status" className="mt-6 flex items-center justify-between gap-3 rounded-xl border border-[#6DC6A4]/40 bg-white/[0.06] px-4 py-3" data-testid="portal-update">
+            <span className="text-sm text-white/80">New from {v.producer.name || 'your producer'}</span>
+            <button type="button" onClick={() => void load()} className="rounded-lg border border-white/20 bg-white/[0.10] px-3 py-1.5 text-xs text-white hover:bg-white/[0.14]">Show</button>
+          </div>
+        )}
 
         {v.projects.length === 0 ? (
           <p className="py-16 text-center text-sm text-white/60">Nothing here yet — your producer hasn’t shared a project with you.</p>
@@ -351,7 +514,7 @@ export function ArtistPortal({ token }: { token: string }) {
             <section aria-labelledby="portal-library" className="mt-10">
               <h2 id="portal-library" className="sr-only">Library</h2>
               <div role="tablist" aria-label="Library" className="mb-4 flex gap-2">
-                {(['beats', 'songs', 'files'] as const).filter((t) => t === 'beats' || (t === 'songs' ? hasSongs : hasFiles)).map((t) => (
+                {(['beats', 'songs', 'files', 'messages'] as const).filter((t) => t === 'beats' || (t === 'songs' ? hasSongs : t === 'files' ? hasFiles : messagesOn)).map((t) => (
                   <button
                     key={t}
                     type="button"
@@ -360,7 +523,10 @@ export function ArtistPortal({ token }: { token: string }) {
                     onClick={() => setTab(t)}
                     className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${tab === t ? 'border-white/30 bg-white/[0.14] text-white' : 'border-white/10 bg-white/[0.06] text-white/60 hover:border-white/20 hover:bg-white/[0.10]'}`}
                   >
-                    {t === 'beats' ? 'Beats' : t === 'songs' ? 'Songs' : 'Files'}
+                    {t === 'beats' ? 'Beats' : t === 'songs' ? 'Songs' : t === 'files' ? 'Files' : 'Messages'}
+                    {t === 'messages' && unreadMessages > 0 && tab !== 'messages' && (
+                      <span className="ml-1.5 text-[#6DC6A4]">{unreadMessages} new</span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -374,7 +540,14 @@ export function ArtistPortal({ token }: { token: string }) {
 
               {notice && <p role="status" className="mb-3 text-xs text-white/60">{notice}</p>}
 
-              {tab === 'files' ? (
+              {tab === 'messages' ? (
+                <PortalMessages
+                  messages={messages}
+                  producerName={v.producer.name}
+                  projects={v.projects.map((p) => ({ id: p.id, name: p.name }))}
+                  onSend={sendMessage}
+                />
+              ) : tab === 'files' ? (
                 visibleFiles.length === 0 ? (
                   <p className="py-10 text-center text-sm text-white/40">No files in this project.</p>
                 ) : (
@@ -446,7 +619,7 @@ export function ArtistPortal({ token }: { token: string }) {
                             {t.isNew && <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-[#6DC6A4]">New</span>}
                           </p>
                           <p className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
-                            {[t.bpm ? `${Math.round(t.bpm)} BPM` : null, key, t.builtOn ? `Built on ${t.builtOn.title}` : null].filter(Boolean).join(' · ') || '—'}
+                            {[t.bpm ? `${Math.round(t.bpm)} BPM` : null, key, t.builtOn ? `Built on ${[t.builtOn, ...(t.builtOnOthers ?? [])].map((b) => b.title).join(' + ')}` : null].filter(Boolean).join(' · ') || '—'}
                           </p>
                         </div>
                         {t.type !== 'song' && (artistCanReact ? (

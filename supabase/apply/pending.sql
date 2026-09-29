@@ -4,735 +4,190 @@
 
 BEGIN;
 
--- ═════════════ 112_backfill_buyer_contacts.sql (SQL-editor form) ═════════════
--- 112_backfill_buyer_contacts.sql — SQL-editor form.
+-- ═════════════ 130_artist_messages.sql ═════════════
+-- 130_artist_messages.sql
+-- Artist Relationship Workspace, phase 3: messages and requests.
 --
--- Same effect as supabase/migrations/112_backfill_buyer_contacts.sql, for the
--- bundle pasted into the Supabase SQL editor. The migration builds a
--- `CREATE TEMP TABLE … ON COMMIT DROP` and reads it in three later
--- statements; the SQL editor does not keep one session/transaction across a
--- pasted script, so the table is gone by the next statement
--- ("relation _paid_buyers does not exist"). Here each statement computes the
--- same buyer set itself. The purchase tables are not changed by any
--- statement, so all three see the same set, exactly as with the temp table.
--- Idempotent: re-running finds nothing left to create or set.
-
--- 1. Contacts the broken webhook never created.
-WITH paid_buyers AS (
-  SELECT DISTINCT seller_user_id, lower(btrim(buyer_email)) AS email
-  FROM public.license_purchases
-  WHERE status = 'paid' AND seller_user_id IS NOT NULL AND buyer_email IS NOT NULL
-    AND lower(btrim(buyer_email)) <> 'unknown@invalid' AND position('@' in buyer_email) > 1
-  UNION
-  SELECT DISTINCT seller_user_id, lower(btrim(buyer_email))
-  FROM public.project_access_links
-  WHERE seller_user_id IS NOT NULL AND buyer_email IS NOT NULL
-    AND lower(btrim(buyer_email)) <> 'unknown@invalid' AND position('@' in buyer_email) > 1
-)
-INSERT INTO public.contacts (user_id, email, name, role, label, category, notes, crm_status, buyer_pipeline_status)
-SELECT b.seller_user_id, b.email, split_part(b.email, '@', 1), 'artist', 'buyer', 'buyer',
-       'Backfilled from a completed purchase (mig 112)', 'customer', 'purchased'
-FROM paid_buyers b
-WHERE NOT EXISTS (
-  SELECT 1 FROM public.contacts c WHERE c.user_id = b.seller_user_id AND lower(btrim(c.email)) = b.email
-)
-ON CONFLICT (user_id, email) DO NOTHING;
-
--- 2. Existing contacts with a paid purchase, whose stage was never set.
-WITH paid_buyers AS (
-  SELECT DISTINCT seller_user_id, lower(btrim(buyer_email)) AS email
-  FROM public.license_purchases
-  WHERE status = 'paid' AND seller_user_id IS NOT NULL AND buyer_email IS NOT NULL
-    AND lower(btrim(buyer_email)) <> 'unknown@invalid' AND position('@' in buyer_email) > 1
-  UNION
-  SELECT DISTINCT seller_user_id, lower(btrim(buyer_email))
-  FROM public.project_access_links
-  WHERE seller_user_id IS NOT NULL AND buyer_email IS NOT NULL
-    AND lower(btrim(buyer_email)) <> 'unknown@invalid' AND position('@' in buyer_email) > 1
-)
-UPDATE public.contacts c
-   SET crm_status = 'customer'
-  FROM paid_buyers b
- WHERE c.user_id = b.seller_user_id AND lower(btrim(c.email)) = b.email AND c.crm_status IS NULL;
-
-WITH paid_buyers AS (
-  SELECT DISTINCT seller_user_id, lower(btrim(buyer_email)) AS email
-  FROM public.license_purchases
-  WHERE status = 'paid' AND seller_user_id IS NOT NULL AND buyer_email IS NOT NULL
-    AND lower(btrim(buyer_email)) <> 'unknown@invalid' AND position('@' in buyer_email) > 1
-  UNION
-  SELECT DISTINCT seller_user_id, lower(btrim(buyer_email))
-  FROM public.project_access_links
-  WHERE seller_user_id IS NOT NULL AND buyer_email IS NOT NULL
-    AND lower(btrim(buyer_email)) <> 'unknown@invalid' AND position('@' in buyer_email) > 1
-)
-UPDATE public.contacts c
-   SET buyer_pipeline_status = 'purchased'
-  FROM paid_buyers b
- WHERE c.user_id = b.seller_user_id AND lower(btrim(c.email)) = b.email AND c.buyer_pipeline_status IS NULL;
-
-NOTIFY pgrst, 'reload schema';
-
-
--- ═════════════ 113_store_layout.sql ═════════════
--- Storefront layout document.
+-- Portal comments (mig 128) hang off a project or a beat. What was missing is
+-- the plain conversation between the producer and one artist — "are you in
+-- town next week?" — and a way for the artist to ASK for something ("send me
+-- something darker"). Both are rows here, one thread per contact:
 --
--- The Store Editor now composes `/store` from an ordered list of sections plus
--- a theme, rather than the section order living in JSX. This column holds that
--- document.
---
--- NULL is meaningful and is the default: it means "this producer has never
--- opened the builder", and the storefront falls back to `defaultStoreLayout()`,
--- which reproduces the page exactly as it renders today. So shipping this
--- migration changes nothing visible until someone saves a layout — existing
--- storefronts are untouched.
---
--- jsonb rather than json: we never need to preserve key order or whitespace,
--- and jsonb gives us containment operators if a later feature wants to query
--- "which storefronts use a video section".
+--   author        who wrote it: the producer (dashboard) or the artist (portal).
+--   kind          'message', or 'request' — only an artist writes a request.
+--   request_status open → done / declined, set by the producer. NULL for a
+--                 message; the check below keeps the two in step.
+--   project_id    optional: the project a request is about.
+--   read_at       when the OTHER side saw it (portal load for a producer
+--                 message, the workspace thread for an artist message).
+--   emailed_at    when a producer message was also emailed to the artist
+--                 (lib/artist-messages/email-fallback decides).
 
-ALTER TABLE creator_profiles
-  ADD COLUMN IF NOT EXISTS store_layout jsonb;
-
-COMMENT ON COLUMN creator_profiles.store_layout IS
-  'Storefront section layout + theme. NULL means use the default layout.';
-
--- Guard against a runaway document. A realistic layout is a few kilobytes; the
--- cap is set far above that but low enough that a malformed client cannot push
--- an unbounded blob into a row that is read on every storefront render.
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'creator_profiles_store_layout_size'
-  ) THEN
-    ALTER TABLE creator_profiles
-      ADD CONSTRAINT creator_profiles_store_layout_size
-      CHECK (store_layout IS NULL OR pg_column_size(store_layout) < 262144);
-  END IF;
-END $$;
-
-NOTIFY pgrst, 'reload schema';
-
-
--- ═════════════ 115_track_collaborators.sql ═════════════
--- 115_track_collaborators.sql
--- Who else is credited on a track.
---
--- `lib/upload/title-metadata` reads credits out of the filename
--- ("Night Shift (prod. by Wheezy x TM88).wav"), which is the moment the
--- producer still knows what the file is. Until now those names were shown in
--- the uploads tray and then thrown away.
---
--- A join table rather than a column on `tracks`, because a collaborator is a
--- person who appears across many tracks: this is what later allows "everything
--- I made with X", a link to a `contacts` row, or crediting on a storefront
--- listing. A jsonb column would have stored the same names as an opaque blob
--- per track and answered none of those.
---
--- `role` is text, not an enum. The parser emits three values today
--- (producer / feature / collaborator) and adding a fourth should not need a
--- migration — same reasoning as `track_tags.category`.
-
-CREATE TABLE IF NOT EXISTS public.track_collaborators (
-  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  track_id   uuid NOT NULL REFERENCES public.tracks(id) ON DELETE CASCADE,
-  name       text NOT NULL,
-  role       text NOT NULL DEFAULT 'collaborator',
-  -- How the credit got here, so a name the producer typed is never silently
-  -- replaced by a re-parse of the filename.
-  source     text NOT NULL DEFAULT 'filename',
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_track_collaborators_track
-  ON public.track_collaborators (track_id);
-
--- Names are matched case-insensitively so a re-parse, a re-analyze, or the
--- same file uploaded twice cannot credit one person several times. This is
--- what makes the write path idempotent, which every cron and retry needs.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_track_collaborators_unique
-  ON public.track_collaborators (track_id, lower(name), role);
-
--- Useful for the reverse lookup ("everything credited to this name").
-CREATE INDEX IF NOT EXISTS idx_track_collaborators_name
-  ON public.track_collaborators (lower(name));
-
-ALTER TABLE public.track_collaborators ENABLE ROW LEVEL SECURITY;
-
--- Owner-only, via the parent track. Deliberately NOT owner-or-null: migration
--- 097 retired that allowance, and re-adding it here would reopen it through a
--- new table.
-DROP POLICY IF EXISTS track_collaborators_via_parent ON public.track_collaborators;
-CREATE POLICY track_collaborators_via_parent ON public.track_collaborators
-  FOR ALL
-  USING (EXISTS (
-    SELECT 1 FROM public.tracks t
-    WHERE t.id = track_collaborators.track_id
-      AND t.user_id = auth.uid()
-  ))
-  WITH CHECK (EXISTS (
-    SELECT 1 FROM public.tracks t
-    WHERE t.id = track_collaborators.track_id
-      AND t.user_id = auth.uid()
-  ));
-
-NOTIFY pgrst, 'reload schema';
-
-
--- ═════════════ 116_notifications_realtime.sql ═════════════
--- Enable Supabase Realtime for `notifications`.
---
--- `TopBar` has always subscribed to this table:
---
---     useRealtimeTable({ table: 'notifications', onChange: fetchNotifs });
---
--- but the table was never added to the `supabase_realtime` publication, so
--- Postgres never broadcast its row changes and that subscription has been
--- silently inert since migration 064 created the table. The bell only ever
--- updated on the 60-second poll beside it, which is why a sale could sit
--- unseen for up to a minute — and why the OS notification for it was late by
--- the same amount.
---
--- It degraded quietly rather than breaking, which is how it went unnoticed:
--- the poll is a deliberate fallback and `lib/notifications/desktop.ts` fires
--- from whatever the poll returns, so everything still arrived, just slowly.
---
--- Numbered 116, not 115: `115_track_collaborators.sql` already exists on
--- branch `claude/code-review-agent-integration-cdf964`. Two branches claiming
--- one number is the collision CLAUDE.md warns about and that already forced a
--- 040/041 -> 046/047 renumber once.
---
--- REPLICA IDENTITY FULL, matching 012: without it a DELETE broadcasts only the
--- primary key. Nothing deletes notifications today, but a partial payload is a
--- trap to leave lying around for whoever adds that.
---
--- Idempotent — re-running adds the table only if it is not already a member.
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_publication_tables
-    WHERE pubname = 'supabase_realtime'
-      AND schemaname = 'public'
-      AND tablename = 'notifications'
-  ) THEN
-    EXECUTE 'ALTER PUBLICATION supabase_realtime ADD TABLE public.notifications';
-  END IF;
-END $$;
-
-ALTER TABLE public.notifications REPLICA IDENTITY FULL;
-
-NOTIFY pgrst, 'reload schema';
-
-
--- ═════════════ 121_share_full_playback.sql ═════════════
--- 121: per-share playback length. Full track (default) or the 75 s preview.
---
--- Share pages streamed tracks.preview_url whenever one existed. PR #17 gave
--- every beat a 75 s clip for the storefront, so from then on every share
--- (rappers writing to a beat, friends, collaborators) stopped at 1:15. The
--- producer now chooses per share. TRUE = the whole track, which is the
--- default and what every existing share gets. See lib/share/playback.ts.
---
--- The code reads a missing column as TRUE, so this is safe to merge before
--- applying: until it is applied every share plays in full, and only the
--- "1:15 preview" choice cannot be saved. Idempotent.
-
-ALTER TABLE public.share_links
-  ADD COLUMN IF NOT EXISTS full_playback boolean NOT NULL DEFAULT true;
-
-ALTER TABLE public.project_shares
-  ADD COLUMN IF NOT EXISTS full_playback boolean NOT NULL DEFAULT true;
-
-NOTIFY pgrst, 'reload schema';
-
-
--- ═════════════ 122_project_contacts.sql ═════════════
--- 122_project_contacts.sql
--- Artist Relationship Workspace, phase 1: who a project is for.
---
--- Nothing connected a contact to a project, so "Artist #1 → New EP" could not
--- be answered. A contact linked here is an ARTIST in workspace mode; buyers and
--- leads keep the plain CRM page.
---
--- Permissions for the artist's portal live on this row, not on a per-project
--- token, so one portal link can carry different rights for each project:
---   in_portal        — the project appears in that contact's portal
---   allow_downloads  — the portal may download this project's tracks
---   can_comment      — reserved for portal comments (phase 2)
--- last_notified_at is what the "Notify · N new" button counts from.
---
--- (Numbered 122, not 121: an unmerged branch already claims
--- 121_share_full_playback.sql.)
-
-CREATE TABLE IF NOT EXISTS public.project_contacts (
-  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id          uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  project_id       uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
-  contact_id       uuid NOT NULL REFERENCES public.contacts(id) ON DELETE CASCADE,
-  role             text NOT NULL DEFAULT 'artist',
-  in_portal        boolean NOT NULL DEFAULT false,
-  allow_downloads  boolean NOT NULL DEFAULT false,
-  can_comment      boolean NOT NULL DEFAULT true,
-  last_notified_at timestamptz,
-  created_at       timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT project_contacts_project_contact_key UNIQUE (project_id, contact_id)
+CREATE TABLE IF NOT EXISTS public.artist_messages (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id        uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  contact_id     uuid NOT NULL REFERENCES public.contacts(id) ON DELETE CASCADE,
+  project_id     uuid REFERENCES public.projects(id) ON DELETE SET NULL,
+  author         text NOT NULL,
+  kind           text NOT NULL DEFAULT 'message',
+  body           text NOT NULL,
+  request_status text,
+  resolved_at    timestamptz,
+  read_at        timestamptz,
+  emailed_at     timestamptz,
+  created_at     timestamptz NOT NULL DEFAULT now()
 );
 
 DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'project_contacts_role_check') THEN
-    ALTER TABLE public.project_contacts ADD CONSTRAINT project_contacts_role_check
-      CHECK (role IN ('artist', 'featured', 'manager', 'engineer', 'collaborator'));
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'artist_messages_author_check') THEN
+    ALTER TABLE public.artist_messages ADD CONSTRAINT artist_messages_author_check
+      CHECK (author IN ('producer', 'artist'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'artist_messages_kind_check') THEN
+    ALTER TABLE public.artist_messages ADD CONSTRAINT artist_messages_kind_check
+      CHECK (kind IN ('message', 'request'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'artist_messages_request_check') THEN
+    ALTER TABLE public.artist_messages ADD CONSTRAINT artist_messages_request_check
+      CHECK (
+        (kind = 'message' AND request_status IS NULL)
+        OR (kind = 'request' AND author = 'artist' AND request_status IN ('open', 'done', 'declined'))
+      );
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'artist_messages_body_check') THEN
+    ALTER TABLE public.artist_messages ADD CONSTRAINT artist_messages_body_check
+      CHECK (char_length(btrim(body)) BETWEEN 1 AND 4000);
   END IF;
 END $$;
 
-CREATE INDEX IF NOT EXISTS idx_project_contacts_contact ON public.project_contacts (contact_id);
-CREATE INDEX IF NOT EXISTS idx_project_contacts_user ON public.project_contacts (user_id);
+CREATE INDEX IF NOT EXISTS idx_artist_messages_contact ON public.artist_messages (contact_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_artist_messages_user ON public.artist_messages (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_artist_messages_open_requests
+  ON public.artist_messages (user_id, contact_id) WHERE kind = 'request' AND request_status = 'open';
 
--- The row, its project and its contact must all belong to one owner. Routes
--- check this before writing with the service role; the trigger makes a
--- mistake there fail loudly instead of linking one producer's contact to
--- another producer's project.
-CREATE OR REPLACE FUNCTION public.project_contacts_same_owner()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.projects p WHERE p.id = NEW.project_id AND p.user_id = NEW.user_id) THEN
-    RAISE EXCEPTION 'project_contacts: project % is not owned by %', NEW.project_id, NEW.user_id;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM public.contacts c WHERE c.id = NEW.contact_id AND c.user_id = NEW.user_id) THEN
-    RAISE EXCEPTION 'project_contacts: contact % is not owned by %', NEW.contact_id, NEW.user_id;
-  END IF;
-  RETURN NEW;
-END $$;
-
-DROP TRIGGER IF EXISTS project_contacts_same_owner ON public.project_contacts;
-CREATE TRIGGER project_contacts_same_owner
-  BEFORE INSERT OR UPDATE OF user_id, project_id, contact_id ON public.project_contacts
-  FOR EACH ROW EXECUTE FUNCTION public.project_contacts_same_owner();
-
-ALTER TABLE public.project_contacts ENABLE ROW LEVEL SECURITY;
-
--- Owner-only (not owner-or-null, mig 097); writes need a producer (mig 119).
-DROP POLICY IF EXISTS project_contacts_owner_select ON public.project_contacts;
-CREATE POLICY project_contacts_owner_select ON public.project_contacts
-  FOR SELECT USING ((SELECT auth.uid()) = user_id);
-
-DROP POLICY IF EXISTS project_contacts_owner_write ON public.project_contacts;
-CREATE POLICY project_contacts_owner_write ON public.project_contacts
-  FOR ALL USING ((SELECT auth.uid()) = user_id)
-  WITH CHECK ((SELECT auth.uid()) = user_id AND (SELECT public.is_producer()));
-
-NOTIFY pgrst, 'reload schema';
-
-
--- ═════════════ 123_contact_track_states.sql ═════════════
--- 123_contact_track_states.sql
--- Artist Relationship Workspace, phase 1: one artist's decision on one beat.
---
--- Beat status used to belong to a SEND (beat_sends.status), so "interested in
--- MIDNIGHT, passed on the other 7" could not be recorded: one send carries
--- every track it contained. The decision now lives on the artist-and-beat pair.
---
--- Two axes, deliberately:
---   decision   — STORED here, set by either side:
---                interested → selected → recording → recorded → released · passed
---   engagement — never stored; derived from sends, opens, plays and downloads
---                (lib/contacts/track-engagement.ts).
--- NULL decision = no decision yet.
---
--- beat_sends.status is frozen after the one-time copy below and stays as a
--- record of the past.
-
-CREATE TABLE IF NOT EXISTS public.contact_track_states (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  contact_id  uuid NOT NULL REFERENCES public.contacts(id) ON DELETE CASCADE,
-  track_id    uuid NOT NULL REFERENCES public.tracks(id) ON DELETE CASCADE,
-  project_id  uuid REFERENCES public.projects(id) ON DELETE SET NULL,
-  decision    text,
-  set_by      text NOT NULL DEFAULT 'producer',
-  created_at  timestamptz NOT NULL DEFAULT now(),
-  updated_at  timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT contact_track_states_contact_track_key UNIQUE (contact_id, track_id)
-);
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contact_track_states_decision_check') THEN
-    ALTER TABLE public.contact_track_states ADD CONSTRAINT contact_track_states_decision_check
-      CHECK (decision IS NULL OR decision IN ('interested', 'selected', 'recording', 'recorded', 'released', 'passed'));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'contact_track_states_set_by_check') THEN
-    ALTER TABLE public.contact_track_states ADD CONSTRAINT contact_track_states_set_by_check
-      CHECK (set_by IN ('producer', 'artist'));
-  END IF;
-END $$;
-
-CREATE INDEX IF NOT EXISTS idx_contact_track_states_track ON public.contact_track_states (track_id);
-CREATE INDEX IF NOT EXISTS idx_contact_track_states_user ON public.contact_track_states (user_id);
-CREATE INDEX IF NOT EXISTS idx_contact_track_states_project ON public.contact_track_states (project_id);
-
--- Same-owner guard, as on project_contacts: contact and track must belong to
--- the row's owner.
-CREATE OR REPLACE FUNCTION public.contact_track_states_same_owner()
+-- The contact (and the project, when set) must belong to the row's owner.
+CREATE OR REPLACE FUNCTION public.artist_messages_same_owner()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.contacts c WHERE c.id = NEW.contact_id AND c.user_id = NEW.user_id) THEN
-    RAISE EXCEPTION 'contact_track_states: contact % is not owned by %', NEW.contact_id, NEW.user_id;
+    RAISE EXCEPTION 'artist_messages: contact % is not owned by %', NEW.contact_id, NEW.user_id;
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM public.tracks t WHERE t.id = NEW.track_id AND t.user_id = NEW.user_id) THEN
-    RAISE EXCEPTION 'contact_track_states: track % is not owned by %', NEW.track_id, NEW.user_id;
-  END IF;
-  RETURN NEW;
-END $$;
-
-DROP TRIGGER IF EXISTS contact_track_states_same_owner ON public.contact_track_states;
-CREATE TRIGGER contact_track_states_same_owner
-  BEFORE INSERT OR UPDATE OF user_id, contact_id, track_id ON public.contact_track_states
-  FOR EACH ROW EXECUTE FUNCTION public.contact_track_states_same_owner();
-
-ALTER TABLE public.contact_track_states ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS contact_track_states_owner_select ON public.contact_track_states;
-CREATE POLICY contact_track_states_owner_select ON public.contact_track_states
-  FOR SELECT USING ((SELECT auth.uid()) = user_id);
-
-DROP POLICY IF EXISTS contact_track_states_owner_write ON public.contact_track_states;
-CREATE POLICY contact_track_states_owner_write ON public.contact_track_states
-  FOR ALL USING ((SELECT auth.uid()) = user_id)
-  WITH CHECK ((SELECT auth.uid()) = user_id AND (SELECT public.is_producer()));
-
--- One-time copy of the old per-send statuses onto the pair, newest send wins:
---   interested → interested · negotiating → selected · placed → released · pass → passed
--- sent / opened are engagement, not decisions, and are not copied.
--- ON CONFLICT DO NOTHING keeps this idempotent AND means a re-run never
--- overwrites a decision made after the first run.
-INSERT INTO public.contact_track_states (user_id, contact_id, track_id, decision, set_by, created_at, updated_at)
-SELECT DISTINCT ON (bs.contact_id, t.id)
-  c.user_id,
-  bs.contact_id,
-  t.id,
-  CASE bs.status
-    WHEN 'interested'  THEN 'interested'
-    WHEN 'negotiating' THEN 'selected'
-    WHEN 'placed'      THEN 'released'
-    WHEN 'pass'        THEN 'passed'
-  END,
-  'producer',
-  bs.sent_at,
-  bs.sent_at
-FROM public.beat_sends bs
-JOIN public.contacts c ON c.id = bs.contact_id AND c.user_id IS NOT NULL
-CROSS JOIN LATERAL unnest(bs.track_ids) AS tid(track_id)
-JOIN public.tracks t ON t.id::text = tid.track_id::text AND t.user_id = c.user_id
-WHERE bs.status IN ('interested', 'negotiating', 'placed', 'pass')
-ORDER BY bs.contact_id, t.id, bs.sent_at DESC
-ON CONFLICT (contact_id, track_id) DO NOTHING;
-
-NOTIFY pgrst, 'reload schema';
-
-
--- ═════════════ 124_song_beat_and_credit_links.sql ═════════════
--- 124_song_beat_and_credit_links.sql
--- Artist Relationship Workspace, phase 1: the links that make
--- Artist → Song → Beat navigable.
---
--- tracks.beat_track_id — a song's MAIN beat. A song stays a track
---   (type = 'song'); it already has versions, stems, credits and the player,
---   so a separate Song entity would duplicate all of it. One pointer is enough
---   today; if a song ever needs several beats a join table can be added
---   without breaking this column. ON DELETE SET NULL: deleting a beat must not
---   delete the song built on it.
--- track_collaborators.contact_id — a credit that points at a CRM contact.
---   The typed `name` stays for credits that are not contacts.
--- contacts.avatar_url — the artist's picture in workspace mode.
-
-ALTER TABLE public.tracks
-  ADD COLUMN IF NOT EXISTS beat_track_id uuid REFERENCES public.tracks(id) ON DELETE SET NULL;
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tracks_beat_track_not_self') THEN
-    ALTER TABLE public.tracks ADD CONSTRAINT tracks_beat_track_not_self
-      CHECK (beat_track_id IS NULL OR beat_track_id <> id);
-  END IF;
-END $$;
-
-CREATE INDEX IF NOT EXISTS idx_tracks_beat_track ON public.tracks (beat_track_id) WHERE beat_track_id IS NOT NULL;
-
--- A song may only be built on a beat its owner owns.
-CREATE OR REPLACE FUNCTION public.tracks_beat_same_owner()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF NEW.beat_track_id IS NOT NULL AND NOT EXISTS (
-    SELECT 1 FROM public.tracks b WHERE b.id = NEW.beat_track_id AND b.user_id = NEW.user_id
+  IF NEW.project_id IS NOT NULL AND NOT EXISTS (
+    SELECT 1 FROM public.projects p WHERE p.id = NEW.project_id AND p.user_id = NEW.user_id
   ) THEN
-    RAISE EXCEPTION 'tracks.beat_track_id: beat % is not owned by the song''s owner', NEW.beat_track_id;
+    RAISE EXCEPTION 'artist_messages: project % is not owned by %', NEW.project_id, NEW.user_id;
   END IF;
   RETURN NEW;
 END $$;
 
-DROP TRIGGER IF EXISTS tracks_beat_same_owner ON public.tracks;
-CREATE TRIGGER tracks_beat_same_owner
-  BEFORE INSERT OR UPDATE OF beat_track_id, user_id ON public.tracks
-  FOR EACH ROW EXECUTE FUNCTION public.tracks_beat_same_owner();
+DROP TRIGGER IF EXISTS artist_messages_same_owner ON public.artist_messages;
+CREATE TRIGGER artist_messages_same_owner
+  BEFORE INSERT OR UPDATE OF user_id, contact_id, project_id ON public.artist_messages
+  FOR EACH ROW EXECUTE FUNCTION public.artist_messages_same_owner();
 
-ALTER TABLE public.track_collaborators
-  ADD COLUMN IF NOT EXISTS contact_id uuid REFERENCES public.contacts(id) ON DELETE SET NULL;
+-- Owner-only. The portal reads and writes through the service role after the
+-- token gate.
+ALTER TABLE public.artist_messages ENABLE ROW LEVEL SECURITY;
 
-CREATE INDEX IF NOT EXISTS idx_track_collaborators_contact
-  ON public.track_collaborators (contact_id) WHERE contact_id IS NOT NULL;
-
-ALTER TABLE public.contacts
-  ADD COLUMN IF NOT EXISTS avatar_url text;
-
-NOTIFY pgrst, 'reload schema';
-
-
--- ═════════════ 125_artist_portals.sql ═════════════
--- 125_artist_portals.sql
--- Artist Relationship Workspace, phase 1: one permanent private portal per
--- artist.
---
--- The portal is the link between the producer and one artist: a small library
--- of the projects linked to that contact with project_contacts.in_portal set.
--- Adding a beat to a portal project shows up on the artist's next visit; the
--- link never changes, so follow-ups stop being new links.
---
--- One row per contact (UNIQUE contact_id). Revoking sets revoked_at (pages
--- return 410); reissuing rotates `token` on the same row, so the old link dies
--- and history stays attached to the contact.
--- previous_viewed_at is the "NEW since your last visit" watermark: a visit
--- moves last_viewed_at into it before stamping a new last_viewed_at.
---
--- The token is a bearer credential, like every share token. Portal routes are
--- allowlisted in lib/security/api-gate.ts and gate on it server-side.
-
-CREATE TABLE IF NOT EXISTS public.artist_portals (
-  id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id            uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  contact_id         uuid NOT NULL REFERENCES public.contacts(id) ON DELETE CASCADE,
-  token              text NOT NULL,
-  password_hash      text,
-  revoked_at         timestamptz,
-  last_viewed_at     timestamptz,
-  previous_viewed_at timestamptz,
-  view_count         integer NOT NULL DEFAULT 0,
-  created_at         timestamptz NOT NULL DEFAULT now(),
-  updated_at         timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT artist_portals_contact_key UNIQUE (contact_id),
-  CONSTRAINT artist_portals_token_key UNIQUE (token)
-);
-
-CREATE INDEX IF NOT EXISTS idx_artist_portals_user ON public.artist_portals (user_id);
-
-CREATE OR REPLACE FUNCTION public.artist_portals_same_owner()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.contacts c WHERE c.id = NEW.contact_id AND c.user_id = NEW.user_id) THEN
-    RAISE EXCEPTION 'artist_portals: contact % is not owned by %', NEW.contact_id, NEW.user_id;
-  END IF;
-  RETURN NEW;
-END $$;
-
-DROP TRIGGER IF EXISTS artist_portals_same_owner ON public.artist_portals;
-CREATE TRIGGER artist_portals_same_owner
-  BEFORE INSERT OR UPDATE OF user_id, contact_id ON public.artist_portals
-  FOR EACH ROW EXECUTE FUNCTION public.artist_portals_same_owner();
-
--- Owner-only. There is deliberately NO anon policy: the portal is read by
--- token through the service role, after the route checks the token, so the
--- table is never listable through PostgREST by a guest.
-ALTER TABLE public.artist_portals ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS artist_portals_owner_select ON public.artist_portals;
-CREATE POLICY artist_portals_owner_select ON public.artist_portals
+DROP POLICY IF EXISTS artist_messages_owner_select ON public.artist_messages;
+CREATE POLICY artist_messages_owner_select ON public.artist_messages
   FOR SELECT USING ((SELECT auth.uid()) = user_id);
 
-DROP POLICY IF EXISTS artist_portals_owner_write ON public.artist_portals;
-CREATE POLICY artist_portals_owner_write ON public.artist_portals
+DROP POLICY IF EXISTS artist_messages_owner_write ON public.artist_messages;
+CREATE POLICY artist_messages_owner_write ON public.artist_messages
   FOR ALL USING ((SELECT auth.uid()) = user_id)
   WITH CHECK ((SELECT auth.uid()) = user_id AND (SELECT public.is_producer()));
 
 NOTIFY pgrst, 'reload schema';
 
 
--- ═════════════ 126_project_shares_contact.sql ═════════════
--- 126_project_shares_contact.sql
--- Artist Relationship Workspace, phase 1: tie a project share to the contact
--- it was sent to.
+-- ═════════════ 131_portal_sign_in.sql ═════════════
+-- 131_portal_sign_in.sql
+-- Artist Relationship Workspace, phase 3: optional email sign-in for a portal.
 --
--- project_shares stored its recipient as text (invited_email, label). The
--- contact id replaces that as the identity; the text fields stay as display
--- fallbacks for links sent to people who are not contacts.
+-- A portal link is a bearer credential: anyone the artist forwards it to gets
+-- in. The producer can now require the artist to confirm their email first.
+-- The portal then emails a short-lived sign-in link to the address ON THE
+-- CONTACT (the visitor never types one, so it cannot be pointed elsewhere),
+-- and opening it leaves a signed cookie for that browser
+-- (lib/artist-portal/sign-in). No Supabase auth user is created: artists are
+-- not buyers and not producers.
 --
--- Backfill: a share whose invited_email matches one of the project owner's
--- contacts (emails are stored lowercased since mig 110; compared lowercased
--- here anyway). Only fills NULLs, so it is idempotent and never re-points a
--- share the producer has since changed.
-
-ALTER TABLE public.project_shares
-  ADD COLUMN IF NOT EXISTS contact_id uuid REFERENCES public.contacts(id) ON DELETE SET NULL;
-
-CREATE INDEX IF NOT EXISTS idx_project_shares_contact
-  ON public.project_shares (contact_id) WHERE contact_id IS NOT NULL;
-
-UPDATE public.project_shares ps
-SET contact_id = c.id
-FROM public.projects p, public.contacts c
-WHERE ps.contact_id IS NULL
-  AND ps.invited_email IS NOT NULL
-  AND p.id = ps.project_id
-  AND c.user_id = p.user_id
-  AND c.email IS NOT NULL
-  AND lower(trim(c.email)) = lower(trim(ps.invited_email));
-
-NOTIFY pgrst, 'reload schema';
-
-
--- ═════════════ 127_project_assets.sql ═════════════
--- 127_project_assets.sql
--- Artist Relationship Workspace, phase 2: project files.
---
--- References, artwork, lyric sheets and documents had nowhere to live: every
--- stored file belonged to a track. A project file is a row here pointing at
--- an object in the PRIVATE bucket (`url` is an `r2://` reference, never a
--- public URL). Track files (WAV, stems, versions) are NOT copied in — the
--- Files tab reads them where they already live.
---
--- in_portal decides whether the file appears in the portal of every artist
--- this project is shared with. It defaults to false: a contract dropped on a
--- project that is already in a portal must not become visible by accident.
--- The upload form sets it explicitly. portal_at records when it last went
--- into the portal (insert with in_portal, or switched on later), so a file
--- that has sat on the project for a month is still NEW to the artist the day
--- it is shared, and still counts toward "Notify · N new".
-
-CREATE TABLE IF NOT EXISTS public.project_assets (
-  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  project_id  uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
-  kind        text NOT NULL DEFAULT 'other',
-  label       text NOT NULL DEFAULT '',
-  file_name   text NOT NULL DEFAULT '',
-  url         text NOT NULL,
-  mime        text,
-  size_bytes  bigint,
-  position    integer NOT NULL DEFAULT 0,
-  in_portal   boolean NOT NULL DEFAULT false,
-  portal_at   timestamptz,
-  created_at  timestamptz NOT NULL DEFAULT now(),
-  updated_at  timestamptz NOT NULL DEFAULT now()
-);
-
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'project_assets_kind_check') THEN
-    ALTER TABLE public.project_assets ADD CONSTRAINT project_assets_kind_check
-      CHECK (kind IN ('reference', 'artwork', 'lyrics', 'document', 'audio', 'other'));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'project_assets_size_check') THEN
-    ALTER TABLE public.project_assets ADD CONSTRAINT project_assets_size_check
-      CHECK (size_bytes IS NULL OR size_bytes >= 0);
-  END IF;
-END $$;
-
-CREATE INDEX IF NOT EXISTS idx_project_assets_project ON public.project_assets (project_id, position);
-CREATE INDEX IF NOT EXISTS idx_project_assets_user ON public.project_assets (user_id);
-
--- The row and its project must belong to one owner.
-CREATE OR REPLACE FUNCTION public.project_assets_same_owner()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.projects p WHERE p.id = NEW.project_id AND p.user_id = NEW.user_id) THEN
-    RAISE EXCEPTION 'project_assets: project % is not owned by %', NEW.project_id, NEW.user_id;
-  END IF;
-  RETURN NEW;
-END $$;
-
-DROP TRIGGER IF EXISTS project_assets_same_owner ON public.project_assets;
-CREATE TRIGGER project_assets_same_owner
-  BEFORE INSERT OR UPDATE OF user_id, project_id ON public.project_assets
-  FOR EACH ROW EXECUTE FUNCTION public.project_assets_same_owner();
-
--- Owner-only. No anon policy: the portal reads files through the service
--- role after checking the token and membership.
-ALTER TABLE public.project_assets ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS project_assets_owner_select ON public.project_assets;
-CREATE POLICY project_assets_owner_select ON public.project_assets
-  FOR SELECT USING ((SELECT auth.uid()) = user_id);
-
-DROP POLICY IF EXISTS project_assets_owner_write ON public.project_assets;
-CREATE POLICY project_assets_owner_write ON public.project_assets
-  FOR ALL USING ((SELECT auth.uid()) = user_id)
-  WITH CHECK ((SELECT auth.uid()) = user_id AND (SELECT public.is_producer()));
-
-NOTIFY pgrst, 'reload schema';
-
-
--- ═════════════ 128_portal_comments.sql ═════════════
--- 128_portal_comments.sql
--- Artist Relationship Workspace, phase 2: comments from the artist portal.
---
--- Portal comments reuse project_comments — the same rows, threading and
--- time-range pins (region_start/end, mig 013) the share pages use — with one
--- new column saying which artist the thread belongs to:
---   contact_id  the artist whose portal thread this is. Set on the artist's
---               own comments AND on the producer's replies in that thread, so
---               a portal shows exactly its own artist's conversation and never
---               another artist's. NULL for every share-page / owner comment.
--- Deleting the contact keeps the comments (the producer's record of the
--- feedback) and only loses the link — ON DELETE SET NULL. Privacy erasure
--- deletes the artist's own comments explicitly (lib/privacy/erase-artist).
-
-ALTER TABLE public.project_comments
-  ADD COLUMN IF NOT EXISTS contact_id uuid REFERENCES public.contacts(id) ON DELETE SET NULL;
-
-CREATE INDEX IF NOT EXISTS idx_project_comments_contact
-  ON public.project_comments (contact_id, created_at)
-  WHERE contact_id IS NOT NULL;
-
--- A thread's contact must belong to the project's owner.
-CREATE OR REPLACE FUNCTION public.project_comments_contact_same_owner()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
-BEGIN
-  IF NEW.contact_id IS NULL THEN
-    RETURN NEW;
-  END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM public.projects p
-    JOIN public.contacts c ON c.user_id = p.user_id
-    WHERE p.id = NEW.project_id AND c.id = NEW.contact_id
-  ) THEN
-    RAISE EXCEPTION 'project_comments: contact % does not belong to the owner of project %', NEW.contact_id, NEW.project_id;
-  END IF;
-  RETURN NEW;
-END $$;
-
-DROP TRIGGER IF EXISTS project_comments_contact_same_owner ON public.project_comments;
-CREATE TRIGGER project_comments_contact_same_owner
-  BEFORE INSERT OR UPDATE OF contact_id, project_id ON public.project_comments
-  FOR EACH ROW EXECUTE FUNCTION public.project_comments_contact_same_owner();
-
-NOTIFY pgrst, 'reload schema';
-
-
--- ═════════════ 129_artist_portal_auto_digest.sql ═════════════
--- 129_artist_portal_auto_digest.sql
--- Artist Relationship Workspace, phase 2: the optional daily digest.
---
--- Adding material never emails anyone by itself; the producer presses
--- Notify. auto_digest lets the producer hand that press to the daily cron
--- (/api/cron/artist-digest) for one artist: once a day, if anything in the
--- portal is new since the last notify, that artist gets the same single
--- digest Notify would send. Off by default. The cron is idempotent because a
--- digest moves project_contacts.last_notified_at, which is what it counts
--- from — a second run the same day finds nothing to send.
+-- sign_in_sent_at throttles the email (one a minute per portal).
 
 ALTER TABLE public.artist_portals
-  ADD COLUMN IF NOT EXISTS auto_digest boolean NOT NULL DEFAULT false;
+  ADD COLUMN IF NOT EXISTS require_sign_in boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS sign_in_sent_at timestamptz;
 
-CREATE INDEX IF NOT EXISTS idx_artist_portals_auto_digest
-  ON public.artist_portals (user_id)
-  WHERE auto_digest AND revoked_at IS NULL;
+NOTIFY pgrst, 'reload schema';
+
+
+-- ═════════════ 132_song_beats.sql ═════════════
+-- 132_song_beats.sql
+-- Artist Relationship Workspace, phase 3: a song built on several beats.
+--
+-- Mig 124 gave a song one pointer, tracks.beat_track_id (its MAIN beat), and
+-- said a join table could come later without breaking it. This is that table.
+-- tracks.beat_track_id stays and stays the main beat — the app keeps it equal
+-- to position 0 here — so everything that reads it keeps working.
+--
+-- Backfilled from beat_track_id, idempotently.
+
+CREATE TABLE IF NOT EXISTS public.song_beats (
+  song_track_id uuid NOT NULL REFERENCES public.tracks(id) ON DELETE CASCADE,
+  beat_track_id uuid NOT NULL REFERENCES public.tracks(id) ON DELETE CASCADE,
+  user_id       uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  position      integer NOT NULL DEFAULT 0,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (song_track_id, beat_track_id)
+);
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'song_beats_not_self') THEN
+    ALTER TABLE public.song_beats ADD CONSTRAINT song_beats_not_self
+      CHECK (song_track_id <> beat_track_id);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_song_beats_beat ON public.song_beats (beat_track_id);
+CREATE INDEX IF NOT EXISTS idx_song_beats_user ON public.song_beats (user_id);
+
+-- Song and beat must both belong to the row's owner.
+CREATE OR REPLACE FUNCTION public.song_beats_same_owner()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.tracks t WHERE t.id = NEW.song_track_id AND t.user_id = NEW.user_id) THEN
+    RAISE EXCEPTION 'song_beats: song % is not owned by %', NEW.song_track_id, NEW.user_id;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.tracks t WHERE t.id = NEW.beat_track_id AND t.user_id = NEW.user_id) THEN
+    RAISE EXCEPTION 'song_beats: beat % is not owned by %', NEW.beat_track_id, NEW.user_id;
+  END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS song_beats_same_owner ON public.song_beats;
+CREATE TRIGGER song_beats_same_owner
+  BEFORE INSERT OR UPDATE ON public.song_beats
+  FOR EACH ROW EXECUTE FUNCTION public.song_beats_same_owner();
+
+ALTER TABLE public.song_beats ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS song_beats_owner_select ON public.song_beats;
+CREATE POLICY song_beats_owner_select ON public.song_beats
+  FOR SELECT USING ((SELECT auth.uid()) = user_id);
+
+DROP POLICY IF EXISTS song_beats_owner_write ON public.song_beats;
+CREATE POLICY song_beats_owner_write ON public.song_beats
+  FOR ALL USING ((SELECT auth.uid()) = user_id)
+  WITH CHECK ((SELECT auth.uid()) = user_id AND (SELECT public.is_producer()));
+
+-- Backfill: every existing main beat becomes position 0.
+INSERT INTO public.song_beats (song_track_id, beat_track_id, user_id, position)
+SELECT s.id, s.beat_track_id, s.user_id, 0
+FROM public.tracks s
+JOIN public.tracks b ON b.id = s.beat_track_id AND b.user_id = s.user_id
+WHERE s.beat_track_id IS NOT NULL AND s.user_id IS NOT NULL
+ON CONFLICT (song_track_id, beat_track_id) DO NOTHING;
 
 NOTIFY pgrst, 'reload schema';
 
@@ -761,6 +216,9 @@ FROM (VALUES
   ('126_project_shares_contact',     EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'project_shares' AND column_name = 'contact_id')),
   ('127_project_assets',             to_regclass('public.project_assets') IS NOT NULL),
   ('128_portal_comments',            EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'project_comments' AND column_name = 'contact_id')),
-  ('129_artist_portal_auto_digest',  EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'artist_portals' AND column_name = 'auto_digest'))
+  ('129_artist_portal_auto_digest',  EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'artist_portals' AND column_name = 'auto_digest')),
+  ('130_artist_messages',            to_regclass('public.artist_messages') IS NOT NULL),
+  ('131_portal_sign_in',             EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'artist_portals' AND column_name = 'require_sign_in')),
+  ('132_song_beats',                 to_regclass('public.song_beats') IS NOT NULL)
 ) AS m(migration, ok)
 ORDER BY m.migration;

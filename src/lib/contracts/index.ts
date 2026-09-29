@@ -714,7 +714,9 @@ export const ArtistPortalActionBodySchema = z.object({
   password: z.string().min(4).max(200).nullable().optional(),
   /** settings: hand Notify to the daily digest cron (mig 129). */
   auto_digest: z.boolean().optional(),
-}).strict().refine((b) => b.action !== 'settings' || b.auto_digest !== undefined, { message: 'Nothing to update' });
+  /** settings: the artist must confirm their email before the portal opens (mig 131). */
+  require_sign_in: z.boolean().optional(),
+}).strict().refine((b) => b.action !== 'settings' || b.auto_digest !== undefined || b.require_sign_in !== undefined, { message: 'Nothing to update' });
 export type ArtistPortalActionBody = z.infer<typeof ArtistPortalActionBodySchema>;
 
 /** POST /api/contacts/[id]/notify — one digest email of what is new in the portal. */
@@ -796,3 +798,41 @@ export const ArtistCommentBodySchema = z.object({
   body: z.string().trim().min(1, 'Comment cannot be empty').max(5000, 'Comment too long'),
 }).strict();
 export type ArtistCommentBody = z.infer<typeof ArtistCommentBodySchema>;
+
+// ── Artist messages + requests (mig 130) ─────────────────────────────────
+
+const messageBody = z.string().trim().min(1, 'Message cannot be empty').max(4000, 'Message too long');
+
+/** POST /api/portal/[token]/messages — the artist writes, or asks for something. */
+export const PortalMessageBodySchema = z.object({
+  body: messageBody,
+  kind: z.enum(['message', 'request']).optional().default('message'),
+  project_id: z.string().uuid().nullable().optional(),
+}).strict();
+export type PortalMessageBody = z.infer<typeof PortalMessageBodySchema>;
+
+/** POST /api/contacts/[id]/messages — the producer writes to the artist. */
+export const ArtistMessageBodySchema = z.object({
+  body: messageBody,
+  /** false keeps the message in the portal only (no email fallback). */
+  email: z.boolean().optional().default(true),
+}).strict();
+export type ArtistMessageBody = z.infer<typeof ArtistMessageBodySchema>;
+
+/** PATCH /api/contacts/[id]/messages/[messageId] — the producer moves a request. */
+export const ArtistRequestPatchBodySchema = z.object({
+  request_status: z.enum(['open', 'done', 'declined']),
+}).strict();
+export type ArtistRequestPatchBody = z.infer<typeof ArtistRequestPatchBodySchema>;
+
+/** POST /api/portal/[token]/sign-in — ask for a link (no code) or redeem one. */
+export const PortalSignInBodySchema = z.object({
+  code: z.string().min(10).max(600).optional(),
+}).strict();
+export type PortalSignInBody = z.infer<typeof PortalSignInBodySchema>;
+
+/** PUT /api/tracks/[id]/beats — the beats a song is built on, main beat first (mig 132). */
+export const SongBeatsBodySchema = z.object({
+  beat_ids: z.array(z.string().uuid()).max(12, 'A song can be built on at most 12 beats'),
+}).strict().refine((b) => new Set(b.beat_ids).size === b.beat_ids.length, { message: 'A beat is listed twice' });
+export type SongBeatsBody = z.infer<typeof SongBeatsBodySchema>;

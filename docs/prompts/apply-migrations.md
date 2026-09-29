@@ -9,7 +9,11 @@ Two ways to use this file:
 - **Do it yourself.** Follow the same steps by hand; the "Without psql"
   section is the Supabase SQL editor route.
 
-As of 2026-09-29 nothing is pending: 112–129 were applied with the SQL-editor bundle. Use this runbook for the next migrations (130 onwards): rebuild the bundle with only the new numbers.
+As of 2026-09-29, 112–129 are applied (SQL-editor bundle). **Pending: 130–132**
+(phase 3); `supabase/apply/pending.sql` holds exactly those, plus the verify
+table (which lists 112–132, so 130–132 should read `applied` after the run).
+None of them rewrites existing data except 132's backfill, which only inserts
+`song_beats` rows copied from `tracks.beat_track_id`.
 `supabase/MIGRATIONS.md` is
 the ledger; if it disagrees with this file, the ledger wins.
 
@@ -133,6 +137,9 @@ has been ruled out.
 | 127 | `project_assets` | — | yes (Files hides itself; uploads 503) | drop the table (the stored files stay in R2 under `project-assets/`) |
 | 128 | `project_comments.contact_id` | — | yes (portal comments 503) | drop the column |
 | 129 | `artist_portals.auto_digest` | — | yes (the cron skips) | drop the column |
+| 130 | `artist_messages` | — | yes (Messages hides itself; sends 503) | drop the table |
+| 131 | `artist_portals.require_sign_in`, `sign_in_sent_at` | — | yes (sign-in cannot be switched on) | drop the columns |
+| 132 | `song_beats` | one row per song with a main beat | yes (one beat per song; a second 503s) | drop the table (`beat_track_id` is untouched) |
 
 Order matters only in one place: 122–126 need `public.is_producer()` from
 119, and 128 needs 125's portals to be useful. Running the full set in number

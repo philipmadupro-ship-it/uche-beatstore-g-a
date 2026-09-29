@@ -18,6 +18,7 @@ import {
   Send, MailOpen, MousePointerClick, ShoppingBag, StickyNote,
   GitBranch, Play, Heart, Clock, Loader2, Plus,
   Link2, ListPlus, DoorOpen, Download, CircleCheck, BellRing, FileDown, MessageSquare,
+  MessageCircle, HandHelping,
 } from 'lucide-react';
 import type { ContactActivity, EngagementSummary, ActivityKind } from '@/lib/contacts/activity';
 import { scoreLead, TIER_META } from '@/lib/contacts/scoring';
@@ -49,6 +50,10 @@ const KIND_META: Record<ActivityKind, { icon: React.ComponentType<{ size?: numbe
   artist_notified:  { icon: BellRing,    tint: 'rgba(255,255,255,0.7)', ring: 'rgba(255,255,255,0.25)' },
   file_downloaded:  { icon: FileDown,    tint: '#6DC6A4', ring: 'rgba(109,198,164,0.25)' },
   portal_comment:   { icon: MessageSquare, tint: '#c8a47a', ring: 'rgba(200,164,122,0.25)' },
+  artist_message:   { icon: MessageCircle, tint: '#c8a47a', ring: 'rgba(200,164,122,0.25)' },
+  artist_request:   { icon: HandHelping,   tint: '#c8a47a', ring: 'rgba(200,164,122,0.25)' },
+  artist_request_resolved: { icon: CircleCheck, tint: 'rgba(255,255,255,0.7)', ring: 'rgba(255,255,255,0.25)' },
+  producer_message: { icon: Send,          tint: 'rgba(255,255,255,0.7)', ring: 'rgba(255,255,255,0.25)' },
 };
 
 function relativeTime(iso: string): string {

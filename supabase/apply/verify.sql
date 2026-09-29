@@ -19,6 +19,9 @@ FROM (VALUES
   ('126_project_shares_contact',     EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'project_shares' AND column_name = 'contact_id')),
   ('127_project_assets',             to_regclass('public.project_assets') IS NOT NULL),
   ('128_portal_comments',            EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'project_comments' AND column_name = 'contact_id')),
-  ('129_artist_portal_auto_digest',  EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'artist_portals' AND column_name = 'auto_digest'))
+  ('129_artist_portal_auto_digest',  EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'artist_portals' AND column_name = 'auto_digest')),
+  ('130_artist_messages',            to_regclass('public.artist_messages') IS NOT NULL),
+  ('131_portal_sign_in',             EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'artist_portals' AND column_name = 'require_sign_in')),
+  ('132_song_beats',                 to_regclass('public.song_beats') IS NOT NULL)
 ) AS m(migration, ok)
 ORDER BY m.migration;

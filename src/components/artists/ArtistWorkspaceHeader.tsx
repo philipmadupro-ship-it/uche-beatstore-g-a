@@ -47,6 +47,26 @@ export function ArtistWorkspaceHeader({
     }
   };
 
+  const setRequireSignIn = async (on: boolean) => {
+    setBusy(true);
+    try {
+      await jsonOrThrow(await fetch(`/api/contacts/${contactId}/portal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'settings', require_sign_in: on }),
+      }));
+      toast.success(
+        on ? 'Email sign-in on' : 'Email sign-in off',
+        on ? `The link now asks ${contactName} to confirm their email first. A forwarded link opens nothing.` : 'The link opens the portal on its own again.',
+      );
+      onChanged();
+    } catch (err) {
+      toast.error('Could not change sign-in', err instanceof Error ? err.message : 'Try again');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const portalAction = async (action: 'create' | 'revoke' | 'reissue') => {
     setBusy(true);
     try {
@@ -111,6 +131,7 @@ export function ArtistWorkspaceHeader({
         {portal?.revoked_at && 'Portal revoked'}
         {live && (portal.last_viewed_at ? `Portal live · opened ${relativeDays(portal.last_viewed_at)}` : 'Portal live · not opened yet')}
         {live && portal.auto_digest && <span className="text-white/40"> · daily digest</span>}
+        {live && portal.require_sign_in && <span className="text-white/40"> · email sign-in</span>}
       </p>
 
       {(totals.plays > 0 || totals.downloads > 0) && (
@@ -181,6 +202,14 @@ export function ArtistWorkspaceHeader({
                   checked: !!portal?.auto_digest,
                   hidden: !live,
                   onSelect: () => setAutoDigest(!portal?.auto_digest),
+                },
+                {
+                  id: 'require-sign-in',
+                  label: 'Require email sign-in',
+                  hint: 'A forwarded link opens nothing',
+                  checked: !!portal?.require_sign_in,
+                  hidden: !live,
+                  onSelect: () => setRequireSignIn(!portal?.require_sign_in),
                 },
               ],
             },

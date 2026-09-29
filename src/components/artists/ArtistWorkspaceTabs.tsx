@@ -3,7 +3,7 @@
 /**
  * The artist workspace — /contacts/[id] in workspace mode.
  *
- *   Overview │ Projects │ Beats │ Songs │ Files │ Activity │ Notes
+ *   Overview │ Projects │ Beats │ Songs │ Files │ Messages │ Activity │ Notes
  *
  * Tabs are URL-addressable (?tab=beats). They read from one
  * /api/contacts/[id]/workspace payload; every write goes to its own route and
@@ -25,12 +25,13 @@ import { ENGAGEMENT_LABEL } from '@/lib/contacts/track-engagement';
 import type { WorkspaceBeat, WorkspaceProject, WorkspaceSong } from '@/lib/artists/workspace-load';
 import { jsonOrThrow, type ReadyWorkspace } from './types';
 import { ArtistCommentsPanel } from './ArtistCommentsPanel';
+import { ArtistMessagesPanel } from './ArtistMessagesPanel';
 
-export const WORKSPACE_TABS = ['overview', 'projects', 'beats', 'songs', 'files', 'activity', 'notes'] as const;
+export const WORKSPACE_TABS = ['overview', 'projects', 'beats', 'songs', 'files', 'messages', 'activity', 'notes'] as const;
 export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
 
 const TAB_LABEL: Record<WorkspaceTab, string> = {
-  overview: 'Overview', projects: 'Projects', beats: 'Beats', songs: 'Songs', files: 'Files', activity: 'Activity', notes: 'Notes',
+  overview: 'Overview', projects: 'Projects', beats: 'Beats', songs: 'Songs', files: 'Files', messages: 'Messages', activity: 'Activity', notes: 'Notes',
 };
 
 const LABEL = 'text-[10px] font-mono uppercase tracking-[0.2em] text-white/40';
@@ -92,6 +93,11 @@ export function ArtistWorkspaceTabs({
             {t === 'beats' && workspace.beats.length > 0 && <span className="ml-1.5 text-white/30">{workspace.beats.length}</span>}
             {t === 'songs' && workspace.songs.length > 0 && <span className="ml-1.5 text-white/30">{workspace.songs.length}</span>}
             {t === 'files' && workspace.files.length > 0 && <span className="ml-1.5 text-white/30">{workspace.files.length}</span>}
+            {t === 'messages' && (workspace.messages?.unread ?? 0) + (workspace.messages?.openRequests ?? 0) > 0 && (
+              <span className="ml-1.5 rounded-full bg-white/[0.14] px-1.5 text-[10px] text-white" aria-label={`${workspace.messages.unread} unread, ${workspace.messages.openRequests} open requests`}>
+                {workspace.messages.unread + workspace.messages.openRequests}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -102,6 +108,7 @@ export function ArtistWorkspaceTabs({
         {tab === 'beats' && <BeatsTab contactId={contactId} beats={workspace.beats} onChanged={onChanged} />}
         {tab === 'songs' && <SongsTab songs={workspace.songs} beats={workspace.beats} onChanged={onChanged} />}
         {tab === 'files' && <FilesTab contactName={contactName} workspace={workspace} onChanged={onChanged} />}
+        {tab === 'messages' && <ArtistMessagesPanel contactId={contactId} contactName={contactName} onCountsChanged={onChanged} />}
         {tab === 'activity' && (
           <>
             <ArtistCommentsPanel
@@ -129,8 +136,24 @@ function OverviewTab({ workspace, contactName, tasks, onOpen }: {
   const moving = workspace.beats.filter((b) => b.decision && MOVING_DECISIONS.includes(b.decision));
   const active = workspace.projects.filter((p) => p.status !== 'archived');
   const c = workspace.counts;
+  const msgs = workspace.messages;
   return (
     <div className="space-y-8">
+      {msgs && (msgs.openRequests > 0 || msgs.unread > 0) && (
+        <button
+          type="button"
+          onClick={() => onOpen('messages')}
+          className="flex w-full items-center justify-between rounded-xl border border-white/20 bg-white/[0.06] px-4 py-3 text-left transition-colors hover:bg-white/[0.10]"
+        >
+          <span className="text-[13px] text-white/80">
+            {[
+              msgs.openRequests ? `${msgs.openRequests} open request${msgs.openRequests === 1 ? '' : 's'}` : null,
+              msgs.unread ? `${msgs.unread} unread message${msgs.unread === 1 ? '' : 's'}` : null,
+            ].filter(Boolean).join(' · ')} from {contactName}
+          </span>
+          <span className="text-[11px] text-white/50">Open messages</span>
+        </button>
+      )}
       <section aria-labelledby="ws-moving">
         <div className="mb-3 flex items-center justify-between">
           <h2 id="ws-moving" className={LABEL}>What’s moving</h2>
@@ -572,7 +595,7 @@ function SongsTab({ songs, beats, onChanged }: { songs: WorkspaceSong[]; beats: 
           <div className="min-w-0 flex-1">
             <Link href={`/library/${s.track.id}`} className="block truncate text-[13px] text-white/80 hover:text-white">{s.track.title}</Link>
             <p className="truncate text-[11px] text-white/40">
-              {s.beat ? `Built on ${s.beat.title}` : 'Beat not set'}
+              {s.beat ? `Built on ${s.beat.title}${s.beats.length > 1 ? ` + ${s.beats.length - 1} more` : ''}` : 'Beat not set'}
               {s.projects[0] ? ` · ${s.projects[0].name}` : ''}
               {s.track.status ? ` · ${s.track.status.replace('_', ' ')}` : ''}
             </p>
