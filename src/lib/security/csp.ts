@@ -54,8 +54,10 @@ export function buildCsp(nonce: string, framable = false): string {
     `media-src 'self' blob: https:`,
     `font-src 'self' data:`,
     `connect-src 'self' https: wss:`,
-    // Audio analysis runs in blob: workers (dashboard). Explicit so workers
-    // don't fall back to script-src, which has no blob:.
+    // Essentia analysis + chord workers are same-origin classic scripts under
+    // /_next/static/media that importScripts the UMD builds (essentia.js,
+    // tfjs + its WASM backend) and fetch the basic-pitch model from 'self'.
+    // blob: stays for any worker built from a Blob; nothing third-party.
     `worker-src 'self' blob:`,
     `frame-src https://js.stripe.com https://*.js.stripe.com https://*.stripe.com https://hooks.stripe.com`,
     frameAncestors,
