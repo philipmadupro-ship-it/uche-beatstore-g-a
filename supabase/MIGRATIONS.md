@@ -99,7 +99,7 @@ Update this table when a run is confirmed.
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 120 (next new migration = 121). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 121 (next new migration = 122). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch
@@ -113,6 +113,8 @@ renumber the *next* new migration past 106, don't touch the existing pairs).
 The robust end state is a deploy step that runs `npm run db:migrate` against the
 target project (with `SUPABASE_DB_URL` as a CI secret) immediately before the
 app deploy, so schema and code ship together and drift is impossible.
+
+- `121_share_full_playback.sql` — adds `full_playback boolean NOT NULL DEFAULT true` to `share_links` and `project_shares`: per-share full track vs 75 s preview (`lib/share/playback.ts`). **Safe to merge before applying**: the code reads a missing column as full, so every share plays in full until it is applied; only saving the "1:15 preview" choice fails (409, with a message naming this migration). Idempotent.
 
 - `116_notifications_realtime.sql` — adds `public.notifications` to the
   `supabase_realtime` publication and sets `REPLICA IDENTITY FULL`, mirroring

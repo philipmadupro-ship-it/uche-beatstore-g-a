@@ -1,6 +1,11 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 
-const GRANT_TTL_SECONDS = 15 * 60;
+// Long enough for a writing session on a FULL track. Shares play the whole
+// beat by default (lib/share/playback), and a player that seeks or loops
+// fetches new byte ranges from this same URL, so a 15-minute grant cut a
+// rapper off mid-session. Revocation and expiry do not depend on this TTL:
+// every media request re-resolves the share and runs the lifecycle gate.
+const GRANT_TTL_SECONDS = 4 * 60 * 60;
 
 function signingSecret(): string {
   const secret = process.env.SHARE_MEDIA_TOKEN_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;

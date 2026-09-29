@@ -8930,6 +8930,36 @@ Three gaps found while auditing the CRM for the artist-workspace plan. No schema
 
 Tests: `lib/crm/project-send.test.ts`, `lib/notifications/share-comment.test.ts`, new `invite/route.test.ts` (5) and `share/[token]/comments/route.test.ts` (3).
 
+## 2026-09-29 - Detect chords → MIDI in the track drawer
+
+The chord detector (#33 loader fix, AUDIO-06 basic-pitch blend) had no caller. The track details drawer (the Library's right-hand panel) now has **Detect chords** in its Asset Intelligence section (`components/tracks/drawer/TrackChordsPanel.tsx`).
+
+- Runs `detectChordsFromUrl`, shows a busy state (spinner gated on `useReducedMotion`), renders the timeline without `N` rows, and POSTs `{ chords }` to `/api/tracks/[id]/analyze` (the existing chord-only branch). A failed save is a warning toast; the MIDI download still works from the in-memory result. An empty / all-`N` result says "No confident chords found" and offers no download.
+- Saved chords: migration 078 (`tracks.chords`) is inside the applied baseline. The library list's column list doesn't include `chords` and this doesn't add it (up to 2000 entries per row, for every track in the vault); the panel fetches `GET /api/tracks/[id]` instead when the row it was handed lacks the key.
+- `lib/audio/chord-midi.ts`: `chordsToMidiNotes` (each chord ends at the next; the last at the track duration, or one bar if unknown; `N` and unrecognised labels are rests; root-position triads with roots G3–F#4) and `writeMidiFile` (format 0, track name, tempo, 4/4, note-offs before note-ons at a shared tick so a common tone re-strikes). No MIDI dependency added.
+- Tests: `chord-midi.test.ts` parses the written bytes back (header, track length, tempo bytes, VLQ, deltas, C–Am–F–G round trip, empty, all-`N`, single chord); `TrackChordsPanel.test.tsx` (jsdom) covers busy state, timeline, save payload, download bytes/filename, empty result, failed save, and loading saved chords.
+
+
+## 2026-09-29 - Every share option honoured on every share page (SHARE-01)
+
+Production report: a project shared with a friend, downloads on. The friend could not download, and every beat stopped at 1:15.
+
+Root causes, each confirmed in a browser against the old code (`e2e/share-options.spec.ts`):
+- **No downloads anywhere.** `recipient_kind` is `NOT NULL DEFAULT 'client'`, so every share renders one of four variants. None had a download control. The working button lived in a default layout no share reached.
+- **Silent Play in the project page's producer / rapper / friend variants.** Only the client variant mounted the player container. `useWaveSurfer` returned early, and `play()` was called 0 times after picking a track.
+- **1:15 everywhere.** The share stream preferred `tracks.preview_url`. PR #17 (2026-09-27) generated a 75 s clip for every beat for the storefront, so from then on every share was clipped. Nothing on the share controlled it.
+- A failed download called `setError`, which replaces the whole page.
+
+Changes:
+- `components/share/ShareActions` (downloads, playback label, collaboration entry) is rendered by every variant through a new `actions` slot. All variants mount the player container. `useWaveSurfer` takes `resetKey` so the player rebinds when a commenter/editor switches to the collaboration view and back.
+- Per-share playback (`full_playback`, migration 121): full track by default, or the 1:15 preview. `lib/share/playback.ts` holds the rules, `lib/share/playback-url.ts` the signed URL. Full never hands out the CDN clip. Create/edit routes (`/api/share`, `/api/share/[token]`, the three `/shares` create routes, both project-share PATCH routes, `/api/links`) accept it through `writeWithPlayback`, and it is set in ContentShareModal, QuickShareModal, SendBeatModal and the `/links` menu and popup via `components/share/PlaybackChoice`.
+- Share media grants: 15 min → 4 h, so a long session on a full track keeps playing after seeks. Revocation and expiry are still checked per request.
+- Downloads save under the server's Content-Disposition name (`lib/share/download-filename.ts`), so WAV masters are no longer saved as .mp3. Errors are toasts.
+
+Not changed: the email route from earlier in this conversation (`lib/share/email-share.ts`) was re-checked. It requires `share_links.user_id` = producer, and `/api/share` sets it on insert.
+
+Tests: `lib/share/playback.test.ts` (15), `lib/share/download-filename.test.ts` (6), grant TTL cases, and `e2e/share-options.spec.ts` (28, all fail on the old code).
+
 ## 2026-09-29 - Store Editor loads the whole catalogue, not the newest 100 (STORE-02)
 
 **Reproduced** with 250 stubbed beats behind `/api/tracks`'s real paging contract, the 30 listed ones being the oldest (all on API page three). On `/store-editor` → Beat Listing, the header said "30 listed · 250 total" and the list showed none of them. They appeared only after pressing "Load next 100 beats" twice.

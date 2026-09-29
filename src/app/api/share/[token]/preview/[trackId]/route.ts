@@ -4,6 +4,7 @@ import { isSupabaseConfigured } from '@/lib/db';
 import { streamAudioPreviewSource } from '@/lib/audio/stream-source';
 import { verifyShareMediaGrant } from '@/lib/share-media-token';
 import { errorMessage } from '@/lib/errors';
+import { isFullPlayback, sharePlaybackSource } from '@/lib/share/playback';
 import {
   lockableOf,
   resolveShareToken,
@@ -45,7 +46,10 @@ export async function GET(
       .select('preview_url, audio_url')
       .eq('id', trackId)
       .maybeSingle();
-    const source = track?.preview_url || track?.audio_url;
+    // Full track unless the producer limited this share to the 75 s clip
+    // (lib/share/playback). A purchase token is always full: it was paid for.
+    const full = resolved.kind === 'paid_access' || isFullPlayback(resolved.row as { full_playback?: boolean | null });
+    const source = track ? sharePlaybackSource(track, full) : null;
     if (!source) {
       return NextResponse.json({ error: 'Preview unavailable' }, { status: 404 });
     }

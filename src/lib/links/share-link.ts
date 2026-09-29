@@ -33,6 +33,8 @@ export interface ShareLinkFacts extends ShareLinkRef {
   expires_at: string | null;
   revoked_at: string | null;
   allow_downloads: boolean;
+  /** Full track (default) or the 75 s preview only. Absent = full (mig 121). */
+  full_playback?: boolean;
   password_protected: boolean;
 }
 
@@ -69,6 +71,8 @@ export function isShareLinkExpired(
 export interface ShareLinkPatch {
   title?: string | null;
   allow_downloads?: boolean;
+  /** Both tables accept it: full track (true) or the 75 s preview (false). */
+  full_playback?: boolean;
   expires_at?: string | null;
   /** Token shares set expiry as a day count; `0` means never. */
   expires_days?: number;
@@ -89,7 +93,7 @@ export function toSharePatchBody(
 ): Record<string, unknown> {
   const body: Record<string, unknown> =
     link.source === 'project_shares'
-      ? { label: patch.title, allow_downloads: patch.allow_downloads }
+      ? { label: patch.title, allow_downloads: patch.allow_downloads, full_playback: patch.full_playback }
       : { ...patch };
   for (const key of Object.keys(body)) {
     if (body[key] === undefined) delete body[key];
@@ -113,6 +117,7 @@ export function fromSharePatchResponse<T extends ShareLinkFacts>(
   return {
     title: (share.label as string | null) ?? link.content_title ?? null,
     allow_downloads: share.allow_downloads as boolean,
+    ...(typeof share.full_playback === 'boolean' ? { full_playback: share.full_playback } : {}),
     expires_at: (share.expires_at as string | null) ?? null,
     revoked_at: (share.revoked_at as string | null) ?? null,
   } as Partial<T>;

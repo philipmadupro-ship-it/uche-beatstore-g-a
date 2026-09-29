@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
 import { SkipForward, SkipBack } from 'lucide-react';
 import { ShareWaveformVinyl } from '@/components/share/ShareWaveformVinyl';
 
@@ -33,9 +35,11 @@ interface Props {
   onPlay: (track: Track) => void;
   playingId?: string | null;
   isPlaying?: boolean;
+  /** Share options the producer set (downloads, playback, collaboration). ShareActions. */
+  actions?: ReactNode;
 }
 
-export function FriendShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying }: Props) {
+export function FriendShareVariant({ project, tracks, creator, onPlay, playingId, isPlaying, actions }: Props) {
   const currentTrack = tracks.find((t) => t.id === playingId) || tracks[0];
   const displayName = creator?.display_name || project.name;
 
@@ -156,6 +160,7 @@ export function FriendShareVariant({ project, tracks, creator, onPlay, playingId
             {project.description}
           </p>
         )}
+        {actions}
       </div>
     </div>
   );

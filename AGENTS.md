@@ -26,7 +26,7 @@ The producer's workspace. Surfaces:
 | Surface | Purpose |
 |---|---|
 | `/library` | Vault. Flat list of every track. List / Grid / Portfolio views. Filter, sort, batch-select, batch-delete. |
-| `/library/[id]` | Single-track drawer: metadata, BPM/key analysis, tags, rating, waveform peaks, version history, comments. |
+| `/library/[id]` | Single-track drawer: metadata, BPM/key analysis, **chord detection with MIDI download**, tags, rating, waveform peaks, version history, comments. |
 | `/projects` + `/projects/[id]` | Active production. Group tracks into projects, set BPM/key targets, add stems, add to public storefront as a bundle. |
 | `/playlists` + `/playlists/[id]` | Curated sets for outreach — drag tracks into a playlist, share it, optionally feature on `/store`. |
 | `/studio` | Sketchpad: groove loops, jam, record. |
@@ -71,6 +71,13 @@ Tokenized link the producer DMs to an artist. The page renders one of four **var
 
 Each variant lives in `src/components/share/variants/*` and consumes the same `/api/projects/share/[token]` shape.
 
+Whatever the variant, the options the producer set are honoured on the page:
+- **Playback** — **full track** (the default) or a **1:15 preview**, chosen per share. Rappers write to the whole beat; the 75 s clip is the storefront's, not the share's.
+- **Downloads** — when allowed, every track has a Download button that saves the original file; when not, the page says downloads are off.
+- **Password / expiry / revocation** — enforced on the page, the stream and the download.
+- **Role** — commenters and editors get a "Leave feedback" / "Comment & edit" entry into the collaboration view (region-pinned comments, the editor); viewers do not.
+- **For sale** — Buy buttons on the client variant only when `sales_enabled`.
+
 ---
 
 ## Core flows
@@ -81,6 +88,9 @@ Drag/drop file in `/library` → R2 multipart upload (`/api/upload/{init,part,co
 The filename is read as metadata, not just a title: `Night Shift 140 Fm.wav` becomes the track *Night Shift* at 140 BPM in F minor. What the producer wrote wins over what the analyser detected, because a detector regularly halves a tempo or names the relative major. A name that says nothing is left alone, and the tray shows what was read so a wrong name is visible immediately. A name that says two things — two tempos, two keys — or whose "key" could just as well be a word (`BB gun`) is not guessed at: nothing from it is applied, the analyser's reading stands, and the tray offers each reading as a one-click choice, marking the one the analyser heard too. When a clear filename and the analyser disagree (140 in the name, 97 heard), the name still wins, but the tray says so and offers the analysed value in one click. Half- or double-time and relative major/minor are not treated as disagreements, since those are the analyser's usual slips. A value the producer sets there is never overwritten by the background analysis that finishes afterwards.
 
 Uploads run in the persistent **Uploads tray**, which is mounted globally and survives navigation. Once a file finishes, its row **names and tags the track it just created, in the tray** — the moment the producer still knows what the file is. Without that, a beat lands in the library titled `beat_final_v3_140.wav` and fixing it means finding it again later. A row that finished without a track id (a `/complete` that returned nothing) shows no editor rather than one bound to nothing.
+
+### Producer: get a track's chords as MIDI
+Open a track in `/library` → the details drawer's **Asset Intelligence** section → **Detect chords**. Detection runs in the browser (usually well under a minute for a full track), then the drawer shows a compact timeline (`0:00 C · 0:04 Am · …`) and saves it on the track, so reopening the drawer shows it without re-running. **MIDI** downloads `<Title> - chords.mid`: one triad per chord around middle C, at the track's BPM (120 when unknown), so it lines up with the audio when dropped into a DAW at that tempo. Stretches with no confident chord are rests. A track where nothing confident is found says so rather than offering an empty file.
 
 ### Producer: list a track for sale
 `/store-editor` → Beat Listing section → toggle the track on (writes `tracks.store_listed=true`) → optionally set per-track lease / exclusive prices in `/library/[id]`. If no per-track override, the public store falls back to `creator_profiles.license_{lease,exclusive}_price_usd`.

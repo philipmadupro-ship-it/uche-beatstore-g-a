@@ -6,6 +6,7 @@ import { isSupabaseConfigured, insert, query, requireRowOwnership } from '@/lib/
 import { readBody } from '@/lib/validate';
 import { ProjectShareCreateBodySchema } from '@/lib/contracts';
 import { errorMessage } from '@/lib/errors';
+import { ownerShareRow, writeWithPlayback } from '@/lib/share/playback';
 import { createLogger } from '@/lib/log';
 
 const log = createLogger('api.projects.shares');
@@ -38,11 +39,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       if (!owner.ok) return owner.res;
       const { data, error } = await owner.admin
         .from('project_shares')
-        .select('id, project_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, revoked_at, recipient_kind, sales_enabled')
+        .select('*')
         .eq('project_id', id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return NextResponse.json({ shares: data ?? [] });
+      // Owner listing: `*` keeps working before mig 121; the hash never leaves.
+      return NextResponse.json({ shares: (data ?? []).map((row) => ownerShareRow(row as Record<string, unknown>)) });
     }
 
     const shares = query<LocalProjectShareRow>('project_shares', (s) => s.project_id === id)
@@ -69,6 +71,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Default off — a share is closed-form unless the producer
   // explicitly flips the For-sale toggle.
   const salesEnabled = body.sales_enabled === true;
+  // Full track unless the producer explicitly chose the 75 s preview (mig 121).
+  const fullPlayback = body.full_playback === false ? false : undefined;
 
   const token = newShareToken();
   const password_hash = password ? await bcrypt.hash(password, 10) : null;
@@ -84,25 +88,31 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const owner = await requireRowOwnership('projects', id);
       if (!owner.ok) return owner.res;
 
-      const { data, error } = await owner.admin
-        .from('project_shares')
-        .insert({
-          project_id: id,
-          token,
-          role,
-          allow_downloads: allowDownloads,
-          password_hash,
-          expires_at,
-          invited_email: invitedEmail,
-          label,
-          created_by: owner.userId,
-          recipient_kind: recipientKind,
-          sales_enabled: salesEnabled,
-        })
-        .select('id, project_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, recipient_kind, sales_enabled')
-        .single();
+      const { data, error } = await writeWithPlayback(fullPlayback, (fields) =>
+        owner.admin
+          .from('project_shares')
+          .insert({
+            project_id: id,
+            token,
+            role,
+            allow_downloads: allowDownloads,
+            password_hash,
+            expires_at,
+            invited_email: invitedEmail,
+            label,
+            created_by: owner.userId,
+            recipient_kind: recipientKind,
+            sales_enabled: salesEnabled,
+            ...fields,
+          })
+          .select('id, project_id, token, role, allow_downloads, expires_at, invited_email, label, plays, created_at, recipient_kind, sales_enabled')
+          .single(),
+      );
+      if (error?.code === 'PLAYBACK_MIGRATION') {
+        return NextResponse.json({ error: error.message }, { status: 409 });
+      }
       if (error) throw error;
-      return NextResponse.json({ share: data, url });
+      return NextResponse.json({ share: { ...data, full_playback: fullPlayback !== false }, url });
     }
 
     const share = insert('project_shares', {
@@ -118,6 +128,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       created_by: null,
       recipient_kind: recipientKind,
       sales_enabled: salesEnabled,
+      full_playback: fullPlayback !== false,
     });
     return NextResponse.json({ share, url });
   } catch (error) {

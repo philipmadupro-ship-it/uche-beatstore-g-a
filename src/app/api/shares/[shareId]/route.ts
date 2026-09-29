@@ -4,6 +4,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server';
 import { errorMessage } from '@/lib/errors';
 import { ProjectSharePatchBodySchema } from '@/lib/contracts';
 import { readBody } from '@/lib/validate';
+import { writeWithPlayback } from '@/lib/share/playback';
 
 export const runtime = 'nodejs';
 
@@ -76,22 +77,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ sh
   if (typeof body.label === 'string') patch.label = body.label.trim() || null;
   if (typeof body.invited_email === 'string') patch.invited_email = body.invited_email.trim() || null;
   if (body.revoke === true) patch.revoked_at = new Date().toISOString();
+  // Mig 121: full track (true) or the 75 s preview (false). Goes through
+  // writeWithPlayback so an unapplied migration refuses "preview" loudly.
+  const fullPlayback = typeof body.full_playback === 'boolean' ? body.full_playback : undefined;
 
-  if (Object.keys(patch).length === 0) {
+  if (Object.keys(patch).length === 0 && fullPlayback === undefined) {
     return NextResponse.json({ error: 'No editable fields in body' }, { status: 400 });
   }
 
   try {
     const gate = await requireShareOwner(shareId);
     if (!gate.ok) return gate.res;
-    const { data, error } = await gate.admin
-      .from('project_shares')
-      .update(patch)
-      .eq('id', shareId)
-      .select('id, token, role, allow_downloads, expires_at, invited_email, label, plays, revoked_at, created_at')
-      .single();
+    const { data, error } = await writeWithPlayback(fullPlayback, (fields) =>
+      gate.admin
+        .from('project_shares')
+        .update({ ...patch, ...fields })
+        .eq('id', shareId)
+        .select('id, token, role, allow_downloads, expires_at, invited_email, label, plays, revoked_at, created_at')
+        .single(),
+    );
+    if (error?.code === 'PLAYBACK_MIGRATION') {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     if (error) throw error;
-    return NextResponse.json({ share: data });
+    return NextResponse.json({ share: { ...data, ...(fullPlayback === undefined ? {} : { full_playback: fullPlayback }) } });
   } catch (error) {
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }

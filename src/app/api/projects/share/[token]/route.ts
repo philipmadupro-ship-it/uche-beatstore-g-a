@@ -9,8 +9,9 @@ import {
 } from '@/lib/share/token-access';
 import { isSupabaseConfigured, getAll, query } from '@/lib/local-store';
 import { createServiceClient } from '@/lib/auth/ownership';
-import { signedSharePeaksUrl, signedSharePreviewUrl } from '@/lib/share-media-token';
-import { cdnAudioSrc } from '@/lib/audio/cdn';
+import { signedSharePeaksUrl } from '@/lib/share-media-token';
+import { isFullPlayback } from '@/lib/share/playback';
+import { sharePlaybackUrl } from '@/lib/share/playback-url';
 import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 export const runtime = 'nodejs';
@@ -38,6 +39,8 @@ interface ProjectShareRow {
   recipient_kind?: RecipientKind | null;
   sales_enabled?: boolean | null;
   content_type?: ShareContentType | null;
+  /** Mig 121. Absent / null = full track; false = 75 s preview only. */
+  full_playback?: boolean | null;
 }
 
 interface ProjectAccessRow {
@@ -175,7 +178,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       const localFailure = await shareAccessFailure(share, { password: submittedPassword });
       if (localFailure) return shareGateResponse(localFailure);
       if (!share.project_id) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-      const tracks = resolveLocalTracks(share.project_id).map((track) => publicShareTrack(track, token));
+      const tracks = resolveLocalTracks(share.project_id).map((track) => publicShareTrack(track, token, isFullPlayback(share)));
       return NextResponse.json({
         share: redactShare(share),
         project: resolveLocalProject(share.project_id),
@@ -211,6 +214,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         recipient_kind: 'client',
         sales_enabled: false,
         content_type: 'project',
+        // Paid for: the whole bundle, never the preview.
+        full_playback: true,
       };
     }
     if (!share) return shareNotFoundResponse();
@@ -255,7 +260,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         tracks = junctionRows
           .map((j) => byId.get(j.track_id))
           .filter((track): track is TrackRow => Boolean(track))
-          .map((track) => publicShareTrack(track, token));
+          .map((track) => publicShareTrack(track, token, isFullPlayback(share)));
       }
       const creator = playlistRow?.user_id ? await fetchCreator(playlistRow.user_id) : null;
       const playlistPublic = redactUserId(playlistRow);
@@ -277,7 +282,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       const trackId = share.track_id;
       const { data: trackRow } = await admin.from('tracks').select(`${TRACK_FIELDS}, user_id`).eq('id', trackId).maybeSingle();
       const track = trackRow as TrackRow | null;
-      const tracks = track ? [publicShareTrack(track, token)] : [];
+      const tracks = track ? [publicShareTrack(track, token, isFullPlayback(share))] : [];
       const stems = track
         ? redactStems((await admin.from('stems').select('track_id, status, vocals_url, drums_url, bass_url, other_url').eq('track_id', trackId)).data, share.allow_downloads)
         : [];
@@ -325,7 +330,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const tracks = trackIds.length
       ? junctionRows.map((j) => byId.get(j.track_id)).filter((track): track is TrackRow => Boolean(track))
       : [];
-    const safeTracks = tracks.map((track) => publicShareTrack(track, token));
+    const safeTracks = tracks.map((track) => publicShareTrack(track, token, isFullPlayback(share)));
 
     const projectPublic = redactUserId(projectRow);
 
@@ -442,24 +447,22 @@ function redactShare(s: ProjectShareRow) {
     label: s.label,
     recipient_kind: s.recipient_kind ?? 'client',
     sales_enabled: s.sales_enabled === true,
+    // Full track unless the producer chose the 75 s preview (mig 121).
+    full_playback: isFullPlayback(s),
   };
 }
 
-function publicShareTrack(track: TrackRow, token: string) {
+function publicShareTrack(track: TrackRow, token: string, full: boolean) {
   const { user_id: _userId, audio_url: _audioUrl, preview_url, ...rest } = track;
   void _userId;
   void _audioUrl;
-  // Stream the public preview clip straight from R2 (fast + edge-cached +
-  // prefetchable) when it exists; fall back to the signed proxy for tracks
-  // whose preview hasn't been generated yet. The preview is the truncated,
-  // public-by-design clip — the full master is never exposed either way.
-  const direct = typeof preview_url === 'string' && /^https?:\/\//i.test(preview_url)
-    ? cdnAudioSrc(preview_url)
-    : null;
+  // Full track (the default) always goes through the signed grant route; the
+  // master's storage reference never reaches public JSON. A preview-only share
+  // may stream the public 75 s clip straight from the CDN. lib/share/playback.
   return {
     ...rest,
     preview_url: null,
-    audio_url: direct ?? signedSharePreviewUrl(token, track.id),
+    audio_url: sharePlaybackUrl({ id: track.id, preview_url }, token, full),
     peaks_url: track.peaks_url ? signedSharePeaksUrl(token, track.id) : null,
   };
 }

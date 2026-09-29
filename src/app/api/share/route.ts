@@ -6,6 +6,7 @@ import { requireProducer } from '@/lib/auth/ownership';
 import { newShareToken } from '@/lib/share/token-access';
 import bcrypt from 'bcryptjs';
 import { errorMessage } from '@/lib/errors';
+import { writeWithPlayback } from '@/lib/share/playback';
 
 type TrackIdRow = {
   id: string;
@@ -51,7 +52,10 @@ export async function POST(req: NextRequest) {
       expires_days,
       password,
       recipient_kind,
+      full_playback,
     } = body;
+    // Full track unless the producer explicitly chose the 75 s preview.
+    const fullPlayback = full_playback === false ? false : undefined;
 
     if (!track_ids || !Array.isArray(track_ids) || track_ids.length === 0) {
       return NextResponse.json({ error: 'Missing track_ids' }, { status: 400 });
@@ -104,12 +108,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      const { data, error } = await owner.admin
-        .from('share_links')
-        .insert({ ...payload, user_id: owner.userId })
-        .select()
-        .single();
+      const { data, error } = await writeWithPlayback(fullPlayback, (fields) =>
+        owner.admin
+          .from('share_links')
+          .insert({ ...payload, ...fields, user_id: owner.userId })
+          .select()
+          .single(),
+      );
 
+      if (error?.code === 'PLAYBACK_MIGRATION') {
+        return NextResponse.json({ error: error.message }, { status: 409 });
+      }
       if (error) throw error;
       return NextResponse.json({
         url: `${APP_URL}/share/${token}`,
@@ -117,7 +126,7 @@ export async function POST(req: NextRequest) {
         token,
       });
     } else {
-      const data = insert('share_links', payload);
+      const data = insert('share_links', { ...payload, full_playback: fullPlayback !== false });
       return NextResponse.json({
         url: `${APP_URL}/share/${token}`,
         ...data,
