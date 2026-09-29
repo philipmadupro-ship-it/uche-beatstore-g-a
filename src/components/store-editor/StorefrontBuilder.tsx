@@ -85,9 +85,10 @@ export function StorefrontBuilder({
     future: [],
   }));
   const layout = editor.doc;
-  // What /store will actually draw: an untouched theme colour defers to the
-  // profile's, so the canvas must too or it previews a colour buyers never see.
-  const renderTheme = useMemo(() => effectiveStoreTheme(layout.theme, data.creator), [layout.theme, data.creator]);
+  // What the sections draw with — the same resolution /store applies, so the
+  // profile's accent and text colour reach the canvas wherever the Theme
+  // panel left them at the default.
+  const sectionTheme = useMemo(() => effectiveStoreTheme(layout.theme, data.creator), [layout.theme, data.creator]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [breakpoint, setBreakpoint] = useState<StoreBreakpoint>('desktop');
@@ -609,7 +610,7 @@ export function StorefrontBuilder({
                       <SectionRenderer
                         section={section}
                         breakpoint={breakpoint}
-                        theme={renderTheme}
+                        theme={sectionTheme}
                         data={data}
                         editBlocks={section.kind === 'canvas' ? {
                           selectedId: selectedBlockId,

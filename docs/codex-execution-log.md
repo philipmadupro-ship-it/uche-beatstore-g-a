@@ -8994,6 +8994,19 @@ Tests: `route.owner-filter.test.ts` drives the Supabase branch through a query-b
 
 **Not changed** (same pattern, other routes): `api/activity`, `api/events`, `api/tracks/[id]/similar`, `api/tracks/tags`, `api/tracks/tags/bulk`, `api/store` (catalogue, playlists, projects), `api/store/facets`, and the `scopedList` default used by `api/calendar` and `api/smart-playlists`.
 
+## 2026-09-29 - Content sections render on /store (STORE-07)
+
+**Reproduced.** A layout with a `text` and a `canvas` section, injected into the real `/api/store` response: both render in the builder, and neither appears on `/store` at 1440 or 390. `renderStoreSection` in `src/app/store/page.tsx` handled only the built-in kinds and returned `null` for `text` / `image` / `video` / `links` / `canvas`.
+
+**Fix.**
+- `/store` hands content kinds (`isContentSection`) to the builder's own `SectionRenderer` with a new `live` prop and no `editBlocks`. When `live` is set, empty sections render nothing (`hasLiveContent`) instead of the inspector hint, the text section body placeholder is gone, and the CTA and social links are real links (CTA href through `safeLinkHref`; no `javascript:`).
+- The render breakpoint is `renderBreakpointFor(section, viewer)`, not the viewer's breakpoint as-is. The renderer returns null for a hidden breakpoint, and the viewer reads `desktop` until hydration. Visibility stays CSS (`visibilityClasses`).
+- Theme: `effectiveStoreTheme` (`lib/store/appearance.ts`, new) layers the profile's accent and text colour under any Design theme colour left at the default. Both the builder canvas and `/store` use it.
+- CSP: video embeds are YouTube and Vimeo only, rewritten by `lib/store-editor/video-embed.ts` to `youtube-nocookie.com` / `player.vimeo.com`, and those origins are now in `frame-src` (read from the same module). Images are https or site-relative (`safeImageSrc`). The builder applies the same filters, so the preview no longer shows media that production `/store` would block. The inspector field now reads "YouTube or Vimeo link".
+- `links` builds hrefs through `lib/store/social-links.ts`, using the same URL shapes as the hero.
+
+**Tests.** `content-sections.test.ts`, `video-embed.test.ts` (including an assertion that every emitted origin is in `frame-src`), `appearance.test.ts`, `social-links.test.ts`, and three new live-mode cases in `SectionRenderer.test.tsx`. `e2e/store-content-sections.spec.ts` at 1440 and 390 checks the text section (heading, body, CTA link), the canvas block inside its frame, no horizontal overflow, and a phone-only section hidden by CSS. Both e2e cases fail with the old `page.tsx`. `check-store-dynamic.mjs` still passes.
+
 ## 2026-09-29 - Store Editor load/save safety, one storefront appearance rule (STORE-03)
 
 Follow-ups found while writing the STORE-02 spec.
@@ -9004,6 +9017,6 @@ Follow-ups found while writing the STORE-02 spec.
 - **Cache delay is stated, not fixed.** `/api/store` stays `s-maxage=30, stale-while-revalidate=60`. The save toast now says a change is live within about a minute and a half.
 - **`next dev` no longer edits AGENTS.md.** Next 16.3 appends a managed agent-rules block whenever it detects an AI agent; `agentRules: false` in `next.config.ts` turns that off.
 
-Not changed: `/store` still renders only the built-in section kinds. `text` / `image` / `video` / `links` / `canvas` sections added in Design show in the builder and not on the live page.
+Not changed here: `/store` rendering the `text` / `image` / `video` / `links` / `canvas` sections. STORE-07 (#42) did that; a parallel implementation on this branch was reverted in favour of it on merge, and `lib/store/appearance.ts` keeps one `effectiveStoreTheme` for both.
 
 Tests: `initial-load.test.ts` (11), `appearance.test.ts` (10), `e2e/store-editor-load.spec.ts` (2; both fail on the old page). Browser check against `next dev`: a themed layout gives `/store` the theme accent and text, and the producer page the profile text colour and font.

@@ -35,7 +35,7 @@ import {
 } from '@/components/store/types';
 import { appearanceStyle } from '@/lib/store/typography';
 import { sanitizeUrl } from '@/components/store/helpers';
-import { resolveStoreAppearance } from '@/lib/store/appearance';
+import { effectiveStoreTheme, resolveStoreAppearance } from '@/lib/store/appearance';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
@@ -47,6 +47,8 @@ import {
   isFullyHidden, isPinnedSection, normalizeLayout, resolveSection, visibilityClasses,
   type SectionSettings, type StoreSectionKind,
 } from '@/lib/store-editor/layout';
+import { hasLiveContent, isContentSection, renderBreakpointFor } from '@/lib/store-editor/content-sections';
+import { SectionRenderer, type StorefrontData } from '@/components/store-editor/SectionRenderer';
 import { useStoreBreakpoint } from '@/hooks/useStoreBreakpoint';
 import { FeaturedPlaylistsStrip } from '@/components/store/FeaturedPlaylistsStrip';
 import {
@@ -1101,6 +1103,20 @@ function StorePage() {
   const appearance = useMemo(() => resolveStoreAppearance(creator, storeLayout.theme), [creator, storeLayout.theme]);
   const accentColor = appearance.accent;
   const themeStyle = useMemo(() => appearanceStyle(appearance), [appearance]);
+  /**
+   * What the producer-authored sections (text / image / video / links /
+   * canvas) draw with. They go through the builder's own `SectionRenderer`,
+   * so the canvas the producer arranged is literally the code buyers get;
+   * the theme defers to the profile's accent and text colour wherever Design
+   * left them at the default, so these sections match the page around them.
+   */
+  const sectionTheme = useMemo(() => effectiveStoreTheme(storeLayout.theme, creator), [storeLayout.theme, creator]);
+  // Content sections read only the creator. Memoised so a player tick does
+  // not hand the renderer a new object.
+  const sectionData = useMemo<StorefrontData>(
+    () => ({ creator, tracks: [], playlists: [], projects: [], picks: [] }),
+    [creator],
+  );
 
   /**
    * Storefront sections, drawn in the order the producer arranged them.
@@ -1275,7 +1291,20 @@ function StorePage() {
       {storeLayout.sections.map((section) => {
         if (isPinnedSection(section.kind)) return null;
         if (isFullyHidden(section)) return null;
-        const node = renderStoreSection(section.kind, resolveSection(section, viewerBreakpoint));
+        let node: React.ReactNode;
+        if (isContentSection(section.kind)) {
+          // Resolved where the section is VISIBLE, not blindly at the viewer's
+          // breakpoint (which reads desktop until hydration): the renderer
+          // drops a section at a breakpoint it is hidden on, and the CSS
+          // wrapper below is what does the per-device hiding here.
+          // An empty one is skipped here too, so it leaves no empty wrapper.
+          const breakpoint = renderBreakpointFor(section, viewerBreakpoint);
+          node = breakpoint && hasLiveContent(section, creator) ? (
+            <SectionRenderer section={section} breakpoint={breakpoint} theme={sectionTheme} data={sectionData} live />
+          ) : null;
+        } else {
+          node = renderStoreSection(section.kind, resolveSection(section, viewerBreakpoint));
+        }
         if (!node) return null;
         const hidden = visibilityClasses(section);
         return hidden ? <div key={section.id} className={hidden}>{node}</div> : <Fragment key={section.id}>{node}</Fragment>;
