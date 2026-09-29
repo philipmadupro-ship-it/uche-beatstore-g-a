@@ -147,6 +147,8 @@ Responsive editing is genuine. Desktop is the base and changes there flow everyw
 
 Two things are deliberately fixed. The **catalogue** and the **trust rail** are pinned to the bottom: the catalogue owns the sticky filter toolbar directly above it, and separating them produces a broken page. And a control only appears where the live storefront will honour it — the featured strips own their own responsive grids, so no column control is offered for them.
 
+The text, image, video, links and canvas blocks a producer adds appear on the live `/store` exactly as the canvas draws them — the same component renders both. A block with nothing in it is left off the live page rather than showing the editor's "add content" hint. Videos are YouTube or Vimeo links (any of their usual URL shapes); other video hosts are refused in the editor too, because the storefront's security policy would block them. Images need an https address.
+
 Work autosaves. A producer who never opens Design gets exactly the storefront they have today.
 
 ### Producer: send a beat to an artist

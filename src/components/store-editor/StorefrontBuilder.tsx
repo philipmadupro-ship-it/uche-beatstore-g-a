@@ -21,7 +21,7 @@
  *     shell whatever else is on screen.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Check, History, Layers, Loader2, Monitor, Palette, Plus, Redo2, Smartphone, Tablet, Trash2, Undo2,
 } from 'lucide-react';
@@ -42,6 +42,7 @@ import { ThemePanel } from './ThemePanel';
 import { HistoryPanel } from './HistoryPanel';
 import { recordSnapshot } from '@/lib/store-editor/history';
 import { storefrontThemeStyle } from '@/lib/store/typography';
+import { effectiveStoreTheme } from '@/lib/store/appearance';
 import {
   deleteSavedSection, listSavedSections, loadSavedSection, saveSection,
   type SavedSectionSummary,
@@ -84,6 +85,10 @@ export function StorefrontBuilder({
     future: [],
   }));
   const layout = editor.doc;
+  // What the sections draw with — the same resolution /store applies, so the
+  // profile's accent and text colour reach the canvas wherever the Theme
+  // panel left them at the default.
+  const sectionTheme = useMemo(() => effectiveStoreTheme(layout.theme, data.creator), [layout.theme, data.creator]);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [breakpoint, setBreakpoint] = useState<StoreBreakpoint>('desktop');
@@ -605,7 +610,7 @@ export function StorefrontBuilder({
                       <SectionRenderer
                         section={section}
                         breakpoint={breakpoint}
-                        theme={layout.theme}
+                        theme={sectionTheme}
                         data={data}
                         editBlocks={section.kind === 'canvas' ? {
                           selectedId: selectedBlockId,
