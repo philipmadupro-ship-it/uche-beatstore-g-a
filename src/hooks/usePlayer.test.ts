@@ -147,6 +147,26 @@ describe('usePlayer playback, volume and mute stay independent', () => {
     expect(reloaded.getState()).toMatchObject({ volume: 0.35, muted: true, isPlaying: false });
   });
 
+  it('persists the position with the track, but never that it was playing', () => {
+    usePlayer.getState().setTrack({ id: 'a', title: 'a', audio_url: '/a.mp3' } as Track);
+    usePlayer.getState().setProgress(0.4);
+    const saved = JSON.parse(storage['antigravity-player']);
+    expect(saved.state).toMatchObject({ progress: 0.4, currentTrack: { id: 'a' } });
+    expect(saved.state.isPlaying).toBeUndefined();
+  });
+
+  it('restores the position after a reload, paused', async () => {
+    storage['antigravity-player'] = JSON.stringify({
+      state: { currentTrack: { id: 'a', title: 'a', audio_url: '/a.mp3' }, progress: 0.4 },
+      version: 1,
+    });
+    vi.resetModules();
+    const { usePlayer: reloaded } = await import('./usePlayer');
+    await reloaded.persist.rehydrate();
+    expect(reloaded.getState()).toMatchObject({ progress: 0.4, isPlaying: false });
+    expect(reloaded.getState().currentTrack?.id).toBe('a');
+  });
+
   it('migrates a pre-flag mute (stored as volume 0) to muted at an audible level', async () => {
     storage['antigravity-player'] = JSON.stringify({ state: { volume: 0, repeat: 'all' }, version: 0 });
     vi.resetModules();

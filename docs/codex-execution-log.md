@@ -8977,3 +8977,12 @@ Changes:
 No API, contract, schema or storage change. The delivery page's stream is the existing token-gated `/api/store/projects/access/[token]/download?format=mp3` URL the page already rendered as a download link (Range-capable; `<audio>` ignores the attachment disposition).
 
 Tests: `SimpleAudioEngine.test.tsx` (+3: unmount marks paused; remount resumes at position without auto-play; a track picked while unmounted starts at 0 — first two fail on the old engine). `e2e/project-playback.spec.ts` (4: delivery page play all / pause / keyboard seek / next with one element; in-store navigation continuity; checkout → Back pauses honestly and resumes at position; 390 px delivery page) — three fail on the old code. The WAV stub serves Range requests: Chromium cannot seek a resource served without them and restarts at 0.
+
+### Follow-up: dashboard → share page in the same tab
+
+Checked in Chromium against `next build && next start` and the dev server, signed in through the stub Supabase. Every dashboard entry point to a share page (`/links`, BeatLog, contact history, analytics) opens it in a NEW tab, so in one tab this is always a full page load (a pasted URL); the client-side unmount path above never runs here.
+- Going there: the dashboard's audio is gone with the page; the share page's WaveSurfer is the only media element playing (counted by hooking `HTMLMediaElement.prototype.play`, since WaveSurfer's element is never in the document).
+- Back: not restored from the back/forward cache (`pageshow.persisted` false in production too), so the dashboard reloads, paused, and the bar says Play. Nothing starts by itself.
+- **Defect found:** the track's position was lost — about 3 s in before leaving, 0:00 after Back — because `usePlayer` did not persist `progress`. It now does (alongside `currentTrack`; `isPlaying` still never), so the fresh engine resumes there.
+
+Tests: `usePlayer.test.ts` (+2: progress persisted but not `isPlaying`; restored paused after reload). `e2e/project-playback.spec.ts` +1 (dashboard → share → Back; skipped without the stub Supabase URL, like the other dashboard specs); it fails on the old store at the position check. The two resume tests now check the paused element's position BEFORE pressing Play — the first version of the new test passed on the old code because a track restarted from 0:00 reaches the old position within the poll window.

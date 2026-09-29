@@ -15,8 +15,13 @@
  *
  * The local fixture store has no projects or access links, so those two API
  * responses are stubbed. The pages, layout and player are real.
+ *
+ * The last block leaves the DASHBOARD for a share page in the same tab. Every
+ * dashboard entry point opens a share in a new tab, so in one tab this is
+ * always a full page load (a pasted URL), and Back reloads the dashboard.
  */
 import { test, expect, type Page } from '@playwright/test';
+import { startStubSupabase, signInCookie, stubSupabaseConfigured } from './fixtures/stub-supabase';
 
 const BUNDLE_ID = 'e2e-playback-bundle';
 const ACCESS_TOKEN = 'e2e-playback-token';
@@ -193,6 +198,9 @@ test.describe('project playback', () => {
     await expect(page.getByRole('button', { name: 'Preview' })).toBeVisible();
 
     // Play resumes the same track near where the buyer left it, not at 0:00.
+    // Checked on the paused element first: once playing, a track restarted
+    // from 0:00 would pass a time check within a few seconds anyway.
+    await expect.poll(async () => (await audios(page))[0]?.time ?? 0).toBeGreaterThan(leftAt - 1);
     await page.getByRole('button', { name: 'Play', exact: true }).first().click();
     await expectPlaying(page, 1, leftAt - 1);
     expect(await audios(page)).toHaveLength(1);
@@ -208,5 +216,96 @@ test.describe('project playback', () => {
     await expectPlaying(page, 1);
     await expect(page.getByRole('button', { name: /Pause/ }).last()).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+});
+
+/**
+ * Every media element that has been played, including ones never attached to
+ * the document (WaveSurfer's). `document.querySelectorAll('audio')` misses
+ * those, and they are exactly the ones that could double the audio.
+ */
+async function trackAllMedia(page: Page) {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __media: HTMLMediaElement[] };
+    w.__media = [];
+    const original = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function play(this: HTMLMediaElement) {
+      if (!w.__media.includes(this)) w.__media.push(this);
+      return original.call(this);
+    };
+  });
+}
+
+function playingMedia(page: Page): Promise<AudioState[]> {
+  return page.evaluate(() =>
+    (window as unknown as { __media: HTMLMediaElement[] }).__media
+      .filter((m) => !m.paused)
+      .map((m) => ({ src: m.currentSrc || m.src, paused: m.paused, time: m.currentTime })),
+  );
+}
+
+test.describe('dashboard player → share page in the same tab → Back', () => {
+  let stubSupabase: Awaited<ReturnType<typeof startStubSupabase>> = null;
+  test.beforeAll(async () => {
+    if (stubSupabaseConfigured()) stubSupabase = await startStubSupabase();
+  });
+  test.afterAll(async () => {
+    await stubSupabase?.close();
+  });
+
+  test('the share page plays alone, and Back returns paused at the same position', async ({ page, context, baseURL }) => {
+    test.skip(!stubSupabase, 'needs the stub Supabase (NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321)');
+    await context.addCookies([signInCookie(baseURL!)]);
+    await trackAllMedia(page);
+    await stub(page);
+
+    const shareTrack = { ...track(3), id: '33333333-3333-4333-8333-333333333333', title: 'SHARED ONE', lyrics: null, description: null };
+    await page.route(/\/api\/projects\/share\/e2ePlaybackShare(\?.*)?$/, (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        share: { token: 'e2ePlaybackShare', role: 'viewer', allow_downloads: false, full_playback: true, expires_at: null, label: 'x', recipient_kind: 'friend', sales_enabled: false },
+        project: { id: 'p1', name: 'Shared Project', cover_url: null, description: null, bpm_target: null, key_target: null, status: 'active' },
+        tracks: [shareTrack],
+        creator: null, licenses: [], stems: [], artworkTheme: null,
+      }),
+    }));
+
+    // A track loaded in the dashboard's player bar, as a previous session left it.
+    await page.goto('/settings');
+    await page.evaluate((t) => localStorage.setItem('antigravity-player', JSON.stringify({
+      state: { currentTrack: t, queue: [t], volume: 0.8, muted: false, shuffle: false, shuffleOrder: [], shuffleSeed: 1, repeat: 'off' },
+      version: 1,
+    })), track(1));
+    await page.reload();
+    await page.getByRole('button', { name: 'Play', exact: true }).first().click();
+    await expect.poll(async () => (await playingMedia(page)).some((m) => m.src.includes('e2e-playback-1.wav') && m.time > 3)).toBe(true);
+    const leftAt = (await playingMedia(page))[0].time;
+
+    // Same tab, full load: only the share page's player may be heard.
+    await page.goto('/projects/share/e2ePlaybackShare');
+    await page.getByRole('button', { name: 'Play', exact: true }).first().click();
+    await expect.poll(async () => {
+      const on = await playingMedia(page);
+      // WaveSurfer plays its own fetch of the file through a blob: URL.
+      return on.length === 1 && !on[0].src.includes('e2e-playback-1.wav') && on[0].time > 0.3;
+    }).toBe(true);
+
+    // Back: the dashboard does not start by itself, the bar says so, and Play
+    // continues from where the producer left, not 0:00.
+    await page.goBack();
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page.getByRole('button', { name: 'Play', exact: true }).first()).toBeVisible();
+    await page.waitForTimeout(1000);
+    expect(await playingMedia(page)).toHaveLength(0);
+    // The paused bar's element already sits at the old position (see the
+    // checkout test for why this is checked before Play).
+    await expect.poll(async () => (await audios(page))[0]?.time ?? 0).toBeGreaterThan(leftAt - 1);
+
+    await page.getByRole('button', { name: 'Play', exact: true }).first().click();
+    await expect.poll(async () => {
+      const on = await playingMedia(page);
+      return on.length === 1 && on[0].src.includes('e2e-playback-1.wav') && on[0].time > leftAt - 1;
+    }).toBe(true);
   });
 });
