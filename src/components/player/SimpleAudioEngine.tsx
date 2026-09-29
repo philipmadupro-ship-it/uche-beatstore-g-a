@@ -21,6 +21,8 @@
  *   - Report progress (0..1 fraction) every timeupdate.
  *   - Consume seekTarget (0..1) written by MiniWaveform / keyboard shortcuts.
  *   - Advance to the next track on `ended`.
+ *   - Survive its own remount: unmounting marks the store paused (the element
+ *     stopped), and the next engine resumes the track where it left off.
  *
  * Headless: renders only a hidden <audio>. Mount once, near the PlayerBar.
  */
@@ -47,6 +49,14 @@ export function SimpleAudioEngine() {
 
   const trackId = currentTrack?.id;
   const url = currentTrack?.audio_url ?? null;
+
+  // Where the listener was when the previous engine went away. The engine
+  // unmounts whenever its layout does (store → checkout, dashboard → a share
+  // page) and a fresh <audio> starts at 0, so without this, coming back
+  // restarted the track from the top. `progress` is reset by every track
+  // change, so a non-zero value at mount always belongs to `currentTrack`.
+  const resumeRef = useRef<number | null>(null);
+  if (resumeRef.current === null) resumeRef.current = usePlayer.getState().progress;
   const normGain = normalizationGain(currentTrack?.loudness);
 
   // What the producer is working in, and whether they asked previews to match
@@ -86,6 +96,15 @@ export function SimpleAudioEngine() {
     let cancelled = false;
 
     const instant = peekPreviewSrc(trackId) ?? playbackAudioSrc(url);
+    const resumeAt = resumeRef.current ?? 0;
+    resumeRef.current = 0;
+    // Setting currentTime before metadata arrives sets the element's default
+    // playback start position, so this works on a source that is still loading.
+    const resume = () => {
+      if (resumeAt <= 0) return;
+      const seconds = seekSeconds(resumeAt, a.duration, currentTrack?.duration_seconds);
+      if (seconds != null) a.currentTime = seconds;
+    };
     // Only reset src when it actually changes — avoids re-buffering on
     // unrelated re-renders.
     if (!holdsSource(a, instant)) {
@@ -93,6 +112,7 @@ export function SimpleAudioEngine() {
       setPlaybackError(null);
       a.src = instant;
       a.load();
+      resume();
     }
     if (isPlaying) a.play().catch(onPlayRejected);
 
@@ -108,6 +128,7 @@ export function SimpleAudioEngine() {
           if (a.currentTime > 0 && !a.paused) return; // already audible — leave it
           a.src = blob;
           a.load();
+          resume();
           if (isPlaying) a.play().catch(onPlayRejected);
         } catch {
           // best-effort; the network stream is already loading
@@ -118,6 +139,23 @@ export function SimpleAudioEngine() {
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackId, url]);
+
+  // ── Hand-over on unmount ──────────────────────────────────────────────
+  // A media element removed from the document pauses itself, but the store
+  // kept `isPlaying: true`. Pages that stay mounted (a bundle's delivery page,
+  // the OS media controls) then showed Pause over silence, and the next engine
+  // to mount started playing on its own. Say what actually happened.
+  // Keyed on the element really having left the page: StrictMode's simulated
+  // unmount runs this cleanup too, with the element still in place, at the
+  // exact moment the first track starts (the bar mounts with it).
+  useEffect(() => {
+    const a = audioRef.current;
+    return () => {
+      if (!a || a.isConnected) return;
+      const s = usePlayer.getState();
+      if (s.isPlaying || s.isBuffering) usePlayer.setState({ isPlaying: false, isBuffering: false });
+    };
+  }, []);
 
   // ── Play / pause ──────────────────────────────────────────────────────
   useEffect(() => {
