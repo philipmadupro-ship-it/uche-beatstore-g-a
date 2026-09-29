@@ -17,29 +17,36 @@
 --
 -- Idempotent: re-running finds nothing left to create or set.
 
+-- No temp table: an earlier version used CREATE TEMP TABLE ... ON COMMIT DROP,
+-- and the Supabase SQL editor commits each statement on its own, so the table
+-- was gone before the INSERT ran (42P01 relation "_paid_buyers" does not
+-- exist). Each statement now carries its own copy of the buyer set as a CTE,
+-- so the file works however it is executed.
+--
 -- Paid buyer emails per seller, from both purchase kinds. Excludes the
 -- 'unknown@invalid' sentinel the webhook writes when Stripe supplied no email
 -- at all (that buyer is genuinely unreachable and must not become a contact),
 -- and anything not email-shaped.
-CREATE TEMP TABLE _paid_buyers ON COMMIT DROP AS
-SELECT DISTINCT seller_user_id, lower(btrim(buyer_email)) AS email
-FROM public.license_purchases
-WHERE status = 'paid'
-  AND seller_user_id IS NOT NULL
-  AND buyer_email IS NOT NULL
-  AND lower(btrim(buyer_email)) <> 'unknown@invalid'
-  AND position('@' in buyer_email) > 1
-UNION
-SELECT DISTINCT seller_user_id, lower(btrim(buyer_email))
-FROM public.project_access_links
-WHERE seller_user_id IS NOT NULL
-  AND buyer_email IS NOT NULL
-  AND lower(btrim(buyer_email)) <> 'unknown@invalid'
-  AND position('@' in buyer_email) > 1;
 
 -- 1. Contacts the broken webhook never created. Name defaults to the email's
 -- local part, matching what the free-download lead path does, so the row reads
 -- sensibly until the producer fills it in.
+WITH paid_buyers AS (
+  SELECT DISTINCT seller_user_id, lower(btrim(buyer_email)) AS email
+  FROM public.license_purchases
+  WHERE status = 'paid'
+    AND seller_user_id IS NOT NULL
+    AND buyer_email IS NOT NULL
+    AND lower(btrim(buyer_email)) <> 'unknown@invalid'
+    AND position('@' in buyer_email) > 1
+  UNION
+  SELECT DISTINCT seller_user_id, lower(btrim(buyer_email))
+  FROM public.project_access_links
+  WHERE seller_user_id IS NOT NULL
+    AND buyer_email IS NOT NULL
+    AND lower(btrim(buyer_email)) <> 'unknown@invalid'
+    AND position('@' in buyer_email) > 1
+)
 INSERT INTO public.contacts (user_id, email, name, role, label, category, notes, crm_status, buyer_pipeline_status)
 SELECT b.seller_user_id,
        b.email,
@@ -50,7 +57,7 @@ SELECT b.seller_user_id,
        'Backfilled from a completed purchase (mig 112)',
        'customer',
        'purchased'
-FROM _paid_buyers b
+FROM paid_buyers b
 WHERE NOT EXISTS (
   SELECT 1 FROM public.contacts c
   WHERE c.user_id = b.seller_user_id
@@ -58,19 +65,30 @@ WHERE NOT EXISTS (
 )
 ON CONFLICT (user_id, email) DO NOTHING;
 
--- 2. Existing contacts with a paid purchase, whose stage was never set.
+-- 2. Existing contacts with a paid purchase, whose stage was never set. One
+-- statement for both columns; COALESCE keeps any stage already set.
+WITH paid_buyers AS (
+  SELECT DISTINCT seller_user_id, lower(btrim(buyer_email)) AS email
+  FROM public.license_purchases
+  WHERE status = 'paid'
+    AND seller_user_id IS NOT NULL
+    AND buyer_email IS NOT NULL
+    AND lower(btrim(buyer_email)) <> 'unknown@invalid'
+    AND position('@' in buyer_email) > 1
+  UNION
+  SELECT DISTINCT seller_user_id, lower(btrim(buyer_email))
+  FROM public.project_access_links
+  WHERE seller_user_id IS NOT NULL
+    AND buyer_email IS NOT NULL
+    AND lower(btrim(buyer_email)) <> 'unknown@invalid'
+    AND position('@' in buyer_email) > 1
+)
 UPDATE public.contacts c
-   SET crm_status = 'customer'
-  FROM _paid_buyers b
+   SET crm_status = COALESCE(c.crm_status, 'customer'),
+       buyer_pipeline_status = COALESCE(c.buyer_pipeline_status, 'purchased')
+  FROM paid_buyers b
  WHERE c.user_id = b.seller_user_id
    AND lower(btrim(c.email)) = b.email
-   AND c.crm_status IS NULL;
-
-UPDATE public.contacts c
-   SET buyer_pipeline_status = 'purchased'
-  FROM _paid_buyers b
- WHERE c.user_id = b.seller_user_id
-   AND lower(btrim(c.email)) = b.email
-   AND c.buyer_pipeline_status IS NULL;
+   AND (c.crm_status IS NULL OR c.buyer_pipeline_status IS NULL);
 
 NOTIFY pgrst, 'reload schema';
