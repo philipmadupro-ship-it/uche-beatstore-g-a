@@ -8929,3 +8929,21 @@ Three gaps found while auditing the CRM for the artist-workspace plan. No schema
 - **"Plays" on `/links` were page opens.** Both `share_links.plays` and `project_shares.plays` go up once per share-page GET, not per track played. `/links` now labels the number "opens". The column keeps its name.
 
 Tests: `lib/crm/project-send.test.ts`, `lib/notifications/share-comment.test.ts`, new `invite/route.test.ts` (5) and `share/[token]/comments/route.test.ts` (3).
+
+## 2026-09-29 - Store Editor loads the whole catalogue, not the newest 100 (STORE-02)
+
+**Reproduced** with 250 stubbed beats behind `/api/tracks`'s real paging contract, the 30 listed ones being the oldest (all on API page three). On `/store-editor` → Beat Listing, the header said "30 listed · 250 total" and the list showed none of them. They appeared only after pressing "Load next 100 beats" twice.
+
+**Root cause.** `loadTrackPage` fetched one `paged=1&lean=1&limit=100` page (newest first) and stopped. The 100 is `/api/tracks`'s per-request ceiling (`parsePositiveInt(…, 50, 100)`), a server protection and not a product rule, but the editor treated it as the list. Everything downstream saw only that page:
+- **Reorder corrupted `/store` order.** Drag and Move up/down write `store_sort_order` 0..n for `allTracks.filter(store_listed)`, the *loaded* listed beats only. Unloaded listed beats kept their old positions and collided with the new ones, so `/store` showed an order nobody chose.
+- **Search** went to the server (`q=`) and *replaced* the list with the matches, so a reorder during a search renumbered only the matches.
+- The Needs-attention filter, the storefront preview and the license-link prices all covered the loaded page only.
+
+**Fix.**
+- `lib/store-editor/track-catalogue.ts#fetchAllTrackPages` follows `nextCursor` to the end, 100 rows per request. It de-duplicates by id, stops on a cursor that does not advance, stops at 200 pages (20,000 beats), and reports `complete`. The editor fills in page by page and is not blocked on the walk. The client-side render window (80 rows, "Load more beats") is unchanged.
+- Search is client-side over the whole catalogue (title / key / BPM, the fields the row filter already used). The server search also matched `description`, which the lean rows do not carry.
+- Reordering waits for `complete`. Before that it shows a toast instead of renumbering a subset.
+- License-link loading now covers every listed beat, 8 requests at a time (`mapWithConcurrency`) instead of all at once.
+- `/api/tracks` orders by `created_at DESC, id ASC`. Without the `id` tiebreak, beats sharing a timestamp (bulk upload) could be skipped or repeated across offset pages.
+
+**Tests.** `track-catalogue.test.ts` (250 → 3 requests, exact multiple, empty, progress, dedupe, stuck cursor, page cap, failure, bounded concurrency). `e2e/store-editor-catalogue.spec.ts` at 1440px and 390px: all 30 page-three listed beats render, no "Load next 100" control, search finds beat 150 without a request, and Move down PATCHes `/api/tracks/reorder` with all 30 listed beats and distinct positions. With the old page it fails at the first assertion.
