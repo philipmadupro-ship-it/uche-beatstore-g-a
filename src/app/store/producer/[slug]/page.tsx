@@ -12,7 +12,8 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { toast } from '@/hooks/useToast';
 import { getBuyerToken } from '@/lib/buyer-session';
 import type { Track } from '@/lib/types';
-import { FONT_FAMILY_MAP } from '@/components/store/types';
+import { storefrontThemeStyle } from '@/lib/store/typography';
+import { normalizeLayout } from '@/lib/store-editor/layout';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { MusicReactiveBackdrop } from '@/components/ui/MusicReactiveBackdrop';
 import { formatSignature, producerSignature } from '@/lib/store/producer-signature';
@@ -38,6 +39,7 @@ interface CreatorProfile {
   accent_color?: string | null;
   font_style?: string | null;
   text_color_primary?: string | null;
+  store_layout?: unknown;
 }
 
 interface PlaylistItem {
@@ -162,7 +164,10 @@ export default function ProducerPage({
     setTrack(t);
   };
 
-  const fontFamily = FONT_FAMILY_MAP[creator?.font_style ?? 'default'] ?? FONT_FAMILY_MAP.default;
+  // Same rule as /store: profile colours, overridden by any theme colour
+  // changed in the Store Editor's Design mode. This page used to apply the
+  // font and ignore the text colour.
+  const themeStyle = storefrontThemeStyle(creator, normalizeLayout(creator?.store_layout).theme);
   const signatureLine = formatSignature(producerSignature(tracks));
   const creditLines = (creator?.credits ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
 
@@ -187,8 +192,8 @@ export default function ProducerPage({
   return (
     <ArtworkThemeProvider theme={artworkTheme}>
     <div
-      className="store-ui min-h-screen bg-[#090907] text-white"
-      style={{ fontFamily }}
+      className="store-ui min-h-screen bg-[#090907]"
+      style={themeStyle}
     >
       {/* ── Hero ── */}
       <div className="relative isolate">
