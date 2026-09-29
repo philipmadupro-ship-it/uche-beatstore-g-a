@@ -8874,3 +8874,22 @@ Tests (new): `essentia-extract.test.ts` (real package), `essentia-worker.test.ts
 - `components/projects/ProjectTrackList.test.tsx` pins the forwarding. One case fails on the old component.
 - `e2e/track-menu-destinations.spec.ts` drives the real `/projects/[id]` and `/playlists/[id]` pages through the stub-Supabase sign-in. For each page it chooses both items and checks the destination. Lyrics Studio is followed to the track page, which must focus `#lyrics` in the viewport, so it covers the LIB-01 hash fix end to end. With the page wiring reverted, all 4 cases fail.
 - Measured on the real pages at 1440px and 390px: no menu label is cut off, and the menu stays in the viewport.
+
+## 2026-09-29 - Chord detection loader fixed (AUDIO-04 follow-up)
+
+`lib/audio/chords.client.ts` carried its own inline worker with the same broken loader BPM/key had before AUDIO-04. It `importScripts`-ed essentia.js from jsDelivr, which is not in the CSP, looked for an `EssentiaWASM` global that file never defines, and called it as a factory. Every detection threw inside the worker and resolved `[]`. Two more bugs sat behind the loader:
+
+- **Sample rate.** The audio was decoded at the device rate (usually 48 kHz) and that rate was passed to `SpectralPeaks`, while `HPCP` defaults to 44.1 kHz, so the two disagreed about every bin. Decoding now goes through the shared `decodeMono44k` (`OfflineAudioContext` at 44.1 kHz, all channels downmixed).
+- **`FrameGenerator` drops silent frames.** Measured with the real package: 7 s of audio with a 3 s break gives 90 frames instead of 149. Chord times come from the frame index, so every chord after a break was stamped early by the length of the break. An all-silent signal gave zero frames and threw. `chord-extract.ts#frameOffsets` now frames in JS.
+
+What changed:
+- The algorithm (4096/2048 frames, HPCP, 1 s buckets, 24 triad templates, 0.45 floor) moved to `lib/audio/chord-extract.ts`. It is unchanged except that a silent bucket is now `N` instead of being skipped. Skipping it made the chord before a break read as ringing through the silence.
+- `essentia.worker.js` gained a `chords` task (default is still `features`). `essentia-worker-client.ts` holds the one worker, the same-origin URLs and the decode, and `analyze.client.ts` now uses it too.
+
+Verified with the real package: I–vi–IV–V in C reads `C, Am, F, G`, which also confirms the HPCP A-rooted bin rotation. A 3-minute track takes ~3.3 s in Node.
+
+Verified in Chromium (`next start`, enforced /store CSP): a 48 kHz WAV of C / 3 s silence / Am, decoded at 44.1 kHz and run through the built worker, returns `C@0, N@3.02, Am@5.02` in 550 ms. There were no CSP violations. The features task still works on the same worker.
+
+Tests: `chord-extract.test.ts` covers the real package: progression, timing, silent break, silence, a clip shorter than one frame, classification and segmentation. The worker drift test now covers the chords task, and it fails when the worker's copy reverts to skipping silent buckets.
+
+**Not wired:** no UI calls `detectChordsFromUrl`, before or after this change. The analyze route accepts a `chords` payload and nothing renders `tracks.chords`.

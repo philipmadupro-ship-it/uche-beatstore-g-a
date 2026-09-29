@@ -4,6 +4,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
 import { extractEssentiaFeatures, ESSENTIA_SAMPLE_RATE, type EssentiaCore } from './essentia-extract';
+import { extractChords, type EssentiaChordCore } from './chord-extract';
 
 /**
  * `essentia.worker.js` is a classic worker script with its own copy of the
@@ -16,7 +17,7 @@ const root = path.resolve(__dirname, '../../..');
 const dist = path.join(root, 'node_modules/essentia.js/dist');
 const workerSource = readFileSync(path.join(__dirname, 'essentia.worker.js'), 'utf8');
 
-type Reply = { id: number; ok: boolean; features?: unknown; error?: string };
+type Reply = { id: number; ok: boolean; features?: unknown; chords?: unknown; error?: string };
 
 function bootWorker() {
   const posted: Reply[] = [];
@@ -92,5 +93,45 @@ describe('essentia.worker.js', () => {
     const reply = worker.send({ id: 9, ...urls, signal: null });
     expect(reply).toMatchObject({ id: 9, ok: false });
     expect(typeof reply.error).toBe('string');
+  });
+
+  describe('chords task', () => {
+    const chordRef = reference as unknown as EssentiaChordCore;
+    const sr = ESSENTIA_SAMPLE_RATE;
+    /** C major, a silent break, then A minor — the break is what FrameGenerator got wrong. */
+    function withBreak(): Float32Array {
+      const out = new Float32Array(sr * 9);
+      const tone = (notes: number[], from: number, to: number) => {
+        for (let i = Math.round(from * sr); i < Math.round(to * sr); i++) {
+          const t = i / sr;
+          out[i] = notes.reduce((v, f) => v + 0.15 * Math.sin(2 * Math.PI * f * t), 0);
+        }
+      };
+      tone([261.63, 329.63, 392.0], 0, 3);
+      tone([440.0, 261.63, 329.63], 6, 9);
+      return out;
+    }
+
+    it('matches the shared chord extractor, silent break included', () => {
+      const signal = withBreak();
+      const reply = worker.send({ id: 10, task: 'chords', ...urls, signal: signal.slice() });
+      expect(reply.error).toBeUndefined();
+      const expected = extractChords(chordRef, signal);
+      expect(expected.map((s) => s.chord)).toEqual(['C', 'N', 'Am']);
+      expect((reply as { chords?: unknown }).chords).toEqual(expected);
+    }, 60_000);
+
+    it('matches on silence and on a clip shorter than a frame', () => {
+      for (const signal of [new Float32Array(sr * 2), new Float32Array(100)]) {
+        const reply = worker.send({ id: 11, task: 'chords', ...urls, signal: signal.slice() });
+        expect((reply as { chords?: unknown }).chords).toEqual(extractChords(chordRef, signal));
+      }
+    }, 60_000);
+
+    it('still defaults to the features task', () => {
+      const reply = worker.send({ id: 12, ...urls, signal: beat(3, 120) });
+      expect(reply.features).toBeDefined();
+      expect((reply as { chords?: unknown }).chords).toBeUndefined();
+    }, 60_000);
   });
 });
