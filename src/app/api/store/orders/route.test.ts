@@ -28,6 +28,8 @@ function req(query: string): NextRequest {
   return new NextRequest(`http://localhost/api/store/orders?${query}`);
 }
 
+let projectExpiresAt: string | null = null;
+
 function tableForOrders(table: string) {
   if (table === 'license_purchases') {
     return {
@@ -73,7 +75,7 @@ function tableForOrders(table: string) {
               token: 'project_access_secret',
               amount_usd: 99,
               created_at: '2026-01-03T00:00:00Z',
-              expires_at: null,
+              expires_at: projectExpiresAt,
               stripe_session_id: 'cs_test_project',
             }],
             error: null,
@@ -103,6 +105,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.STRIPE_WEBHOOK_SECRET = 'test-secret-key-do-not-use-in-prod';
   mockIsSupabaseConfigured.mockReturnValue(true);
+  projectExpiresAt = null;
   mockFrom.mockImplementation((table: string) => tableForOrders(table));
 });
 
@@ -159,6 +162,7 @@ describe('GET /api/store/orders', () => {
         created_at: '2026-01-03T00:00:00Z',
         token: 'project_access_secret',
         expires_at: null,
+        access_revoked: false,
       },
       {
         id: 'purchase-1',
@@ -170,5 +174,18 @@ describe('GET /api/store/orders', () => {
         stripe_session_id: 'cs_test_track',
       },
     ]);
+  });
+
+  it('lists a refunded bundle but withholds its access token', async () => {
+    // charge.refunded / dispute revoke by setting expires_at = now() (mig 117).
+    projectExpiresAt = '2026-01-04T00:00:00Z';
+    const token = signBuyerToken('buyer@example.test');
+    const mod = await loadRoute();
+    const res = await mod.GET(req(`email=buyer%40example.test&token=${encodeURIComponent(token)}`));
+
+    expect(res.status).toBe(200);
+    const bundle = (await res.json()).orders.find((o: { kind: string }) => o.kind === 'project_bundle');
+    expect(bundle).toMatchObject({ id: 'access-1', token: null, access_revoked: true });
+    expect(JSON.stringify(bundle)).not.toContain('project_access_secret');
   });
 });
