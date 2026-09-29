@@ -35,6 +35,8 @@ export interface ArtistSummary {
   /** The most recently linked project that is not archived. */
   activeProject: { id: string; name: string; cover_url: string | null } | null;
   projectCount: number;
+  /** Every linked project's name, newest link first — what the Artists search matches besides the name. */
+  projectNames: string[];
   decisions: Partial<Record<Decision, number>>;
   moving: number;
   plays: number;
@@ -90,6 +92,7 @@ export function summarizeArtist(input: ArtistSummaryInput): ArtistSummary {
     relationship,
     activeProject: top ? { id: top.id, name: top.name ?? 'Untitled project', cover_url: top.cover_url } : null,
     projectCount: linked.length,
+    projectNames: linked.map((l) => projectById.get(l.project_id)!.name ?? 'Untitled project'),
     decisions,
     moving,
     plays,

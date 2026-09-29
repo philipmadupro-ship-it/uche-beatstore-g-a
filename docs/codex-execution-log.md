@@ -9138,3 +9138,13 @@ Migrations 130–132 (pending on production; `supabase/apply/pending.sql` holds 
 Bugs found by the real-database run and fixed: PostgREST rejects `or=` on a PATCH ("column does not exist") — the sign-in throttle is a compare-and-set instead; the portal's `?signin=` redemption raced React's double mount effect in dev; a HEAD count on a missing table reads as an empty 404, so the workspace's message counts use a GET; an INSERT into a missing table (portal message) needed the read-first probe. Phase 1 spec: waited for the play request instead of its response (flaked on a cold compile).
 
 Tests: unit (messages 13, sign-in 8, pulse 4, song-beats 7, useVisiblePoll 2); `e2e/artist-workspace-phase3.spec.ts` 5 flows; all 16 real-DB flows pass; routes re-checked with 130–132 dropped.
+
+## 2026-09-29 - Artists apart from contacts, search inside projects, grouped credits
+
+Owner request after phase 3: separate familiar artists from the rest of the contacts, search inside projects, and fewer names per credit on a track.
+
+- `/contacts`: Artists · N | Other contacts · M | Beat log. The table and all its counts run over `splitContacts(...).others` (`lib/contacts/audience.ts`); the Artists view gains a search (name, project, stage). First visit opens on Artists when any exist; the choice is remembered per device.
+- Projects: `/api/projects` returns `track_titles` + `artist_names`; `projectSearchMatch` (every word, accent-insensitive, whole-phrase field preferred) drives the list filter and the card's "why it matched" line. ⌘K adds projects via a matching track or artist.
+- Credits: `groupCredits` (one person = linked contact, else normalised name) + `visibleCredits` (3, never folds a single one). Remove/link act on the person.
+
+Tests: audience (2), project search (4), credits (5 + 1 jsdom); real-DB flow 6 in `e2e/artist-workspace-phase3.spec.ts` — 17/17 real-DB flows pass. Also fixed two 12px sizes the type-scale guard caught (they were in the phase 3 commit).

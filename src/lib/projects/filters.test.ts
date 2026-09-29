@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   filterAndSortProjects,
+  projectSearchMatch,
   activeProjectFilterCount,
   type ProjectListItem,
   type ProjectFilterState,
@@ -137,5 +138,29 @@ describe('filterAndSortProjects', () => {
     expect(activeProjectFilterCount(filters())).toBe(0);
     expect(activeProjectFilterCount(filters({ status: 'final', tags: ['Trap'] }))).toBe(2);
     expect(activeProjectFilterCount(filters({ search: 'x', folder: 'f1', status: 'final', tags: ['a'] }))).toBe(4);
+  });
+});
+
+describe('projectSearchMatch (search inside projects)', () => {
+  const p = {
+    id: 'x', name: 'Summer EP', tags: [{ tag: 'Afrobeats' }],
+    description: 'Warm, late-night records', track_titles: ['MIDNIGHT', 'Níght Drive'], artist_names: ['Nova'],
+  };
+  it('matches the name without a reason', () => {
+    expect(projectSearchMatch(p, 'summer')).toEqual({ via: null });
+  });
+  it('finds a project by a track, an artist, a tag or its description, and says which', () => {
+    expect(projectSearchMatch(p, 'midnight')).toEqual({ via: 'Track · MIDNIGHT' });
+    expect(projectSearchMatch(p, 'nova')).toEqual({ via: 'Artist · Nova' });
+    expect(projectSearchMatch(p, 'afro')).toEqual({ via: 'Tag · Afrobeats' });
+    expect(projectSearchMatch(p, 'late-night')).toEqual({ via: 'Description' });
+    expect(projectSearchMatch(p, 'night drive')?.via).toBe('Track · Níght Drive');
+  });
+  it('needs every word somewhere', () => {
+    expect(projectSearchMatch(p, 'nova midnight')).not.toBeNull();
+    expect(projectSearchMatch(p, 'nova dawn')).toBeNull();
+  });
+  it('drives the list filter', () => {
+    expect(filterAndSortProjects([{ ...p }, { id: 'y', name: 'Other' }], filters({ search: 'nova' })).map((q) => q.id)).toEqual(['x']);
   });
 });

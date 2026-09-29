@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isAutoDerived, roleLabel, sortCollaborators, suggestContactForCredit } from './collaborators';
+import { groupCredits, isAutoDerived, roleLabel, sortCollaborators, suggestContactForCredit, visibleCredits } from './collaborators';
 
 describe('sortCollaborators', () => {
   it('orders producer before feature before collaborator', () => {
@@ -63,5 +63,35 @@ describe('suggestContactForCredit', () => {
     expect(suggestContactForCredit('Metro', contacts)).toBeNull();
     expect(suggestContactForCredit('Nobody', contacts)).toBeNull();
     expect(suggestContactForCredit('', contacts)).toBeNull();
+  });
+});
+
+describe('groupCredits', () => {
+  const row = (id: string, name: string, role: string, extra: Partial<{ contact_id: string | null; source: string }> = {}) => ({
+    id, track_id: 't', name, role, source: extra.source ?? 'manual', created_at: '', contact_id: extra.contact_id ?? null,
+  });
+  it('folds one person with several roles into one entry', () => {
+    const g = groupCredits([row('1', 'Nova', 'feature'), row('2', ' nova ', 'collaborator'), row('3', 'Metro', 'producer')]);
+    expect(g.map((x) => [x.name, x.roles])).toEqual([['Metro', ['producer']], ['Nova', ['feature', 'collaborator']]]);
+    expect(g[1].credits.map((c) => c.id)).toEqual(['1', '2']);
+  });
+  it('uses the linked contact as identity and pulls in unlinked credits of the same name', () => {
+    const g = groupCredits([row('1', 'Nova', 'feature', { contact_id: 'c1' }), row('2', 'Nova', 'collaborator'), row('3', 'N.O.V.A', 'producer', { contact_id: 'c1' })]);
+    expect(g).toHaveLength(1);
+    expect(g[0].contactId).toBe('c1');
+    expect(g[0].roles).toEqual(['producer', 'feature', 'collaborator']);
+  });
+  it('marks a person auto when any credit came from the filename', () => {
+    expect(groupCredits([row('1', 'A', 'feature', { source: 'filename' }), row('2', 'A', 'producer')])[0].auto).toBe(true);
+  });
+});
+
+describe('visibleCredits', () => {
+  it('shows the first three and folds the rest', () => {
+    expect(visibleCredits([1, 2, 3, 4, 5], false)).toEqual({ shown: [1, 2, 3], hidden: 2 });
+    expect(visibleCredits([1, 2, 3, 4, 5], true)).toEqual({ shown: [1, 2, 3, 4, 5], hidden: 0 });
+  });
+  it('never folds away a single person', () => {
+    expect(visibleCredits([1, 2, 3, 4], false)).toEqual({ shown: [1, 2, 3, 4], hidden: 0 });
   });
 });

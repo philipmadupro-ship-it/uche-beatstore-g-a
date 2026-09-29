@@ -21,7 +21,7 @@ interface SearchTrackResult extends Pick<Track, 'id' | 'title' | 'type' | 'cover
 
 interface SearchResults {
   tracks: SearchTrackResult[];
-  projects: { id: string; name: string; cover_url?: string | null }[];
+  projects: { id: string; name: string; cover_url?: string | null; via?: string | null }[];
   contacts: { id: string; name: string; email?: string | null; role?: string | null; label?: string | null; is_artist?: boolean }[];
   files: { id: string; project_id: string; project_name: string; label: string; kind: string }[];
 }
@@ -147,7 +147,7 @@ export function CommandPalette() {
         kind: 'project',
         id: p.id,
         label: p.name,
-        sub: 'PROJECT',
+        sub: p.via ? `PROJECT · ${p.via}` : 'PROJECT',
         icon: Layers,
         action: () => { router.push(`/projects/${p.id}`); setOpen(false); },
       });

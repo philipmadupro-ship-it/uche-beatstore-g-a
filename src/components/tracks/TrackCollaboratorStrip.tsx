@@ -5,15 +5,17 @@ import Link from 'next/link';
 import { Link2, Plus, Sparkles, Users, X } from 'lucide-react';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { Popover } from '@/components/ui/Popover';
-import { toast } from '@/hooks/useToast';
+import { confirmToast, toast } from '@/hooks/useToast';
 import { errorMessage } from '@/lib/errors';
 import { cn } from '@/lib/utils';
 import {
   KNOWN_COLLABORATOR_ROLES,
-  isAutoDerived,
+  groupCredits,
   roleLabel,
   sortCollaborators,
   suggestContactForCredit,
+  visibleCredits,
+  type CreditGroup,
   type TrackCollaborator,
 } from '@/lib/tracks/collaborators';
 
@@ -42,6 +44,11 @@ interface ApiErrorResponse {
  * Deleting either kind is allowed here; only the automatic REPLACE-on-reparse
  * is scoped to 'filename' rows, and that logic lives in
  * lib/upload/collaborators.ts, not here.
+ *
+ * One pill per PERSON (`groupCredits`): an artist credited in two roles reads
+ * "Nova · Feature, Collaborator", not two pills. Past three people the rest
+ * fold behind "+N more" (`visibleCredits`), so a heavily credited track
+ * doesn't bury the row it sits in.
  */
 export function TrackCollaboratorStrip({ trackId, className }: Props) {
   const [collaborators, setCollaborators] = useState<TrackCollaborator[] | null>(null);
@@ -71,6 +78,9 @@ export function TrackCollaboratorStrip({ trackId, className }: Props) {
   }, [fetchCollaborators]);
 
   const ordered = sortCollaborators(collaborators ?? []);
+  const groups = groupCredits(collaborators ?? []);
+  const [expanded, setExpanded] = useState(false);
+  const { shown, hidden } = visibleCredits(groups, expanded);
 
   // Contacts are fetched the first time a credit's link popover opens.
   const [contacts, setContacts] = useState<Array<{ id: string; name: string }> | null>(null);
@@ -129,6 +139,19 @@ export function TrackCollaboratorStrip({ trackId, className }: Props) {
     }
   };
 
+  /** A person with several credits goes in one action, after a confirmation. */
+  const removeGroup = async (g: CreditGroup) => {
+    if (g.credits.length > 1) {
+      const ok = await confirmToast(
+        `Remove ${g.name}’s ${g.credits.length} credits?`,
+        g.roles.map(roleLabel).join(', '),
+        { confirmLabel: 'Remove', cancelLabel: 'Keep', danger: true },
+      );
+      if (!ok) return;
+    }
+    for (const credit of g.credits) await handleRemove(credit.id);
+  };
+
   const handleRemove = async (id: string) => {
     setRemovingId(id);
     const prev = collaborators;
@@ -156,11 +179,13 @@ export function TrackCollaboratorStrip({ trackId, className }: Props) {
     <div className={cn('flex flex-wrap items-center gap-1.5', className)}>
       <Users size={11} className="shrink-0 text-white/30" />
 
-      {ordered.map((c) => {
-        const auto = isAutoDerived(c.source);
+      {shown.map((g) => {
+        const auto = g.auto;
+        const c = { ...g.credits[0], name: g.name, contact_id: g.contactId };
         return (
           <span
-            key={c.id}
+            key={g.key}
+            data-testid="credit-person"
             title={auto ? 'Read from the uploaded filename' : 'Added by hand'}
             className="group/credit inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.06] py-1 pl-2.5 pr-1 text-[10px] font-medium text-white/70 transition-colors hover:border-white/20 hover:text-white"
           >
@@ -168,19 +193,19 @@ export function TrackCollaboratorStrip({ trackId, className }: Props) {
             {c.contact_id
               ? <Link href={`/contacts/${c.contact_id}`} className="underline decoration-white/20 underline-offset-2 hover:text-white">{c.name}</Link>
               : <span>{c.name}</span>}
-            <span className="text-white/30">· {roleLabel(c.role)}</span>
+            <span className="text-white/30">· {g.roles.map(roleLabel).join(', ')}</span>
             {auto && <span className="sr-only">(from filename)</span>}
             <CreditContactLink
               credit={c}
               contacts={contacts}
               onOpen={loadContacts}
-              onChange={(contactId) => void linkContact(c, contactId)}
+              onChange={(contactId) => { for (const credit of g.credits) void linkContact(credit, contactId); }}
             />
             <button
               type="button"
-              onClick={() => handleRemove(c.id)}
-              disabled={removingId === c.id}
-              aria-label={`Remove credit for ${c.name}`}
+              onClick={() => void removeGroup(g)}
+              disabled={g.credits.some((x) => x.id === removingId)}
+              aria-label={g.credits.length > 1 ? `Remove all ${g.credits.length} credits for ${g.name}` : `Remove credit for ${g.name}`}
               className="grid size-4 place-items-center rounded-full text-white/30 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
             >
               <X size={9} />
@@ -188,6 +213,22 @@ export function TrackCollaboratorStrip({ trackId, className }: Props) {
           </span>
         );
       })}
+
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-medium text-white/50 transition-colors hover:border-white/20 hover:text-white"
+          aria-label={`Show ${hidden} more credited ${hidden === 1 ? 'person' : 'people'}`}
+        >
+          +{hidden} more
+        </button>
+      )}
+      {expanded && groups.length > 4 && (
+        <button type="button" onClick={() => setExpanded(false)} className="px-1 text-[10px] text-white/40 hover:text-white">
+          Show less
+        </button>
+      )}
 
       <Popover
         width={280}

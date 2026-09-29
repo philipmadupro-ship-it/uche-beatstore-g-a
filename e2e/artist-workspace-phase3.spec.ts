@@ -373,3 +373,31 @@ test('5 · a song built on two beats', async ({ page, baseURL, browser }) => {
   expect((await self.json()).beats.map((b: { id: string }) => b.id)).toEqual([ids.beat2]);
   await artist.close();
 });
+
+test('6 · artists apart from other contacts; search inside projects', async ({ page, baseURL }) => {
+  await asProducer(page, baseURL!);
+  const other = `Phase3 Buyer ${run}`;
+  await rest(page.request, 'POST', 'contacts', { id: randomUUID(), user_id: PRODUCER_ID, name: other, email: `buyer-${run}@local.test` });
+
+  // The artist is under Artists only; the buyer under Other contacts only.
+  await page.goto('/contacts');
+  await page.getByRole('button', { name: /^Artists/ }).click();
+  await page.getByPlaceholder('Search artists or their projects…').fill(projectName);
+  await expect(page.getByTestId(`artist-card-${ids.artist}`)).toBeVisible();
+  await page.getByRole('button', { name: /^Other contacts/ }).click();
+  await page.getByPlaceholder(/Search/).first().fill(run);
+  await expect(page.getByText(other).first()).toBeVisible();
+  await expect(page.getByText(artistName)).toHaveCount(0);
+
+  // /projects finds the project by a track in it and by its artist, and says why.
+  await page.goto('/projects');
+  const search = page.getByPlaceholder('Search projects, tracks, artists, tags…');
+  await search.fill(`TIDE ${run}`);
+  await expect(page.getByTestId('project-match-via')).toHaveText(`Track · TIDE ${run}`);
+  await search.fill(artistName);
+  await expect(page.getByTestId('project-match-via')).toHaveText(`Artist · ${artistName}`);
+
+  // ⌘K: the same project, found through the artist.
+  const hit = await (await page.request.get(`/api/search?q=${encodeURIComponent(artistName)}`)).json();
+  expect(hit.projects.find((p: { id: string }) => p.id === projectId)?.via).toBe(`with ${artistName}`);
+});

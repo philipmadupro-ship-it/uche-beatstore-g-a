@@ -3,11 +3,14 @@
 /**
  * The Artists view on /contacts: every contact in workspace mode as a card —
  * avatar, name, relationship stage, the project you are working on together,
- * what is moving, and what they have done with it. Everyone else stays in the
- * Network table. Cards link to the workspace.
+ * what is moving, and what they have done with it. Everyone else is under
+ * "Other contacts". Cards link to the workspace; the search matches a name,
+ * a linked project or a stage (lib/contacts/audience).
  */
 
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
+import { searchArtists } from '@/lib/contacts/audience';
 import Link from 'next/link';
 import { Layers } from 'lucide-react';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
@@ -15,23 +18,14 @@ import { relativeDays } from '@/components/crm/contacts-shared';
 import { RELATIONSHIP_META } from '@/lib/contacts/relationship';
 import { describeMoving, type ArtistSummary } from '@/lib/contacts/artist-summary';
 
-export function ArtistsCardView() {
-  const [artists, setArtists] = useState<ArtistSummary[] | null>(null);
-  const [ready, setReady] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    fetch('/api/contacts/artists')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((d: { schemaReady: boolean; artists: ArtistSummary[] }) => {
-        if (!alive) return;
-        setReady(d.schemaReady !== false);
-        setArtists(d.artists ?? []);
-      })
-      .catch(() => { if (alive) setFailed(true); });
-    return () => { alive = false; };
-  }, []);
+export function ArtistsCardView({ artists, ready, failed }: {
+  /** From /api/contacts/artists, loaded by the page (it also splits the table by them). Null while loading. */
+  artists: ArtistSummary[] | null;
+  ready: boolean;
+  failed: boolean;
+}) {
+  const [query, setQuery] = useState('');
+  const shown = useMemo(() => searchArtists(artists ?? [], query), [artists, query]);
 
   if (failed) return <p className="py-16 text-center text-[11px] text-white/40">Could not load artists. Reload to try again.</p>;
   if (!ready) return <p className="py-16 text-center text-[11px] text-white/40">The artist workspace needs migrations 122–129 applied on Supabase.</p>;
@@ -45,8 +39,21 @@ export function ArtistsCardView() {
   }
 
   return (
+    <div className="space-y-4">
+      <label className="relative block max-w-sm">
+        <span className="sr-only">Search artists</span>
+        <Search size={13} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search artists or their projects…"
+          className="w-full rounded-lg border border-white/10 bg-white/[0.06] py-2 pl-8 pr-3 text-[11px] text-white/80 placeholder:text-white/30 focus:border-white/30 focus:outline-none"
+        />
+      </label>
+      {shown.length === 0 && <p className="py-10 text-center text-[11px] text-white/40">No artist matches “{query}”.</p>}
     <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="artists-cards">
-      {artists.map((a) => {
+      {shown.map((a) => {
         const moving = describeMoving(a.decisions);
         const facts = [
           a.plays > 0 ? `Played ${a.plays}×` : null,
@@ -106,5 +113,6 @@ export function ArtistsCardView() {
         );
       })}
     </ul>
+    </div>
   );
 }

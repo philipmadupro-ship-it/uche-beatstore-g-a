@@ -170,7 +170,9 @@ In the portal the artist plays beats, downloads where the producer allowed it, a
 
 **Daily digest.** Notify stays a button by default. Turning on **Daily digest** for an artist hands that button to a once-a-day email: sent only when something is new, never more than once a day, and never on top of a Notify the producer pressed that day.
 
-**Finding things.** ⌘K search labels a song with its artist, finds project files, and marks which contacts are artists. A credit on a track can be linked to a contact, which puts the track in that artist's workspace, and a contact can have a photo.
+**Artists apart from everyone else.** /contacts opens on **Artists** (cards, searchable by name or project) and keeps buyers, leads and industry contacts under **Other contacts**, each with its own count — an artist is never listed twice.
+
+**Finding things.** ⌘K search labels a song with its artist, finds project files, and marks which contacts are artists. Projects are found by what is inside them too: /projects and ⌘K match a track in the project, an artist on it, a tag or its description, and say which ("Track · MIDNIGHT", "with Nova"). A track's credits show one entry per person ("Nova · Feature, Collaborator") and fold past three people behind "+N more". A credit on a track can be linked to a contact, which puts the track in that artist's workspace, and a contact can have a photo.
 
 A song is a track of type song; its **Built on** list points it at the beats it was made on — the first is the main beat, any other can be made the main — and each beat's drawer lists the songs built on it. The track drawer's **People** section answers "who has this beat?" — each artist with the project it arrived through, their decision and how often they played it — and every row links through. The project page shows its artists in a strip with Share / Notify and a small decision pill per artist on each track row.
 

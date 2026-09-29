@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
         sb.from('tracks').select('id, title, type, cover_url, audio_url')
           .ilike('title', pattern).eq('user_id', user.id).limit(5),
         sb.from('projects').select('id, name, cover_url')
-          .ilike('name', pattern).eq('user_id', user.id).limit(5),
+          .or(`name.ilike.${orPattern},description.ilike.${orPattern}`).eq('user_id', user.id).limit(5),
         sb.from('contacts').select('id, name, email, role, label')
           .or(`name.ilike.${orPattern},email.ilike.${orPattern}`).eq('user_id', user.id).limit(5),
       ]);
@@ -78,7 +78,8 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json({
         tracks: tracks.map((t) => ({ ...t, artist: extra.songArtists.get(t.id) ?? null })),
-        projects: projectsRes.data || [],
+        projects: await withRelatedProjects(sb, user.id, (projectsRes.data || []) as SearchProjectHit[], tracks, contacts)
+          .catch(() => (projectsRes.data || []) as SearchProjectHit[]),
         contacts: contacts.map((c) => ({ ...c, is_artist: extra.artistIds.has(c.id) })),
         files: extra.files,
       });
@@ -180,4 +181,44 @@ async function workspaceLabels(
     });
   }
   return out;
+}
+
+type SearchProjectHit = { id: string; name: string; cover_url: string | null; via?: string | null };
+
+/**
+ * Search inside projects: besides a name or description hit, a project is a
+ * result when it CONTAINS a matching track or is LINKED to a matching artist
+ * (mig 122), labelled with why (`via`). Owner-filtered; capped at 8.
+ */
+async function withRelatedProjects(
+  sb: ReturnType<typeof createServiceClient>,
+  userId: string,
+  direct: SearchProjectHit[],
+  tracks: Array<{ id: string; title?: string | null }>,
+  contacts: Array<{ id: string; name?: string | null }>,
+): Promise<SearchProjectHit[]> {
+  const out = new Map(direct.map((p) => [p.id, { ...p, via: null as string | null }]));
+  const [viaTracks, viaContacts] = await Promise.all([
+    tracks.length
+      ? sb.from('project_tracks').select('project_id, track_id').in('track_id', tracks.map((t) => t.id)).limit(50)
+      : Promise.resolve({ data: [], error: null }),
+    contacts.length
+      ? sb.from('project_contacts').select('project_id, contact_id').in('contact_id', contacts.map((c) => c.id)).eq('user_id', userId).limit(50)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  const reasons = new Map<string, string>();
+  for (const r of (viaTracks.error ? [] : viaTracks.data ?? []) as Array<{ project_id: string; track_id: string }>) {
+    const t = tracks.find((x) => x.id === r.track_id);
+    if (!reasons.has(r.project_id)) reasons.set(r.project_id, `has ${t?.title ?? 'a matching track'}`);
+  }
+  for (const r of (viaContacts.error ? [] : viaContacts.data ?? []) as Array<{ project_id: string; contact_id: string }>) {
+    const c = contacts.find((x) => x.id === r.contact_id);
+    if (!reasons.has(r.project_id)) reasons.set(r.project_id, `with ${c?.name ?? 'a matching artist'}`);
+  }
+  const extraIds = [...reasons.keys()].filter((id) => !out.has(id)).slice(0, 8);
+  if (extraIds.length) {
+    const { data } = await sb.from('projects').select('id, name, cover_url').in('id', extraIds).eq('user_id', userId);
+    for (const p of (data ?? []) as SearchProjectHit[]) out.set(p.id, { ...p, via: reasons.get(p.id) ?? null });
+  }
+  return [...out.values()].slice(0, 8);
 }

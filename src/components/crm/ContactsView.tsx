@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Users, Upload, Send, Mail, Folder } from 'lucide-react';
 import { Contact, BeatSend } from '@/lib/types';
 import { filterAndSortContacts, paginate, type ContactCategoryFilter, type ContactFilterState, type ContactSortMode, type ContactStatusFilter, type SortDir } from '@/lib/contacts/filters';
@@ -19,6 +19,8 @@ import { ContactsStatsBar } from '@/components/crm/ContactsStatsBar';
 import { FollowUpsPanel } from '@/components/crm/FollowUpsPanel';
 import { ContactsToolbar, type Segment } from '@/components/crm/ContactsToolbar';
 import { ArtistsCardView } from '@/components/artists/ArtistsCardView';
+import { splitContacts } from '@/lib/contacts/audience';
+import type { ArtistSummary } from '@/lib/contacts/artist-summary';
 import { ContactsTable } from '@/components/crm/ContactsTable';
 import { ContactsPagination } from '@/components/crm/ContactsPagination';
 import { ContactsTableSkeleton, type ActivityTone } from '@/components/crm/contacts-shared';
@@ -68,7 +70,39 @@ export function ContactsView({
   const [sendQueue, setSendQueue] = useState<Contact[] | null>(null);
   const [historyContact, setHistoryContact] = useState<Contact | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'network' | 'artists' | 'activity'>('network');
+  const [activeTab, setActiveTabState] = useState<'network' | 'artists' | 'activity'>('network');
+  // Artists (contacts in workspace mode) live in their own view; the table
+  // below only lists everyone else (lib/contacts/audience).
+  const [artists, setArtists] = useState<ArtistSummary[] | null>(null);
+  const [artistsReady, setArtistsReady] = useState(true);
+  const [artistsFailed, setArtistsFailed] = useState(false);
+  const tabChosen = useRef(false);
+  const setActiveTab = (t: 'network' | 'artists' | 'activity') => {
+    tabChosen.current = true;
+    setActiveTabState(t);
+    try { window.localStorage.setItem('contacts.view', t); } catch { /* per-device convenience only */ }
+  };
+  useEffect(() => {
+    let alive = true;
+    try {
+      const saved = window.localStorage.getItem('contacts.view');
+      if (saved === 'network' || saved === 'artists' || saved === 'activity') { tabChosen.current = true; setActiveTabState(saved); }
+    } catch { /* ignore */ }
+    fetch('/api/contacts/artists')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d: { schemaReady: boolean; artists: ArtistSummary[] }) => {
+        if (!alive) return;
+        setArtistsReady(d.schemaReady !== false);
+        setArtists(d.artists ?? []);
+        // First visit: open on the artists when there are any.
+        if (!tabChosen.current && (d.artists ?? []).length > 0) setActiveTabState('artists');
+      })
+      .catch(() => { if (alive) { setArtistsFailed(true); setArtists([]); } });
+    return () => { alive = false; };
+  }, []);
+  const artistIds = useMemo(() => new Set((artists ?? []).map((a) => a.contact.id)), [artists]);
+  // Everything the table, its stats and its filters count: the non-artists.
+  const others = useMemo(() => splitContacts(contacts, artistIds).others, [contacts, artistIds]);
   const [categoryFilter, setCategoryFilter] = useState<ContactCategoryFilter>('all');
   const [statusFilter, setStatusFilter] = useState<ContactStatusFilter>('all');
   const [sortMode, setSortMode] = useState<ContactSortMode>('recent');
@@ -310,7 +344,7 @@ export function ContactsView({
     });
 
   const stats = useMemo(() => {
-    const total = contacts.length;
+    const total = others.length;
     const sends = beatSends.length;
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const active = new Set(beatSends.filter((s) => s.sent_at >= thirtyDaysAgo).map((s) => s.contact_id)).size;
@@ -319,24 +353,24 @@ export function ContactsView({
     const pipeline: Record<string, number> = { sent: 0, opened: 0, interested: 0, negotiating: 0, placed: 0, pass: 0 };
     for (const s of beatSends) { const st = (s.status as string) ?? 'sent'; if (st in pipeline) pipeline[st]++; }
     const openedCount = beatSends.filter((s) => s.opened_at).length;
-    const needNudge = contacts.reduce((n, c) => n + (needsNudge(c.id) ? 1 : 0), 0);
+    const needNudge = others.reduce((n, c) => n + (needsNudge(c.id) ? 1 : 0), 0);
     return { total, sends, active, needNudge, responseRate, pipeline, openedCount };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contacts, beatSends, latestSendByContact]);
+  }, [others, beatSends, latestSendByContact]);
 
   const allTags = useMemo(() => {
     const seen = new Set<string>();
-    for (const c of contacts) for (const t of c.tags ?? []) seen.add(t.tag);
+    for (const c of others) for (const t of c.tags ?? []) seen.add(t.tag);
     return [...seen].sort();
-  }, [contacts]);
+  }, [others]);
   // Tag → how many contacts carry it, for the folder strip. Tags are how
   // contacts are grouped (mig 091), so the strip shows them as folders: always
   // on screen, counted, one click to open — instead of behind a filter popover.
   const tagCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const c of contacts) for (const t of new Set((c.tags ?? []).map((x) => x.tag))) counts.set(t, (counts.get(t) ?? 0) + 1);
+    for (const c of others) for (const t of new Set((c.tags ?? []).map((x) => x.tag))) counts.set(t, (counts.get(t) ?? 0) + 1);
     return counts;
-  }, [contacts]);
+  }, [others]);
 
   const needsNudgeIds = useMemo(() => {
     const s = new Set<string>();
@@ -347,8 +381,8 @@ export function ContactsView({
 
   // Count for each category segment (toolbar dropdown).
   const categoryCount = (seg: string): number => {
-    if (seg === 'all') return contacts.length;
-    return contacts.filter((c) => {
+    if (seg === 'all') return others.length;
+    return others.filter((c) => {
       if (seg === 'nudge') return needsNudge(c.id);
       const cat = c.category?.toLowerCase() || '';
       const role = c.role?.toLowerCase() || '';
@@ -363,8 +397,8 @@ export function ContactsView({
 
   const filtered = useMemo(() => {
     const fState: ContactFilterState = { search: searchQuery, category: categoryFilter, status: statusFilter, sort: sortMode, sortDir, tags: tagFilter };
-    return filterAndSortContacts(contacts, fState, { lastSentByContact, needsNudgeIds, sendCountByContact, leadScoreByContact, revenueByContact });
-  }, [contacts, searchQuery, categoryFilter, sortMode, sortDir, statusFilter, tagFilter, lastSentByContact, needsNudgeIds, sendCountByContact, leadScoreByContact, revenueByContact]);
+    return filterAndSortContacts(others, fState, { lastSentByContact, needsNudgeIds, sendCountByContact, leadScoreByContact, revenueByContact });
+  }, [others, searchQuery, categoryFilter, sortMode, sortDir, statusFilter, tagFilter, lastSentByContact, needsNudgeIds, sendCountByContact, leadScoreByContact, revenueByContact]);
 
   // Reset to page 1 whenever the result set changes.
   useEffect(() => { setCurrentPage(1); }, [searchQuery, categoryFilter, statusFilter, sortMode, sortDir, tagFilter, pageSize]);
@@ -425,14 +459,16 @@ export function ContactsView({
         eyebrow="CRM"
         title="Contacts"
         description="Track artists, buyers, follow-ups, and every beat you send."
-        meta={`${contacts.length} contact${contacts.length === 1 ? '' : 's'}`}
+        meta={`${contacts.length} contact${contacts.length === 1 ? '' : 's'}${artists && artists.length ? ` · ${artists.length} artist${artists.length === 1 ? '' : 's'}` : ''}`}
         actions={
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-md p-0.5">
-              {(['network', 'artists', 'activity'] as const).map((t) => (
-                <button key={t} onClick={() => setActiveTab(t)}
-                  className={`px-3 py-1.5 text-[11px] font-medium rounded capitalize transition-colors ${activeTab === t ? 'bg-white/20 text-white font-semibold' : 'text-white/60 hover:text-white'}`}>
-                  {t}
+              {(['artists', 'network', 'activity'] as const).map((t) => (
+                <button key={t} onClick={() => setActiveTab(t)} aria-pressed={activeTab === t}
+                  className={`px-3 py-1.5 text-[11px] font-medium rounded transition-colors ${activeTab === t ? 'bg-white/20 text-white font-semibold' : 'text-white/60 hover:text-white'}`}>
+                  {t === 'artists' ? 'Artists' : t === 'network' ? 'Other contacts' : 'Beat log'}
+                  {t === 'artists' && artists !== null && <span className="ml-1.5 text-white/40">{artists.length}</span>}
+                  {t === 'network' && <span className="ml-1.5 text-white/40">{others.length}</span>}
                 </button>
               ))}
             </div>
@@ -573,7 +609,7 @@ export function ContactsView({
           )}
         </>
       ) : activeTab === 'artists' ? (
-        <ArtistsCardView />
+        <ArtistsCardView artists={artists} ready={artistsReady} failed={artistsFailed} />
       ) : (
         <div className="border border-[var(--border)] rounded-xl overflow-hidden">
           <BeatLog sends={beatSends} contacts={contacts} />
