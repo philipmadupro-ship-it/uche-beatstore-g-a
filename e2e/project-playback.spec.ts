@@ -59,6 +59,17 @@ const payload = {
   artworkTheme: null,
 };
 
+/**
+ * The public bundle page as production serves it: the player streams a short
+ * preview clip while `duration_seconds` is the full beat (75 s of 179 s there).
+ * With the two equal, a resume computed from the wrong one looked correct —
+ * that is how #40 shipped one that landed ~2.4x too far into the clip.
+ */
+const storePayload = {
+  ...payload,
+  tracks: payload.tracks.map((t) => ({ ...t, duration_seconds: SECONDS * 3 })),
+};
+
 /** Quiet 8 kHz mono PCM, long enough to seek around in. */
 function toneWav(seconds = SECONDS, rate = 8000): Buffer {
   const samples = seconds * rate;
@@ -73,9 +84,9 @@ function toneWav(seconds = SECONDS, rate = 8000): Buffer {
 }
 
 async function stub(page: Page) {
-  const json = { status: 200, contentType: 'application/json', body: JSON.stringify(payload) };
-  await page.route(`**/api/store/projects/${BUNDLE_ID}`, (route) => route.fulfill(json));
-  await page.route(`**/api/store/projects/access/${ACCESS_TOKEN}`, (route) => route.fulfill(json));
+  const json = (body: unknown) => ({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  await page.route(`**/api/store/projects/${BUNDLE_ID}`, (route) => route.fulfill(json(storePayload)));
+  await page.route(`**/api/store/projects/access/${ACCESS_TOKEN}`, (route) => route.fulfill(json(payload)));
   // With Range support, as the real delivery and preview routes have: Chromium
   // cannot seek a media resource served without it, and restarts at 0:00.
   const wav = toneWav();
@@ -188,6 +199,12 @@ test.describe('project playback', () => {
     await page.getByRole('button', { name: /Buy bundle/i }).first().click();
     await expect(page).toHaveURL(/\/store\/checkout/);
     await expectSilent(page);
+    // Where it really stopped: the audio played on while the route changed.
+    const stoppedAt = await page.evaluate(
+      (clip) => JSON.parse(localStorage.getItem('antigravity-player') ?? '{}').state.progress * clip,
+      SECONDS,
+    );
+    expect(stoppedAt).toBeGreaterThanOrEqual(leftAt - 0.5);
 
     await page.goBack();
     await expect(page.getByRole('heading', { name: 'Playback Bundle' })).toBeVisible();
@@ -200,9 +217,11 @@ test.describe('project playback', () => {
     // Play resumes the same track near where the buyer left it, not at 0:00.
     // Checked on the paused element first: once playing, a track restarted
     // from 0:00 would pass a time check within a few seconds anyway.
-    await expect.poll(async () => (await audios(page))[0]?.time ?? 0).toBeGreaterThan(leftAt - 1);
+    // Within a second of it either way: past it is as wrong as 0:00.
+    await expect.poll(async () => (await audios(page))[0]?.time ?? 0).toBeGreaterThan(stoppedAt - 1);
+    expect((await audios(page))[0].time).toBeLessThan(stoppedAt + 1);
     await page.getByRole('button', { name: 'Play', exact: true }).first().click();
-    await expectPlaying(page, 1, leftAt - 1);
+    await expectPlaying(page, 1, stoppedAt - 1);
     expect(await audios(page)).toHaveLength(1);
   });
 
@@ -284,6 +303,12 @@ test.describe('dashboard player → share page in the same tab → Back', () => 
 
     // Same tab, full load: only the share page's player may be heard.
     await page.goto('/projects/share/e2ePlaybackShare');
+    // Where the dashboard really stopped: it played on until the page unloaded.
+    const stoppedAt = await page.evaluate(
+      (clip) => JSON.parse(localStorage.getItem('antigravity-player') ?? '{}').state.progress * clip,
+      SECONDS,
+    );
+    expect(stoppedAt).toBeGreaterThanOrEqual(leftAt - 0.5);
     await page.getByRole('button', { name: 'Play', exact: true }).first().click();
     await expect.poll(async () => {
       const on = await playingMedia(page);
@@ -300,12 +325,13 @@ test.describe('dashboard player → share page in the same tab → Back', () => 
     expect(await playingMedia(page)).toHaveLength(0);
     // The paused bar's element already sits at the old position (see the
     // checkout test for why this is checked before Play).
-    await expect.poll(async () => (await audios(page))[0]?.time ?? 0).toBeGreaterThan(leftAt - 1);
+    await expect.poll(async () => (await audios(page))[0]?.time ?? 0).toBeGreaterThan(stoppedAt - 1);
+    expect((await audios(page))[0].time).toBeLessThan(stoppedAt + 1);
 
     await page.getByRole('button', { name: 'Play', exact: true }).first().click();
     await expect.poll(async () => {
       const on = await playingMedia(page);
-      return on.length === 1 && on[0].src.includes('e2e-playback-1.wav') && on[0].time > leftAt - 1;
+      return on.length === 1 && on[0].src.includes('e2e-playback-1.wav') && on[0].time > stoppedAt - 1;
     }).toBe(true);
   });
 });

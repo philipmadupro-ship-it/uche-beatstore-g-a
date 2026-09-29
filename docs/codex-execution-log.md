@@ -9048,6 +9048,13 @@ Checked in Chromium against `next build && next start` and the dev server, signe
 
 Tests: `usePlayer.test.ts` (+2: progress persisted but not `isPlaying`; restored paused after reload). `e2e/project-playback.spec.ts` +1 (dashboard → share → Back; skipped without the stub Supabase URL, like the other dashboard specs); it fails on the old store at the position check. The two resume tests now check the paused element's position BEFORE pressing Play — the first version of the new test passed on the old code because a track restarted from 0:00 reaches the old position within the poll window.
 
+### Follow-up: resume position on store previews (found verifying #40 on production)
+
+Verified #40 on production (`uche-beatstore-g-a.vercel.app`, real "Beat Pack" bundle, real R2 previews; the delivery page with only its access API stubbed, since no real purchase token was available). 16/16 behaviour checks passed, but two numbers were wrong: left checkout at ≈8.9 s, came back at 21.3 s; reloaded at ≈23.4 s, came back at 55.9 s. Both ≈ ×2.39 = 179 / 74.9 — the preview clip is 74.9 s, the track's `duration_seconds` 179 s. The fraction saved was of the clip; the resume converted it back with `duration_seconds`, because a fresh element has no metadata yet and `seekSeconds` falls back to the stored duration. Only store previews were affected (dashboard playback is the full track). The e2e fixture served audio exactly as long as `duration_seconds`, so it could not see this, and its check was only a lower bound.
+
+- `SimpleAudioEngine` resumes with the element's own duration: immediately if metadata is there, else on `loadedmetadata`. The pending resume is keyed to its track id and cleared only once applied, so StrictMode's rehearsal cleanup cannot consume it and a track picked meanwhile never inherits it. The background cached-blob swap (which rewinds on `load()`) re-arms the position it had.
+- Tests: `SimpleAudioEngine.test.tsx` — resume waits for metadata; a 75 s preview of a 179 s beat resumes at 9 s, not 21.48 s (the old engine's answer, matching production). `e2e/project-playback.spec.ts` — the bundle page's tracks now claim 3× their clip length, as production's do, and both resume checks bound the position within ±1 s of where playback actually stopped (read from the persisted progress). The old engine fails it: stopped ≈4.9 s, came back at 14.7 s.
+
 ## 2026-09-29 - Store Editor video section: link reachable, real size control (STORE-08)
 
 Producer report: in Design, a video section's size couldn't be changed and a URL couldn't be pasted.
