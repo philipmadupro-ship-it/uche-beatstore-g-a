@@ -5,6 +5,7 @@ import type { AudioFeatures } from '@/lib/audio/analyze.server';
 import { getAuddFeatures } from '@/lib/audio/audd';
 import type { AuddFeatures } from '@/lib/audio/audd';
 import { mergeFeatures } from '@/lib/audio/merge';
+import { parseClientAnalysis } from '@/lib/contracts/client-analysis';
 import { extractPeaks } from '@/lib/audio/peaks';
 import { makeTruncatedPreview, DEFAULT_PREVIEW_SECONDS } from '@/lib/audio/preview';
 import { needsPreview, isPreviewableMaster, canTruncateWithoutFfmpeg } from '@/lib/audio/preview-candidates';
@@ -78,9 +79,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (rawText.trim().length > 0) {
       try {
         const body = JSON.parse(rawText) as unknown;
-        clientFeatures = isRecord(body) && isRecord(body.features)
-          ? body.features as ClientFeatures
-          : null;
+        if (isRecord(body) && body.features !== undefined) {
+          // Validated per field; see lib/contracts/client-analysis.
+          const parsed = parseClientAnalysis(body.features);
+          if (parsed.rejected.length) {
+            log.warn('Dropped invalid client analysis fields', { rejected: parsed.rejected });
+          }
+          clientFeatures = parsed.analysis as ClientFeatures | null;
+        }
         // Chord timeline (Task 8) — client-detected via Essentia HPCP. Validate
         // shape + cap length so a bad payload can't bloat the row.
         if (isRecord(body) && Array.isArray(body.chords)) {

@@ -16,6 +16,7 @@ import {
 } from '@/lib/upload/row-actions';
 import { InlineText } from '@/components/ui/InlineText';
 import { parseTitleMetadata, describeTitleMetadata } from '@/lib/upload/title-metadata';
+import { FilenameChecks } from './FilenameChecks';
 import { InlineTagStrip, type TagGroup } from '@/components/ui/InlineTagStrip';
 import { TAG_TAXONOMY } from '@/lib/types/tags';
 import { useTags } from '@/hooks/useTags';
@@ -136,7 +137,8 @@ function UploadRow({ u }: { u: UploadItem }) {
   const editable = canEditUploadedTrack(u);
   const trackId = (u.track?.id as string | undefined) ?? '';
   const trackTitle = (u.track?.title as string | undefined) ?? u.fileName.replace(/\.[^.]+$/, '');
-  const filenameMeta = describeTitleMetadata(parseTitleMetadata(u.fileName));
+  const parsedName = useMemo(() => parseTitleMetadata(u.fileName), [u.fileName]);
+  const filenameMeta = describeTitleMetadata(parsedName);
 
   /**
    * Rename the track this row created.
@@ -249,6 +251,17 @@ function UploadRow({ u }: { u: UploadItem }) {
           it if the name lied. */}
       {u.status === 'success' && filenameMeta && (
         <p className="mt-1 text-[10px] text-white/40">{filenameMeta}</p>
+      )}
+      {/* What the name left unsettled, or disagreed with the analyser about —
+          never guessed, and settled here in one click. */}
+      {u.status === 'success' && (
+        <FilenameChecks
+          meta={parsedName}
+          detected={u.analysis}
+          trackId={trackId}
+          editable={editable}
+          onApplied={(p) => patch(u.id, { track: { ...(u.track ?? {}), ...p } })}
+        />
       )}
 
       {/* error/info detail */}
