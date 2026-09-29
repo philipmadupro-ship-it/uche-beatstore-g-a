@@ -647,7 +647,10 @@ export function StorefrontBuilder({
 
         {/* Right: inspector */}
         <aside className={cn(
-          'min-h-0 border-l border-white/10 bg-[#0D0D0A]',
+          // overflow-hidden + the inspector's h-full: without a bounded height
+          // here the inspector never scrolled, and whatever did not fit (the
+          // video link, on a 768px-tall laptop) was clipped out of reach.
+          'min-h-0 overflow-hidden border-l border-white/10 bg-[#0D0D0A]',
           compact && 'absolute inset-y-0 right-0 z-30 w-72 shadow-[0_0_40px_rgba(0,0,0,0.6)]',
         )}
         >

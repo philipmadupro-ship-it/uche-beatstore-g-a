@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
       voice_tag_interval_seconds,
       bundle_discount_threshold,
       bundle_discount_percent,
+      store_layout,
     } = body;
 
     const payload = {
@@ -115,6 +116,10 @@ export async function POST(req: NextRequest) {
       // Bundle/quantity discount (migration 077)
       ...(bundle_discount_threshold !== undefined && { bundle_discount_threshold: Math.max(0, Math.min(99, Math.round(Number(bundle_discount_threshold) || 0))) }),
       ...(bundle_discount_percent !== undefined && { bundle_discount_percent: Math.max(0, Math.min(90, Number(bundle_discount_percent) || 0)) }),
+      // Store Editor → Design layout (migration 113). Missing from this
+      // whitelist until STORE-08: the builder's autosave got a 200 and the
+      // layout was never written, so nothing arranged in Design reached /store.
+      ...(store_layout !== undefined && { store_layout: store_layout ?? null }),
     };
 
     const result = await updateCreatorProfile(pickProvidedProfileFields(payload, body));

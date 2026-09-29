@@ -23,7 +23,7 @@ import type { CreatorProfile, StoreTrack } from '@/components/store/types';
 import { resolveSection, type SectionSettings, type StoreBreakpoint, type StoreSection, type StoreTheme } from '@/lib/store-editor/layout';
 import { cn } from '@/lib/utils';
 import { pointToPercent } from '@/lib/store-editor/canvas-blocks';
-import { hasLiveContent, safeImageSrc, safeLinkHref } from '@/lib/store-editor/content-sections';
+import { hasLiveContent, safeImageSrc, safeLinkHref, mediaAlignMargins, mediaSizePercent } from '@/lib/store-editor/content-sections';
 import { videoEmbedUrl } from '@/lib/store-editor/video-embed';
 import { storeSocialLinks } from '@/lib/store/social-links';
 
@@ -107,6 +107,12 @@ export function SectionRenderer({
   const pad = spacingFor(settings, theme);
   const inner = cn('mx-auto w-full', widthClass(settings.width));
   const align = settings.align === 'center' ? 'text-center' : settings.align === 'right' ? 'text-right' : 'text-left';
+  // Image and video: the Size slider (a share of the section width), placed by
+  // the section's Align setting. Same object on the canvas and on /store.
+  const mediaBox = {
+    width: `${mediaSizePercent(section.content?.mediaSize)}%`,
+    ...mediaAlignMargins(settings.align),
+  };
 
   const body = (() => {
     switch (section.kind) {
@@ -361,8 +367,8 @@ export function SectionRenderer({
                * the hero.
                */
               <div
-                className="w-full overflow-hidden"
-                style={{ aspectRatio: '16 / 9', borderRadius: theme.radius }}
+                className="overflow-hidden"
+                style={{ aspectRatio: '16 / 9', borderRadius: theme.radius, ...mediaBox }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary producer-supplied URL, not a known-size asset. */}
                 <img
@@ -390,8 +396,8 @@ export function SectionRenderer({
           <div className={cn(inner, 'px-4')}>
             {embed ? (
               <div
-                className="aspect-video w-full overflow-hidden border"
-                style={{ borderColor: theme.border, background: theme.surface, borderRadius: theme.radius }}
+                className="aspect-video overflow-hidden border"
+                style={{ borderColor: theme.border, background: theme.surface, borderRadius: theme.radius, ...mediaBox }}
               >
                 <iframe
                   src={embed}

@@ -257,3 +257,25 @@ describe('content sections on the live storefront', () => {
     expect(container.querySelector('iframe')).toBeNull();
   });
 });
+
+describe('image and video size', () => {
+  it('draws a live video at the chosen share of the section, placed by Align', () => {
+    const base = createSection('video', 'Clip', { align: 'right' });
+    const section = { ...base, content: { videoUrl: 'https://youtu.be/dQw4w9WgXcQ', mediaSize: 60 } };
+    const { container } = render(
+      <SectionRenderer section={section} breakpoint="desktop" theme={defaultStoreTheme} data={data} live />,
+    );
+    const box = container.querySelector('iframe')!.parentElement!;
+    expect(box.style.width).toBe('60%');
+    expect(box.style.marginLeft).toBe('auto');
+    expect(box.style.marginRight).toBe('0px');
+  });
+
+  it('draws full width when no size was ever set', () => {
+    const section = { ...createSection('image', 'Photo'), content: { imageUrl: 'https://cdn.example.com/a.jpg' } };
+    const { container } = render(
+      <SectionRenderer section={section} breakpoint="desktop" theme={defaultStoreTheme} data={data} live />,
+    );
+    expect(container.querySelector('img')!.parentElement!.style.width).toBe('100%');
+  });
+});
