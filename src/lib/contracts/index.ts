@@ -416,6 +416,8 @@ const ContactWritableFields = {
   role: z.string().max(120).nullable().optional(),
   label: z.string().max(120).nullable().optional(),
   category: z.string().max(60).nullable().optional(),
+  /** The one extra role beside `category` (mig 134, lib/contacts/roles). */
+  secondary_category: z.string().max(60).nullable().optional(),
   genre: z.string().max(120).nullable().optional(),
   country: z.string().max(120).nullable().optional(),
   city: z.string().max(120).nullable().optional(),

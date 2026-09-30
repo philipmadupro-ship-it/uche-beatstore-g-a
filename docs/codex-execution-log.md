@@ -9160,3 +9160,15 @@ Owner request: link a song to its beat, a beat to its loops, and so on, then dow
 - Loop/Topline added to every type list (upload, drawer, library filter, analytics, quick share, add-from-library).
 
 Tests: links (7), zip-stream (2, unzipped and compared); `e2e/linked-material.spec.ts` 3 flows on the real database (zip compared byte for byte, share row checked); degradation with 133 dropped: GET works, non-beat links 503, zip works.
+
+## 2026-09-30 - Contact roles (step 2 of the roles/linking plan)
+
+Owner request: artists, producers and labels each get their own tab in contacts with the features that fit (producers → loops, labels → toplines and packs); a contact has a main role and can add one more.
+
+- Migration 134: `contacts.secondary_category`.
+- `lib/contacts/roles.ts`: category → group (artist / producer / label / other), `contactGroups` (main first, one extra, workspace contacts with no specific role are artists), `splitByRole`, `otherRoleBadge`, `ROLE_SENDS`, `sentByType`.
+- /contacts: Artists · Producers · Labels & A&R · Other contacts · Beat log; the table and its stats run over the tab's people. Producers / Labels open with `RoleSummaryStrip` (`/api/contacts/roles`), with "Show all N" (the first version cut at 9 and hid a producer who had never been sent anything — caught by the e2e). Artists without a workspace are listed under the cards.
+- `SendBeatModal`: `initialMode` + `typeFilter` (a clearable "Loops only" chip).
+- Contact page: `ContactRoleFields` (Role + Also) replaces the free-text Category field.
+
+Tests: roles (7); `e2e/contact-roles.spec.ts` 3 flows; all 23 real-DB flows pass.

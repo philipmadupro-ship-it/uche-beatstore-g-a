@@ -37,7 +37,7 @@ re-run `NOTIFY pgrst, 'reload schema';` and wait.
 As of **2026-09-29** 001–129 are in effect on production: the owner ran the
 SQL-editor bundle and its verify table reported every row `applied`.
 **Pending: 130, 131, 132** (Artist Workspace, phase 3) and **133** (linked
-material) — `supabase/apply/pending.sql` carries all four. Every one is
+material) and **134** (contact roles) — `supabase/apply/pending.sql` carries all five. Every one is
 idempotent, so the bundle is safe to run again if some were already applied. Keep the table below as the record; add new
 migrations to it as **not applied** until they are run.
 
@@ -78,6 +78,7 @@ service-role key can read the schema's effects but cannot run DDL):
 | `131_portal_sign_in.sql` | **not applied** | new — `artist_portals.require_sign_in` + `sign_in_sent_at` (optional email sign-in) |
 | `132_song_beats.sql` | **not applied** | new — `song_beats`: a song built on several beats; backfilled from `tracks.beat_track_id` |
 | `133_track_links.sql` | **not applied** | new — `track_links` (instrumental / loop / topline / version) + track types `loop`, `topline` |
+| `134_contact_secondary_role.sql` | **not applied** | new — `contacts.secondary_category`: one extra role beside `category` |
 
 **To apply everything pending in one go** without `psql`, paste
 `supabase/apply/pending.sql` (built by `scripts/ops/bundle-migrations.sh`) into
@@ -203,12 +204,18 @@ All are idempotent, so running the full set (`npm run db:migrate`) is safe.
   DROP IF EXISTS and refuse loops, and verify would read MISSING.
   Without 133: links other than "beat" answer 503; everything else works.
 
+- `134` — **Contact roles.** `contacts.secondary_category` (text, nullable,
+  partial index): one extra role beside the main `category`, which decides
+  the tabs a contact appears in on /contacts (`lib/contacts/roles.ts`).
+  Without it the Producers/Labels tabs still work from `category`; saving an
+  extra role fails until it is applied.
+
 Update this table when a run is confirmed.
 
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 133, 121 is `121_share_full_playback` (SHARE-01) (next new migration = 134). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 134, 121 is `121_share_full_playback` (SHARE-01) (next new migration = 135). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch

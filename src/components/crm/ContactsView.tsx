@@ -19,7 +19,9 @@ import { ContactsStatsBar } from '@/components/crm/ContactsStatsBar';
 import { FollowUpsPanel } from '@/components/crm/FollowUpsPanel';
 import { ContactsToolbar, type Segment } from '@/components/crm/ContactsToolbar';
 import { ArtistsCardView } from '@/components/artists/ArtistsCardView';
-import { splitContacts } from '@/lib/contacts/audience';
+import { ROLE_SENDS, otherRoleBadge, splitByRole } from '@/lib/contacts/roles';
+import { RoleSummaryStrip, type RoleSendPreset } from '@/components/crm/RoleSummaryStrip';
+import Link from 'next/link';
 import type { ArtistSummary } from '@/lib/contacts/artist-summary';
 import { ContactsTable } from '@/components/crm/ContactsTable';
 import { ContactsPagination } from '@/components/crm/ContactsPagination';
@@ -53,6 +55,13 @@ function asSortMode(value: string | undefined): ContactSortMode {
  * This component is the stateful container; presentation lives in the
  * extracted Toolbar / Table / Pagination / StatsBar / BulkEditPanel children.
  */
+/** /contacts tabs: one per role group (lib/contacts/roles), then the beat log. */
+const CONTACTS_TABS = ['artists', 'producers', 'labels', 'network', 'activity'] as const;
+type ContactsTab = (typeof CONTACTS_TABS)[number];
+const TAB_LABEL: Record<ContactsTab, string> = {
+  artists: 'Artists', producers: 'Producers', labels: 'Labels & A&R', network: 'Other contacts', activity: 'Beat log',
+};
+
 export function ContactsView({
   initialContacts,
   initialBeatSends,
@@ -70,14 +79,14 @@ export function ContactsView({
   const [sendQueue, setSendQueue] = useState<Contact[] | null>(null);
   const [historyContact, setHistoryContact] = useState<Contact | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTabState] = useState<'network' | 'artists' | 'activity'>('network');
+  const [activeTab, setActiveTabState] = useState<ContactsTab>('network');
   // Artists (contacts in workspace mode) live in their own view; the table
   // below only lists everyone else (lib/contacts/audience).
   const [artists, setArtists] = useState<ArtistSummary[] | null>(null);
   const [artistsReady, setArtistsReady] = useState(true);
   const [artistsFailed, setArtistsFailed] = useState(false);
   const tabChosen = useRef(false);
-  const setActiveTab = (t: 'network' | 'artists' | 'activity') => {
+  const setActiveTab = (t: ContactsTab) => {
     tabChosen.current = true;
     setActiveTabState(t);
     try { window.localStorage.setItem('contacts.view', t); } catch { /* per-device convenience only */ }
@@ -86,7 +95,7 @@ export function ContactsView({
     let alive = true;
     try {
       const saved = window.localStorage.getItem('contacts.view');
-      if (saved === 'network' || saved === 'artists' || saved === 'activity') { tabChosen.current = true; setActiveTabState(saved); }
+      if ((CONTACTS_TABS as readonly string[]).includes(saved ?? '')) { tabChosen.current = true; setActiveTabState(saved as ContactsTab); }
     } catch { /* ignore */ }
     fetch('/api/contacts/artists')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
@@ -101,8 +110,21 @@ export function ContactsView({
     return () => { alive = false; };
   }, []);
   const artistIds = useMemo(() => new Set((artists ?? []).map((a) => a.contact.id)), [artists]);
-  // Everything the table, its stats and its filters count: the non-artists.
-  const others = useMemo(() => splitContacts(contacts, artistIds).others, [contacts, artistIds]);
+  // One tab per role (lib/contacts/roles): a contact's main role plus its one
+  // extra role. The table, its stats and its filters count only the people of
+  // the tab on screen — producers under Producers, labels under Labels, and
+  // everyone without an artist/producer/label role under Other contacts.
+  const byRole = useMemo(() => splitByRole(contacts, artistIds), [contacts, artistIds]);
+  const others = useMemo(
+    () => (activeTab === 'producers' ? byRole.producer : activeTab === 'labels' ? byRole.label : byRole.other),
+    [activeTab, byRole],
+  );
+  // Artists by role with no workspace yet: listed under the cards so an
+  // artist is never hidden from every tab.
+  const artistsWithoutWorkspace = useMemo(() => byRole.artist.filter((c) => !artistIds.has(c.id)), [byRole, artistIds]);
+  // The send that fits the tab (loops for producers, toplines for labels).
+  const [sendPreset, setSendPreset] = useState<RoleSendPreset | null>(null);
+  const tabPreset = (): RoleSendPreset | null => (activeTab === 'producers' ? ROLE_SENDS.producer[0] : activeTab === 'labels' ? ROLE_SENDS.label[0] : null);
   const [categoryFilter, setCategoryFilter] = useState<ContactCategoryFilter>('all');
   const [statusFilter, setStatusFilter] = useState<ContactStatusFilter>('all');
   const [sortMode, setSortMode] = useState<ContactSortMode>('recent');
@@ -463,12 +485,14 @@ export function ContactsView({
         actions={
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-md p-0.5">
-              {(['artists', 'network', 'activity'] as const).map((t) => (
+              {CONTACTS_TABS.map((t) => (
                 <button key={t} onClick={() => setActiveTab(t)} aria-pressed={activeTab === t}
                   className={`px-3 py-1.5 text-[11px] font-medium rounded transition-colors ${activeTab === t ? 'bg-white/20 text-white font-semibold' : 'text-white/60 hover:text-white'}`}>
-                  {t === 'artists' ? 'Artists' : t === 'network' ? 'Other contacts' : 'Beat log'}
-                  {t === 'artists' && artists !== null && <span className="ml-1.5 text-white/40">{artists.length}</span>}
-                  {t === 'network' && <span className="ml-1.5 text-white/40">{others.length}</span>}
+                  {TAB_LABEL[t]}
+                  {t === 'artists' && artists !== null && <span className="ml-1.5 text-white/40">{artistIds.size + artistsWithoutWorkspace.length}</span>}
+                  {t === 'producers' && <span className="ml-1.5 text-white/40">{byRole.producer.length}</span>}
+                  {t === 'labels' && <span className="ml-1.5 text-white/40">{byRole.label.length}</span>}
+                  {t === 'network' && <span className="ml-1.5 text-white/40">{byRole.other.length}</span>}
                 </button>
               ))}
             </div>
@@ -482,9 +506,22 @@ export function ContactsView({
         }
       />
 
-      {activeTab === 'network' ? (
+      {activeTab === 'network' || activeTab === 'producers' || activeTab === 'labels' ? (
         <>
-          <FollowUpsPanel />
+          {activeTab === 'producers' || activeTab === 'labels' ? (
+            <RoleSummaryStrip
+              key={activeTab}
+              group={activeTab === 'producers' ? 'producer' : 'label'}
+              onSend={(contactId, preset) => {
+                const c = contacts.find((x) => x.id === contactId);
+                if (!c) return;
+                setSendPreset(preset);
+                setSendQueue([c]);
+              }}
+            />
+          ) : (
+            <FollowUpsPanel />
+          )}
 
           <ContactsStatsBar stats={stats} />
 
@@ -596,7 +633,7 @@ export function ContactsView({
                 onFilterTone={(t) => setStatusFilter((cur) => (cur === t ? 'all' : t))}
                 needsNudge={needsNudge}
                 onOpenHistory={(c) => setHistoryContact(c)}
-                onSend={(c) => setSendQueue([c])}
+                onSend={(c) => { setSendPreset(tabPreset()); setSendQueue([c]); }}
                 onNudge={(c) => { const latest = latestSendByContact.get(c.id); if (latest) setNudgeContact({ contact: c, latestSend: latest }); }}
                 onStageChange={onStageChange}
                 dropHoverId={dropHoverId}
@@ -609,7 +646,31 @@ export function ContactsView({
           )}
         </>
       ) : activeTab === 'artists' ? (
-        <ArtistsCardView artists={artists} ready={artistsReady} failed={artistsFailed} />
+        <>
+          <ArtistsCardView artists={artists} ready={artistsReady} failed={artistsFailed} />
+          {artistsWithoutWorkspace.length > 0 && (
+            <section aria-labelledby="artists-no-ws" className="mt-8" data-testid="artists-without-workspace">
+              <h2 id="artists-no-ws" className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
+                Artists without a workspace yet · {artistsWithoutWorkspace.length}
+              </h2>
+              <ul className="divide-y divide-white/[0.06] rounded-xl border border-white/10 bg-[#0D0D0A]">
+                {artistsWithoutWorkspace.map((c) => {
+                  const badge = otherRoleBadge(c, false, 'artist');
+                  return (
+                    <li key={c.id} className="flex items-center gap-3 px-4 py-2.5">
+                      <Link href={`/contacts/${c.id}`} className="min-w-0 flex-1 truncate text-[13px] text-white/80 hover:text-white">{c.name}</Link>
+                      <span className="shrink-0 text-[11px] text-white/40">{[c.category, badge].filter(Boolean).join(' · ')}</span>
+                      <button type="button" onClick={() => { setSendPreset(ROLE_SENDS.artist[0]); setSendQueue([c]); }} disabled={!c.email}
+                        className="shrink-0 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1 text-[11px] text-white/80 hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40">
+                        Send beats
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+        </>
       ) : (
         <div className="border border-[var(--border)] rounded-xl overflow-hidden">
           <BeatLog sends={beatSends} contacts={contacts} />
@@ -634,7 +695,9 @@ export function ContactsView({
             contacts={sendQueue}
             initialTrackIds={prefilledTrackIds ?? undefined}
             priorSentTrackIds={prior.size > 0 ? prior : undefined}
-            onClose={() => { setSendQueue(null); setPrefilledTrackIds(null); }}
+            initialMode={sendPreset?.mode}
+            typeFilter={sendPreset?.types}
+            onClose={() => { setSendQueue(null); setPrefilledTrackIds(null); setSendPreset(null); }}
             onSuccess={() => { refetch(); setPrefilledTrackIds(null); setSelectedIds(new Set()); }}
           />
         );

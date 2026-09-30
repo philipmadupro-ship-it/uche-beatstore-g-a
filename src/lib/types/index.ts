@@ -120,6 +120,8 @@ export interface Contact {
   role?: string | null;
   label?: string | null;
   category?: ContactCategory | string | null;
+  /** The one extra role beside `category` (mig 134). */
+  secondary_category?: string | null;
   genre?: string | null;
   country?: string | null;
   city?: string | null;

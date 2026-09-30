@@ -23,6 +23,7 @@ FROM (VALUES
   ('130_artist_messages',            to_regclass('public.artist_messages') IS NOT NULL),
   ('131_portal_sign_in',             EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'artist_portals' AND column_name = 'require_sign_in')),
   ('132_song_beats',                 to_regclass('public.song_beats') IS NOT NULL),
+  ('134_contact_secondary_role',     EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'contacts' AND column_name = 'secondary_category')),
   ('133_track_links',                to_regclass('public.track_links') IS NOT NULL
                                      AND pg_get_constraintdef((SELECT oid FROM pg_constraint WHERE conname = 'tracks_type_check' AND conrelid = 'public.tracks'::regclass)) LIKE '%topline%'
                                      AND (SELECT count(*) FROM pg_constraint WHERE conrelid = 'public.tracks'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%instrumental%') = 1)

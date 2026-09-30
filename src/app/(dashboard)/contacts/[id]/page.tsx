@@ -38,6 +38,7 @@ import { cn } from '@/lib/utils';
 import type { Contact, BeatSend } from '@/lib/types';
 import { deriveActivityTone, type ActivityTone } from '@/lib/contacts/tone';
 import { ArtistWorkspaceHeader } from '@/components/artists/ArtistWorkspaceHeader';
+import { ContactRoleFields } from '@/components/crm/ContactRoleFields';
 import { ArtistWorkspaceTabs } from '@/components/artists/ArtistWorkspaceTabs';
 import { StartWorkspace } from '@/components/artists/StartWorkspace';
 import type { WorkspaceResponse } from '@/components/artists/types';
@@ -225,7 +226,11 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <DetailField icon={<Mail size={11} />}    label="Email"     value={contact.email}     onSave={(v) => patchField('email', v)} />
                 <DetailField icon={<Phone size={11} />}   label="Phone"     value={contact.phone}     onSave={(v) => patchField('phone', v)} />
-                <DetailField icon={<Tag size={11} />}     label="Category"  value={contact.category} onSave={(v) => patchField('category', v)} />
+                <ContactRoleFields
+                  category={contact.category}
+                  secondaryCategory={contact.secondary_category}
+                  onSave={(field, v) => void patchField(field, v)}
+                />
                 <DetailField icon={<Tag size={11} />}     label="Genre"     value={contact.genre}     onSave={(v) => patchField('genre', v)} />
                 <DetailField icon={<Globe size={11} />}   label="Instagram" value={contact.instagram} onSave={(v) => patchField('instagram', v)} prefix="@" />
                 <DetailField icon={<Globe size={11} />}   label="Twitter"   value={contact.twitter}   onSave={(v) => patchField('twitter', v)} prefix="@" />

@@ -170,7 +170,7 @@ In the portal the artist plays beats, downloads where the producer allowed it, a
 
 **Daily digest.** Notify stays a button by default. Turning on **Daily digest** for an artist hands that button to a once-a-day email: sent only when something is new, never more than once a day, and never on top of a Notify the producer pressed that day.
 
-**Artists apart from everyone else.** /contacts opens on **Artists** (cards, searchable by name or project) and keeps buyers, leads and industry contacts under **Other contacts**, each with its own count — an artist is never listed twice.
+**A tab per role.** /contacts has **Artists · Producers · Labels & A&R · Other contacts**. A contact has a main role and can have one more ("Role: Artist · Also: Producer" on the contact page), and shows in the tab of each, badged with the other. Each tab puts first what that relationship is about: Artists keep the workspace cards (and list artists who have no workspace yet); **Producers** show what loops and beats you have sent each one and the tracks you share credits on, with **Send loops**; **Labels & A&R** show the toplines, songs and packs sent, with **Send toplines** and **Send a pack**. Those buttons open the usual send flow already filtered to loops or toplines (one click clears the filter). Buyers, friends and everyone else stay under Other contacts.
 
 **Finding things.** ⌘K search labels a song with its artist, finds project files, and marks which contacts are artists. Projects are found by what is inside them too: /projects and ⌘K match a track in the project, an artist on it, a tag or its description, and say which ("Track · MIDNIGHT", "with Nova"). A track's credits show one entry per person ("Nova · Feature, Collaborator") and fold past three people behind "+N more". A credit on a track can be linked to a contact, which puts the track in that artist's workspace, and a contact can have a photo.
 
@@ -233,6 +233,7 @@ project_comments(project_id, track_id, author_name, body, parent_id,
                  contact_id)   -- set = an artist's portal thread
 
 contacts(id, user_id, name, email, role, label, instagram, notes,
+         category, secondary_category,   -- main role + one extra (tabs on /contacts)
          buyer_pipeline_status, avatar_url, created_at)
 project_assets(id, project_id, user_id, kind[reference|artwork|lyrics|document|audio|other],
                label, file_name, url, mime, size_bytes, position, in_portal,
