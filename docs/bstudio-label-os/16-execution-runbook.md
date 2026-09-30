@@ -1,61 +1,96 @@
 # 16 — Execution Runbook: one task per Claude session
 
-**Decided 2026-09-30:** each backlog task runs in its own fresh Claude Code session, one after another in dependency order. The owner reviews and merges each pull request, and merging starts the next task.
+**Decided 2026-09-30 (revised the same day):**
+
+- Each backlog task runs in its own fresh Claude Code session, one after another in dependency order.
+- **Nothing goes to production.** Every finished task is merged into a separate Label OS branch by the orchestrator. The owner is not a gate per task.
+- The owner merges that branch into `main` (production) **once**, when they decide.
+
+## Branches
+
+```text
+main  (production — untouched by this work)
+  │
+  └── claude/happy-bardeen-rnosf3   ← the Label OS branch. Everything lands here.
+         ├── label-os/LABEL-02  ── PR ──▶ merged into the Label OS branch by the orchestrator
+         ├── label-os/LABEL-03  ── PR ──▶ merged into the Label OS branch by the orchestrator
+         └── …
+Later, by the owner only:  Label OS branch ──▶ main
+```
+
+- **Label OS branch:** `claude/happy-bardeen-rnosf3`. Every task PR targets it.
+- **Task branches:** `label-os/LABEL-NN`, one per task, deleted after merge.
+- **`main` is never pushed to or merged into by any session.**
+- **Weekly:** merge `main` *into* the Label OS branch, so the final merge to production stays small and conflict-free (R-13). This only brings production's changes in; nothing flows out.
 
 ## Why one task per session
 
 - **Fresh context per task.** Each session reads the repo and this folder cold, so knowledge lives in the docs, not in a long chat that gets summarised and forgets things.
-- **Small pull requests.** One task = one PR = one thing to review. That matches the backlog's "independently executable" format.
+- **Small pull requests.** One task = one PR = one merge commit on the Label OS branch, easy to inspect or revert later.
 - **Clean failure.** A task that goes wrong is abandoned and restarted without polluting the next one.
-- **Sequential, not parallel,** because Phases 1–2 touch shared files (`api-gate.ts`, `nav/model.ts`, migrations). Parallel sessions would collide on migration numbers and those files.
+- **Sequential, not parallel,** because Phases 1–2 touch shared files (`api-gate.ts`, `nav/model.ts`, migrations).
 
 ## The pipeline
 
 ```text
-                ┌──────────────────────── orchestrator session (this chat) ─────────────────────────┐
-backlog ──▶ pick next task whose dependencies are merged ──▶ create child session with the task prompt
-                                                                         │
-                             child session: read docs → implement → tsc + vitest + build → /code-review
-                                                                         │
-                                          push branch label-os/LABEL-NN → open PR into the integration branch
-                                                                         │
-                                  CI runs on the PR ──▶ owner reviews ──▶ owner merges (or asks for changes)
-                                                                         │
-                ◀──────────── orchestrator is told the PR merged (PR events) ──▶ mark task Done ──▶ next task
+orchestrator (the planning chat)
+   │
+   ├─ 1. pick the lowest-numbered task whose dependencies are Done
+   ├─ 2. start a child session with the task prompt (below)
+   │        child: read docs → implement → tsc + vitest + build → /code-review → PR into Label OS branch
+   ├─ 3. watch the PR: CI must be green; fix-ups go back to the child session
+   ├─ 4. merge gate (automatic, no owner action):
+   │        CI green on the latest commit
+   │        + every Acceptance Criterion checked off in the PR with how it was verified
+   │        + orchestrator's own review of the diff finds no blocking issue
+   │        + no change outside the task's scope (Out of Scope respected; no edits to main)
+   │     → squash-merge into the Label OS branch, mark the task Done in 14-engineering-backlog.md
+   └─ 5. start the next task
 ```
 
-**Branches.**
-
-- **Integration branch:** `claude/happy-bardeen-rnosf3`. Every task PR targets it, and **`main` is not touched**.
-- **Per-task branches:** `label-os/LABEL-NN`.
-- **Bringing Label OS to `main`:** one PR per completed phase, after the owner decides. The feature flag stays off in production until then.
-- **Weekly:** merge `main` into the integration branch to limit drift (R-13).
-
-**CI.** `.github/workflows/ci.yml` runs `tsc → vitest → next build`. Its `pull_request` trigger was `[main]` only, so task PRs would have had no checks. It now also covers the integration branch.
+**CI:** `.github/workflows/ci.yml` runs `tsc → vitest → next build` on pull requests into `main` **and** into the Label OS branch.
 
 ## What the owner does
 
 | When | Action |
 |---|---|
-| A task PR opens | Review it. Merge, or comment what to change (the orchestrator relays it to the task's session) |
-| A task has a migration | **Before merging to `main`:** run the migration in the Supabase SQL editor and mark it applied in `supabase/MIGRATIONS.md`. Merging into the integration branch does not need it, since the flag is off |
-| Now (D7) | Apply `supabase/migrations/115_track_collaborators.sql` on production |
-| End of each phase | Check the phase's exit criteria (`12-phased-roadmap.md`), then decide whether to merge the phase into `main` |
+| Any time | Optional: read any task PR (each is linked from the orchestrator chat). Commenting "stop" or asking for changes is always possible |
+| End of each phase | The orchestrator reports the phase's exit criteria (`12-phased-roadmap.md`). The owner may try it (see "Trying it before production") |
+| When Label OS is ready | **The owner merges the Label OS branch into `main`.** Before that: apply the Label OS migrations to the production database (in order, listed in `supabase/MIGRATIONS.md`), then merge, then set `LABEL_OS_ENABLED` in Vercel when ready to switch it on |
 | To pause | Say "pause Label OS" in the orchestrator chat. No new sessions start |
+
+## Production database: do not touch until the final merge
+
+Label OS migrations are committed to the Label OS branch and registered in `supabase/MIGRATIONS.md` as **"Label OS — not applied (apply at final merge)"**. **Nobody applies them to the production Supabase project during development.**
+
+The code does not need them in production until the branch is merged, and the feature flag is off anyway.
+
+(Migration 115 is different: it belongs to the existing producer app and was applied by the owner on 2026-09-30.)
+
+## Trying it before production (optional, recommended before the final merge)
+
+Vercel builds a **preview deployment** for every pushed branch, including the Label OS branch. By default a preview uses the same environment variables as production, which means the **production database**.
+
+To try Label OS safely:
+
+1. Create a second Supabase project, e.g. "bstudio-staging".
+2. Run all migrations on it (`SUPABASE_DB_URL=<staging> npm run db:migrate`).
+3. In Vercel → Settings → Environment Variables, set the **Preview** values of `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` to the staging project, and set `LABEL_OS_ENABLED=true` for Preview only.
+4. Open the Label OS branch's preview URL.
+
+Until that is done, the preview runs with Label OS switched off. The flag defaults to off, so it looks like production.
 
 ## What the orchestrator does
 
-1. Keeps the task status in `14-engineering-backlog.md` current (`Not Started` → `In Progress` → `In Review` → `Done`).
-2. Starts at most **one** child session at a time, for the lowest-numbered task whose dependencies are `Done`.
-3. Watches that task's PR:
-   - relays review comments;
-   - on merge, marks it Done and starts the next task.
+1. Keeps task status in `14-engineering-backlog.md` current (`Not Started` → `In Progress` → `In Review` → `Done`).
+2. Runs **one** child session at a time.
+3. Merges a task PR into the Label OS branch only when the merge gate above passes.
 4. Stops and asks the owner when:
    - a task hits one of the brief's hard-stop conditions;
    - CI is red twice on the same cause;
    - a task needs a product decision not covered by `15-product-decisions.md`;
-   - a phase is complete.
-5. Never merges PRs itself, never pushes to `main`, never applies migrations to production.
+   - a phase is complete (report + short summary).
+5. **Never** merges into `main`, pushes to `main`, or applies migrations to the production database.
 
 ## The task prompt (sent to each child session)
 
@@ -77,15 +112,17 @@ Rules:
   under /api/org/*), pure logic in src/lib with Vitest tests written first, design-direction.md
   for UI.
 - Migrations: next free number (check `git log --all -- supabase/migrations/`), idempotent, end with
-  NOTIFY pgrst. Register them in supabase/MIGRATIONS.md as "not applied". Never apply to production.
+  NOTIFY pgrst. Register them in supabase/MIGRATIONS.md as
+  "Label OS — not applied (apply at final merge)". Never apply them to any database.
 - Everything stays behind LABEL_OS_ENABLED. No change to existing producer, store, or checkout
   behaviour unless the task says so.
 - Before pushing: npx tsc --noEmit && npm test && npm run build must pass. Run /code-review on
   your diff and fix what it finds.
-- Branch: label-os/LABEL-{NN}. Open a PR into claude/happy-bardeen-rnosf3 (NOT main), titled
+- Branch: label-os/LABEL-{NN}. Open a PR into claude/happy-bardeen-rnosf3 (NEVER main), titled
   "LABEL-{NN}: {TITLE}", with the repo PR format: Summary / Why / Test plan /
   Required prod config / Migrations to apply.
 - In the PR, check off each Acceptance Criterion with how it was verified.
+- Do not merge your own PR. The orchestrator merges it into the Label OS branch.
 - If blocked by a hard-stop condition or an undecided product question, stop and say so in the PR
   or your final message. Do not guess.
 ```
@@ -94,8 +131,8 @@ Rules:
 
 `14-engineering-backlog.md` → "Recommended execution order". Phase 8 items (chat, workflow builder, contract generation, multi-org store) are not started automatically. Each needs a short discovery first.
 
-## Cost and speed notes
+## Speed
 
-- **Sessions per phase:** Phase 1 is 8 sessions (LABEL-02…09; LABEL-01 is done).
-- **The real pace-setter is review.** Each task waits for the owner's merge. Reviewing a small PR shortly after it opens keeps the pipeline moving.
-- **If review becomes the bottleneck,** switch to "parallel where possible" for the independent pairs listed in the backlog (22 ∥ 23, 25 ∥ 26, 33 ∥ 34, 37 ∥ 38). Keep Phases 1–2 sequential.
+- **Nothing waits on the owner**, so the pace is set by how long each session takes plus CI (roughly 5–10 minutes).
+- The orchestrator checks in on a schedule. Each task PR also produces events the orchestrator reacts to.
+- **If more speed is wanted later,** the independent pairs listed in the backlog (22 ∥ 23, 25 ∥ 26, 33 ∥ 34, 37 ∥ 38) can run in parallel. Keep Phases 1–2 sequential.

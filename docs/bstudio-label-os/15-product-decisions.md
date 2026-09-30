@@ -12,7 +12,7 @@
 | D4 | Can a label edit role permissions? | **No, roles are fixed.** A label has a **creative side** (A&R: all music including toplines and loops, all collaborators, no legal) and a **business side** (marketing: projects and finished music, not working material; legal: rights and contracts) | `audio.full` split into `audio.finished` / `audio.working`; A&R loses `rights.write`; `business.read.internal` replaces `activity.read.internal`. See `06` §2.3–2.4 |
 | D5 | What does an artist see about their own songs? | **Everything:** stage, each reviewer's rating and verdict, A&R comments | Reviews/comments visible to the song's artist; only business-internal notes are hidden. LABEL-24/25 |
 | D6 | How does a producer's beat become a label song's source? | **A copy with provenance kept**, made when the deal is accepted; the original stays in the producer's library | LABEL-11 (flag), LABEL-41 |
-| D7 | Apply migration 115 (`track_collaborators`) on prod now? | **Yes, apply now.** Import into credits later | **Action for the owner:** run `supabase/migrations/115_track_collaborators.sql` in the Supabase SQL editor, then mark it applied in `supabase/MIGRATIONS.md`. LABEL-27 imports it |
+| D7 | Apply migration 115 (`track_collaborators`) on prod now? | **Yes, apply now.** Import into credits later | ✅ **Applied on production by the owner, 2026-09-30** (recorded in `supabase/MIGRATIONS.md`). LABEL-27 imports it |
 | D8 | Previews of unreleased label music? | **Private until released.** After release they may go public, e.g. on the store | LABEL-14; LABEL-42 |
 | D9 | Everyday activity history retention | **2 years.** Security/audit records kept for the life of the org | LABEL-39 |
 | D10 | Grace period before an org is permanently deleted | **30 days** | LABEL-39 |
@@ -21,7 +21,7 @@
 
 ## Execution decision
 
-**One backlog task per Claude session, in dependency order.** When one task's pull request is merged, the next session starts. The owner reviews each pull request. See `16-execution-runbook.md`.
+**One backlog task per Claude session, in dependency order.** Each finished task is merged by the orchestrator into the separate Label OS branch (`claude/happy-bardeen-rnosf3`), never into `main`. **Nothing reaches production** until the owner merges the Label OS branch into `main`. Label OS migrations are not applied to the production database until then. See `16-execution-runbook.md`.
 
 ---
 

@@ -48,7 +48,7 @@ service-role key can read the schema's effects but cannot run DDL):
 | `112_backfill_buyer_contacts.sql` | **not applied** | 1 paid buyer email has no contact |
 | `113_store_layout.sql` | applied (seen 2026-09-29) | prod `/api/store` returns a `store_layout` key, which only its own `select('store_layout')` can supply — that select fails when the column is missing |
 | `114_share_price_overrides.sql` | no-op on prod | columns already exist, added outside migrations |
-| `115_track_collaborators.sql` | **not applied** | new table; `track_collaborators` missing |
+| `115_track_collaborators.sql` | applied 2026-09-30 (manual SQL editor run, reported by owner) | new table `track_collaborators` |
 | `116_notifications_realtime.sql` | **not applied** | new — adds `notifications` to the realtime publication |
 | `117_creator_profiles_no_self_insert.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — drops the RLS policy that let any signed-in buyer insert a `creator_profiles` row |
 | `118_strict_arrangements_rls.sql` | applied 2026-09-26 (manual SQL editor run, reported by owner) | security — owner-only RLS on `arrangements` (097 missed it) |
@@ -129,3 +129,9 @@ app deploy, so schema and code ship together and drift is impossible.
   branch `claude/code-review-agent-integration-cdf964`. Two branches claiming
   one number is the collision this file warns about; check
   `git log --all -- supabase/migrations/` before naming the next one.
+
+## Label OS migrations (branch `claude/happy-bardeen-rnosf3`)
+Label OS migrations live on the Label OS branch only and are **not applied to
+the production database** until the owner merges that branch into `main`
+(`docs/bstudio-label-os/16-execution-runbook.md`). Each one is listed here as
+"Label OS — not applied (apply at final merge)" when it is added.
