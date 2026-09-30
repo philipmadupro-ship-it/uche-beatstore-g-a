@@ -84,7 +84,7 @@ Revert the docs PR.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-01
-**Status:** Not Started
+**Status:** In Review
 
 ## Objective
 A single, tested source of truth mapping role + functions → capabilities.
