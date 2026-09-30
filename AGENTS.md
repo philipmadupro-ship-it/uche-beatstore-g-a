@@ -25,7 +25,7 @@ The producer's workspace. Surfaces:
 
 | Surface | Purpose |
 |---|---|
-| `/library` | Vault. Flat list of every track. List / Grid / Portfolio views. Filter, sort, batch-select, batch-delete. |
+| `/library` | Vault. Flat list of every track. List / Grid / Portfolio views. Filter, sort, batch-select, batch-delete. **Browse** shows curated rows (WIP, Finished, each genre, In your store, Top rated…); a row's **See all →** opens All tracks with that row's filter and ordering applied. The Filters menu governs both views, and the view (Browse/All, filters, sort) lives in the URL, so a refresh or a bookmark keeps it. |
 | `/library/[id]` | Single-track drawer: metadata, BPM/key analysis, **chord detection with MIDI download**, tags, rating, waveform peaks, version history, comments. |
 | `/projects` + `/projects/[id]` | Active production. Group tracks into projects, set BPM/key targets, add stems, add to public storefront as a bundle. |
 | `/playlists` + `/playlists/[id]` | Curated sets for outreach — drag tracks into a playlist, share it, optionally feature on `/store`. |
