@@ -1,0 +1,51 @@
+%% BStudio Label OS — permission model (Discovery 01, 2026-09-30)
+%% access = membership AND capability AND scope. Routes check capabilities, never role names.
+flowchart LR
+    subgraph WHO["Who is asking"]
+        U["Signed-in user"]
+        G["Token holder (no account)"]
+    end
+
+    subgraph MEMBERSHIP["1 · Membership"]
+        OM["org_members<br/>role: owner | admin | member | artist<br/>functions: a_and_r, pm, marketing, legal, ..."]
+        PM["project_members<br/>viewer | commenter | contributor | editor"]
+        TS["share_links / project_shares<br/>(EXISTING token shares)"]
+    end
+
+    subgraph CAPS["2 · Capability (lib/labelos/capabilities.ts == SQL has_org_cap)"]
+        C1["catalog.read / catalog.write"]
+        C2["audio.full"]
+        C3["rights.read / rights.write"]
+        C4["contracts.read"]
+        C5["release.write / release.approve.GATE"]
+        C6["share.external / members.manage / org.manage"]
+    end
+
+    subgraph SCOPE["3 · Scope"]
+        S1["scope = org → all artists"]
+        S2["scope = artists → member_artist_scopes"]
+        S3["artist role → own artist only"]
+        S4["external → one project only"]
+    end
+
+    subgraph ENFORCE["Enforcement"]
+        GATE["src/proxy.ts gate<br/>/api/org/* needs any membership<br/>producer routes stay producer-only"]
+        APP["src/lib/auth/org-access.ts<br/>requireObjectAccess(table,id,cap)"]
+        RLS["RLS: security-definer helpers<br/>has_org_cap · can_see_artist · can_see_project"]
+        STORE["Storage: per-object check → presigned GET<br/>restricted files need contracts.read<br/>every restricted download audited"]
+    end
+
+    U --> OM
+    U --> PM
+    G --> TS
+    OM --> C1 & C2 & C3 & C4 & C5 & C6
+    OM --> S1 & S2 & S3
+    PM --> S4
+    PM -->|"never rights.write, contracts, release.*"| C1
+    TS -->|"listen + comment only · never contribute"| C1
+
+    C1 & C2 & C3 & C4 & C5 & C6 --> APP
+    S1 & S2 & S3 & S4 --> APP
+    GATE --> APP
+    APP --> RLS
+    APP --> STORE

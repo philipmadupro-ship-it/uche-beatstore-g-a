@@ -1,0 +1,159 @@
+%% BStudio Label OS — proposed domain model (Discovery 01, 2026-09-30)
+%% EXISTING = table exists today; EXTEND = existing table gains columns; NEW = proposed.
+%% Audio is NOT re-modelled: a recording IS a `tracks` row (EXISTING).
+erDiagram
+    USERS ||--o{ ORG_MEMBERS : "belongs to many orgs"
+    ORGANIZATIONS ||--o{ ORG_MEMBERS : "has"
+    ORGANIZATIONS ||--o{ ORG_INVITATIONS : "issues"
+    ORG_MEMBERS ||--o{ MEMBER_ARTIST_SCOPES : "limited to"
+    ARTISTS ||--o{ MEMBER_ARTIST_SCOPES : "scopes"
+
+    ORGANIZATIONS ||--o{ ARTISTS : "roster"
+    ARTISTS ||--o{ ARTIST_REFERENCES : "creative direction"
+    ARTISTS |o--o| CONTACTS : "CRM link (EXISTING)"
+    ARTISTS |o--o| USERS : "artist's own account"
+
+    ARTISTS ||--o{ SONGS : "has"
+    ARTISTS ||--o{ PROJECTS : "has (EXTEND)"
+    ARTISTS ||--o{ RELEASES : "has"
+    PROJECTS ||--o{ PROJECT_SONGS : "groups"
+    SONGS ||--o{ PROJECT_SONGS : "in"
+    PROJECTS ||--o{ PROJECT_MEMBERS : "external accounts"
+    PROJECTS ||--o{ PROJECT_SHARES : "token links (EXISTING)"
+    PROJECTS ||--o{ PROJECT_TRACKS : "producer projects (EXISTING)"
+
+    SONGS ||--o{ SONG_RECORDINGS : "demo mix master ..."
+    TRACKS ||--o{ SONG_RECORDINGS : "is the recording"
+    TRACKS ||--o{ TRACK_VERSIONS : "file history (EXISTING)"
+    TRACKS ||--o{ STEMS : "stems (EXISTING)"
+
+    RELEASES ||--|{ RELEASE_ITEMS : "tracklist"
+    SONGS ||--o{ RELEASE_ITEMS : "placed on"
+    TRACKS ||--o{ RELEASE_ITEMS : "master used"
+
+    ORGANIZATIONS ||--o{ PARTIES : "rights holders"
+    PARTIES |o--o| CONTACTS : "optional link"
+    PARTIES ||--o{ CREDITS : "credited"
+    SONGS ||--o{ CREDITS : "composition credits"
+    TRACKS ||--o{ CREDITS : "recording credits"
+    SONGS ||--o{ SPLIT_SHEETS : "versioned"
+    SPLIT_SHEETS ||--|{ SPLIT_LINES : "sum to 100"
+    PARTIES ||--o{ SPLIT_LINES : "holds share"
+
+    SONGS ||--o{ SONG_REVIEWS : "per reviewer"
+    SONGS ||--o{ COMMENTS : "region comments"
+    RELEASES ||--o{ APPROVALS : "gates"
+    SONGS ||--o{ APPROVALS : "gates"
+    ORGANIZATIONS ||--o{ FILES : "artwork docs contracts"
+    RELEASES ||--o{ FILES : "assets"
+    ORGANIZATIONS ||--o{ TASKS : "work"
+    ORGANIZATIONS ||--o{ ACTIVITY_EVENTS : "append-only"
+
+    ORGANIZATIONS {
+        uuid id PK
+        text name
+        text slug
+        text kind "producer|label|management"
+        jsonb settings "gate switches"
+    }
+    ORG_MEMBERS {
+        uuid org_id FK
+        uuid user_id FK
+        text role "owner|admin|member|artist"
+        text_array functions "a_and_r marketing legal ..."
+        text scope "org|artists"
+    }
+    ARTISTS {
+        uuid id PK
+        uuid org_id FK
+        text name
+        text status "prospect|developing|signed|alumni"
+        uuid user_id "nullable"
+        uuid contact_id "nullable"
+        jsonb direction
+    }
+    SONGS {
+        uuid id PK
+        uuid org_id FK
+        uuid artist_id FK
+        text title
+        text stage "inbox..selected|passed|on_hold|archived"
+        text iswc
+    }
+    SONG_RECORDINGS {
+        uuid song_id FK
+        uuid track_id FK
+        text kind "beat_source|demo|rough|mix|master|instrumental|..."
+        boolean is_current
+    }
+    TRACKS {
+        uuid id PK
+        uuid user_id "EXISTING owner"
+        uuid org_id "EXTEND nullable"
+        text isrc "EXTEND"
+        text audio_url "r2 ref"
+    }
+    RELEASES {
+        uuid id PK
+        uuid org_id FK
+        uuid artist_id FK
+        text type "single|ep|album|..."
+        text upc
+        date target_date
+        text state "draft|delivered|cancelled"
+    }
+    RELEASE_ITEMS {
+        uuid release_id FK
+        int position
+        uuid song_id FK
+        uuid track_id "master recording"
+    }
+    PARTIES {
+        uuid id PK
+        uuid org_id FK
+        text legal_name
+        text ipi
+        text pro
+        text publisher_name
+    }
+    CREDITS {
+        uuid id PK
+        uuid party_id FK
+        uuid song_id "xor track_id"
+        text role "RIN-aligned"
+        text status "proposed|confirmed|disputed"
+    }
+    SPLIT_SHEETS {
+        uuid id PK
+        uuid song_id FK
+        text kind "composition|master"
+        int version
+        text status "draft|circulated|signed|superseded"
+    }
+    SPLIT_LINES {
+        uuid split_sheet_id FK
+        uuid party_id FK
+        numeric share "7,4"
+        timestamptz signed_at
+    }
+    APPROVALS {
+        uuid id PK
+        text gate "master|artwork|legal|marketing|metadata"
+        text decision "requested|approved|changes_requested"
+        jsonb subject_snapshot
+    }
+    FILES {
+        uuid id PK
+        uuid org_id FK
+        text object_key "orgs/ORG_ID/..."
+        text category
+        text sensitivity "normal|restricted"
+    }
+    ACTIVITY_EVENTS {
+        uuid id PK
+        uuid org_id FK
+        uuid actor_id
+        text verb
+        boolean audit
+        text visibility "internal|artist"
+    }

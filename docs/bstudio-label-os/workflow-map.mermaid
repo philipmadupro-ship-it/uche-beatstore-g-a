@@ -1,0 +1,62 @@
+%% BStudio Label OS — workflow map (Discovery 01, 2026-09-30)
+%% Song stages are STORED human decisions. Release gates are DERIVED from data + approvals.
+%% "Released" and "Catalog" are DERIVED, never stored.
+flowchart TB
+    subgraph AR["A&R — song stage (stored: songs.stage)"]
+        direction LR
+        inbox["inbox"] --> in_review["in_review"]
+        in_review --> shortlisted["shortlisted"]
+        shortlisted --> in_development["in_development"]
+        in_development --> selected["selected"]
+        in_review --> passed["passed"]
+        shortlisted --> passed
+        in_development --> passed
+        in_review --> on_hold["on_hold"]
+        shortlisted --> on_hold
+        in_development --> on_hold
+        on_hold --> in_review
+        passed --> in_review
+    end
+
+    subgraph REVIEW["Per-reviewer (song_reviews) — not a stage"]
+        verdict["rating 1-5 · shortlist | hold | pass | changes_requested"]
+    end
+    in_review -.-> verdict
+    in_development -.-> verdict
+
+    subgraph REL["Release gates (derived: lib/labelos/release-readiness.ts)"]
+        direction LR
+        tracklist["tracklist"]
+        masters["masters<br/>+ approval: master"]
+        credits["credits_splits<br/>= legal readiness has no blockers"]
+        legal["legal<br/>+ approval: legal (org switch)"]
+        artwork["artwork<br/>+ approval: artwork"]
+        metadata["metadata<br/>ISRC UPC P/C lines<br/>+ confirmation"]
+        marketing["marketing<br/>+ approval (org switch)"]
+        credits --> legal
+    end
+
+    selected -->|"placed on release_items"| tracklist
+    tracklist & masters & legal & artwork & metadata & marketing --> ready{"ready to deliver?"}
+    ready -->|"PM marks delivered (stored, audited)"| delivered["delivered"]
+    delivered -->|"release_date <= today (derived)"| released["released"]
+    released -->|"after post-release window (derived)"| catalog["catalog"]
+
+    subgraph COLLAB["Shared project (W4)"]
+        direction LR
+        invite["invite by email<br/>(hashed token)"] --> join["sign in with own account"]
+        join --> member["project_members: contributor"]
+        member --> upload["append recording versions"]
+        member --> propose["propose own credit"]
+    end
+    upload --> in_development
+    propose --> credits
+
+    subgraph LEGAL["Legal handoff (W6)"]
+        direction LR
+        send["send to legal<br/>approval requested"] --> decide{"legal decides"}
+        decide -->|"approved + snapshot"| legal
+        decide -->|"changes_requested + note"| fix["fix named gaps"]
+        fix --> send
+    end
+    credits --> send
