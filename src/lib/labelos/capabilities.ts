@@ -100,7 +100,7 @@ export const FUNCTIONS_BY_ORG_KIND: Readonly<Record<OrgKind, readonly OrgFunctio
  * between kinds are the roles and functions they offer), so every ceiling
  * is the full set. It stays a table so a later decision is a data change.
  */
-const KIND_CEILING: Readonly<Record<OrgKind, readonly Capability[]>> = {
+export const KIND_CEILING: Readonly<Record<OrgKind, readonly Capability[]>> = {
   artist: ALL_CAPABILITIES,
   producer: ALL_CAPABILITIES,
   label: ALL_CAPABILITIES,
@@ -168,7 +168,7 @@ export const FUNCTION_PRESETS: Readonly<Record<OrgFunction, readonly Capability[
  * capability, because role `artist` is always artist-scoped (§2.5).
  * member: nothing by itself; its capabilities come from functions.
  */
-const ROLE_GRANTS: Readonly<Record<Role, readonly Capability[]>> = {
+export const ROLE_GRANTS: Readonly<Record<Role, readonly Capability[]>> = {
   owner: ALL_CAPABILITIES,
   admin: ALL_CAPABILITIES,
   member: [],
@@ -176,7 +176,7 @@ const ROLE_GRANTS: Readonly<Record<Role, readonly Capability[]>> = {
 };
 
 /** Only `member` takes its capabilities from functions. */
-const ROLE_USES_FUNCTIONS: Readonly<Record<Role, boolean>> = {
+export const ROLE_USES_FUNCTIONS: Readonly<Record<Role, boolean>> = {
   owner: false,
   admin: false,
   member: true,
@@ -187,7 +187,7 @@ const ROLE_USES_FUNCTIONS: Readonly<Record<Role, boolean>> = {
  * Owner and admin always hold everything, so per-member overrides apply
  * only to `member` and `artist`.
  */
-const ROLE_TAKES_OVERRIDES: Readonly<Record<Role, boolean>> = {
+export const ROLE_TAKES_OVERRIDES: Readonly<Record<Role, boolean>> = {
   owner: false,
   admin: false,
   member: true,
@@ -217,7 +217,7 @@ export const NEVER_GRANTABLE: Readonly<Record<Role, readonly Capability[]>> = {
  * than leaving them approving releases they cannot see.
  */
 const NEEDS_CATALOG: readonly Capability[] = ['catalog.read'];
-const IMPLIES: Readonly<Partial<Record<Capability, readonly Capability[]>>> = {
+export const IMPLIES: Readonly<Partial<Record<Capability, readonly Capability[]>>> = {
   'catalog.write': NEEDS_CATALOG,
   'audio.finished': NEEDS_CATALOG,
   'audio.working': NEEDS_CATALOG,

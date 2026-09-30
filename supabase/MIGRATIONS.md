@@ -135,3 +135,11 @@ Label OS migrations live on the Label OS branch only and are **not applied to
 the production database** until the owner merges that branch into `main`
 (`docs/bstudio-label-os/16-execution-runbook.md`). Each one is listed here as
 "Label OS — not applied (apply at final merge)" when it is added.
+
+| Migration | Status | What it does |
+|---|---|---|
+| `136_labelos_org_core.sql` | **Label OS — not applied (apply at final merge)** | LABEL-03. Five new tables (`organizations`, `org_members` with per-member `cap_grants`/`cap_revokes`, `org_invitations`, `user_profiles`, `activity_events`), the `org_role` / `has_org_cap` SECURITY DEFINER helpers (mirroring `src/lib/labelos/capabilities.ts`, held equal by `capabilities.sql.test.ts`), a deferred "≥1 owner per org" trigger, and member-only RLS. No existing table is touched. Rollback: `supabase/rollback/136_labelos_org_core.down.sql` |
+
+**Numbered 136, not 122.** `main` already has 122–135 (#44, artist workspace +
+portal); the Label OS branch has not merged them yet. Numbering past them keeps
+the final merge free of collisions.
