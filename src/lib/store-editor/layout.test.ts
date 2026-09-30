@@ -376,6 +376,10 @@ describe('section capabilities', () => {
     // the live page — the exact fake-control failure this guards against.
     expect(supportsSetting('text', 'spacing')).toBe(true);
     expect(supportsSetting('canvas', 'width')).toBe(true);
+    // No content kind draws a grid, so a Columns control would change nothing.
+    for (const kind of ['text', 'image', 'video', 'links', 'canvas'] as const) {
+      expect(supportsSetting(kind, 'columns'), kind).toBe(false);
+    }
     expect(supportsSetting('hero', 'spacing')).toBe(false);
     expect(supportsSetting('spotlight', 'width')).toBe(false);
     expect(supportsSetting('trust', 'spacing')).toBe(false);
@@ -392,7 +396,9 @@ describe('section capabilities', () => {
   });
 
   it('offers columns only where the layout actually draws the grid', () => {
-    expect(supportsSetting('text', 'columns')).toBe(true);
+    // No content kind draws a grid either: text / image / video / links /
+    // canvas never read `columns`, so offering it was a control that did nothing.
+    expect(supportsSetting('text', 'columns')).toBe(false);
     // The featured strips and the beat grid own their own responsive column
     // counts, and they are tested that way.
     expect(supportsSetting('catalog', 'columns')).toBe(false);

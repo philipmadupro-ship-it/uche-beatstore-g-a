@@ -43,6 +43,30 @@ export function safeImageSrc(raw: string | null | undefined): string | null {
   return null;
 }
 
+/** The Size slider for image and video sections, in percent of the section width. */
+export const MEDIA_SIZE = { min: 25, max: 100, step: 5, default: 100 } as const;
+
+/**
+ * How wide an image or video is drawn, as a whole percentage. Missing,
+ * non-numeric or out-of-range values fall back or clamp, so a hand-edited or
+ * older layout can never collapse the media to nothing or overflow its frame.
+ */
+export function mediaSizePercent(value: unknown): number {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+  if (!Number.isFinite(n)) return MEDIA_SIZE.default;
+  return Math.min(MEDIA_SIZE.max, Math.max(MEDIA_SIZE.min, Math.round(n)));
+}
+
+/**
+ * Where media narrower than its section sits: the section's own Align setting,
+ * expressed as margins so it works in any block container.
+ */
+export function mediaAlignMargins(align: 'left' | 'center' | 'right'): { marginLeft: string | number; marginRight: string | number } {
+  if (align === 'center') return { marginLeft: 'auto', marginRight: 'auto' };
+  if (align === 'right') return { marginLeft: 'auto', marginRight: 0 };
+  return { marginLeft: 0, marginRight: 'auto' };
+}
+
 /**
  * A text section's button target, or null to draw it as a plain label.
  * Site-relative paths, http(s) and mailto only — never `javascript:`.

@@ -97,6 +97,12 @@ export type SectionContent = {
   videoUrl?: string;
   ctaLabel?: string;
   ctaHref?: string;
+  /**
+   * `image` / `video` only: how wide the media is, as a percentage of the
+   * section's content width (25–100, default 100). Positioned by `align`.
+   * See `mediaSizePercent` in `content-sections.ts`.
+   */
+  mediaSize?: number;
   /** Free-form children, only for `canvas` sections. Percentages of the frame. */
   blocks?: CanvasBlock[];
 };
@@ -396,9 +402,9 @@ export function sectionCapabilities(kind: StoreSectionKind): SectionCapability[]
     case 'video':
     case 'links':
     case 'canvas':
-      // Rendered by this feature's own code on both surfaces, so the full set
-      // applies — these are the sections the layout genuinely lays out.
-      return ['visible', 'spacing', 'width', 'align', 'columns'];
+      // Rendered by this feature's own code on both surfaces. No `columns`:
+      // none of these draws a grid, so the control changed nothing.
+      return ['visible', 'spacing', 'width', 'align'];
     default:
       // countdown / featured strips / spotlight / picks / trust all render
       // through storefront components that own their own internal padding and

@@ -55,7 +55,7 @@ service-role key can read the schema's effects but cannot run DDL):
 | `110_normalize_contact_emails.sql` | effect present | no contact emails with uppercase letters found |
 | `111_adopt_orphan_contacts.sql` | effect present | 0 contacts with `user_id IS NULL` |
 | `112_backfill_buyer_contacts.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | 1 paid buyer email has no contact |
-| `113_store_layout.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | `creator_profiles.store_layout` missing |
+| `113_store_layout.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner; prod `/api/store` also returns a `store_layout` key) | `creator_profiles.store_layout` |
 | `114_share_price_overrides.sql` | no-op on prod | columns already exist, added outside migrations |
 | `115_track_collaborators.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new table; `track_collaborators` missing |
 | `116_notifications_realtime.sql` | applied 2026-09-29 (SQL editor bundle `supabase/apply/pending.sql`, verify table all `applied`, reported by owner) | new — adds `notifications` to the realtime publication |

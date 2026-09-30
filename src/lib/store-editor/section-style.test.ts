@@ -57,8 +57,10 @@ describe('applySectionStyle', () => {
     const style = copySectionStyle(styled());
     const target = applySectionStyle(createSection('text', 'Target'), style);
     expect(resolveSection(target, 'desktop')).toMatchObject({
-      spacing: 7, width: 'narrow', align: 'center', columns: 3,
+      spacing: 7, width: 'narrow', align: 'center',
     });
+    // Columns is not a text-section setting, so it is not pasted onto one.
+    expect(resolveSection(target, 'desktop').columns).toBe(resolveSection(createSection('text'), 'desktop').columns);
     expect(resolveSection(target, 'mobile').spacing).toBe(2);
   });
 
