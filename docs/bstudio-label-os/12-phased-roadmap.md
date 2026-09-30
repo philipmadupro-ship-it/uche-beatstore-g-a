@@ -16,7 +16,7 @@
 |---|---|
 | Objective | Research-backed blueprint + atomic backlog |
 | Output | `docs/bstudio-label-os/*` |
-| Exit criteria | Product owner answers D1–D10 (`00-executive-summary.md`) and approves the MVP boundary. **No implementation until then** |
+| Exit criteria | ✅ D1–D10 answered 2026-09-30 (`15-product-decisions.md`). Execution method: `16-execution-runbook.md` |
 
 ## PHASE 1 — Foundation
 
@@ -53,7 +53,7 @@
 | | |
 |---|---|
 | Objective | External contributors, comments, activity, tasks: the "Uche × Producer X" flow end to end |
-| Tasks | LABEL-19 → LABEL-23 |
+| Tasks | LABEL-19 → LABEL-23, then LABEL-41 (artist ↔ label connection) |
 | Dependencies | Phase 2; D3 |
 | Database | `project_members`, `comments`, `tasks`; `notifications.org_id`; audit RPC functions |
 | Backend | `recordEvent` + audit RPC; project invite/accept/revoke; comment + task routes; direct-ask notifications |
@@ -98,7 +98,7 @@
 | | |
 |---|---|
 | Objective | Release gates, approvals, metadata, delivery marker; owner visibility complete |
-| Tasks | LABEL-32 → LABEL-35 |
+| Tasks | LABEL-32 → LABEL-35, then LABEL-42 (released → store) |
 | Dependencies | Phase 5 |
 | Database | `organizations.settings` gate switches (a column from Phase 1, schema validated here) |
 | Backend | Release readiness module; deliver route; metadata export; ICS; needs-attention cron |
@@ -122,6 +122,10 @@
 | Testing | Each §A2 example query as a test; scope leak tests on search |
 | Migration risk | **Low** |
 | Exit criteria | All seven example queries in `08` §A2 answered correctly and scope-safely |
+
+## PHASE 8 — Later (each needs a short discovery first)
+
+Chat (building on comments, mentions and project threads), workflow builder, contract generation + e-signature, multi-org storefronts, and migrating the producer catalogue into its org (M7). See `15-product-decisions.md`.
 
 ## Cross-cutting (schedule alongside the phase noted)
 

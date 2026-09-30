@@ -24,7 +24,9 @@
 | `11-migration-strategy.md` | KEEP / EXTEND / ABSTRACT / REPLACE / DEPRECATE / ISOLATE; expand→contract |
 | `12-phased-roadmap.md` | Phases 0–7 with exit criteria |
 | `13-risk-register.md` | 24 risks |
-| `14-engineering-backlog.md` | 40 atomic tasks (LABEL-01…40) in the required format |
+| `14-engineering-backlog.md` | 42 atomic tasks (LABEL-01…42) in the required format |
+| `15-product-decisions.md` | **D1–D10 as decided by the owner on 2026-09-30**, plus released→store, workflow, chat and contracts direction |
+| `16-execution-runbook.md` | How the backlog runs: one Claude session per task, next starts when the PR merges |
 | `domain-model.mermaid`, `workflow-map.mermaid`, `permission-model.mermaid` | Diagrams |
 
 **Documentation location.** The repo keeps design docs under `docs/` (`design-direction.md`, `codex-execution-log.md`, `design-system/`), so `docs/bstudio-label-os/` follows that convention; there is no competing structure.
@@ -96,33 +98,31 @@ Every status field is manual, so it goes stale. Specialist tools own fragments: 
 
 | Area | Not built |
 |---|---|
-| Communication | Chat/channels; real-time co-editing; mobile apps |
+| Communication | Chat (Phase 8, prepared for via comments → mentions → project threads); real-time co-editing; mobile apps |
 | Money and delivery | Royalty accounting or statements; DSP/DDEX delivery; finance/advances |
-| Legal | Contract generation or e-signature; PRO registration |
-| Configurability | Configurable workflow builder; custom roles per org |
+| Legal | Contract generation and e-signature (Phase 8); PRO registration |
+| Configurability | Workflow builder (Phase 8); custom roles per org |
 | Intelligence | Semantic/vector search or any AI feature; A&R prediction |
-| Commerce | A storefront for label orgs |
+| Commerce | Selling label releases; storefronts for label/artist orgs (Phase 8). **Listing released music on the existing store is in scope (LABEL-42)** |
 | Media | Video review |
 | Producer catalogue | Migrating the producer catalogue to org scope (M7); org-scoping the producer CRM |
 
 ---
 
-## DECISIONS REQUIRED FROM THE PRODUCT OWNER (before LABEL-02)
+## DECISIONS (answered 2026-09-30 — full record in `15-product-decisions.md`)
 
-These are recorded as ADRs by LABEL-01.
-
-| # | Decision | Recommendation | Blocks |
-|---|---|---|---|
-| D1 | Ship an `artist` org kind (artists run their own org) in MVP? | **No.** Artists are users + org roster records; a personal org only if they sell beats | LABEL-03 |
-| D2 | May external producers see the full split of a song they're on, or only their own line? | **Own line only** by default | LABEL-28 |
-| D3 | When an external contributor leaves, who keeps their uploads? | **The project's org keeps them**, attributed; the contributor may download their own uploads while a member | LABEL-21 |
-| D4 | May owners customise the role → capability table per org? | **No in MVP** | LABEL-02 |
-| D5 | May an artist see the A&R stage/reviews of their own songs? | **Coarse stage yes, individual reviews no** | LABEL-24/25 |
-| D6 | How does a producer's beat (their org) become a label song's source? | **Copy-on-accept with provenance**; no live cross-org references | LABEL-11 |
-| D7 | Apply `115_track_collaborators.sql` on prod now and import it into credits later? | **Yes, apply it**; import in LABEL-27 | LABEL-27 |
-| D8 | Private (non-CDN) previews for unreleased org music? | **Yes** | LABEL-14 |
-| D9 | Retention for non-audit activity events | **24 months**; audit for the life of the org | LABEL-39 |
-| D10 | Org deletion grace period | **30 days** | LABEL-39 |
+| # | Decision |
+|---|---|
+| D1 | **Artists get their own org.** Three kinds, artist / producer / label, each with its own capabilities and ways of adding people; artist orgs connect to labels (LABEL-41) |
+| D2 | External producers see **only their own** split line |
+| D3 | The **project owner keeps** a departing collaborator's uploads, credited |
+| D4 | **Fixed roles** with a creative side (A&R: all music incl. toplines/loops, all collaborators, no legal) and a business side (marketing: projects + finished music only; legal: rights + contracts) |
+| D5 | Artists see **everything** about their own songs (stage, ratings, A&R comments) |
+| D6 | Beat → label song by **copy with provenance** |
+| D7 | **Apply migration 115 on production now** (owner action) |
+| D8 | Previews **private until released**; released music can go public, e.g. on the store (LABEL-42) |
+| D9 | Everyday activity kept **2 years**; audit records for the life of the org |
+| D10 | **30-day** grace before permanent org deletion |
 
 Also for the owner: AGENTS.md currently states *"No multi-tenant producer model (yet)"*. Approving this blueprint changes the product definition. Per `CLAUDE.md`, AGENTS.md should be updated **when the product changes** (at Phase 1 merge), not now.
 
@@ -142,7 +142,7 @@ Also for the owner: AGENTS.md currently states *"No multi-tenant producer model 
 | Collaboration understood | Pass (`01` §3) |
 | Competitor claims source-backed | **Partial.** Every claim cites a URL, but content came from search summaries; primary pages were blocked by egress |
 | No unnecessary entity duplication | Pass (`01` §4, `05` §3) |
-| Engineering tasks have explicit dependencies | Pass. 40 tasks, numbered 01–40, and no task depends on a later-numbered task (script-checked) |
+| Engineering tasks have explicit dependencies | Pass. 42 tasks, numbered 01–42, and no task depends on a later-numbered task (script-checked) |
 | Roadmap internally consistent | Pass. Security prerequisites precede exposure (`12` consistency checks) |
 
 ## OUT OF SCOPE (found, recorded, not acted on)

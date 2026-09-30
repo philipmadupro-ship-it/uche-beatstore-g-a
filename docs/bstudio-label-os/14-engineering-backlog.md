@@ -19,12 +19,13 @@
 ```
 Phase 1: 01 → 02 → 03 → 04 → 05 → 06 → 07 → 08 → 09
 Phase 2: 10 → 11 → 12 → 13 → 14 → 15 → 16 → 17 → 18
-Phase 3: 19 → 20 → 21 → 22 → 23
+Phase 3: 19 → 20 → 21 → 22 → 23 → 41
 Phase 4: 24 → 25 → 26
 Phase 5: 27 → 28 → 29 → 30 → 31
-Phase 6: 32 → 33 → 34 → 35
+Phase 6: 32 → 33 → 34 → 35 → 42
 Phase 7: 36 → 37 → 38
 Cross-cutting: 39 (before first external org), 40 (after 08)
+Phase 8 (later, needs its own discovery): chat, workflow builder, contract generation, multi-org store — see `15-product-decisions.md`
 ```
 
 Parallelisable once dependencies land: 22 ∥ 23; 25 ∥ 26; 33 ∥ 34; 37 ∥ 38; 39 alongside Phase 3+.
@@ -38,7 +39,7 @@ Parallelisable once dependencies land: 22 ∥ 23; 25 ∥ 26; 33 ∥ 34; 37 ∥ 3
 **Risk:** Medium
 **Workstream:** L — BStudio Label OS
 **Dependencies:** Discovery 01 (this package)
-**Status:** Not Started
+**Status:** Done (2026-09-30) — see `15-product-decisions.md`
 
 ## Objective
 Capture the product owner's answers to decisions D1–D10 as ADRs, so implementation tasks stop depending on open questions.
@@ -47,7 +48,7 @@ Capture the product owner's answers to decisions D1–D10 as ADRs, so implementa
 Decisions are listed in `00-executive-summary.md` §Decisions with recommendations, but are unanswered.
 
 ## Required Change
-Add `docs/bstudio-label-os/adr/ADR-001…010.md`, one per decision: context, options, the decision, and consequences. Update any backlog task whose scope changes as a result.
+Record the decisions. Done as one file, `docs/bstudio-label-os/15-product-decisions.md`, rather than ten ADR files. Update any backlog task whose scope changes as a result.
 
 ## Starting Code Surfaces
 `docs/bstudio-label-os/00-executive-summary.md`, `05`, `06`, `10`.
@@ -94,7 +95,8 @@ No capability concept exists. Authorization is ownership (`src/lib/auth/ownershi
 ## Required Change
 Create `src/lib/labelos/capabilities.ts`. It exports:
 - The `Role`, `OrgFunction` and `Capability` unions.
-- `capabilitiesFor(role, functions)`.
+- `capabilitiesFor(orgKind, role, functions)`: org kind (`artist` | `producer` | `label`) × role × functions, per `06` §2.4 and §2.4b (D1, D4).
+- `recordingClass(kind)` → `finished` | `working`, deciding between `audio.finished` and `audio.working` (D4).
 - `can(member, cap)`.
 - The external project-role table.
 
@@ -116,6 +118,8 @@ None.
 - Every cell of the §2.4 and §2.6 tables is asserted.
 - An unknown role or function grants nothing.
 - `owner` ⊇ `admin` ⊇ any member.
+- Marketing and legal never get `audio.working`; A&R never gets `rights.write`, `contracts.read` or legal approval (D4).
+- A role or function the org kind does not offer grants nothing (e.g. `a_and_r` in an `artist` org).
 - An external role never includes `rights.write`, `contracts.read`, `release.*` or `members.manage`.
 
 ## Tests
@@ -147,8 +151,8 @@ Tenancy is `user_id`. `team_members` / `invites` are dormant (`01` §2.3).
 ## Required Change
 Add migration `NNN_labelos_org_core.sql`:
 
-- **Tables:** `organizations` (incl. `settings jsonb default '{}'`, `deleted_at`), `org_members`, `org_invitations`, `user_profiles`, and `activity_events` (schema only; used by LABEL-05/08/19).
-- **Functions:** SECURITY DEFINER STABLE `org_role(uuid)` and `has_org_cap(uuid, text)` (mapping mirrors LABEL-02), owned by `postgres`, with `search_path` set and EXECUTE granted as `is_producer()` is in 119.
+- **Tables:** `organizations` (kind CHECK `artist` | `producer` | `label`; incl. `settings jsonb default '{}'`, `deleted_at`), `org_members`, `org_invitations`, `user_profiles`, and `activity_events` (schema only; used by LABEL-05/08/19).
+- **Functions:** SECURITY DEFINER STABLE `org_role(uuid)` and `has_org_cap(uuid, text)` (mapping mirrors LABEL-02, including org kind), owned by `postgres`, with `search_path` set and EXECUTE granted as `is_producer()` is in 119.
 - **Triggers:** "≥1 owner per org".
 - **RLS:**
   - Members read their orgs and co-members.
@@ -406,7 +410,7 @@ The `invites` flow is non-functional (`01` §2.3).
 - **`POST /api/org/[orgId]/invitations`** (`members.manage`):
   - 32-byte token; store its sha-256.
   - Email normalised with `normalizeEmail`.
-  - Role, functions and `artist_ids` (validated later by LABEL-10).
+  - Role, functions and `artist_ids` (validated later by LABEL-10). **Only the roles and functions the org kind offers** can be invited (`06` §2.4b); anything else → 400.
   - 7-day expiry.
   - Rate limit via `rate_limits`.
   - Send email through Resend.
@@ -516,7 +520,8 @@ No artist entity (`01` §3).
 - **Migration:** `artists`, `member_artist_scopes`, a SQL `can_see_artist(org, artist)`, and a same-org FK trigger.
 - **Routes:** `/api/org/[orgId]/artists[/id]` CRUD (`catalog.write`); `contact_id` link validated against the producer's contacts only when the caller is the producer (otherwise null).
 - **Wiring:** `requireObjectAccess` artist scope becomes live. Invitations accept `artist_ids`.
-- **Pages:** roster list.
+- **Artist orgs:** creating an `artist`-kind org creates its single `artists` row (the owner themselves); that org cannot add more roster rows.
+- **Pages:** roster list (label orgs); artist profile (artist orgs).
 
 ## Starting Code Surfaces
 `src/lib/auth/org-access.ts`, the invitations route from LABEL-08.
@@ -561,7 +566,7 @@ The Song entity above recordings.
 `tracks` conflates audio and song (`01` §3).
 
 ## Required Change
-- **Migration:** `songs` (stage CHECK = the §W3 union, default `inbox`), `song_recordings` (kind CHECK; partial unique `is_current` per (song, kind)), `project_songs`, and same-org triggers.
+- **Migration:** `songs` (stage CHECK = the §W3 union, default `inbox`), `song_recordings` (kind CHECK incl. `topline` and `loop`; partial unique `is_current` per (song, kind)), `project_songs`, and same-org triggers.
 - **Routes:**
   - `/api/org/[orgId]/songs[/id]` CRUD.
   - `/api/org/[orgId]/songs/[id]/recordings`: POST links an **existing org track**, PATCH sets kind/current, DELETE unlinks.
@@ -666,7 +671,7 @@ Stream or presign a recording only if the caller may access that specific record
 Add `GET /api/org/[orgId]/audio/[trackId]?variant=preview|full|wav|stem:<name>`:
 1. Load the `tracks` row. It requires `org_id = orgId`.
 2. Resolve the song → artist / project via `song_recordings`, or `projects` for project-only recordings.
-3. `requireObjectAccess` with `catalog.read` (preview) or `audio.full` (full/wav/stems). External project members are allowed only if the recording is linked to their project and the project allows downloads, for download variants.
+3. `requireObjectAccess` with `audio.finished` or `audio.working`, chosen by `recordingClass(song_recordings.kind)` (D4): marketing can stream a master but not a topline or loop. Stems and session files are always `working`. External project members are allowed only if the recording is linked to their project and the project allows downloads, for download variants.
 4. Stream with Range support, reusing `lib/storage` helpers, or 302 to a ≤5-minute presigned URL.
 
 Log `recording.downloaded` for external members (audit). **`/api/audio` is not changed** in this task.
@@ -704,7 +709,7 @@ Revert (nothing depends on it until LABEL-14/17).
 **Priority:** P0
 **Risk:** High
 **Workstream:** L
-**Dependencies:** LABEL-11, LABEL-12, LABEL-13, D8
+**Dependencies:** LABEL-11, LABEL-12, LABEL-13 (D8 decided: private until released)
 **Status:** Not Started
 
 ## Objective
@@ -1215,7 +1220,7 @@ Validated stage transitions with history.
 None.
 
 ## Security
-`catalog.write` in scope. Artists can move their own songs only `inbox → in_review` (D5).
+`catalog.write` in scope. Artists can move their own songs only `inbox → in_review`. Artists **see** every stage change on their songs (D5).
 
 ## UX
 Per `07` §2.3.
@@ -1252,7 +1257,7 @@ Per-reviewer ratings and verdicts, and a fast keyboard review queue.
 
 ## Required Change
 - **Migration:** `song_reviews`.
-- **Routes:** upsert my review; list reviews (aggregate for artists per D5).
+- **Routes:** upsert my review; list reviews. **The song's artist sees every review, rating and verdict** (D5).
 - **UI:** `/o/[orgSlug]/ar` inbox with J/K/Space/1–5/S/H/P/C shortcuts and `BatchActionBar` bulk actions.
 
 ## Starting Code Surfaces
@@ -1262,14 +1267,14 @@ Per-reviewer ratings and verdicts, and a fast keyboard review queue.
 One table.
 
 ## Security
-Individual reviews require `activity.read.internal`.
+Reviews are visible to org members in scope and to the song's artist (D5). Never to other artists or to external project members.
 
 ## UX
 Keyboard hints spell out "Shift" / "Alt" (the Panchang glyph gotcha).
 
 ## Acceptance Criteria
 - Two reviewers' ratings coexist.
-- An artist sees the aggregate only (or nothing, per D5).
+- The song's artist sees all reviews; another artist in the same label sees none.
 
 ## Tests
 Route tests; keyboard e2e.
@@ -1334,7 +1339,7 @@ Drop.
 **Priority:** P0
 **Risk:** Medium
 **Workstream:** L
-**Dependencies:** LABEL-21, D7
+**Dependencies:** LABEL-21 (D7 decided: migration 115 applied on prod by the owner first)
 **Status:** Not Started
 
 ## Objective
@@ -1981,3 +1986,124 @@ Dropping the tables.
 
 ## Rollback
 Revert.
+
+---
+
+# LABEL-41 — Artist ↔ label connection
+
+**Area:** Organizations / Collaboration
+**Priority:** P1
+**Risk:** High
+**Workstream:** L
+**Dependencies:** LABEL-10, LABEL-21
+**Status:** Not Started
+
+## Objective
+An artist org can connect to a label org and share its whole catalogue or selected projects. The label sees that music through its roster, under its own staff permissions (D1).
+
+## Current State
+After LABEL-10 an artist org has one `artists` row. After LABEL-21 people can join single projects. Orgs cannot see each other.
+
+## Required Change
+- **Migration:**
+  - `org_connections`, with a unique active connection per (label, artist) pair.
+  - `connection_projects`.
+  - `artists.artist_org_id`.
+  - SQL `can_see_via_connection(project)`.
+- **Routes:**
+  - `POST /api/org/[orgId]/connections`: a label invites an artist org by slug or email, or an artist org requests a label.
+  - Accept by the other side's owner or admin (`org.manage`).
+  - `PATCH` share mode and selected projects: **artist side only**.
+  - `DELETE` ends the connection (either side).
+- **Access:** `requireObjectAccess` also admits label members to objects in shared artist-org projects, still filtered by the label member's own capabilities (marketing still gets finished audio only).
+- **Beat reuse (D6):** "Use in a label song" makes a copy of a producer or artist recording into the label org, with `provenance` (`source_org_id`, `source_track_id`, `copied_at`, `copied_by`). No live cross-org references.
+- **Audit events:** `connection.requested`, `connection.accepted`, `connection.ended`, `recording.copied`.
+
+## Starting Code Surfaces
+`src/lib/auth/org-access.ts`, the LABEL-21 project-members code, the LABEL-10 artists routes.
+
+## Data Changes
+Two tables, one column on `artists`, a provenance jsonb column on `tracks` (nullable).
+
+## Security
+- The artist controls what is shared.
+- Ending a connection removes access on the next request.
+- Label members never see artist-org business-internal notes or contracts.
+- A two-org **and** two-connection test matrix.
+
+## UX
+- Label roster rows show "Connected" with the artist's org.
+- The artist org's settings list its labels and what each can see.
+
+## Acceptance Criteria
+- A connected label A&R hears the artist's shared demos.
+- Label marketing sees only finished recordings.
+- Ending the connection → 404 on the next request.
+- A copied beat keeps provenance, and the source is unchanged.
+
+## Tests
+Route matrix; `org-access` unit tests for connection scope; e2e (artist org connects to label; A&R reviews a demo).
+
+## Out of Scope
+Deal terms and contracts between artist and label; multi-label conflicts beyond "the artist chooses per label".
+
+## Rollback
+Drop the connection tables; flag off.
+
+---
+
+# LABEL-42 — Released → store bridge
+
+**Area:** Release ops / Storefront
+**Priority:** P1
+**Risk:** High
+**Workstream:** L
+**Dependencies:** LABEL-33, LABEL-41
+**Status:** Not Started
+
+## Objective
+A release that is **released** can be put on the store, where everyone can listen, including albums already out on Spotify.
+
+## Current State
+- The storefront is single-producer (`resolveStoreOwner`, `src/lib/store/owner.ts`) and lists `tracks.store_listed` beats and featured projects.
+- Label OS releases have no store presence. Unreleased org previews are private (D8).
+
+## Required Change
+1. **"Already released" import:** create a release with `imported_released = true`, a past `release_date`, UPC/ISRC optional, **skipping gates**. Owner/admin only, audited.
+2. **List on store** (`release.write`, released only; unreleased → 409):
+   - Sets `releases.store_listed`.
+   - Promotes each item's preview from the private to the public bucket (D8).
+   - Shows the release on the owning org's storefront as a project-bundle-style tile at `/store/releases/[id]`, with full-length or preview playback per a per-release setting.
+3. **MVP store owner:** only releases owned by the **producer org of the current store owner**, or by an artist org connected to it, can be listed. Label/artist-owned stores are Phase 8.
+4. **Unlist:** removes the release from the store. The public previews are deleted **only if** the release was never released publicly. The owner is asked.
+
+## Starting Code Surfaces
+`src/app/store/**`, `src/app/api/store/route.ts`, `src/lib/store/owner.ts`, `src/lib/store/public-media.ts`, `src/lib/store/filters.ts`, `src/lib/storage/upload.ts`.
+
+## Data Changes
+Uses the `releases.store_listed`, `store_listed_at` and `imported_released` columns (add them in this task's migration if LABEL-16 did not).
+
+## Security
+- **This touches the ISOLATED storefront.** Changes must be additive: a new section and route. Catalogue, checkout and `license_purchases` are untouched.
+- `redactPublicTrackMedia` rules apply.
+- New store pages must stay dynamic (`scripts/ci/check-store-dynamic.mjs`).
+- Nothing new is loaded from outside the site, so no CSP change is needed.
+- A preview is promoted to public only for released items.
+
+## UX
+The released badge is text plus a hairline border. Store tile per the storefront design rules; no new colours.
+
+## Acceptance Criteria
+- An unreleased release cannot be listed.
+- An imported "already released" album lists and plays on `/store` at 1440 and 390 px.
+- Unlisting hides it within the store's ~90 s cache window.
+- Existing store e2e tests stay green.
+
+## Tests
+Route tests; `lib/labelos/store-listing.ts` pure eligibility tests; Playwright store spec.
+
+## Out of Scope
+Selling releases (checkout for label music); label/artist storefronts; streaming-service links beyond a URL field.
+
+## Rollback
+Unlist all, flag off, revert. Promoted previews stay public only for already-released music.

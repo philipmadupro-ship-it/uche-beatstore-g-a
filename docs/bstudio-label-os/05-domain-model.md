@@ -42,18 +42,20 @@ Why each prompt level was dropped or changed:
 
 | Entity | Tag | Key fields | Notes |
 |---|---|---|---|
-| `organizations` | NEW | `id`, `name`, `slug` (unique), `kind` (`producer`\|`label`\|`management`), `settings jsonb` (gate switches), `created_by`, `created_at`, `deleted_at` | The tenant. The existing producer gets a `producer` org (Phase 1 backfill) |
+| `organizations` | NEW | `id`, `name`, `slug` (unique), `kind` (`artist`\|`producer`\|`label`), `settings jsonb` (gate switches), `created_by`, `created_at`, `deleted_at` | The tenant. **D1 decided:** artists, producers and labels each get their own org kind, with kind-specific roles, functions and invite flows (`06` §2.4b). The existing producer gets a `producer` org (Phase 1 backfill) |
 | `org_members` | NEW | `org_id`, `user_id`, `role` (`owner`\|`admin`\|`member`\|`artist`), `functions text[]`, `scope` (`org`\|`artists`), `invited_by`, `joined_at`; PK (`org_id`,`user_id`) | Exactly ≥1 owner per org (trigger) |
 | `member_artist_scopes` | NEW | `org_id`, `user_id`, `artist_id`; PK all three | Used when `scope = 'artists'`, or when `role = 'artist'` |
 | `org_invitations` | NEW | `id`, `org_id`, `email` (normalised), `role`, `functions`, `artist_ids uuid[]`, `project_id` (for external project invites), `project_role`, `token_hash`, `expires_at`, `accepted_at`, `revoked_at`, `invited_by` | Replaces `invites` for Label OS. Token stored hashed |
 | `user_profiles` | NEW | `user_id` PK, `display_name`, `avatar_url` | Neutral display identity for members. `creator_profiles` stays the *storefront* + producer marker and is not overloaded further |
+| `org_connections` | NEW | `id`, `label_org_id`, `artist_org_id`, `status` (`requested`\|`active`\|`ended`), `share_mode` (`catalog`\|`selected_projects`), `requested_by`, `accepted_by`, `created_at`, `ended_at` | Artist org ↔ label org (LABEL-41). The artist decides what is shared |
+| `connection_projects` | NEW | `connection_id`, `project_id` | Used when `share_mode = 'selected_projects'` |
 | `team_members`, `invites` | EXISTING → DEPRECATE | — | Dormant (audit §2.3) |
 
 ### 2.2 Roster and direction
 
 | Entity | Tag | Key fields | Notes |
 |---|---|---|---|
-| `artists` | NEW | `id`, `org_id`, `name`, `slug`, `status` (`prospect`\|`developing`\|`signed`\|`alumni`), `user_id` (the artist's own account, nullable), `contact_id` (CRM link, nullable), `party_id` (rights identity, nullable), `image_file_id`, `bio`, `links jsonb` (DSP/analytics URLs), `created_at`, `archived_at` | An artist on two labels = two rows in two orgs, linked by the same `user_id` if the artist has an account. No cross-org shared record (isolation) |
+| `artists` | NEW | `id`, `org_id`, `name`, `slug`, `status` (`prospect`\|`developing`\|`signed`\|`alumni`), `user_id` (the artist's own account, nullable), `artist_org_id` (the artist's own org when connected, nullable), `contact_id` (CRM link, nullable), `party_id` (rights identity, nullable), `image_file_id`, `bio`, `links jsonb` (DSP/analytics URLs), `created_at`, `archived_at` | An artist org has exactly one `artists` row (itself). A label roster row may point at a connected artist org. An artist on two labels = two roster rows in two label orgs, each pointing at the same artist org |
 | `artist_references` | NEW | `id`, `org_id`, `artist_id`, `kind` (`track`\|`artist`\|`visual`\|`link`\|`note`), `title`, `url`, `file_id`, `track_id`, `note`, `visibility` (`internal`\|`artist`), `created_by`, `created_at` | Creative direction memory. `internal` hides A&R notes from the artist |
 | `artists.direction` | NEW column | `jsonb`: `{ genres[], moods[], sounds_like[], avoid[], current_focus, updated_by, updated_at }` | Structured summary fields. Kept as one small document, not a table per field |
 
@@ -62,7 +64,7 @@ Why each prompt level was dropped or changed:
 | Entity | Tag | Key fields | Notes |
 |---|---|---|---|
 | `songs` | NEW | `id`, `org_id`, `artist_id`, `project_id` (nullable), `title`, `working_title`, `stage` (see W3), `stage_changed_at`, `iswc`, `explicit`, `language`, `genre`, `samples_declared` (`none`\|`yes`\|`unknown`), `notes`, `created_by`, `updated_at`, `archived_at` | The **creative identity** labels talk about ("Track 04"). Close to a musical work: composition credits and composition splits attach here |
-| `song_recordings` | NEW | `song_id`, `track_id`, `kind` (`beat_source`\|`demo`\|`rough`\|`mix`\|`master`\|`instrumental`\|`acapella`\|`clean`\|`reference`), `is_current` (one current per kind), `label` ("mix v3"), `added_by`, `added_at`; PK (`song_id`,`track_id`) | Same shape as the existing `project_tracks.role`. A `tracks` row **is** the recording. Its own `track_versions` are file-level revisions of that recording |
+| `song_recordings` | NEW | `song_id`, `track_id`, `kind` (`beat_source`\|`demo`\|`rough`\|`topline`\|`loop`\|`mix`\|`master`\|`instrumental`\|`acapella`\|`clean`\|`reference`), `is_current` (one current per kind), `label` ("mix v3"), `added_by`, `added_at`; PK (`song_id`,`track_id`) | Same shape as the existing `project_tracks.role`. A `tracks` row **is** the recording. Its own `track_versions` are file-level revisions of that recording |
 | `tracks` | EXISTING → EXTEND | + `org_id` (nullable; expand/contract), + `isrc`, + `created_by` | ISRC belongs to the recording (master). `user_id` keeps meaning "uploader/owner" for producer-era rows |
 | `track_versions` | EXISTING | — | File history of one recording. Unchanged |
 | `stems`, `track_stem_files` | EXISTING | — | Unchanged; they hang off the recording |
@@ -70,7 +72,7 @@ Why each prompt level was dropped or changed:
 | `project_tracks` | EXISTING | — | Kept for producer projects |
 | `project_songs` | NEW | `project_id`, `song_id`, `position` | Label projects group **songs**. A song belongs to at most one *primary* project via `songs.project_id`; this junction allows a song to appear in more than one |
 | `project_members` | NEW | `project_id`, `user_id`, `role` (`viewer`\|`commenter`\|`contributor`\|`editor`), `invited_by`, `expires_at`, `revoked_at`, `joined_at` | Account-based external access (W4). Token shares (`project_shares`) stay for no-account listening |
-| `releases` | NEW | `id`, `org_id`, `artist_id`, `project_id` (nullable), `title`, `type` (`single`\|`ep`\|`album`\|`mixtape`\|`compilation`), `upc`, `label_name`, `c_line`, `p_line`, `primary_genre`, `target_date`, `release_date`, `artwork_file_id`, `state` (`draft`\|`delivered`\|`cancelled`), `delivered_at`, `delivered_to`, `created_by`, `updated_at` | **Only terminal/manual facts are stored** (`state`, `delivered_at`). Gate status is derived (09) |
+| `releases` | NEW | `id`, `org_id`, `artist_id`, `project_id` (nullable), `title`, `type` (`single`\|`ep`\|`album`\|`mixtape`\|`compilation`), `upc`, `label_name`, `c_line`, `p_line`, `primary_genre`, `target_date`, `release_date`, `artwork_file_id`, `state` (`draft`\|`delivered`\|`cancelled`), `delivered_at`, `delivered_to`, `imported_released boolean` (an existing release entered as already out, skipping gates), `store_listed boolean`, `store_listed_at`, `created_by`, `updated_at` | **Only terminal/manual facts are stored** (`state`, `delivered_at`, `store_listed`). Gate status and `released` are derived (09). **Released vs unreleased is a first-class distinction:** only a released release can be listed on a storefront (LABEL-42) |
 | `release_items` | NEW | `release_id`, `position`, `song_id`, `track_id` (the master recording), `version_title`, `explicit`; PK (`release_id`,`position`) | ISRC is read from `tracks.isrc` of the chosen master |
 | `playlists` | EXISTING | — | Unchanged (producer outreach/storefront) |
 
@@ -105,7 +107,8 @@ Why each prompt level was dropped or changed:
 | Concept | Is a… | Where |
 |---|---|---|
 | Song | **Entity** | `songs` |
-| Demo, Rough, Mix, Master, Instrumental | **Relationship kind** (song ↔ recording) | `song_recordings.kind` |
+| Demo, Rough, Topline, Loop, Mix, Master, Instrumental | **Relationship kind** (song ↔ recording) | `song_recordings.kind` |
+| Working vs finished material | **Derived class** of a recording kind (`06` §2.3). Gates `audio.working` / `audio.finished` | `lib/labelos/capabilities.ts` |
 | Recording | **Entity** (the existing audio row) | `tracks` |
 | Version (of a recording) | **Entity** (file revision) | `track_versions` |
 | Beat | **Entity** (a `tracks` row with `type = 'beat'`) plus, when used for a song, **relationship kind** `beat_source` | `tracks`, `song_recordings` |
@@ -114,6 +117,8 @@ Why each prompt level was dropped or changed:
 | Project | **Entity** | `projects` |
 | Release | **Entity** | `releases` |
 | Catalog item | **Derived state** (released + post-window) | not stored |
+| Released | **Derived state** (delivered + date passed, or imported as released) | not stored |
+| Listed on store | **Stored flag** on a released release | `releases.store_listed` |
 | Song stage (A&R) | **Stored state** (a human decision) | `songs.stage` |
 | Release gate status | **Derived state** | `lib/labelos/release-readiness.ts` |
 | Legal readiness | **Derived state** | `lib/labelos/legal-readiness.ts` |

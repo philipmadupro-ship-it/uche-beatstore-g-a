@@ -70,7 +70,7 @@ Deriving a feed from source tables cannot answer "who moved Track 04 to *selecte
 
 ### B4. Visibility
 
-- An event is visible if the viewer could see its **context object** now (same scope rules as 06), **and** `visibility = 'artist'` or the viewer has `activity.read.internal`.
+- An event is visible if the viewer could see its **context object** now (same scope rules as 06), **and** the event is not business-internal, or the viewer has `business.read.internal`. A&R reviews and stage changes are visible to the song's artist (D5).
 - Events are checked against *current* scope, not scope at write time. Removing someone's access removes their view of history too.
 
 ### B5. Feeds
@@ -94,5 +94,5 @@ Grouping is a **pure function** (`lib/labelos/digest.ts`), in the `src/lib/dashb
 ### B7. Retention
 
 - **Audit-class events:** retained for the life of the org. Export is available to owners. They are deleted only with the org (a GDPR-style org erasure path, which extends the existing `/api/privacy/erase` thinking).
-- **Non-audit events:** kept 24 months, then pruned by an idempotent daily cron under the existing `vercel.json` / `CRON_SECRET` conventions. Decision **D9** confirms the window.
+- **Non-audit events:** kept 24 months, then pruned by an idempotent daily cron under the existing `vercel.json` / `CRON_SECRET` conventions. **D9 decided: 24 months.**
 - **Volume estimate** (INFERENCE): canonical label ≈ 10 active users × ≤200 events/day ≈ 0.7M rows/year. A trivial size for Postgres with `(org_id, created_at desc)` and `(artist_id, created_at desc)` indexes.

@@ -7,14 +7,15 @@ flowchart LR
     end
 
     subgraph MEMBERSHIP["1 · Membership"]
-        OM["org_members<br/>role: owner | admin | member | artist<br/>functions: a_and_r, pm, marketing, legal, ..."]
+        OM["org_members<br/>org kind: artist | producer | label<br/>role: owner | admin | member | artist<br/>functions: a_and_r, pm, marketing, legal, ..."]
+        OC["org connections<br/>artist org shares with label org"]
         PM["project_members<br/>viewer | commenter | contributor | editor"]
         TS["share_links / project_shares<br/>(EXISTING token shares)"]
     end
 
-    subgraph CAPS["2 · Capability (lib/labelos/capabilities.ts == SQL has_org_cap)"]
+    subgraph CAPS["2 · Capability = capabilitiesFor(orgKind, role, functions)"]
         C1["catalog.read / catalog.write"]
-        C2["audio.full"]
+        C2["audio.finished / audio.working<br/>(business side: finished only)"]
         C3["rights.read / rights.write"]
         C4["contracts.read"]
         C5["release.write / release.approve.GATE"]
@@ -37,6 +38,7 @@ flowchart LR
 
     U --> OM
     U --> PM
+    OC --> S1
     G --> TS
     OM --> C1 & C2 & C3 & C4 & C5 & C6
     OM --> S1 & S2 & S3

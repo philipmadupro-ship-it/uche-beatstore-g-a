@@ -24,7 +24,7 @@
 ```text
 access(user, object, action) =
     member(user, object.org)                               -- 1. membership
-  ∧ capability(role, functions) ∋ action's capability      -- 2. capability
+  ∧ capability(orgKind, role, functions) ∋ action's capability -- 2. capability
   ∧ inScope(user, object.artist_id, object.project_id)     -- 3. scope
 ```
 
@@ -47,34 +47,43 @@ A member can hold several functions (a small label's owner-assistant may be PM +
 
 ### 2.3 Capabilities (MVP set)
 
+**Decided 2026-09-30 (D4):** roles are fixed and code-defined; no per-org editing. A label has **two sides**:
+
+- The **creative side** (A&R, producers, engineers, artist managers) needs *all* the music, including working material, and all collaborators. It stays out of the legal area.
+- The **business side** (marketing, legal, finance) needs projects and finished music, not working material.
+
+That split is expressed by separating finished audio from working audio.
+
 | Capability | Grants |
 |---|---|
-| `catalog.read` | See artists, songs, recordings (preview-quality stream), projects, releases in scope |
+| `catalog.read` | See artists, songs, projects, releases in scope, with titles, stages, artwork and metadata |
 | `catalog.write` | Create/edit songs, upload recordings, edit metadata/tags, move stages |
-| `audio.full` | Stream/download full-quality masters, WAV, stems |
+| `audio.finished` | Stream/download **finished** material: `master`, `clean`, `instrumental`, `acapella` recordings, the current `mix` of a song that is `selected` or on a release, and release artwork/assets |
+| `audio.working` | Stream/download **working** material: `beat_source`, `demo`, `rough`, `topline`, `loop`, earlier `mix` versions, stems, session files |
 | `review.write` | Rate, verdict, comment on songs |
-| `rights.read` | See credits, parties, split sheets (percentages) |
+| `rights.read` | See credits (who worked on what), parties, split sheets (percentages) |
 | `rights.write` | Edit parties/credits; confirm credits; create/circulate split sheets |
 | `contracts.read` | Open `restricted` files (contracts, signed split sheets) |
-| `release.write` | Create/edit releases, tracklist, metadata; mark delivered |
+| `release.write` | Create/edit releases, tracklist, metadata; mark delivered; publish a released release to the store (LABEL-42) |
 | `release.approve.<gate>` | Decide `master`, `artwork`, `legal`, `marketing`, `metadata` gates |
 | `tasks.write` | Create/assign tasks |
 | `share.external` | Create token shares / invite external project members |
 | `members.manage` | Invite/remove members, change roles/scopes |
-| `org.manage` | Org settings, gate switches |
+| `org.manage` | Org settings, gate switches, org connections (LABEL-41) |
 | `finance.read` | Reserved, no MVP data |
-| `activity.read.internal` | See `internal`-visibility activity/comments/references |
+| `business.read.internal` | See business-side notes (legal/finance/marketing-internal comments and files). **Artists never have it**; A&R reviews and comments are **not** business-internal (D5) |
 
-### 2.4 Default mapping
+### 2.4 Default mapping (label org)
 
-**R** = read, **W** = write, **A** = approve.
+**R** = read, **W** = write.
 
 | | owner | admin | a_and_r | project_manager | marketing | legal | artist_manager | producer / engineer | artist |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|:-:|
 | catalog | R W | R W | R W | R W | R | R | R W | R W | R W (own) |
-| audio.full | ✓ | ✓ | ✓ | ✓ | — | — | ✓ | ✓ | ✓ (own) |
+| audio.finished | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ (own) |
+| audio.working (toplines, loops, demos, stems) | ✓ | ✓ | ✓ | ✓ | — | — | ✓ | ✓ | ✓ (own) |
 | review.write | ✓ | ✓ | ✓ | ✓ | — | — | ✓ | — | comment only |
-| rights | R W | R W | R W | R | — | R W | R | R (own credits) | R (own) |
+| rights | R W | R W | R (all collaborators) | R | — | R W | R | R (own line) | R (own songs) |
 | contracts.read | ✓ | ✓ | — | — | — | ✓ | — | — | — |
 | release.write | ✓ | ✓ | ✓ | ✓ | — | — | — | — | — |
 | approve master | ✓ | ✓ | ✓ | — | — | — | — | — | — |
@@ -84,9 +93,37 @@ A member can hold several functions (a small label's owner-assistant may be PM +
 | approve metadata | ✓ | ✓ | — | ✓ | — | — | — | — | — |
 | share.external | ✓ | ✓ | ✓ | ✓ | — | — | — | — | — |
 | members.manage | ✓ | ✓ | — | — | — | — | — | — | — |
-| activity.read.internal | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| business.read.internal | ✓ | ✓ | — | ✓ | ✓ | ✓ | — | — | — |
 
-**Open decision D4:** whether owners may customise this table per org. Recommended: **no in MVP**. A single code-defined table is auditable, and per-org editing is exactly the configurability trap in `02` §4.
+**D4 decided:** no per-org customisation of this table in the MVP.
+
+**D5 decided:** an artist sees **everything about their own songs** — stage, every reviewer's rating and verdict, and A&R comments. They still never see other artists, contracts, business-internal notes, or other people's split lines beyond their own songs.
+
+### 2.4b Org kinds (D1 decided: artists get their own ecosystem)
+
+There are three org kinds. The **kind decides which roles and functions exist and how people are added**. It also decides which capabilities the owner's org has at all.
+
+| | `artist` org | `producer` org | `label` org |
+|---|---|---|---|
+| Owner | The artist | The producer | The label owner |
+| Roles offered | owner, admin, member | owner, admin, member | owner, admin, member, artist |
+| Functions offered | `artist_manager`, `producer`, `engineer`, `marketing`, `legal`, `operations` | `producer`, `engineer`, `artist_manager`, `operations` | all functions (§2.2) |
+| Ways to add people | Invite team (manager, engineer, producer); **connect to a label** (LABEL-41); external project members | Invite collaborators (co-producer, engineer, manager); external project members | Invite staff; add **artists to the roster** (as an `artist`-role member, or by connecting their artist org); external project members |
+| Roster (`artists`) | Exactly one artist record: the owner themselves, created with the org | None required | Many |
+| A&R inbox / release board | Own songs; own releases | Beat pipeline (existing library); releases optional | Full |
+| Storefront | Later (via LABEL-42 once store is multi-org) | **Yes — the existing beatstore** | Later |
+
+A capability is granted only if **both** the member's role/functions **and** the org kind allow it. This is still one code-defined table (`capabilitiesFor(orgKind, role, functions)`), so no per-org editing is involved.
+
+**Label ↔ artist connection (LABEL-41).** An artist org can connect to one or more label orgs.
+
+- The connection is requested by one side and accepted by the other.
+- The artist chooses what the label sees: the whole catalogue or selected projects.
+- The label's roster row points at the artist org (`artists.artist_org_id`).
+- Music the artist makes stays in the artist org. Label-created projects and releases live in the label org.
+- Either side can end the connection. Copies already made under D6 stay where they are, with provenance.
+
+**Assumed (D1a), change if wrong:** before signing, demos stay in the artist's own org and the label sees them only through the connection.
 
 ### 2.5 Scope
 
@@ -94,6 +131,7 @@ A member can hold several functions (a small label's owner-assistant may be PM +
 - `org_members.scope = 'artists'`: only artists listed in `member_artist_scopes`. `role = 'artist'` is **always** artist-scoped.
 - Objects without an `artist_id` (org-level parties, org files) are visible to `scope = 'org'` members only, except parties referenced by in-scope credits, which are visible through the credit.
 - **External project members** see the project, its songs and recordings, and nothing else. They see the project's artist *name* but not the artist workspace.
+- **Connected label members** see only what the artist org shared through the connection, filtered again by their own capabilities (marketing still does not get working audio).
 
 ### 2.6 External project member roles (account-based)
 
@@ -104,7 +142,7 @@ A member can hold several functions (a small label's owner-assistant may be PM +
 | `contributor` | ✓ | ✓ | ✓ | — | ✓ | ✓ |
 | `editor` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-External members **never** get `rights.write`, `contracts.read`, `release.*` or `members.manage`. They see **their own** credits and splits lines (so they can confirm them), not others' percentages. **Open decision D2:** confirm that producers may see the full split of a song they're on. Industry practice varies; the default recommended here is own-line only.
+External members **never** get `rights.write`, `contracts.read`, `release.*` or `members.manage`. **D2 decided:** they see **only their own** credit and split line, so they can confirm it, and never others' percentages. **D3 decided:** when they leave, their uploads stay in the project, credited to them.
 
 ---
 
@@ -153,8 +191,8 @@ scopedOrgQuery(admin, table, ctx)                         → pre-applies org_id
 
 | Asset | Where | How access is decided |
 |---|---|---|
-| Recording audio (masters/WAV/stems) | Private bucket, `r2://` refs on `tracks` | **Per-object:** the route resolves the owning `tracks` row → org/artist/project → `audio.full`. `/api/audio`'s own comment says this check is required before a second privileged user exists (**P0 prerequisite**, backlog LABEL-13) |
-| Preview audio / peaks | Public bucket (existing) | Unchanged for store previews. For **unreleased org music**, previews must **not** go to the public bucket: org recordings get previews in the private bucket, served via HMAC grants (the existing `share-media-token` pattern). Decision **D8** |
+| Recording audio (masters/WAV/stems) | Private bucket, `r2://` refs on `tracks` | **Per-object:** the route resolves the owning `tracks` row → org/artist/project → `audio.finished` or `audio.working` by recording kind. `/api/audio`'s own comment says this check is required before a second privileged user exists (**P0 prerequisite**, backlog LABEL-13) |
+| Preview audio / peaks | Public bucket (existing) | Unchanged for store previews. **D8 decided: private until released.** Unreleased org recordings get previews in the private bucket, served via HMAC grants (the existing `share-media-token` pattern). When a release is released, its items' previews may be promoted to public (e.g. for the store, LABEL-42) |
 | Files (artwork, docs, contracts) | Private bucket, keys `orgs/<org_id>/<category>/<uuid>` | Short-lived presigned GET (≤5 min) issued after `requireObjectAccess`; `restricted` requires `contracts.read`; every restricted download → `activity_events` (audit) |
 | Legacy flat keys (`tracks/…`, `covers/…`) | Unchanged | Keys are *not* the authorization; the DB row is. The org prefix is defence in depth plus lifecycle/export by prefix |
 

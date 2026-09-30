@@ -8,7 +8,8 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # Label OS task PRs target its integration branch (docs/bstudio-label-os/16-execution-runbook.md).
+    branches: [main, claude/happy-bardeen-rnosf3]
 
 # Cancel older runs on the same branch when a new commit lands.
 concurrency:

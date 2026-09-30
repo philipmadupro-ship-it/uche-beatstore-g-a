@@ -9,6 +9,9 @@ erDiagram
     ARTISTS ||--o{ MEMBER_ARTIST_SCOPES : "scopes"
 
     ORGANIZATIONS ||--o{ ARTISTS : "roster"
+    ORGANIZATIONS ||--o{ ORG_CONNECTIONS : "label side"
+    ORG_CONNECTIONS }o--|| ARTIST_ORG : "artist side"
+    ARTISTS |o--o| ARTIST_ORG : "connected artist org"
     ARTISTS ||--o{ ARTIST_REFERENCES : "creative direction"
     ARTISTS |o--o| CONTACTS : "CRM link (EXISTING)"
     ARTISTS |o--o| USERS : "artist's own account"
@@ -53,7 +56,7 @@ erDiagram
         uuid id PK
         text name
         text slug
-        text kind "producer|label|management"
+        text kind "artist|producer|label"
         jsonb settings "gate switches"
     }
     ORG_MEMBERS {
@@ -83,7 +86,7 @@ erDiagram
     SONG_RECORDINGS {
         uuid song_id FK
         uuid track_id FK
-        text kind "beat_source|demo|rough|mix|master|instrumental|..."
+        text kind "beat_source|demo|rough|topline|loop|mix|master|..."
         boolean is_current
     }
     TRACKS {
@@ -101,6 +104,7 @@ erDiagram
         text upc
         date target_date
         text state "draft|delivered|cancelled"
+        boolean store_listed "released only"
     }
     RELEASE_ITEMS {
         uuid release_id FK
