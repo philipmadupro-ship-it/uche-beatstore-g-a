@@ -9085,3 +9085,19 @@ Note for the producer: layouts arranged before this deploy were never on the ser
 
 In this sandbox the embed itself shows Chromium's error page: `ERR_CERT_AUTHORITY_INVALID` from the sandbox's TLS proxy, reproduced on a blank page with no CSP. Not an app issue.
 
+
+## 2026-09-30 - Creator links resolve to real destinations on every public surface (PROFILE-02)
+
+Reported: the producer's social / website / email links should be direct destinations, safely.
+
+**Reproduced** on `/store/producer/[slug]` (API stubbed with the shapes a producer actually pastes; 1280 and 390 px). `creator_profiles` stores these as free text (`/api/profile` only caps length), and six public surfaces interpolated the raw value into `href`: `https://instagram.com/uche` became `instagram.com/https://instagram.com/uche`; a bare `open.spotify.com/…` became a relative link into our own site; `javascript:…` in a URL field was emitted verbatim; a `mailto:` took whatever was stored (`?cc=`, `,`). The surfaces also disagreed with each other (`twitter.com` vs `x.com`).
+
+Root cause: the first wrong layer is read/render, not storage. The one validator that existed (`webUrl`, in `lib/store/social-links.ts`) only fed the storefront `links` content section.
+
+Changes (no schema, API or contract change; validation at read time also covers rows already stored):
+- `lib/store/social-links.ts#resolveCreatorLink(kind, raw)` — instagram / x handles accept `handle`, `@handle` or a pasted profile URL and are validated against each network's handle rules; website / Spotify / SoundCloud accept http(s) or a bare domain, and refuse other schemes, protocol-relative, `user:pass@host` and dotless hosts; email must be a plain address. Anything else resolves to null and the caller renders nothing. `storeSocialLinks` now goes through it.
+- All surfaces use it: `ArtistBioBlock`, `ProducerProfile` (bundle / playlist / delivery pages), `/store/producer/[slug]`, `/store/[id]`, the client share variant (its "Get in touch" heading no longer shows with zero pills), and the access page's contact link. X is `x.com` everywhere.
+
+Tests: `social-links.test.ts` (resolver: shapes, hostile schemes, userinfo, mailto injection, empties); `creator-link-guard.test.ts` (source guard: fails on any raw handle/URL/mailto interpolation — names 17+ sites on the old code); `components/store/creator-links.test.tsx` (hero + ProducerProfile hrefs); `e2e/creator-links.spec.ts` (producer page at 1280 and 390: every link clicked and its popup URL checked, `javascript:` renders nothing and nothing executes, no Links panel when nothing is usable — fails on the old page).
+
+Not changed: the profile editor still accepts any text (a save-time "this isn't a link" hint would be the follow-up); handles keep Instagram's / X's own character rules, so a handle those networks would reject shows no link.
