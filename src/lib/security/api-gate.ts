@@ -20,6 +20,7 @@ const PUBLIC_PREFIXES = [
   '/api/store',          // storefront, checkout, buyer account (/api/store/me)
   '/api/share/',         // legacy share pages (HMAC media grants)
   '/api/projects/share/',// project share pages
+  '/api/portal/',        // artist portals (token-gated in lib/artist-portal/gate.ts)
   '/api/stripe/webhook', // signature-verified
   '/api/resend/webhook', // signature-verified
   '/api/cron/',          // CRON_SECRET bearer

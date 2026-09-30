@@ -29,6 +29,11 @@ export interface ShareLinkFacts extends ShareLinkRef {
   title: string | null;
   content_title?: string | null;
   kind?: string | null;
+  /**
+   * Page opens, despite the column name: both share routes increment it each
+   * time the page is loaded, before anything is played. Show it through
+   * `shareOpensLabel`. Real per-track listening is in `play_head_pings`.
+   */
   plays?: number | null;
   expires_at: string | null;
   revoked_at: string | null;
@@ -36,6 +41,16 @@ export interface ShareLinkFacts extends ShareLinkRef {
   /** Full track (default) or the 75 s preview only. Absent = full (mig 121). */
   full_playback?: boolean;
   password_protected: boolean;
+}
+
+/**
+ * "1 open" / "12 opens". The `plays` column on `share_links` and
+ * `project_shares` counts page loads, and /links used to call it plays, which
+ * overstated how much was actually listened to.
+ */
+export function shareOpensLabel(count: number | null | undefined): string {
+  const n = typeof count === 'number' && Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+  return `${n.toLocaleString('en-US')} ${n === 1 ? 'open' : 'opens'}`;
 }
 
 /** The API path that reads, patches and deletes this link. */

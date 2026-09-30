@@ -4,26 +4,30 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Search, Music, Layers, Users, Disc3, ListMusic, Calendar,
-  Link2, Settings, Sliders, CloudOff, ArrowRight, Loader2,
+  Link2, Settings, Sliders, CloudOff, ArrowRight, Loader2, FileText,
   type LucideIcon,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
 import { usePlayer } from '@/hooks/usePlayer';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import type { Track } from '@/lib/types';
+import { trackSearchSub } from '@/lib/search/labels';
 
 interface SearchTrackResult extends Pick<Track, 'id' | 'title' | 'type' | 'cover_url' | 'audio_url'> {
   duration_seconds?: number | null;
+  /** A song's artist (credited contact, or its project's artist). */
+  artist?: string | null;
 }
 
 interface SearchResults {
   tracks: SearchTrackResult[];
-  projects: { id: string; name: string; cover_url?: string | null }[];
-  contacts: { id: string; name: string; email?: string | null; role?: string | null; label?: string | null }[];
+  projects: { id: string; name: string; cover_url?: string | null; via?: string | null }[];
+  contacts: { id: string; name: string; email?: string | null; role?: string | null; label?: string | null; is_artist?: boolean }[];
+  files: { id: string; project_id: string; project_name: string; label: string; kind: string }[];
 }
 
 interface CommandItem {
-  kind: 'route' | 'track' | 'project' | 'contact';
+  kind: 'route' | 'track' | 'project' | 'contact' | 'file';
   id: string;
   label: string;
   sub?: string;
@@ -50,7 +54,7 @@ export function CommandPalette() {
   const { setTrack: setPlayerTrack } = usePlayer();
 
   const [q, setQ] = useState('');
-  const [results, setResults] = useState<SearchResults>({ tracks: [], projects: [], contacts: [] });
+  const [results, setResults] = useState<SearchResults>({ tracks: [], projects: [], contacts: [], files: [] });
   const [loading, setLoading] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,7 +77,7 @@ export function CommandPalette() {
     if (open) {
       setQ('');
       setActiveIdx(0);
-      setResults({ tracks: [], projects: [], contacts: [] });
+      setResults({ tracks: [], projects: [], contacts: [], files: [] });
       // Defer focus until after the modal animates in
       setTimeout(() => inputRef.current?.focus(), 30);
     }
@@ -83,7 +87,7 @@ export function CommandPalette() {
   useEffect(() => {
     if (!open) return;
     if (q.trim().length < 1) {
-      setResults({ tracks: [], projects: [], contacts: [] });
+      setResults({ tracks: [], projects: [], contacts: [], files: [] });
       return;
     }
     let cancelled = false;
@@ -96,9 +100,10 @@ export function CommandPalette() {
           tracks: data.tracks || [],
           projects: data.projects || [],
           contacts: data.contacts || [],
+          files: data.files || [],
         });
       } catch {
-        if (!cancelled) setResults({ tracks: [], projects: [], contacts: [] });
+        if (!cancelled) setResults({ tracks: [], projects: [], contacts: [], files: [] });
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -129,7 +134,7 @@ export function CommandPalette() {
         kind: 'track',
         id: t.id,
         label: t.title,
-        sub: t.type ? t.type.toUpperCase() : 'TRACK',
+        sub: trackSearchSub(t.type, t.artist),
         icon: Music,
         action: () => {
           if (t.audio_url) setPlayerTrack(t as Track);
@@ -142,7 +147,7 @@ export function CommandPalette() {
         kind: 'project',
         id: p.id,
         label: p.name,
-        sub: 'PROJECT',
+        sub: p.via ? `PROJECT · ${p.via}` : 'PROJECT',
         icon: Layers,
         action: () => { router.push(`/projects/${p.id}`); setOpen(false); },
       });
@@ -152,9 +157,19 @@ export function CommandPalette() {
         kind: 'contact',
         id: c.id,
         label: c.name,
-        sub: c.email || c.role || 'CONTACT',
+        sub: c.is_artist ? 'ARTIST' : c.email || c.role || 'CONTACT',
         icon: Users,
-        action: () => { router.push('/contacts'); setOpen(false); },
+        action: () => { router.push(`/contacts/${c.id}`); setOpen(false); },
+      });
+    }
+    for (const f of results.files) {
+      items.push({
+        kind: 'file',
+        id: f.id,
+        label: f.label,
+        sub: `FILE · ${f.project_name}`,
+        icon: FileText,
+        action: () => { router.push(`/projects/${f.project_id}`); setOpen(false); },
       });
     }
 

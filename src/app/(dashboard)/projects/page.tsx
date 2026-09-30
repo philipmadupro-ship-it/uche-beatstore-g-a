@@ -23,6 +23,7 @@ import { renameCollection } from '@/lib/ui/rename-collection';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import {
   filterAndSortProjects,
+  projectSearchMatch,
   DEFAULT_PROJECT_FILTERS,
   type ProjectFilterState,
   type ProjectListItem,
@@ -307,6 +308,8 @@ export default function ProjectsPage() {
             {filtered.map((project) => {
               const updatedAt = project.updated_at ? new Date(project.updated_at) : null;
               const relativeTime = updatedAt ? relativeDate(updatedAt) : null;
+              // While searching, say why a project whose name doesn't match is here.
+              const matchVia = filters.search.trim() ? projectSearchMatch(project, filters.search)?.via ?? null : null;
 
               return (
                 <MediaCard
@@ -335,7 +338,9 @@ export default function ProjectsPage() {
                       onEditTitle={startRename}
                     />
                   )}
-                  meta={
+                  meta={matchVia ? (
+                    <span className="truncate text-white/60" data-testid="project-match-via">{matchVia}</span>
+                  ) : (
                     <>
                       <span>{project.track_count || 0} track{project.track_count === 1 ? '' : 's'}</span>
                       {relativeTime && (
@@ -351,7 +356,7 @@ export default function ProjectsPage() {
                         </>
                       )}
                     </>
-                  }
+                  )}
                 />
               );
             })}

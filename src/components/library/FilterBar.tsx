@@ -17,12 +17,16 @@ const STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
   { value: 'archived',   label: 'Archived', color: 'bg-[#0D0D0A] text-white/60 border-white/10'    },
 ];
 
-export type LibraryTrackType = 'all' | 'beat' | 'instrumental' | 'song' | 'remix';
+export type LibraryTrackType = 'beat' | 'instrumental' | 'song' | 'remix' | 'loop' | 'topline';
+
+export const LIBRARY_TRACK_TYPES: readonly LibraryTrackType[] = ['beat', 'instrumental', 'song', 'remix', 'loop', 'topline'];
 
 export interface LibraryFilters {
-  /** Track type. Folded in from the standalone pill row so every facet that
-   *  narrows the list lives in one control. */
-  type: LibraryTrackType;
+  /** Track types to show (any match qualifies; empty = every type). Folded in
+   *  from the standalone pill row so every facet that narrows the list lives in
+   *  one control. A set, not a single value, because a Browse row may span
+   *  several types and See all has to be able to say so. */
+  types: Set<LibraryTrackType>;
   /** Cached-for-offline only. Was a sixth pill sitting beside the types even
    *  though it is a different axis entirely. */
   offlineOnly: boolean;
@@ -47,7 +51,7 @@ export interface LibraryFilters {
 }
 
 export const DEFAULT_FILTERS: LibraryFilters = {
-  type: 'all',
+  types: new Set(),
   offlineOnly: false,
   genres: new Set(),
   statuses: new Set(),
@@ -62,7 +66,7 @@ export const DEFAULT_FILTERS: LibraryFilters = {
 
 export function hasActiveFilters(f: LibraryFilters): boolean {
   return (
-    f.type !== 'all' ||
+    f.types.size > 0 ||
     f.offlineOnly ||
     f.genres.size > 0 ||
     f.statuses.size > 0 ||
@@ -77,7 +81,7 @@ export function hasActiveFilters(f: LibraryFilters): boolean {
 
 export function activeFilterCount(f: LibraryFilters): number {
   return [
-    f.type !== 'all',
+    f.types.size > 0,
     f.offlineOnly,
     f.genres.size > 0,
     f.statuses.size > 0,
@@ -92,7 +96,7 @@ export function activeFilterCount(f: LibraryFilters): number {
 /** Serialize filters to a plain JSON object (Sets → arrays) for storage. */
 export function serializeFilters(f: LibraryFilters): Record<string, unknown> {
   return {
-    type: f.type,
+    types: Array.from(f.types),
     offlineOnly: f.offlineOnly,
     genres: Array.from(f.genres),
     statuses: Array.from(f.statuses),
@@ -107,7 +111,9 @@ export function serializeFilters(f: LibraryFilters): Record<string, unknown> {
 }
 
 type SerializedLibraryFilters = {
+  /** Legacy single-select value (`'all'` or one type) — still read, never written. */
   type?: unknown;
+  types?: unknown;
   offlineOnly?: unknown;
   genres?: unknown;
   statuses?: unknown;
@@ -123,9 +129,15 @@ type SerializedLibraryFilters = {
 /** Rehydrate filters from a stored JSON object (arrays → Sets). */
 export function deserializeFilters(raw: unknown): LibraryFilters {
   const r = (raw && typeof raw === 'object' ? raw : {}) as SerializedLibraryFilters;
-  const TYPES: LibraryTrackType[] = ['all', 'beat', 'instrumental', 'song', 'remix'];
+  // Smart playlists saved before this became a set carry `type: 'beat'` (or
+  // 'all'); fold that in so they keep narrowing to what they always did.
+  const types = new Set<LibraryTrackType>(
+    [...(Array.isArray(r.types) ? r.types : []), r.type].filter(
+      (t): t is LibraryTrackType => LIBRARY_TRACK_TYPES.includes(t as LibraryTrackType),
+    ),
+  );
   return {
-    type: TYPES.includes(r.type as LibraryTrackType) ? (r.type as LibraryTrackType) : 'all',
+    types,
     offlineOnly: r.offlineOnly === true,
     genres: new Set<string>(Array.isArray(r.genres) ? r.genres : []),
     statuses: new Set<string>(Array.isArray(r.statuses) ? r.statuses : []),
@@ -159,11 +171,12 @@ interface FilterBarProps {
 }
 
 const TYPE_OPTIONS: Array<{ value: LibraryTrackType; label: string }> = [
-  { value: 'all', label: 'All' },
   { value: 'beat', label: 'Beats' },
   { value: 'instrumental', label: 'Instrumentals' },
   { value: 'song', label: 'Songs' },
   { value: 'remix', label: 'Remixes' },
+  { value: 'loop', label: 'Loops' },
+  { value: 'topline', label: 'Toplines' },
 ];
 
 export function FilterBar({ filters, onChange, embedded = false, triageCounts = null }: FilterBarProps) {
@@ -190,7 +203,12 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
     filters.rating != null,
   ].filter(Boolean).length;
 
-  const typeLabel = TYPE_OPTIONS.find((t) => t.value === filters.type)?.label ?? 'All';
+  const typeLabelOf = (v: LibraryTrackType) => TYPE_OPTIONS.find((t) => t.value === v)?.label ?? v;
+  const toggleType = (value: LibraryTrackType) => {
+    const next = new Set(filters.types);
+    if (next.has(value)) next.delete(value); else next.add(value);
+    set({ types: next });
+  };
 
   /* Each facet is a menu, not a permanently-open row of chips.
      The old bar stacked Type, Genre and State as three wrapping chip rows plus
@@ -199,16 +217,16 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
      opens on demand. */
   const facets = (
     <>
-      <FacetMenu label="Type" value={filters.type === 'all' ? null : typeLabel}>
-        {(close) => (
+      <FacetMenu
+        label="Type"
+        value={filters.types.size === 1 ? typeLabelOf([...filters.types][0]) : null}
+        count={filters.types.size > 1 ? filters.types.size : 0}
+      >
+        {() => (
           <MenuList>
+            <MenuItem label="All" selected={filters.types.size === 0} onClick={() => set({ types: new Set() })} />
             {TYPE_OPTIONS.map(({ value, label }) => (
-              <MenuItem
-                key={value}
-                label={label}
-                selected={filters.type === value}
-                onClick={() => { set({ type: value }); close(); }}
-              />
+              <MenuItem key={value} label={label} selected={filters.types.has(value)} onClick={() => toggleType(value)} />
             ))}
           </MenuList>
         )}
@@ -384,7 +402,7 @@ export function FilterBar({ filters, onChange, embedded = false, triageCounts = 
       {hasActiveFilters(filters) && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-white/10 pt-2">
           <span className="font-mono text-[9px] uppercase tracking-wider text-white/40">Active:</span>
-          {filters.type !== 'all' && <Chip label={typeLabel} onRemove={() => set({ type: 'all' })} />}
+          {Array.from(filters.types).map((v) => <Chip key={v} label={typeLabelOf(v)} onRemove={() => toggleType(v)} />)}
           {filters.offlineOnly && <Chip label="Offline" onRemove={() => set({ offlineOnly: false })} />}
           {Array.from(filters.genres).map((g) => <Chip key={g} label={g} onRemove={() => toggleGenre(g)} />)}
           {Array.from(filters.statuses).map((v) => {

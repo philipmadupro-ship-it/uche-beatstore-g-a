@@ -5,6 +5,7 @@ import {
   isShareLinkExpired,
   shareLinkEndpoint,
   shareLinkKey,
+  shareOpensLabel,
   toSharePatchBody,
   type ShareLinkFacts,
 } from './share-link';
@@ -156,5 +157,19 @@ describe('filterShareLinks', () => {
   it('combines a facet with the text query', () => {
     const out = filterShareLinks(links, { filter: 'Active', search: 'locked', now });
     expect(out.map((l) => l.token)).toEqual(['c']);
+  });
+});
+
+describe('shareOpensLabel', () => {
+  it('calls the counter what it counts: page opens', () => {
+    expect(shareOpensLabel(0)).toBe('0 opens');
+    expect(shareOpensLabel(1)).toBe('1 open');
+    expect(shareOpensLabel(1204)).toBe('1,204 opens');
+  });
+
+  it('reads a missing or nonsense count as zero', () => {
+    expect(shareOpensLabel(null)).toBe('0 opens');
+    expect(shareOpensLabel(undefined)).toBe('0 opens');
+    expect(shareOpensLabel(-2)).toBe('0 opens');
   });
 });

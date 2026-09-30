@@ -2,14 +2,19 @@ import bcrypt from 'bcryptjs';
 import { nanoid } from 'nanoid';
 import { NextResponse } from 'next/server';
 import { projectShareOwnerId, shareGrantsTrack } from '@/lib/share/share-owner';
+import { portalProjectsWithTrack } from '@/lib/artist-portal/membership';
 
 /**
  * One definition of how a public share token is minted, resolved and gated.
  *
- * Three tables answer to a token in a public URL:
+ * Four tables answer to a token in a public URL:
  *   - `project_shares`       — project / playlist / single-track shares
  *   - `share_links`          — the legacy flat list of track ids
  *   - `project_access_links` — a storefront bundle purchase
+ *   - `artist_portals`       — one artist's permanent portal (migration 125);
+ *     it covers every track in the projects linked to that contact with
+ *     `project_contacts.in_portal`, so the signed preview/peaks routes serve
+ *     portal audio without a copy of their own.
  *
  * Every public route used to carry its own copy of "look the token up, then
  * refuse revoked (410), expired (410), and locked without the right password
@@ -146,10 +151,19 @@ export interface PaidAccessRecord {
   expires_at?: string | null;
 }
 
+export interface ArtistPortalRecord extends ShareLockable {
+  id?: string;
+  token?: string;
+  user_id: string;
+  contact_id: string;
+  [key: string]: unknown;
+}
+
 export type ResolvedShare =
   | { kind: 'project_share'; row: ProjectShareRecord }
   | { kind: 'share_link'; row: ShareLinkRecord }
-  | { kind: 'paid_access'; row: PaidAccessRecord };
+  | { kind: 'paid_access'; row: PaidAccessRecord }
+  | { kind: 'artist_portal'; row: ArtistPortalRecord };
 
 export type ShareKind = ResolvedShare['kind'];
 
@@ -157,10 +171,11 @@ const TABLE: Record<ShareKind, string> = {
   project_share: 'project_shares',
   share_link: 'share_links',
   paid_access: 'project_access_links',
+  artist_portal: 'artist_portals',
 };
 
-/** Resolution order: a project share wins, then a flat link, then a purchase. */
-const ORDER: ShareKind[] = ['project_share', 'share_link', 'paid_access'];
+/** Resolution order: a project share wins, then a flat link, then a purchase, then a portal. */
+const ORDER: ShareKind[] = ['project_share', 'share_link', 'paid_access', 'artist_portal'];
 
 /**
  * Look a token up in the tables `kinds` names — and only those, so a route
@@ -209,6 +224,10 @@ export async function resolvedShareIncludesTrack(
     const ids = resolved.row.track_ids;
     if (!Array.isArray(ids) || !ids.includes(trackId)) return false;
     return shareGrantsTrack(admin, resolved.row.user_id, trackId);
+  }
+  if (resolved.kind === 'artist_portal') {
+    return (await portalProjectsWithTrack(admin, resolved.row, trackId)).length > 0
+      && shareGrantsTrack(admin, resolved.row.user_id, trackId);
   }
   const ref = resolved.kind === 'paid_access'
     ? { content_type: 'project', project_id: resolved.row.project_id }

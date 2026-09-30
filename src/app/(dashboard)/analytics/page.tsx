@@ -57,7 +57,7 @@ interface TrackMeta {
 }
 
 type DatePreset = '7d' | '30d' | '90d' | 'all';
-type TypeFilter = 'all' | 'beat' | 'instrumental' | 'song' | 'remix';
+type TypeFilter = 'all' | 'beat' | 'instrumental' | 'song' | 'remix' | 'loop' | 'topline';
 
 const STATUS_OPTIONS = [
   { value: 'maq',        label: 'MAQ',      color: 'bg-white/[0.04] text-white/70 border-white/15' },
@@ -84,6 +84,8 @@ const TYPE_OPTIONS: { value: TypeFilter; label: string }[] = [
   { value: 'instrumental', label: 'Instrumentals' },
   { value: 'song', label: 'Songs' },
   { value: 'remix', label: 'Remixes' },
+  { value: 'loop', label: 'Loops' },
+  { value: 'topline', label: 'Toplines' },
 ];
 
 // ── Page ─────────────────────────────────────────────────────────

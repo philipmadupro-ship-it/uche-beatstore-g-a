@@ -11,7 +11,10 @@ import {
   type BeatSendRow,
   type PurchaseRow,
   type BuyerFavoriteRow,
+  type ProjectLinkRow,
+  type ProjectTrackAddRow,
 } from '@/lib/contacts/activity';
+import { isMissingSchema } from '@/lib/artists/workspace-load';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -87,8 +90,33 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       favorites = (favs ?? []) as BuyerFavoriteRow[];
     }
 
+    // 5/6. Artist workspace: projects this contact is linked to, and tracks
+    // added to them since. Optional — before migration 122 the table does not
+    // exist and the timeline is exactly what it was.
+    let projectLinks: ProjectLinkRow[] = [];
+    let projectTrackAdds: ProjectTrackAddRow[] = [];
+    const { data: links, error: linksErr } = await admin
+      .from('project_contacts')
+      .select('project_id, created_at')
+      .eq('contact_id', id)
+      .eq('user_id', userId);
+    if (linksErr && !isMissingSchema(linksErr)) throw linksErr;
+    const linkRows = (links ?? []) as Array<{ project_id: string; created_at: string }>;
+    if (linkRows.length > 0) {
+      const ids = linkRows.map((l) => l.project_id);
+      const [{ data: projects }, { data: adds }] = await Promise.all([
+        admin.from('projects').select('id, name').in('id', ids).eq('user_id', userId),
+        admin.from('project_tracks').select('project_id, track_id, added_at').in('project_id', ids),
+      ]);
+      const name = new Map(((projects ?? []) as Array<{ id: string; name: string | null }>).map((p) => [p.id, p.name]));
+      projectLinks = linkRows.map((l) => ({ ...l, project_name: name.get(l.project_id) ?? null }));
+      projectTrackAdds = ((adds ?? []) as Array<{ project_id: string; track_id: string; added_at: string }>)
+        .map((a) => ({ ...a, project_name: name.get(a.project_id) ?? null }));
+    }
+
     // Title map for every referenced track id
     const trackIds = new Set<string>();
+    projectTrackAdds.forEach((a) => trackIds.add(a.track_id));
     (beatSends ?? []).forEach((b) => (b.track_ids ?? []).forEach((t: string) => trackIds.add(t)));
     purchases.forEach((p) => (p.track_ids ?? []).forEach((t: string) => trackIds.add(t)));
     favorites.forEach((f) => trackIds.add(f.track_id));
@@ -106,6 +134,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       beatSends: (beatSends ?? []) as BeatSendRow[],
       purchases,
       favorites,
+      projectLinks,
+      projectTrackAdds,
       titleMap,
     });
     const summary = summarizeEngagement(timeline);

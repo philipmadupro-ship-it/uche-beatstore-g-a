@@ -72,3 +72,8 @@ stem-service/.venv/
 
 # Unrelated project folder dropped into the repo root — not part of the app
 Remix:-PATTERN-MACHINE/
+public/uploads/e2e-local-db/
+# Images the local-database e2e run uploads (no R2 locally, e.g. contact photos).
+public/uploads/covers/
+scripts/local-db/.cache/
+data/project-assets/

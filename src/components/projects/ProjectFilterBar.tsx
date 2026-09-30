@@ -262,7 +262,7 @@ export function ProjectFilterBar({
           <input
             value={value.search}
             onChange={(e) => set({ search: e.target.value })}
-            placeholder="Search projects + tags…"
+            placeholder="Search projects, tracks, artists, tags…"
             className="w-full bg-white/[0.02] border border-white/10 rounded-full py-2 pl-9 pr-3 text-[11px] text-white placeholder:text-white/40 focus:outline-none focus:border-white/20"
           />
         </div>
