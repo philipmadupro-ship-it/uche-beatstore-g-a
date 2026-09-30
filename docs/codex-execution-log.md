@@ -9085,3 +9085,18 @@ Note for the producer: layouts arranged before this deploy were never on the ser
 
 In this sandbox the embed itself shows Chromium's error page: `ERR_CERT_AUTHORITY_INVALID` from the sandbox's TLS proxy, reproduced on a blank page with no CSP. Not an app issue.
 
+
+## 2026-09-30 - Library "See all" keeps the row's filter (STORE-11)
+
+**Reproduced** (Chromium, `/library` Browse, 1440 and 820 wide, stubbed tracks with a decoy per row): every track row's "See all →" (WIP, MAQ, Finished, each genre, In your store, Top rated) opened All tracks with all 8 tracks and the Filters button reading "no filters". Focus also fell to `<body>`, because the clicked row unmounts with Browse.
+
+**Root cause:** `onSeeAll={() => setBrowseMode('all')}` was one closure for every row. It never read the row's `cfg.filter`, and All tracks is driven by the separate `filters` state, so the row's criteria were dropped at the click. Nothing downstream lost it; it was never sent.
+
+Changes:
+- `lib/library/home-row-filters.ts#filtersForHomeRow` (pure, Vitest-covered) translates a row's `HomeRowFilter` into `LibraryFilters` using existing facets only: genres, statuses, single `type`, `storeListed` -> triage stage `listed`, `notStoreListed` -> the other stages, `minRating` -> rating `atLeast`. The clicked row's criteria replace the same dimension of the current filters; every other filter the producer set is kept. A test re-states row membership and filter membership independently for every default row and asserts they select the same tracks, so a new `HomeRowFilter` field the translator forgets fails there.
+- `library/page.tsx`: `handleSeeAll` applies it, clears the highlighted smart playlist (its filters no longer match), switches mode, and moves focus to the "All tracks" toggle. Both mode toggles gain `aria-pressed`. `HomeRow` gets a `data-testid`.
+- Not changed: playlists / projects rows (real links to their own pages), the "Recently played" row (has no See all), the API, schema and RLS.
+
+Tests: `home-row-filters.test.ts` (21); `e2e/library-see-all.spec.ts` (20: each of the 8 rows x 2 viewports shows exactly its members, keyboard focus lands on the All tracks toggle, a hand-picked genre filter survives a See all on another row). All 10 desktop cases fail on the old code (7 extra tracks shown; focus on body). Below 640px Browse rows are not rendered (mobile is All tracks only), so there is no See all there.
+
+Known and left alone: `sortBy` is not carried (All tracks has its own sort and no "plays" sort); filters and browse mode are component state, not in the URL, so a refresh returns to Browse with no filters (as before this change); Browse rows apply only genre / state / type from the shared filters, so a BPM or key filter narrows All tracks but not the rows.

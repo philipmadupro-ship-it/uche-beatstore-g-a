@@ -37,6 +37,7 @@ import MusicPortfolio, { type PortfolioTrack } from '@/components/library/MusicP
 import { MiniTrackCard } from '@/components/library/MiniTrackCard';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
+import { filtersForHomeRow } from '@/lib/library/home-row-filters';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
 import { matchesRating } from '@/lib/library/rating-filter';
 import { summarizeTriage, triageStage, type TriageStage } from '@/lib/library/triage';
@@ -258,6 +259,19 @@ export default function LibraryPage() {
     setActiveSmartId(sp.id);
     setShowFilters(true);
     setBrowseMode('all');
+  };
+
+  // "See all →" on a Browse row: open All tracks narrowed to THAT row, not the
+  // whole vault (lib/library/home-row-filters). The row that was clicked is
+  // about to unmount with Browse, so focus moves to the toggle for the mode
+  // just entered instead of falling to <body>.
+  const allTracksToggleRef = useRef<HTMLButtonElement>(null);
+  const handleSeeAll = (rowFilter: HomeRowConfig['filter']) => {
+    setFilters((current) => filtersForHomeRow(rowFilter, current));
+    // The filters no longer match whichever smart playlist was highlighted.
+    setActiveSmartId(null);
+    setBrowseMode('all');
+    allTracksToggleRef.current?.focus();
   };
 
   const deleteSmartPlaylist = async (id: string) => {
@@ -1292,10 +1306,13 @@ export default function LibraryPage() {
           <div className="hidden sm:flex items-center bg-white/[0.04] border border-white/[0.06] rounded-full p-0.5">
             <button
               onClick={() => setBrowseMode('sections')}
+              aria-pressed={effectiveBrowseMode === 'sections'}
               className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${effectiveBrowseMode === 'sections' ? 'bg-white/[0.14] text-white' : 'text-white/60 hover:text-white'}`}
             >Browse</button>
             <button
+              ref={allTracksToggleRef}
               onClick={() => setBrowseMode('all')}
+              aria-pressed={effectiveBrowseMode === 'all'}
               className={`px-3 py-1 rounded-full text-[10px] font-medium transition-colors ${effectiveBrowseMode === 'all' ? 'bg-white/[0.14] text-white' : 'text-white/60 hover:text-white'}`}
             >All tracks</button>
           </div>
@@ -1320,7 +1337,7 @@ export default function LibraryPage() {
                   onOpenTrack={(t) => setSelectedTrack(t)}
                   onOpenLyrics={handleOpenLyrics}
                   onOpenStudio={handleOpenStudio}
-                  onSeeAll={() => setBrowseMode('all')}
+                  onSeeAll={() => handleSeeAll(row.cfg.filter)}
                 />
               ))}
             </div>
@@ -1991,7 +2008,7 @@ function HomeRow({
   if (isEmpty) return null;
 
   return (
-    <div className="group/row">
+    <div className="group/row" data-testid={`home-row-${cfg.id}`}>
       <div className="flex items-center justify-between mb-2.5">
         <div>
           <h3 className="text-[18px] font-bold text-white">{cfg.title}</h3>
