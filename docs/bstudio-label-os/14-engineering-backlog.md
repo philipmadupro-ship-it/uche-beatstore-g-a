@@ -84,7 +84,7 @@ Revert the docs PR.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-01
-**Status:** In Review
+**Status:** Done (2026-09-30) — [PR #47](https://github.com/philipmadupro-ship-it/uche-beatstore-g-a/pull/47)
 
 ## Objective
 A single, tested source of truth mapping role + functions → capabilities.
@@ -151,8 +151,9 @@ Tenancy is `user_id`. `team_members` / `invites` are dormant (`01` §2.3).
 ## Required Change
 Add migration `NNN_labelos_org_core.sql`:
 
+- **Per-member overrides (from LABEL-02):** `org_members.cap_grants text[]` and `org_members.cap_revokes text[]` (default `'{}'`). Only owner/admin (`members.manage`) may write them.
 - **Tables:** `organizations` (kind CHECK `artist` | `producer` | `label`; incl. `settings jsonb default '{}'`, `deleted_at`), `org_members`, `org_invitations`, `user_profiles`, and `activity_events` (schema only; used by LABEL-05/08/19).
-- **Functions:** SECURITY DEFINER STABLE `org_role(uuid)` and `has_org_cap(uuid, text)` (mapping mirrors LABEL-02, including org kind), owned by `postgres`, with `search_path` set and EXECUTE granted as `is_producer()` is in 119.
+- **Functions:** SECURITY DEFINER STABLE `org_role(uuid)` and `has_org_cap(uuid, text)` (mapping mirrors LABEL-02 exactly: org kind → roles/functions offered, function presets, role grants, implication closure, per-member grants, revokes that also remove everything implying the revoked capability, and `NEVER_GRANTABLE`), owned by `postgres`, with `search_path` set and EXECUTE granted as `is_producer()` is in 119.
 - **Triggers:** "≥1 owner per org".
 - **RLS:**
   - Members read their orgs and co-members.
@@ -182,7 +183,7 @@ None.
 
 ## Tests
 - Extend `src/lib/security/rls-final-state.test.ts`.
-- Add `src/lib/labelos/capabilities.sql.test.ts`: parse the `has_org_cap` mapping from the migration and assert it equals LABEL-02's table.
+- Add `src/lib/labelos/capabilities.sql.test.ts`: parse the `has_org_cap` mapping from the migration and assert it equals LABEL-02's tables (`FUNCTION_PRESETS`, `ROLES_BY_ORG_KIND`, `FUNCTIONS_BY_ORG_KIND`, `IMPLIES`, `NEVER_GRANTABLE`). Where the SQL encodes rules rather than data (override closure), also assert with fixture cases that SQL-side and TS-side results agree, via a documented pure mirror of the SQL logic if running Postgres in CI is not available.
 
 ## Out of Scope
 Artists and scopes (LABEL-10); any existing table.
