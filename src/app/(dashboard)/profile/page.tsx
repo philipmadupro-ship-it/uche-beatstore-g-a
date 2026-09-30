@@ -324,14 +324,14 @@ export default function ProfilePage() {
                 <div className="relative">
                   <AtSign size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                   <input type="text" value={profile.instagram_handle} onChange={set('instagram_handle')}
-                    placeholder="yourusername" className={`${inputCls} pl-8`} />
+                    placeholder="username or instagram.com/username" className={`${inputCls} pl-8`} />
                 </div>
               </Field>
               <Field label="Twitter / X">
                 <div className="relative">
                   <AtSign size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
                   <input type="text" value={profile.twitter_handle} onChange={set('twitter_handle')}
-                    placeholder="yourusername" className={`${inputCls} pl-8`} />
+                    placeholder="username or x.com/username" className={`${inputCls} pl-8`} />
                 </div>
               </Field>
               <Field label="Spotify">

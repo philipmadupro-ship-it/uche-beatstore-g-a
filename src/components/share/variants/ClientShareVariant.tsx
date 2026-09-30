@@ -17,6 +17,7 @@ import type { LicenseTier } from '@/components/store/LicenseSelector';
 import type { Track as CartTrack } from '@/lib/types';
 import { GlassPlayButton } from '@/components/ui/GlassPlayButton';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
+import { resolveCreatorLink } from '@/lib/store/social-links';
 
 function InstagramIcon({ size = 12 }: { size?: number }) {
   return (
@@ -207,8 +208,17 @@ export function ClientShareVariant({
 
   const hasBio = !!creator?.bio?.trim();
   const hasCredits = !!creator?.credits?.trim();
-  const hasContact = !!creator?.contact_email || !!creator?.instagram_handle || !!creator?.twitter_handle
-                  || !!creator?.spotify_url || !!creator?.soundcloud_url || !!creator?.website_url;
+  // Resolved, not interpolated: a stored value that is not a usable link
+  // renders no pill (and no empty "Get in touch" heading).
+  const contactLinks = ([
+    ['email', resolveCreatorLink('email', creator?.contact_email), <Mail key="m" size={12} />],
+    ['instagram', resolveCreatorLink('instagram', creator?.instagram_handle), <InstagramIcon key="i" size={12} />],
+    ['x', resolveCreatorLink('x', creator?.twitter_handle), <XTwitterIcon key="x" size={12} />],
+    ['spotify', resolveCreatorLink('spotify', creator?.spotify_url), <Music key="s" size={12} />],
+    ['soundcloud', resolveCreatorLink('soundcloud', creator?.soundcloud_url), <SoundcloudIcon key="c" size={12} />],
+    ['website', resolveCreatorLink('website', creator?.website_url), <Globe key="w" size={12} />],
+  ] as const).flatMap(([key, link, icon]) => (link ? [{ key, link, icon }] : []));
+  const hasContact = contactLinks.length > 0;
 
   const creatorLeasePrice = creator?.license_lease_price_usd ?? null;
   const creatorExclusivePrice = creator?.license_exclusive_price_usd ?? null;
@@ -612,32 +622,9 @@ export function ClientShareVariant({
           <section className="mb-8">
             <p className="text-[9px] font-mono uppercase tracking-[0.3em] text-white/80 mb-3">Get in touch</p>
             <div className="flex flex-wrap gap-2">
-              {creator?.contact_email && (
-                <SocialPill href={`mailto:${creator.contact_email}`} icon={<Mail size={12} />} label={creator.contact_email} />
-              )}
-              {creator?.instagram_handle && (
-                <SocialPill
-                  href={`https://instagram.com/${creator.instagram_handle.replace(/^@/, '')}`}
-                  icon={<InstagramIcon size={12} />}
-                  label={`@${creator.instagram_handle.replace(/^@/, '')}`}
-                />
-              )}
-              {creator?.twitter_handle && (
-                <SocialPill
-                  href={`https://twitter.com/${creator.twitter_handle.replace(/^@/, '')}`}
-                  icon={<XTwitterIcon size={12} />}
-                  label={`@${creator.twitter_handle.replace(/^@/, '')}`}
-                />
-              )}
-              {creator?.spotify_url && (
-                <SocialPill href={creator.spotify_url} icon={<Music size={12} />} label="Spotify" />
-              )}
-              {creator?.soundcloud_url && (
-                <SocialPill href={creator.soundcloud_url} icon={<SoundcloudIcon size={12} />} label="SoundCloud" />
-              )}
-              {creator?.website_url && (
-                <SocialPill href={creator.website_url} icon={<Globe size={12} />} label="Website" />
-              )}
+              {contactLinks.map(({ key, link, icon }) => (
+                <SocialPill key={key} href={link.href} icon={icon} label={link.label} />
+              ))}
             </div>
           </section>
         )}

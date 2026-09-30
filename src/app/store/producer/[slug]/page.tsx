@@ -14,6 +14,7 @@ import { getBuyerToken } from '@/lib/buyer-session';
 import type { Track } from '@/lib/types';
 import { storefrontThemeStyle } from '@/lib/store/typography';
 import { normalizeLayout } from '@/lib/store-editor/layout';
+import { resolveCreatorLink } from '@/lib/store/social-links';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { MusicReactiveBackdrop } from '@/components/ui/MusicReactiveBackdrop';
 import { formatSignature, producerSignature } from '@/lib/store/producer-signature';
@@ -169,6 +170,14 @@ export default function ProducerPage({
   // font and ignore the text colour.
   const themeStyle = storefrontThemeStyle(creator, normalizeLayout(creator?.store_layout).theme);
   const signatureLine = formatSignature(producerSignature(tracks));
+  const socialRows = ([
+    ['instagram', resolveCreatorLink('instagram', creator?.instagram_handle), <AtSign key="i" size={12} />],
+    ['x', resolveCreatorLink('x', creator?.twitter_handle), <Link2 key="x" size={12} />],
+    ['spotify', resolveCreatorLink('spotify', creator?.spotify_url), <Music key="s" size={12} />],
+    ['soundcloud', resolveCreatorLink('soundcloud', creator?.soundcloud_url), <Music2 key="c" size={12} />],
+    ['website', resolveCreatorLink('website', creator?.website_url), <Globe key="w" size={12} />],
+    ['email', resolveCreatorLink('email', creator?.contact_email), <Mail key="m" size={12} />],
+  ] as const).flatMap(([key, link, icon]) => (link ? [{ key, link, icon }] : []));
   const creditLines = (creator?.credits ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
 
   if (loading) {
@@ -292,40 +301,23 @@ export default function ProducerPage({
               </div>
             )}
 
-            {/* Social links */}
-            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 space-y-2">
-              <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-2">Links</p>
-              {creator.instagram_handle && (
-                <a href={`https://instagram.com/${creator.instagram_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors">
-                  <AtSign size={12} /> {creator.instagram_handle}
-                </a>
-              )}
-              {creator.twitter_handle && (
-                <a href={`https://twitter.com/${creator.twitter_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors">
-                  <Link2 size={12} /> {creator.twitter_handle}
-                </a>
-              )}
-              {creator.spotify_url && (
-                <a href={creator.spotify_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors">
-                  <Music size={12} /> Spotify
-                </a>
-              )}
-              {creator.soundcloud_url && (
-                <a href={creator.soundcloud_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors">
-                  <Music2 size={12} /> SoundCloud
-                </a>
-              )}
-              {creator.website_url && (
-                <a href={creator.website_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors">
-                  <Globe size={12} /> Website
-                </a>
-              )}
-              {creator.contact_email && (
-                <a href={`mailto:${creator.contact_email}`} className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors">
-                  <Mail size={12} /> {creator.contact_email}
-                </a>
-              )}
-            </div>
+            {/* Social links — resolved, never interpolated: see resolveCreatorLink. */}
+            {socialRows.length > 0 && (
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 space-y-2">
+                <p className="text-[9px] font-mono uppercase tracking-widest text-white/40 mb-2">Links</p>
+                {socialRows.map(({ key, link, icon }) => (
+                  <a
+                    key={key}
+                    href={link.href}
+                    target={link.href.startsWith('mailto:') ? undefined : '_blank'}
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-[11px] text-white/60 hover:text-white transition-colors"
+                  >
+                    {icon} {link.label}
+                  </a>
+                ))}
+              </div>
+            )}
 
             {/* Stats */}
             <div className="rounded-xl border border-white/10 bg-white/[0.04] p-4 grid grid-cols-2 gap-3">

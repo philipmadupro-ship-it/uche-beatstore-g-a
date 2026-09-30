@@ -2261,7 +2261,7 @@ export default function StoreEditorPage() {
                       type="text"
                       value={form.instagram_handle}
                       onChange={set('instagram_handle')}
-                      placeholder="username"
+                      placeholder="username or instagram.com/username"
                       className={`${inputCls} pl-7`}
                     />
                   </div>
@@ -2273,7 +2273,7 @@ export default function StoreEditorPage() {
                       type="text"
                       value={form.twitter_handle}
                       onChange={set('twitter_handle')}
-                      placeholder="username"
+                      placeholder="username or x.com/username"
                       className={`${inputCls} pl-7`}
                     />
                   </div>
