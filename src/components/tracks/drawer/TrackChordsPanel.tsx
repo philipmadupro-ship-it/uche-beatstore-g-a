@@ -19,7 +19,7 @@ interface Props {
 }
 
 const BUTTON =
-  'tap flex min-h-11 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] hover:text-white disabled:cursor-not-allowed disabled:opacity-40';
+  'tap flex h-7 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 font-mono text-[9px] uppercase tracking-widest text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] hover:text-white disabled:cursor-not-allowed disabled:opacity-40';
 
 function savedChords(track: Track): ChordSegmentInput[] | null | undefined {
   // `undefined` = the row we were handed didn't select the column (the

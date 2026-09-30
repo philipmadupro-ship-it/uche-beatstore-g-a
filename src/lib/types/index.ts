@@ -1,6 +1,6 @@
 import type { CrmStage } from '@/lib/contracts';
 
-export type TrackType = 'beat' | 'instrumental' | 'song' | 'remix';
+export type TrackType = 'beat' | 'instrumental' | 'song' | 'remix' | 'loop' | 'topline';
 export type TrackStatus = 'finished' | 'needs_work' | 'archived' | 'maq';
 export type StemsStatus = 'none' | 'pending' | 'done' | 'failed';
 
@@ -113,11 +113,15 @@ export type ContactCategory =
 export interface Contact {
   id: string;
   name: string;
+  /** Mig 124: a photo uploaded through /api/upload/image. */
+  avatar_url?: string | null;
   email?: string | null;
   phone?: string | null;
   role?: string | null;
   label?: string | null;
   category?: ContactCategory | string | null;
+  /** The one extra role beside `category` (mig 134). */
+  secondary_category?: string | null;
   genre?: string | null;
   country?: string | null;
   city?: string | null;

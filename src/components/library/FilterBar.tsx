@@ -17,9 +17,9 @@ const STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
   { value: 'archived',   label: 'Archived', color: 'bg-[#0D0D0A] text-white/60 border-white/10'    },
 ];
 
-export type LibraryTrackType = 'beat' | 'instrumental' | 'song' | 'remix';
+export type LibraryTrackType = 'beat' | 'instrumental' | 'song' | 'remix' | 'loop' | 'topline';
 
-export const LIBRARY_TRACK_TYPES: readonly LibraryTrackType[] = ['beat', 'instrumental', 'song', 'remix'];
+export const LIBRARY_TRACK_TYPES: readonly LibraryTrackType[] = ['beat', 'instrumental', 'song', 'remix', 'loop', 'topline'];
 
 export interface LibraryFilters {
   /** Track types to show (any match qualifies; empty = every type). Folded in
@@ -175,6 +175,8 @@ const TYPE_OPTIONS: Array<{ value: LibraryTrackType; label: string }> = [
   { value: 'instrumental', label: 'Instrumentals' },
   { value: 'song', label: 'Songs' },
   { value: 'remix', label: 'Remixes' },
+  { value: 'loop', label: 'Loops' },
+  { value: 'topline', label: 'Toplines' },
 ];
 
 export function FilterBar({ filters, onChange, embedded = false, triageCounts = null }: FilterBarProps) {

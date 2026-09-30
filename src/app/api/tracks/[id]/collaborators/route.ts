@@ -3,7 +3,7 @@ import { requireRowOwnership } from '@/lib/auth/ownership';
 import { readBody } from '@/lib/validate';
 import { errorMessage, schemaCacheMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
-import { CollaboratorCreateBodySchema, CollaboratorDeleteBodySchema } from '@/lib/contracts';
+import { CollaboratorCreateBodySchema, CollaboratorDeleteBodySchema, CollaboratorLinkBodySchema } from '@/lib/contracts';
 
 const log = createLogger('api.tracks.collaborators');
 
@@ -30,11 +30,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     const owner = await requireRowOwnership('tracks', id);
     if (!owner.ok) return owner.res;
 
-    const { data, error } = await owner.admin
+    // contact_id arrived in migration 124; read it when it exists, and fall
+    // back to the 115 columns so credits still list before 124.
+    const list = (columns: string) => owner.admin
       .from('track_collaborators')
-      .select('id, track_id, name, role, source, created_at')
+      .select(columns)
       .eq('track_id', id)
       .order('created_at', { ascending: true });
+    let { data, error } = await list('id, track_id, name, role, source, created_at, contact_id');
+    if (error && (error as { code?: string }).code === '42703') ({ data, error } = await list('id, track_id, name, role, source, created_at'));
 
     if (error) {
       if (isMissingTableError(error.message ?? '')) {
@@ -118,6 +122,53 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     return NextResponse.json({ success: true });
   } catch (error) {
     log.error('delete failed', { trackId: id, error: errorMessage(error) });
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH { id, contact_id } — point a credit at a CRM contact (or unlink with
+ * null), so "credit Artist #1 on the song" puts the song in their workspace.
+ * The contact must be this producer's: the table has no owner column and no
+ * trigger for it, so this route is the check.
+ */
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const parsed = await readBody(req, CollaboratorLinkBodySchema);
+  if (!parsed.ok) return parsed.res;
+  const { id: collaboratorId, contact_id: contactId } = parsed.data;
+
+  try {
+    const owner = await requireRowOwnership('tracks', id);
+    if (!owner.ok) return owner.res;
+
+    if (contactId) {
+      const { data: contact } = await owner.admin
+        .from('contacts')
+        .select('id')
+        .eq('id', contactId)
+        .eq('user_id', owner.userId)
+        .maybeSingle();
+      if (!contact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
+    }
+
+    const { data, error } = await owner.admin
+      .from('track_collaborators')
+      .update({ contact_id: contactId })
+      .eq('id', collaboratorId)
+      .eq('track_id', id)
+      .select('id, track_id, name, role, source, created_at, contact_id');
+    if (error) {
+      if (isMissingTableError(error.message ?? '') || (error as { code?: string }).code === '42703') {
+        return NextResponse.json({ error: 'Linking credits to contacts needs migration 124 applied on Supabase.' }, { status: 503 });
+      }
+      throw new Error(error.message);
+    }
+    const row = (data as unknown[] | null)?.[0];
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return NextResponse.json(row);
+  } catch (error) {
+    log.error('link failed', { trackId: id, error: errorMessage(error) });
     return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }

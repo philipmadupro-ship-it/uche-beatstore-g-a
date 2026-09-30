@@ -52,6 +52,9 @@ export async function GET(req: NextRequest) {
   const tagsByProject = new Map<string, { tag: string; category: string | null }[]>();
   const foldersByProject = new Map<string, string[]>();
   const previewCoversByProject = new Map<string, string[]>();
+  const titleByTrack = new Map<string, string>();
+  const trackTitlesByProject = new Map<string, string[]>();
+  const artistNamesByProject = new Map<string, string[]>();
 
   if (isSupabaseConfigured() && ids.length) {
     const admin = createServiceClient();
@@ -69,13 +72,41 @@ export async function GET(req: NextRequest) {
       // catalogue scale overflows a single `.in()`. The error was swallowed
       // here, so the only symptom was projects quietly losing their preview
       // covers.
-      const trackRows = await selectIn<{ id: string; cover_url: string | null }>(
-        (ids) => admin.from('tracks').select('id, cover_url').in('id', ids),
+      const trackRows = await selectIn<{ id: string; cover_url: string | null; title: string | null }>(
+        (ids) => admin.from('tracks').select('id, cover_url, title').in('id', ids),
         trackIds,
       );
       trackRows.forEach((track) => {
         coverByTrack.set(track.id, track.cover_url);
+        if (track.title) titleByTrack.set(track.id, track.title);
       });
+    }
+    projectTrackRows.forEach((pt) => {
+      const title = titleByTrack.get(pt.track_id);
+      if (!title) return;
+      const arr = trackTitlesByProject.get(pt.project_id) ?? [];
+      if (!arr.includes(title)) arr.push(title);
+      trackTitlesByProject.set(pt.project_id, arr);
+    });
+
+    // Linked artists (mig 122), for search. Optional: before the migration
+    // there are none, never an error.
+    const { data: linkRows, error: linkErr } = await admin.from('project_contacts').select('project_id, contact_id').in('project_id', ids);
+    if (!linkErr && linkRows?.length) {
+      const links = linkRows as Array<{ project_id: string; contact_id: string }>;
+      const contacts = await selectIn<{ id: string; name: string | null; user_id: string | null }>(
+        (cids) => admin.from('contacts').select('id, name, user_id').in('id', cids),
+        [...new Set(links.map((l) => l.contact_id))],
+      ).catch(() => []);
+      const ownerOf = new Map(projects.map((p) => [p.id, p.user_id]));
+      const contactById = new Map(contacts.map((c) => [c.id, c]));
+      for (const l of links) {
+        const c = contactById.get(l.contact_id);
+        if (!c?.name || c.user_id !== ownerOf.get(l.project_id)) continue;
+        const arr = artistNamesByProject.get(l.project_id) ?? [];
+        if (!arr.includes(c.name)) arr.push(c.name);
+        artistNamesByProject.set(l.project_id, arr);
+      }
     }
 
     projectTrackRows.forEach((pt) => {
@@ -122,6 +153,8 @@ export async function GET(req: NextRequest) {
     tags: tagsByProject.get(p.id) ?? [],
     folder_ids: foldersByProject.get(p.id) ?? [],
     preview_covers: previewCoversByProject.get(p.id) ?? [],
+    track_titles: trackTitlesByProject.get(p.id) ?? [],
+    artist_names: artistNamesByProject.get(p.id) ?? [],
   }));
   return NextResponse.json({ projects: withCount }, {
     headers: { 'Cache-Control': 'private, max-age=15, stale-while-revalidate=60' },

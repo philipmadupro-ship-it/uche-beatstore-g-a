@@ -28,6 +28,46 @@ export interface ProjectListItem {
   is_public?: boolean;
   tags?: ProjectTag[];
   folder_ids?: string[];
+  /** Searched too: the storefront copy, the tracks in it, the artists linked to it. */
+  description?: string | null;
+  track_titles?: string[];
+  artist_names?: string[];
+}
+
+function fold(s: string): string {
+  return s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+/**
+ * Why a project matches a search, or null when it does not. Every word of the
+ * query must appear somewhere — the name, a tag, the description, a track
+ * title or a linked artist — so "nova midnight" finds the project Nova is on
+ * that contains MIDNIGHT. `via` names the first non-name field that matched,
+ * so a card can say why it is in the results.
+ */
+export function projectSearchMatch(p: ProjectListItem, query: string): { via: string | null } | null {
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  if (words.length === 0) return { via: null };
+  const fields: Array<{ label: string | null; text: string }> = [
+    { label: null, text: p.name },
+    ...(p.tags ?? []).map((t) => ({ label: `Tag · ${t.tag}`, text: t.tag })),
+    ...(p.artist_names ?? []).map((n) => ({ label: `Artist · ${n}`, text: n })),
+    ...(p.track_titles ?? []).map((t) => ({ label: `Track · ${t}`, text: t })),
+    ...(p.description ? [{ label: 'Description', text: p.description }] : []),
+  ];
+  const folded = fields.map((f) => ({ ...f, text: fold(f.text) }));
+  // A field holding the whole phrase is the best reason ("night drive" is the
+  // track Night Drive, not MIDNIGHT + Drive).
+  const phrase = words.join(' ');
+  const whole = folded.find((f) => f.text.includes(phrase));
+  if (whole) return { via: whole.label };
+  let via: string | null = null;
+  for (const w of words) {
+    const hit = folded.find((f) => f.text.includes(w));
+    if (!hit) return null;
+    if (!via && hit.label && !folded[0].text.includes(w)) via = hit.label;
+  }
+  return { via };
 }
 
 export type ProjectSortMode = 'recent' | 'updated' | 'name' | 'tracks';
@@ -77,11 +117,7 @@ export function filterAndSortProjects(
     }
 
     // Search — name OR any tag value.
-    if (q) {
-      const inName = p.name.toLowerCase().includes(q);
-      const inTags = (p.tags ?? []).some((t) => t.tag.toLowerCase().includes(q));
-      if (!inName && !inTags) return false;
-    }
+    if (q && !projectSearchMatch(p, q)) return false;
     return true;
   });
 

@@ -8894,6 +8894,65 @@ Tests: `chord-extract.test.ts` covers the real package: progression, timing, sil
 
 **Not wired:** no UI calls `detectChordsFromUrl`, before or after this change. The analyze route accepts a `chords` payload and nothing renders `tracks.chords`.
 
+## 2026-09-29 - CRM audit fixes (Artist Relationship Workspace, phase 0)
+
+The three bugs the Artist Relationship Workspace plan found in its audit. No migrations, no RLS change.
+
+**A project sent outside a campaign wrote no `beat_sends` row.** `SendBeatModal`'s project mode created a `project_shares` row and called the invite route. Only when a campaign was attached did it also call `/api/campaigns/[id]/targets`, which is the only place that wrote `beat_sends`. A direct send therefore never reached the contact's timeline (`lib/contacts/activity.ts` derives sends from `beat_sends`) or the nudge queue, and the Resend webhook, which matches on `beat_sends.email_resend_id`, had nothing to stamp the open or click on.
+- `lib/crm/project-send.ts#buildProjectSendRow` is the one row builder. The campaign path now uses it too.
+- The invite route takes an optional `contact_id` (Zod: `ProjectShareInviteBodySchema`). With it, after the email is sent, the route checks the contact belongs to the caller, reads the project's tracks in order, inserts the row and returns `beatSendId`. It is best-effort: the email has already gone, so a failure is logged and the invite still reports success.
+- The modal passes `contact_id` only when no campaign is attached, so a campaign send is not recorded twice. `ContentShareModal` re-sends invites without it, unchanged.
+
+**Share-page comments notified nobody.** `/api/projects/share/[token]/comments` saved the comment and returned. It now writes a `share_comment` notification to the share's owner (`projectShareOwnerId`), built by `lib/notifications/share-comment.ts`. The title names the author and project. The body names the track, the pinned region (`0:42–0:58`) and a 140-char excerpt. The track title is looked up only among the owner's tracks, because the id comes from the guest. The row never carries the share token. It reaches the bell, its realtime subscription and desktop alerts with no further change. TopBar gives the kind a speech-bubble icon. Failure is logged and the comment is still saved.
+
+**`plays` on share links counts page opens.** Both `/api/share/[token]` and `/api/projects/share/[token]` increment it on every page load. `/links` (metric tile, header meta, card and row captions, detail popup) and `ContentShareModal` now say "opens", through `lib/links/share-link.ts#shareOpensLabel`. The column is unchanged.
+
+Tests: `lib/crm/project-send.test.ts`, `lib/notifications/share-comment.test.ts`, `shareOpensLabel` in `lib/links/share-link.test.ts`, and new route tests for the invite route (5) and the share comments route (4). 7 of those 9 route cases fail against the old routes; the other 2 pin unchanged behaviour (no row without `contact_id`, no notification for a refused view-only comment).
+
+Not changed: `/links`' "Downloads" tile counts links that allow downloads, not downloads.
+
+## 2026-09-29 - Artist Relationship Workspace, phase 1 (migrations 122–126)
+
+Builds phase 1 of the Artist Relationship Workspace plan. A contact linked to a project, or given a portal, becomes an artist workspace. Each artist gets one permanent private portal. Decisions are stored per artist and beat. Engagement and the relationship stage are worked out from activity. Rules are in CLAUDE.md "Artist workspace + portal"; product behaviour is in AGENTS.md "Producer: work with an artist".
+
+**Migrations (numbered 122–126, not the planned 121–125).** `121_share_full_playback.sql` already exists on the unmerged branch `claude/lucid-ride-5j0gql`.
+- 122 `project_contacts` (artist ↔ project, carrying the portal permissions)
+- 123 `contact_track_states`, plus a one-time copy of `beat_sends.status` (newest send wins; sent/opened not copied; `ON CONFLICT DO NOTHING`)
+- 124 `tracks.beat_track_id`, `track_collaborators.contact_id`, `contacts.avatar_url`
+- 125 `artist_portals`
+- 126 `project_shares.contact_id`, backfilled from `invited_email`
+
+Every new table is owner-only under RLS (writes also need `is_producer()`), and has a `SECURITY DEFINER` same-owner trigger. None is applied on Supabase yet (MIGRATIONS.md).
+
+**Pure logic** (Vitest):
+- `lib/contacts/{decisions,track-engagement,relationship}.ts`
+- `lib/artist-portal/{new-items,view,digest}.ts`
+- `lib/notifications/artist-reaction.ts`
+- New timeline sources in `lib/contacts/activity.ts`: project linked, and beats added since the link, grouped per project and day. Plus stored `portal_opened`, `track_downloaded`, `decision_changed` and `artist_notified` rows. A notify suppresses the derived "Sent X" for the same `beat_sends` row.
+
+**Routes:**
+- Producer: `/api/contacts/[id]/{workspace,decisions,portal,notify}`, `/api/projects/[id]/contacts` (+ `/[contactId]`, `/[contactId]/share`) and `/api/tracks/[id]/people`. `beat_track_id` is added to the track PATCH contract.
+- Public, allowlisted: `/api/portal/[token]` (+ `reaction`, `play`, `download/[trackId]`).
+- `artist_portal` is a new `resolveShareToken` kind. The signed preview and peaks routes serve portal audio with no copy of their own.
+- `/api/contacts/[id]/activity` reads the new timeline sources.
+- `/api/privacy/erase` erases the portal, artist-written reactions and portal visits before anonymising the contact.
+
+**UI:**
+- `/contacts/[id]` in workspace mode has tabs Overview · Projects · Beats · Songs · Activity · Notes, and the identity card shows the stage, portal status, Notify · N new, Copy link and revoke/reissue. Other contacts get a "Start workspace" button.
+- The project page has an Artists strip (Share / Notify / Add artist), with a decision pill per artist under each track row. `ProjectTrackList` gained an optional `rowAddon` slot.
+- The track drawer has People / Songs built on this / Built on.
+- `/artist/[token]` is the portal page: password gate, projects, Beats/Songs library, the share page's `WavePlayer`, Interested/Pass and downloads. Checked at 1280 and 390px.
+
+**Found by the redaction test:** `loadPublicArtworkTheme` returns profile URLs as stored, so a logo saved as `r2://` reached the portal JSON. The portal now passes the theme through `toPortalArtworkTheme`. The storefront and share pages use the same loader and were not changed here.
+
+**Verified against a real database, not only mocks.** `scripts/local-db/` replays 001–126 twice through `scripts/apply-migrations.sh` into Postgres 16. It serves them through PostgREST 12 with RLS, a Supabase-shaped gateway and a fake Resend. Against that stack:
+- RLS and trigger probes: anon, a buyer, the producer and cross-owner writes, 10 cases.
+- An API smoke run of every route: 42 checks.
+- `e2e/artist-workspace.spec.ts`, 6 flows, run three times: start workspace → share → the artist plays and taps Interested → the producer sees it, gets a notification and moves decisions → a later beat is NEW and counted by Notify → a song is built on a beat, the drawer's People lists the artist, the artist downloads, the portal is revoked → a signed-in buyer gets 403 on producer routes.
+
+The spec is excluded from the default e2e run, which still reports 183 passed / 8 skipped. The unit suite is 3014 passing.
+
+**Not in phase 1:** project files (`project_assets`), portal comments, the Artists card view in `/contacts`, search labels, a digest cron, a credit → contact picker (the column exists), and avatar upload (the column exists).
 ## 2026-09-29 - Chord detection blends basic-pitch into Essentia HPCP (AUDIO-06)
 
 **Comparison.** Synthetic progressions (clean triads, overtone-rich tones with drums, inversions + 7ths + melody, a noisy trap loop, 1 s changes) were too easy: HPCP and basic-pitch (0.3 activation floor) both scored 100%. Real audio separated them. 40 GuitarSet comping takes (CC-BY-4.0, acoustic guitar, 8 per style, fetched by HTTP range from Zenodo), lead-sheet ("instructed") chords reduced to major/minor triads; dim/hdim/aug/sus seconds and seconds where no chord covers 70% are unscored; 997 scored one-second buckets:
@@ -8960,6 +9019,18 @@ Not changed: the email route from earlier in this conversation (`lib/share/email
 
 Tests: `lib/share/playback.test.ts` (15), `lib/share/download-filename.test.ts` (6), grant TTL cases, and `e2e/share-options.spec.ts` (28, all fail on the old code).
 
+## 2026-09-29 - Artist Relationship Workspace, phase 2
+
+Builds on phase 1 (migrations 122–126). Migrations **127–129**; the branch also merges `origin/main` (#34 SHARE-01, #35 the phase 0 fixes from another branch — main's versions kept, #36 chords).
+
+- **Project files** (127 `project_assets`): project page Files section (drop or add, rename in place, kind, per-file "In portal", delete with confirm), workspace Files tab (project files + the artist's track WAVs/stems, with "downloaded" per artist), portal Files tab (open / download). Private bucket only; extension allowlist decides the MIME; ≤4 MB through the app, larger via presigned PUT + register, and register only accepts a key this project's presign minted. New files count toward Notify and appear in the digest ("File: Lyrics").
+- **Portal comments** (128 `project_comments.contact_id`): per-beat threads (optionally pinned to the playhead) and per-project notes in the portal; `portal_comment` notification + timeline row; the producer answers from the workspace's Activity tab (and replies from the project comments panel stay in the thread). Share pages filter portal threads out; `can_comment` gates posting.
+- **Daily digest** (129 `artist_portals.auto_digest`, `/api/cron/artist-digest` 17:00 UTC): opt-in per artist from the portal ⋯ menu; sends through `sendPortalDigest`, at most once per 20 h, idempotent.
+- **Artists card view** on /contacts (`/api/contacts/artists`, pure `summarizeArtist`), **per-artist totals** (played / downloads, 90 days) in the workspace header, **search** labels (song → artist, files, artists; palette contacts now open the contact), **credit → contact** linking in the track drawer's credits, **contact photo** upload.
+- Fixes found on the way: Notify / Artists strip / digest counted archived portal projects (membership already excluded them); an INSERT into a missing table comes back from PostgREST as an empty 404, so the assets POST now probes with a read before storing anything; erasure also removes the artist's portal comments.
+- Ops: `scripts/ops/bundle-migrations.sh` + `supabase/apply/pending.sql` (112–129 for the SQL editor; 112 in a same-effect form without its TEMP table, which the editor drops between statements) + `supabase/apply/verify.sql`; `docs/prompts/apply-migrations.md` is the runbook / agent prompt.
+
+Verification: migrations replayed twice on local Postgres 16 + PostgREST 12, bundle applied twice on a production-shaped database (13/13 applied, re-run a no-op), RLS/trigger probes, every route re-checked with 127–129 removed (reads degrade, writes 503 naming the migration). `e2e/artist-workspace-phase2.spec.ts` (5 flows) + the phase 1 spec: 11/11 on three fresh databases. Unit tests 3,101, tsc, lint, CI-style build and the store-dynamic check pass.
 ## 2026-09-29 - Store Editor loads the whole catalogue, not the newest 100 (STORE-02)
 
 **Reproduced** with 250 stubbed beats behind `/api/tracks`'s real paging contract, the 30 listed ones being the oldest (all on API page three). On `/store-editor` → Beat Listing, the header said "30 listed · 250 total" and the list showed none of them. They appeared only after pressing "Load next 100 beats" twice.
@@ -9055,6 +9126,53 @@ Verified #40 on production (`uche-beatstore-g-a.vercel.app`, real "Beat Pack" bu
 - `SimpleAudioEngine` resumes with the element's own duration: immediately if metadata is there, else on `loadedmetadata`. The pending resume is keyed to its track id and cleared only once applied, so StrictMode's rehearsal cleanup cannot consume it and a track picked meanwhile never inherits it. The background cached-blob swap (which rewinds on `load()`) re-arms the position it had.
 - Tests: `SimpleAudioEngine.test.tsx` — resume waits for metadata; a 75 s preview of a 179 s beat resumes at 9 s, not 21.48 s (the old engine's answer, matching production). `e2e/project-playback.spec.ts` — the bundle page's tracks now claim 3× their clip length, as production's do, and both resume checks bound the position within ±1 s of where playback actually stopped (read from the persisted progress). The old engine fails it: stopped ≈4.9 s, came back at 14.7 s.
 
+## 2026-09-29 - Artist workspace, phase 3: messages, requests, email sign-in, live portal, songs on several beats
+
+Migrations 130–132 (pending on production; `supabase/apply/pending.sql` holds exactly them).
+
+- **Messages + requests** (130, `lib/artist-messages/`): one thread per artist beside the per-beat comments. Portal Messages tab (message, or "Ask for something" with an optional project); workspace Messages tab with open requests (Done / Decline / Reopen), Seen / Emailed markers and an overview callout. Email is a fallback: skipped while the artist is on the portal (10 min) and while an emailed message is unread (6 h). Notifications, timeline kinds and erasure extended.
+- **Email sign-in** (131, `lib/artist-portal/sign-in.ts`): per-portal switch in the workspace menu; sign-in link emailed to the contact's own address; stateless HMAC code (15 min) → 30-day httpOnly cookie, bound to portal id + token + email.
+- **Live portal** (`lib/artist-portal/pulse.ts`, `/pulse`, `hooks/useVisiblePoll`): fingerprints polled while visible; comments/messages refresh quietly, library changes offer "Show".
+- **Songs on several beats** (132, `lib/tracks/song-beats*.ts`, `PUT /api/tracks/[id]/beats`): drawer list with Make main / Remove; the single PATCH mirrors into the table; portal and workspace name all beats.
+
+Bugs found by the real-database run and fixed: PostgREST rejects `or=` on a PATCH ("column does not exist") — the sign-in throttle is a compare-and-set instead; the portal's `?signin=` redemption raced React's double mount effect in dev; a HEAD count on a missing table reads as an empty 404, so the workspace's message counts use a GET; an INSERT into a missing table (portal message) needed the read-first probe. Phase 1 spec: waited for the play request instead of its response (flaked on a cold compile).
+
+Tests: unit (messages 13, sign-in 8, pulse 4, song-beats 7, useVisiblePoll 2); `e2e/artist-workspace-phase3.spec.ts` 5 flows; all 16 real-DB flows pass; routes re-checked with 130–132 dropped.
+
+## 2026-09-29 - Artists apart from contacts, search inside projects, grouped credits
+
+Owner request after phase 3: separate familiar artists from the rest of the contacts, search inside projects, and fewer names per credit on a track.
+
+- `/contacts`: Artists · N | Other contacts · M | Beat log. The table and all its counts run over `splitContacts(...).others` (`lib/contacts/audience.ts`); the Artists view gains a search (name, project, stage). First visit opens on Artists when any exist; the choice is remembered per device.
+- Projects: `/api/projects` returns `track_titles` + `artist_names`; `projectSearchMatch` (every word, accent-insensitive, whole-phrase field preferred) drives the list filter and the card's "why it matched" line. ⌘K adds projects via a matching track or artist.
+- Credits: `groupCredits` (one person = linked contact, else normalised name) + `visibleCredits` (3, never folds a single one). Remove/link act on the person.
+
+Tests: audience (2), project search (4), credits (5 + 1 jsdom); real-DB flow 6 in `e2e/artist-workspace-phase3.spec.ts` — 17/17 real-DB flows pass. Also fixed two 12px sizes the type-scale guard caught (they were in the phase 3 commit).
+
+## 2026-09-29 - Linked material (step 1 of the roles/linking plan)
+
+Owner request: link a song to its beat, a beat to its loops, and so on, then download or send the set together; one zip. Migration 132 stays as it is.
+
+- Migration 133: `track_links` (instrumental / loop / topline / version, one per pair) + track types `loop`, `topline`. No DO blocks; verify.sql checks that exactly one type check survives.
+- `lib/tracks/links.ts`: `mergeLinks` reads `song_beats` (relation `beat`) and `track_links` as one list, both directions, labelled per side; `suggestRelation`; zip naming + README. `links-store.ts` writes `beat` through song-beats-store so the main beat stays in step.
+- `/api/tracks/[id]/links` (GET/POST/DELETE), `/api/tracks/[id]/links/zip` (streamed, `lib/tracks/zip-stream.ts`, fflate added as a direct dependency).
+- Drawer **Linked** panel: inline search-and-click linking (a Dropdown menu inside the drawer rendered off-screen — found by the e2e), Download all · zip, Share all, Send to….
+- Loop/Topline added to every type list (upload, drawer, library filter, analytics, quick share, add-from-library).
+
+Tests: links (7), zip-stream (2, unzipped and compared); `e2e/linked-material.spec.ts` 3 flows on the real database (zip compared byte for byte, share row checked); degradation with 133 dropped: GET works, non-beat links 503, zip works.
+
+## 2026-09-30 - Contact roles (step 2 of the roles/linking plan)
+
+Owner request: artists, producers and labels each get their own tab in contacts with the features that fit (producers → loops, labels → toplines and packs); a contact has a main role and can add one more.
+
+- Migration 134: `contacts.secondary_category`.
+- `lib/contacts/roles.ts`: category → group (artist / producer / label / other), `contactGroups` (main first, one extra, workspace contacts with no specific role are artists), `splitByRole`, `otherRoleBadge`, `ROLE_SENDS`, `sentByType`.
+- /contacts: Artists · Producers · Labels & A&R · Other contacts · Beat log; the table and its stats run over the tab's people. Producers / Labels open with `RoleSummaryStrip` (`/api/contacts/roles`), with "Show all N" (the first version cut at 9 and hid a producer who had never been sent anything — caught by the e2e). Artists without a workspace are listed under the cards.
+- `SendBeatModal`: `initialMode` + `typeFilter` (a clearable "Loops only" chip).
+- Contact page: `ContactRoleFields` (Role + Also) replaces the free-text Category field.
+
+Tests: roles (7); `e2e/contact-roles.spec.ts` 3 flows; all 23 real-DB flows pass.
+
 ## 2026-09-29 - Store Editor video section: link reachable, real size control (STORE-08)
 
 Producer report: in Design, a video section's size couldn't be changed and a URL couldn't be pasted.
@@ -9085,6 +9203,44 @@ Note for the producer: layouts arranged before this deploy were never on the ser
 
 In this sandbox the embed itself shows Chromium's error page: `ERR_CERT_AUTHORITY_INVALID` from the sandbox's TLS proxy, reproduced on a blank page with no CSP. Not an app issue.
 
+
+## 2026-09-30 - Fixes from testing, Labels like Artists, portals shaped by role (step 3, mig 135)
+
+Producer feedback after testing steps 1–2.
+
+**Linked panel search showed nothing.** Not reproducible locally with real keystrokes: the API and input were fine. The likely cause is that search only matched title, description, key and BPM. A producer typing "loop" or "topline" to find their loops got nothing unless a title said it. The panel also showed nothing at all until something was typed, and a failed request looked the same as no match.
+- `lib/tracks/links.ts#linkSearchParams`: a type word ("loop", "loops", "topline", "inst"…) searches the type, and anything else searches titles. With nothing typed, it lists the 40 most recent tracks.
+- `rankCandidates` puts the types that fit this track first (a song: beats, instrumentals, toplines, loops).
+- The panel always lists candidates ("Recent · click to link" / "Matches"). It says when loading fails, and an empty search names what to try.
+- The panel moved below Asset Intelligence. The relation Dropdown ("Auto") and the chord buttons are now 28px tall.
+
+**/contacts header.**
+- The tab bar was inside `PageHeader`'s `actions`, which squeezed the description into a one-word column and pushed the tabs off the edge. The tabs now have their own row, scrolling sideways on a phone.
+- The description is shorter: "Artists, producers, labels, and everyone you send music to."
+
+**Labels & A&R works like Artists.**
+- Workspace cards (`ArtistsCardView kind="label"`) are followed by the labels without a workspace (`RoleSummaryStrip` with `excludeIds` + `heading`), with their sends. There is no table.
+- The workspace cards are now split by role. Before, a label with a workspace also showed as an Artists card and counted in the Artists tab.
+
+**Portals shaped by role** (`lib/artist-portal/audience.ts`, mig 135 `project_contacts.pitch_note`). There is still one portal per contact, and the main role picks its shape:
+- **Producer:** loops first and "Loops & beats". Each row has **Ask for stems**: a normal portal request, so it reaches the producer's open requests and notifications. The button reads "Stems ready · ask" when `stems_status = 'done'`.
+- **Label:** toplines first, projects shown as "Packs", and each pack opens with the pitch written for that label. The pitch is edited inline on the workspace Projects tab and stored per link, not per project.
+- **Artist:** unchanged.
+- Only wording and order change. Membership, downloads and comments are untouched.
+- `portal.audience`, `project.pitchNote` and `track.hasStems` are explicit view fields, and the redaction test's field lists were updated.
+- Pitch notes are read in their own query, so the portal and the workspace work before 135 is applied. Saving a pitch then answers 503 naming 135.
+
+Tests:
+- `links.test.ts`: the picker query and ranking.
+- `audience.test.ts`.
+- Portal route test: artist default, and label order + pitch.
+- `e2e/portal-roles.spec.ts` (real DB):
+  - producer: order, Ask for stems → open request in the workspace;
+  - label: pitch written in the workspace → shown on the pack; Packs; order;
+  - artist: unchanged.
+- `npm run e2e:real-db`: 26/26.
+
+Bundle: `supabase/apply/pending.sql` = 130–135, run locally, verify all `applied`.
 
 ## 2026-09-30 - Library "See all" keeps the row's filter (STORE-11)
 

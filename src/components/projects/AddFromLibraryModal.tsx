@@ -22,7 +22,7 @@ interface Props {
   title?: string;
 }
 
-const TYPE_OPTIONS = ['all', 'beat', 'instrumental', 'song', 'remix'] as const;
+const TYPE_OPTIONS = ['all', 'beat', 'instrumental', 'song', 'remix', 'loop', 'topline'] as const;
 const KEY_OPTIONS = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 const TRACK_PAGE_SIZE = 80;
 
