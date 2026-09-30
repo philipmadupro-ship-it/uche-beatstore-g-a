@@ -38,9 +38,11 @@ import { MiniTrackCard } from '@/components/library/MiniTrackCard';
 import { LiquidGlassButton } from '@/components/ui/LiquidGlassButton';
 import { BulkEditPanel } from '@/components/crm/BulkEditPanel';
 import { filtersForHomeRow } from '@/lib/library/home-row-filters';
+import { matchesLibraryFilters } from '@/lib/library/filter-tracks';
+import { sortForHomeRow, type LibrarySortMode } from '@/lib/library/sort-modes';
+import { decodeLibraryView, encodeLibraryView, hasLibraryViewParams } from '@/lib/library/view-state';
 import { FilterBar, LibraryFilters, DEFAULT_FILTERS, hasActiveFilters, activeFilterCount, serializeFilters, deserializeFilters } from '@/components/library/FilterBar';
-import { matchesRating } from '@/lib/library/rating-filter';
-import { summarizeTriage, triageStage, type TriageStage } from '@/lib/library/triage';
+import { summarizeTriage, type TriageStage } from '@/lib/library/triage';
 import { SellReadinessPanel } from '@/components/library/SellReadinessPanel';
 import { ActionDigestPanel } from '@/components/library/ActionDigestPanel';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
@@ -62,7 +64,7 @@ import type { MenuSection } from '@/lib/ui/action-menu';
 // `recent` reflects upload time; `recently_played` would need a history
 // table we don't have. Skipping for now. `store_order` activates the
 // beat reorder UI so creators can control public storefront placement.
-type SortMode = 'recent' | 'title' | 'bpm' | 'bpm-desc' | 'key' | 'rating' | 'store_order';
+type SortMode = LibrarySortMode;
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: 'recent', label: 'Newest' },
@@ -71,6 +73,7 @@ const SORT_OPTIONS: { value: SortMode; label: string }[] = [
   { value: 'bpm-desc', label: 'BPM ↓' },
   { value: 'key', label: 'Key' },
   { value: 'rating', label: 'Rating ↓' },
+  { value: 'plays', label: 'Most played' },
   { value: 'store_order', label: 'Store Order ↕' },
 ];
 
@@ -247,15 +250,9 @@ export default function LibraryPage() {
 
   const applySmartPlaylist = (sp: { id: string; filter: Record<string, unknown> }) => {
     // Smart playlists saved before type moved into the filter model carry it
-    // as a sibling `typeFilter` key; fold that in so they still apply correctly.
-    const legacyType = sp.filter?.typeFilter;
-    const restored = deserializeFilters(sp.filter);
-    setFilters(
-      legacyType === 'beat' || legacyType === 'instrumental' || legacyType === 'song'
-        || legacyType === 'remix' || legacyType === 'all'
-        ? { ...restored, type: legacyType }
-        : restored,
-    );
+    // as a sibling `typeFilter` key (and later as a single `type`);
+    // deserializeFilters folds either into the `types` set.
+    setFilters(deserializeFilters({ ...sp.filter, type: sp.filter?.typeFilter ?? sp.filter?.type }));
     setActiveSmartId(sp.id);
     setShowFilters(true);
     setBrowseMode('all');
@@ -266,8 +263,10 @@ export default function LibraryPage() {
   // about to unmount with Browse, so focus moves to the toggle for the mode
   // just entered instead of falling to <body>.
   const allTracksToggleRef = useRef<HTMLButtonElement>(null);
-  const handleSeeAll = (rowFilter: HomeRowConfig['filter']) => {
-    setFilters((current) => filtersForHomeRow(rowFilter, current));
+  const handleSeeAll = (cfg: HomeRowConfig) => {
+    setFilters((current) => filtersForHomeRow(cfg.filter, current));
+    // Open in the order the row showed (Most played, Rating ↓, …).
+    setSortMode(sortForHomeRow(cfg.sortBy));
     // The filters no longer match whichever smart playlist was highlighted.
     setActiveSmartId(null);
     setBrowseMode('all');
@@ -528,24 +527,7 @@ export default function LibraryPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const matched = tracks.filter((t) => {
-      if (filters.offlineOnly && !cachedIds.has(t.id)) return false;
-      if (filters.type !== 'all' && t.type !== filters.type) return false;
-      if (filters.bpmMin != null && (t.bpm == null || t.bpm < filters.bpmMin)) return false;
-      if (filters.bpmMax != null && (t.bpm == null || t.bpm > filters.bpmMax)) return false;
-      if (filters.keys.size > 0 && (!t.key || !filters.keys.has(t.key))) return false;
-      if (filters.scale === 'major' && t.scale === 'minor') return false;
-      if (filters.scale === 'minor' && t.scale !== 'minor') return false;
-      if (filters.statuses.size > 0 && (!t.status || !filters.statuses.has(t.status))) return false;
-      if (!matchesRating(t.rating, filters.rating, filters.ratingMatch)) return false;
-      // Pipeline stage — derived from the row, so it needs no extra fetch.
-      if (filters.triage.size > 0 && !filters.triage.has(triageStage(t, { hasDefaultPrice }))) return false;
-      // Genre filter — track_tags come down from the API rich select
-      if (filters.genres.size > 0) {
-        const trackGenres: string[] = ((t as TrackWithInlineTags).track_tags ?? [])
-          .filter((tt) => tt.category === 'genre')
-          .map((tt) => tt.tag);
-        if (!Array.from(filters.genres).some((g) => trackGenres.includes(g))) return false;
-      }
+      if (!matchesLibraryFilters(t, filters, { cachedIds, hasDefaultPrice })) return false;
       if (!q) return true;
       // Match against title, key (e.g. "C minor", "Am"), and BPM
       // string (e.g. "140"). Tags aren't on the Track row by default,
@@ -578,6 +560,12 @@ export default function LibraryPage() {
       case 'rating':
         sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
         break;
+      case 'plays':
+        // Most played first; never-played tracks keep newest-first among themselves.
+        sorted.sort((a, b) =>
+          (playsByTrack[b.id] ?? 0) - (playsByTrack[a.id] ?? 0)
+          || String(b.created_at).localeCompare(String(a.created_at)));
+        break;
       case 'store_order':
         // Tracks with a set store_sort_order come first (ascending),
         // then tracks with no order fall to the bottom sorted by created_at.
@@ -595,7 +583,7 @@ export default function LibraryPage() {
         sorted.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     }
     return sorted;
-  }, [tracks, search, cachedIds, sortMode, filters, hasDefaultPrice]);
+  }, [tracks, search, cachedIds, sortMode, filters, hasDefaultPrice, playsByTrack]);
 
   // Per-stage counts for the Stage menu. Scoped to the tracks loaded so far —
   // same caveat as every other facet on this page until the filter work moves
@@ -617,6 +605,40 @@ export default function LibraryPage() {
 
   // ── Browse mode: 'sections' (homepage-style) or 'all' (paginated list) ──
   const [browseMode, setBrowseMode] = useState<'sections' | 'all'>('sections');
+
+  // ── View state in the URL ────────────────────────────────────────
+  // Browse-vs-All, the Filters menu and the sort round-trip through the query
+  // string (lib/library/view-state), so a refresh, a bookmark or Back from a
+  // track keeps the view — "See all → WIP" is now a link you can keep.
+  // Read once on mount, then mirrored with replaceState (no history spam, no
+  // router round-trip, no Suspense boundary the way useSearchParams needs).
+  // `urlReady` is STATE, not a ref: the mirror effect must not run in the same
+  // commit as the read, or it would write the still-default state over the URL
+  // it is about to apply.
+  const [urlReady, setUrlReady] = useState(false);
+  useEffect(() => {
+    if (hasLibraryViewParams(window.location.search)) {
+      const restored = decodeLibraryView(window.location.search);
+      setFilters(restored.filters);
+      setSortMode(restored.sort);
+      setBrowseMode(restored.browse);
+      // A filtered link should show what it is filtering by.
+      if (hasActiveFilters(restored.filters)) setShowFilters(true);
+    }
+    setUrlReady(true);
+  }, []);
+  useEffect(() => {
+    if (!urlReady) return;
+    // Phones always show All tracks, so it is not a choice worth recording.
+    const qs = encodeLibraryView({
+      browse: isMobileViewport ? 'sections' : browseMode,
+      sort: sortMode,
+      filters,
+    });
+    const { pathname, search, hash } = window.location;
+    const next = `${pathname}${qs ? `?${qs}` : ''}${hash}`;
+    if (next !== `${pathname}${search}${hash}`) window.history.replaceState(window.history.state, '', next);
+  }, [urlReady, isMobileViewport, browseMode, sortMode, filters]);
   const [currentPage, setCurrentPage] = useState(0);
   const PAGE_SIZE = 50;
 
@@ -644,17 +666,11 @@ export default function LibraryPage() {
         if (f.storeListed && !t.store_listed) return false;
         if (f.notStoreListed && t.store_listed) return false;
         if (f.minRating != null && (t.rating ?? 0) < f.minRating) return false;
-        /* The library's own Filters menu governs Browse rows too.
-           
-           Browse used to carry a second, separate chip strip with its own
-           single-select state and a hardcoded subset of the vocabulary —
-           seven genres of twelve, three states of four. Two filter controls on
-           one page meant the Filters button could read "no filters" while the
-           rows were in fact narrowed to Trap, and a genre missing from the
-           strip was unreachable in this view. One control, one source. */
-        if (filters.genres.size > 0 && !getGenres(t).some((g) => filters.genres.has(g))) return false;
-        if (filters.statuses.size > 0 && (!t.status || !filters.statuses.has(t.status))) return false;
-        if (filters.type !== 'all' && t.type !== filters.type) return false;
+        /* The library's own Filters menu governs Browse rows too — ALL of it.
+           The rows once applied only genre / state / type, so a BPM or key
+           filter narrowed All tracks and left the rows untouched. Same
+           predicate as All tracks (lib/library/filter-tracks) now. */
+        if (!matchesLibraryFilters(t, filters, { cachedIds, hasDefaultPrice })) return false;
         return true;
       });
       // Sort
@@ -692,7 +708,7 @@ export default function LibraryPage() {
         if (row.cfg.source === 'projects' && row.projects.length === 0) return false;
         return true;
       });
-  }, [tracks, playlists, projects, playsByTrack, filters]);
+  }, [tracks, playlists, projects, playsByTrack, filters, cachedIds, hasDefaultPrice]);
 
   // Total library duration shown in the hero.
   const totalDurationLabel = useMemo(() => {
@@ -1337,7 +1353,7 @@ export default function LibraryPage() {
                   onOpenTrack={(t) => setSelectedTrack(t)}
                   onOpenLyrics={handleOpenLyrics}
                   onOpenStudio={handleOpenStudio}
-                  onSeeAll={() => handleSeeAll(row.cfg.filter)}
+                  onSeeAll={() => handleSeeAll(row.cfg)}
                 />
               ))}
             </div>

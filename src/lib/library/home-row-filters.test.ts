@@ -4,10 +4,11 @@ import { matchesRating } from '@/lib/library/rating-filter';
 import { triageStage, TRIAGE_STAGE_ORDER } from '@/lib/library/triage';
 import type { LibraryFilters } from '@/components/library/FilterBar';
 import { filtersForHomeRow } from './home-row-filters';
+import { isLibrarySortMode, sortForHomeRow } from './sort-modes';
 
 function empty(): LibraryFilters {
   return {
-    type: 'all',
+    types: new Set(),
     offlineOnly: false,
     genres: new Set(),
     statuses: new Set(),
@@ -54,9 +55,14 @@ describe('filtersForHomeRow', () => {
     expect(f.triage.size).toBe(TRIAGE_STAGE_ORDER.length - 1);
   });
 
-  it('maps a single type, and leaves a multi-type row alone rather than guessing', () => {
-    expect(filtersForHomeRow({ types: ['remix'] }, empty()).type).toBe('remix');
-    expect(filtersForHomeRow({ types: ['beat', 'song'] }, empty()).type).toBe('all');
+  it('maps a single type and a multi-type row onto the types set', () => {
+    expect([...filtersForHomeRow({ types: ['remix'] }, empty()).types]).toEqual(['remix']);
+    expect([...filtersForHomeRow({ types: ['beat', 'song'] }, empty()).types].sort()).toEqual(['beat', 'song']);
+  });
+
+  it('a row with no types leaves the producer\'s type selection alone', () => {
+    const current = { ...empty(), types: new Set(['remix' as const]) };
+    expect([...filtersForHomeRow(row('wip'), current).types]).toEqual(['remix']);
   });
 
   it("the row's own criteria replace the same dimension of the current filters", () => {
@@ -142,5 +148,22 @@ describe('filtersForHomeRow', () => {
         expect(byFilters(filtersForHomeRow(cfg.filter, empty()))).toEqual(byRow(cfg.filter ?? {}));
       });
     }
+  });
+});
+
+describe('sortForHomeRow', () => {
+  it('maps every row ordering onto an All tracks sort', () => {
+    expect(sortForHomeRow('newest')).toBe('recent');
+    expect(sortForHomeRow('plays')).toBe('plays');
+    expect(sortForHomeRow('rating')).toBe('rating');
+    expect(sortForHomeRow('alphabetical')).toBe('title');
+  });
+
+  it('a row with no sortBy opens newest-first, as it rendered', () => {
+    expect(sortForHomeRow(undefined)).toBe('recent');
+  });
+
+  it('every default row maps to a sort the dropdown offers', () => {
+    for (const cfg of DEFAULT_HOME_ROWS) expect(isLibrarySortMode(sortForHomeRow(cfg.sortBy))).toBe(true);
   });
 });

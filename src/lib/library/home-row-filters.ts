@@ -19,23 +19,19 @@
  * reverted). The mapping onto existing facets, none of them new:
  *
  *   genres / statuses  → the same-named sets
- *   types              → `type`, which is a SINGLE-select — see below
+ *   types              → the `types` set (several types are fine)
  *   storeListed        → triage stage `listed` (triageStage() returns it exactly
  *                        when `store_listed` is true)
  *   notStoreListed     → every other triage stage (the stages partition tracks)
  *   minRating          → `rating` with `atLeast`
  *
- * Not carried: `sortBy`. The row orders by recency / rating / plays; All tracks
- * has its own sort control, which the producer keeps. Multi-value `types`
- * cannot be expressed by the single-select `type` facet, so it is left
- * unchanged rather than guessed at; no default row uses it.
+ * The row's ordering travels too, but as a separate value (`sortForHomeRow` in
+ * sort-modes.ts), because the sort is not part of `LibraryFilters`.
  */
 
 import type { HomeRowFilter } from '@/lib/dashboard/home-config';
 import { TRIAGE_STAGE_ORDER, type TriageStage } from '@/lib/library/triage';
-import type { LibraryFilters, LibraryTrackType } from '@/components/library/FilterBar';
-
-const LIBRARY_TYPES: readonly LibraryTrackType[] = ['beat', 'instrumental', 'song', 'remix'];
+import { LIBRARY_TRACK_TYPES, type LibraryFilters, type LibraryTrackType } from '@/components/library/FilterBar';
 
 export function filtersForHomeRow(
   row: HomeRowFilter | undefined,
@@ -45,6 +41,7 @@ export function filtersForHomeRow(
   // previous state would let a later mutation leak backwards.
   const next: LibraryFilters = {
     ...current,
+    types: new Set(current.types),
     genres: new Set(current.genres),
     statuses: new Set(current.statuses),
     keys: new Set(current.keys),
@@ -55,9 +52,8 @@ export function filtersForHomeRow(
   if (row.genres?.length) next.genres = new Set(row.genres);
   if (row.statuses?.length) next.statuses = new Set(row.statuses);
 
-  if (row.types?.length === 1 && LIBRARY_TYPES.includes(row.types[0] as LibraryTrackType)) {
-    next.type = row.types[0] as LibraryTrackType;
-  }
+  const rowTypes = (row.types ?? []).filter((t): t is LibraryTrackType => LIBRARY_TRACK_TYPES.includes(t as LibraryTrackType));
+  if (rowTypes.length) next.types = new Set(rowTypes);
 
   if (row.storeListed) {
     next.triage = new Set<TriageStage>(['listed']);
