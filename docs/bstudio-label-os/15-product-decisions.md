@@ -19,6 +19,20 @@
 
 **Assumption D1a** (correct it if wrong): before an artist is signed, their demos stay in the **artist's own org** and a label sees them only through the connection. Projects and releases the label creates live in the **label org**.
 
+## LABEL-02 follow-up (decided by the owner on 2026-09-30)
+
+Questions that came up while writing the capability module (`src/lib/labelos/capabilities.ts`).
+
+| Question | Decision | What it changes |
+|---|---|---|
+| Can an owner tailor what one member may do? | **Yes: presets + per-member tweaks.** A function (A&R, marketing, …) is a ready-made bundle; on top of it an owner or admin can switch single abilities on or off for one member (create, edit, send, approve…). **This amends D4:** the bundles are still fixed in code and no org edits a *function*, but a *member* can differ from their function's preset | `capabilitiesFor(orgKind, role, functions, overrides)`; `revoke` beats `grant`; revoking a read also removes the writes that need it. Owner and admin are not tweakable. **LABEL-03** must store the per-member grants/revokes on `org_members` and mirror the rule in `has_org_cap`; a members UI (LABEL-05 or later) shows the preset and the switches |
+| Hard limits on tweaks | (1) A roster artist (role `artist` in a label org) can **never** be given business-internal notes or contracts (D5). (2) Nobody gets member management or org settings by tweak — make them **admin** instead, so a member who can edit tweaks cannot grant themselves everything. (3) Seeing the catalogue is the floor: switching it off switches off everything that acts on songs, projects and releases | `NEVER_GRANTABLE`; every catalogue-scoped capability implies `catalog.read`. Only owner/admin set tweaks |
+| Who can create tasks? | **Every function** (A&R, PM, marketing, legal, artist manager, producer, engineer), each side its own tasks | `tasks.write` in every preset. Which tasks each side sees is LABEL-23's |
+| `finance` and `operations` | **Not for now.** Their presets are empty | A member can still be given single abilities by tweak |
+| `reference` recordings | A reference someone made (e.g. a reference vocal): **working** material | `recordingClass('reference') = 'working'` |
+| Owner vs admin | **Same abilities.** The owner owns and runs the org; an admin has administrative power in it | Identical capability sets. Owner-only acts (deleting the org, transferring ownership) are a role check where they are built, not a capability |
+| Does an artist who owns an **artist org** see business-internal notes there? | **Yes, in their own org.** It is their org. They never see a *label's* business notes (as a roster `artist` they cannot) | Owner of an artist org holds everything |
+
 ## Execution decision
 
 **One backlog task per Claude session, in dependency order.** When one task's pull request is merged, the next session starts. The owner reviews each pull request. See `16-execution-runbook.md`.

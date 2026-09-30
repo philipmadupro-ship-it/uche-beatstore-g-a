@@ -1,7 +1,12 @@
 /**
  * Label OS capability model — the single source of truth for "who may do
  * what" (docs/bstudio-label-os/06-permission-model.md §2, as decided in
- * 15-product-decisions.md D1/D2/D4/D5).
+ * 15-product-decisions.md D1/D2/D4/D5 and its LABEL-02 follow-up).
+ *
+ * A member's abilities = their role, plus the PRESET bundle of each function
+ * they hold, plus per-member overrides an owner/admin sets (switch single
+ * abilities on or off). Owner and admin are not tweakable: they hold
+ * everything.
  *
  * Routes and RLS check CAPABILITIES, never role names. The SQL helper
  * `has_org_cap` will mirror this table and be held equal to it by a parity
@@ -102,12 +107,13 @@ const KIND_CEILING: Readonly<Record<OrgKind, readonly Capability[]>> = {
 };
 
 /**
- * §2.4 columns. Only the capabilities written here are granted; implied
- * reads are added by `IMPLIES`. `finance` and `operations` have no column
- * in §2.4 and so grant nothing until one is decided — as does `tasks.write`
- * for any function, which §2.4 has no row for.
+ * §2.4 columns: the preset each function starts a member with. Implied
+ * reads are added by `IMPLIES`. Every function with a column can create
+ * tasks (`tasks.write`; which tasks each side sees is LABEL-23's). `finance`
+ * and `operations` are deferred ("not for now") and start empty — an
+ * owner can still switch single abilities on for such a member.
  */
-const FUNCTION_GRANTS: Readonly<Record<OrgFunction, readonly Capability[]>> = {
+export const FUNCTION_PRESETS: Readonly<Record<OrgFunction, readonly Capability[]>> = {
   a_and_r: [
     'catalog.write',
     'audio.finished',
@@ -117,6 +123,7 @@ const FUNCTION_GRANTS: Readonly<Record<OrgFunction, readonly Capability[]>> = {
     'release.write',
     'release.approve.master',
     'share.external',
+    'tasks.write',
   ],
   project_manager: [
     'catalog.write',
@@ -128,6 +135,7 @@ const FUNCTION_GRANTS: Readonly<Record<OrgFunction, readonly Capability[]>> = {
     'release.approve.metadata',
     'share.external',
     'business.read.internal',
+    'tasks.write',
   ],
   marketing: [
     'catalog.read',
@@ -135,6 +143,7 @@ const FUNCTION_GRANTS: Readonly<Record<OrgFunction, readonly Capability[]>> = {
     'release.approve.artwork',
     'release.approve.marketing',
     'business.read.internal',
+    'tasks.write',
   ],
   legal: [
     'catalog.read',
@@ -143,10 +152,11 @@ const FUNCTION_GRANTS: Readonly<Record<OrgFunction, readonly Capability[]>> = {
     'contracts.read',
     'release.approve.legal',
     'business.read.internal',
+    'tasks.write',
   ],
-  artist_manager: ['catalog.write', 'audio.finished', 'audio.working', 'review.write', 'rights.read'],
-  producer: ['catalog.write', 'audio.finished', 'audio.working', 'rights.read.own_line'],
-  engineer: ['catalog.write', 'audio.finished', 'audio.working', 'rights.read.own_line'],
+  artist_manager: ['catalog.write', 'audio.finished', 'audio.working', 'review.write', 'rights.read', 'tasks.write'],
+  producer: ['catalog.write', 'audio.finished', 'audio.working', 'rights.read.own_line', 'tasks.write'],
+  engineer: ['catalog.write', 'audio.finished', 'audio.working', 'rights.read.own_line', 'tasks.write'],
   finance: [],
   operations: [],
 };
@@ -173,9 +183,56 @@ const ROLE_USES_FUNCTIONS: Readonly<Record<Role, boolean>> = {
   artist: false,
 };
 
-/** A capability that implies a narrower one. Applied to a fixed point. */
+/**
+ * Owner and admin always hold everything, so per-member overrides apply
+ * only to `member` and `artist`.
+ */
+const ROLE_TAKES_OVERRIDES: Readonly<Record<Role, boolean>> = {
+  owner: false,
+  admin: false,
+  member: true,
+  artist: true,
+};
+
+/**
+ * Hard limits no override can lift.
+ * - Running the org (`members.manage`, `org.manage`) is what the admin role
+ *   is for. Granting it by tweak would let a member who can edit overrides
+ *   grant themselves everything; make them admin instead.
+ * - D5: a roster artist (role `artist` in a label org) never sees
+ *   business-internal notes or contracts. An artist who OWNS an artist org
+ *   is role `owner` there and sees everything in it.
+ */
+export const NEVER_GRANTABLE: Readonly<Record<Role, readonly Capability[]>> = {
+  owner: [],
+  admin: [],
+  member: ['members.manage', 'org.manage'],
+  artist: ['members.manage', 'org.manage', 'business.read.internal', 'contracts.read'],
+};
+
+/**
+ * A capability that implies a narrower one. Applied to a fixed point, and
+ * in reverse by revoke. Everything that acts on catalogue objects needs
+ * `catalog.read`, so revoking it locks a member out of all of them rather
+ * than leaving them approving releases they cannot see.
+ */
+const NEEDS_CATALOG: readonly Capability[] = ['catalog.read'];
 const IMPLIES: Readonly<Partial<Record<Capability, readonly Capability[]>>> = {
-  'catalog.write': ['catalog.read'],
+  'catalog.write': NEEDS_CATALOG,
+  'audio.finished': NEEDS_CATALOG,
+  'audio.working': NEEDS_CATALOG,
+  'review.comment': NEEDS_CATALOG,
+  'rights.read.own_line': NEEDS_CATALOG,
+  'contracts.read': NEEDS_CATALOG,
+  'release.write': NEEDS_CATALOG,
+  'release.approve.master': NEEDS_CATALOG,
+  'release.approve.artwork': NEEDS_CATALOG,
+  'release.approve.legal': NEEDS_CATALOG,
+  'release.approve.marketing': NEEDS_CATALOG,
+  'release.approve.metadata': NEEDS_CATALOG,
+  'tasks.write': NEEDS_CATALOG,
+  'share.external': NEEDS_CATALOG,
+  'business.read.internal': NEEDS_CATALOG,
   'rights.write': ['rights.read'],
   'rights.read': ['rights.read.own_line'],
   'review.write': ['review.comment'],
@@ -200,17 +257,48 @@ function withImplied(caps: Iterable<Capability>): Set<Capability> {
   return out;
 }
 
+/** `cap` plus every capability that (transitively) implies it. */
+function withImpliers(caps: Iterable<Capability>): Set<Capability> {
+  const out = new Set<Capability>();
+  const queue = [...caps];
+  while (queue.length) {
+    const cap = queue.pop()!;
+    if (out.has(cap)) continue;
+    out.add(cap);
+    for (const [wider, narrower] of Object.entries(IMPLIES) as [Capability, readonly Capability[]][]) {
+      if (narrower.includes(cap)) queue.push(wider);
+    }
+  }
+  return out;
+}
+
+function knownCapabilities(list: unknown): Capability[] {
+  return Array.isArray(list) ? list.filter((c): c is Capability => known(ALL_CAPABILITIES, c)) : [];
+}
+
+/**
+ * Per-member switches an owner/admin sets on top of the function presets.
+ * `revoke` wins over `grant`, and revoking a capability also removes every
+ * capability that needs it (you cannot write what you cannot read).
+ */
+export type CapabilityOverrides = {
+  grant?: readonly string[] | null;
+  revoke?: readonly string[] | null;
+};
+
 // ── Org members ─────────────────────────────────────────────────────────
 
 /**
- * The capabilities of an org member: role grants, plus function grants for
- * `member`, both limited to what the org kind offers, then capped by the
- * kind's ceiling. Returns a fresh set; mutating it changes nothing.
+ * The capabilities of an org member: role grants, plus the preset of each
+ * function for `member` (both limited to what the org kind offers), plus
+ * per-member overrides, then capped by the kind's ceiling and the role's
+ * hard limits. Returns a fresh set; mutating it changes nothing.
  */
 export function capabilitiesFor(
   orgKind: string,
   role: string,
   functions: readonly string[] | null | undefined,
+  overrides?: CapabilityOverrides | null,
 ): ReadonlySet<Capability> {
   if (!known(ORG_KINDS, orgKind)) return new Set();
   if (!known(ROLES, role) || !ROLES_BY_ORG_KIND[orgKind].includes(role)) return new Set();
@@ -219,13 +307,24 @@ export function capabilitiesFor(
   if (ROLE_USES_FUNCTIONS[role] && Array.isArray(functions)) {
     for (const fn of functions) {
       if (known(ORG_FUNCTIONS, fn) && FUNCTIONS_BY_ORG_KIND[orgKind].includes(fn)) {
-        granted.push(...FUNCTION_GRANTS[fn]);
+        granted.push(...FUNCTION_PRESETS[fn]);
       }
     }
   }
 
+  let revoked = new Set<Capability>();
+  if (ROLE_TAKES_OVERRIDES[role] && overrides) {
+    granted.push(...knownCapabilities(overrides.grant));
+    revoked = withImpliers(knownCapabilities(overrides.revoke));
+  }
+
   const ceiling = KIND_CEILING[orgKind];
-  return new Set([...withImplied(granted)].filter((cap) => ceiling.includes(cap)));
+  const forbidden = NEVER_GRANTABLE[role];
+  return new Set(
+    [...withImplied(granted)].filter(
+      (cap) => ceiling.includes(cap) && !forbidden.includes(cap) && !revoked.has(cap),
+    ),
+  );
 }
 
 // ── External project members (§2.6) ─────────────────────────────────────
@@ -321,6 +420,7 @@ export type OrgMemberGrant = {
   orgKind: string;
   role: string;
   functions: readonly string[] | null | undefined;
+  overrides?: CapabilityOverrides | null;
 };
 export type ExternalMemberGrant = { externalRole: string };
 export type MemberGrant = OrgMemberGrant | ExternalMemberGrant;
@@ -331,7 +431,7 @@ export function can(member: MemberGrant, cap: Capability): boolean {
   const caps =
     'externalRole' in member
       ? externalCapabilities(member.externalRole)
-      : capabilitiesFor(member.orgKind, member.role, member.functions);
+      : capabilitiesFor(member.orgKind, member.role, member.functions, member.overrides);
   return caps.has(cap);
 }
 

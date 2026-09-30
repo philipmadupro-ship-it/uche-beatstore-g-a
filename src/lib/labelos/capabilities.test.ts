@@ -4,6 +4,7 @@ import {
   EXTERNAL_ACTIONS,
   EXTERNAL_PROJECT_ROLES,
   EXTERNAL_PROJECT_ROLE_TABLE,
+  FUNCTION_PRESETS,
   FUNCTIONS_BY_ORG_KIND,
   ORG_FUNCTIONS,
   ORG_KINDS,
@@ -69,6 +70,9 @@ const TABLE_2_4: Array<{ row: string; caps: Capability[]; cells: Record<Column, 
   { row: 'approve metadata', caps: ['release.approve.metadata'], cells: { owner: R, admin: R, a_and_r: _, project_manager: R, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, artist: _ } },
   { row: 'share.external', caps: ['share.external'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, artist: _ } },
   { row: 'members.manage', caps: ['members.manage'], cells: { owner: R, admin: R, a_and_r: _, project_manager: _, marketing: _, legal: _, artist_manager: _, producer: _, engineer: _, artist: _ } },
+  // Decided 2026-09-30 (15, "LABEL-02 follow-up"): every function with a
+  // column can create tasks, each side its own. The artist role cannot.
+  { row: 'tasks.write', caps: ['tasks.write'], cells: { owner: R, admin: R, a_and_r: R, project_manager: R, marketing: R, legal: R, artist_manager: R, producer: R, engineer: R, artist: _ } },
   { row: 'business.read.internal', caps: ['business.read.internal'], cells: { owner: R, admin: R, a_and_r: _, project_manager: R, marketing: R, legal: R, artist_manager: _, producer: _, engineer: _, artist: _ } },
 ];
 
@@ -98,7 +102,7 @@ describe('capabilitiesFor — §2.4 label org, every cell', () => {
       const extras = [...got].filter((c) => !expected.has(c));
       if (col === 'owner' || col === 'admin') {
         // §2.1: owner/admin have "everything" — including the capabilities
-        // §2.4 has no row for (tasks.write, org.manage, finance.read).
+        // §2.4 has no row for (org.manage, finance.read).
         expect(extras.every((c) => !tabulated.has(c))).toBe(true);
       } else {
         expect(extras).toEqual([]);
@@ -114,7 +118,7 @@ describe('capabilitiesFor — §2.4 label org, every cell', () => {
 });
 
 describe('capabilitiesFor — untabulated grants stay closed', () => {
-  it('finance and operations grant nothing until their columns are decided', () => {
+  it('finance and operations grant nothing (deferred, "not for now")', () => {
     expect(capabilitiesFor('label', 'member', ['finance']).size).toBe(0);
     expect(capabilitiesFor('label', 'member', ['operations']).size).toBe(0);
   });
@@ -123,10 +127,9 @@ describe('capabilitiesFor — untabulated grants stay closed', () => {
     expect(capabilitiesFor('label', 'member', []).size).toBe(0);
   });
 
-  it('no function grants tasks.write, org.manage or finance.read', () => {
+  it('no function grants org.manage or finance.read', () => {
     for (const fn of ORG_FUNCTIONS) {
       const caps = capabilitiesFor('label', 'member', [fn]);
-      expect(caps.has('tasks.write')).toBe(false);
       expect(caps.has('org.manage')).toBe(false);
       expect(caps.has('finance.read')).toBe(false);
     }
@@ -267,6 +270,136 @@ describe('D4 — creative side vs business side', () => {
     const artist = capabilitiesFor('label', 'artist', []);
     expect(artist.has('business.read.internal')).toBe(false);
     expect(artist.has('contracts.read')).toBe(false);
+  });
+
+  it('an artist who OWNS an artist org sees everything in it, business notes included', () => {
+    expect(capabilitiesFor('artist', 'owner', []).has('business.read.internal')).toBe(true);
+    expect(capabilitiesFor('artist', 'owner', []).has('contracts.read')).toBe(true);
+  });
+});
+
+describe('per-member overrides — presets + tweaks (decided 2026-09-30)', () => {
+  const marketing = (overrides?: { grant?: string[]; revoke?: string[] }) =>
+    capabilitiesFor('label', 'member', ['marketing'], overrides);
+
+  it('no overrides = the preset, unchanged', () => {
+    expect(marketing()).toEqual(capabilitiesFor('label', 'member', ['marketing']));
+    expect(marketing({})).toEqual(marketing());
+    expect(marketing({ grant: [], revoke: [] })).toEqual(marketing());
+  });
+
+  it('grant adds a single ability on top of the preset', () => {
+    const caps = marketing({ grant: ['audio.working'] });
+    expect(caps.has('audio.working')).toBe(true);
+    for (const c of marketing()) expect(caps.has(c)).toBe(true);
+    expect(caps.size).toBe(marketing().size + 1);
+  });
+
+  it('grant brings its implied reads with it', () => {
+    const caps = marketing({ grant: ['rights.write'] });
+    expect(caps.has('rights.read')).toBe(true);
+    expect(caps.has('rights.read.own_line')).toBe(true);
+  });
+
+  it('revoke removes a single ability from the preset', () => {
+    const caps = marketing({ revoke: ['release.approve.artwork'] });
+    expect(caps.has('release.approve.artwork')).toBe(false);
+    expect(caps.size).toBe(marketing().size - 1);
+  });
+
+  it('revoke wins over grant', () => {
+    expect(marketing({ grant: ['audio.working'], revoke: ['audio.working'] }).has('audio.working')).toBe(false);
+  });
+
+  it('revoking a read also removes every write that needs it', () => {
+    // catalog.read is the floor: without it nothing catalogue-scoped is left.
+    for (const fn of ORG_FUNCTIONS) {
+      expect(capabilitiesFor('label', 'member', [fn], { revoke: ['catalog.read'] }).size).toBe(0);
+    }
+    expect(capabilitiesFor('label', 'artist', [], { revoke: ['catalog.read'] }).size).toBe(0);
+    const legal = capabilitiesFor('label', 'member', ['legal'], { revoke: ['rights.read.own_line'] });
+    expect(legal.has('rights.read')).toBe(false);
+    expect(legal.has('rights.write')).toBe(false);
+    const pm = capabilitiesFor('label', 'member', ['project_manager'], { revoke: ['review.comment'] });
+    expect(pm.has('review.write')).toBe(false);
+  });
+
+  it('a member with no function can be built entirely from grants', () => {
+    const caps = capabilitiesFor('label', 'member', ['finance'], { grant: ['finance.read', 'catalog.read'] });
+    expect([...caps].sort()).toEqual(['catalog.read', 'finance.read']);
+  });
+
+  it('unknown or prototype names in overrides are ignored', () => {
+    expect(marketing({ grant: ['org.delete', 'toString', '__proto__', ''] })).toEqual(marketing());
+    expect(marketing({ revoke: ['nope', 'constructor'] })).toEqual(marketing());
+  });
+
+  it('tolerates malformed override lists', () => {
+    const bad = { grant: null, revoke: 'audio.finished' } as unknown as { grant: string[]; revoke: string[] };
+    expect(marketing(bad)).toEqual(marketing());
+  });
+
+  it('owner and admin are not tweakable — they always hold everything', () => {
+    for (const kind of ORG_KINDS) {
+      for (const role of ['owner', 'admin'] as const) {
+        expect(capabilitiesFor(kind, role, [], { revoke: [...ALL_CAPABILITIES] }).size).toBe(ALL_CAPABILITIES.length);
+      }
+    }
+  });
+
+  it('running the org is never grantable by tweak — that is the admin role', () => {
+    for (const role of ['member', 'artist'] as const) {
+      const caps = capabilitiesFor('label', role, [], { grant: [...ALL_CAPABILITIES] });
+      expect(caps.has('members.manage')).toBe(false);
+      expect(caps.has('org.manage')).toBe(false);
+    }
+  });
+
+  it('a granted ability brings catalog.read with it', () => {
+    expect([...capabilitiesFor('label', 'member', [], { grant: ['share.external'] })].sort()).toEqual(['catalog.read', 'share.external']);
+  });
+
+  it('owner ⊇ admin ⊇ any tweaked member', () => {
+    const admin = capabilitiesFor('label', 'admin', []);
+    const everything = capabilitiesFor('label', 'member', [], { grant: [...ALL_CAPABILITIES] });
+    for (const c of everything) expect(admin.has(c)).toBe(true);
+  });
+
+  it('the artist role can be tweaked, but never into business notes or contracts (D5)', () => {
+    const artist = capabilitiesFor('label', 'artist', [], {
+      grant: ['release.write', 'business.read.internal', 'contracts.read'],
+    });
+    expect(artist.has('release.write')).toBe(true);
+    expect(artist.has('business.read.internal')).toBe(false);
+    expect(artist.has('contracts.read')).toBe(false);
+    expect(capabilitiesFor('label', 'artist', [], { revoke: ['audio.working'] }).has('audio.working')).toBe(false);
+  });
+
+  it('overrides never rescue an unknown kind, an unknown role or a role the kind lacks', () => {
+    const grant = { grant: ['catalog.read'] };
+    expect(capabilitiesFor('mgmt', 'member', [], grant).size).toBe(0);
+    expect(capabilitiesFor('label', 'root', [], grant).size).toBe(0);
+    expect(capabilitiesFor('artist', 'artist', [], grant).size).toBe(0);
+  });
+
+  it('works the same in every org kind', () => {
+    for (const kind of ORG_KINDS) {
+      expect(capabilitiesFor(kind, 'member', ['producer'], { grant: ['share.external'] }).has('share.external')).toBe(true);
+    }
+  });
+
+  it('can() applies a member\'s overrides', () => {
+    const m = { orgKind: 'label', role: 'member', functions: ['marketing'], overrides: { grant: ['audio.working'], revoke: ['audio.finished'] } };
+    expect(can(m, 'audio.working')).toBe(true);
+    expect(can(m, 'audio.finished')).toBe(false);
+  });
+
+  it('exposes the presets, so a UI can show what a function starts with', () => {
+    for (const fn of ORG_FUNCTIONS) {
+      const caps = capabilitiesFor('label', 'member', [fn]);
+      for (const c of FUNCTION_PRESETS[fn]) expect(caps.has(c)).toBe(true);
+    }
+    expect(FUNCTION_PRESETS.finance).toEqual([]);
   });
 });
 

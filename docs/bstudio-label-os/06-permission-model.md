@@ -95,7 +95,7 @@ That split is expressed by separating finished audio from working audio.
 | members.manage | ✓ | ✓ | — | — | — | — | — | — | — |
 | business.read.internal | ✓ | ✓ | — | ✓ | ✓ | ✓ | — | — | — |
 
-**D4 decided:** no per-org customisation of this table in the MVP.
+**D4 decided:** no per-org customisation of this table in the MVP. **Amended 2026-09-30 (`15`, "LABEL-02 follow-up"):** the columns are *presets*; an owner or admin can switch single abilities on or off for one member (never for owner/admin, and never business-internal notes or contracts for a roster artist). Every function column also has `tasks.write`; `finance` and `operations` start empty.
 
 **D5 decided:** an artist sees **everything about their own songs** — stage, every reviewer's rating and verdict, and A&R comments. They still never see other artists, contracts, business-internal notes, or other people's split lines beyond their own songs.
 
