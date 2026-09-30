@@ -9285,3 +9285,12 @@ Changes (no schema, API or contract change; validation at read time also covers 
 Tests: `social-links.test.ts` (resolver: shapes, hostile schemes, userinfo, mailto injection, empties); `creator-link-guard.test.ts` (source guard: fails on any raw handle/URL/mailto interpolation — names 17+ sites on the old code); `components/store/creator-links.test.tsx` (hero + ProducerProfile hrefs); `e2e/creator-links.spec.ts` (producer page at 1280 and 390: every link clicked and its popup URL checked, `javascript:` renders nothing and nothing executes, no Links panel when nothing is usable — fails on the old page).
 
 Not changed: the profile editor still accepts any text (a save-time "this isn't a link" hint would be the follow-up); handles keep Instagram's / X's own character rules, so a handle those networks would reject shows no link.
+
+## 2026-09-30 - Save-time warning for links the storefront will not show (PROFILE-02 follow-up)
+
+PR #48 made the storefront refuse unusable handles / URLs / emails instead of rendering dead links. The other half: the producer only found out when a visitor could not click. The profile is still stored exactly as typed (a half-filled form must not lose its other fields), but saving now says which links are hidden.
+
+- `lib/store/social-links.ts`: `unusableCreatorLinks(fields)` (labels of filled fields that `resolveCreatorLink` rejects) and `unusableLinksWarning(fields)` (toast copy, or null). Same resolver as the storefront, so the warning cannot disagree with what renders.
+- `/profile` fires it after "Profile saved"; `/store-editor` fires it as soon as the profile PATCH succeeds, so it also shows when a later playlist/project update partly fails.
+
+Tests: `social-links.test.ts` (labels, silence for empty/valid, toast wording); `e2e/profile-link-warning.spec.ts` at 1280 and 390 px through the real page (save still posts the typed value; a pasted profile link, `@handle` and bare domain stay silent; fails without the change). The Store Editor call site is covered by the shared helper and `tsc`, not by its own e2e.
