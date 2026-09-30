@@ -699,6 +699,8 @@ export const ProjectContactPatchBodySchema = z.object({
   in_portal: z.boolean().optional(),
   allow_downloads: z.boolean().optional(),
   can_comment: z.boolean().optional(),
+  /** Mig 135: the pitch a label sees on this project in their portal. Empty clears it. */
+  pitch_note: z.string().max(2000).nullable().optional(),
 }).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
 export type ProjectContactPatchBody = z.infer<typeof ProjectContactPatchBodySchema>;
 

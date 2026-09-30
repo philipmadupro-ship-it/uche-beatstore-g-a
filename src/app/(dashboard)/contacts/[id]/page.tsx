@@ -421,6 +421,7 @@ export default function ContactDetailPage({ params: paramsPromise }: { params: P
             <ArtistWorkspaceTabs
               contactId={contact.id}
               contactName={contact.name}
+              contactCategory={contact.category ?? null}
               workspace={ready}
               onChanged={fetchWorkspace}
               activity={timeline}

@@ -26,7 +26,7 @@ import { Popover } from '@/components/ui/Popover';
 import { SendBeatModal } from '@/components/crm/SendBeatModal';
 import { toast } from '@/hooks/useToast';
 import { copyToClipboard } from '@/lib/clipboard';
-import { linkLabel, relationChoices, suggestRelation, type LinkRelation } from '@/lib/tracks/links';
+import { linkLabel, linkSearchParams, rankCandidates, relationChoices, suggestRelation, type LinkRelation } from '@/lib/tracks/links';
 import type { Contact } from '@/lib/types';
 
 interface LinkedRow {
@@ -41,8 +41,6 @@ interface Candidate { id: string; title: string; type: string | null }
 const H3 = 'mb-3 text-[9px] font-black uppercase tracking-[0.25em] text-white/40';
 const CONTROL = 'inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 transition-colors hover:border-white/20 hover:bg-white/[0.10] disabled:opacity-40';
 
-/** The track type a relation usually points at, to narrow the picker. */
-const TYPE_FOR: Partial<Record<LinkRelation, string>> = { beat: 'beat', instrumental: 'instrumental', loop: 'loop', topline: 'topline' };
 
 export function TrackLinkedSection({ trackId, trackTitle, trackType, onUpdate }: {
   trackId: string;
@@ -69,23 +67,28 @@ export function TrackLinkedSection({ trackId, trackTitle, trackType, onUpdate }:
   }, [trackId]);
   useEffect(() => { void load(); }, [load]);
 
-  // The picker: tracks of the type this relation usually points at, or any
-  // type when the producer is searching by name.
+  // The picker: recent tracks, the types that fit this one first, before
+  // anything is typed; "loop" / "toplines" search the type, anything else the
+  // title (lib/tracks/links#linkSearchParams).
+  const [searchState, setSearchState] = useState<'loading' | 'ready' | 'failed'>('loading');
   useEffect(() => {
     let alive = true;
     const t = setTimeout(() => {
-      const params = new URLSearchParams({ limit: '20', lean: '1' });
-      if (query.trim()) params.set('q', query.trim());
-      else if (relation !== 'auto' && TYPE_FOR[relation]) params.set('type', TYPE_FOR[relation]!);
-      else { setCandidates([]); return; }
-      fetch(`/api/tracks?${params}`).then((r) => (r.ok ? r.json() : [])).then((d) => {
-        if (!alive) return;
-        const rows = (Array.isArray(d) ? d : d.tracks ?? []) as Array<{ id: string; title: string | null; type: string | null }>;
-        setCandidates(rows.filter((r) => r.id !== trackId).map((r) => ({ id: r.id, title: r.title ?? 'Untitled', type: r.type })));
-      }).catch(() => {});
+      fetch(`/api/tracks?${linkSearchParams(query, relation)}`)
+        .then(async (r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+        .then((d) => {
+          if (!alive) return;
+          const rows = (Array.isArray(d) ? d : d.tracks ?? []) as Array<{ id: string; title: string | null; type: string | null }>;
+          setCandidates(rankCandidates(trackType ?? null, rows.filter((r) => r.id !== trackId)).map((r) => ({ id: r.id, title: r.title ?? 'Untitled', type: r.type })));
+          setSearchState('ready');
+        })
+        .catch(() => { if (alive) setSearchState('failed'); });
     }, 200);
     return () => { alive = false; clearTimeout(t); };
-  }, [query, relation, trackId]);
+  }, [query, relation, trackId, trackType]);
 
   const linkedIds = useMemo(() => new Set((links ?? []).map((l) => l.track.id)), [links]);
   const shown = useMemo(() => candidates.filter((c) => !linkedIds.has(c.id)).slice(0, 6), [candidates, linkedIds]);
@@ -171,11 +174,12 @@ export function TrackLinkedSection({ trackId, trackTitle, trackType, onUpdate }:
       )}
 
       <div className="mb-2 flex flex-wrap items-center gap-2">
-        <div className="w-36 shrink-0">
+        <div className="w-28 shrink-0">
           <Dropdown
+            className="!min-h-0 !h-7 !w-full !px-2 !py-0 !text-[10px]"
             value={relation}
             onChange={(v) => setRelation(v as LinkRelation | 'auto')}
-            options={[{ value: 'auto', label: 'Auto (by type)' }, ...relationChoices(trackType ?? null).map((r) => ({ value: r, label: linkLabel(r, 'out') }))]}
+            options={[{ value: 'auto', label: 'Auto' }, ...relationChoices(trackType ?? null).map((r) => ({ value: r, label: linkLabel(r, 'out') }))]}
             aria-label="What the linked track is"
           />
         </div>
@@ -185,30 +189,36 @@ export function TrackLinkedSection({ trackId, trackTitle, trackType, onUpdate }:
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search your tracks to link…"
           aria-label="Search tracks to link"
-          className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[11px] text-white/80 placeholder:text-white/30 focus:border-white/30 focus:outline-none"
+          className="h-7 min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.06] px-3 text-[11px] text-white/80 placeholder:text-white/30 focus:border-white/30 focus:outline-none"
         />
       </div>
-      {(query.trim() || relation !== 'auto') && (
-        <ul className="mb-3 space-y-1" aria-label="Tracks you can link" data-testid="link-candidates">
-          {shown.length === 0 ? (
-            <li className="text-[11px] text-white/40">No matching tracks.</li>
-          ) : shown.map((c) => (
-            <li key={c.id}>
-              <button
-                type="button"
-                disabled={busy === c.id}
-                onClick={() => void addLink(c)}
-                aria-label={`Link ${c.title} as ${linkLabel(relationFor(c), 'out')}`}
-                className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white disabled:opacity-40"
-              >
-                <Link2 size={11} aria-hidden="true" className="shrink-0 text-white/40" />
-                <span className="min-w-0 flex-1 truncate">{c.title}</span>
-                <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">{linkLabel(relationFor(c), 'out')}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <p className="mb-1 font-mono text-[9px] uppercase tracking-[0.2em] text-white/30">
+        {query.trim() ? 'Matches' : 'Recent · click to link'}
+      </p>
+      <ul className="mb-3 space-y-1" aria-label="Tracks you can link" data-testid="link-candidates">
+        {searchState === 'failed' ? (
+          <li className="text-[11px] text-white/40">Could not load your tracks. Try again.</li>
+        ) : searchState === 'loading' && candidates.length === 0 ? (
+          <li className="text-[11px] text-white/40">Loading…</li>
+        ) : shown.length === 0 ? (
+          <li className="text-[11px] text-white/40">{query.trim() ? `Nothing called “${query.trim()}”. Try part of the title, or a type: loop, topline, beat.` : 'No other tracks to link yet.'}</li>
+        ) : shown.map((c) => (
+          <li key={c.id}>
+            <button
+              type="button"
+              disabled={busy === c.id}
+              onClick={() => void addLink(c)}
+              aria-label={`Link ${c.title} as ${linkLabel(relationFor(c), 'out')}`}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[11px] text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white disabled:opacity-40"
+            >
+              <Link2 size={11} aria-hidden="true" className="shrink-0 text-white/40" />
+              <span className="min-w-0 flex-1 truncate">{c.title}</span>
+              {c.type && c.type !== relationFor(c) && <span className="shrink-0 text-[10px] text-white/30">{c.type}</span>}
+              <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">{linkLabel(relationFor(c), 'out')}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
 
       <div className="flex flex-wrap items-center gap-2">
         <a href={`/api/tracks/${trackId}/links/zip`} download className={CONTROL} data-testid="download-linked-zip">

@@ -63,6 +63,8 @@ export interface ProjectLinkRow {
   can_comment: boolean;
   last_notified_at: string | null;
   created_at: string;
+  /** Mig 135: the pitch shown to a label for this project; null when missing. */
+  pitch_note?: string | null;
 }
 
 export interface PortalRow {
@@ -115,6 +117,13 @@ export async function loadArtistLinks(admin: Admin, userId: string, contactId: s
       .eq('contact_id', contactId)
       .eq('user_id', userId)),
   ]);
+  if (links.length) {
+    // Own query, like auto_digest below: before migration 135 the column is
+    // missing and must not cost the producer the workspace.
+    const { data, error } = await admin.from('project_contacts').select('project_id, pitch_note').eq('contact_id', contactId).eq('user_id', userId);
+    const notes = new Map(error ? [] : ((data ?? []) as Array<{ project_id: string; pitch_note: string | null }>).map((r) => [r.project_id, r.pitch_note]));
+    for (const l of links) l.pitch_note = notes.get(l.project_id) ?? null;
+  }
   const portal = portals[0] ?? null;
   if (portal) {
     // Its own query: before migration 129 the column is missing, and that

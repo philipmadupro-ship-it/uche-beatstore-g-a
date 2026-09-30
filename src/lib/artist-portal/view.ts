@@ -13,6 +13,7 @@
 
 import type { Decision } from '@/lib/contacts/decisions';
 import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
+import type { PortalAudience } from '@/lib/artist-portal/audience';
 
 export interface PortalTrackSource {
   id: string;
@@ -51,6 +52,8 @@ export interface PortalTrack {
   builtOn: { id: string; title: string } | null;
   /** The song's other beats that are in this portal (mig 132). */
   builtOnOthers: Array<{ id: string; title: string }>;
+  /** Separated stems exist for this track (the producer portal offers to ask for them). */
+  hasStems: boolean;
   streamUrl: string | null;
   peaksUrl: string | null;
 }
@@ -67,6 +70,8 @@ export interface PortalProject {
   files: number;
   allowDownloads: boolean;
   canComment: boolean;
+  /** The producer's pitch of this project to this label (mig 135); null elsewhere. */
+  pitchNote: string | null;
 }
 
 /** A project file the producer put in the portal. No storage reference, ever. */
@@ -84,7 +89,12 @@ export interface PortalFile {
 }
 
 export interface PortalView {
-  portal: { artistName: string; lastVisitAt: string | null };
+  portal: {
+    artistName: string;
+    lastVisitAt: string | null;
+    /** Who the portal is shaped for, from the contact's main role (lib/artist-portal/audience). */
+    audience: PortalAudience;
+  };
   producer: { name: string; logo_url: string | null; avatar_url: string | null };
   projects: PortalProject[];
   tracks: PortalTrack[];
@@ -119,6 +129,7 @@ export function toPortalTrack(
     canDownload: boolean;
     /** In-portal beats, main first. */
     builtOn: ReadonlyArray<{ id: string; title: string }>;
+    hasStems?: boolean;
     streamUrl: string | null;
     peaksUrl: string | null;
   },
@@ -139,6 +150,7 @@ export function toPortalTrack(
     canDownload: ctx.canDownload,
     builtOn: ctx.builtOn[0] ? { id: ctx.builtOn[0].id, title: ctx.builtOn[0].title } : null,
     builtOnOthers: ctx.builtOn.slice(1).map((b) => ({ id: b.id, title: b.title })),
+    hasStems: ctx.hasStems === true,
     streamUrl: ctx.streamUrl,
     peaksUrl: ctx.peaksUrl,
   };
@@ -146,7 +158,7 @@ export function toPortalTrack(
 
 export function toPortalProject(
   row: { id: string; name: string | null; cover_url: string | null; description: string | null; [key: string]: unknown },
-  ctx: { isNew: boolean; newCount: number; beats: number; songs: number; files: number; allowDownloads: boolean; canComment: boolean },
+  ctx: { isNew: boolean; newCount: number; beats: number; songs: number; files: number; allowDownloads: boolean; canComment: boolean; pitchNote?: string | null },
 ): PortalProject {
   return {
     id: row.id,
@@ -160,6 +172,7 @@ export function toPortalProject(
     files: ctx.files,
     allowDownloads: ctx.allowDownloads,
     canComment: ctx.canComment,
+    pitchNote: ctx.pitchNote ?? null,
   };
 }
 

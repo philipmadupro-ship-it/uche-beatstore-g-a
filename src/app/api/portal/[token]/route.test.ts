@@ -16,7 +16,7 @@ const inserts: Array<{ table: string; row: unknown }> = [];
 const hostile = {
   contacts: [{ id: 'c1', name: 'Artist #1', email: 'artist@secret.test', notes: 'CRM: owes a verse', crm_status: 'cold', phone: '+33 6 00 00 00 00' }],
   creator_profiles: [{ user_id: OWNER, display_name: 'UCHE', logo_url: 'r2://private/logo.png', hero_image_url: null, contact_email: 'producer@secret.test' }],
-  project_contacts: [{ project_id: 'p1', created_at: '2026-09-01T00:00:00Z', last_notified_at: null, allow_downloads: false, can_comment: true, role: 'artist', user_id: OWNER }],
+  project_contacts: [{ project_id: 'p1', created_at: '2026-09-01T00:00:00Z', last_notified_at: null, allow_downloads: false, can_comment: true, role: 'artist', user_id: OWNER, pitch_note: '  Two toplines for the summer single  ' }],
   projects: [
     { id: 'p1', name: 'New EP', cover_url: 'r2://private/cover.png', description: 'Six tracks', status: 'in_progress', price_usd: 99, user_id: OWNER },
   ],
@@ -117,5 +117,26 @@ describe('GET /api/portal/[token]', () => {
     await GET(get(), params);
     expect(updates.find((u) => u.table === 'artist_portals')?.patch).toMatchObject({ previous_viewed_at: null, view_count: 1 });
     expect(inserts.find((i) => i.table === 'contact_activity')?.row).toMatchObject({ kind: 'portal_opened', contact_id: 'c1', title: 'Opened the portal · 3 new' });
+  });
+
+  it('is an artist portal by default, beats first, and never shows a pitch there', async () => {
+    const { GET } = await import('./route');
+    const body = await (await GET(get(), params)).json();
+    expect(body.portal.audience).toBe('artist');
+    expect(body.tracks.map((t: { id: string }) => t.id)).toEqual(['t1', 't2']);
+    expect(body.projects[0].pitchNote).toBeNull();
+  });
+
+  it('is shaped for a label by the main role: songs first, the pitch for this label', async () => {
+    hostile.contacts[0].category = 'A&R';
+    try {
+      const { GET } = await import('./route');
+      const body = await (await GET(get(), params)).json();
+      expect(body.portal.audience).toBe('label');
+      expect(body.tracks.map((t: { id: string }) => t.id)).toEqual(['t2', 't1']);
+      expect(body.projects[0].pitchNote).toBe('Two toplines for the summer single');
+    } finally {
+      delete hostile.contacts[0].category;
+    }
   });
 });

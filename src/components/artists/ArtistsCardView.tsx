@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * The Artists view on /contacts: every contact in workspace mode as a card —
+ * The Artists (and Labels & A&R) view on /contacts: every contact in
+ * workspace mode with that role as a card —
  * avatar, name, relationship stage, the project you are working on together,
  * what is moving, and what they have done with it. Everyone else is under
  * "Other contacts". Cards link to the workspace; the search matches a name,
@@ -18,22 +19,36 @@ import { relativeDays } from '@/components/crm/contacts-shared';
 import { RELATIONSHIP_META } from '@/lib/contacts/relationship';
 import { describeMoving, type ArtistSummary } from '@/lib/contacts/artist-summary';
 
-export function ArtistsCardView({ artists, ready, failed }: {
+const NOUNS = {
+  artist: {
+    one: 'artist', many: 'artists',
+    empty: 'No artists yet. Open a contact and choose Start workspace — linking them to a project makes them an artist, with their own portal.',
+  },
+  label: {
+    one: 'label', many: 'labels',
+    empty: 'No label or A&R workspaces yet. Open a label contact and choose Start workspace — link them to a pack or a project and they get their own portal, like an artist.',
+  },
+} as const;
+
+export function ArtistsCardView({ artists, ready, failed, kind = 'artist' }: {
   /** From /api/contacts/artists, loaded by the page (it also splits the table by them). Null while loading. */
   artists: ArtistSummary[] | null;
   ready: boolean;
   failed: boolean;
+  /** Which tab this is; only changes the wording. */
+  kind?: keyof typeof NOUNS;
 }) {
+  const noun = NOUNS[kind];
   const [query, setQuery] = useState('');
   const shown = useMemo(() => searchArtists(artists ?? [], query), [artists, query]);
 
-  if (failed) return <p className="py-16 text-center text-[11px] text-white/40">Could not load artists. Reload to try again.</p>;
+  if (failed) return <p className="py-16 text-center text-[11px] text-white/40">Could not load {noun.many}. Reload to try again.</p>;
   if (!ready) return <p className="py-16 text-center text-[11px] text-white/40">The artist workspace needs migrations 122–129 applied on Supabase.</p>;
-  if (artists === null) return <p className="py-16 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">Loading artists…</p>;
+  if (artists === null) return <p className="py-16 text-center font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">Loading {noun.many}…</p>;
   if (artists.length === 0) {
     return (
-      <p className="mx-auto max-w-md py-16 text-center text-[11px] text-white/40">
-        No artists yet. Open a contact and choose Start workspace — linking them to a project makes them an artist, with their own portal.
+      <p className={kind === 'artist' ? 'mx-auto max-w-md py-16 text-center text-[11px] text-white/40' : 'rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-5 text-center text-[11px] text-white/40'}>
+        {noun.empty}
       </p>
     );
   }
@@ -41,18 +56,18 @@ export function ArtistsCardView({ artists, ready, failed }: {
   return (
     <div className="space-y-4">
       <label className="relative block max-w-sm">
-        <span className="sr-only">Search artists</span>
+        <span className="sr-only">Search {noun.many}</span>
         <Search size={13} aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search artists or their projects…"
+          placeholder={`Search ${noun.many} or their projects…`}
           className="w-full rounded-lg border border-white/10 bg-white/[0.06] py-2 pl-8 pr-3 text-[11px] text-white/80 placeholder:text-white/30 focus:border-white/30 focus:outline-none"
         />
       </label>
-      {shown.length === 0 && <p className="py-10 text-center text-[11px] text-white/40">No artist matches “{query}”.</p>}
-    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="artists-cards">
+      {shown.length === 0 && <p className="py-10 text-center text-[11px] text-white/40">No {noun.one} matches “{query}”.</p>}
+    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid={kind === 'artist' ? 'artists-cards' : 'labels-cards'}>
       {shown.map((a) => {
         const moving = describeMoving(a.decisions);
         const facts = [

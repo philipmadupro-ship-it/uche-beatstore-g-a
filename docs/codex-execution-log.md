@@ -9203,3 +9203,41 @@ Note for the producer: layouts arranged before this deploy were never on the ser
 
 In this sandbox the embed itself shows Chromium's error page: `ERR_CERT_AUTHORITY_INVALID` from the sandbox's TLS proxy, reproduced on a blank page with no CSP. Not an app issue.
 
+
+## 2026-09-30 - Fixes from testing, Labels like Artists, portals shaped by role (step 3, mig 135)
+
+Producer feedback after testing steps 1–2.
+
+**Linked panel search showed nothing.** Not reproducible locally with real keystrokes: the API and input were fine. The likely cause is that search only matched title, description, key and BPM. A producer typing "loop" or "topline" to find their loops got nothing unless a title said it. The panel also showed nothing at all until something was typed, and a failed request looked the same as no match.
+- `lib/tracks/links.ts#linkSearchParams`: a type word ("loop", "loops", "topline", "inst"…) searches the type, and anything else searches titles. With nothing typed, it lists the 40 most recent tracks.
+- `rankCandidates` puts the types that fit this track first (a song: beats, instrumentals, toplines, loops).
+- The panel always lists candidates ("Recent · click to link" / "Matches"). It says when loading fails, and an empty search names what to try.
+- The panel moved below Asset Intelligence. The relation Dropdown ("Auto") and the chord buttons are now 28px tall.
+
+**/contacts header.**
+- The tab bar was inside `PageHeader`'s `actions`, which squeezed the description into a one-word column and pushed the tabs off the edge. The tabs now have their own row, scrolling sideways on a phone.
+- The description is shorter: "Artists, producers, labels, and everyone you send music to."
+
+**Labels & A&R works like Artists.**
+- Workspace cards (`ArtistsCardView kind="label"`) are followed by the labels without a workspace (`RoleSummaryStrip` with `excludeIds` + `heading`), with their sends. There is no table.
+- The workspace cards are now split by role. Before, a label with a workspace also showed as an Artists card and counted in the Artists tab.
+
+**Portals shaped by role** (`lib/artist-portal/audience.ts`, mig 135 `project_contacts.pitch_note`). There is still one portal per contact, and the main role picks its shape:
+- **Producer:** loops first and "Loops & beats". Each row has **Ask for stems**: a normal portal request, so it reaches the producer's open requests and notifications. The button reads "Stems ready · ask" when `stems_status = 'done'`.
+- **Label:** toplines first, projects shown as "Packs", and each pack opens with the pitch written for that label. The pitch is edited inline on the workspace Projects tab and stored per link, not per project.
+- **Artist:** unchanged.
+- Only wording and order change. Membership, downloads and comments are untouched.
+- `portal.audience`, `project.pitchNote` and `track.hasStems` are explicit view fields, and the redaction test's field lists were updated.
+- Pitch notes are read in their own query, so the portal and the workspace work before 135 is applied. Saving a pitch then answers 503 naming 135.
+
+Tests:
+- `links.test.ts`: the picker query and ranking.
+- `audience.test.ts`.
+- Portal route test: artist default, and label order + pitch.
+- `e2e/portal-roles.spec.ts` (real DB):
+  - producer: order, Ask for stems → open request in the workspace;
+  - label: pitch written in the workspace → shown on the pack; Packs; order;
+  - artist: unchanged.
+- `npm run e2e:real-db`: 26/26.
+
+Bundle: `supabase/apply/pending.sql` = 130–135, run locally, verify all `applied`.

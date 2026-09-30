@@ -108,6 +108,50 @@ export function relationChoices(fromType: string | null): LinkRelation[] {
     : ['loop', 'topline', 'instrumental', 'version'];
 }
 
+/* ── The picker ───────────────────────────────────────────────────────── */
+
+/** Words a producer types to mean a track TYPE rather than a title. */
+const TYPE_WORDS: Record<string, string> = {
+  beat: 'beat', beats: 'beat',
+  instrumental: 'instrumental', instrumentals: 'instrumental', inst: 'instrumental',
+  loop: 'loop', loops: 'loop',
+  topline: 'topline', toplines: 'topline',
+  song: 'song', songs: 'song',
+  remix: 'remix', remixes: 'remix',
+};
+
+/** Types that usually belong with a track of `fromType`, best first. */
+export function fittingTypes(fromType: string | null): string[] {
+  if (fromType === 'song') return ['beat', 'instrumental', 'topline', 'loop'];
+  if (fromType === 'beat') return ['loop', 'topline', 'instrumental', 'song'];
+  if (fromType === 'loop' || fromType === 'topline') return ['beat', 'song'];
+  return ['loop', 'topline', 'instrumental', 'beat'];
+}
+
+/**
+ * The /api/tracks query for the Linked picker. Searching "loop" or "toplines"
+ * means the type (titles rarely say it); anything else searches titles. With
+ * nothing typed it asks for recent tracks — narrowed to the relation's type
+ * when one is picked — so the picker is never an empty box.
+ */
+export function linkSearchParams(query: string, relation: LinkRelation | 'auto'): URLSearchParams {
+  const params = new URLSearchParams({ limit: '40', lean: '1' });
+  const q = query.trim();
+  const typeWord = TYPE_WORDS[q.toLowerCase()];
+  const relationType: Partial<Record<LinkRelation, string>> = { beat: 'beat', instrumental: 'instrumental', loop: 'loop', topline: 'topline' };
+  if (typeWord) params.set('type', typeWord);
+  else if (q) params.set('q', q);
+  else if (relation !== 'auto' && relationType[relation]) params.set('type', relationType[relation]!);
+  return params;
+}
+
+/** Candidates in picker order: types that fit this track first, otherwise as the server sent them (newest first). */
+export function rankCandidates<T extends { type: string | null }>(fromType: string | null, rows: T[]): T[] {
+  const fit = fittingTypes(fromType);
+  const rank = (t: string | null) => { const i = fit.indexOf(t ?? ''); return i === -1 ? fit.length : i; };
+  return rows.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r.type) - rank(b.r.type) || a.i - b.i).map(({ r }) => r);
+}
+
 /* ── The one-zip download ──────────────────────────────────────────────── */
 
 export const BUNDLE_MAX_TRACKS = 20;

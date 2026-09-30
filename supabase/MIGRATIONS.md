@@ -37,7 +37,7 @@ re-run `NOTIFY pgrst, 'reload schema';` and wait.
 As of **2026-09-29** 001–129 are in effect on production: the owner ran the
 SQL-editor bundle and its verify table reported every row `applied`.
 **Pending: 130, 131, 132** (Artist Workspace, phase 3) and **133** (linked
-material) and **134** (contact roles) — `supabase/apply/pending.sql` carries all five. Every one is
+material), **134** (contact roles) and **135** (label pitch notes) — `supabase/apply/pending.sql` carries all six. Every one is
 idempotent, so the bundle is safe to run again if some were already applied. Keep the table below as the record; add new
 migrations to it as **not applied** until they are run.
 
@@ -79,6 +79,7 @@ service-role key can read the schema's effects but cannot run DDL):
 | `132_song_beats.sql` | **not applied** | new — `song_beats`: a song built on several beats; backfilled from `tracks.beat_track_id` |
 | `133_track_links.sql` | **not applied** | new — `track_links` (instrumental / loop / topline / version) + track types `loop`, `topline` |
 | `134_contact_secondary_role.sql` | **not applied** | new — `contacts.secondary_category`: one extra role beside `category` |
+| `135_portal_pitch_note.sql` | **not applied** | new — `project_contacts.pitch_note`: the pitch a label sees on a pack in their portal |
 
 **To apply everything pending in one go** without `psql`, paste
 `supabase/apply/pending.sql` (built by `scripts/ops/bundle-migrations.sh`) into
@@ -210,12 +211,19 @@ All are idempotent, so running the full set (`npm run db:migrate`) is safe.
   Without it the Producers/Labels tabs still work from `category`; saving an
   extra role fails until it is applied.
 
+- `135` — **Portals shaped by role.** `project_contacts.pitch_note` (text,
+  nullable, ≤ 2000 chars): the producer's pitch of one project to one label,
+  shown on that pack in the label's portal (`lib/artist-portal/audience.ts`).
+  Per link, not per project — one pack is pitched differently to two labels.
+  Without it portals are still shaped by role; the pitch is just absent and
+  saving one answers 503 naming 135.
+
 Update this table when a run is confirmed.
 
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 134, 121 is `121_share_full_playback` (SHARE-01) (next new migration = 135). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 135, 121 is `121_share_full_playback` (SHARE-01) (next new migration = 136). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch

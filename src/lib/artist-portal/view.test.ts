@@ -30,7 +30,7 @@ describe('toPortalTrack', () => {
     expect(json).not.toContain('owner-1');
     expect(json).not.toContain('cdn.example.com');
     expect(Object.keys(out).sort()).toEqual([
-      'bpm', 'builtOn', 'builtOnOthers', 'canDownload', 'cover_url', 'decision', 'decisionSetBy', 'duration_seconds', 'id', 'isNew',
+      'bpm', 'builtOn', 'builtOnOthers', 'canDownload', 'cover_url', 'decision', 'decisionSetBy', 'duration_seconds', 'hasStems', 'id', 'isNew',
       'key', 'peaksUrl', 'projectIds', 'scale', 'streamUrl', 'title', 'type',
     ]);
     expect(out.cover_url).toBeNull();
@@ -53,7 +53,7 @@ describe('toPortalProject', () => {
     );
     expect(out).toEqual({
       id: 'p1', name: 'New EP', cover_url: 'https://cdn.example.com/c.png', description: 'Six tracks',
-      isNew: true, newCount: 3, beats: 5, songs: 1, files: 2, allowDownloads: false, canComment: true,
+      isNew: true, newCount: 3, beats: 5, songs: 1, files: 2, allowDownloads: false, canComment: true, pitchNote: null,
     });
   });
 });

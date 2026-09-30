@@ -23,10 +23,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const parsed = await readBody(req, ProjectContactPatchBodySchema);
   if (!parsed.ok) return parsed.res;
 
+  const patch = { ...parsed.data };
+  if (patch.pitch_note !== undefined) patch.pitch_note = patch.pitch_note?.trim() ? patch.pitch_note.trim() : null;
+
   try {
     const { data, error } = await auth.admin
       .from('project_contacts')
-      .update(parsed.data)
+      .update(patch)
       .eq('project_id', id)
       .eq('contact_id', contactId)
       .eq('user_id', auth.userId)
@@ -36,6 +39,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!data) return NextResponse.json({ error: 'Not linked' }, { status: 404 });
     return NextResponse.json({ link: data });
   } catch (err) {
+    if (patch.pitch_note !== undefined && isSchemaNotReady(err)) {
+      return NextResponse.json({ error: 'Pitch notes need migration 135 applied on Supabase.', migration: '135', schemaReady: false }, { status: 503 });
+    }
     if (isSchemaNotReady(err)) return schemaNotReadyResponse();
     log.error('PATCH failed', { id, contactId, error: errorMessage(err) });
     return NextResponse.json({ error: errorMessage(err) }, { status: 500 });

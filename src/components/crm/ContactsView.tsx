@@ -122,6 +122,19 @@ export function ContactsView({
   // Artists by role with no workspace yet: listed under the cards so an
   // artist is never hidden from every tab.
   const artistsWithoutWorkspace = useMemo(() => byRole.artist.filter((c) => !artistIds.has(c.id)), [byRole, artistIds]);
+  // Workspace cards per tab: a label with a workspace is a Labels card, not an
+  // Artists one (unless it is also an artist).
+  const workspaceCards = useMemo(() => {
+    const ids = (list: Contact[]) => new Set(list.map((c) => c.id));
+    const artistRole = ids(byRole.artist);
+    const labelRole = ids(byRole.label);
+    const all = artists ?? [];
+    return {
+      artist: artists === null ? null : all.filter((a) => artistRole.has(a.contact.id)),
+      label: artists === null ? null : all.filter((a) => labelRole.has(a.contact.id)),
+    };
+  }, [artists, byRole]);
+  const labelWorkspaceIds = useMemo(() => new Set((workspaceCards.label ?? []).map((a) => a.contact.id)), [workspaceCards]);
   // The send that fits the tab (loops for producers, toplines for labels).
   const [sendPreset, setSendPreset] = useState<RoleSendPreset | null>(null);
   const tabPreset = (): RoleSendPreset | null => (activeTab === 'producers' ? ROLE_SENDS.producer[0] : activeTab === 'labels' ? ROLE_SENDS.label[0] : null);
@@ -480,38 +493,39 @@ export function ContactsView({
       <PageHeader
         eyebrow="CRM"
         title="Contacts"
-        description="Track artists, buyers, follow-ups, and every beat you send."
-        meta={`${contacts.length} contact${contacts.length === 1 ? '' : 's'}${artists && artists.length ? ` · ${artists.length} artist${artists.length === 1 ? '' : 's'}` : ''}`}
+        description="Artists, producers, labels, and everyone you send music to."
+        meta={`${contacts.length} contact${contacts.length === 1 ? '' : 's'}${artists && artists.length ? ` · ${artists.length} workspace${artists.length === 1 ? '' : 's'}` : ''}`}
         actions={
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-md p-0.5">
-              {CONTACTS_TABS.map((t) => (
-                <button key={t} onClick={() => setActiveTab(t)} aria-pressed={activeTab === t}
-                  className={`px-3 py-1.5 text-[11px] font-medium rounded transition-colors ${activeTab === t ? 'bg-white/20 text-white font-semibold' : 'text-white/60 hover:text-white'}`}>
-                  {TAB_LABEL[t]}
-                  {t === 'artists' && artists !== null && <span className="ml-1.5 text-white/40">{artistIds.size + artistsWithoutWorkspace.length}</span>}
-                  {t === 'producers' && <span className="ml-1.5 text-white/40">{byRole.producer.length}</span>}
-                  {t === 'labels' && <span className="ml-1.5 text-white/40">{byRole.label.length}</span>}
-                  {t === 'network' && <span className="ml-1.5 text-white/40">{byRole.other.length}</span>}
-                </button>
-              ))}
-            </div>
-            <div>
-              <button onClick={() => setShowImportModal(true)}
-                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-[var(--border)] bg-[var(--bg-card)] text-white hover:border-[var(--border-hover)] text-[11px] font-medium transition-colors">
-                <Upload size={13} /> Import
-              </button>
-            </div>
-          </div>
+          <button onClick={() => setShowImportModal(true)}
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-[var(--border)] bg-[var(--bg-card)] text-white hover:border-[var(--border-hover)] text-[11px] font-medium transition-colors">
+            <Upload size={13} /> Import
+          </button>
         }
       />
 
-      {activeTab === 'network' || activeTab === 'producers' || activeTab === 'labels' ? (
+      {/* The tabs get a row of their own: inside the header's actions they
+          squeezed the description into a one-word column and ran off the edge. */}
+      <nav aria-label="Contact groups" className="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <div className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-[#0D0D0A] p-0.5">
+          {CONTACTS_TABS.map((t) => (
+            <button key={t} onClick={() => setActiveTab(t)} aria-pressed={activeTab === t}
+              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors ${activeTab === t ? 'bg-white/[0.14] text-white font-semibold' : 'text-white/60 hover:text-white'}`}>
+              {TAB_LABEL[t]}
+              {t === 'artists' && artists !== null && <span className="ml-1.5 text-white/40">{(workspaceCards.artist?.length ?? 0) + artistsWithoutWorkspace.length}</span>}
+              {t === 'producers' && <span className="ml-1.5 text-white/40">{byRole.producer.length}</span>}
+              {t === 'labels' && <span className="ml-1.5 text-white/40">{byRole.label.length}</span>}
+              {t === 'network' && <span className="ml-1.5 text-white/40">{byRole.other.length}</span>}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {activeTab === 'network' || activeTab === 'producers' ? (
         <>
-          {activeTab === 'producers' || activeTab === 'labels' ? (
+          {activeTab === 'producers' ? (
             <RoleSummaryStrip
               key={activeTab}
-              group={activeTab === 'producers' ? 'producer' : 'label'}
+              group="producer"
               onSend={(contactId, preset) => {
                 const c = contacts.find((x) => x.id === contactId);
                 if (!c) return;
@@ -645,9 +659,30 @@ export function ContactsView({
             </>
           )}
         </>
+      ) : activeTab === 'labels' ? (
+        <>
+          {/* Labels & A&R work like Artists: a workspace and portal per label,
+              shown as cards; labels without one yet are listed underneath with
+              what was sent to them and the sends that fit (toplines, packs). */}
+          <ArtistsCardView kind="label" artists={workspaceCards.label} ready={artistsReady} failed={artistsFailed} />
+          <div className="mt-8">
+            <RoleSummaryStrip
+              key="labels"
+              group="label"
+              heading="Labels & A&R without a workspace yet"
+              excludeIds={labelWorkspaceIds}
+              onSend={(contactId, preset) => {
+                const c = contacts.find((x) => x.id === contactId);
+                if (!c) return;
+                setSendPreset(preset);
+                setSendQueue([c]);
+              }}
+            />
+          </div>
+        </>
       ) : activeTab === 'artists' ? (
         <>
-          <ArtistsCardView artists={artists} ready={artistsReady} failed={artistsFailed} />
+          <ArtistsCardView artists={workspaceCards.artist} ready={artistsReady} failed={artistsFailed} />
           {artistsWithoutWorkspace.length > 0 && (
             <section aria-labelledby="artists-no-ws" className="mt-8" data-testid="artists-without-workspace">
               <h2 id="artists-no-ws" className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">

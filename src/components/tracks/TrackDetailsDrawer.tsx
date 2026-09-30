@@ -626,10 +626,6 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
                   songs built on it, and for a song the beat it is built on. */}
               <TrackPeopleSection trackId={track.id} trackType={track.type} onUpdate={onUpdate} />
 
-              {/* Linked material — beat, instrumental, loops, topline, versions;
-                  download them as one zip or send them together (mig 133). */}
-              <TrackLinkedSection trackId={track.id} trackTitle={track.title ?? null} trackType={track.type} onUpdate={onUpdate} />
-
               {/* Type / Status / Rating — extracted to drawer/TrackMetadataEditor. */}
               <TrackMetadataEditor
                 track={track}
@@ -642,6 +638,10 @@ export function TrackDetailsDrawer({ track: trackProp, onClose, onUpdate, projec
 
               {/* Asset Intelligence — extracted to drawer/TrackAnalysisSection. */}
               <TrackAnalysisSection track={track} onUpdate={onUpdate} />
+
+              {/* Linked material — beat, instrumental, loops, topline, versions;
+                  download them as one zip or send them together (mig 133). */}
+              <TrackLinkedSection trackId={track.id} trackTitle={track.title ?? null} trackType={track.type} onUpdate={onUpdate} />
 
               {/* Track feedback — only shows when the drawer is opened from
                   a project (projectId provided). Comments pinned to this

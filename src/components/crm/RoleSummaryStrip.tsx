@@ -38,11 +38,16 @@ function facts(group: 'producer' | 'label', s: RoleSummary): string {
   return parts.filter(Boolean).join(' · ') || 'Nothing sent yet';
 }
 
-export function RoleSummaryStrip({ group, onSend }: {
+export function RoleSummaryStrip({ group, onSend, excludeIds, heading }: {
   group: 'producer' | 'label';
   onSend: (contactId: string, preset: RoleSendPreset) => void;
+  /** Contacts shown elsewhere on the tab (Labels: the workspace cards above). */
+  excludeIds?: ReadonlySet<string>;
+  /** Given, the strip titles itself and renders nothing when it is empty. */
+  heading?: string;
 }) {
-  const [rows, setRows] = useState<RoleSummary[] | null>(null);
+  const [fetched, setRows] = useState<RoleSummary[] | null>(null);
+  const rows = fetched && excludeIds ? fetched.filter((s) => !excludeIds.has(s.contact.id)) : fetched;
   const [all, setAll] = useState(false);
 
   useEffect(() => {
@@ -56,6 +61,7 @@ export function RoleSummaryStrip({ group, onSend }: {
 
   if (rows === null) return <p className="mb-4 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">Loading…</p>;
   if (rows.length === 0) {
+    if (heading) return null;
     return (
       <p className="mb-6 rounded-xl border border-white/10 bg-[#0D0D0A] px-4 py-6 text-center text-[11px] text-white/40">
         {group === 'producer'
@@ -68,6 +74,9 @@ export function RoleSummaryStrip({ group, onSend }: {
   const shown = all ? rows : rows.slice(0, CARDS_SHOWN);
   return (
     <div className="mb-6">
+    {heading && (
+      <h2 className="mb-3 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">{heading} · {rows.length}</h2>
+    )}
     <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid={`role-strip-${group}`}>
       {shown.map((s) => {
         const badge = otherRoleBadge(s.contact, false, group);

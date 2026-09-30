@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bundleFileNames, bundleReadme, linkLabel, mergeLinks, relationChoices, suggestRelation } from './links';
+import { bundleFileNames, bundleReadme, linkLabel, linkSearchParams, mergeLinks, rankCandidates, relationChoices, suggestRelation } from './links';
 
 const t = (id: string, type: string) => ({ id, title: id.toUpperCase(), type });
 const tracks = new Map([t('song', 'song'), t('b1', 'beat'), t('b2', 'beat'), t('inst', 'instrumental'), t('loop', 'loop'), t('top', 'topline')].map((x) => [x.id, x]));
@@ -66,5 +66,23 @@ describe('zip naming', () => {
   });
   it('writes a readme', () => {
     expect(bundleReadme('Song', [{ file: '01 Song.wav', label: 'This track' }])).toContain('01 Song.wav  (This track)');
+  });
+});
+
+describe('the Linked picker', () => {
+  it('reads a type word as the type, anything else as a title search', () => {
+    expect(Object.fromEntries(linkSearchParams('loops', 'auto'))).toEqual({ limit: '40', lean: '1', type: 'loop' });
+    expect(Object.fromEntries(linkSearchParams(' Topline ', 'auto'))).toEqual({ limit: '40', lean: '1', type: 'topline' });
+    expect(Object.fromEntries(linkSearchParams('pad loop', 'auto'))).toEqual({ limit: '40', lean: '1', q: 'pad loop' });
+  });
+  it('asks for recent tracks when nothing is typed, narrowed by a picked relation', () => {
+    expect(Object.fromEntries(linkSearchParams('', 'auto'))).toEqual({ limit: '40', lean: '1' });
+    expect(Object.fromEntries(linkSearchParams('', 'instrumental'))).toEqual({ limit: '40', lean: '1', type: 'instrumental' });
+    expect(Object.fromEntries(linkSearchParams('', 'version'))).toEqual({ limit: '40', lean: '1' });
+  });
+  it('puts the types that fit first and keeps server order within a type', () => {
+    const rows = [{ id: 'a', type: 'song' }, { id: 'b', type: 'loop' }, { id: 'c', type: 'beat' }, { id: 'd', type: 'loop' }];
+    expect(rankCandidates('song', rows).map((r) => r.id)).toEqual(['c', 'b', 'd', 'a']);
+    expect(rankCandidates('beat', rows).map((r) => r.id)).toEqual(['b', 'd', 'a', 'c']);
   });
 });

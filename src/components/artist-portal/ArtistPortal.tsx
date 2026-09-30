@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, ExternalLink, FileText, Heart, Lock, Mail, MessageSquare, Music, X } from 'lucide-react';
+import { Download, ExternalLink, FileText, Heart, Layers, Lock, Mail, MessageSquare, Music, X } from 'lucide-react';
 import { PortalThread } from './PortalComments';
 import { PortalMessages } from './PortalMessages';
 import type { ArtistMessage } from '@/lib/artist-messages/messages';
@@ -34,6 +34,7 @@ import { usePlayer } from '@/hooks/usePlayer';
 import { DECISION_META, ARTIST_DECISIONS } from '@/lib/contacts/decisions';
 import type { PortalFile, PortalTrack, PortalView } from '@/lib/artist-portal/view';
 import { formatBytes } from '@/lib/projects/assets';
+import { PORTAL_SHAPES, stemsRequestBody } from '@/lib/artist-portal/audience';
 
 type LoadState =
   | { kind: 'loading' }
@@ -446,6 +447,17 @@ export function ArtistPortal({ token }: { token: string }) {
   const totalNew = v.tracks.filter((t) => t.isNew).length + v.files.filter((f) => f.isNew).length;
   const hasSongs = v.tracks.some((t) => t.type === 'song');
   const hasFiles = v.files.length > 0;
+  // Shaped by the contact's main role (lib/artist-portal/audience): wording
+  // and order only — what the portal holds is decided by the server.
+  const audience = v.portal.audience ?? 'artist';
+  const shape = PORTAL_SHAPES[audience];
+  const selectedProject = projectFilter ? v.projects.find((p) => p.id === projectFilter) ?? null : null;
+  const askForStems = async (t: PortalTrack) => {
+    setBusy(t.id);
+    const ok = await sendMessage({ body: stemsRequestBody(t.title), kind: 'request', projectId: t.projectIds[0] ?? null });
+    setBusy(null);
+    if (ok) setNotice(`Asked ${v.producer.name || 'your producer'} for the stems of ${t.title}. You’ll see it in Messages.`);
+  };
 
   return (
     <ArtworkThemeProvider theme={v.artworkTheme}>
@@ -454,6 +466,7 @@ export function ArtistPortal({ token }: { token: string }) {
           <div className="min-w-0">
             <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">Private library</p>
             <h1 className="mt-2 truncate font-heading text-[32px] leading-tight text-white/90 sm:text-[40px]">{v.producer.name || 'Your producer'}</h1>
+            <p className="mt-2 text-sm text-white/60" data-testid="portal-tagline">{shape.tagline}</p>
           </div>
           {v.portal.artistName && (
             <p className="shrink-0 pb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">for {v.portal.artistName}</p>
@@ -473,7 +486,7 @@ export function ArtistPortal({ token }: { token: string }) {
           <>
             <section aria-labelledby="portal-projects" className="mt-8">
               <div className="mb-3 flex items-center justify-between gap-4">
-                <h2 id="portal-projects" className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">Projects</h2>
+                <h2 id="portal-projects" className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">{shape.projectNoun.many}</h2>
                 {totalNew > 0 && (
                   <span className="text-right font-mono text-[10px] uppercase tracking-[0.2em] text-[#6DC6A4]">
                     {totalNew} new<span className="hidden sm:inline"> since your last visit</span>
@@ -499,8 +512,9 @@ export function ArtistPortal({ token }: { token: string }) {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm text-white/80">{p.name}</span>
                         <span className="mt-1 block font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">
-                          {p.beats} beat{p.beats === 1 ? '' : 's'}{p.songs ? ` · ${p.songs} song${p.songs === 1 ? '' : 's'}` : ''}{p.files ? ` · ${p.files} file${p.files === 1 ? '' : 's'}` : ''}
+                          {p.beats} {audience === 'artist' ? 'beat' : 'track'}{p.beats === 1 ? '' : 's'}{p.songs ? ` · ${p.songs} song${p.songs === 1 ? '' : 's'}` : ''}{p.files ? ` · ${p.files} file${p.files === 1 ? '' : 's'}` : ''}
                         </span>
+                        {p.pitchNote && <span className="mt-1 line-clamp-2 block text-xs text-white/60">{p.pitchNote}</span>}
                       </span>
                       {p.newCount > 0 && (
                         <span className="shrink-0 rounded-lg border border-[#6DC6A4]/40 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-[#6DC6A4]">{p.newCount} new</span>
@@ -509,6 +523,12 @@ export function ArtistPortal({ token }: { token: string }) {
                   );
                 })}
               </div>
+              {selectedProject?.pitchNote && (
+                <div className="mt-4 rounded-xl border border-white/10 bg-[#0D0D0A] p-4" data-testid="portal-pitch">
+                  <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">The pitch · {selectedProject.name}</p>
+                  <p className="whitespace-pre-wrap text-sm text-white/80">{selectedProject.pitchNote}</p>
+                </div>
+              )}
             </section>
 
             <section aria-labelledby="portal-library" className="mt-10">
@@ -523,7 +543,7 @@ export function ArtistPortal({ token }: { token: string }) {
                     onClick={() => setTab(t)}
                     className={`rounded-lg border px-3 py-1.5 text-xs transition-colors ${tab === t ? 'border-white/30 bg-white/[0.14] text-white' : 'border-white/10 bg-white/[0.06] text-white/60 hover:border-white/20 hover:bg-white/[0.10]'}`}
                   >
-                    {t === 'beats' ? 'Beats' : t === 'songs' ? 'Songs' : t === 'files' ? 'Files' : 'Messages'}
+                    {t === 'beats' ? (audience === 'producer' ? 'Loops & beats' : audience === 'label' ? 'Toplines & beats' : 'Beats') : t === 'songs' ? 'Songs' : t === 'files' ? 'Files' : 'Messages'}
                     {t === 'messages' && unreadMessages > 0 && tab !== 'messages' && (
                       <span className="ml-1.5 text-[#6DC6A4]">{unreadMessages} new</span>
                     )}
@@ -663,6 +683,19 @@ export function ArtistPortal({ token }: { token: string }) {
                             </button>
                           );
                         })()}
+                        {shape.askForStems && messagesOn && t.type !== 'song' && (
+                          <button
+                            type="button"
+                            onClick={() => void askForStems(t)}
+                            disabled={busy === t.id}
+                            title={t.hasStems ? 'Stems are ready — ask for them' : `Ask ${v.producer.name || 'your producer'} for the stems`}
+                            className="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1.5 text-xs text-white/60 transition-colors hover:border-white/20 hover:bg-white/[0.10] hover:text-white disabled:opacity-40"
+                          >
+                            <Layers size={12} aria-hidden="true" />
+                            <span className="hidden sm:inline">{t.hasStems ? 'Stems ready · ask' : 'Ask for stems'}</span>
+                            <span className="sr-only sm:hidden">Ask for stems</span>
+                          </button>
+                        )}
                         {t.canDownload && (
                           <button
                             type="button"

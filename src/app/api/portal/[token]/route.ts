@@ -16,6 +16,7 @@ import { assetAvailableAt } from '@/lib/projects/assets';
 import { isSchemaNotReady } from '@/lib/artists/http';
 import { loadPublicArtworkTheme } from '@/lib/artwork/public-theme';
 import { loadSongBeats } from '@/lib/tracks/song-beats-store';
+import { cleanPitchNote, orderForAudience, portalAudience } from '@/lib/artist-portal/audience';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,6 +37,7 @@ interface TrackRow {
   wav_url: string | null;
   preview_url: string | null;
   peaks_url: string | null;
+  stems_status?: string | null;
   [key: string]: unknown;
 }
 
@@ -71,7 +73,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const projectIds = links.map((l) => l.project_id);
 
     const [contactRes, profileRes, projects, projectTracks, statesRes, assets] = await Promise.all([
-      admin.from('contacts').select('name').eq('id', portal.contact_id).eq('user_id', ownerId).maybeSingle(),
+      admin.from('contacts').select('name, category').eq('id', portal.contact_id).eq('user_id', ownerId).maybeSingle(),
       admin.from('creator_profiles').select('display_name, logo_url, hero_image_url').eq('user_id', ownerId).maybeSingle(),
       projectIds.length
         ? selectIn<{ id: string; name: string | null; cover_url: string | null; description: string | null; status: string | null }>((ids) => admin.from('projects').select('id, name, cover_url, description, status').in('id', ids).eq('user_id', ownerId), projectIds)
@@ -83,11 +85,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       loadPortalAssets(admin, ownerId, projectIds),
     ]);
     if (statesRes.error) throw statesRes.error;
+    // The portal's shape follows the contact's MAIN role (lib/artist-portal/audience).
+    const audience = portalAudience((contactRes.data as { category?: string | null } | null)?.category);
+    const pitchNotes = audience === 'label' ? await loadPitchNotes(admin, portal, projectIds) : new Map<string, string>();
 
     const trackIds = [...new Set(projectTracks.map((pt) => pt.track_id))];
     const tracks = trackIds.length
       ? await selectIn<TrackRow>((ids) => admin.from('tracks')
-          .select('id, title, type, bpm, key, scale, duration_seconds, cover_url, beat_track_id, audio_url, wav_url, preview_url, peaks_url')
+          .select('id, title, type, bpm, key, scale, duration_seconds, cover_url, beat_track_id, audio_url, wav_url, preview_url, peaks_url, stems_status')
           .in('id', ids).eq('user_id', ownerId), trackIds)
       : [];
     const trackById = new Map(tracks.map((t) => [t.id, t]));
@@ -120,7 +125,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       entries.set(pt.track_id, cur);
     }
 
-    const portalTracks: PortalTrack[] = [...entries.entries()].map(([trackId, e]) => {
+    const portalTracks: PortalTrack[] = orderForAudience([...entries.entries()].map(([trackId, e]) => {
       const t = trackById.get(trackId)!;
       const st = states.get(trackId);
       const decision = st && isDecision(st.decision) ? st.decision : null;
@@ -136,10 +141,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
         decisionSetBy: decision ? (st!.set_by === 'artist' ? 'artist' : 'producer') : null,
         canDownload: e.canDownload && !!(t.wav_url || t.audio_url),
         builtOn,
+        hasStems: t.stems_status === 'done',
         streamUrl: hasAudio ? signedSharePreviewUrl(portal.token, trackId) : null,
         peaksUrl: t.peaks_url ? signedSharePeaksUrl(portal.token, trackId) : null,
       });
-    });
+    }), audience);
 
     const portalFiles = assets
       .filter((a) => liveIds.has(a.project_id))
@@ -149,7 +155,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
       }));
 
     const view: PortalView = {
-      portal: { artistName: (contactRes.data as { name?: string } | null)?.name ?? '', lastVisitAt: watermark },
+      portal: { artistName: (contactRes.data as { name?: string } | null)?.name ?? '', lastVisitAt: watermark, audience },
       producer: {
         name: (profileRes.data as { display_name?: string | null } | null)?.display_name ?? '',
         logo_url: publicUrlOrNull((profileRes.data as { logo_url?: string | null } | null)?.logo_url),
@@ -168,6 +174,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
             files: portalFiles.filter((f) => f.projectId === p.id).length,
             allowDownloads: link.allow_downloads,
             canComment: link.can_comment,
+            pitchNote: pitchNotes.get(p.id) ?? null,
           });
         }),
       tracks: portalTracks,
@@ -204,4 +211,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     log.error('portal load failed', { error: errorMessage(err) });
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 });
   }
+}
+
+/**
+ * A label's pitch per project (mig 135). Optional: before the migration the
+ * column is missing and the portal simply shows no pitch.
+ */
+async function loadPitchNotes(admin: ReturnType<typeof createServiceClient>, portal: { contact_id: string; user_id: string }, projectIds: string[]): Promise<Map<string, string>> {
+  if (projectIds.length === 0) return new Map();
+  const { data, error } = await admin
+    .from('project_contacts')
+    .select('project_id, pitch_note')
+    .eq('contact_id', portal.contact_id)
+    .eq('user_id', portal.user_id)
+    .in('project_id', projectIds);
+  if (error) {
+    log.warn('pitch notes unavailable', { error: errorMessage(error) });
+    return new Map();
+  }
+  const out = new Map<string, string>();
+  for (const r of (data ?? []) as Array<{ project_id: string; pitch_note: unknown }>) {
+    const note = cleanPitchNote(r.pitch_note);
+    if (note) out.set(r.project_id, note);
+  }
+  return out;
 }

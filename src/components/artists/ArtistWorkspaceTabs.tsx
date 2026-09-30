@@ -26,6 +26,8 @@ import type { WorkspaceBeat, WorkspaceProject, WorkspaceSong } from '@/lib/artis
 import { jsonOrThrow, type ReadyWorkspace } from './types';
 import { ArtistCommentsPanel } from './ArtistCommentsPanel';
 import { ArtistMessagesPanel } from './ArtistMessagesPanel';
+import { InlineText } from '@/components/ui/InlineText';
+import { PORTAL_SHAPES, portalAudience, type PortalAudience } from '@/lib/artist-portal/audience';
 
 export const WORKSPACE_TABS = ['overview', 'projects', 'beats', 'songs', 'files', 'messages', 'activity', 'notes'] as const;
 export type WorkspaceTab = (typeof WORKSPACE_TABS)[number];
@@ -46,6 +48,7 @@ function readTab(): WorkspaceTab {
 export function ArtistWorkspaceTabs({
   contactId,
   contactName,
+  contactCategory = null,
   workspace,
   onChanged,
   activity,
@@ -54,6 +57,8 @@ export function ArtistWorkspaceTabs({
 }: {
   contactId: string;
   contactName: string;
+  /** The contact's MAIN role; it decides how their portal is shaped (lib/artist-portal/audience). */
+  contactCategory?: string | null;
   workspace: ReadyWorkspace;
   onChanged: () => void;
   /** The CRM's own timeline component, rendered as the Activity tab. */
@@ -104,7 +109,7 @@ export function ArtistWorkspaceTabs({
 
       <div role="tabpanel" id={`ws-panel-${tab}`} aria-labelledby={`ws-tab-${tab}`}>
         {tab === 'overview' && <OverviewTab workspace={workspace} contactName={contactName} tasks={tasks} onOpen={go} />}
-        {tab === 'projects' && <ProjectsTab contactId={contactId} contactName={contactName} workspace={workspace} onChanged={onChanged} />}
+        {tab === 'projects' && <ProjectsTab contactId={contactId} contactName={contactName} audience={portalAudience(contactCategory)} workspace={workspace} onChanged={onChanged} />}
         {tab === 'beats' && <BeatsTab contactId={contactId} beats={workspace.beats} onChanged={onChanged} />}
         {tab === 'songs' && <SongsTab songs={workspace.songs} beats={workspace.beats} onChanged={onChanged} />}
         {tab === 'files' && <FilesTab contactName={contactName} workspace={workspace} onChanged={onChanged} />}
@@ -218,9 +223,10 @@ function ProjectCardMini({ project }: { project: WorkspaceProject }) {
 
 /* ── Projects ─────────────────────────────────────────────────────────── */
 
-function ProjectsTab({ contactId, contactName, workspace, onChanged }: {
+function ProjectsTab({ contactId, contactName, audience, workspace, onChanged }: {
   contactId: string;
   contactName: string;
+  audience: PortalAudience;
   workspace: ReadyWorkspace;
   onChanged: () => void;
 }) {
@@ -271,6 +277,19 @@ function ProjectsTab({ contactId, contactName, workspace, onChanged }: {
     }
   };
 
+  const savePitch = async (projectId: string, next: string) => {
+    try {
+      await jsonOrThrow(await fetch(`/api/projects/${projectId}/contacts/${contactId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pitch_note: next }),
+      }));
+      onChanged();
+      return true;
+    } catch (err) {
+      toast.error('Could not save the pitch', err instanceof Error ? err.message : 'Try again');
+      return false;
+    }
+  };
+
   const patch = async (projectId: string, body: Record<string, boolean>) => {
     setBusy(projectId);
     try {
@@ -308,6 +327,14 @@ function ProjectsTab({ contactId, contactName, workspace, onChanged }: {
 
   return (
     <div className="space-y-4">
+      {audience !== 'artist' && (
+        <p className="text-[11px] text-white/40" data-testid="portal-shape-note">
+          {audience === 'label'
+            ? `${contactName}’s portal is a label portal: projects show as packs, toplines and songs first, each opened with your pitch.`
+            : `${contactName}’s portal is a producer portal: loops first, and they can ask for stems in one click.`}
+          {' '}It follows their main role.
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         {creating ? (
           <form className="flex flex-1 items-center gap-2" onSubmit={(e) => { e.preventDefault(); void createProject(); }}>
@@ -372,6 +399,21 @@ function ProjectsTab({ contactId, contactName, workspace, onChanged }: {
                   </button>
                 )}
               </div>
+              {audience === 'label' && (
+                <div className="mt-3 border-t border-white/[0.06] pt-3" data-testid={`ws-pitch-${p.id}`}>
+                  <p className="mb-1 font-mono text-[10px] uppercase tracking-[0.2em] text-white/40">Pitch to {contactName}</p>
+                  <InlineText
+                    value={p.link.pitch_note ?? ''}
+                    onSave={(next) => savePitch(p.id, next)}
+                    multiline
+                    rows={3}
+                    maxLength={2000}
+                    label={`Pitch for ${p.name} to ${contactName}`}
+                    emptyLabel={`What this ${PORTAL_SHAPES.label.projectNoun.one} is for — shown at the top of it in ${contactName}’s portal`}
+                    className="text-[11px] text-white/70"
+                  />
+                </div>
+              )}
               <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-white/[0.06] pt-3">
                 <Toggle label="In portal" checked={p.link.in_portal} disabled={busy === p.id} onChange={(v) => patch(p.id, { in_portal: v })} />
                 <Toggle label="Downloads" checked={p.link.allow_downloads} disabled={busy === p.id || !p.link.in_portal} onChange={(v) => patch(p.id, { allow_downloads: v })} />

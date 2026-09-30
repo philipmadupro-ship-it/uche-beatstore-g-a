@@ -282,6 +282,29 @@ CREATE INDEX IF NOT EXISTS contacts_secondary_category_idx
 NOTIFY pgrst, 'reload schema';
 
 
+-- ═════════════ 135_portal_pitch_note.sql ═════════════
+-- 135_portal_pitch_note.sql
+-- Portals shaped by role: a pitch note per label, per project.
+--
+-- A label or A&R contact's portal frames each project as a pack and opens it
+-- with the producer's pitch ("two toplines for the summer single, hooks
+-- written, open to a feature"). The note belongs to the link, not the
+-- project: the same pack is pitched differently to two labels, and the
+-- project's own description stays the storefront copy. NULL = no pitch.
+-- Read by /api/portal/[token] (lib/artist-portal/audience); the portal works
+-- without it when this migration is not applied.
+
+ALTER TABLE public.project_contacts
+  ADD COLUMN IF NOT EXISTS pitch_note text;
+
+ALTER TABLE public.project_contacts
+  DROP CONSTRAINT IF EXISTS project_contacts_pitch_note_len;
+ALTER TABLE public.project_contacts
+  ADD CONSTRAINT project_contacts_pitch_note_len CHECK (pitch_note IS NULL OR char_length(pitch_note) <= 2000);
+
+NOTIFY pgrst, 'reload schema';
+
+
 COMMIT;
 
 -- ═════════════ check ═════════════
@@ -311,6 +334,7 @@ FROM (VALUES
   ('131_portal_sign_in',             EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'artist_portals' AND column_name = 'require_sign_in')),
   ('132_song_beats',                 to_regclass('public.song_beats') IS NOT NULL),
   ('134_contact_secondary_role',     EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'contacts' AND column_name = 'secondary_category')),
+  ('135_portal_pitch_note',          EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'project_contacts' AND column_name = 'pitch_note')),
   ('133_track_links',                to_regclass('public.track_links') IS NOT NULL
                                      AND pg_get_constraintdef((SELECT oid FROM pg_constraint WHERE conname = 'tracks_type_check' AND conrelid = 'public.tracks'::regclass)) LIKE '%topline%'
                                      AND (SELECT count(*) FROM pg_constraint WHERE conrelid = 'public.tracks'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%instrumental%') = 1)
