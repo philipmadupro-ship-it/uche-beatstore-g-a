@@ -31,6 +31,9 @@ interface Props {
    *  other row action here; each item stays hidden when its prop is absent. */
   onOpenLyrics?: (t: Track) => void;
   onOpenStudio?: (t: Track) => void;
+  /** Optional line under a row — the project page puts each linked artist's
+   *  decision on the track here. Rendered only when it returns content. */
+  rowAddon?: (t: Track) => React.ReactNode;
 }
 
 type InlineTrackTag = { tag: string; category?: string | null };
@@ -50,7 +53,7 @@ export function ProjectTrackList({
   onAddFromLibrary, onShowUpload,
   selectedIds, onToggleSelect, onSelectAll,
   selectMode = false, onToggleSelectMode, onReorder, onTrackChanged,
-  onOpenLyrics, onOpenStudio,
+  onOpenLyrics, onOpenStudio, rowAddon,
 }: Props) {
   // Internal tag filter — derive available tags from all tracks, let user
   // narrow within the already type/search filtered list.
@@ -274,6 +277,7 @@ export function ProjectTrackList({
                 selected={selectable && selectedIds!.has(track.id)}
                 onSelectChange={(t) => onToggleSelect?.(t.id)}
               />
+              {rowAddon?.(track)}
             </div>
           ))
         )}

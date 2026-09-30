@@ -193,3 +193,31 @@ describe('summarizeEngagement', () => {
     expect(summarizeEngagement(tl).favorites).toBe(2);
   });
 });
+
+describe('artist workspace timeline sources', () => {
+  it('adds a link event and groups follow-up adds per project and day', async () => {
+    const { buildContactTimeline } = await import('./activity');
+    const timeline = buildContactTimeline({
+      stored: [],
+      beatSends: [],
+      purchases: [],
+      projectLinks: [{ project_id: 'p1', project_name: 'New EP', created_at: '2026-09-20T10:00:00Z' }],
+      projectTrackAdds: [
+        { project_id: 'p1', project_name: 'New EP', track_id: 'before', added_at: '2026-09-19T10:00:00Z' },
+        { project_id: 'p1', project_name: 'New EP', track_id: 'm', added_at: '2026-09-29T09:00:00Z' },
+        { project_id: 'p1', project_name: 'New EP', track_id: 'n', added_at: '2026-09-29T11:00:00Z' },
+      ],
+      titleMap: { m: 'MIDNIGHT', n: 'NIGHT DRIVE', before: 'OLD' },
+    });
+    expect(timeline.map((a) => a.title)).toEqual([
+      'Added MIDNIGHT + NIGHT DRIVE to New EP',
+      'Linked to New EP',
+    ]);
+  });
+
+  it('keeps stored workspace kinds instead of folding them into notes', async () => {
+    const { activityFromStored } = await import('./activity');
+    const [row] = activityFromStored([{ id: 'x', kind: 'portal_opened', title: 'Opened the portal', occurred_at: '2026-09-27T00:00:00Z' }]);
+    expect(row.kind).toBe('portal_opened');
+  });
+});

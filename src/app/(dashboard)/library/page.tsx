@@ -251,7 +251,7 @@ export default function LibraryPage() {
     const restored = deserializeFilters(sp.filter);
     setFilters(
       legacyType === 'beat' || legacyType === 'instrumental' || legacyType === 'song'
-        || legacyType === 'remix' || legacyType === 'all'
+        || legacyType === 'remix' || legacyType === 'loop' || legacyType === 'topline' || legacyType === 'all'
         ? { ...restored, type: legacyType }
         : restored,
     );

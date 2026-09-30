@@ -13,6 +13,7 @@ import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 import { rateLimitDurable, clientIp } from '@/lib/security/rate-limit';
 import { shareCommentNotification } from '@/lib/notifications/share-comment';
+import { isMissingSchema } from '@/lib/artists/workspace-load';
 const log = createLogger('api.projects.share.token.comments');
 
 export const runtime = 'nodejs';
@@ -71,12 +72,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
     const gate = await resolveShare(token, password);
     if (!gate.ok) return gate.response;
 
-    const { data, error } = await gate.admin
-      .from('project_comments')
-      .select('id, project_id, track_id, user_id, share_token, author_name, body, parent_id, region_start, region_end, edited_at, deleted_at, created_at')
-      .eq('project_id', gate.share.project_id)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: true });
+    // An artist's portal conversation (contact_id set, mig 128) is between
+    // that artist and the producer — never shown to a share-link holder.
+    // Before 128 the column does not exist, and every comment is a share one.
+    const list = (portalFilter: boolean) => {
+      const q = gate.admin
+        .from('project_comments')
+        .select('id, project_id, track_id, user_id, share_token, author_name, body, parent_id, region_start, region_end, edited_at, deleted_at, created_at')
+        .eq('project_id', gate.share.project_id)
+        .is('deleted_at', null);
+      return (portalFilter ? q.is('contact_id', null) : q).order('created_at', { ascending: true });
+    };
+    let { data, error } = await list(true);
+    if (error && isMissingSchema(error)) ({ data, error } = await list(false));
     if (error) throw error;
     return NextResponse.json({ comments: data ?? [] });
   } catch (error: unknown) {

@@ -48,6 +48,8 @@ const TYPE_OPTIONS: { value: TrackType; label: string }[] = [
   { value: 'instrumental', label: 'Instrumental' },
   { value: 'song',         label: 'Song' },
   { value: 'remix',        label: 'Remix' },
+  { value: 'loop',         label: 'Loop' },
+  { value: 'topline',      label: 'Topline' },
 ];
 
 type AnalyzeResponse = Partial<Track> & {

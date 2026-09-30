@@ -15,6 +15,7 @@ import { TrackDetailsDrawer } from '@/components/tracks/TrackDetailsDrawer';
 import { DropZone } from '@/components/upload/DropZone';
 import { ContentShareModal } from '@/components/share/ContentShareModal';
 import { ProjectCommentsPanel } from '@/components/projects/ProjectCommentsPanel';
+import { ProjectFilesSection } from '@/components/projects/ProjectFilesSection';
 import { AddFromLibraryModal } from '@/components/projects/AddFromLibraryModal';
 import { ProjectDetailHeader } from '@/components/projects/ProjectDetailHeader';
 import { ProjectTrackList } from '@/components/projects/ProjectTrackList';
@@ -28,6 +29,7 @@ import { toast, confirmToast } from '@/hooks/useToast';
 import { BatchActionBar, DeleteIcon } from '@/components/ui/BatchActionBar';
 import { uploadAndAttachImage } from '@/lib/upload/image-upload-client';
 import { CoverEditor } from '@/components/ui/CoverEditor';
+import { ProjectArtistsStrip, TrackDecisionPills, type TrackDecisions } from '@/components/artists/ProjectArtistsStrip';
 
 type ProjectStatus = 'in_progress' | 'final' | 'archived';
 
@@ -57,6 +59,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
   const openStudio = (t: Track) => router.push(studioHref(t.id));
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [trackDecisions, setTrackDecisions] = useState<TrackDecisions>({});
   const [loading, setLoading] = useState(true);
   const [uploadingArt, setUploadingArt] = useState(false);
   const [removingArt, setRemovingArt] = useState(false);
@@ -430,6 +433,10 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
               onDeleted={() => { window.location.href = '/projects'; }}
             />
 
+        {/* Artists linked to this project (artist workspace) — portal status,
+            Share / Notify, and the decisions shown on each row below. */}
+        <ProjectArtistsStrip projectId={params.id} refreshKey={tracks.length} onDecisions={setTrackDecisions} />
+
         {/* Upload Zone */}
         {showUpload && (
           <div className="mb-8">
@@ -469,6 +476,7 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
           onTrackChanged={fetchData}
           onOpenLyrics={openLyrics}
           onOpenStudio={openStudio}
+          rowAddon={(t) => <TrackDecisionPills rows={trackDecisions[t.id]} />}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelectOne}
           onSelectAll={toggleSelectAll}
@@ -494,6 +502,9 @@ export default function ProjectWorkspacePage({ params: paramsPromise }: { params
             }
           }}
         />
+            {/* Project files (mig 127): references, artwork, lyric sheets. */}
+            {project && <div className="mt-6"><ProjectFilesSection projectId={params.id} /></div>}
+
             {/* Analytics strip */}
             {project && <ProjectAnalyticsPanel projectId={params.id} />}
 

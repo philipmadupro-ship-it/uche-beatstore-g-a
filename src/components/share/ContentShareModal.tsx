@@ -8,6 +8,7 @@ import { PlaybackChoice } from '@/components/share/PlaybackChoice';
 import { Dropdown } from '@/components/ui/Dropdown';
 import { useCallback, useEffect, useState } from 'react';
 import { copyToClipboard } from '@/lib/clipboard';
+import { shareOpensLabel } from '@/lib/links/share-link';
 import { toast, confirmToast } from '@/hooks/useToast';
 import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
@@ -475,7 +476,7 @@ export function ContentShareModal({ contentType, contentId, contentTitle, coverU
                           {expired && !revoked && <span className="text-[8px] text-yellow-500 uppercase">Expired</span>}
                         </div>
                         <p className="text-[9px] font-mono text-white/40 mt-0.5 truncate">
-                          {s.plays} {s.plays === 1 ? 'play' : 'plays'} · created {fmtDate(s.created_at)}
+                          {shareOpensLabel(s.plays)} · created {fmtDate(s.created_at)}
                           {s.expires_at ? ` · expires ${fmtDate(s.expires_at)}` : ''}
                           {s.full_playback === false ? ' · 1:15 preview' : ''}
                         </p>
