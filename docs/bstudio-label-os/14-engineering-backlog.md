@@ -200,7 +200,7 @@ Down-script drops the five tables and two functions (no dependants yet).
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-03
-**Status:** In Review ([PR #53](https://github.com/philipmadupro-ship-it/uche-beatstore-g-a/pull/53), branch label-os/LABEL-04)
+**Status:** Done (2026-10-01) — [PR #53](https://github.com/philipmadupro-ship-it/uche-beatstore-g-a/pull/53)
 
 ## Objective
 Make the policy-replay test fail on the Label OS–specific mistakes before they ship.
@@ -250,7 +250,7 @@ Revert.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-02, LABEL-03
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-05)
 
 ## Objective
 Route-level authorization for service-role routes, plus a single event writer.
