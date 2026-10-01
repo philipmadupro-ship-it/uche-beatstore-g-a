@@ -303,7 +303,7 @@ Revert.
 **Risk:** Critical
 **Workstream:** L
 **Dependencies:** LABEL-05
-**Status:** In Review (PR #56, branch label-os/LABEL-06)
+**Status:** Done (2026-10-01) — [PR #56](https://github.com/philipmadupro-ship-it/uche-beatstore-g-a/pull/56)
 
 ## Objective
 Admit org members to `/api/org/*` and `/o/*` only, behind `LABEL_OS_ENABLED`, without changing any existing route's gate.
@@ -353,7 +353,7 @@ One-function revert; flag off.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-03
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-07)
 
 ## Objective
 Give the producer an `owner` membership of a `producer`-kind org, so they can invite people and switch orgs.
@@ -441,6 +441,9 @@ One modal for invite. The join page follows auth-page styling with correct contr
 ## Tests
 - Route tests for each path.
 - e2e: invite → magic link (stubbed) → org visible.
+
+## Carried from LABEL-06 (#56)
+`src/proxy.ts` sends any signed-in non-producer who opens `/login` to `/store/account/me`. A member-only user (an invitee, a buyer who joined) who signs in through `/login?next=/o/...` is therefore bounced away from Label OS. The OAuth callback honours `next`, but the `/login` page itself is gated. The join flow must land the invitee on `/o/...` after sign-in. Either sign in from the join page itself, or let `/login` honour a `next` under `/o/` or `/join/` for users with a membership. Do not loosen the rule for any other `next`.
 
 ## Out of Scope
 External project invites (LABEL-21); removing the old flow (LABEL-40).
