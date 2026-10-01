@@ -1,5 +1,5 @@
 -- Behaviour checks for 136_labelos_org_core.sql, run by
--- scripts/db/local-check.sh in its own copy of the throwaway database.
+-- scripts/local-db/check.sh (npm run db:local:check) in its own copy of the throwaway database.
 -- Every check RAISEs on failure; psql stops at the first one.
 --
 -- Cast: org A (label): owner O, admin D, member M (marketing), roster
@@ -71,7 +71,7 @@ SELECT public.check_eq('helpers owned by postgres',
 
 -- ── Member M (marketing) ─────────────────────────────────────────────────
 SET ROLE authenticated;
-SELECT set_config('request.jwt.claim.sub', 'a0000000-0000-4000-8000-00000000000e', false);
+SELECT set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-00000000000e"}', false);
 SELECT public.check_eq('M sees only org A', (SELECT string_agg(slug, ',') FROM public.organizations), 'org-a');
 SELECT public.check_eq('M sees A''s 4 members', (SELECT count(*) FROM public.org_members), 4::bigint);
 SELECT public.check_eq('M (business side) sees internal + artist events of A',
@@ -92,27 +92,27 @@ SELECT public.check_eq('organizations: no member writes',
   public.rows_changed($$UPDATE public.organizations SET kind = 'artist'$$), 0);
 
 -- ── Roster artist R ──────────────────────────────────────────────────────
-SELECT set_config('request.jwt.claim.sub', 'a0000000-0000-4000-8000-00000000000f', false);
+SELECT set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-00000000000f"}', false);
 SELECT public.check_eq('roster artist sees no business-internal events',
   (SELECT string_agg(verb, ',') FROM public.activity_events), 'song.created');
 SELECT public.check_eq('roster artist never holds contracts.read',
   public.has_org_cap('aaaaaaaa-0000-4000-8000-000000000000', 'contracts.read'), false);
 
 -- ── Outsider C and anon ──────────────────────────────────────────────────
-SELECT set_config('request.jwt.claim.sub', 'c0000000-0000-4000-8000-00000000000c', false);
+SELECT set_config('request.jwt.claims', '{"sub":"c0000000-0000-4000-8000-00000000000c"}', false);
 SELECT public.check_eq('outsider sees no orgs', (SELECT count(*) FROM public.organizations), 0::bigint);
 SELECT public.check_eq('outsider sees no members', (SELECT count(*) FROM public.org_members), 0::bigint);
 SELECT public.check_eq('outsider sees no events', (SELECT count(*) FROM public.activity_events), 0::bigint);
 RESET ROLE;
 SET ROLE anon;
-SELECT set_config('request.jwt.claim.sub', '', false);
+SELECT set_config('request.jwt.claims', '{}', false);
 SELECT public.check_eq('anon sees no orgs', (SELECT count(*) FROM public.organizations), 0::bigint);
 SELECT public.check_eq('anon has no role', public.org_role('aaaaaaaa-0000-4000-8000-000000000000'), NULL::text);
 RESET ROLE;
 
 -- ── Admin D ──────────────────────────────────────────────────────────────
 SET ROLE authenticated;
-SELECT set_config('request.jwt.claim.sub', 'a0000000-0000-4000-8000-00000000000d', false);
+SELECT set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-00000000000d"}', false);
 SELECT public.check_eq('admin sees invitations', (SELECT count(*) FROM public.org_invitations), 1::bigint);
 SELECT public.check_eq('admin edits a member''s functions and overrides',
   public.rows_changed($$UPDATE public.org_members SET functions = '{a_and_r}', cap_grants = '{rights.write}' WHERE user_id = 'a0000000-0000-4000-8000-00000000000e'$$), 1);
@@ -130,7 +130,7 @@ RESET ROLE;
 
 -- ── Owner rules (need real commits: the trigger is deferred) ─────────────
 SET ROLE authenticated;
-SELECT set_config('request.jwt.claim.sub', 'b0000000-0000-4000-8000-00000000000b', false);
+SELECT set_config('request.jwt.claims', '{"sub":"b0000000-0000-4000-8000-00000000000b"}', false);
 \set ON_ERROR_STOP 0
 -- X is B's only owner: the delete must fail at COMMIT.
 \echo '(expected: "must keep at least one owner" error next)'
@@ -141,7 +141,7 @@ SELECT public.check_eq('last owner cannot leave',
 
 -- Through RLS, O transfers A to M by promoting first: once O has demoted
 -- themselves they are no longer an owner and cannot write owner rows.
-SELECT set_config('request.jwt.claim.sub', 'a0000000-0000-4000-8000-00000000000a', false);
+SELECT set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-00000000000a"}', false);
 BEGIN;
 UPDATE public.org_members SET role = 'owner' WHERE user_id = 'a0000000-0000-4000-8000-00000000000e';
 UPDATE public.org_members SET role = 'admin' WHERE user_id = 'a0000000-0000-4000-8000-00000000000a';
@@ -165,7 +165,7 @@ SELECT public.check_eq('deferred owner check allows demote-then-promote',
 -- ── Soft and hard delete ─────────────────────────────────────────────────
 UPDATE public.organizations SET deleted_at = now() WHERE slug = 'org-a';
 SET ROLE authenticated;
-SELECT set_config('request.jwt.claim.sub', 'a0000000-0000-4000-8000-00000000000e', false);
+SELECT set_config('request.jwt.claims', '{"sub":"a0000000-0000-4000-8000-00000000000e"}', false);
 SELECT public.check_eq('soft-deleted org is hidden', (SELECT count(*) FROM public.organizations), 0::bigint);
 SELECT public.check_eq('soft-deleted org grants nothing',
   public.has_org_cap('aaaaaaaa-0000-4000-8000-000000000000', 'catalog.read'), false);

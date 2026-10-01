@@ -29,6 +29,7 @@ import { ProducerProfile } from '@/components/store/ProducerProfile';
 import { ShareCardButton } from '@/components/store/ShareCardButton';
 import { normalizeThemeColor } from '@/lib/theme/colors';
 import type { Track } from '@/lib/types';
+import { resolveCreatorLink } from '@/lib/store/social-links';
 
 interface AccessTrack {
   id: string;
@@ -258,8 +259,8 @@ export default function ProjectAccessPage({
         <p className="text-[14px] text-center max-w-sm">
           This access link is invalid or has expired. Check the email it came from for the latest code.
         </p>
-        {creator?.contact_email && (
-          <a href={`mailto:${creator.contact_email}`} className="text-[11px] underline hover:text-white">
+        {resolveCreatorLink('email', creator?.contact_email) && (
+          <a href={resolveCreatorLink('email', creator?.contact_email)!.href} className="text-[11px] underline hover:text-white">
             Contact the producer
           </a>
         )}

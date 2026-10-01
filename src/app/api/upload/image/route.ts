@@ -72,6 +72,7 @@ const IMAGE_REFERENCES: Array<{ table: string; column: string }> = [
   { table: 'tracks', column: 'cover_url' },
   { table: 'projects', column: 'cover_url' },
   { table: 'playlists', column: 'cover_url' },
+  { table: 'contacts', column: 'avatar_url' },
   ...['hero_image_url', 'og_image_url', 'logo_url', 'default_artwork_url',
     'default_artwork_project_url', 'default_artwork_playlist_url']
     .map((column) => ({ table: 'creator_profiles', column })),

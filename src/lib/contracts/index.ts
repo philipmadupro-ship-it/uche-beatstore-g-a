@@ -16,6 +16,7 @@
  */
 import { z } from 'zod';
 import { STORE_EVENT_TYPES } from '@/lib/store/funnel';
+import { DECISIONS } from '@/lib/contacts/decisions';
 
 // ── Tracks ──────────────────────────────────────────────────────────────
 
@@ -53,7 +54,7 @@ export type UploadedImageDeleteBody = z.infer<typeof UploadedImageDeleteBodySche
 // triggering DB-level "column does not exist" errors.
 export const TrackPatchBodySchema = z.object({
   title: z.string().min(1).max(200).optional(),
-  type: z.enum(['beat', 'instrumental', 'song', 'remix']).optional(),
+  type: z.enum(['beat', 'instrumental', 'song', 'remix', 'loop', 'topline']).optional(),
   // Instrumental (no vocals) flag — distinct from `type` (migration 079).
   instrumental: z.boolean().optional(),
   status: z.enum(['finished', 'needs_work', 'archived', 'maq']).nullable().optional(),
@@ -90,6 +91,9 @@ export const TrackPatchBodySchema = z.object({
   // route /api/cron/publish-scheduled flips store_listed=true at that
   // timestamp and clears this field. Null clears any pending schedule.
   scheduled_publish_at: z.string().datetime().nullable().optional(),
+  // A song's main beat (migration 124). Any beat the producer owns; the DB
+  // refuses another owner's beat and the song itself.
+  beat_track_id: z.string().uuid().nullable().optional(),
 }).strict();
 export type TrackPatchBody = z.infer<typeof TrackPatchBodySchema>;
 
@@ -147,6 +151,13 @@ export const CollaboratorDeleteBodySchema = z.object({
   id: z.string().min(1),
 }).strict();
 export type CollaboratorDeleteBody = z.infer<typeof CollaboratorDeleteBodySchema>;
+
+/** PATCH /api/tracks/[id]/collaborators — link a credit to a CRM contact (mig 124), or unlink with null. */
+export const CollaboratorLinkBodySchema = z.object({
+  id: z.string().min(1),
+  contact_id: z.string().uuid().nullable(),
+}).strict();
+export type CollaboratorLinkBody = z.infer<typeof CollaboratorLinkBodySchema>;
 
 // ── Projects ────────────────────────────────────────────────────────────
 
@@ -319,6 +330,22 @@ export const CampaignTargetsDeleteBodySchema = z.object({
 });
 export type CampaignTargetsDeleteBody = z.infer<typeof CampaignTargetsDeleteBodySchema>;
 
+// ── Project share invites ───────────────────────────────────────────────
+
+/**
+ * POST /api/projects/[id]/shares/[shareId]/invite.
+ *
+ * `contact_id` asks the route to record the send in `beat_sends`. Send it only
+ * when the invite is NOT part of a campaign: a campaign send is recorded by
+ * `/api/campaigns/[id]/targets` instead, and sending both writes two rows.
+ */
+export const ProjectShareInviteBodySchema = z.object({
+  email: z.string().trim().max(320).nullable().optional(),
+  message: z.string().max(5000).optional().default(''),
+  contact_id: z.string().uuid().nullable().optional(),
+});
+export type ProjectShareInviteBody = z.infer<typeof ProjectShareInviteBodySchema>;
+
 // ── Beat sends ──────────────────────────────────────────────────────────
 
 export const BEAT_SEND_STATUSES = [
@@ -389,6 +416,8 @@ const ContactWritableFields = {
   role: z.string().max(120).nullable().optional(),
   label: z.string().max(120).nullable().optional(),
   category: z.string().max(60).nullable().optional(),
+  /** The one extra role beside `category` (mig 134, lib/contacts/roles). */
+  secondary_category: z.string().max(60).nullable().optional(),
   genre: z.string().max(120).nullable().optional(),
   country: z.string().max(120).nullable().optional(),
   city: z.string().max(120).nullable().optional(),
@@ -397,6 +426,10 @@ const ContactWritableFields = {
   website: z.string().max(300).nullable().optional(),
   notes: z.string().max(10000).nullable().optional(),
   crm_status: z.enum(CRM_STAGES).nullable().optional(),
+  /** Mig 124. A URL /api/upload/image returned: public http(s) or an app path, never a private reference. */
+  avatar_url: z.string().max(500)
+    .refine((v) => /^https?:\/\//.test(v) || (v.startsWith('/') && !v.startsWith('//')), { message: 'Avatar must be an uploaded image URL' })
+    .nullable().optional(),
 } as const;
 
 export const ContactCreateBodySchema = z.object({
@@ -646,3 +679,178 @@ export const StoreEventBodySchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 export type StoreEventBody = z.infer<typeof StoreEventBodySchema>;
+
+// ── Artist workspace (migrations 122–126) ───────────────────────────────
+
+export const PROJECT_CONTACT_ROLES = ['artist', 'featured', 'manager', 'engineer', 'collaborator'] as const;
+
+/** POST /api/projects/[id]/contacts — link a contact to a project. */
+export const ProjectContactLinkBodySchema = z.object({
+  contact_id: z.string().uuid(),
+  role: z.enum(PROJECT_CONTACT_ROLES).optional().default('artist'),
+  in_portal: z.boolean().optional().default(false),
+  allow_downloads: z.boolean().optional().default(false),
+}).strict();
+export type ProjectContactLinkBody = z.infer<typeof ProjectContactLinkBodySchema>;
+
+/** PATCH /api/projects/[id]/contacts/[contactId] — portal permissions and role. */
+export const ProjectContactPatchBodySchema = z.object({
+  role: z.enum(PROJECT_CONTACT_ROLES).optional(),
+  in_portal: z.boolean().optional(),
+  allow_downloads: z.boolean().optional(),
+  can_comment: z.boolean().optional(),
+  /** Mig 135: the pitch a label sees on this project in their portal. Empty clears it. */
+  pitch_note: z.string().max(2000).nullable().optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type ProjectContactPatchBody = z.infer<typeof ProjectContactPatchBodySchema>;
+
+/** PUT /api/contacts/[id]/decisions — the producer sets decisions on one or more beats. */
+export const ContactDecisionBodySchema = z.object({
+  track_ids: z.array(z.string().uuid()).min(1).max(200),
+  decision: z.enum(DECISIONS).nullable(),
+  project_id: z.string().uuid().nullable().optional(),
+}).strict();
+export type ContactDecisionBody = z.infer<typeof ContactDecisionBodySchema>;
+
+/** POST /api/contacts/[id]/portal — create, revoke or reissue the artist's portal. */
+export const ArtistPortalActionBodySchema = z.object({
+  action: z.enum(['create', 'revoke', 'reissue', 'settings']),
+  password: z.string().min(4).max(200).nullable().optional(),
+  /** settings: hand Notify to the daily digest cron (mig 129). */
+  auto_digest: z.boolean().optional(),
+  /** settings: the artist must confirm their email before the portal opens (mig 131). */
+  require_sign_in: z.boolean().optional(),
+}).strict().refine((b) => b.action !== 'settings' || b.auto_digest !== undefined || b.require_sign_in !== undefined, { message: 'Nothing to update' });
+export type ArtistPortalActionBody = z.infer<typeof ArtistPortalActionBodySchema>;
+
+/** POST /api/contacts/[id]/notify — one digest email of what is new in the portal. */
+export const ArtistNotifyBodySchema = z.object({
+  message: z.string().max(2000).optional().default(''),
+}).strict();
+export type ArtistNotifyBody = z.infer<typeof ArtistNotifyBodySchema>;
+
+/** POST /api/portal/[token]/reaction — the artist's Interested / Pass (null takes it back). */
+export const PortalReactionBodySchema = z.object({
+  track_id: z.string().uuid(),
+  decision: z.enum(['interested', 'passed']).nullable(),
+}).strict();
+export type PortalReactionBody = z.infer<typeof PortalReactionBodySchema>;
+
+/** POST /api/portal/[token]/play — one play, logged once per track per visit window. */
+export const PortalPlayBodySchema = z.object({
+  track_id: z.string().uuid(),
+}).strict();
+export type PortalPlayBody = z.infer<typeof PortalPlayBodySchema>;
+
+// ── Artist workspace, phase 2 (migrations 127–129) ───────────────────────
+
+const ASSET_KINDS = ['reference', 'artwork', 'lyrics', 'document', 'audio', 'other'] as const;
+
+/** POST /api/projects/[id]/assets/presign — a presigned PUT for a large project file. */
+export const ProjectAssetPresignBodySchema = z.object({
+  file_name: z.string().min(1).max(300),
+  size_bytes: z.number().int().positive(),
+}).strict();
+export type ProjectAssetPresignBody = z.infer<typeof ProjectAssetPresignBodySchema>;
+
+/** POST /api/projects/[id]/assets (JSON) — register a file uploaded with a presigned PUT. */
+export const ProjectAssetRegisterBodySchema = z.object({
+  url: z.string().min(1).max(500),
+  file_name: z.string().min(1).max(300),
+  kind: z.enum(ASSET_KINDS).optional(),
+  label: z.string().max(200).optional(),
+  in_portal: z.boolean().optional().default(false),
+}).strict();
+export type ProjectAssetRegisterBody = z.infer<typeof ProjectAssetRegisterBodySchema>;
+
+/** Fields of a multipart POST /api/projects/[id]/assets besides the file. */
+export const ProjectAssetFormFieldsSchema = z.object({
+  kind: z.enum(ASSET_KINDS).optional(),
+  label: z.string().max(200).optional(),
+  in_portal: z.enum(['true', 'false']).optional().transform((v) => v === 'true'),
+});
+
+/** PATCH /api/projects/[id]/assets/[assetId] */
+export const ProjectAssetPatchBodySchema = z.object({
+  label: z.string().trim().min(1).max(200).optional(),
+  kind: z.enum(ASSET_KINDS).optional(),
+  in_portal: z.boolean().optional(),
+  position: z.number().int().min(0).max(100000).optional(),
+}).strict().refine((b) => Object.keys(b).length > 0, { message: 'Nothing to update' });
+export type ProjectAssetPatchBody = z.infer<typeof ProjectAssetPatchBodySchema>;
+
+const commentRegion = <T extends { region_start?: number | null; region_end?: number | null }>(b: T) =>
+  (b.region_start == null) === (b.region_end == null)
+  && (b.region_start == null || (b.region_end as number) > (b.region_start as number));
+
+/** POST /api/portal/[token]/comments — the artist comments on a portal project or beat. */
+export const PortalCommentBodySchema = z.object({
+  project_id: z.string().uuid(),
+  track_id: z.string().uuid().nullable().optional(),
+  parent_id: z.string().uuid().nullable().optional(),
+  body: z.string().trim().min(1, 'Comment cannot be empty').max(5000, 'Comment too long'),
+  region_start: z.number().min(0).max(86400).nullable().optional(),
+  region_end: z.number().min(0).max(86400).nullable().optional(),
+}).strict().refine(commentRegion, { message: 'A time range needs a start before its end' });
+export type PortalCommentBody = z.infer<typeof PortalCommentBodySchema>;
+
+/** POST /api/contacts/[id]/comments — the producer writes in an artist's portal thread. */
+export const ArtistCommentBodySchema = z.object({
+  project_id: z.string().uuid(),
+  track_id: z.string().uuid().nullable().optional(),
+  parent_id: z.string().uuid().nullable().optional(),
+  body: z.string().trim().min(1, 'Comment cannot be empty').max(5000, 'Comment too long'),
+}).strict();
+export type ArtistCommentBody = z.infer<typeof ArtistCommentBodySchema>;
+
+// ── Artist messages + requests (mig 130) ─────────────────────────────────
+
+const messageBody = z.string().trim().min(1, 'Message cannot be empty').max(4000, 'Message too long');
+
+/** POST /api/portal/[token]/messages — the artist writes, or asks for something. */
+export const PortalMessageBodySchema = z.object({
+  body: messageBody,
+  kind: z.enum(['message', 'request']).optional().default('message'),
+  project_id: z.string().uuid().nullable().optional(),
+}).strict();
+export type PortalMessageBody = z.infer<typeof PortalMessageBodySchema>;
+
+/** POST /api/contacts/[id]/messages — the producer writes to the artist. */
+export const ArtistMessageBodySchema = z.object({
+  body: messageBody,
+  /** false keeps the message in the portal only (no email fallback). */
+  email: z.boolean().optional().default(true),
+}).strict();
+export type ArtistMessageBody = z.infer<typeof ArtistMessageBodySchema>;
+
+/** PATCH /api/contacts/[id]/messages/[messageId] — the producer moves a request. */
+export const ArtistRequestPatchBodySchema = z.object({
+  request_status: z.enum(['open', 'done', 'declined']),
+}).strict();
+export type ArtistRequestPatchBody = z.infer<typeof ArtistRequestPatchBodySchema>;
+
+/** POST /api/portal/[token]/sign-in — ask for a link (no code) or redeem one. */
+export const PortalSignInBodySchema = z.object({
+  code: z.string().min(10).max(600).optional(),
+}).strict();
+export type PortalSignInBody = z.infer<typeof PortalSignInBodySchema>;
+
+/** PUT /api/tracks/[id]/beats — the beats a song is built on, main beat first (mig 132). */
+export const SongBeatsBodySchema = z.object({
+  beat_ids: z.array(z.string().uuid()).max(12, 'A song can be built on at most 12 beats'),
+}).strict().refine((b) => new Set(b.beat_ids).size === b.beat_ids.length, { message: 'A beat is listed twice' });
+export type SongBeatsBody = z.infer<typeof SongBeatsBodySchema>;
+
+// ── Linked material (migs 132 + 133) ─────────────────────────────────────
+
+/**
+ * POST / DELETE /api/tracks/[id]/links — link another track to this one.
+ * `direction: 'out'` (default) reads "track_id is this track's <relation>"
+ * (this song's beat, this beat's loop); 'in' reads the other way round.
+ */
+export const TrackLinkBodySchema = z.object({
+  track_id: z.string().uuid(),
+  relation: z.enum(['beat', 'instrumental', 'loop', 'topline', 'version']),
+  direction: z.enum(['out', 'in']).optional().default('out'),
+}).strict();
+export type TrackLinkBody = z.infer<typeof TrackLinkBodySchema>;

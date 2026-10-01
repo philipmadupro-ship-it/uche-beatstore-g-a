@@ -34,6 +34,8 @@ const TYPE_PICKER: { value: TrackType; label: string }[] = [
   { value: 'instrumental', label: 'Instrumental' },
   { value: 'song',         label: 'Song' },
   { value: 'remix',        label: 'Remix' },
+  { value: 'loop',         label: 'Loop' },
+  { value: 'topline',      label: 'Topline' },
 ];
 
 // Format badge colours — warm neutrals for the standard formats,

@@ -69,9 +69,9 @@ The code does not need them in production until the branch is merged, and the fe
 
 ## Always run a local database (decided by the owner, 2026-10-01)
 
-Every task that adds or changes a migration runs **`npm run db:local-check`** before pushing. It builds a throwaway Postgres in a temp directory (never Supabase, never `SUPABASE_DB_URL`), applies Supabase-shaped stubs (`supabase/local/stubs.sql`), then:
+Every task that adds or changes a migration runs **`npm run db:local:check`** (`scripts/local-db/check.sh`) before pushing. It starts a throwaway Postgres in a temp directory (never Supabase, never `SUPABASE_DB_URL`), then:
 
-1. replays **every** migration in order, then the whole set again (idempotency);
+1. runs `scripts/local-db/reset.sh` against it: `bootstrap.sql` (Supabase-shaped roles and `auth`), **every** migration twice through the deploy runner, `seed.sql`;
 2. runs each `supabase/local/checks/*.sql`. **A schema task adds a check file for its migration**: behaviour asserted as `anon` / `authenticated` users, raising on failure. `136_labelos_org_core.sql` is the template;
 3. checks `has_org_cap` against `capabilitiesFor()` on generated fixtures;
 4. runs each `supabase/rollback/NNN_*.down.sql`, then re-applies its migration.
@@ -126,12 +126,12 @@ Rules:
   NOTIFY pgrst. Register them in supabase/MIGRATIONS.md as
   "Label OS — not applied (apply at final merge)". Never apply them to a real (Supabase)
   database. Always prove them on a local one: add supabase/local/checks/NNN_*.sql for the
-  migration and run `npm run db:local-check` (throwaway Postgres; see "Always run a local
+  migration and run `npm run db:local:check` (throwaway Postgres; see "Always run a local
   database" in this runbook).
 - Everything stays behind LABEL_OS_ENABLED. No change to existing producer, store, or checkout
   behaviour unless the task says so.
 - Before pushing: npx tsc --noEmit && npm test && npm run build must pass, and
-  npm run db:local-check when the task touches supabase/. Run /code-review on
+  npm run db:local:check when the task touches supabase/. Run /code-review on
   your diff and fix what it finds.
 - Branch: label-os/LABEL-{NN}. Open a PR into claude/happy-bardeen-rnosf3 (NEVER main), titled
   "LABEL-{NN}: {TITLE}", with the repo PR format: Summary / Why / Test plan /

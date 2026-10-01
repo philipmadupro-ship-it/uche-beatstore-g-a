@@ -9,6 +9,13 @@ import {
 } from '@/lib/db';
 import { readBody } from '@/lib/validate';
 import { TrackPatchBodySchema } from '@/lib/contracts';
+import { createServiceClient } from '@/lib/auth/ownership';
+import { createLogger } from '@/lib/log';
+import { errorMessage } from '@/lib/errors';
+import { currentSongBeats, writeSongBeats } from '@/lib/tracks/song-beats-store';
+import { replaceMainBeat } from '@/lib/tracks/song-beats';
+
+const log = createLogger('api.tracks.item');
 
 /**
  * Single-track CRUD through the storage facade.
@@ -42,8 +49,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // surfaces field-level errors instead of opaque 500s from Postgres.
   const parsed = await readBody(req, TrackPatchBodySchema);
   if (!parsed.ok) return parsed.res;
+
+  // The single "Built on" control changes the MAIN beat; keep song_beats
+  // (mig 132) in step: the new main first, the old main out, the rest kept.
+  const changesMain = parsed.data.beat_track_id !== undefined && isSupabaseConfigured();
+  const before = changesMain
+    ? (await createServiceClient().from('tracks').select('id, user_id, beat_track_id').eq('id', id).maybeSingle()).data as { id: string; user_id: string; beat_track_id: string | null } | null
+    : null;
+
   const result = await updateOwned('tracks', id, parsed.data);
   if (isErrorResponse(result)) return result;
+
+  if (before && before.beat_track_id !== (parsed.data.beat_track_id ?? null)) {
+    try {
+      const admin = createServiceClient();
+      const current = await currentSongBeats(admin, before.user_id, before);
+      await writeSongBeats(admin, before.user_id, id, replaceMainBeat(current, before.beat_track_id, parsed.data.beat_track_id ?? null));
+    } catch (err) {
+      // The main beat is saved; the extra beats list is a best-effort mirror.
+      log.warn('song_beats sync failed', { id, error: errorMessage(err) });
+    }
+  }
   return NextResponse.json({ track: result });
 }
 

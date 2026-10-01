@@ -10,6 +10,7 @@
 import Link from 'next/link';
 import { Mail, Globe, AtSign, Link2 } from 'lucide-react';
 import { slugify } from '@/lib/slug';
+import { resolveCreatorLink } from '@/lib/store/social-links';
 
 export interface ProducerProfileCreator {
   display_name?: string | null;
@@ -24,6 +25,10 @@ export function ProducerProfile({ creator }: { creator: ProducerProfileCreator |
   if (!creator?.display_name) {
     return <p className="text-[13px] text-white/50">Producer details unavailable.</p>;
   }
+  const instagram = resolveCreatorLink('instagram', creator.instagram_handle);
+  const twitter = resolveCreatorLink('x', creator.twitter_handle);
+  const website = resolveCreatorLink('website', creator.website_url);
+  const email = resolveCreatorLink('email', creator.contact_email);
   return (
     <>
       <Link
@@ -38,29 +43,23 @@ export function ProducerProfile({ creator }: { creator: ProducerProfileCreator |
         </p>
       )}
       <div className="mt-5 flex items-center gap-2 flex-wrap">
-        {creator.instagram_handle && (
-          <SocialIcon
-            href={`https://instagram.com/${creator.instagram_handle.replace(/^@/, '')}`}
-            title="Instagram"
-          >
+        {instagram && (
+          <SocialIcon href={instagram.href} title="Instagram">
             <AtSign size={14} />
           </SocialIcon>
         )}
-        {creator.twitter_handle && (
-          <SocialIcon
-            href={`https://x.com/${creator.twitter_handle.replace(/^@/, '')}`}
-            title="X / Twitter"
-          >
+        {twitter && (
+          <SocialIcon href={twitter.href} title="X / Twitter">
             <Link2 size={14} />
           </SocialIcon>
         )}
-        {creator.website_url && (
-          <SocialIcon href={creator.website_url} title="Website">
+        {website && (
+          <SocialIcon href={website.href} title="Website">
             <Globe size={14} />
           </SocialIcon>
         )}
-        {creator.contact_email && (
-          <SocialIcon href={`mailto:${creator.contact_email}`} title="Email">
+        {email && (
+          <SocialIcon href={email.href} title="Email">
             <Mail size={14} />
           </SocialIcon>
         )}
