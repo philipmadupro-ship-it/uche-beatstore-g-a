@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { buildCsp, cspHeaderName as cspHeaderNameFor } from '@/lib/security/csp';
-import { apiGateFor, isLabelOsApiPath, isLabelOsPagePath } from '@/lib/security/api-gate';
+import { apiGateFor, isLabelOsApiPath, isLabelOsJoinPagePath, isLabelOsPagePath } from '@/lib/security/api-gate';
 import { isLabelOsEnabled } from '@/lib/labelos/flag';
 import { hasAnyLabelOsMembership } from '@/lib/labelos/membership-gate';
 import { isSupabaseConfigured } from '@/lib/local-store';
@@ -59,9 +59,13 @@ export async function proxy(request: NextRequest) {
   // authorisation implementation — so without Supabase it answers 503
   // (10-technical-architecture.md §12–13, risk R-24). No other path is
   // affected by either check.
+  // `/join/<token>` (LABEL-08) is a Label OS page too, so it shares the flag
+  // and the database check, but not the membership redirect below: an
+  // invitee is not a member until the page has accepted for them.
   const labelOsApi = isLabelOsApiPath(request.nextUrl.pathname);
   const labelOsPage = isLabelOsPagePath(request.nextUrl.pathname);
-  if (labelOsApi || labelOsPage) {
+  const labelOsJoinPage = isLabelOsJoinPagePath(request.nextUrl.pathname);
+  if (labelOsApi || labelOsPage || labelOsJoinPage) {
     if (!isLabelOsEnabled()) {
       return labelOsApi
         ? NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -118,7 +122,9 @@ export async function proxy(request: NextRequest) {
   // in lib/security/api-gate.ts. Signed-out calls fall through to the route,
   // which answers 401 itself (or checks a cron bearer / webhook signature).
   // `/api/org/*` is the one namespace gated on org membership instead, and
-  // membership admits to nothing else (risk R-03).
+  // membership admits to nothing else (risk R-03). `/api/org/join` alone is
+  // gate `session`: a signed-in invitee is not a member yet, and the route
+  // does every check itself (token, email, expiry, revoked, used).
   const apiGate = apiGateFor(request.nextUrl.pathname, !!user);
   if (user && apiGate === 'producer' && !(await isProducer(user.id))) {
     return NextResponse.json({ error: 'Producer account required' }, { status: 403 });

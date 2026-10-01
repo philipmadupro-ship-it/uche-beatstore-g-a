@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   apiGateFor,
   isLabelOsApiPath,
+  isLabelOsJoinApiPath,
+  isLabelOsJoinPagePath,
   isLabelOsPagePath,
   isPublicApiPath,
   requiresProducerForApi,
@@ -55,6 +57,31 @@ describe('isLabelOsPagePath', () => {
   it.each(['/offline', '/orders', '/org', '/oo/x', '/store/orders', '/', '/api/org'])('is not: %s', (p) =>
     expect(isLabelOsPagePath(p)).toBe(false),
   );
+});
+
+describe('the join exception (LABEL-08)', () => {
+  it('is exactly /api/org/join', () => {
+    expect(isLabelOsJoinApiPath('/api/org/join')).toBe(true);
+    for (const p of ['/api/org/join/', '/api/org/join/x', '/api/org/joint', '/api/org/x/join', '/api/org', '/api/join', '/api/org/JOIN']) {
+      expect(isLabelOsJoinApiPath(p), p).toBe(false);
+    }
+  });
+
+  it('the join page is /join/<token>', () => {
+    for (const p of ['/join/abc', '/join/abc/']) expect(isLabelOsJoinPagePath(p), p).toBe(true);
+    for (const p of ['/join', '/join/', '/joiner/x', '/o/join/x', '/api/org/join', '/store/join/x']) {
+      expect(isLabelOsJoinPagePath(p), p).toBe(false);
+    }
+  });
+
+  it('admits any signed-in caller to /api/org/join only; the route authorises', () => {
+    expect(apiGateFor('/api/org/join', true)).toBe('session');
+    expect(apiGateFor('/api/org/join', false)).toBe('none');
+    for (const p of ['/api/org/join/x', '/api/org/joint', '/api/org/x/join', '/api/org/x/invitations']) {
+      expect(apiGateFor(p, true), p).toBe('member');
+    }
+    expect(requiresProducerForApi('/api/org/join', true)).toBe(false);
+  });
 });
 
 describe('apiGateFor', () => {

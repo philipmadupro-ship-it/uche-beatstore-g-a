@@ -70,10 +70,22 @@ const NOT_AUTHENTICATED = () => fail(401, 'Not authenticated');
 const FORBIDDEN = () => fail(403, 'Forbidden');
 const NOT_FOUND = () => fail(404, 'Not found');
 
-async function sessionUserId(): Promise<string | null> {
+export type SessionIdentity = { userId: string; email: string | null };
+
+/**
+ * The signed-in caller, or null. For the one Label OS route a NON-member may
+ * reach (`/api/org/join`, LABEL-08), which authorises by invitation rather
+ * than membership. Every other route uses the require* helpers below.
+ */
+export async function sessionIdentity(): Promise<SessionIdentity | null> {
   const cookieClient = await createServerClient();
   const { data: { user } } = await cookieClient.auth.getUser();
-  return user?.id ?? null;
+  if (!user?.id) return null;
+  return { userId: user.id, email: typeof user.email === 'string' ? user.email : null };
+}
+
+async function sessionUserId(): Promise<string | null> {
+  return (await sessionIdentity())?.userId ?? null;
 }
 
 type MembershipRow = {
@@ -156,6 +168,21 @@ export async function requireOrgMember(orgId: string): Promise<OrgAccessResult> 
   if (!userId) return NOT_AUTHENTICATED();
   if (!isUUID(orgId)) return FORBIDDEN();
   return memberContext(userId, orgId, FORBIDDEN);
+}
+
+/**
+ * Is `userId` a live member of `orgId`? For `/api/org/join`'s preview, which
+ * runs for a caller who may not be a member of anything (so the require*
+ * helpers, which answer 403, do not fit). Same live read as they do; false on
+ * any error.
+ */
+export async function isLiveOrgMember(admin: AdminClient, orgId: string, userId: string): Promise<boolean> {
+  if (!isUUID(orgId) || !isUUID(userId)) return false;
+  try {
+    return (await readMembership(admin, orgId, userId)) !== null;
+  } catch {
+    return false;
+  }
 }
 
 /** requireOrgMember, plus the capability. 403 when the member lacks it. */

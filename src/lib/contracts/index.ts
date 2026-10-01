@@ -854,3 +854,30 @@ export const TrackLinkBodySchema = z.object({
   direction: z.enum(['out', 'in']).optional().default('out'),
 }).strict();
 export type TrackLinkBody = z.infer<typeof TrackLinkBodySchema>;
+
+// ── Label OS invitations (LABEL-08) ──────────────────────────────────────
+
+/**
+ * POST /api/org/[orgId]/invitations. Which roles and functions are allowed is
+ * decided per org kind by `validateInvitationGrant` (lib/labelos/invitations),
+ * so here they are only bounded strings. `contact_ids` are the roster artists
+ * (contacts, 17 R3) the member is limited to; LABEL-10 validates them.
+ */
+export const OrgInvitationCreateBodySchema = z.object({
+  email: z.string().trim().email('Enter a valid email address').max(200),
+  role: z.string().min(1).max(40),
+  functions: z.array(z.string().min(1).max(40)).max(9).optional().default([]),
+  contact_ids: z.array(z.string().uuid()).max(100).optional().default([]),
+}).strict();
+export type OrgInvitationCreateBody = z.infer<typeof OrgInvitationCreateBodySchema>;
+
+/**
+ * POST /api/org/join. The token travels in the body, never the query string,
+ * so it stays out of request logs. `preview` reads what the invitation is
+ * for (no session needed); `accept` joins (session required).
+ */
+export const OrgJoinBodySchema = z.object({
+  token: z.string().min(1).max(200),
+  action: z.enum(['preview', 'accept']).optional().default('accept'),
+}).strict();
+export type OrgJoinBody = z.infer<typeof OrgJoinBodySchema>;

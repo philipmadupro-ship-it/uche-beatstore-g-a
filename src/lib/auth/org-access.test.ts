@@ -469,3 +469,38 @@ describe('membership edge cases', () => {
     if (r.ok) expect(r.scope).toBe('artists');
   });
 });
+
+describe('sessionIdentity', () => {
+  it('returns null without a session', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null } });
+    const { sessionIdentity } = await load();
+    expect(await sessionIdentity()).toBeNull();
+  });
+
+  it('returns the id and email, and reads no table', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER, email: 'a@b.test' } } });
+    const { sessionIdentity } = await load();
+    expect(await sessionIdentity()).toEqual({ userId: USER, email: 'a@b.test' });
+    expect(calls).toEqual([]);
+  });
+
+  it('tolerates a user without an email', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: USER } } });
+    const { sessionIdentity } = await load();
+    expect(await sessionIdentity()).toEqual({ userId: USER, email: null });
+  });
+});
+
+describe('isLiveOrgMember', () => {
+  it('is true for a live membership, false otherwise (and on errors)', async () => {
+    const { isLiveOrgMember } = await load();
+    const { createServiceClient } = await import('./ownership');
+    const admin = createServiceClient();
+    memberships({ [ORG_A]: member(), [ORG_B]: member({}, { deleted_at: '2026-01-01T00:00:00Z' }) });
+    expect(await isLiveOrgMember(admin, ORG_A, USER)).toBe(true);
+    expect(await isLiveOrgMember(admin, ORG_B, USER)).toBe(false);
+    expect(await isLiveOrgMember(admin, 'nope', USER)).toBe(false);
+    answers.org_members = { data: null, error: { message: 'boom' } };
+    expect(await isLiveOrgMember(admin, ORG_A, USER)).toBe(false);
+  });
+});

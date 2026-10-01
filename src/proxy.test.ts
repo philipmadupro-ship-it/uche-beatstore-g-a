@@ -212,7 +212,7 @@ describe('Label OS gate: flag off', () => {
   it('404s /api/org/* and /o/* for everyone', async () => {
     for (const id of [null, 'buyer-1', 'member-1', 'producer-1', 'producer-member']) {
       currentUser = id ? { id } : null;
-      for (const p of ['/api/org', '/api/org/abc', '/api/org/abc/members', '/o', '/o/acme', '/o/acme/artists']) {
+      for (const p of ['/api/org', '/api/org/abc', '/api/org/abc/members', '/api/org/join', '/o', '/o/acme', '/o/acme/artists', '/join/tok']) {
         expect((await run(p)).status, `${id} ${p}`).toBe(404);
       }
     }
@@ -248,7 +248,7 @@ describe('Label OS gate: flag on', () => {
 
   it('refuses a buyer on /api/org/*', async () => {
     currentUser = { id: 'buyer-1' };
-    for (const p of ['/api/org', '/api/org/abc', '/api/org/join']) {
+    for (const p of ['/api/org', '/api/org/abc', '/api/org/join/x', '/api/org/joint']) {
       const res = await run(p);
       expect(res.status, p).toBe(403);
       expect(await res.json()).toEqual({ error: 'Organization membership required' });
@@ -315,5 +315,70 @@ describe('Label OS gate: flag on', () => {
     vi.stubEnv('ENABLE_LOCAL_STORE', 'true');
     vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://dummy.example.test');
     expect((await run('/api/org')).status).toBe(503);
+  });
+});
+
+// ── Joining (LABEL-08) ──────────────────────────────────────────────────────
+//
+// An invitee is not a member until they accept, so the membership gate would
+// refuse the request that makes them one. The exception is exactly
+// `/api/org/join` (and the `/join/<token>` page): any signed-in caller
+// reaches the route, which does all of the authorisation. Nothing else moves:
+// the table tests above still pass unchanged for every existing path.
+
+describe('Label OS join admission (flag on)', () => {
+  beforeEach(() => vi.stubEnv('LABEL_OS_ENABLED', 'true'));
+
+  it('admits any signed-in caller to /api/org/join without reading membership', async () => {
+    for (const id of ['buyer-1', 'producer-1', 'member-1']) {
+      currentUser = { id };
+      expect((await run('/api/org/join')).status, id).toBe(200);
+    }
+    expect(membershipReads).toBe(0);
+  });
+
+  it('leaves a signed-out /api/org/join to the route (401 there)', async () => {
+    expect((await run('/api/org/join')).status).toBe(200);
+  });
+
+  it('admits nothing beside or below it', async () => {
+    currentUser = { id: 'buyer-1' };
+    for (const p of ['/api/org/join/', '/api/org/join/x', '/api/org/joint', '/api/org/abc/join', '/api/org/abc/invitations', '/api/join']) {
+      const res = await run(p);
+      expect(res.status, p).toBe(403);
+    }
+  });
+
+  it('a buyer who joined is a member on /api/org/* and still 403 on every producer path', async () => {
+    memberIds.add('buyer-1');
+    currentUser = { id: 'buyer-1' };
+    expect((await run('/api/org/abc/invitations')).status).toBe(200);
+    for (const p of EXISTING_API_PATHS) {
+      expect((await run(p)).status, p).toBe(PUBLIC_EXISTING_PATHS.has(p) ? 200 : 403);
+    }
+    const lib = await run('/library');
+    expect(new URL(lib.headers.get('location')!).pathname).toBe('/store/account/me');
+  });
+
+  it('serves the join page to signed-out visitors, buyers and non-members (no login or / redirect)', async () => {
+    for (const id of [null, 'buyer-1', 'producer-1', 'member-1']) {
+      currentUser = id ? { id } : null;
+      expect((await run('/join/tok')).status, String(id)).toBe(200);
+    }
+    expect(membershipReads).toBe(0);
+  });
+
+  it('answers 503 on the join page and route without a database', async () => {
+    vi.stubEnv('ENABLE_LOCAL_STORE', 'true');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', '');
+    expect((await run('/join/tok')).status).toBe(503);
+    expect((await run('/api/org/join')).status).toBe(503);
+  });
+
+  it('leaves look-alike pages alone', async () => {
+    currentUser = null;
+    expect((await run('/join')).status).toBe(200);
+    expect((await run('/joiner/x')).status).toBe(200);
   });
 });
