@@ -234,7 +234,7 @@ Update this table when a run is confirmed.
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 136 (Label OS, not applied), 121 is `121_share_full_playback` (SHARE-01) (next new migration = 137). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 137 (136–137 Label OS, not applied), 121 is `121_share_full_playback` (SHARE-01) (next new migration = 138). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch
@@ -274,6 +274,7 @@ the production database** until the owner merges that branch into `main`
 | Migration | Status | What it does |
 |---|---|---|
 | `136_labelos_org_core.sql` | **Label OS — not applied (apply at final merge)** | LABEL-03. Five new tables (`organizations`, `org_members` with per-member `cap_grants`/`cap_revokes`, `org_invitations`, `user_profiles`, `activity_events`), the `org_role` / `has_org_cap` SECURITY DEFINER helpers (mirroring `src/lib/labelos/capabilities.ts`, held equal by `capabilities.sql.test.ts`), a deferred "≥1 owner per org" trigger, and member-only RLS. No existing table is touched. Rollback: `supabase/rollback/136_labelos_org_core.down.sql` |
+| `137_labelos_producer_org.sql` | **Label OS — not applied (apply at final merge)** | LABEL-07. Data only (M2): every `creator_profiles` owner gets one `producer`-kind org (name = `display_name` or "My studio", slug from the profile slug / name, next free `-2`, `-3` …) and an `owner` membership. Adds `labelos_ensure_producer_org(user)` (SECURITY DEFINER, service-role only, per-user advisory lock), which `POST /api/profile` also calls through `src/lib/labelos/personal-org.ts`; a user who already owns or created a producer org gets nothing new (an ownership transfer never spawns a second), a buyer gets nothing. No `org_id` written to any existing table. Apply after 136. Rollback: `supabase/rollback/137_labelos_producer_org.down.sql` (deletes producer orgs with no other member, drops the two functions) |
 
 **Numbered 136, not 122.** `main` already has 122–135 (#44, artist workspace +
 portal); the Label OS branch has not merged them yet. Numbering past them keeps
