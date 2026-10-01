@@ -67,6 +67,17 @@ The code does not need them in production until the branch is merged, and the fe
 
 (Migration 115 is different: it belongs to the existing producer app and was applied by the owner on 2026-09-30.)
 
+## Always run a local database (decided by the owner, 2026-10-01)
+
+Every task that adds or changes a migration runs **`npm run db:local-check`** before pushing. It builds a throwaway Postgres in a temp directory (never Supabase, never `SUPABASE_DB_URL`), applies Supabase-shaped stubs (`supabase/local/stubs.sql`), then:
+
+1. replays **every** migration in order, then the whole set again (idempotency);
+2. runs each `supabase/local/checks/*.sql`. **A schema task adds a check file for its migration**: behaviour asserted as `anon` / `authenticated` users, raising on failure. `136_labelos_org_core.sql` is the template;
+3. checks `has_org_cap` against `capabilitiesFor()` on generated fixtures;
+4. runs each `supabase/rollback/NNN_*.down.sql`, then re-applies its migration.
+
+It deletes the database afterwards (`KEEP_LOCAL_DB=1` keeps it running). The PR's test plan reports its output. This is what "not applied" means: never applied to a **real** database, always proven on a local one.
+
 ## Trying it before production (optional, recommended before the final merge)
 
 Vercel builds a **preview deployment** for every pushed branch, including the Label OS branch. By default a preview uses the same environment variables as production, which means the **production database**.
@@ -113,10 +124,14 @@ Rules:
   for UI.
 - Migrations: next free number (check `git log --all -- supabase/migrations/`), idempotent, end with
   NOTIFY pgrst. Register them in supabase/MIGRATIONS.md as
-  "Label OS — not applied (apply at final merge)". Never apply them to any database.
+  "Label OS — not applied (apply at final merge)". Never apply them to a real (Supabase)
+  database. Always prove them on a local one: add supabase/local/checks/NNN_*.sql for the
+  migration and run `npm run db:local-check` (throwaway Postgres; see "Always run a local
+  database" in this runbook).
 - Everything stays behind LABEL_OS_ENABLED. No change to existing producer, store, or checkout
   behaviour unless the task says so.
-- Before pushing: npx tsc --noEmit && npm test && npm run build must pass. Run /code-review on
+- Before pushing: npx tsc --noEmit && npm test && npm run build must pass, and
+  npm run db:local-check when the task touches supabase/. Run /code-review on
   your diff and fix what it finds.
 - Branch: label-os/LABEL-{NN}. Open a PR into claude/happy-bardeen-rnosf3 (NEVER main), titled
   "LABEL-{NN}: {TITLE}", with the repo PR format: Summary / Why / Test plan /

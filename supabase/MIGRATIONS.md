@@ -10,6 +10,17 @@ the full set in order is safe and re-runnable — that's the deploy contract.
 table/column/index isn't live yet silently no-ops (or 500s). Apply on a
 **staging** Supabase project first, then production.
 
+## Verify locally first — always
+
+```bash
+npm run db:local-check
+```
+
+Builds a throwaway Postgres (temp dir, `127.0.0.1:55432`, never Supabase), applies
+`supabase/local/stubs.sql`, replays every migration twice, runs
+`supabase/local/checks/*.sql` and each `supabase/rollback/*.down.sql`, then deletes
+the database. A new migration ships with a check file of its own.
+
 ## How to apply
 
 ```bash

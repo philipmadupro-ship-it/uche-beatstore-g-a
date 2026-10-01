@@ -262,6 +262,7 @@ npm run test:scale     # the catalogue-scale perf specs only
 npm run lint           # eslint
 npm run e2e            # playwright (e2e/), also :headed / :ui
 npm run db:migrate     # scripts/apply-migrations.sh — needs SUPABASE_DB_URL
+npm run db:local-check # throwaway local Postgres: replay all migrations twice + checks + rollbacks
 npm run readiness:prod # scripts/ops/production-readiness.mjs
 git config core.hooksPath .githooks    # one-time: enable local pre-commit
 ```
@@ -325,7 +326,7 @@ CI: `.github/workflows/ci.yml` runs `tsc --noEmit` → `vitest` → `next build`
 - **AGENTS.md is the product spec, not a build-order prompt.** Update it when you change the product, not when you change the code.
 
 ## Adding a feature
-1. **Migration first** (if schema change): `supabase/migrations/NNN_descriptor.sql`, idempotent, ends with `NOTIFY pgrst, 'reload schema';`. Apply on Supabase before merging dependent code.
+1. **Migration first** (if schema change): `supabase/migrations/NNN_descriptor.sql`, idempotent, ends with `NOTIFY pgrst, 'reload schema';`. Apply on Supabase before merging dependent code. **Always run a local database first:** add `supabase/local/checks/NNN_descriptor.sql` (behaviour asserted as `anon`/`authenticated`, raising on failure) and run `npm run db:local-check`, which builds a throwaway Postgres, replays every migration twice, runs the checks and any `supabase/rollback/*.down.sql`, then deletes it. It never touches Supabase.
 2. **Zod contract** in `lib/contracts/` for any mutation body.
 3. **Route handler** — owner-gated (`requireRowOwnership` / `requireUser`), Zod-validated, `errorMessage(err)` on failure, `createLogger('api.x.y')` for diagnostics.
 4. **Pure-logic extract** — when the feature has filter / sort / scoring / pricing logic, write it as a pure function in `lib/` first (`filterAndSortTracks` is the template). Vitest the helper. **Logic inside React components can't be tested in isolation and gets silently reverted** — we've shipped this regression twice.

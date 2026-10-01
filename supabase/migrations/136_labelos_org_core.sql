@@ -388,9 +388,11 @@ GRANT EXECUTE ON FUNCTION public.org_role(uuid) TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION public.has_org_cap(uuid, text) TO authenticated, anon;
 
 -- ── ≥1 owner per org ─────────────────────────────────────────────────────
--- Deferred to commit, so an ownership transfer can demote the old owner
--- before promoting the new one inside one transaction. Skipped when the org
--- itself is gone (deleting an org cascades to its members).
+-- Deferred to commit, so a service-role ownership transfer can demote the
+-- old owner before promoting the new one inside one transaction. (Through
+-- RLS the order is forced the other way: once demoted, the old owner may no
+-- longer write owner rows.) Skipped when the org itself is gone (deleting an
+-- org cascades to its members).
 
 CREATE OR REPLACE FUNCTION public.org_members_keep_an_owner()
 RETURNS trigger
