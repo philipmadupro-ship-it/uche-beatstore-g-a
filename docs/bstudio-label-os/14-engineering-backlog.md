@@ -501,7 +501,7 @@ The last owner cannot be removed or demoted (DB trigger + route 409).
 `org-api-source-guard.test.ts` forbids every `user_id` equality filter under `src/app/api/org/**`, but changing a member's role or removing a member addresses an `org_members` row by `(org_id, user_id)`. Add a helper for that in `src/lib/auth/org-access.ts` (for example `memberRowQuery(admin, ctx, userId)`, always org-filtered and capability-checked). Do not add an allowlist to the guard.
 
 ## Carried from LABEL-07 (#57)
-The producer's personal org is named once, from `display_name` (or "My studio"), when it is created. Renaming the producer does not rename the org. The switcher shows the org name, so an owner needs to be able to rename it. Add `PATCH /api/org/[orgId]` `{ name }` (capability `org.settings`, `org.settings_changed` audit event) with an inline rename in settings. Keep it to the name; the slug stays.
+The producer's personal org is named once, from `display_name` (or "My studio"), when it is created. Renaming the producer does not rename the org. The switcher shows the org name, so an owner needs to be able to rename it. Add `PATCH /api/org/[orgId]` `{ name }` (capability `org.manage`, `org.settings_changed` audit event) with an inline rename in settings. Keep it to the name; the slug stays.
 
 ## Out of Scope
 Artist scope UI (LABEL-10).
