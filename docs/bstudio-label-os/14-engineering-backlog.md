@@ -353,7 +353,7 @@ One-function revert; flag off.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-03
-**Status:** In Review (PR #57, branch label-os/LABEL-07)
+**Status:** Done (2026-10-01) — [PR #57](https://github.com/philipmadupro-ship-it/uche-beatstore-g-a/pull/57)
 
 ## Objective
 Give the producer an `owner` membership of a `producer`-kind org, so they can invite people and switch orgs.
@@ -399,7 +399,7 @@ Delete the org rows where `kind = 'producer'` and no other members exist.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-05, LABEL-06, LABEL-07
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-08)
 
 ## Objective
 A working invitation flow for org members.
@@ -499,6 +499,9 @@ The last owner cannot be removed or demoted (DB trigger + route 409).
 
 ## Carried from LABEL-05 (#55)
 `org-api-source-guard.test.ts` forbids every `user_id` equality filter under `src/app/api/org/**`, but changing a member's role or removing a member addresses an `org_members` row by `(org_id, user_id)`. Add a helper for that in `src/lib/auth/org-access.ts` (for example `memberRowQuery(admin, ctx, userId)`, always org-filtered and capability-checked). Do not add an allowlist to the guard.
+
+## Carried from LABEL-07 (#57)
+The producer's personal org is named once, from `display_name` (or "My studio"), when it is created. Renaming the producer does not rename the org. The switcher shows the org name, so an owner needs to be able to rename it. Add `PATCH /api/org/[orgId]` `{ name }` (capability `org.settings`, `org.settings_changed` audit event) with an inline rename in settings. Keep it to the name; the slug stays.
 
 ## Out of Scope
 Artist scope UI (LABEL-10).
@@ -1024,6 +1027,8 @@ None.
 
 ## Carried from LABEL-05 (#55)
 `recordEvent` defaults `visibility` to `internal`, and 136's RLS shows those rows only to holders of `business.read.internal`. So A&R, producers and engineers cannot see everyday events like `song.created` unless the route passes `visibility: 'artist'`. Decide a default per verb here, in `src/lib/labelos/activity.ts`, consistent with D4 and D5. Audit events are not yet atomic with their mutation; the RPC in this task fixes that.
+
+Also from LABEL-07 (#57): orgs created by migration 137's backfill have no `org.created` event (only orgs created through `POST /api/profile` record one). Backfill them here if the feed needs a complete history.
 
 ## Out of Scope
 Feeds (LABEL-20).
