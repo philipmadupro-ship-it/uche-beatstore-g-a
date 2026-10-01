@@ -250,7 +250,7 @@ Revert.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-02, LABEL-03
-**Status:** In Progress (branch label-os/LABEL-05)
+**Status:** In Review (PR #55, branch label-os/LABEL-05)
 
 ## Objective
 Route-level authorization for service-role routes, plus a single event writer.
