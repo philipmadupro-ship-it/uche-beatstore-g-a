@@ -2,6 +2,9 @@
 
 **Discovery 01 · 2026-09-29**
 
+> **Superseded in part (2026-10-01):** `main` gained the Artist Workspace (#44) after this was written. Where this file conflicts with `17-reconciliation-with-artist-workspace.md`, **17 wins**: songs are `tracks` rows, artists are org contacts in workspace mode, files are `project_assets`, comments are `project_comments`, credits are `track_collaborators`.
+
+
 Each workflow gives: trigger → steps → the state written → the state derived → what is recorded in activity. Entities are defined in `05-domain-model.md`, and capabilities in `06-permission-model.md`. The visual map is `workflow-map.mermaid`.
 
 ---

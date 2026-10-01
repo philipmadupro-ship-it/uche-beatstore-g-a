@@ -62,23 +62,25 @@ The MVP does **not** build that. It **does** ship a real workflow: the release p
 > If "work" meant something else — for example the *Work* area (tasks, "My work") — say so and the plan will be adjusted. Tasks and "My work" are in Phase 3 (LABEL-23).
 
 ### Chat: last, but prepared for from the start
-Interactive chat is **not** built now. The design grows toward it step by step, with each step useful on its own:
+Interactive chat is **not** built now. Since #44, `main` already has the first steps (`17` R6), and the rest grows from them:
 
-| Step | What exists | Phase |
+| Step | What exists | Where |
 |---|---|---|
-| 1 | Comments on songs/recordings/releases, threaded, with timestamps on the waveform (`comments`) | 3 (LABEL-22) |
-| 2 | @mentions that notify only the person named | 3 (LABEL-23) |
-| 3 | A per-project discussion thread (comments whose subject is the project) | 3 (LABEL-22, already allowed by the schema) |
-| 4 | Live updates: new comments appear without refresh (Supabase realtime, the pattern already used in migration 012) | 8 |
-| 5 | Direct messages and group chat, reusing the same `comments` storage with a `thread` subject | 8 |
-
-Because steps 1–3 use one table and one permission model, chat later is an extension, not a rebuild.
+| 1 | Comments with timestamps on the waveform, threaded (`project_comments`) | Exists; Label OS adds org visibility (LABEL-22) |
+| 2 | Portal comments from artists (`project_comments.contact_id`) | Exists (#44) |
+| 3 | Producer ↔ artist **message threads with requests** (`artist_messages`) | Exists (#44) |
+| 4 | @mentions that notify only the person named | Phase 3 (LABEL-23) |
+| 5 | Org members as participants in `artist_messages`, member ↔ member threads, live updates | Phase 8, extending `artist_messages`, not a new chat store |
 
 ### Contract generation: later, interesting
 Not now: legal liability and jurisdiction differences. The MVP stores signed documents and tracks signatures (LABEL-28). **Phase 8** can add generated split sheets and simple agreement templates filled from the data BStudio already holds (parties, IPI, percentages), with e-signature through an external service.
 
 ### Confirmed out of scope
 Royalty accounting and delivery to streaming services: **no**.
+
+## Reconciliation with the Artist Workspace (2026-10-01)
+
+The owner asked for the plan to be updated to build on `main`'s #44 instead of duplicating it. Decisions R1–R12 are in `17-reconciliation-with-artist-workspace.md`. Two open questions there (Q1 inbox project per artist, Q2 label orgs keep their own contacts) run on their defaults until answered.
 
 ## Phase 8 — Later (not in the backlog yet; each needs its own short discovery first)
 

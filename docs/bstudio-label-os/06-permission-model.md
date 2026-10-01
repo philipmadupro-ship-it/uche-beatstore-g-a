@@ -2,6 +2,9 @@
 
 **Discovery 01 · 2026-09-30** · Diagram: `permission-model.mermaid`
 
+> **Superseded in part (2026-10-01):** `main` gained the Artist Workspace (#44) after this was written. Where this file conflicts with `17-reconciliation-with-artist-workspace.md`, **17 wins**: songs are `tracks` rows, artists are org contacts in workspace mode, files are `project_assets`, comments are `project_comments`, credits are `track_collaborators`.
+
+
 ## 1. Recommendation in one line
 
 **Role + capability, with two resource scopes (artist, project).** No per-object ACLs in the MVP; sensitivity is by file category.

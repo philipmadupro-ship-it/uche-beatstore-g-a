@@ -262,7 +262,7 @@ Route-level authorization for service-role routes, plus a single event writer.
 1. `src/lib/auth/org-access.ts`:
    - `requireOrgMember(orgId)`
    - `requireOrgCapability(orgId, cap)`
-   - `requireObjectAccess({ table, id, cap })`, which loads `org_id` / `artist_id` / `project_id` and checks scope. Artist scope is a no-op until LABEL-10.
+   - `requireObjectAccess({ table, id, cap })`, which loads `org_id` / the artist `contact_id` / `project_id` and checks scope (`17` R3). Artist scope is a no-op until LABEL-10.
    - `scopedOrgQuery(admin, table, ctx)`.
 2. `src/lib/labelos/activity.ts`: `recordEvent(admin, ctx, verb, subject, payload, { audit })`, with a closed `Verb` union.
 3. Add a source-guard test: files under `src/app/api/org/**` must not contain `.eq('user_id'` or `user_id.eq`, and must import from `@/lib/auth/org-access`.
@@ -411,7 +411,7 @@ The `invites` flow is non-functional (`01` §2.3).
 - **`POST /api/org/[orgId]/invitations`** (`members.manage`):
   - 32-byte token; store its sha-256.
   - Email normalised with `normalizeEmail`.
-  - Role, functions and `artist_ids` (validated later by LABEL-10). **Only the roles and functions the org kind offers** can be invited (`06` §2.4b); anything else → 400.
+  - Role, functions and `contact_ids` (the artists, validated later by LABEL-10). **Only the roles and functions the org kind offers** can be invited (`06` §2.4b); anything else → 400.
   - 7-day expiry.
   - Rate limit via `rate_limits`.
   - Send email through Resend.
@@ -502,56 +502,66 @@ Flag off.
 
 ---
 
-# LABEL-10 — Artists + artist scopes
+# LABEL-10 — Org-scoped contacts as the artist roster + artist scopes
 
 **Area:** Roster / Permissions
 **Priority:** P0
-**Risk:** Medium
+**Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-09
 **Status:** Not Started
 
 ## Objective
-Artists as first-class org records, and artist-scoped membership.
+The artist roster is the org's contacts in workspace mode (`17` R3), and members can be limited to some artists.
 
 ## Current State
-No artist entity (`01` §3).
+- `main` (#44): an artist is a contact in workspace mode (`lib/contacts/relationship.ts#isWorkspaceMode`), with role tabs (`lib/contacts/roles.ts`).
+- Contacts are producer-owned (`user_id`) and know nothing about orgs.
 
 ## Required Change
-- **Migration:** `artists`, `member_artist_scopes`, a SQL `can_see_artist(org, artist)`, and a same-org FK trigger.
-- **Routes:** `/api/org/[orgId]/artists[/id]` CRUD (`catalog.write`); `contact_id` link validated against the producer's contacts only when the caller is the producer (otherwise null).
-- **Wiring:** `requireObjectAccess` artist scope becomes live. Invitations accept `artist_ids`.
-- **Artist orgs:** creating an `artist`-kind org creates its single `artists` row (the owner themselves); that org cannot add more roster rows.
-- **Pages:** roster list (label orgs); artist profile (artist orgs).
+- **Migration (expand):**
+  - `contacts.org_id` (nullable FK, indexed).
+  - `member_artist_scopes(org_id, user_id, contact_id)`.
+  - SQL `can_see_artist(org uuid, contact uuid)`.
+  - An additive SELECT policy `org_member_read` on `contacts`: `org_id IS NOT NULL AND has_org_cap(org_id,'catalog.read') AND can_see_artist(...)`.
+  - A same-org trigger on `member_artist_scopes`.
+  - **No change to producer rows** (`org_id IS NULL`) or to existing policies.
+- **Routes:**
+  - `/api/org/[orgId]/contacts[/id]` CRUD for org contacts.
+  - Roster = the org contacts that `isWorkspaceMode` accepts, plus any contact with an artist role in an org (Q2 default: label orgs have their own directory).
+- **Artist orgs (D1):** creating an `artist`-kind org creates one contact for the owner, which is that org's single roster entry.
+- **Wiring:** `requireObjectAccess` artist scope becomes live (by `contact_id`). Invitations accept `contact_ids` (renamed from `artist_ids`).
 
 ## Starting Code Surfaces
-`src/lib/auth/org-access.ts`, the invitations route from LABEL-08.
+`src/lib/contacts/relationship.ts`, `src/lib/contacts/roles.ts`, `src/lib/auth/org-access.ts`, `docs/bstudio-label-os/17-reconciliation-with-artist-workspace.md`.
 
 ## Data Changes
-Two tables and one function.
+One nullable column, one table, one function, one additive policy.
 
 ## Security
-An artist-role member is always scoped. `scope = 'artists'` with zero artists sees nothing.
+- R-04 pattern: `org_member_read` must require `org_id IS NOT NULL`, and the replay test asserts it.
+- An artist-role member is always scoped. `scope = 'artists'` with zero contacts sees nothing.
 
 ## UX
-The roster uses `ListRow` with status text; no cards grid.
+None beyond the roster list (it reuses the `/contacts` Artists card components).
 
 ## Acceptance Criteria
-- An artist-scoped member lists only their artists; gets 404 on others.
-- Cross-org artist ids are rejected.
+- An artist-scoped member lists only their contacts and gets 404 on others.
+- Producer contacts (`org_id IS NULL`) are never visible to members.
+- Cross-org ids are rejected.
 
 ## Tests
-Two-org and two-scope route tests; RLS replay entries.
+Two-org and two-scope route tests; RLS replay entries; producer CRM e2e unchanged.
 
 ## Out of Scope
-Direction (LABEL-26).
+Org-scoping the producer's existing contacts (M7); direction (LABEL-26).
 
 ## Rollback
-Drop the tables; revert.
+Drop the policy, table and column (nullable, no backfill).
 
 ---
 
-# LABEL-11 — Songs, song recordings, project songs
+# LABEL-11 — Songs on tracks: song stage, identifiers, master/demo links, recording-kind adapter
 
 **Area:** Music model
 **Priority:** P0
@@ -561,47 +571,53 @@ Drop the tables; revert.
 **Status:** Not Started
 
 ## Objective
-The Song entity above recordings.
+Use `main`'s song model (a `tracks` row with `type = 'song'`, plus `song_beats` and `track_links`) as the Label OS song (`17` R1).
 
 ## Current State
-`tracks` conflates audio and song (`01` §3).
+- **Songs** are tracks with `type = 'song'`, built on beats (`song_beats`, mig 132), with linked instrumental / loop / topline / version (`track_links`, mig 133).
+- **Read model:** `mergeLinks` (`lib/tracks/links.ts`) is the single way links are read.
+- **Missing:** there is no A&R stage, ISWC, or master/demo marker.
 
 ## Required Change
-- **Migration:** `songs` (stage CHECK = the §W3 union, default `inbox`), `song_recordings` (kind CHECK incl. `topline` and `loop`; partial unique `is_current` per (song, kind)), `project_songs`, and same-org triggers.
-- **Routes:**
-  - `/api/org/[orgId]/songs[/id]` CRUD.
-  - `/api/org/[orgId]/songs/[id]/recordings`: POST links an **existing org track**, PATCH sets kind/current, DELETE unlinks.
-- **Rejected:** cross-org `beat_source`, pending D6.
+- **Migration:**
+  - `tracks.song_stage` (CHECK = the `04` W3 stages, nullable; default `inbox` set by the app for org songs);
+  - `tracks.iswc`;
+  - widen the `track_links_relation_check` constraint to add `master` and `demo` (drop + re-add the constraint, idempotently).
+- **Pure module `lib/labelos/recording-kind.ts`:**
+  - `recordingKindOf(track, relationFromSong)` per the `17` R1 table, feeding `recordingClass` / `audioCapabilityFor` from `capabilities.ts`;
+  - `songRecordings(song, mergeLinksResult)` returns the classified list.
+- **Rule helper:** `ensureInboxProject(org, contact)` makes sure every org song belongs to ≥1 project (Q1 default: one "Inbox" project per artist contact).
+- **Links code:** `lib/tracks/links.ts` learns the two new relations: labels, `suggestRelation`, and `rankCandidates`.
 
 ## Starting Code Surfaces
-`supabase/migrations/003_vault_domain.sql` (`project_tracks.role` pattern).
+`src/lib/tracks/links.ts`, `src/lib/tracks/song-beats.ts`, `src/lib/labelos/capabilities.ts`, `supabase/migrations/133_track_links.sql`.
 
 ## Data Changes
-Three tables.
+Two nullable columns on `tracks`; the CHECK constraint is widened. No new tables (**do not create `songs` / `song_recordings` / `project_songs`**).
 
 ## Security
-Linking requires `catalog.write` on the song **and** the track in the same org.
+Writing `song_stage` requires `catalog.write` in scope (enforced in LABEL-24's route). The adapter is pure.
 
 ## UX
-None (LABEL-17).
+None (the drawer's Linked panel shows the new relations by label only).
 
 ## Acceptance Criteria
-- One current per kind is enforced.
-- A cross-org link → 400.
-- Deleting a song does not delete tracks.
+- Every row of the `17` R1 mapping table is asserted.
+- Old links still read correctly.
+- The `links` tests from `main` stay green.
 
 ## Tests
-Route and constraint tests.
+`recording-kind.test.ts`; extend `links.test.ts`; a migration replay check that exactly one relation CHECK survives (the verify pattern from mig 133).
 
 ## Out of Scope
 Stage transitions (LABEL-24); uploads (LABEL-14).
 
 ## Rollback
-Drop the tables.
+Restore the old relation CHECK (only if no `master` / `demo` rows exist); drop the nullable columns.
 
 ---
 
-# LABEL-12 — Expand `tracks` / `projects` with `org_id` (+ additive read policy)
+# LABEL-12 — Expand tracks / projects and #44 child tables with org access (additive read policies)
 
 **Area:** Database
 **Priority:** P0
@@ -611,45 +627,48 @@ Drop the tables.
 **Status:** Not Started
 
 ## Objective
-Let org recordings and projects live in the existing tables without changing producer behaviour.
+Let org songs, projects and their #44 material live in the existing tables without changing producer behaviour (`17` R11).
 
 ## Current State
-Both tables are `owner_only` (097/119).
+- `tracks` and `projects` are `owner_only` (097/119).
+- The #44 tables (`project_contacts`, `artist_portals`, `project_assets`, `song_beats`, `track_links`, `artist_messages`, `contact_track_states`, `project_comments`) are owner-only with same-owner triggers.
 
 ## Required Change
-- **Migration:**
-  - `tracks.org_id` (nullable FK), `tracks.isrc`, `tracks.created_by`.
-  - `projects.org_id`, `projects.artist_id`.
-  - Indexes `(org_id, created_at desc)`.
-  - An **additive** SELECT policy `org_member_read`: `org_id IS NOT NULL AND (select has_org_cap(org_id,'catalog.read'))`.
-  - **No write policy.** Org writes go through the service role in `/api/org/*`.
+- **Migration (columns and indexes):**
+  - `tracks.org_id`, `tracks.isrc`, `tracks.created_by`, `projects.org_id` (nullable FKs).
+  - Indexes on `(org_id, created_at desc)`.
+- **Migration (policies):**
+  - An additive SELECT policy `org_member_read` on `tracks` and `projects`: `org_id IS NOT NULL AND (select has_org_cap(org_id,'catalog.read'))`.
+  - Parent-based `org_member_read` SELECT policies on each #44 child table, using `EXISTS` on its parent row with the same predicate.
+  - No write policies. Org writes go through the service role in `/api/org/*`.
+- **Migration (trigger compatibility):** the #44 same-owner triggers must also accept same-**org** rows. Extend each trigger function with "or both rows have the same non-null `org_id`", without weakening the owner case.
 - **Code:** producer routes and `scopedList` are unchanged.
 
 ## Starting Code Surfaces
-`supabase/migrations/097_strict_owned_rows.sql`, `119_producer_only_catalogue_writes.sql`, `src/lib/security/rls-final-state.test.ts`.
+`supabase/migrations/097_strict_owned_rows.sql`, `119_producer_only_catalogue_writes.sql`, `122`–`133`, `src/lib/security/rls-final-state.test.ts`.
 
 ## Data Changes
-Nullable columns. **No backfill.**
+Nullable columns, additive policies, trigger functions extended. **No backfill.**
 
 ## Security
-R-04. The replay test asserts `org_member_read` contains `org_id IS NOT NULL`.
+- R-04. The replay test asserts every `org_member_read` policy contains `org_id IS NOT NULL`, directly or through its parent.
+- Trigger changes are tested for "different owner, no org → still refused".
 
 ## UX
 None.
 
 ## Acceptance Criteria
-- The producer library, store and uploads behave identically (existing e2e suite green).
-- A member cannot read `org_id IS NULL` rows via PostgREST (local test).
+- The producer library, store, artist workspace and portal behave identically (existing e2e and real-DB suites green).
+- A member cannot read `org_id IS NULL` rows via PostgREST.
 
 ## Tests
-- Replay assertion.
-- A local Supabase probe script, in the style of the 118 verification described in `MIGRATIONS.md`.
+Replay assertions; trigger tests on the local real-DB harness (`scripts/local-db/`); `npm run e2e:real-db` unchanged.
 
 ## Out of Scope
-M7 backfill; producer route conversion.
+M7 backfill; org-scoping `contacts` (LABEL-10 did it).
 
 ## Rollback
-Drop the policy and columns (nullable, no dependants until LABEL-14).
+Drop the policies, restore the trigger functions, drop the nullable columns.
 
 ---
 
@@ -666,41 +685,41 @@ Drop the policy and columns (nullable, no dependants until LABEL-14).
 Stream or presign a recording only if the caller may access that specific recording.
 
 ## Current State
-`/api/audio` checks `requireProducer`, not the object (its own comment, R-01).
+`/api/audio` checks `requireProducer`, not the object (R-01). Portals stream through signed preview grants (`main`).
 
 ## Required Change
 Add `GET /api/org/[orgId]/audio/[trackId]?variant=preview|full|wav|stem:<name>`:
 1. Load the `tracks` row. It requires `org_id = orgId`.
-2. Resolve the song → artist / project via `song_recordings`, or `projects` for project-only recordings.
-3. `requireObjectAccess` with `audio.finished` or `audio.working`, chosen by `recordingClass(song_recordings.kind)` (D4): marketing can stream a master but not a topline or loop. Stems and session files are always `working`. External project members are allowed only if the recording is linked to their project and the project allows downloads, for download variants.
-4. Stream with Range support, reusing `lib/storage` helpers, or 302 to a ≤5-minute presigned URL.
+2. Find its song context: either it is a song, or it is linked to one via `song_beats` / `track_links`, using `mergeLinks`. Find its project(s) and artist contact through `project_tracks` / `project_contacts`.
+3. Required capability: `audioCapabilityFor(recordingKindOf(...))` (LABEL-11), plus scope via `requireObjectAccess`. External project members are allowed only for recordings in their project, per `externalCan`.
+4. Stream with Range support (`lib/storage` helpers), or 302 to a presigned URL that expires in ≤5 minutes. Record `recording.downloaded` for external members (audit).
 
-Log `recording.downloaded` for external members (audit). **`/api/audio` is not changed** in this task.
+**`/api/audio` and the portal media routes are not changed** in this task.
 
 ## Starting Code Surfaces
-`src/app/api/audio/route.ts` (reference), `src/lib/storage/upload.ts`, `src/lib/share-media-token.ts`.
+`src/app/api/audio/route.ts` (reference), `src/lib/storage/upload.ts`, `src/lib/share-media-token.ts`, `src/lib/tracks/links.ts`.
 
 ## Data Changes
 None.
 
 ## Security
-Never accept a raw `src`/`r2://` from the client; only a track id.
+Never accept a raw `src` / `r2://` from the client; only a track id. Marketing gets 403 on a topline or loop and 200 on a master (D4).
 
 ## UX
 None.
 
 ## Acceptance Criteria
-- Every combination of role × scope × variant from `06` returns the right status.
+- Every combination of role × scope × recording kind × variant from `06` returns the right status.
 - A producer-era track (`org_id IS NULL`) → 404.
 
 ## Tests
-A route test matrix; a Range header test.
+Route test matrix; Range header test.
 
 ## Out of Scope
-Hardening `/api/audio` for multiple producers (a separate task when M7 is planned).
+Hardening `/api/audio` for multiple producers.
 
 ## Rollback
-Revert (nothing depends on it until LABEL-14/17).
+Revert.
 
 ---
 
@@ -714,48 +733,48 @@ Revert (nothing depends on it until LABEL-14/17).
 **Status:** Not Started
 
 ## Objective
-Upload audio into an org, attached to a song as a given kind, with previews that are not publicly addressable.
+Upload audio into an org as a song, or as material linked to a song, with previews that are not publicly addressable.
 
 ## Current State
-`/api/upload/*` is producer-only and writes public previews (`099_track_preview_assets.sql`).
+`/api/upload/*` is producer-only and writes public previews (`099_track_preview_assets.sql`). Songs and links are created through `main`'s track, beats and links routes.
 
 ## Required Change
-- Add `/api/org/[orgId]/upload/{init,part,complete,abort}`: check `catalog.write` in scope, then call the same `lib/storage` / `lib/upload` functions.
-- `complete` sets `tracks.org_id`, `created_by`, `user_id` = uploader, and optionally creates or links the song (`kind` default `demo`).
-- Preview derivatives for org tracks go to the private bucket under `orgs/<org_id>/previews/`. Peaks are private too, served via the LABEL-13 route or an HMAC grant.
-- The processing job (`lib/upload/processing.ts`) branches on `org_id` for the destination bucket only.
+- **Routes:** add `/api/org/[orgId]/upload/{init,part,complete,abort}`. Each checks `catalog.write` in scope, then calls the same `lib/storage` / `lib/upload` functions.
+- **`complete`:**
+  - sets `tracks.org_id`, `created_by`, and `user_id` (= the uploader);
+  - creates either a song track (`type = 'song'`, `song_stage = 'inbox'`, placed in the artist's inbox project via `ensureInboxProject`), or a track linked to an existing song with a relation (`demo` / `master` / `instrumental` / `loop` / `topline` / `version`), through `links-store.ts`.
+- **Private previews:** previews for org tracks go to the private bucket under `orgs/<org_id>/previews/`. Peaks are private too, served via the LABEL-13 route or an HMAC grant.
+- **Processing job:** `lib/upload/processing.ts` branches on `org_id` for the destination bucket only.
 
 ## Starting Code Surfaces
-`src/app/api/upload/*`, `src/lib/upload/processing.ts`, `src/lib/storage/*`.
+`src/app/api/upload/*`, `src/lib/upload/processing.ts`, `src/lib/storage/*`, `src/lib/tracks/links-store.ts`.
 
 ## Data Changes
-None (columns from LABEL-13).
+None (columns from LABEL-11/12).
 
 ## Security
-R-05. An org preview key must never land in the public bucket (tested). Producer uploads are unchanged.
+R-05: an org preview key must never land in the public bucket (tested). Producer uploads are unchanged.
 
 ## UX
-The uploads tray works unchanged. In org context, the tray offers "separate songs / versions of one song" (W3).
+The uploads tray works unchanged. In org context it offers "new song / add to song as…" (W3).
 
 ## Acceptance Criteria
-- An upload in the org creates a track with `org_id` and a song link.
+- An org upload creates a song in the inbox project, or a linked track.
 - The preview object is in the private bucket.
-- A producer upload is byte-for-byte unchanged in behaviour.
+- Producer uploads behave exactly as before.
 
 ## Tests
-- Route tests with mocked storage.
-- A processing-branch unit test.
-- e2e: upload 3 files → 3 songs.
+Route tests with mocked storage; processing-branch unit test; e2e: upload 3 files → 3 songs in the artist's inbox project.
 
 ## Out of Scope
 Non-audio files (LABEL-15).
 
 ## Rollback
-Revert the wrapper; org rows remain and are harmless.
+Revert the wrapper. Org rows remain and are harmless.
 
 ---
 
-# LABEL-15 — File registry + presigned upload/download
+# LABEL-15 — Org assets on `project_assets` (sensitivity, kinds, org access)
 
 **Area:** Storage
 **Priority:** P1
@@ -765,44 +784,48 @@ Revert the wrapper; org rows remain and are harmless.
 **Status:** Not Started
 
 ## Objective
-Store artwork, photos, video, documents and contracts as org assets.
+Artwork, photos, video, documents and contracts as org assets, by extending `main`'s `project_assets` (`17` R2). **No new `files` table.**
 
 ## Current State
-No file registry. Covers and contracts are loose R2 keys.
+`project_assets` (mig 127) already provides:
+- the private bucket;
+- an extension allowlist;
+- presign + register;
+- `kind ∈ reference, artwork, lyrics, document, audio, other`;
+- producer-owned rows.
 
 ## Required Change
-- **Migration:** `files` (per `05` §2.5).
-- **Routes:**
-  - `POST /api/org/[orgId]/files` returns a presigned PUT to `orgs/<org>/files/<category>/<uuid>`, with a confirm step that records bytes + sha256.
-  - `GET /api/org/[orgId]/files/[id]` returns a ≤5-minute presigned GET.
-  - `restricted` files require `contracts.read`, and each download is logged as an audit event.
-- Versioning uses `version_of`.
+- **Migration:**
+  - `project_assets.org_id` (via its project; it may be set by trigger from the project);
+  - `sensitivity` (`normal` | `restricted`, default `normal`);
+  - widen the `kind` CHECK with `photo`, `video`, `contract`, `split_sheet`, `session`, extending the allowlist accordingly. `.html` / `.svg` stay refused.
+- **Routes:** `/api/org/[orgId]/projects/[id]/assets` wraps `lib/projects/assets.ts` + `lib/storage/project-assets.ts` with the org capability checks. `restricted` assets require `contracts.read`, and each download is logged as an audit event.
 
 ## Starting Code Surfaces
-`src/lib/storage/upload.ts`, `src/lib/storage/multipart.ts`.
+`src/lib/projects/assets.ts`, `src/lib/storage/project-assets.ts`, `supabase/migrations/127_project_assets.sql`.
 
 ## Data Changes
-One table.
+Columns and widened CHECKs on an existing table.
 
 ## Security
-Key prefixes are org-bound. The object key is never accepted from the client.
+`projectAssetKeyOf` registration rules unchanged. Org keys are prefixed `orgs/<org_id>/`.
 
 ## UX
-None (LABEL-17).
+The project Files section is reused in org context.
 
 ## Acceptance Criteria
-- Restricted download without the capability → 403.
+- A restricted download without the capability → 403.
 - The audit event is written.
-- A cross-org id → 404.
+- Producer project files are unchanged (`artist-workspace-phase2` e2e green).
 
 ## Tests
-Route tests.
+Route tests; existing assets tests stay green.
 
 ## Out of Scope
-Image processing and thumbnails beyond the existing cover handling.
+Thumbnails / image processing.
 
 ## Rollback
-Drop the table; objects orphaned under `orgs/` can be deleted by prefix.
+Restore the CHECKs (only if no new kinds are used); drop the columns.
 
 ---
 
@@ -816,18 +839,23 @@ Drop the table; objects orphaned under `orgs/` can be deleted by prefix.
 **Status:** Not Started
 
 ## Objective
-The release entity and its tracklist.
+The release entity and its tracklist, built on song tracks (`17` R1/R2).
 
 ## Current State
 None. `projects.price_usd` is a store bundle, not a release.
 
 ## Required Change
-- **Migration:** `releases`, `release_items` (item track must be linked to the item song with kind ∈ master / clean / instrumental; trigger).
-- **Module:** `src/lib/labelos/identifiers.ts` (ISRC / UPC / ISWC / IPI format + normalisation).
+- **Migration:**
+  - `releases`, with `project_id NOT NULL` (created with the release if not given), `artwork_asset_id` → `project_assets`, `contact_id` (the artist), and the `05` release fields.
+  - `release_items(release_id, position, song_track_id, master_track_id, version_title, explicit)`.
+  - A trigger enforcing two rules:
+    - the song is `type = 'song'`;
+    - the master is the song itself, or linked to it as `master`, `instrumental` or `version`.
+- **Pure module:** `src/lib/labelos/identifiers.ts` (ISRC / UPC / ISWC / IPI format + normalisation).
 - **Routes:** release CRUD; items reorder (contiguous positions).
 
 ## Starting Code Surfaces
-`src/lib/labelos/`.
+`src/lib/labelos/`, `src/lib/tracks/links.ts`.
 
 ## Data Changes
 Two tables.
@@ -840,11 +868,10 @@ None (LABEL-17 / 33).
 
 ## Acceptance Criteria
 - Invalid identifiers → 400 with the field named.
-- Positions stay contiguous after delete (same rule as buyer playlists' `compactPlaylistPositions`).
+- Positions stay contiguous after delete.
 
 ## Tests
-- `identifiers.test.ts` with valid/invalid vectors.
-- Route tests.
+`identifiers.test.ts`; route tests.
 
 ## Out of Scope
 Gates (LABEL-32); export (LABEL-34).
@@ -854,7 +881,7 @@ Drop the tables.
 
 ---
 
-# LABEL-17 — Artist workspace UI + song detail v1
+# LABEL-17 — Org artist workspace (reusing #44 components) + song detail
 
 **Area:** Frontend
 **Priority:** P1
@@ -864,19 +891,19 @@ Drop the tables.
 **Status:** Not Started
 
 ## Objective
-The artist workspace tabs Overview / Music / Releases / Projects / Files, and song detail with the recording stack and A/B.
+The org artist workspace and song view, built from `main`'s workspace components (`17` R12), plus the Releases tab.
 
 ## Current State
-None.
+`components/artists/ArtistWorkspaceTabs` (overview, projects, beats, songs, files, activity, notes) runs on `/contacts/[id]` for the producer.
 
 ## Required Change
-Pages under `(label)/o/[orgSlug]/artists/[artistSlug]` and `/songs/[id]`, per `07` §2.2–2.3.
-- Playback through `usePlayer` with the org audio URL (LABEL-13).
-- A/B keeps the position when switching recordings.
-- Title is `InlineText`. The ⋯ menu is `ActionMenu`.
+- Render `ArtistWorkspaceTabs` under `(label)/o/[orgSlug]/artists/[contactId]`, fed by org-scoped APIs (an org data source, not producer routes).
+- Add a **Releases** tab.
+- Song view: song track, its classified recordings (`songRecordings`), stage, and A/B between recordings through `usePlayer`, playing via the LABEL-13 route.
+- Hide what the viewer's capabilities exclude. For example, marketing does not see loops / toplines.
 
 ## Starting Code Surfaces
-`src/components/ui/*`, `src/hooks/usePlayer.ts`, `src/components/player/*`.
+`src/components/artists/*`, `src/components/ui/*`, `src/hooks/usePlayer.ts`.
 
 ## Data Changes
 None.
@@ -885,18 +912,18 @@ None.
 Restricted sections render "restricted", not empty (`07` §3.4).
 
 ## UX
-Follows `design-direction.md`: one hero per screen, white/alpha state, mint only for complete.
+Same components and design as the producer workspace. No new pattern.
 
 ## Acceptance Criteria
-- At 1440/390: tabs work, the recording stack plays, A/B switches without a restart.
-- An artist-scoped member cannot navigate to another artist (404 page).
+- At 1440 and 390 px, the tabs work and A/B switches without a restart.
+- An artist-scoped member cannot open another artist (404).
+- The producer's own workspace is unchanged.
 
 ## Tests
-- jsdom component tests for the recording stack.
-- Playwright spec.
+jsdom tests for the capability-filtered tabs; Playwright spec; existing artist-workspace e2e green.
 
 ## Out of Scope
-Reviews, comments, credits.
+Reviews, credits, direction tabs (later tasks).
 
 ## Rollback
 Flag off.
@@ -1098,7 +1125,7 @@ Drop the table; flag off.
 
 ---
 
-# LABEL-22 — Org comments (region-pinned)
+# LABEL-22 — Org comments on `project_comments` (region-pinned)
 
 **Area:** Collaboration
 **Priority:** P1
@@ -1108,41 +1135,43 @@ Drop the table; flag off.
 **Status:** Not Started
 
 ## Objective
-Threaded, region-pinned comments on songs, recordings, releases and projects.
+Threaded, region-pinned comments for org members, by extending `project_comments` (`17` R5). **No new `comments` table.**
 
 ## Current State
-`project_comments` (token/guest-shaped, `region_start/end`).
+`project_comments` has track pins, `region_start` / `region_end`, threads, guest authors via share token, and portal threads via `contact_id` (mig 128).
 
 ## Required Change
-- **Migration:** `comments`.
-- **Routes:** CRUD, resolve, and an internal/artist visibility toggle.
-- **Carry-forward:** unresolved comments on a superseded recording show on the current one with a "from mix v2" label (the Dropbox Replay behaviour, `02`).
-- **UI:** a waveform region comment layer on song detail, reusing the share-page region UI.
+- **Migration:** `project_comments.org_id` (set from the project), `visibility` (`internal` | `artist`, default `artist`), `resolved_at`.
+- **Routes:** `/api/org/[orgId]/projects/[id]/comments` (CRUD, resolve, visibility).
+- **Visibility:** portal and share views keep their existing filters, and also hide `internal` rows.
+- **Carry-forward:** unresolved comments on a superseded version show on the current one, labelled "from mix v2".
+- **UI:** reuse the region comment layer.
 
 ## Starting Code Surfaces
-`src/app/api/projects/share/[token]/comments/route.ts` (validation rules for regions), `src/components/share/*`.
+`src/app/api/projects/share/[token]/comments/route.ts`, `src/components/share/*`, portal comment code in `src/lib/artist-portal/`.
 
 ## Data Changes
-One table.
+Columns on an existing table.
 
 ## Security
-Authors can edit/delete their own comments. `members.manage` can moderate. Guests have no access (tokens stay on `project_comments`).
+`internal` comments never reach a portal, a share page or an artist-role member.
 
 ## UX
 Inline. No modal.
 
 ## Acceptance Criteria
-- A region with end ≤ start is rejected.
+- An internal comment is absent from the portal and share JSON.
 - Carry-forward shows exactly the unresolved comments.
+- Portal comment e2e green.
 
 ## Tests
-Route tests; a jsdom test for carry-forward.
+Route tests; the redaction test covers the portal view; jsdom test for carry-forward.
 
 ## Out of Scope
-Merging `project_comments` into `comments`.
+Release-level comments outside the release's project.
 
 ## Rollback
-Drop the table.
+Drop the columns.
 
 ---
 
@@ -1207,11 +1236,11 @@ Drop the table and column.
 Validated stage transitions with history.
 
 ## Current State
-`songs.stage` exists (default `inbox`), with no transition rules.
+`tracks.song_stage` exists (LABEL-11; default `inbox` for org songs), with no transition rules.
 
 ## Required Change
 - `lib/labelos/song-stage.ts`: `allowedTransitions(stage, caps)`, `transition(song, to)`. The `released` state is derived via `isReleased(song, releases)`.
-- `POST /api/org/[orgId]/songs/[id]/stage` records `song.stage_changed`.
+- `POST /api/org/[orgId]/tracks/[id]/stage` (song tracks only) records `song.stage_changed`.
 - UI: the stage `Dropdown` lists allowed transitions only.
 
 ## Starting Code Surfaces
@@ -1268,7 +1297,7 @@ Per-reviewer ratings and verdicts, and a fast keyboard review queue.
 One table.
 
 ## Security
-Reviews are visible to org members in scope and to the song's artist (D5). Never to other artists or to external project members.
+`song_reviews` is keyed by the song's `track_id` (`17` R7; distinct from `main`'s `contact_track_states`, which is the recipient's decision on a beat). Reviews are visible to org members in scope and to the song's artist (D5). Never to other artists or to external project members.
 
 ## UX
 Keyboard hints spell out "Shift" / "Alt" (the Panchang glyph gotcha).
@@ -1304,9 +1333,9 @@ A per-artist memory of references and direction.
 None.
 
 ## Required Change
-- **Migration:** `artists.direction jsonb` and `artist_references`.
+- **Migration:** `artist_direction(org_id, contact_id PK, direction jsonb, updated_by, updated_at)` and `artist_references(…, contact_id, …)`, keyed by contact (`17` R3).
 - **Routes:** CRUD, with a visibility filter.
-- **UI:** the Direction tab (structured fields + references list; tracks referenced via picker; links; visual files via LABEL-15).
+- **UI:** the Direction tab (structured fields + references list; tracks referenced via picker; links; visual files as `project_assets` via LABEL-15).
 
 ## Starting Code Surfaces
 `src/lib/share/track-picker.ts` (picker pattern).
@@ -1334,52 +1363,57 @@ Drop.
 
 ---
 
-# LABEL-27 — Parties + credits (+ import from `track_collaborators`)
+# LABEL-27 — Parties + credits on `track_collaborators`
 
 **Area:** Rights
 **Priority:** P0
 **Risk:** Medium
 **Workstream:** L
-**Dependencies:** LABEL-21 (D7 decided: migration 115 applied on prod by the owner first)
+**Dependencies:** LABEL-21 (D7: 115 applied on prod)
 **Status:** Not Started
 
 ## Objective
-Credits referencing rights-holder parties, with a proposal/confirmation flow.
+Legal-grade credits by extending `track_collaborators` (`17` R8), and rights-holder parties. **No new `credits` table.**
 
 ## Current State
-`track_collaborators` (115, name + role text, **not applied on prod**).
+`track_collaborators(track_id, name, role, source, contact_id)` exists, with `groupCredits` / `visibleCredits` and credit → contact linking (`main`).
 
 ## Required Change
-- **Migration:** `parties`, `credits` (with an XOR CHECK on song/track). Role vocabulary: `lib/labelos/credit-roles.ts`, RIN-aligned labels.
-- **Routes:** party CRUD (`rights.write`); credit propose (any contributor, for themselves) / confirm / dispute.
-- **Import:** a one-shot per-org import of `track_collaborators` for org tracks, creating unlinked parties with `source = filename` and status `proposed`.
-- **UI:** a Credits section on song detail.
+- **Migration:**
+  - `parties` (`05` fields + `contact_id`).
+  - `track_collaborators` gains `org_id`, `party_id`, `scope` (`composition` | `recording`), `status` (`proposed` | `confirmed` | `disputed`, default `confirmed` for existing rows), `role_detail`, `created_by`, `confirmed_by`.
+- **Role vocabulary:** `lib/labelos/credit-roles.ts`, with RIN-aligned labels.
+- **Routes:**
+  - party CRUD (`rights.write`);
+  - credit propose (any contributor, for themselves only), confirm, dispute, via `/api/org/[orgId]/tracks/[id]/credits`.
+  - The existing producer `PATCH /api/tracks/[id]/collaborators` is unchanged.
+- **UI:** the drawer's credits pills (`groupCredits`) show status and party in org context.
 
 ## Starting Code Surfaces
-`src/lib/tracks/collaborators.ts`, `src/lib/upload/title-metadata.ts`, `supabase/migrations/115_track_collaborators.sql`.
+`src/lib/tracks/collaborators.ts`, `src/lib/upload/title-metadata.ts`, `supabase/migrations/115_track_collaborators.sql`, `124_song_beat_and_credit_links.sql`.
 
 ## Data Changes
-Two tables.
+One table and columns on an existing table.
 
 ## Security
-- External members propose only credits naming themselves.
+- An external member can only propose a credit naming themselves.
 - IPI and legal name are visible with `rights.read` only.
 
 ## UX
-Proposed credits show as "proposed" with a confirm action for `rights.write`.
+Proposed credits show "proposed", with Confirm for `rights.write`.
 
 ## Acceptance Criteria
 - An external member can't propose a credit for someone else.
-- The import is idempotent.
+- Existing credits read unchanged.
 
 ## Tests
-Route tests; `credit-roles.test.ts`.
+Route tests; `credit-roles.test.ts`; existing `collaborators` tests green.
 
 ## Out of Scope
-Public credits display on the store.
+Public credits on the store.
 
 ## Rollback
-Drop the tables.
+Drop `parties` and the new columns.
 
 ---
 
@@ -1399,9 +1433,9 @@ Versioned composition and master split sheets that validate to exactly 100%.
 None.
 
 ## Required Change
-- **Migration:** `split_sheets`, `split_lines` (`numeric(7,4)`). Triggers: lines are immutable once the sheet is circulated; the sum equals 100 on leaving draft.
+- **Migration:** `split_sheets` (keyed by the song's `track_id`), `split_lines` (`numeric(7,4)`). Triggers: lines are immutable once the sheet is circulated; the sum equals 100 on leaving draft.
 - **Module:** `lib/labelos/splits.ts` (pure validation, suggested remainder).
-- **Routes:** create, edit draft, circulate, record signature (upload the signed PDF to `files` as restricted, or an acknowledgement), supersede.
+- **Routes:** create, edit draft, circulate, record signature (upload the signed PDF as a restricted `project_assets` row (kind `split_sheet`), or an acknowledgement), supersede.
 
 ## Starting Code Surfaces
 `src/lib/labelos/`.
@@ -1450,7 +1484,7 @@ The pattern exists in `src/lib/store/readiness.ts` and `src/lib/library/triage.t
 
 ## Required Change
 - `lib/labelos/legal-readiness.ts` implementing L1–L14 (`09` §3.1), the score (§3.2), and a `Reason` shape with a fix capability.
-- `GET /api/org/[orgId]/songs/[id]/legal-readiness`.
+- `GET /api/org/[orgId]/tracks/[id]/legal-readiness` (song tracks).
 - UI: a readiness popover on song detail and a Credits & Rights tab table.
 
 ## Starting Code Surfaces
@@ -1773,7 +1807,7 @@ Fast, scope-safe keyword and identifier search across the org.
 `/api/search` (`ilike`, producer-only).
 
 ## Required Change
-- **Migration:** generated `tsvector` (`simple`) plus GIN on songs, artists, releases, parties, projects (org rows) and files.
+- **Migration:** generated `tsvector` (`simple`) plus GIN on org rows of `tracks` (song tracks), `contacts`, `releases`, `parties`, `projects` and `project_assets` (`17` R1–R3).
 - **Route:** `GET /api/org/[orgId]/search?q=`, with identifier short-circuit via `identifiers.ts`.
 - **UI:** a `CommandPalette` provider.
 
@@ -2003,13 +2037,13 @@ Revert.
 An artist org can connect to a label org and share its whole catalogue or selected projects. The label sees that music through its roster, under its own staff permissions (D1).
 
 ## Current State
-After LABEL-10 an artist org has one `artists` row. After LABEL-21 people can join single projects. Orgs cannot see each other.
+After LABEL-10 an artist org has one roster contact (the owner). After LABEL-21 people can join single projects. Orgs cannot see each other.
 
 ## Required Change
 - **Migration:**
   - `org_connections`, with a unique active connection per (label, artist) pair.
   - `connection_projects`.
-  - `artists.artist_org_id`.
+  - `contacts.artist_org_id` (`17` R3).
   - SQL `can_see_via_connection(project)`.
 - **Routes:**
   - `POST /api/org/[orgId]/connections`: a label invites an artist org by slug or email, or an artist org requests a label.
@@ -2021,10 +2055,10 @@ After LABEL-10 an artist org has one `artists` row. After LABEL-21 people can jo
 - **Audit events:** `connection.requested`, `connection.accepted`, `connection.ended`, `recording.copied`.
 
 ## Starting Code Surfaces
-`src/lib/auth/org-access.ts`, the LABEL-21 project-members code, the LABEL-10 artists routes.
+`src/lib/auth/org-access.ts`, the LABEL-21 project-members code, the LABEL-10 org contacts routes.
 
 ## Data Changes
-Two tables, one column on `artists`, a provenance jsonb column on `tracks` (nullable).
+Two tables, one column on `contacts`, a provenance jsonb column on `tracks` (nullable).
 
 ## Security
 - The artist controls what is shared.

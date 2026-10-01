@@ -65,6 +65,8 @@ Label OS migrations are committed to the Label OS branch and registered in `supa
 
 The code does not need them in production until the branch is merged, and the feature flag is off anyway.
 
+**Never run `npm run db:migrate` against production from the Label OS branch**: it applies every migration file, Label OS ones included. Production uses `supabase/apply/pending.sql`, built from explicit numbers (`scripts/ops/bundle-migrations.sh`), and Label OS tasks never edit that file.
+
 (Migration 115 is different: it belongs to the existing producer app and was applied by the owner on 2026-09-30.)
 
 ## Trying it before production (optional, recommended before the final merge)
@@ -101,6 +103,7 @@ Read first, in this order:
   CLAUDE.md, AGENTS.md,
   docs/bstudio-label-os/00-executive-summary.md,
   docs/bstudio-label-os/15-product-decisions.md (binding decisions),
+  docs/bstudio-label-os/17-reconciliation-with-artist-workspace.md (binding; wins over 04-14 where they differ),
   docs/bstudio-label-os/16-execution-runbook.md,
   the task section "# LABEL-{NN}" in docs/bstudio-label-os/14-engineering-backlog.md,
   and every doc that section references.
@@ -111,9 +114,12 @@ Rules:
 - Follow the repo conventions in CLAUDE.md: Zod contracts, org-access helpers (no user_id filters
   under /api/org/*), pure logic in src/lib with Vitest tests written first, design-direction.md
   for UI.
-- Migrations: next free number (check `git log --all -- supabase/migrations/`), idempotent, end with
-  NOTIFY pgrst. Register them in supabase/MIGRATIONS.md as
-  "Label OS — not applied (apply at final merge)". Never apply them to any database.
+- Migrations: next free number (check `git log --all -- supabase/migrations/`; main ends at 135, Label OS
+  started at 136), idempotent, end with NOTIFY pgrst. Register them in supabase/MIGRATIONS.md as
+  "Label OS — not applied (apply at final merge)". Never apply them to Supabase. Never edit
+  supabase/apply/pending.sql. A throwaway local Postgres (scripts/local-db/) for testing is fine.
+- Build on main's Artist Workspace (#44) — never create songs/artists/files/comments/credits tables
+  (17-reconciliation). Keep `npm run e2e:real-db` flows green when you touch #44 tables.
 - Everything stays behind LABEL_OS_ENABLED. No change to existing producer, store, or checkout
   behaviour unless the task says so.
 - Before pushing: npx tsc --noEmit && npm test && npm run build must pass. Run /code-review on
