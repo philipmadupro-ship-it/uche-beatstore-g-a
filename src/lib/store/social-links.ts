@@ -87,3 +87,40 @@ export function storeSocialLinks(creator: Partial<SocialFields> | null | undefin
   }
   return links;
 }
+
+type LinkFields = Partial<Record<
+  'instagram_handle' | 'twitter_handle' | 'spotify_url' | 'soundcloud_url' | 'website_url' | 'contact_email',
+  string | null
+>>;
+
+const FIELD_LABELS: Array<[keyof LinkFields, CreatorLinkKind, string]> = [
+  ['instagram_handle', 'instagram', 'Instagram'],
+  ['twitter_handle', 'x', 'X'],
+  ['spotify_url', 'spotify', 'Spotify'],
+  ['soundcloud_url', 'soundcloud', 'SoundCloud'],
+  ['website_url', 'website', 'Website'],
+  ['contact_email', 'email', 'Email'],
+];
+
+/**
+ * Labels of the profile link fields that hold something the storefront will
+ * refuse to link (`resolveCreatorLink` → null). Empty fields are fine; this is
+ * for the save-time warning, so a producer learns the link is dead when they
+ * press Save rather than when a visitor can't click it.
+ */
+export function unusableCreatorLinks(fields: LinkFields | null | undefined): string[] {
+  if (!fields) return [];
+  return FIELD_LABELS
+    .filter(([key, kind]) => !!fields[key]?.trim() && !resolveCreatorLink(kind, fields[key]))
+    .map(([, , label]) => label);
+}
+
+/** Toast copy for `unusableCreatorLinks`, or null when every filled field is usable. */
+export function unusableLinksWarning(fields: LinkFields | null | undefined): { title: string; description: string } | null {
+  const bad = unusableCreatorLinks(fields);
+  if (bad.length === 0) return null;
+  return {
+    title: bad.length === 1 ? `${bad[0]} link won't show` : `${bad.length} links won't show`,
+    description: `${bad.join(', ')} ${bad.length === 1 ? "isn't" : "aren't"} a valid link or handle, so it is hidden on your storefront. Saved as typed — fix it to show it.`,
+  };
+}
