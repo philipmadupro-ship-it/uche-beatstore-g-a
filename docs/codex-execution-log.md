@@ -9298,4 +9298,6 @@ Reported: ten WAVs (~200–300 MB) took ~10 minutes to upload; the vinyl and wav
 
 Tests: part route batch cases; `ShareTrackRow.test.tsx`; `e2e/share-options.spec.ts` +9 (disc spins and there is one vinyl waveform; Download on the row; no row download when off) — 37 passing.
 
-Not done: the store cards; any measured before/after of upload time. Prompt: `docs/prompts/upload-speed-and-share-player.md`.
+**Store.** `/store` now follows the same row and card anatomy. `StoreListView`: each beat is its own bordered row (48px cover with the play glyph, semibold title, BPM | key | type line) instead of dividers inside one panel; the Time and Buy columns are wider (76px / 272px) because two prices were running into the length. `BeatCard`: cover with hover play + BPM/key badges, title and type BELOW the art (it was overlaid on a scrim), buy strip under the meta; wishlist heart, Sold/Free tag and the momentum line are the store's additions. `BandcampRemixCard` (remix type) is unchanged. E2E hooks kept: `[id^="beat-"]`, `li ... p.truncate.font-semibold`, the "Lease" label.
+
+Not done: any measured before/after of upload time. Prompt: `docs/prompts/upload-speed-and-share-player.md`.
