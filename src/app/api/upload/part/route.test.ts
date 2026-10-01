@@ -87,6 +87,47 @@ describe('POST /api/upload/part', () => {
   });
 });
 
+describe('POST /api/upload/part (batch)', () => {
+  it('signs every requested part in one request, after one ownership check', async () => {
+    mockGetUploadPartUrl.mockImplementation(async ({ partNumber }: { partNumber: number }) => `https://r2.example/p${partNumber}`);
+    const mod = await import('./route');
+    const res = await mod.POST(jsonRequest('POST', { sessionId: 'session-1', partNumbers: [1, 2, 3, 2] }));
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      direct: true,
+      urls: { 1: 'https://r2.example/p1', 2: 'https://r2.example/p2', 3: 'https://r2.example/p3' },
+      expiresIn: 900,
+    });
+    expect(mockGetSession).toHaveBeenCalledTimes(1);
+    expect(mockRequireOwner).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports direct: false when R2 signing is unavailable, so the client proxies', async () => {
+    mockGetUploadPartUrl.mockResolvedValue(null);
+    const mod = await import('./route');
+    const res = await mod.POST(jsonRequest('POST', { sessionId: 'session-1', partNumbers: [1, 2] }));
+    expect(await res.json()).toMatchObject({ direct: false, urls: {} });
+  });
+
+  it('rejects a part outside the session, a bad entry, and an empty list', async () => {
+    const mod = await import('./route');
+    for (const partNumbers of [[1, 4], [1, 'x'], [0], []]) {
+      const res = await mod.POST(jsonRequest('POST', { sessionId: 'session-1', partNumbers }));
+      expect(res.status).toBe(400);
+    }
+    expect(mockGetUploadPartUrl).not.toHaveBeenCalled();
+  });
+
+  it('does not sign for someone else\'s session', async () => {
+    mockRequireOwner.mockResolvedValue({ ok: false, res: new Response(null, { status: 404 }) });
+    const mod = await import('./route');
+    const res = await mod.POST(jsonRequest('POST', { sessionId: 'session-1', partNumbers: [1] }));
+    expect(res.status).toBe(404);
+    expect(mockGetUploadPartUrl).not.toHaveBeenCalled();
+  });
+});
+
 describe('PATCH /api/upload/part', () => {
   it('records the R2 ETag and exact final-part size', async () => {
     const mod = await import('./route');

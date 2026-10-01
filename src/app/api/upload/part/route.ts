@@ -22,13 +22,22 @@ function expectedPartSize(session: {
     : session.partSize;
 }
 
+/** Most parts one signing request may cover (a 500 MiB file is ~63 parts). */
+const MAX_BATCH_PARTS = 200;
+
 /**
  * Returns a short-lived R2 URL. Audio bytes then travel browser -> R2.
+ *
+ * `partNumbers: number[]` signs a whole file's parts in ONE request. Signing
+ * is a local computation, but each request still pays a session lookup and a
+ * Supabase auth check, and the browser used to make one per part, in series
+ * with the PUT it was waiting to send.
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const sessionId = typeof body.sessionId === 'string' ? body.sessionId : '';
+    if (Array.isArray(body.partNumbers)) return signBatch(sessionId, body.partNumbers);
     const partNumber = validatePartNumber(body.partNumber);
     if (!sessionId || !partNumber) {
       return NextResponse.json({ error: 'sessionId and valid partNumber required' }, { status: 400 });
@@ -60,6 +69,31 @@ export async function POST(req: NextRequest) {
     console.error('upload/part sign error:', err);
     return NextResponse.json({ error: err instanceof Error ? err.message : 'part signing failed' }, { status: 500 });
   }
+}
+
+async function signBatch(sessionId: string, requested: unknown[]) {
+  const partNumbers = Array.from(new Set(requested.map(validatePartNumber)));
+  if (!sessionId || partNumbers.length === 0 || partNumbers.length > MAX_BATCH_PARTS || partNumbers.includes(null)) {
+    return NextResponse.json({ error: 'sessionId and 1-200 valid partNumbers required' }, { status: 400 });
+  }
+  const session = await getSession(sessionId);
+  if (!session) return NextResponse.json({ error: 'unknown session' }, { status: 404 });
+  if (session.status !== 'in_progress') {
+    return NextResponse.json({ error: `session ${session.status}` }, { status: 409 });
+  }
+  const owner = await requireUploadSessionOwner(session);
+  if (!owner.ok) return owner.res;
+  if (partNumbers.some((n) => (n as number) > session.totalParts)) {
+    return NextResponse.json({ error: 'part number exceeds total parts' }, { status: 400 });
+  }
+
+  const urls: Record<number, string> = {};
+  for (const n of partNumbers as number[]) {
+    const url = await getUploadPartUrl({ uploadId: session.uploadId, key: session.key, partNumber: n });
+    if (url) urls[n] = url;
+  }
+  // Empty `urls` means R2 is not configured: the caller proxies each part.
+  return NextResponse.json({ direct: Object.keys(urls).length > 0, urls, expiresIn: 15 * 60 });
 }
 
 /**

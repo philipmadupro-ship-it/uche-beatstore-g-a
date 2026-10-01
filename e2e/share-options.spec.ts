@@ -195,6 +195,51 @@ async function expectPlays(page: Page, h: Harness, kind: Kind) {
     .toBeGreaterThan(0);
 }
 
+// Producer / rapper / friend put the vinyl + waveform hero and a track list on
+// the page. Pins the two things that were wrong there: the waveform under the
+// vinyl was a SECOND player (so disc, waveform and sound ran on different
+// state), and Download lived in a block at the bottom, not on the beat.
+for (const kind of ['producer', 'rapper', 'friend'] as const) {
+  test.describe(`project share · ${kind} · vinyl and rows`, () => {
+    test('the vinyl, its waveform and the sound are one player', async ({ page }) => {
+      const h = await stubProjectShare(page, { kind, allowDownloads: true, fullPlayback: true });
+      await page.goto(`/projects/share/${TOKEN}`);
+
+      const disc = page.getByTestId('share-vinyl-disc');
+      const wave = page.getByTestId('share-vinyl-wave');
+      await expect(disc).toHaveAttribute('data-spinning', 'false');
+      // The page's engine draws into the container under the vinyl.
+      await expect.poll(() => wave.evaluate((el) => el.childElementCount > 0)).toBe(true);
+
+      await expectPlays(page, h, kind);
+      // Playing Track Two moves the disc and keeps one waveform on the page.
+      await expect(disc).toHaveAttribute('data-spinning', 'true');
+      await expect(page.getByTestId('share-vinyl-wave')).toHaveCount(1);
+    });
+
+    test('Download is on the beat\'s own row', async ({ page }) => {
+      const h = await stubProjectShare(page, { kind, allowDownloads: true, fullPlayback: true });
+      await page.goto(`/projects/share/${TOKEN}`);
+      const row = page.getByTestId('share-track-row').filter({ hasText: 'Track Two' });
+      await row.scrollIntoViewIfNeeded();
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        row.getByRole('button', { name: 'Download Track Two' }).click(),
+      ]);
+      // The stub names every file Track One.wav; the request names the beat.
+      expect(download.suggestedFilename()).toMatch(/\.wav$/);
+      expect(new URL(h.downloads[0].url()).searchParams.get('track_id')).toBe(tracks[1].id);
+    });
+
+    test('no download button on the rows when downloads are off', async ({ page }) => {
+      await stubProjectShare(page, { kind, allowDownloads: false, fullPlayback: true });
+      await page.goto(`/projects/share/${TOKEN}`);
+      await expect(page.getByTestId('share-track-row').first()).toBeVisible();
+      await expect(page.getByTestId('share-track-row').getByRole('button', { name: /^Download / })).toHaveCount(0);
+    });
+  });
+}
+
 for (const kind of KINDS) {
   test.describe(`project share · ${kind} variant`, () => {
     test('downloads on + full track: player loads, playback says full, download saves the master', async ({ page }) => {
