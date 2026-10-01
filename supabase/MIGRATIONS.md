@@ -10,6 +10,17 @@ the full set in order is safe and re-runnable — that's the deploy contract.
 table/column/index isn't live yet silently no-ops (or 500s). Apply on a
 **staging** Supabase project first, then production.
 
+## Verify locally first — always
+
+```bash
+npm run db:local:check
+```
+
+Starts a throwaway Postgres (temp dir, `127.0.0.1:55432`, never Supabase), runs
+`scripts/local-db/reset.sh` against it (bootstrap, every migration twice, seed), then
+`supabase/local/checks/*.sql` and each `supabase/rollback/*.down.sql`, and deletes
+the database. A new migration ships with a check file of its own.
+
 ## How to apply
 
 ```bash
@@ -223,7 +234,7 @@ Update this table when a run is confirmed.
 If you add a new one, list it here until it's confirmed applied.
 
 ## Numbering
-Latest applied baseline = 106; latest file on disk = 135, 121 is `121_share_full_playback` (SHARE-01) (next new migration = 136). When two branches both add a migration, both
+Latest applied baseline = 106; latest file on disk = 136 (Label OS, not applied), 121 is `121_share_full_playback` (SHARE-01) (next new migration = 137). When two branches both add a migration, both
 claim the next number — check `git log --all -- supabase/migrations/` before
 naming (we renumbered 040/041 → 046/047 once already; 096/097/098/099 each
 have two independent files sharing a number from a past parallel-branch
@@ -259,3 +270,11 @@ Label OS migrations live on the Label OS branch only and are **not applied to
 the production database** until the owner merges that branch into `main`
 (`docs/bstudio-label-os/16-execution-runbook.md`). Each one is listed here as
 "Label OS — not applied (apply at final merge)" when it is added.
+
+| Migration | Status | What it does |
+|---|---|---|
+| `136_labelos_org_core.sql` | **Label OS — not applied (apply at final merge)** | LABEL-03. Five new tables (`organizations`, `org_members` with per-member `cap_grants`/`cap_revokes`, `org_invitations`, `user_profiles`, `activity_events`), the `org_role` / `has_org_cap` SECURITY DEFINER helpers (mirroring `src/lib/labelos/capabilities.ts`, held equal by `capabilities.sql.test.ts`), a deferred "≥1 owner per org" trigger, and member-only RLS. No existing table is touched. Rollback: `supabase/rollback/136_labelos_org_core.down.sql` |
+
+**Numbered 136, not 122.** `main` already has 122–135 (#44, artist workspace +
+portal); the Label OS branch has not merged them yet. Numbering past them keeps
+the final merge free of collisions.

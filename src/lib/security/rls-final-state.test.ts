@@ -67,6 +67,42 @@ describe('final RLS policy state', () => {
     }
   });
 
+  describe('Label OS org core (mig 136)', () => {
+    const ORG_TABLES = ['organizations', 'org_members', 'org_invitations', 'user_profiles', 'activity_events'];
+    const onTable = (table: string) => [...policies].filter(([k]) => k.startsWith(`${table}.`));
+
+    it('every org-core table has at least one policy', () => {
+      for (const table of ORG_TABLES) expect(onTable(table).length, table).toBeGreaterThan(0);
+    });
+
+    it('every new-table policy keys on org_id or a membership helper', () => {
+      const offenders = ORG_TABLES.flatMap(onTable)
+        .filter(([, body]) => !/\borg_id\b|\borg_role\s*\(|\bhas_org_cap\s*\(/.test(body))
+        .map(([k]) => k);
+      expect(offenders).toEqual([]);
+    });
+
+    it('activity_events is append-only: no UPDATE, DELETE or ALL policy', () => {
+      const writes = onTable('activity_events')
+        .filter(([, body]) => /FOR\s+(UPDATE|DELETE|ALL)\b/i.test(body))
+        .map(([k]) => k);
+      expect(writes).toEqual([]);
+    });
+
+    it('org_members has no insert policy: joining is the service-role accept route only', () => {
+      const inserts = onTable('org_members')
+        .filter(([, body]) => /FOR\s+(INSERT|ALL)\b/i.test(body))
+        .map(([k]) => k);
+      expect(inserts).toEqual([]);
+    });
+
+    it('org_members writes require members.manage', () => {
+      const writes = onTable('org_members').filter(([, body]) => /FOR\s+(UPDATE|DELETE)\b/i.test(body));
+      expect(writes.length).toBeGreaterThan(0);
+      for (const [k, body] of writes) expect(body, k).toMatch(/has_org_cap\s*\(\s*org_id\s*,\s*'members\.manage'\s*\)/);
+    });
+  });
+
   it('share_links writes through RLS require the producer', () => {
     for (const name of ['share_links_owner_insert', 'share_links_owner_update']) {
       expect(policies.get(`share_links.${name}`) ?? '', name).toMatch(/WITH CHECK[\s\S]*is_producer\(\)/i);

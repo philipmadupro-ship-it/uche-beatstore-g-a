@@ -140,7 +140,7 @@ Revert.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-02
-**Status:** Not Started
+**Status:** In Review
 
 ## Objective
 Create the tenant tables and SQL authorization helpers.

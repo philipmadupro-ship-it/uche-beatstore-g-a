@@ -10,6 +10,7 @@
     "db:migrate": "bash scripts/apply-migrations.sh",
     "db:local:reset": "bash scripts/local-db/reset.sh",
     "db:local:up": "bash scripts/local-db/up.sh",
+    "db:local:check": "bash scripts/local-db/check.sh",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
