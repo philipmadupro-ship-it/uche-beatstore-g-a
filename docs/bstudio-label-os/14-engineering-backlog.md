@@ -200,7 +200,7 @@ Down-script drops the five tables and two functions (no dependants yet).
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-03
-**Status:** In Progress (session_01MCFUPyrvd3TeR7FC3ke5uh, branch label-os/LABEL-04)
+**Status:** In Review ([PR #53](https://github.com/philipmadupro-ship-it/uche-beatstore-g-a/pull/53), branch label-os/LABEL-04)
 
 ## Objective
 Make the policy-replay test fail on the Label OS–specific mistakes before they ship.

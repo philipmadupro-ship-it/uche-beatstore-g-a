@@ -131,6 +131,9 @@ Rules:
   supabase/apply/pending.sql. Always prove them on a throwaway local Postgres: add
   supabase/local/checks/NNN_*.sql for the migration and run `npm run db:local:check` (see "Always
   run a local database" in this runbook).
+- Every new Label OS table goes into `labelOsTables()` in src/lib/security/rls-final-state.test.ts
+  in the same PR. The LABEL-04 guards (RLS on, no USING (true), every policy keyed on org_id or a
+  membership helper) only cover tables in that list.
 - Build on main's Artist Workspace (#44) — never create songs/artists/files/comments/credits tables
   (17-reconciliation). Keep `npm run e2e:real-db` flows green when you touch #44 tables.
 - Everything stays behind LABEL_OS_ENABLED. No change to existing producer, store, or checkout
