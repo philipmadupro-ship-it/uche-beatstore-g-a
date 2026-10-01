@@ -7,6 +7,11 @@ import { createHmac, timingSafeEqual } from 'crypto';
 // every media request re-resolves the share and runs the lifecycle gate.
 const GRANT_TTL_SECONDS = 4 * 60 * 60;
 
+/** The server's HMAC secret for signed share grants (also keys portal sign-in: lib/artist-portal/sign-in). */
+export function shareSigningSecret(): string {
+  return signingSecret();
+}
+
 function signingSecret(): string {
   const secret = process.env.SHARE_MEDIA_TOKEN_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (secret) return secret;

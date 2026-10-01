@@ -32,7 +32,7 @@ export async function GET(
 
   try {
     const admin = createServiceClient();
-    const resolved = await resolveShareToken(admin, token, ['project_share', 'share_link', 'paid_access']);
+    const resolved = await resolveShareToken(admin, token, ['project_share', 'share_link', 'paid_access', 'artist_portal']);
     if (!resolved || !(await resolvedShareIncludesTrack(admin, resolved, trackId))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }

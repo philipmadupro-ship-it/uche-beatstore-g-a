@@ -26,6 +26,7 @@ import type { Track } from '@/lib/types';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { ArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
 import { artworkTagsOf } from '@/lib/artwork/artwork-tags';
+import { resolveCreatorLink } from '@/lib/store/social-links';
 import type { PublicArtworkTheme } from '@/lib/artwork/public-theme';
 
 /* ─── Types ────────────────────────────────────────────────── */
@@ -599,28 +600,38 @@ export default function StoreProductPage({ params }: { params: Promise<{ id: str
                     <p className="text-[11px] text-white/60 mt-2 leading-relaxed line-clamp-3">{creator.bio}</p>
                   )}
                   <div className="flex items-center gap-3 mt-3 flex-wrap">
-                    {creator.instagram_handle && (
-                      <a href={`https://instagram.com/${creator.instagram_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-mono text-white/40 hover:text-white transition-colors flex items-center gap-1" title="Instagram">
-                        <AtSign size={11} />
-                        {creator.instagram_handle.replace(/^@/, '')}
-                      </a>
-                    )}
-                    {creator.twitter_handle && (
-                      <a href={`https://twitter.com/${creator.twitter_handle.replace(/^@/, '')}`} target="_blank" rel="noopener noreferrer" className="text-[9px] font-mono text-white/40 hover:text-white transition-colors flex items-center gap-1" title="X / Twitter">
-                        <Link2 size={11} />
-                        {creator.twitter_handle.replace(/^@/, '')}
-                      </a>
-                    )}
-                    {creator.website_url && (
-                      <a href={creator.website_url} target="_blank" rel="noopener noreferrer" className="text-white/40 hover:text-white transition-colors" title="Website">
-                        <Globe size={14} />
-                      </a>
-                    )}
-                    {creator.contact_email && (
-                      <a href={`mailto:${creator.contact_email}`} className="text-white/40 hover:text-white transition-colors" title={creator.contact_email}>
-                        <Mail size={14} />
-                      </a>
-                    )}
+                    {(() => {
+                      const instagram = resolveCreatorLink('instagram', creator.instagram_handle);
+                      const twitter = resolveCreatorLink('x', creator.twitter_handle);
+                      const website = resolveCreatorLink('website', creator.website_url);
+                      const email = resolveCreatorLink('email', creator.contact_email);
+                      return (
+                        <>
+                          {instagram && (
+                            <a href={instagram.href} target="_blank" rel="noopener noreferrer" className="text-[9px] font-mono text-white/40 hover:text-white transition-colors flex items-center gap-1" title="Instagram">
+                              <AtSign size={11} />
+                              {instagram.label.slice(1)}
+                            </a>
+                          )}
+                          {twitter && (
+                            <a href={twitter.href} target="_blank" rel="noopener noreferrer" className="text-[9px] font-mono text-white/40 hover:text-white transition-colors flex items-center gap-1" title="X / Twitter">
+                              <Link2 size={11} />
+                              {twitter.label.slice(1)}
+                            </a>
+                          )}
+                          {website && (
+                            <a href={website.href} target="_blank" rel="noopener noreferrer" className="text-white/40 hover:text-white transition-colors" title="Website">
+                              <Globe size={14} />
+                            </a>
+                          )}
+                          {email && (
+                            <a href={email.href} className="text-white/40 hover:text-white transition-colors" title={email.label}>
+                              <Mail size={14} />
+                            </a>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

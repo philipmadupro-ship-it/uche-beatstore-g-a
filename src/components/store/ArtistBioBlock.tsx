@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ChevronDown, Globe, Mail, ArrowRight } from 'lucide-react';
 import { ParticleText } from '@/components/store/ParticleText';
 import { sanitizeUrl } from './helpers';
+import { resolveCreatorLink } from '@/lib/store/social-links';
 import { slugify } from '@/lib/slug';
 import type { CreatorProfile } from './types';
 
@@ -32,49 +33,53 @@ export function ArtistBioBlock({ creator, accentColor, plainTitle = false }: Pro
   const hero = sanitizeUrl(creator?.hero_image_url);
 
   const socialLinks: Array<{ href: string; label: string; icon: React.ReactNode; color: string }> = [];
-  if (creator?.instagram_handle) {
-    const h = creator.instagram_handle.replace(/^@/, '');
+  const instagram = resolveCreatorLink('instagram', creator?.instagram_handle);
+  const twitter = resolveCreatorLink('x', creator?.twitter_handle);
+  const spotify = resolveCreatorLink('spotify', creator?.spotify_url);
+  const soundcloud = resolveCreatorLink('soundcloud', creator?.soundcloud_url);
+  const website = resolveCreatorLink('website', creator?.website_url);
+  const email = resolveCreatorLink('email', creator?.contact_email);
+  if (instagram) {
     socialLinks.push({
-      href: `https://instagram.com/${h}`, label: 'Instagram', color: 'hover:text-[#E1306C]', icon: (
+      href: instagram.href, label: 'Instagram', color: 'hover:text-[#E1306C]', icon: (
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
         </svg>
       )
     });
   }
-  if (creator?.twitter_handle) {
-    const h = creator.twitter_handle.replace(/^@/, '');
+  if (twitter) {
     socialLinks.push({
-      href: `https://x.com/${h}`, label: 'X / Twitter', color: 'hover:text-white', icon: (
+      href: twitter.href, label: 'X / Twitter', color: 'hover:text-white', icon: (
         <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
           <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.736-8.854L2.5 2.25h6.894l4.259 5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
         </svg>
       )
     });
   }
-  if (creator?.spotify_url) {
+  if (spotify) {
     socialLinks.push({
-      href: creator.spotify_url, label: 'Spotify', color: 'hover:text-[#1DB954]', icon: (
+      href: spotify.href, label: 'Spotify', color: 'hover:text-[#1DB954]', icon: (
         <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor">
           <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z" />
         </svg>
       )
     });
   }
-  if (creator?.soundcloud_url) {
+  if (soundcloud) {
     socialLinks.push({
-      href: creator.soundcloud_url, label: 'SoundCloud', color: 'hover:text-[#FF5500]', icon: (
+      href: soundcloud.href, label: 'SoundCloud', color: 'hover:text-[#FF5500]', icon: (
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
           <path d="M1.175 12.225c-.014.095 0 .19 0 .285l1.3 5.48H1.175c-.65 0-1.175-.524-1.175-1.175v-3.62c0-.65.524-1.175 1.175-1.175v.205zm2.6-3.92c-.65 0-1.175.524-1.175 1.175v7.63h1.3V8.48c0-.65-.474-1.175-1.125-1.175zm1.3-.3c-.65 0-1.175.524-1.175 1.175v8.43h1.3V9.18c0-.65-.474-1.155-1.125-1.175zm1.3-1.24c-.65 0-1.175.524-1.175 1.175v9.67h1.3V7.94c0-.65-.474-1.175-1.125-1.175zm1.3.175c-.65 0-1.175.524-1.175 1.175v9.495l1.3-.7V7.115c0-.65-.474-1.175-1.125-1.175zm1.3 0c-.65 0-1.175.524-1.175 1.175v9.67c.27.095.555.175.855.175.38 0 .745-.095 1.065-.27V7.115c0-.65-.474-1.175-1.125-1.175z" />
         </svg>
       )
     });
   }
-  if (creator?.website_url) {
-    socialLinks.push({ href: creator.website_url, label: 'Website', color: 'hover:text-white', icon: <Globe size={16} /> });
+  if (website) {
+    socialLinks.push({ href: website.href, label: 'Website', color: 'hover:text-white', icon: <Globe size={16} /> });
   }
-  if (creator?.contact_email) {
-    socialLinks.push({ href: `mailto:${creator.contact_email}`, label: creator.contact_email, color: 'hover:text-white', icon: <Mail size={15} /> });
+  if (email) {
+    socialLinks.push({ href: email.href, label: email.label, color: 'hover:text-white', icon: <Mail size={15} /> });
   }
 
   return (

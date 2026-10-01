@@ -9,6 +9,8 @@ const TYPE_OPTIONS: { value: TrackType; label: string }[] = [
   { value: 'instrumental', label: 'Instr.' },
   { value: 'song',         label: 'Song' },
   { value: 'remix',        label: 'Remix' },
+  { value: 'loop',         label: 'Loop' },
+  { value: 'topline',      label: 'Topline' },
 ];
 
 const STATUS_OPTIONS: { value: TrackStatus; label: string; active: string; dot: string }[] = [

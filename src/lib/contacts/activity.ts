@@ -15,6 +15,18 @@
  *      an account and favorited three tracks looked identical to a stranger
  *      who'd never visited.
  *
+ * Artist workspace (migrations 122–125) adds two derived sources and a set of
+ * stored kinds, through the same merge rather than a second event system:
+ *   5. Derived "Linked to <project>" from `project_contacts`.
+ *   6. Derived "Added <beat> to <project>" for tracks added to a project the
+ *      contact is linked to, after the link — what a follow-up looks like now
+ *      that it is no longer a new link.
+ *   Stored: `portal_opened`, `track_played` / `track_downloaded` (portal),
+ *   `decision_changed`, `artist_notified`, `file_downloaded` (a project file
+ *   from the portal), `portal_comment`, `artist_message` / `artist_request` / `producer_message` /
+ *   `artist_request_resolved` (mig 130's thread) — real events with no other
+ *   record.
+ *
  * Everything here is pure (no IO) so the merge/dedupe/sort logic is unit
  * tested in isolation — the route just feeds it rows. This is the
  * `filterAndSortTracks` template applied to the CRM.
@@ -28,7 +40,19 @@ export type ActivityKind =
   | 'favorited'
   | 'purchase'
   | 'note'
-  | 'stage_change';
+  | 'stage_change'
+  | 'project_linked'
+  | 'track_added'
+  | 'portal_opened'
+  | 'track_downloaded'
+  | 'decision_changed'
+  | 'artist_notified'
+  | 'file_downloaded'
+  | 'portal_comment'
+  | 'artist_message'
+  | 'artist_request'
+  | 'artist_request_resolved'
+  | 'producer_message';
 
 export interface ContactActivity {
   id: string;
@@ -74,6 +98,19 @@ export interface PurchaseRow {
 export interface BuyerFavoriteRow {
   track_id: string;
   created_at: string;
+}
+
+export interface ProjectLinkRow {
+  project_id: string;
+  project_name?: string | null;
+  created_at: string;
+}
+
+export interface ProjectTrackAddRow {
+  project_id: string;
+  project_name?: string | null;
+  track_id: string;
+  added_at: string;
 }
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
@@ -186,10 +223,57 @@ export function activityFromBuyerFavorites(
   }));
 }
 
+/** project_contacts → one "Linked to <project>" event each. */
+export function activityFromProjectLinks(links: ProjectLinkRow[]): ContactActivity[] {
+  return links.map((l) => ({
+    id: `plink-${l.project_id}`,
+    kind: 'project_linked' as const,
+    title: `Linked to ${l.project_name?.trim() || 'a project'}`,
+    metadata: { project_id: l.project_id },
+    occurredAt: l.created_at,
+    derived: true,
+  }));
+}
+
+/**
+ * Tracks added to a linked project AFTER the contact was linked → "Added X to
+ * <project>", grouped per project and day so a batch of eight reads as one
+ * line. Tracks already in the project when it was linked are part of the link
+ * event, not follow-ups.
+ */
+export function activityFromProjectTrackAdds(
+  adds: ProjectTrackAddRow[],
+  links: ProjectLinkRow[],
+  titleMap: Record<string, string>,
+): ContactActivity[] {
+  const linkedAt = new Map(links.map((l) => [l.project_id, l.created_at]));
+  const groups = new Map<string, { row: ProjectTrackAddRow; ids: string[]; latest: string }>();
+  for (const a of adds) {
+    const since = linkedAt.get(a.project_id);
+    if (!since || a.added_at <= since) continue;
+    const key = `${a.project_id}:${a.added_at.slice(0, 10)}`;
+    const g = groups.get(key) ?? { row: a, ids: [], latest: a.added_at };
+    if (!g.ids.includes(a.track_id)) g.ids.push(a.track_id);
+    if (a.added_at > g.latest) g.latest = a.added_at;
+    groups.set(key, g);
+  }
+  return [...groups.entries()].map(([key, g]) => ({
+    id: `padd-${key}`,
+    kind: 'track_added' as const,
+    title: `Added ${titlesFor(g.ids, titleMap)} to ${g.row.project_name?.trim() || 'a project'}`,
+    metadata: { project_id: g.row.project_id, track_ids: g.ids },
+    occurredAt: g.latest,
+    derived: true,
+  }));
+}
+
 /** Stored rows → ContactActivity (kind validated loosely; unknowns kept as note). */
 export function activityFromStored(rows: StoredActivityRow[]): ContactActivity[] {
   const known: ActivityKind[] = [
     'beat_sent', 'email_opened', 'link_clicked', 'track_played', 'favorited', 'purchase', 'note', 'stage_change',
+    'project_linked', 'track_added', 'portal_opened', 'track_downloaded', 'decision_changed', 'artist_notified',
+    'file_downloaded', 'portal_comment', 'artist_message', 'artist_request', 'artist_request_resolved',
+    'producer_message',
   ];
   return rows.map((r) => ({
     id: r.id,
@@ -220,6 +304,8 @@ export function buildContactTimeline(params: {
   beatSends: BeatSendRow[];
   purchases: PurchaseRow[];
   favorites?: BuyerFavoriteRow[];
+  projectLinks?: ProjectLinkRow[];
+  projectTrackAdds?: ProjectTrackAddRow[];
   titleMap: Record<string, string>;
 }): ContactActivity[] {
   const stored = activityFromStored(params.stored);
@@ -227,6 +313,8 @@ export function buildContactTimeline(params: {
     ...activityFromBeatSends(params.beatSends, params.titleMap),
     ...activityFromPurchases(params.purchases, params.titleMap),
     ...activityFromBuyerFavorites(params.favorites ?? [], params.titleMap),
+    ...activityFromProjectLinks(params.projectLinks ?? []),
+    ...activityFromProjectTrackAdds(params.projectTrackAdds ?? [], params.projectLinks ?? [], params.titleMap),
   ];
 
   // Index of dedupe keys already present in stored rows.
@@ -263,6 +351,12 @@ export function dedupeKey(a: ContactActivity): string | null {
       return m.beat_send_id ? `link_clicked:${m.beat_send_id}` : null;
     case 'favorited':
       return m.track_id ? `favorited:${m.track_id}` : null;
+    case 'project_linked':
+      return m.project_id ? `project_linked:${m.project_id}` : null;
+    // A notify IS a send: the stored row carries the beat_sends id, so the
+    // derived "Sent X" for the same row is suppressed rather than shown twice.
+    case 'artist_notified':
+      return m.beat_send_id ? `beat_sent:${m.beat_send_id}` : null;
     default:
       return null;
   }

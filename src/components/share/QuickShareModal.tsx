@@ -376,6 +376,8 @@ export function QuickShareModal({ onClose, onCreated }: Props) {
                             { value: 'instrumental', label: 'Instrumental' },
                             { value: 'song', label: 'Song' },
                             { value: 'remix', label: 'Remix' },
+                            { value: 'loop', label: 'Loop' },
+                            { value: 'topline', label: 'Topline' },
                           ]}
                           className="bg-[#090907] border border-white/10 rounded-md text-[11px] text-white"
                         />

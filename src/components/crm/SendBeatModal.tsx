@@ -64,6 +64,13 @@ interface SendBeatModalProps {
    * beat_sends.campaign_id and upserts campaign_targets server-side.
    */
   campaignId?: string;
+  /** Start on tracks or on a whole project (a pack) — the role tabs' presets (lib/contacts/roles). */
+  initialMode?: 'tracks' | 'project';
+  /**
+   * Show only tracks of these types to begin with (loops for a producer,
+   * toplines for a label). Shown as a chip the producer can clear.
+   */
+  typeFilter?: string[];
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -77,7 +84,7 @@ type ShareRole = 'viewer' | 'commenter';
  * and an email preview tab. For bulk sends we create one share PER
  * recipient so revocation / per-contact tracking stays clean.
  */
-export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds, priorSentTrackIds, campaignId: initialCampaignId, onClose, onSuccess }: SendBeatModalProps) {
+export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds, priorSentTrackIds, campaignId: initialCampaignId, initialMode, typeFilter, onClose, onSuccess }: SendBeatModalProps) {
   const reducedMotion = useReducedMotion();
   // Normalize the input — caller can pass either `contact` or `contacts`.
   // Internal logic only sees `recipients`.
@@ -94,7 +101,8 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
 
   // When opened via track-on-contact DnD, start on the tracks tab so
   // the user sees their pre-loaded selection right away.
-  const [mode, setMode] = useState<SendMode>('tracks');
+  const [mode, setMode] = useState<SendMode>(initialMode ?? 'tracks');
+  const [onlyTypes, setOnlyTypes] = useState<string[] | null>(typeFilter?.length ? typeFilter : null);
   const [tab, setTab] = useState<'compose' | 'preview'>('compose');
 
   // Source state
@@ -294,6 +302,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
       const allowed = new Set(projectScopeTrackIds);
       pool = pool.filter((t) => allowed.has(t.id));
     }
+    if (onlyTypes) pool = pool.filter((t) => onlyTypes.includes(t.type));
     if (tagFilter) {
       pool = pool.filter((t) => {
         const tags = (t as unknown as { track_tags?: { tag: string }[] }).track_tags ?? [];
@@ -311,7 +320,7 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
       case 'energy': sorted.sort((a, b) => (b.energy ?? 0) - (a.energy ?? 0)); break;
     }
     return sorted;
-  }, [tracks, projectScopeId, projectScopeTrackIds, tagFilter, searchQuery, trackSort]);
+  }, [tracks, projectScopeId, projectScopeTrackIds, onlyTypes, tagFilter, searchQuery, trackSort]);
 
   const filteredProjects = projects.filter((p) =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase()),
@@ -638,6 +647,17 @@ export function SendBeatModal({ contact, contacts: contactsProp, initialTrackIds
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
               </div>
+
+              {mode === 'tracks' && onlyTypes && (
+                <button
+                  type="button"
+                  onClick={() => setOnlyTypes(null)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/[0.08] px-2.5 py-1 text-[10px] text-white/80 hover:bg-white/[0.12]"
+                  aria-label="Show every type"
+                >
+                  {onlyTypes.map((t) => `${t[0].toUpperCase()}${t.slice(1)}s`).join(' + ')} only <span aria-hidden="true">×</span>
+                </button>
+              )}
 
               {/* Tag + project scope + sort — tracks mode only */}
               {mode === 'tracks' && (

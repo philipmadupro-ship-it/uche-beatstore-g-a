@@ -3,6 +3,7 @@ import { requireProducer } from '@/lib/auth/ownership';
 import { isSupabaseConfigured } from '@/lib/db';
 import { ErasureRequestSchema } from '@/lib/contracts';
 import { normalizeEmail, buildErasurePlan } from '@/lib/privacy/erase';
+import { eraseArtistWorkspace } from '@/lib/privacy/erase-artist';
 import { errorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 
@@ -23,6 +24,10 @@ export const dynamic = 'force-dynamic';
  * comments) are anonymised so the accounting survives; rows that exist only
  * because of the person (favourites, history, playlists, follows, drop
  * subscriptions, free downloads, abandoned carts) are deleted.
+ *
+ * The artist workspace (portal, artist-written reactions, portal visits) is
+ * erased first, by `eraseArtistWorkspace`, while the contact can still be
+ * found by the address — the plan's contact step replaces it.
  *
  * Steps run in order and stop at the first error, reporting what was already
  * done. Every step is idempotent, so re-running after a failure is safe.
@@ -50,6 +55,16 @@ export async function POST(req: NextRequest) {
 
   const email = normalizeEmail(parsed.data.email);
   const counts: Record<string, number> = {};
+
+  try {
+    Object.assign(counts, await eraseArtistWorkspace(admin, userId, email));
+  } catch (err) {
+    log.error('erasure step failed', { sellerUserId: userId, table: 'artist workspace', error: errorMessage(err) });
+    return NextResponse.json(
+      { error: `Erasure stopped at the artist workspace: ${errorMessage(err)}. Re-run to finish; completed steps are safe to repeat.`, partial: counts },
+      { status: 500 },
+    );
+  }
 
   for (const step of buildErasurePlan(email)) {
     try {

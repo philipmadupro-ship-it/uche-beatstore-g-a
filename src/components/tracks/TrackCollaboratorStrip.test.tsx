@@ -96,4 +96,20 @@ describe('TrackCollaboratorStrip', () => {
     expect(screen.queryByTitle('Read from the uploaded filename')).toBeNull();
     expect(screen.queryByTitle('Added by hand')).toBeNull();
   });
+
+  it('shows one pill per person, roles joined, and folds past three people', async () => {
+    const row = (id: string, name: string, role: string) => ({ id, track_id: 't-1', name, role, source: 'manual', created_at: 'now' });
+    mockFetchSequence([{
+      ok: true,
+      json: [row('1', 'Nova', 'feature'), row('2', 'nova', 'collaborator'), row('3', 'Metro', 'producer'), row('4', 'Ada', 'feature'), row('5', 'Bo', 'collaborator'), row('6', 'Cy', 'collaborator')],
+    }]);
+    render(<TrackCollaboratorStrip trackId="t-1" />);
+    await waitFor(() => expect(screen.getAllByTestId('credit-person')).toHaveLength(3));
+    const pills = screen.getAllByTestId('credit-person').map((p) => p.textContent);
+    expect(pills[0]).toContain('Metro');
+    expect(pills.join('|')).toContain('Feature, Collaborator');
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 more credited people' }));
+    expect(screen.getAllByTestId('credit-person')).toHaveLength(5);
+    expect(screen.getByRole('button', { name: 'Remove all 2 credits for Nova' })).toBeTruthy();
+  });
 });
