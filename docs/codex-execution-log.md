@@ -9286,6 +9286,22 @@ Tests: `social-links.test.ts` (resolver: shapes, hostile schemes, userinfo, mail
 
 Not changed: the profile editor still accepts any text (a save-time "this isn't a link" hint would be the follow-up); handles keep Instagram's / X's own character rules, so a handle those networks would reject shows no link.
 
+## 2026-10-01 - Upload round trips, one player under the share vinyl, Download on the row (SHARE-02)
+
+Reported: ten WAVs (~200–300 MB) took ~10 minutes to upload; the vinyl and waveform on a share page were not one player; Download should be on the beat; share track rows should look like the library's.
+
+**Upload.** Not reproduced: no timing was taken, and 300 MB in 10 minutes (~0.5 MB/s) may simply be the producer's uplink, in which case no code makes it faster. What the code did show: every 8 MiB chunk made two JSON calls (sign, confirm), each with a session lookup and a Supabase auth check, and `DropZone` ran up to 6 whole-file decodes in the same tab as the transfer. Changes: `POST /api/upload/part` accepts `partNumbers` and signs a file's chunks in one request (the manager asks once per file, falls back to per-chunk signing on any failure, and drops a cached URL when its chunk fails so the retry signs fresh); analysis concurrency 6 -> 2. Chunk size, parallelism, `/complete` and resume are unchanged on purpose.
+
+**Share vinyl.** `ShareWaveformVinyl` only drew the page's waveform when given `waveRef`; producer / rapper / friend never passed it, so it mounted a second `WavePlayer` (global `usePlayer`) while the sound and the disc ran off the page's `useWaveSurfer`. The variants now take `waveRef` and the page no longer mounts the hidden duplicate container for them.
+
+**Rows.** `components/share/ShareTrackRow` replaces the hand-drawn lists in all four variants (client included) and is laid out like the library's All tracks row: bordered row, 48px cover with the play glyph, semibold title, BPM | key | type line, a Time column, and a Download button on the row when the share allows it (a sibling of Play, not nested). Narrow lists (the producer sidebar) pass `compact`: no Time column, the length rides the meta line. The client variant keeps its split (cover plays, title opens the licence drawer) and passes its price/licence pill as `trailing`. `ShareActions` keeps its block (playback label, downloads-off notice, collaboration entry).
+
+Tests: part route batch cases; `ShareTrackRow.test.tsx`; `e2e/share-options.spec.ts` +9 (disc spins and there is one vinyl waveform; Download on the row; no row download when off) — 37 passing.
+
+**Store.** `/store` now follows the same row and card anatomy. `StoreListView`: each beat is its own bordered row (48px cover with the play glyph, semibold title, BPM | key | type line) instead of dividers inside one panel; the Time and Buy columns are wider (76px / 272px) because two prices were running into the length. `BeatCard`: cover with hover play + BPM/key badges, title and type BELOW the art (it was overlaid on a scrim), buy strip under the meta; wishlist heart, Sold/Free tag and the momentum line are the store's additions. `BandcampRemixCard` (remix type) is unchanged. E2E hooks kept: `[id^="beat-"]`, `li ... p.truncate.font-semibold`, the "Lease" label.
+
+Not done: any measured before/after of upload time. Prompt: `docs/prompts/upload-speed-and-share-player.md`.
+
 ## 2026-09-30 - Save-time warning for links the storefront will not show (PROFILE-02 follow-up)
 
 PR #48 made the storefront refuse unusable handles / URLs / emails instead of rendering dead links. The other half: the producer only found out when a visitor could not click. The profile is still stored exactly as typed (a half-filled form must not lose its other fields), but saving now says which links are hidden.

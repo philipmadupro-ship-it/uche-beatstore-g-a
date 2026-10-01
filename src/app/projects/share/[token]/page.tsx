@@ -668,6 +668,9 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
   // variants continue through to the historical layout below (still
   // the default for now; we'll specialise each variant in follow-ups).
   // Every option the producer set, honoured in every variant (ShareActions).
+  const rowDownload = share
+    ? { allowed: share.allow_downloads === true, onDownload: downloadTrack, downloadingId }
+    : undefined;
   const shareActions = share ? (
     <ShareActions
       tracks={tracks}
@@ -691,6 +694,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         <ClientShareVariant
           project={displayProject}
           actions={shareActions}
+          rowDownload={rowDownload}
           tracks={tracks}
           creator={creator}
           licenses={licenses}
@@ -723,11 +727,14 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     return (
       <>
       {purchaseBannerNode}
-      {/* The player binds here. Without it Play did nothing in this variant. */}
-      <div ref={waveRef} className="hidden" />
+      {/* The page's ONE audio engine draws its waveform inside the variant's
+          vinyl, so the disc, the waveform and the sound share a single clock.
+          (The variant used to mount a second, separate player there.) */}
       <ProducerShareVariant
         project={displayProject}
         actions={shareActions}
+        waveRef={waveRef}
+        rowDownload={rowDownload}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}
@@ -752,11 +759,14 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     return (
       <>
       {purchaseBannerNode}
-      {/* The player binds here. Without it Play did nothing in this variant. */}
-      <div ref={waveRef} className="hidden" />
+      {/* The page's ONE audio engine draws its waveform inside the variant's
+          vinyl, so the disc, the waveform and the sound share a single clock.
+          (The variant used to mount a second, separate player there.) */}
       <RapperShareVariant
         project={displayProject}
         actions={shareActions}
+        waveRef={waveRef}
+        rowDownload={rowDownload}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}
@@ -781,11 +791,14 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
     return (
       <>
       {purchaseBannerNode}
-      {/* The player binds here. Without it Play did nothing in this variant. */}
-      <div ref={waveRef} className="hidden" />
+      {/* The page's ONE audio engine draws its waveform inside the variant's
+          vinyl, so the disc, the waveform and the sound share a single clock.
+          (The variant used to mount a second, separate player there.) */}
       <FriendShareVariant
         project={displayProject}
         actions={shareActions}
+        waveRef={waveRef}
+        rowDownload={rowDownload}
         tracks={tracks}
         creator={creator}
         playingId={activeTrack?.id ?? null}

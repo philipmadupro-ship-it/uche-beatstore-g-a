@@ -5,7 +5,7 @@ import NextImage from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Music, Mail, Globe, ExternalLink,
-  Play, Pause, ChevronRight, Mic2, ShoppingCart,
+  ChevronRight, Mic2, ShoppingCart,
   CheckCircle2, XCircle, X as CloseIcon, Tag, Zap,
   SkipForward, SkipBack,
 } from 'lucide-react';
@@ -16,6 +16,7 @@ import { LicenseSelector } from '@/components/store/LicenseSelector';
 import type { LicenseTier } from '@/components/store/LicenseSelector';
 import type { Track as CartTrack } from '@/lib/types';
 import { GlassPlayButton } from '@/components/ui/GlassPlayButton';
+import { ShareTrackRow, ShareTrackListHeader, type ShareRowDownload } from '@/components/share/ShareTrackRow';
 import { ArtworkFallback } from '@/components/ui/ArtworkFallback';
 import { resolveCreatorLink } from '@/lib/store/social-links';
 
@@ -109,6 +110,8 @@ interface Props {
   onSeek: (seconds: number) => void;
   /** Share options the producer set (downloads, playback, collaboration). ShareActions. */
   actions?: React.ReactNode;
+  /** Download on the row itself, beside the beat it belongs to. */
+  rowDownload?: ShareRowDownload;
 }
 
 function fmt(seconds: number) {
@@ -143,20 +146,6 @@ function toCartTrack(track: Track): CartTrack {
   };
 }
 
-function KeyBadge({ keyName, scale }: { keyName?: string | null; scale?: string | null }) {
-  if (!keyName) return null;
-  const isMinor = scale === 'minor';
-  return (
-    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
-      isMinor
-        ? 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/30'
-        : 'text-[#c8a47a] bg-[#1f1a10]/60 border border-[#3d3020]/40'
-    }`}>
-      {keyName}{isMinor ? 'm' : ''}
-    </span>
-  );
-}
-
 export function ClientShareVariant({
   project,
   tracks,
@@ -175,6 +164,7 @@ export function ClientShareVariant({
   progressPct,
   onSeek,
   actions,
+  rowDownload,
 }: Props) {
   const { addItem, items: cartItems, setIsOpen: setCartOpen, isOpen: cartOpen } = useCart();
   const searchParams = useSearchParams();
@@ -426,21 +416,15 @@ export function ClientShareVariant({
             )}
           </div>
 
-          <div className="rounded-2xl border border-white/10 overflow-hidden divide-y divide-white/10">
-            {/* Table header */}
-            <div className="hidden md:grid grid-cols-[2fr_80px_80px_1fr] gap-4 px-5 py-2.5 bg-[#0e0c09]">
-              <span className="text-[9px] font-mono uppercase tracking-widest text-white/30">Track</span>
-              <span className="text-[9px] font-mono uppercase tracking-widest text-white/30 text-center">BPM</span>
-              <span className="text-[9px] font-mono uppercase tracking-widest text-white/30 text-center">Time</span>
-              <span className="text-[9px] font-mono uppercase tracking-widest text-white/30 text-right">License</span>
-            </div>
+          <div className="space-y-2">
+            <ShareTrackListHeader hasDownload={rowDownload?.allowed} hasTrailing trailingLabel={shareToken && resolvedTiers.length > 0 ? 'License' : undefined} />
 
             {tracks.length === 0 ? (
               <div className="px-5 py-12 text-center text-[11px] text-white/60">
                 No tracks in this selection yet.
               </div>
             ) : (
-              tracks.map((t, i) => {
+              tracks.map((t) => {
                 const isCurrent = playingId === t.id;
                 const leasePrice = resolvePrice(shareLeasePrice, t.lease_price_usd, creatorLeasePrice, discount);
                 const exclPrice = resolvePrice(shareExclusivePrice, t.exclusive_price_usd, creatorExclusivePrice, discount);
@@ -450,86 +434,21 @@ export function ClientShareVariant({
                 const inCart = cartItems.some((ci) => ci.track.id === t.id);
 
                 return (
-                  <div
+                  <ShareTrackRow
                     key={t.id}
-                    className={`group flex md:grid md:grid-cols-[2fr_80px_80px_1fr] items-center gap-3 md:gap-4 px-4 md:px-5 py-3.5 transition-colors ${
-                      isCurrent ? 'bg-white/[0.04]' : 'hover:bg-[#0e0c09]'
-                    }`}
-                  >
-                    {/* Cover + play */}
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <button
-                        onClick={() => onPlay(t)}
-                        className="relative w-11 h-11 rounded-lg overflow-hidden bg-white/[0.04] border border-white/10 shrink-0 focus:outline-none"
-                      >
-                        <ArtworkFallback src={t.cover_url} seed={t.id} kind="track" sizes="44px" className="object-cover">
-                          <Music size={16} aria-hidden="true" />
-                        </ArtworkFallback>
-                        <div className={`absolute inset-0 flex items-center justify-center bg-black/55 transition-opacity ${
-                          isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                        }`}>
-                          {isCurrent && isPlaying ? (
-                            <Pause size={16} className="text-white" fill="currentColor" />
-                          ) : (
-                            <Play size={16} className="text-white ml-0.5" fill="currentColor" />
-                          )}
-                        </div>
-                        {isCurrent && isPlaying && (
-                          <div className="absolute bottom-1 left-0 right-0 flex justify-center gap-0.5 items-end h-2">
-                            <span className="w-0.5 bg-white animate-[pulse_0.6s_ease-in-out_infinite]" style={{ height: '40%' }} />
-                            <span className="w-0.5 bg-white animate-[pulse_0.8s_ease-in-out_infinite]" style={{ height: '100%' }} />
-                            <span className="w-0.5 bg-white animate-[pulse_0.7s_ease-in-out_infinite]" style={{ height: '60%' }} />
-                          </div>
-                        )}
-                      </button>
-
-                      <button
-                        onClick={() => setSelectedTrackForDetails(t)}
-                        className="min-w-0 text-left flex-1"
-                      >
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-[9px] font-mono text-white/30 tabular-nums ${isCurrent ? 'text-white' : ''}`}>
-                            {String(i + 1).padStart(2, '0')}
-                          </span>
-                          <p className={`text-[14px] font-medium truncate transition-colors ${
-                            isCurrent ? 'text-white' : 'text-white group-hover:text-white'
-                          }`}>
-                            {t.title}
-                          </p>
-                          {inCart && (
-                            <span className="text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#0e1f17] border border-[#6DC6A4]/20 px-1.5 py-0.5 rounded-full shrink-0">
-                              In cart
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                          <span className="text-[9px] font-mono text-white/40 uppercase tracking-wider">{t.type}</span>
-                          {t.key && <KeyBadge keyName={t.key} scale={t.scale} />}
-                        </div>
-                      </button>
-                    </div>
-
-                    {/* BPM */}
-                    <div className="hidden md:flex flex-col items-center">
-                      {t.bpm ? (
-                        <>
-                          <span className="text-[13px] font-mono font-bold text-white tabular-nums">{t.bpm}</span>
-                          <span className="text-[8px] font-mono text-white/30 uppercase tracking-wider">bpm</span>
-                        </>
-                      ) : (
-                        <span className="text-white/30 font-mono">—</span>
-                      )}
-                    </div>
-
-                    {/* Duration */}
-                    <div className="hidden md:flex items-center justify-center">
-                      <span className="text-[11px] font-mono text-white/40 tabular-nums">
-                        {t.duration_seconds ? fmt(t.duration_seconds) : '—'}
+                    track={t}
+                    active={isCurrent}
+                    isPlaying={!!isPlaying}
+                    onPlay={() => onPlay(t)}
+                    onOpenDetails={() => setSelectedTrackForDetails(t)}
+                    download={rowDownload}
+                    titleBadge={inCart ? (
+                      <span className="text-[8px] font-mono uppercase tracking-wider text-[#6DC6A4] bg-[#0e1f17] border border-[#6DC6A4]/20 px-1.5 py-0.5 rounded-full shrink-0">
+                        In cart
                       </span>
-                    </div>
-
-                    {/* License pills / chevron */}
-                    <div className="flex items-center justify-end gap-2 shrink-0 ml-auto md:ml-0">
+                    ) : null}
+                    trailing={
+                      <>
                       {shareToken && resolvedTiers.length > 0 ? (
                         (() => {
                           const selTier = resolvedTiers.find((r) => r.id === selectedLicenseId) ?? resolvedTiers[0];
@@ -577,8 +496,10 @@ export function ClientShareVariant({
                           <ChevronRight size={14} />
                         </button>
                       )}
-                    </div>
-                  </div>
+
+                      </>
+                    }
+                  />
                 );
               })
             )}
