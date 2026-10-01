@@ -200,7 +200,7 @@ Down-script drops the five tables and two functions (no dependants yet).
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-03
-**Status:** Not Started
+**Status:** In Review
 
 ## Objective
 Make the policy-replay test fail on the Label OS–specific mistakes before they ship.
