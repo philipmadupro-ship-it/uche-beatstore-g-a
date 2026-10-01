@@ -353,7 +353,7 @@ One-function revert; flag off.
 **Risk:** Low
 **Workstream:** L
 **Dependencies:** LABEL-03
-**Status:** In Progress (branch label-os/LABEL-07)
+**Status:** In Review (PR #57, branch label-os/LABEL-07)
 
 ## Objective
 Give the producer an `owner` membership of a `producer`-kind org, so they can invite people and switch orgs.
