@@ -18,6 +18,8 @@ import { CartDrawer, FloatingCartButton } from '@/components/store/CartDrawer';
 import { InstallAppButton } from '@/components/store/InstallAppButton';
 import { useCart } from '@/hooks/useCart';
 import { useWishlistStore } from '@/hooks/useWishlist';
+import { reconcileSessionMarker } from '@/lib/buyer-session';
+import { createClient } from '@/lib/supabase/client';
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { PublicArtworkThemeProvider } from '@/components/providers/ArtworkThemeProvider';
@@ -36,8 +38,21 @@ export function StoreLayoutClient({ children }: { children: React.ReactNode }) {
   // Keyed on the path because signing in happens inside /store (the account
   // page sets the identity), so the first sync after it is the next
   // navigation. The store no-ops once it has synced for that identity.
+  //
+  // The device's signed-in marker is first made to agree with the auth
+  // cookie (getSession reads it locally, no network): the marker used to be
+  // set only by /store/account/me, so a purged localStorage left a signed-in
+  // buyer whose hearts never saved or synced.
   useEffect(() => {
-    void useWishlistStore.getState().syncWithAccount();
+    void (async () => {
+      try {
+        const { data } = await createClient().auth.getSession();
+        reconcileSessionMarker(Boolean(data.session));
+      } catch {
+        /* no session info: keep whatever identity the device already holds */
+      }
+      await useWishlistStore.getState().syncWithAccount();
+    })();
   }, [pathname]);
 
   return (

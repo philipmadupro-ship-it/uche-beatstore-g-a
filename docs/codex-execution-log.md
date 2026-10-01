@@ -9285,3 +9285,20 @@ Changes (no schema, API or contract change; validation at read time also covers 
 Tests: `social-links.test.ts` (resolver: shapes, hostile schemes, userinfo, mailto injection, empties); `creator-link-guard.test.ts` (source guard: fails on any raw handle/URL/mailto interpolation — names 17+ sites on the old code); `components/store/creator-links.test.tsx` (hero + ProducerProfile hrefs); `e2e/creator-links.spec.ts` (producer page at 1280 and 390: every link clicked and its popup URL checked, `javascript:` renders nothing and nothing executes, no Links panel when nothing is usable — fails on the old page).
 
 Not changed: the profile editor still accepts any text (a save-time "this isn't a link" hint would be the follow-up); handles keep Instagram's / X's own character rules, so a handle those networks would reject shows no link.
+
+## 2026-10-01 - Favorites and buyer accounts: the signed-in marker follows the auth cookie
+
+Reported: favorites and buyer accounts "don't show up" — hearts tapped while signed in did not save to the account or come back on another device.
+
+**Traced, not reproduced against a database.** `/api/store/me`, the `set_favorite` action, `buyer_favorites` (mig 060, applied) and `/api/store/account/me` all read correctly, and the unit suites around them passed. The break is on the client, in how a device knows a buyer is signed in. `buyerIdentityQuery()` returns the session identity only when a `localStorage` marker (`antigravity-buyer-session-mode`) is set, and the only place that ever set it was `/store/account/me`. The Supabase session lives in a cookie and outlives that flag: Safari purges `localStorage` after a week without a visit, a site-data clear removes it, and `dispatch` / `fetchBuyerLibrary` delete it on any 400, including one transient auth refresh. With the cookie alive and the marker gone, `setFavorite` returned `No buyer session` (swallowed — the heart still fills locally) and `syncWithAccount` found no identity and never pulled the account's hearts in. The buyer looked signed in everywhere except to the code that writes the favourites.
+
+Root cause: a second, weaker copy of "is a buyer signed in" kept in `localStorage` and written from one page, instead of reading the auth session that already exists.
+
+Changes (no schema, API or contract change):
+- `lib/buyer-session.ts#reconcileSessionMarker(hasSession)` — makes the marker agree with the session, returns whether it changed.
+- `StoreLayoutClient` reads `auth.getSession()` (a local cookie read, no network) on every store navigation and reconciles the marker before `syncWithAccount` runs. A transient 400 that cleared the marker is now repaired on the next navigation, and a signed-out device drops a stale marker.
+- A legacy delivery token still works, and the session still outranks it (`buyerIdentityQuery` unchanged).
+
+Tests: `buyer-session.test.ts` (3 new): a lost marker with a live session is restored and the next heart POSTs to `?session=1`; a gone session clears it; agreement reports no change.
+
+Not changed: the session is shared with the producer's dashboard login, so a producer browsing `/store` while signed in now syncs hearts under their own email and `upsertLeadContact` creates a lead for them (as opening `/store/account/me` already did). Skipping that needs the server to know the producer's email; left for a follow-up. `syncedIdentity` is keyed on the query string (`session=1`), not the user id, so switching accounts without signing out through `/store/account/me` would not re-sync until reload.
