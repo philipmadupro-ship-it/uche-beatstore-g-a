@@ -140,7 +140,7 @@ Revert.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-02
-**Status:** In Review
+**Status:** Done (2026-10-01) — [PR #49](https://github.com/philipmadupro-ship-it/uche-beatstore-g-a/pull/49)
 
 ## Objective
 Create the tenant tables and SQL authorization helpers.
@@ -200,7 +200,7 @@ Down-script drops the five tables and two functions (no dependants yet).
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-03
-**Status:** Not Started
+**Status:** In Progress (session_01MCFUPyrvd3TeR7FC3ke5uh, branch label-os/LABEL-04)
 
 ## Objective
 Make the policy-replay test fail on the Label OS–specific mistakes before they ship.
