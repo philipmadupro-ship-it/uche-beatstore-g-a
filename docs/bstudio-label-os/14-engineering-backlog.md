@@ -250,7 +250,7 @@ Revert.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-02, LABEL-03
-**Status:** In Review (PR #55, branch label-os/LABEL-05)
+**Status:** Done (2026-10-01) — [PR #55](https://github.com/philipmadupro-ship-it/uche-beatstore-g-a/pull/55)
 
 ## Objective
 Route-level authorization for service-role routes, plus a single event writer.
@@ -303,7 +303,7 @@ Revert.
 **Risk:** Critical
 **Workstream:** L
 **Dependencies:** LABEL-05
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-06)
 
 ## Objective
 Admit org members to `/api/org/*` and `/o/*` only, behind `LABEL_OS_ENABLED`, without changing any existing route's gate.
@@ -493,6 +493,9 @@ The last owner cannot be removed or demoted (DB trigger + route 409).
 - `model.test.ts` for `navGroupsFor`.
 - Route tests.
 - e2e at 1440 and 390.
+
+## Carried from LABEL-05 (#55)
+`org-api-source-guard.test.ts` forbids every `user_id` equality filter under `src/app/api/org/**`, but changing a member's role or removing a member addresses an `org_members` row by `(org_id, user_id)`. Add a helper for that in `src/lib/auth/org-access.ts` (for example `memberRowQuery(admin, ctx, userId)`, always org-filtered and capability-checked). Do not add an allowlist to the guard.
 
 ## Out of Scope
 Artist scope UI (LABEL-10).
@@ -1015,6 +1018,9 @@ None.
 ## Tests
 - A local DB test for the RPC.
 - The source coverage test.
+
+## Carried from LABEL-05 (#55)
+`recordEvent` defaults `visibility` to `internal`, and 136's RLS shows those rows only to holders of `business.read.internal`. So A&R, producers and engineers cannot see everyday events like `song.created` unless the route passes `visibility: 'artist'`. Decide a default per verb here, in `src/lib/labelos/activity.ts`, consistent with D4 and D5. Audit events are not yet atomic with their mutation; the RPC in this task fixes that.
 
 ## Out of Scope
 Feeds (LABEL-20).
