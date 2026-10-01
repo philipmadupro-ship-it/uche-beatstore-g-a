@@ -9301,3 +9301,12 @@ Tests: part route batch cases; `ShareTrackRow.test.tsx`; `e2e/share-options.spec
 **Store.** `/store` now follows the same row and card anatomy. `StoreListView`: each beat is its own bordered row (48px cover with the play glyph, semibold title, BPM | key | type line) instead of dividers inside one panel; the Time and Buy columns are wider (76px / 272px) because two prices were running into the length. `BeatCard`: cover with hover play + BPM/key badges, title and type BELOW the art (it was overlaid on a scrim), buy strip under the meta; wishlist heart, Sold/Free tag and the momentum line are the store's additions. `BandcampRemixCard` (remix type) is unchanged. E2E hooks kept: `[id^="beat-"]`, `li ... p.truncate.font-semibold`, the "Lease" label.
 
 Not done: any measured before/after of upload time. Prompt: `docs/prompts/upload-speed-and-share-player.md`.
+
+## 2026-09-30 - Save-time warning for links the storefront will not show (PROFILE-02 follow-up)
+
+PR #48 made the storefront refuse unusable handles / URLs / emails instead of rendering dead links. The other half: the producer only found out when a visitor could not click. The profile is still stored exactly as typed (a half-filled form must not lose its other fields), but saving now says which links are hidden.
+
+- `lib/store/social-links.ts`: `unusableCreatorLinks(fields)` (labels of filled fields that `resolveCreatorLink` rejects) and `unusableLinksWarning(fields)` (toast copy, or null). Same resolver as the storefront, so the warning cannot disagree with what renders.
+- `/profile` fires it after "Profile saved"; `/store-editor` fires it as soon as the profile PATCH succeeds, so it also shows when a later playlist/project update partly fails.
+
+Tests: `social-links.test.ts` (labels, silence for empty/valid, toast wording); `e2e/profile-link-warning.spec.ts` at 1280 and 390 px through the real page (save still posts the typed value; a pasted profile link, `@handle` and bare domain stay silent; fails without the change). The Store Editor call site is covered by the shared helper and `tsc`, not by its own e2e.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveCreatorLink, storeSocialLinks } from './social-links';
+import { resolveCreatorLink, storeSocialLinks, unusableCreatorLinks, unusableLinksWarning } from './social-links';
 
 describe('storeSocialLinks', () => {
   it('builds the same hrefs the hero does, in a stable order', () => {
@@ -67,5 +67,27 @@ describe('resolveCreatorLink', () => {
       expect(resolveCreatorLink(kind, null)).toBeNull();
       expect(resolveCreatorLink(kind, '   ')).toBeNull();
     }
+  });
+});
+
+describe('unusableCreatorLinks / unusableLinksWarning', () => {
+  it('names only the filled fields the storefront would refuse', () => {
+    expect(unusableCreatorLinks({
+      instagram_handle: 'two words', twitter_handle: '@ok', spotify_url: 'javascript:alert(1)',
+      soundcloud_url: '', website_url: 'https://me.example', contact_email: 'nope',
+    })).toEqual(['Instagram', 'Spotify', 'Email']);
+  });
+
+  it('is silent for empty, missing and fully valid profiles', () => {
+    expect(unusableCreatorLinks(null)).toEqual([]);
+    expect(unusableCreatorLinks({ instagram_handle: '  ', website_url: null })).toEqual([]);
+    expect(unusableLinksWarning({ instagram_handle: 'uche', website_url: 'uche.example', contact_email: 'hi@uche.example' })).toBeNull();
+  });
+
+  it('words the toast for one or several', () => {
+    expect(unusableLinksWarning({ website_url: '//evil' })?.title).toBe("Website link won't show");
+    const many = unusableLinksWarning({ website_url: '//evil', contact_email: 'x' });
+    expect(many?.title).toBe("2 links won't show");
+    expect(many?.description).toContain('Website, Email aren\'t');
   });
 });

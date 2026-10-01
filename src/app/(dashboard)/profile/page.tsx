@@ -14,6 +14,7 @@ import { useDialogBehavior } from '@/hooks/useDialogBehavior';
 import { discardUploadedImage, uploadImageFile } from '@/lib/upload/image-upload-client';
 import { normalizeFontStyle, STORE_FONT_LABELS, STORE_FONT_STYLES } from '@/lib/store/appearance';
 import { profileSaveBody, profileSaveError, type ProfileFormState } from '@/lib/profile/save-body';
+import { unusableLinksWarning } from '@/lib/store/social-links';
 
 const EMPTY_PROFILE: ProfileFormState = {
   display_name: '',
@@ -161,6 +162,8 @@ export default function ProfilePage() {
       unsavedHeroUrl.current = null;
       setSaved(true);
       toast.success('Profile saved');
+      const badLinks = unusableLinksWarning(profile);
+      if (badLinks) toast.warning(badLinks.title, badLinks.description);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: unknown) {
       toast.error('Save failed', errorMessage(err, 'Unknown error'));

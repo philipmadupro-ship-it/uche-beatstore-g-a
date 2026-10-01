@@ -56,6 +56,7 @@ import { layoutSaveProblem } from '@/lib/store-editor/layout-save';
 import { failedSourceLabels, loadStoreEditor, saveScope, type SaveScope } from '@/lib/store-editor/initial-load';
 import { normalizeFontStyle, resolveStoreAppearance, STORE_FONT_LABELS, STORE_FONT_STYLES } from '@/lib/store/appearance';
 import { uploadImageFile } from '@/lib/upload/image-upload-client';
+import { unusableLinksWarning } from '@/lib/store/social-links';
 import { getStoreEditorAttentionIssues } from '@/lib/store-editor/attention-issues';
 import { fetchAllTrackPages, mapWithConcurrency, TRACK_PAGE_SIZE } from '@/lib/store-editor/track-catalogue';
 
@@ -1793,6 +1794,10 @@ export default function StoreEditorPage() {
         const j = await profileRes.json().catch(() => ({}));
         throw new Error(j.error || `Profile save failed (HTTP ${profileRes.status})`);
       }
+      // The profile is stored as typed; tell the producer which links the
+      // storefront will not show rather than letting a visitor find out.
+      const badLinks = unusableLinksWarning(form);
+      if (badLinks) toast.warning(badLinks.title, badLinks.description);
 
       // 2. Persist each featured playlist's order + featured flag
       const featuredIds = new Set(featured.map((f) => f.id));
