@@ -491,16 +491,18 @@ describe('sessionIdentity', () => {
   });
 });
 
-describe('isLiveOrgMember', () => {
-  it('is true for a live membership, false otherwise (and on errors)', async () => {
-    const { isLiveOrgMember } = await load();
+describe('liveMembership', () => {
+  it('answers role + capabilities for a live membership, null otherwise (and on errors)', async () => {
+    const { liveMembership } = await load();
     const { createServiceClient } = await import('./ownership');
     const admin = createServiceClient();
-    memberships({ [ORG_A]: member(), [ORG_B]: member({}, { deleted_at: '2026-01-01T00:00:00Z' }) });
-    expect(await isLiveOrgMember(admin, ORG_A, USER)).toBe(true);
-    expect(await isLiveOrgMember(admin, ORG_B, USER)).toBe(false);
-    expect(await isLiveOrgMember(admin, 'nope', USER)).toBe(false);
+    memberships({ [ORG_A]: member({ role: 'admin' }), [ORG_B]: member({}, { deleted_at: '2026-01-01T00:00:00Z' }) });
+    const m = await liveMembership(admin, ORG_A, USER);
+    expect(m?.role).toBe('admin');
+    expect(m?.capabilities.has('members.manage')).toBe(true);
+    expect(await liveMembership(admin, ORG_B, USER)).toBeNull();
+    expect(await liveMembership(admin, 'nope', USER)).toBeNull();
     answers.org_members = { data: null, error: { message: 'boom' } };
-    expect(await isLiveOrgMember(admin, ORG_A, USER)).toBe(false);
+    expect(await liveMembership(admin, ORG_A, USER)).toBeNull();
   });
 });

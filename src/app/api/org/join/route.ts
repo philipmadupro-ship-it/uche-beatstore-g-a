@@ -16,11 +16,11 @@
  *    membership and the `member.joined` audit event in one transaction.
  *    Accepting twice is idempotent. A mismatch is 403 without the address.
  *
- * The token travels in the body (never a query string) and is never logged
- * or echoed. Attempts are rate-limited per client.
+ * The token travels in the body (never an API query string) and this route
+ * never logs or echoes it. Attempts are rate-limited per client.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { isLiveOrgMember, sessionIdentity } from '@/lib/auth/org-access';
+import { liveMembership, sessionIdentity } from '@/lib/auth/org-access';
 import { createServiceClient } from '@/lib/auth/ownership';
 import { normalizeEmailOrNull } from '@/lib/contacts/email';
 import { OrgJoinBodySchema } from '@/lib/contracts';
@@ -46,6 +46,7 @@ type PreviewRow = {
   role: string;
   functions: string[] | null;
   project_id: string | null;
+  invited_by: string | null;
   expires_at: string;
   accepted_at: string | null;
   revoked_at: string | null;
@@ -74,7 +75,7 @@ export async function POST(req: NextRequest) {
     if (action === 'preview') {
       const { data, error } = await admin
         .from('org_invitations')
-        .select('org_id, email, role, functions, project_id, expires_at, accepted_at, revoked_at, organizations!inner(name, slug, kind, deleted_at)')
+        .select('org_id, email, role, functions, project_id, invited_by, expires_at, accepted_at, revoked_at, organizations!inner(name, slug, kind, deleted_at)')
         .eq('token_hash', tokenHash)
         .maybeSingle();
       if (error) throw new Error(error.message);
@@ -86,16 +87,22 @@ export async function POST(req: NextRequest) {
       let member = false;
       if (session) {
         emailMatches = normalizeEmailOrNull(session.email) === row.email;
-        if (emailMatches) {
-          member = await isLiveOrgMember(admin, row.org_id, session.userId);
-        }
+        if (emailMatches) member = (await liveMembership(admin, row.org_id, session.userId)) !== null;
+      }
+
+      // Same rule as labelos_accept_invitation: an invitation whose inviter
+      // no longer holds members.manage reads as withdrawn.
+      let state = invitationState(row);
+      if (state === 'pending') {
+        const inviter = row.invited_by ? await liveMembership(admin, row.org_id, row.invited_by) : null;
+        if (!inviter?.capabilities.has('members.manage')) state = 'revoked';
       }
 
       return NextResponse.json({
         org: { name: org.name, kind: org.kind, ...(member ? { slug: org.slug } : {}) },
         role: row.role,
         functions: row.functions ?? [],
-        state: invitationState(row),
+        state,
         signedIn: !!session,
         emailMatches,
         member,

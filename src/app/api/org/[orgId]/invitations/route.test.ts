@@ -14,7 +14,9 @@ const C1 = '55555555-5555-4555-8555-555555555555';
 let denied: number | null = null;
 let orgKind = 'label';
 let allowed = true;
+let rateCalls = 0;
 let pending: unknown[] = [];
+let pendingAfterInsert: unknown[] | null = null;
 let auditFails = false;
 let emailResult: { sent: boolean; reason?: string } = { sent: true };
 let revokeRow: { accepted_at: string | null; revoked_at: string | null } | null = null;
@@ -51,7 +53,7 @@ vi.mock('@/lib/auth/org-access', () => ({
 }));
 vi.mock('@/lib/labelos/activity', () => ({
   recordEvent: async (...args: unknown[]) => {
-    if (auditFails) throw new Error('audit event invitation.created was not recorded');
+    if (auditFails) throw new Error('audit event was not recorded');
     events.push(args.slice(1));
     return { ok: true, id: 'e1' };
   },
@@ -63,7 +65,12 @@ vi.mock('@/lib/labelos/invitation-email', () => ({
     return emailResult;
   },
 }));
-vi.mock('@/lib/security/rate-limit', () => ({ rateLimitDurable: async () => allowed }));
+vi.mock('@/lib/security/rate-limit', () => ({
+  rateLimitDurable: async () => {
+    rateCalls += 1;
+    return allowed;
+  },
+}));
 vi.mock('@/lib/log', () => ({
   createLogger: () => ({ info: (...a: unknown[]) => logged.push(a), warn: (...a: unknown[]) => logged.push(a), error: (...a: unknown[]) => logged.push(a), debug: () => {} }),
 }));
@@ -81,7 +88,8 @@ function answer(chain: Chain): Answer {
     if (opOf(chain, 'update')) return { data: updateReturns, error: null };
     if (opOf(chain, 'delete')) return { data: null, error: null };
     if (opOf(chain, 'maybeSingle')) return { data: revokeRow ? { id: INV, email: 'a@b.test', ...revokeRow } : null, error: null };
-    return { data: pending, error: null };
+    const inserted = admin.chains.some((c) => c.table === 'org_invitations' && opOf(c, 'insert'));
+    return { data: inserted && pendingAfterInsert ? pendingAfterInsert : pending, error: null };
   }
   return { data: null, error: null };
 }
@@ -90,7 +98,9 @@ beforeEach(() => {
   denied = null;
   orgKind = 'label';
   allowed = true;
+  rateCalls = 0;
   pending = [];
+  pendingAfterInsert = null;
   auditFails = false;
   emailResult = { sent: true };
   revokeRow = { accepted_at: null, revoked_at: null };
@@ -191,11 +201,33 @@ describe('POST invitations', () => {
     expect((await create({ email: 'a@b.test', role: 'member', token: 'x' })).status).toBe(400);
   });
 
-  it('409 when the address already has a pending invitation', async () => {
+  it('409 when the address already has a pending invitation, without spending the rate limit', async () => {
     pending = [{ id: INV }];
     const r = await create({ email: 'a@b.test', role: 'member' });
     expect(r).toMatchObject({ status: 409, json: { invitationId: INV } });
     expect(emails).toEqual([]);
+    expect(rateCalls).toBe(0);
+  });
+
+  it('a 400 does not spend the rate limit either', async () => {
+    await create({ email: 'a@b.test', role: 'owner' });
+    expect(rateCalls).toBe(0);
+  });
+
+  it('loses a race to an older pending invitation: removes its own row, 409, no email, no event', async () => {
+    const OLDER = '66666666-6666-4666-8666-666666666666';
+    pendingAfterInsert = [{ id: OLDER }, { id: INV }];
+    const r = await create({ email: 'a@b.test', role: 'member' });
+    expect(r).toMatchObject({ status: 409, json: { invitationId: OLDER } });
+    const del = admin.chains.find((c) => c.table === 'org_invitations' && opOf(c, 'delete'))!;
+    expect(eqs(del)).toEqual({ org_id: ORG, id: INV });
+    expect(emails).toEqual([]);
+    expect(events).toEqual([]);
+  });
+
+  it('wins the race when it is the oldest', async () => {
+    pendingAfterInsert = [{ id: INV }, { id: '66666666-6666-4666-8666-666666666666' }];
+    expect((await create({ email: 'a@b.test', role: 'member' })).status).toBe(201);
   });
 
   it('429 when rate-limited', async () => {
@@ -242,6 +274,15 @@ describe('DELETE invitation', () => {
     expect(r).toEqual({ status: 200, json: { revoked: true, revoked_at: '2026-09-30T00:00:00Z' } });
     expect(admin.chains.some((c) => opOf(c, 'update'))).toBe(false);
     expect(events).toEqual([]);
+  });
+
+  it('undoes the revocation when its audit event cannot be written', async () => {
+    auditFails = true;
+    const r = await revoke();
+    expect(r.status).toBe(500);
+    const updates = admin.chains.filter((c) => opOf(c, 'update'));
+    expect(updates.map((c) => opOf(c, 'update')!.args[0])).toEqual([{ revoked_at: expect.any(String) }, { revoked_at: null }]);
+    expect(eqs(updates[1])).toEqual({ org_id: ORG, id: INV, revoked_at: '2026-10-01T00:00:00Z' });
   });
 
   it('409 on an accepted invitation', async () => {

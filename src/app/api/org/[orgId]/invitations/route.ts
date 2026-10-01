@@ -75,6 +75,34 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
   const { admin } = access;
 
   try {
+    const pendingFor = () =>
+      scopedOrgQuery(admin, 'org_invitations', access, 'id, created_at')
+        .eq('email', email)
+        .is('accepted_at', null)
+        .is('revoked_at', null)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true });
+    const conflict = (invitationId: string) =>
+      NextResponse.json(
+        { error: 'This address already has a pending invitation. Revoke it to send a new one.', invitationId },
+        { status: 409 },
+      );
+
+    // `organizations` is keyed by `id` (the org the helper just authorised).
+    const [pendingRes, orgRes, inviterName] = await Promise.all([
+      pendingFor(),
+      admin.from('organizations').select('name').eq('id', access.orgId).maybeSingle(),
+      inviterDisplayName(admin, access.userId),
+    ]);
+    if (pendingRes.error) throw new Error(pendingRes.error.message);
+    if (orgRes.error) throw new Error(orgRes.error.message);
+    const pending = (pendingRes.data ?? []) as unknown as { id: string }[];
+    if (pending.length > 0) return conflict(pending[0].id);
+    const orgName = (orgRes.data as { name?: string } | null)?.name ?? 'your organization';
+
+    // Counted only for invitations that will actually be written, so a 400
+    // or 409 never spends the address's budget.
     const [orgOk, addressOk] = await Promise.all([
       rateLimitDurable(`org-invite:${access.orgId}`, 30, 60 * 60 * 1000),
       rateLimitDurable(`org-invite:${access.orgId}:${email}`, 5, 24 * 60 * 60 * 1000),
@@ -82,29 +110,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
     if (!orgOk || !addressOk) {
       return NextResponse.json({ error: 'Too many invitations. Try again later.' }, { status: 429 });
     }
-
-    const { data: pending, error: pendingErr } = await scopedOrgQuery(admin, 'org_invitations', access, 'id')
-      .eq('email', email)
-      .is('accepted_at', null)
-      .is('revoked_at', null)
-      .gt('expires_at', new Date().toISOString())
-      .limit(1);
-    if (pendingErr) throw new Error(pendingErr.message);
-    if (Array.isArray(pending) && pending.length > 0) {
-      return NextResponse.json(
-        { error: 'This address already has a pending invitation. Revoke it to send a new one.', invitationId: (pending[0] as unknown as { id: string }).id },
-        { status: 409 },
-      );
-    }
-
-    // `organizations` is keyed by `id` (the org the helper just authorised).
-    const { data: orgRow, error: orgRowErr } = await admin
-      .from('organizations')
-      .select('name')
-      .eq('id', access.orgId)
-      .maybeSingle();
-    if (orgRowErr) throw new Error(orgRowErr.message);
-    const orgName = (orgRow as { name?: string } | null)?.name ?? 'your organization';
 
     const { token, tokenHash } = newInvitationToken();
     const { data: inserted, error: insertErr } = await admin
@@ -124,6 +129,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
     if (insertErr || !inserted) throw new Error(insertErr?.message ?? 'insert returned nothing');
     const invitation = inserted as InvitationRow;
 
+    // Two requests for one address can both pass the check above. After
+    // inserting, the oldest pending row wins and any later one removes
+    // itself, so exactly one survives whatever the interleaving.
+    const after = await pendingFor();
+    if (after.error) throw new Error(after.error.message);
+    const oldest = ((after.data ?? []) as unknown as { id: string }[])[0];
+    if (oldest && oldest.id !== invitation.id) {
+      await admin.from('org_invitations').delete().eq('org_id', access.orgId).eq('id', invitation.id);
+      return conflict(oldest.id);
+    }
+
     try {
       await recordEvent(
         admin,
@@ -141,7 +157,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ org
     const sent = await sendInvitationEmail({
       to: email,
       orgName,
-      inviterName: await inviterDisplayName(admin, access.userId),
+      inviterName,
       role: grant.role,
       functions: grant.functions,
       url: `${getAppUrl()}/join/${token}`,

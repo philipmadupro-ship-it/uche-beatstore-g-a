@@ -171,17 +171,23 @@ export async function requireOrgMember(orgId: string): Promise<OrgAccessResult> 
 }
 
 /**
- * Is `userId` a live member of `orgId`? For `/api/org/join`'s preview, which
- * runs for a caller who may not be a member of anything (so the require*
- * helpers, which answer 403, do not fit). Same live read as they do; false on
- * any error.
+ * `userId`'s live membership of `orgId` (role + capabilities), or null when
+ * they are not a member, the org is gone, or the read fails. For
+ * `/api/org/join`, which runs for a caller who may not be a member of
+ * anything and also asks about a third person (the inviter), so the
+ * require* helpers — which answer for the session, with 403s — do not fit.
  */
-export async function isLiveOrgMember(admin: AdminClient, orgId: string, userId: string): Promise<boolean> {
-  if (!isUUID(orgId) || !isUUID(userId)) return false;
+export async function liveMembership(
+  admin: AdminClient,
+  orgId: string,
+  userId: string,
+): Promise<{ role: Role; capabilities: ReadonlySet<Capability> } | null> {
+  if (!isUUID(orgId) || !isUUID(userId)) return null;
   try {
-    return (await readMembership(admin, orgId, userId)) !== null;
+    const m = await readMembership(admin, orgId, userId);
+    return m ? { role: m.role, capabilities: m.capabilities } : null;
   } catch {
-    return false;
+    return null;
   }
 }
 

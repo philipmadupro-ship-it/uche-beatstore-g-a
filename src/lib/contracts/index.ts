@@ -872,8 +872,8 @@ export const OrgInvitationCreateBodySchema = z.object({
 export type OrgInvitationCreateBody = z.infer<typeof OrgInvitationCreateBodySchema>;
 
 /**
- * POST /api/org/join. The token travels in the body, never the query string,
- * so it stays out of request logs. `preview` reads what the invitation is
+ * POST /api/org/join. The token travels in the body, never an API query
+ * string (the join PAGE's own URL does carry it, as share links do). `preview` reads what the invitation is
  * for (no session needed); `accept` joins (session required).
  */
 export const OrgJoinBodySchema = z.object({

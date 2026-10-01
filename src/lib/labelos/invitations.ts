@@ -14,7 +14,10 @@
  * email + revoked + used + expiry, writes `org_members` and the
  * `member.joined` audit event in one transaction. Nothing here writes.
  *
- * The token never appears in a log, an activity payload or a response.
+ * The token never appears in an application log, an activity payload, an
+ * API response or an API query string. It IS the last segment of the join
+ * link (`/join/<token>`, like every share link), so it can appear in
+ * platform request logs; it is single-use, email-bound and expires in 7 days.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import {
@@ -27,6 +30,7 @@ import {
   type OrgKind,
   type Role,
 } from './capabilities';
+import { escapeHtml } from '@/lib/email/templates';
 import { isUUID } from '@/lib/validate';
 
 export const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -159,6 +163,7 @@ export function invitationState(row: InvitationTimes, now: Date = new Date()): I
 export type AcceptErrorCode =
   | 'not_found'
   | 'email_mismatch'
+  | 'email_unverified'
   | 'revoked'
   | 'expired'
   | 'used'
@@ -181,6 +186,11 @@ const ACCEPT_ERRORS: Readonly<Record<Exclude<AcceptErrorCode, 'schema_missing' |
     status: 403,
     message: 'This invitation was sent to a different email address. Sign in with the address it was sent to.',
   },
+  email_unverified: {
+    status: 403,
+    message: 'Confirm your email address first: open the confirmation email, then accept again.',
+  },
+  // Also: the inviter no longer holds members.manage in the org (migration 138).
   revoked: { status: 410, message: 'This invitation was withdrawn' },
   expired: { status: 410, message: 'This invitation has expired. Ask for a new one.' },
   used: { status: 409, message: 'This invitation has already been used' },
@@ -213,15 +223,6 @@ export function interpretAcceptResult(data: unknown, error: RpcError): AcceptOut
 }
 
 // ── Email ───────────────────────────────────────────────────────────────
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 export function describeGrant(role: Role, functions: readonly OrgFunction[]): string {
   const label = ROLE_LABELS[role];

@@ -399,7 +399,7 @@ Delete the org rows where `kind = 'producer'` and no other members exist.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-05, LABEL-06, LABEL-07
-**Status:** In Progress (branch label-os/LABEL-08)
+**Status:** In Review (PR #PENDING, branch label-os/LABEL-08)
 
 ## Objective
 A working invitation flow for org members.
@@ -503,6 +503,10 @@ The last owner cannot be removed or demoted (DB trigger + route 409).
 ## Carried from LABEL-07 (#57)
 The producer's personal org is named once, from `display_name` (or "My studio"), when it is created. Renaming the producer does not rename the org. The switcher shows the org name, so an owner needs to be able to rename it. Add `PATCH /api/org/[orgId]` `{ name }` (capability `org.manage`, `org.settings_changed` audit event) with an inline rename in settings. Keep it to the name; the slug stays.
 
+## Carried from LABEL-08
+- Mount `src/components/labelos/InviteMemberModal.tsx` (built and tested in LABEL-08) on the members page; it posts to `POST /api/org/[orgId]/invitations`. List pending invitations there with a Revoke action (`DELETE /api/org/[orgId]/invitations/[invitationId]`); the GET listing is this task's.
+- `/join/<token>` ends on "Open <org>" → `/o/<slug>`. Until this task adds `(label)/o/[orgSlug]`, that link 404s (behind the flag).
+
 ## Out of Scope
 Artist scope UI (LABEL-10).
 
@@ -561,6 +565,9 @@ None beyond the roster list (it reuses the `/contacts` Artists card components).
 
 ## Tests
 Two-org and two-scope route tests; RLS replay entries; producer CRM e2e unchanged.
+
+## Carried from LABEL-08
+- An invitation limited to named artists stores them as `org_invitations.artist_ids` (roster CONTACT ids, 17 R3; the column keeps 136's name) and the API calls them `contact_ids`. Accepting sets `org_members.scope = 'artists'` but there is no `member_artist_scopes` yet, so the list is NOT copied onto the membership. When this task adds `member_artist_scopes`, (1) make `labelos_accept_invitation` (138) insert one row per `artist_ids` entry in the same transaction, (2) backfill members whose accepted invitation carries `artist_ids`, and (3) validate `contact_ids` on `POST /api/org/[orgId]/invitations` as contacts of THAT org (today they are only checked to be uuids). Until then `artistScopeAllows` is a no-op, so such a member sees the whole org.
 
 ## Out of Scope
 Org-scoping the producer's existing contacts (M7); direction (LABEL-26).

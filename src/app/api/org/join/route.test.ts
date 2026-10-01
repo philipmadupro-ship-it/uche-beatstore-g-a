@@ -14,15 +14,20 @@ const USER = '33333333-3333-4333-8333-333333333333';
 
 let session: { userId: string; email: string | null } | null = null;
 let liveMember = false;
+let inviterCanManage = true;
 let allowed = true;
 let rpcAnswer: Answer = { data: null, error: null };
 let previewRow: Record<string, unknown> | null = null;
 let admin: ReturnType<typeof fakeAdmin>;
 const logged: unknown[] = [];
 
+const INVITER = '44444444-4444-4444-8444-444444444444';
 vi.mock('@/lib/auth/org-access', () => ({
   sessionIdentity: async () => session,
-  isLiveOrgMember: async () => liveMember,
+  liveMembership: async (_admin: unknown, _org: string, user: string) => {
+    if (user === INVITER) return inviterCanManage ? { role: 'admin', capabilities: new Set(['members.manage']) } : { role: 'member', capabilities: new Set() };
+    return liveMember ? { role: 'member', capabilities: new Set() } : null;
+  },
 }));
 vi.mock('@/lib/auth/ownership', () => ({ createServiceClient: () => admin.client }));
 vi.mock('@/lib/security/rate-limit', () => ({ rateLimitDurable: async () => allowed, clientIp: () => '1.2.3.4' }));
@@ -44,6 +49,7 @@ function answer(chain: Chain): Answer {
 beforeEach(() => {
   session = null;
   liveMember = false;
+  inviterCanManage = true;
   allowed = true;
   rpcAnswer = { data: null, error: null };
   previewRow = null;
@@ -145,6 +151,7 @@ describe('preview', () => {
     role: 'member',
     functions: ['a_and_r'],
     project_id: null,
+    invited_by: INVITER,
     expires_at: new Date(Date.now() + 86_400_000).toISOString(),
     accepted_at: null,
     revoked_at: null,
@@ -193,6 +200,15 @@ describe('preview', () => {
   ])('reports %s', async (state, over) => {
     previewRow = row(over);
     expect((await post({ token, action: 'preview' })).json.state).toBe(state);
+  });
+
+  it('reads as withdrawn when the inviter no longer holds members.manage', async () => {
+    inviterCanManage = false;
+    previewRow = row();
+    expect((await post({ token, action: 'preview' })).json.state).toBe('revoked');
+    previewRow = row({ invited_by: null });
+    inviterCanManage = true;
+    expect((await post({ token, action: 'preview' })).json.state).toBe('revoked');
   });
 
   it.each([

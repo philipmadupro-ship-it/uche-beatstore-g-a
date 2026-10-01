@@ -153,6 +153,36 @@ SELECT public.check_eq('artist membership is artist-scoped',
 SELECT public.check_eq('the buyer is still not a producer',
   (SELECT count(*) FROM public.creator_profiles WHERE user_id = :B), 0::bigint);
 
+-- ── An unverified address cannot accept ─────────────────────────────────
+INSERT INTO auth.users (id, email, email_confirmed_at) VALUES ('e1000000-0000-4000-8000-000000000004', 'unverified@local.test', NULL);
+INSERT INTO public.org_invitations (org_id, email, role, token_hash, expires_at, invited_by)
+  VALUES (:L, 'unverified@local.test', 'member', pg_temp.h('unverified'), now() + interval '7 days', :OWN);
+SET ROLE service_role;
+SELECT public.check_eq('unverified email → email_unverified',
+  public.labelos_accept_invitation(pg_temp.h('unverified'), 'e1000000-0000-4000-8000-000000000004'), '{"error": "email_unverified"}'::jsonb);
+RESET ROLE;
+SELECT public.check_eq('unverified wrote no membership',
+  (SELECT count(*) FROM public.org_members WHERE user_id = 'e1000000-0000-4000-8000-000000000004'), 0::bigint);
+
+-- ── An invitation does not outlive its inviter's authority ──────────────
+INSERT INTO auth.users (id, email) VALUES
+  ('e1000000-0000-4000-8000-000000000005', 'formeradmin@local.test'),
+  ('e1000000-0000-4000-8000-000000000006', 'friend@local.test');
+INSERT INTO public.org_members (org_id, user_id, role, scope)
+  VALUES (:L, 'e1000000-0000-4000-8000-000000000005', 'admin', 'org');
+INSERT INTO public.org_invitations (org_id, email, role, token_hash, expires_at, invited_by)
+  VALUES (:L, 'friend@local.test', 'admin', pg_temp.h('stale-authority'), now() + interval '7 days', 'e1000000-0000-4000-8000-000000000005');
+UPDATE public.org_members SET role = 'member' WHERE org_id = :L AND user_id = 'e1000000-0000-4000-8000-000000000005';
+SET ROLE service_role;
+SELECT public.check_eq('inviter demoted since → refused as withdrawn',
+  public.labelos_accept_invitation(pg_temp.h('stale-authority'), 'e1000000-0000-4000-8000-000000000006'), '{"error": "revoked"}'::jsonb);
+RESET ROLE;
+UPDATE public.org_members SET role = 'admin' WHERE org_id = :L AND user_id = 'e1000000-0000-4000-8000-000000000005';
+SET ROLE service_role;
+SELECT public.check_eq('inviter an admin again → joined',
+  public.labelos_accept_invitation(pg_temp.h('stale-authority'), 'e1000000-0000-4000-8000-000000000006') ->> 'status', 'joined');
+RESET ROLE;
+
 -- ── Already a member before accepting: membership untouched ─────────────
 INSERT INTO public.org_invitations (org_id, email, role, token_hash, expires_at, invited_by)
   VALUES (:L, 'owner@local.test', 'member', pg_temp.h('own-again'), now() + interval '7 days', :OWN);

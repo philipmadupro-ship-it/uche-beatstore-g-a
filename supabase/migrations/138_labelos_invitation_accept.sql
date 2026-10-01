@@ -12,10 +12,15 @@
 --   1. the invitation is looked up by the sha-256 of its token and LOCKED
 --      (FOR UPDATE), so two simultaneous accepts serialise;
 --   2. the accepting user's email (read from auth.users, never from the
---      caller) must equal the invited email, normalised as
---      lib/contacts/email.ts normalises (trim + lower-case);
+--      caller) must be VERIFIED (`email_confirmed_at`) and equal the invited
+--      email, normalised as lib/contacts/email.ts normalises (trim +
+--      lower-case). An unverified address proves nothing about who holds
+--      the inbox;
 --   3. revoked → refused; already accepted → idempotent for a user who is a
---      member, "used" for anyone else; expired → refused;
+--      member, "used" for anyone else; expired → refused; an inviter who no
+--      longer holds members.manage in the org (removed, demoted — only owner
+--      and admin can hold it, NEVER_GRANTABLE) → refused as withdrawn: an
+--      invitation does not outlive the authority that issued it;
 --   4. org_members is written (scope `artists` for an artist or anyone
 --      limited to named artists, 06 §2.5), the invitation is marked accepted
 --      and the `member.joined` audit event is recorded.
@@ -39,15 +44,17 @@ SECURITY DEFINER
 SET search_path = public
 AS $fn$
 DECLARE
-  v_email   text;
-  v_inv     public.org_invitations%ROWTYPE;
-  v_rows    int;
+  v_email     text;
+  v_confirmed timestamptz;
+  v_inv       public.org_invitations%ROWTYPE;
+  v_rows      int;
 BEGIN
   IF p_token_hash IS NULL OR p_token_hash !~ '^[0-9a-f]{64}$' OR p_user IS NULL THEN
     RETURN jsonb_build_object('error', 'not_found');
   END IF;
 
-  SELECT lower(btrim(u.email)) INTO v_email FROM auth.users u WHERE u.id = p_user;
+  SELECT lower(btrim(u.email)), u.email_confirmed_at INTO v_email, v_confirmed
+  FROM auth.users u WHERE u.id = p_user;
   IF v_email IS NULL OR v_email = '' THEN
     RETURN jsonb_build_object('error', 'email_mismatch');
   END IF;
@@ -65,6 +72,9 @@ BEGIN
   IF v_inv.email <> v_email THEN
     RETURN jsonb_build_object('error', 'email_mismatch');
   END IF;
+  IF v_confirmed IS NULL THEN
+    RETURN jsonb_build_object('error', 'email_unverified');
+  END IF;
   IF v_inv.project_id IS NOT NULL OR v_inv.role = 'owner' THEN
     RETURN jsonb_build_object('error', 'unsupported');
   END IF;
@@ -79,6 +89,12 @@ BEGIN
   END IF;
   IF v_inv.expires_at <= now() THEN
     RETURN jsonb_build_object('error', 'expired');
+  END IF;
+  IF v_inv.invited_by IS NULL OR NOT EXISTS (
+    SELECT 1 FROM public.org_members m
+    WHERE m.org_id = v_inv.org_id AND m.user_id = v_inv.invited_by AND m.role IN ('owner', 'admin')
+  ) THEN
+    RETURN jsonb_build_object('error', 'revoked');
   END IF;
 
   INSERT INTO public.org_members (org_id, user_id, role, functions, scope, invited_by)

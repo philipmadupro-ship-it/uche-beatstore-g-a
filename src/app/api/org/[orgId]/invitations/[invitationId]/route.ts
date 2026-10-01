@@ -63,13 +63,26 @@ export async function DELETE(
       return NextResponse.json({ error: 'This invitation was already accepted. Remove the member instead.' }, { status: 409 });
     }
 
-    await recordEvent(
-      admin,
-      { orgId: access.orgId, userId: access.userId },
-      'invitation.revoked',
-      { type: 'invitation', id },
-      { email: before.email },
-    );
+    try {
+      await recordEvent(
+        admin,
+        { orgId: access.orgId, userId: access.userId },
+        'invitation.revoked',
+        { type: 'invitation', id },
+        { email: before.email },
+      );
+    } catch (err) {
+      // A revocation with no audit row must not stand, or a retry would see
+      // `revoked_at` and answer 200 without ever recording it. Undo exactly
+      // this revocation; the retry then revokes and records together.
+      await admin
+        .from('org_invitations')
+        .update({ revoked_at: null })
+        .eq('org_id', access.orgId)
+        .eq('id', id)
+        .eq('revoked_at', row.revoked_at);
+      throw err;
+    }
     return NextResponse.json({ revoked: true, revoked_at: row.revoked_at });
   } catch (err) {
     log.error('revoke invitation failed', { orgId: access.orgId, invitationId: id, error: errorMessage(err) });

@@ -149,6 +149,7 @@ describe('interpretAcceptResult', () => {
   it.each([
     ['not_found', 404],
     ['email_mismatch', 403],
+    ['email_unverified', 403],
     ['revoked', 410],
     ['expired', 410],
     ['used', 409],
