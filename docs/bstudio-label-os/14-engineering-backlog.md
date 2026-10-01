@@ -399,7 +399,7 @@ Delete the org rows where `kind = 'producer'` and no other members exist.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-05, LABEL-06, LABEL-07
-**Status:** In Review (PR #PENDING, branch label-os/LABEL-08)
+**Status:** In Review (PR #58, branch label-os/LABEL-08)
 
 ## Objective
 A working invitation flow for org members.
