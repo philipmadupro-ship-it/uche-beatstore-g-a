@@ -286,16 +286,16 @@ export function ProducerShareVariant({ project, tracks, creator, onPlay, playing
                   Pack · {tracks.length}
                 </p>
               </div>
-              <div className="divide-y divide-white/10">
-                {visibleTracks.map((t, i) => (
+              <div className="space-y-2 p-2">
+                {visibleTracks.map((t) => (
                   <ShareTrackRow
                     key={t.id}
                     track={t}
-                    index={i}
                     active={playingId === t.id}
                     isPlaying={!!isPlaying}
                     onPlay={() => onPlay(t)}
                     download={rowDownload}
+                    compact
                   />
                 ))}
               </div>

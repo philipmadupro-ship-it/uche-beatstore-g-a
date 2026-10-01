@@ -694,6 +694,7 @@ export default function ProjectSharePage({ params: paramsPromise }: { params: Pr
         <ClientShareVariant
           project={displayProject}
           actions={shareActions}
+          rowDownload={rowDownload}
           tracks={tracks}
           creator={creator}
           licenses={licenses}

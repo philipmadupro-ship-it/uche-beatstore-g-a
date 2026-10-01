@@ -9,8 +9,12 @@ const track = { id: 't1', title: 'Night Shift', type: 'beat', bpm: 140, key: 'F'
 
 describe('ShareTrackRow', () => {
   it('shows the library-style meta line', () => {
-    render(<ShareTrackRow track={track} index={0} active={false} isPlaying={false} onPlay={() => {}} />);
-    expect(screen.getByText('beat · 140 bpm · Fm · 2:05')).toBeTruthy();
+    render(<ShareTrackRow track={track} active={false} isPlaying={false} onPlay={() => {}} />);
+    expect(screen.getByText('Night Shift')).toBeTruthy();
+    expect(screen.getByText('Fm')).toBeTruthy();
+    expect(screen.getByText('beat')).toBeTruthy();
+    // The Time column, and the same length repeated for phones.
+    expect(screen.getAllByText('2:05').length).toBeGreaterThan(0);
   });
 
   it('plays on the row and downloads on its own button, without nesting buttons', () => {
@@ -19,7 +23,7 @@ describe('ShareTrackRow', () => {
     const { container } = render(
       <ShareTrackRow
         track={track}
-        index={0}
+       
         active={false}
         isPlaying={false}
         onPlay={onPlay}
@@ -36,11 +40,29 @@ describe('ShareTrackRow', () => {
     expect(container.querySelector('button button')).toBeNull();
   });
 
+  it('splits cover (plays) from title (details) when a details handler is given', () => {
+    const onPlay = vi.fn();
+    const onOpenDetails = vi.fn();
+    render(<ShareTrackRow track={track} active={false} isPlaying={false} onPlay={onPlay} onOpenDetails={onOpenDetails} />);
+    fireEvent.click(screen.getByTestId('share-track-play'));
+    expect(onPlay).toHaveBeenCalledTimes(1);
+    expect(onOpenDetails).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Night Shift'));
+    expect(onOpenDetails).toHaveBeenCalledTimes(1);
+    expect(onPlay).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the trailing slot and title badge', () => {
+    render(<ShareTrackRow track={track} active={false} isPlaying={false} onPlay={() => {}} trailing={<b>$30</b>} titleBadge={<i>In cart</i>} />);
+    expect(screen.getByText('$30')).toBeTruthy();
+    expect(screen.getByText('In cart')).toBeTruthy();
+  });
+
   it('has no download control when downloads are off', () => {
     render(
       <ShareTrackRow
         track={track}
-        index={0}
+       
         active={false}
         isPlaying={false}
         onPlay={() => {}}
@@ -54,7 +76,7 @@ describe('ShareTrackRow', () => {
     render(
       <ShareTrackRow
         track={track}
-        index={0}
+       
         active
         isPlaying
         onPlay={() => {}}

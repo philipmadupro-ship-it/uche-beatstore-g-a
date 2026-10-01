@@ -9294,8 +9294,8 @@ Reported: ten WAVs (~200–300 MB) took ~10 minutes to upload; the vinyl and wav
 
 **Share vinyl.** `ShareWaveformVinyl` only drew the page's waveform when given `waveRef`; producer / rapper / friend never passed it, so it mounted a second `WavePlayer` (global `usePlayer`) while the sound and the disc ran off the page's `useWaveSurfer`. The variants now take `waveRef` and the page no longer mounts the hidden duplicate container for them.
 
-**Rows.** `components/share/ShareTrackRow` replaces three hand-drawn lists: cover, title, type · BPM · key · length, and a Download button on the row when the share allows it (a sibling of the Play button, not nested). `ShareActions` keeps its block (playback label, downloads-off notice, collaboration entry).
+**Rows.** `components/share/ShareTrackRow` replaces the hand-drawn lists in all four variants (client included) and is laid out like the library's All tracks row: bordered row, 48px cover with the play glyph, semibold title, BPM | key | type line, a Time column, and a Download button on the row when the share allows it (a sibling of Play, not nested). Narrow lists (the producer sidebar) pass `compact`: no Time column, the length rides the meta line. The client variant keeps its split (cover plays, title opens the licence drawer) and passes its price/licence pill as `trailing`. `ShareActions` keeps its block (playback label, downloads-off notice, collaboration entry).
 
 Tests: part route batch cases; `ShareTrackRow.test.tsx`; `e2e/share-options.spec.ts` +9 (disc spins and there is one vinyl waveform; Download on the row; no row download when off) — 37 passing.
 
-Not done: the client variant's own list; the store cards; any measured before/after of upload time. Prompt: `docs/prompts/upload-speed-and-share-player.md`.
+Not done: the store cards; any measured before/after of upload time. Prompt: `docs/prompts/upload-speed-and-share-player.md`.

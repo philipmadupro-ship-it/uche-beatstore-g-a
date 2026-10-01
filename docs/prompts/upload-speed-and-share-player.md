@@ -42,15 +42,15 @@ Three fixes, each independently shippable. Do them in this order and say which y
 
 **Wanted:**
 - Download is a button on the track's own row, only when the share allows downloads. The server's download gate still decides.
-- One shared row (`components/share/ShareTrackRow`) in all three variants: cover, title, then type · BPM · key · length, the same facts the library row leads with.
+- One shared row (`components/share/ShareTrackRow`) in all four variants, laid out like the library's All tracks row: bordered row, 48px cover with the play glyph, semibold title, BPM | key | type line, a Time column.
 - The bottom block stays (it also carries the playback label, the "downloads are off" notice and the collaboration entry).
 - The row must not nest a button in a button: Play wraps the content, Download sits beside it.
 
-**Open question, ask if it matters:** "same format as my library" was read as the library row's content and order on the share pages. It was not read as restyling the store (`/store`) cards. If the intent was the store, say so.
+**Open question, ask if it matters:** "same format as my library" was read as the library's All tracks row, applied on the share pages. It was not read as restyling the store (`/store`) cards. If the intent was the store, say so.
 
 ## Out of scope
 
-The client variant's own track list, the store, the dashboard library, schema changes, and anything in `supabase/migrations/`.
+The store, the dashboard library, schema changes, and anything in `supabase/migrations/`.
 
 ## Done means
 
