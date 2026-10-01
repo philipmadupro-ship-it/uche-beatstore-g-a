@@ -1,7 +1,10 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { buildCsp, cspHeaderName as cspHeaderNameFor } from '@/lib/security/csp';
-import { requiresProducerForApi } from '@/lib/security/api-gate';
+import { apiGateFor, isLabelOsApiPath, isLabelOsPagePath } from '@/lib/security/api-gate';
+import { isLabelOsEnabled } from '@/lib/labelos/flag';
+import { hasAnyLabelOsMembership } from '@/lib/labelos/membership-gate';
+import { isSupabaseConfigured } from '@/lib/local-store';
 
 /**
  * Next.js 16 renamed the `middleware` file convention to `proxy`. The shape
@@ -47,12 +50,33 @@ export async function proxy(request: NextRequest) {
 
   let response = newResponse();
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // Label OS namespaces (`/api/org/*`, `/o/*`). Behind LABEL_OS_ENABLED: while
+  // it is off they do not exist (404). Label OS has no local-store fallback —
+  // a JSON-file copy of multi-tenant RLS would be a second, untested
+  // authorisation implementation — so without Supabase it answers 503
+  // (10-technical-architecture.md §12–13, risk R-24). No other path is
+  // affected by either check.
+  const labelOsApi = isLabelOsApiPath(request.nextUrl.pathname);
+  const labelOsPage = isLabelOsPagePath(request.nextUrl.pathname);
+  if (labelOsApi || labelOsPage) {
+    if (!isLabelOsEnabled()) {
+      return labelOsApi
+        ? NextResponse.json({ error: 'Not found' }, { status: 404 })
+        : new NextResponse('Not found', { status: 404 });
+    }
+    if (!supabaseUrl || !supabaseAnon || !isSupabaseConfigured()) {
+      return labelOsApi
+        ? NextResponse.json({ error: 'Label OS requires a database' }, { status: 503 })
+        : new NextResponse('Label OS requires a database', { status: 503 });
+    }
+  }
+
   // /embed/* is a public, cookieless distribution widget — skip the Supabase
   // token refresh entirely so it loads fast and never touches auth.
   if (framable) return response;
-
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   // Local-store / offline dev: nothing to refresh, let everything through.
   if (!supabaseUrl || !supabaseAnon) return response;
@@ -93,8 +117,14 @@ export async function proxy(request: NextRequest) {
   // API gate: a signed-in non-producer may reach only the public/buyer routes
   // in lib/security/api-gate.ts. Signed-out calls fall through to the route,
   // which answers 401 itself (or checks a cron bearer / webhook signature).
-  if (user && requiresProducerForApi(request.nextUrl.pathname, true) && !(await isProducer(user.id))) {
+  // `/api/org/*` is the one namespace gated on org membership instead, and
+  // membership admits to nothing else (risk R-03).
+  const apiGate = apiGateFor(request.nextUrl.pathname, !!user);
+  if (user && apiGate === 'producer' && !(await isProducer(user.id))) {
     return NextResponse.json({ error: 'Producer account required' }, { status: 403 });
+  }
+  if (user && apiGate === 'member' && !(await hasAnyLabelOsMembership(supabase, user.id))) {
+    return NextResponse.json({ error: 'Organization membership required' }, { status: 403 });
   }
 
   // Auth redirects are ON. Without this, unauthenticated users get to wander
@@ -113,6 +143,27 @@ export async function proxy(request: NextRequest) {
     '/cover-art',
   ];
   const path = request.nextUrl.pathname;
+
+  // Label OS pages need a session and some membership; which org the page
+  // may show is the page's own check. A signed-in non-member goes to `/`,
+  // which routes the producer to /library and a buyer on to their account.
+  if (labelOsPage) {
+    if (!user) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/login';
+      url.search = '';
+      url.searchParams.set('next', path + request.nextUrl.search);
+      return NextResponse.redirect(url);
+    }
+    if (!(await hasAnyLabelOsMembership(supabase, user.id))) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/';
+      url.search = '';
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+
   // /projects/share/[token] is a PUBLIC reader page (same shape as
   // /share/[token]) — guests with a link must be able to view without an
   // account, so we explicitly exempt it from the redirect.

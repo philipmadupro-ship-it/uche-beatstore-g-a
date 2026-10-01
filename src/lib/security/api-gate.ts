@@ -44,7 +44,44 @@ export function isPublicApiPath(pathname: string): boolean {
   return PUBLIC_PATTERNS.some((re) => re.test(pathname));
 }
 
+/**
+ * The Label OS API namespace: `/api/org` and everything under `/api/org/`.
+ * Look-alikes (`/api/organizations`, `/api/orgs`) are NOT in it and stay
+ * producer-only like any other dashboard path.
+ */
+export function isLabelOsApiPath(pathname: string): boolean {
+  return pathname === '/api/org' || pathname.startsWith('/api/org/');
+}
+
+/**
+ * The Label OS page namespace: `/o` and everything under `/o/`. Exact segment
+ * match, because `/offline` and `/orders`-style paths share the letter.
+ */
+export function isLabelOsPagePath(pathname: string): boolean {
+  return pathname === '/o' || pathname.startsWith('/o/');
+}
+
+/**
+ * Which check the proxy runs on an /api request from this caller:
+ *  - `none`     signed out, a public route, or not an /api path at all;
+ *  - `member`   a Label OS path: the caller must belong to some org (or, from
+ *               LABEL-21, some project). This is coarse admission only; the
+ *               routes check org and capability (lib/auth/org-access.ts);
+ *  - `producer` everything else: the caller must be the producer.
+ *
+ * Membership NEVER admits anyone to a `producer` path. That isolation is the
+ * point of the separate namespace (06-permission-model.md §3.3, risk R-03).
+ */
+export type ApiGate = 'none' | 'member' | 'producer';
+
+export function apiGateFor(pathname: string, signedIn: boolean): ApiGate {
+  if (!signedIn || !pathname.startsWith('/api/')) return 'none';
+  if (isLabelOsApiPath(pathname)) return 'member';
+  if (isPublicApiPath(pathname)) return 'none';
+  return 'producer';
+}
+
 /** True when the proxy must check the caller is the producer. */
 export function requiresProducerForApi(pathname: string, signedIn: boolean): boolean {
-  return signedIn && pathname.startsWith('/api/') && !isPublicApiPath(pathname);
+  return apiGateFor(pathname, signedIn) === 'producer';
 }
