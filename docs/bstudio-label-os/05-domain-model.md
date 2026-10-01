@@ -2,6 +2,9 @@
 
 **Discovery 01 · 2026-09-30** · Diagram: `domain-model.mermaid`
 
+> **Superseded in part (2026-10-01):** `main` gained the Artist Workspace (#44) after this was written. Where this file conflicts with `17-reconciliation-with-artist-workspace.md`, **17 wins**: songs are `tracks` rows, artists are org contacts in workspace mode, files are `project_assets`, comments are `project_comments`, credits are `track_collaborators`.
+
+
 **Design rule:** reuse before create. Every new entity below was checked against the existing schema (`01-current-system-audit.md` §4). The audio pipeline (`tracks`, `track_versions`, stems, peaks, previews) is **reused, not re-modelled**.
 
 Tags: **EXISTING** (table exists today), **EXTEND** (existing table + new columns), **NEW** (new table).

@@ -2,6 +2,9 @@
 
 **Discovery 01 · 2026-09-30** · Diagram: `workflow-map.mermaid`
 
+> **Superseded in part (2026-10-01):** `main` gained the Artist Workspace (#44) after this was written. Where this file conflicts with `17-reconciliation-with-artist-workspace.md`, **17 wins**: songs are `tracks` rows, artists are org contacts in workspace mode, files are `project_assets`, comments are `project_comments`, credits are `track_collaborators`.
+
+
 ## 1. Principle: derive, don't store
 
 **FACT (repo):** `src/lib/library/triage.ts` classifies every beat's produce→sell stage from existing columns ("no status column to keep in sync, and it classifies the whole back catalogue retroactively"). `src/lib/store/readiness.ts` splits **hard blockers** (literally unpurchasable) from **conversion issues**, and `CLAUDE.md` says to keep that split: "a diagnostic that overstates gets ignored".

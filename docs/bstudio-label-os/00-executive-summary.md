@@ -26,6 +26,7 @@
 | `13-risk-register.md` | 24 risks |
 | `14-engineering-backlog.md` | 42 atomic tasks (LABEL-01…42) in the required format |
 | `15-product-decisions.md` | **D1–D10 as decided by the owner on 2026-09-30**, plus released→store, workflow, chat and contracts direction |
+| `17-reconciliation-with-artist-workspace.md` | **Binding (2026-10-01):** how Label OS builds on `main`'s Artist Workspace (#44) instead of duplicating it; wins over 04–14 where they differ |
 | `16-execution-runbook.md` | How the backlog runs: one Claude session per task, next starts when the PR merges |
 | `domain-model.mermaid`, `workflow-map.mermaid`, `permission-model.mermaid` | Diagrams |
 

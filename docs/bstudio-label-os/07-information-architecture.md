@@ -2,6 +2,9 @@
 
 **Discovery 01 · 2026-09-30**
 
+> **Superseded in part (2026-10-01):** `main` gained the Artist Workspace (#44) after this was written. Where this file conflicts with `17-reconciliation-with-artist-workspace.md`, **17 wins**: songs are `tracks` rows, artists are org contacts in workspace mode, files are `project_assets`, comments are `project_comments`, credits are `track_collaborators`.
+
+
 **Binding constraints:** `docs/design-direction.md` ("Quiet Luxury"), and the interaction hierarchy and primitives in `CLAUDE.md`: `ListRow`, `ActionMenu`, `InlineText`, `InlineTagStrip`, `Popover`, `Dropdown`, `BatchActionBar`, `useDialogBehavior`, toast queue. **No new colours, fonts or UI library.**
 
 **Priority order (from the brief):** Context → Music → People → Work → Next Action.
