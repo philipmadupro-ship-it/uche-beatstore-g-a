@@ -9294,3 +9294,20 @@ PR #48 made the storefront refuse unusable handles / URLs / emails instead of re
 - `/profile` fires it after "Profile saved"; `/store-editor` fires it as soon as the profile PATCH succeeds, so it also shows when a later playlist/project update partly fails.
 
 Tests: `social-links.test.ts` (labels, silence for empty/valid, toast wording); `e2e/profile-link-warning.spec.ts` at 1280 and 390 px through the real page (save still posts the typed value; a pasted profile link, `@handle` and bare domain stay silent; fails without the change). The Store Editor call site is covered by the shared helper and `tsc`, not by its own e2e.
+
+## 2026-10-01 - Favorites and buyer accounts: the signed-in marker follows the auth cookie
+
+Reported: favorites and buyer accounts "don't show up" — hearts tapped while signed in did not save to the account or come back on another device.
+
+**Traced, not reproduced against a database.** `/api/store/me`, the `set_favorite` action, `buyer_favorites` (mig 060, applied) and `/api/store/account/me` all read correctly, and the unit suites around them passed. The break is on the client, in how a device knows a buyer is signed in. `buyerIdentityQuery()` returns the session identity only when a `localStorage` marker (`antigravity-buyer-session-mode`) is set, and the only place that ever set it was `/store/account/me`. The Supabase session lives in a cookie and outlives that flag: Safari purges `localStorage` after a week without a visit, a site-data clear removes it, and `dispatch` / `fetchBuyerLibrary` delete it on any 400, including one transient auth refresh. With the cookie alive and the marker gone, `setFavorite` returned `No buyer session` (swallowed — the heart still fills locally) and `syncWithAccount` found no identity and never pulled the account's hearts in. The buyer looked signed in everywhere except to the code that writes the favourites.
+
+Root cause: a second, weaker copy of "is a buyer signed in" kept in `localStorage` and written from one page, instead of reading the auth session that already exists.
+
+Changes (no schema, API or contract change):
+- `lib/buyer-session.ts#reconcileSessionMarker(hasSession)` — makes the marker agree with the session, returns whether it changed.
+- `StoreLayoutClient` reads `auth.getSession()` (a local cookie read, no network) on every store navigation and reconciles the marker before `syncWithAccount` runs. A transient 400 that cleared the marker is now repaired on the next navigation, and a signed-out device drops a stale marker.
+- A legacy delivery token still works, and the session still outranks it (`buyerIdentityQuery` unchanged).
+
+Tests: `buyer-session.test.ts` (3 new): a lost marker with a live session is restored and the next heart POSTs to `?session=1`; a gone session clears it; agreement reports no change.
+
+Not changed: the session is shared with the producer's dashboard login, so a producer browsing `/store` while signed in now syncs hearts under their own email and `upsertLeadContact` creates a lead for them (as opening `/store/account/me` already did). Skipping that needs the server to know the producer's email; left for a follow-up. `syncedIdentity` is keyed on the query string (`session=1`), not the user id, so switching accounts without signing out through `/store/account/me` would not re-sync until reload.
