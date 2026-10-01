@@ -303,7 +303,7 @@ Revert.
 **Risk:** Critical
 **Workstream:** L
 **Dependencies:** LABEL-05
-**Status:** In Progress (branch label-os/LABEL-06)
+**Status:** In Review (PR #56, branch label-os/LABEL-06)
 
 ## Objective
 Admit org members to `/api/org/*` and `/o/*` only, behind `LABEL_OS_ENABLED`, without changing any existing route's gate.

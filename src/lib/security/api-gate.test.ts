@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { isPublicApiPath, requiresProducerForApi } from './api-gate';
+import {
+  apiGateFor,
+  isLabelOsApiPath,
+  isLabelOsPagePath,
+  isPublicApiPath,
+  requiresProducerForApi,
+} from './api-gate';
 
 describe('isPublicApiPath', () => {
   it.each([
@@ -28,5 +34,46 @@ describe('requiresProducerForApi', () => {
   });
   it('ignores non-api paths', () => {
     expect(requiresProducerForApi('/library', true)).toBe(false);
+  });
+});
+
+describe('isLabelOsApiPath', () => {
+  it.each(['/api/org', '/api/org/', '/api/org/abc', '/api/org/abc/members', '/api/org/join'])(
+    'is the namespace: %s',
+    (p) => expect(isLabelOsApiPath(p)).toBe(true),
+  );
+  it.each(['/api/organizations', '/api/orgs', '/api/orgx/1', '/api', '/api/', '/org', '/o/acme', '/api/tracks/org'])(
+    'is not: %s',
+    (p) => expect(isLabelOsApiPath(p)).toBe(false),
+  );
+});
+
+describe('isLabelOsPagePath', () => {
+  it.each(['/o', '/o/', '/o/acme', '/o/acme/artists/1'])('is the namespace: %s', (p) =>
+    expect(isLabelOsPagePath(p)).toBe(true),
+  );
+  it.each(['/offline', '/orders', '/org', '/oo/x', '/store/orders', '/', '/api/org'])('is not: %s', (p) =>
+    expect(isLabelOsPagePath(p)).toBe(false),
+  );
+});
+
+describe('apiGateFor', () => {
+  it('gates Label OS paths on membership, never on producer', () => {
+    expect(apiGateFor('/api/org', true)).toBe('member');
+    expect(apiGateFor('/api/org/abc/members', true)).toBe('member');
+    expect(requiresProducerForApi('/api/org/abc', true)).toBe(false);
+  });
+
+  it('leaves signed-out callers to the route everywhere, Label OS included', () => {
+    for (const p of ['/api/org', '/api/email', '/api/store']) expect(apiGateFor(p, false)).toBe('none');
+  });
+
+  it('keeps every other path exactly as requiresProducerForApi had it', () => {
+    for (const p of ['/api/email', '/api/tracks', '/api/organizations', '/api/orgs', '/api/stripe/diagnostics']) {
+      expect(apiGateFor(p, true), p).toBe('producer');
+    }
+    for (const p of ['/api/store/me', '/api/share/t', '/api/portal/t', '/api/tracks/t/heatmap', '/library', '/o/acme']) {
+      expect(apiGateFor(p, true), p).toBe('none');
+    }
   });
 });
