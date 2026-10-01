@@ -4,8 +4,10 @@ import { getCreatorProfile, updateCreatorProfile } from '@/lib/actions/profile';
 import { errorMessage, schemaCacheMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/log';
 const log = createLogger('api.profile');
-import { readBody } from '@/lib/validate';
+import { isUUID, readBody } from '@/lib/validate';
 import { CreatorProfilePatchSchema } from '@/lib/contracts';
+import { createServiceClient } from '@/lib/auth/ownership';
+import { ensurePersonalOrg } from '@/lib/labelos/personal-org';
 
 export const dynamic = 'force-dynamic';
 
@@ -131,6 +133,7 @@ export async function POST(req: NextRequest) {
       const pending = schemaCacheMessage(result.error);
       return NextResponse.json({ error: pending ?? result.error }, { status: pending ? 503 : status });
     }
+    await ensureProducerOrg(result.profile);
     return NextResponse.json({ profile: result.profile });
   } catch (error) {
     log.error('Profile POST API error:', { error: errorMessage(error) });
@@ -139,6 +142,22 @@ export async function POST(req: NextRequest) {
       { error: pending ?? errorMessage(error) },
       { status: pending ? 503 : 500 },
     );
+  }
+}
+
+/**
+ * Label OS (LABEL-07): the producer owns a personal `producer` org. A side
+ * effect of a successful save that never fails it — idempotent and
+ * concurrency-safe in SQL, skipped before migrations 136/137 are applied,
+ * and a no-op for anyone but the producer (only they reach a saved profile).
+ */
+async function ensureProducerOrg(profile: unknown) {
+  const userId = (profile as { user_id?: unknown } | null)?.user_id;
+  if (!isUUID(userId)) return; // local-store mode: no database
+  try {
+    await ensurePersonalOrg(createServiceClient(), userId);
+  } catch (error) {
+    log.warn('personal org not ensured', { error: errorMessage(error) });
   }
 }
 
