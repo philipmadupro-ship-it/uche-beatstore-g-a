@@ -460,7 +460,7 @@ Flag off; revert.
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-06, LABEL-08
-**Status:** In Review (PR #59, branch label-os/LABEL-09)
+**Status:** Done (2026-10-02) — [PR #59](https://github.com/philipmadupro-ship-it/uche-beatstore-g-a/pull/59). **Phase 1 complete.**
 
 ## Objective
 A navigable Label OS shell with member management.
@@ -568,6 +568,10 @@ Two-org and two-scope route tests; RLS replay entries; producer CRM e2e unchange
 
 ## Carried from LABEL-08
 - An invitation limited to named artists stores them as `org_invitations.artist_ids` (roster CONTACT ids, 17 R3; the column keeps 136's name) and the API calls them `contact_ids`. Accepting sets `org_members.scope = 'artists'` but there is no `member_artist_scopes` yet, so the list is NOT copied onto the membership. When this task adds `member_artist_scopes`, (1) make `labelos_accept_invitation` (138) insert one row per `artist_ids` entry in the same transaction, (2) backfill members whose accepted invitation carries `artist_ids`, and (3) validate `contact_ids` on `POST /api/org/[orgId]/invitations` as contacts of THAT org (today they are only checked to be uuids). Until then `artistScopeAllows` is a no-op, so such a member sees the whole org.
+
+## Carried from LABEL-09 (#59)
+- The members page already shows a member's scope ("Selected artists"), and `PATCH /api/org/[orgId]/members` already accepts and audits `scope`. This task adds the roster picker and `member_artist_scopes`, then makes `artistScopeAllows` in `org-access.ts` read it. Combined with LABEL-08's carried note, that is everything artist scope needs.
+- Org shells for label and artist orgs list only Members today (`navGroupsFor`). Add the Artists hub here, gated on its capability, once its page exists.
 
 ## Out of Scope
 Org-scoping the producer's existing contacts (M7); direction (LABEL-26).
