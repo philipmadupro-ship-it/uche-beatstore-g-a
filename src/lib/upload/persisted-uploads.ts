@@ -25,6 +25,7 @@
 
 import type { UploadStatus } from './manager';
 import { bytesFromParts } from './progress';
+import { parseOrgUploadTarget, type OrgUploadTarget } from './org-target';
 
 /** One upload as stored in localStorage. */
 export interface PersistedItem {
@@ -42,6 +43,8 @@ export interface PersistedItem {
   replaceTrackId: string | null;
   status: UploadStatus;
   startedAt: number;
+  /** LABEL-14: an org upload's target; null (or absent, in older rows) for a producer upload. */
+  org?: OrgUploadTarget | null;
 }
 
 const VALID_STATUSES: readonly UploadStatus[] = [
@@ -103,6 +106,7 @@ export function normalisePersistedItem(raw: unknown): PersistedItem | null {
     replaceTrackId: nullableStr(r.replaceTrackId),
     status: status(r.status),
     startedAt: num(r.startedAt, Date.now()),
+    org: parseOrgUploadTarget(r.org),
   };
 }
 
