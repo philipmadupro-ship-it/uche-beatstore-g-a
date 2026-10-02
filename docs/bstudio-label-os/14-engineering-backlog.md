@@ -522,7 +522,7 @@ Flag off.
 **Risk:** High
 **Workstream:** L
 **Dependencies:** LABEL-09
-**Status:** In Review (PR #65, branch label-os/LABEL-10)
+**Status:** Done (2026-10-02) — [PR #65](https://github.com/philipmadupro-ship-it/uche-beatstore-g-a/pull/65)
 
 ## Objective
 The artist roster is the org's contacts in workspace mode (`17` R3), and members can be limited to some artists.
@@ -588,7 +588,7 @@ Drop the policy, table and column (nullable, no backfill).
 **Risk:** Medium
 **Workstream:** L
 **Dependencies:** LABEL-10
-**Status:** Not Started
+**Status:** In Progress (branch label-os/LABEL-11)
 
 ## Objective
 Use `main`'s song model (a `tracks` row with `type = 'song'`, plus `song_beats` and `track_links`) as the Label OS song (`17` R1).
@@ -628,6 +628,9 @@ None (the drawer's Linked panel shows the new relations by label only).
 
 ## Tests
 `recording-kind.test.ts`; extend `links.test.ts`; a migration replay check that exactly one relation CHECK survives (the verify pattern from mig 133).
+
+## Orchestrator note (2026-10-02)
+`projects.org_id` arrives in LABEL-12, so `ensureInboxProject` cannot write an org project yet. Build its rule here as a pure, tested planner (which project an org song belongs in, and when an inbox project must be created). LABEL-12/14 wire the write. Widening `track_links_relation_check` touches a producer table: the producer's Linked panel must keep working exactly as before for the existing relations (the #44 links tests plus `npm run e2e:real-db` linked-material flows).
 
 ## Out of Scope
 Stage transitions (LABEL-24); uploads (LABEL-14).
@@ -941,6 +944,11 @@ Same components and design as the producer workspace. No new pattern.
 
 ## Tests
 jsdom tests for the capability-filtered tabs; Playwright spec; existing artist-workspace e2e green.
+
+## Carried from LABEL-10 (#65)
+- The org roster page (`/o/[orgSlug]/artists`) renders `ArtistsCardView` with `linkFor` returning null, because there is no org artist workspace yet. When this task builds it, point `linkFor` at it.
+- Org contacts deliberately take no `notes` / `crm_status`: those are the CRM's private fields, and a roster artist reads their own contact (D5). If the workspace needs internal notes about an artist, store them separately with visibility (business-internal vs artist-visible). Never put them on the contact row.
+- An artist org's "exactly one roster artist" rule is checked only in the route. A DB guard is optional.
 
 ## Out of Scope
 Reviews, credits, direction tabs (later tasks).
