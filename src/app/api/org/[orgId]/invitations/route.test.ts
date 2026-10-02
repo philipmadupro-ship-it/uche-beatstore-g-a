@@ -307,3 +307,28 @@ describe('DELETE invitation', () => {
     expect(events).toEqual([]);
   });
 });
+
+describe('GET invitations (LABEL-09)', () => {
+  it('lists pending invitations of this org, newest first, without token or hash', async () => {
+    pending = [{ id: INV, email: 'a@b.test', role: 'member', functions: ['a_and_r'], artist_ids: [], expires_at: 'x', accepted_at: null, revoked_at: null, created_at: 'now' }];
+    const { GET } = await import('./route');
+    const res = await GET(new NextRequest(`https://app.test/api/org/${ORG}/invitations`), { params: Promise.resolve({ orgId: ORG }) });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.invitations).toEqual([
+      { id: INV, email: 'a@b.test', role: 'member', functions: ['a_and_r'], contact_ids: [], expires_at: 'x', accepted_at: null, revoked_at: null, created_at: 'now' },
+    ]);
+    const chain = admin.chains[0];
+    expect(eqs(chain)).toEqual({ org_id: ORG });
+    expect(chain.ops.filter((o) => o.op === 'is').map((o) => o.args)).toEqual([['accepted_at', null], ['revoked_at', null]]);
+    expect(opOf(chain, 'gt')?.args[0]).toBe('expires_at');
+    expect(String(opOf(chain, 'select')?.args[0])).not.toContain('token');
+  });
+
+  it('passes through the access helper refusal', async () => {
+    denied = 403;
+    const { GET } = await import('./route');
+    const res = await GET(new NextRequest(`https://app.test/api/org/${ORG}/invitations`), { params: Promise.resolve({ orgId: ORG }) });
+    expect(res.status).toBe(403);
+  });
+});

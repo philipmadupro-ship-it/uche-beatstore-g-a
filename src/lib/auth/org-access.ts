@@ -312,3 +312,139 @@ export function scopedOrgQuery(
 ) {
   return admin.from(table).select(columns, options).eq('org_id', ctx.orgId);
 }
+
+// ── Member rows (LABEL-09) ──────────────────────────────────────────────
+
+/**
+ * One `org_members` row, addressed by (org, user): the org from the
+ * authorised context, the user from the request. This is the only place a
+ * Label OS route reaches a row by `user_id` — routes under src/app/api/org
+ * may not filter on it themselves (org-api-source-guard.test.ts), because
+ * there `user_id` is a member's identity, never the tenant.
+ *
+ * Reads need only the context (it is already a member of the org). Writes
+ * need `members.manage` on it; asking without throws, a programming error,
+ * which the route's try/catch turns into a 500 rather than a write.
+ */
+export function memberRowQuery(admin: AdminClient, ctx: OrgAccessOk, userId: string) {
+  if (!isUUID(userId)) throw new Error('memberRowQuery: userId is not a uuid');
+  const write = () => {
+    if (!ctx.capabilities.has('members.manage')) throw new Error('memberRowQuery: members.manage is required to write');
+  };
+  return {
+    select: (columns = '*') =>
+      admin.from('org_members').select(columns).eq('org_id', ctx.orgId).eq('user_id', userId),
+    update: (patch: Record<string, unknown>) => {
+      write();
+      return admin.from('org_members').update(patch).eq('org_id', ctx.orgId).eq('user_id', userId);
+    },
+    delete: () => {
+      write();
+      return admin.from('org_members').delete().eq('org_id', ctx.orgId).eq('user_id', userId);
+    },
+  };
+}
+
+// ── The caller's orgs (LABEL-09) ────────────────────────────────────────
+
+export type MyOrg = { id: string; name: string; slug: string; kind: OrgKind; role: Role };
+
+type MyOrgRow = {
+  role: string;
+  organizations:
+    | { id: string; name: string; slug: string; kind: string; deleted_at: string | null }
+    | { id: string; name: string; slug: string; kind: string; deleted_at: string | null }[]
+    | null;
+};
+
+/** The producer is the user with a creator_profiles row (as src/proxy.ts decides). */
+async function isProducerUser(admin: AdminClient, userId: string): Promise<boolean> {
+  const { data, error } = await admin.from('creator_profiles').select('user_id').eq('user_id', userId).maybeSingle();
+  if (error) return false;
+  return !!data;
+}
+
+/**
+ * Every live org the signed-in caller belongs to, for the org switcher
+ * (`GET /api/org`). The caller's own memberships — identity, not tenancy —
+ * which is why this read lives here and not in the route. A soft-deleted
+ * org, an unknown kind or a role the kind does not offer is left out, the
+ * same memberships `readMembership` refuses.
+ */
+export async function myOrganizations(): Promise<
+  { ok: true; userId: string; isProducer: boolean; orgs: MyOrg[] } | OwnershipFail
+> {
+  const userId = await sessionUserId();
+  if (!userId) return NOT_AUTHENTICATED();
+  const admin = createServiceClient();
+  try {
+    const [{ data, error }, isProducer] = await Promise.all([
+      admin.from('org_members').select('role, organizations!inner(id, name, slug, kind, deleted_at)').eq('user_id', userId),
+      isProducerUser(admin, userId),
+    ]);
+    if (error) throw new Error(error.message);
+    const orgs: MyOrg[] = [];
+    for (const row of (data ?? []) as MyOrgRow[]) {
+      const org = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations;
+      if (!org || org.deleted_at) continue;
+      const kind = ORG_KINDS.find((k) => k === org.kind);
+      const role = ROLES.find((r) => r === row.role);
+      if (!kind || !role || !ROLES_BY_ORG_KIND[kind].includes(role)) continue;
+      orgs.push({ id: org.id, name: org.name, slug: org.slug, kind, role });
+    }
+    orgs.sort((a, b) => a.name.localeCompare(b.name) || a.slug.localeCompare(b.slug));
+    return { ok: true, userId, isProducer, orgs };
+  } catch (err) {
+    log.error('org list failed', { error: err instanceof Error ? err.message : String(err) });
+    return fail(500, 'Could not list organizations');
+  }
+}
+
+export type OrgShell = {
+  org: { id: string; name: string; slug: string; kind: OrgKind };
+  role: Role;
+  scope: 'org' | 'artists';
+  capabilities: Capability[];
+  viewerIsProducer: boolean;
+};
+
+const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/**
+ * The org shell for `/o/<slug>` (the (label) layout, a server component):
+ * the org by slug and the caller's live membership of it. Null when there is
+ * no session, no such live org, or the caller is not a member — the page
+ * answers 404 for all three, so a slug never reveals that an org exists.
+ */
+export async function orgShellFor(slug: string): Promise<OrgShell | null> {
+  if (!SLUG_RE.test(slug) || slug.length > 80) return null;
+  const userId = await sessionUserId();
+  if (!userId) return null;
+  const admin = createServiceClient();
+  try {
+    const { data, error } = await admin
+      .from('organizations')
+      .select('id, name, slug, kind')
+      .eq('slug', slug)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const org = data as { id: string; name: string; slug: string; kind: string } | null;
+    if (!org) return null;
+    const [membership, viewerIsProducer] = await Promise.all([
+      readMembership(admin, org.id, userId),
+      isProducerUser(admin, userId),
+    ]);
+    if (!membership) return null;
+    return {
+      org: { id: org.id, name: org.name, slug: org.slug, kind: membership.orgKind },
+      role: membership.role,
+      scope: membership.scope,
+      capabilities: [...membership.capabilities],
+      viewerIsProducer,
+    };
+  } catch (err) {
+    log.error('org shell read failed', { error: err instanceof Error ? err.message : String(err) });
+    return null;
+  }
+}

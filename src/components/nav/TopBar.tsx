@@ -21,7 +21,9 @@ import {
   MessageCircle, HandHelping,
 } from 'lucide-react';
 import { useCommandPalette } from '@/hooks/useCommandPalette';
-import { NAV_GROUPS, ALL_GROUPS, activeGroupFor, isItemActive, type NavGroup } from './model';
+import { ACCOUNT_GROUP, ALL_GROUPS, activeGroupFor, activeGroupIn, isItemActive, navGroupsFor, type NavGroup } from './model';
+import { OrgSwitcher } from './OrgSwitcher';
+import { useOrgShell } from '@/components/labelos/OrgShellContext';
 import { Popover } from '@/components/ui/Popover';
 import { SessionContextControl } from './SessionContextControl';
 import { ActivityPanel } from '@/components/activity/ActivityPanel';
@@ -75,7 +77,25 @@ export function TopBar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const mobilePanelRef = useDialogBehavior({ open: mobileOpen, onClose: () => setMobileOpen(false) });
 
-  const group = activeGroupFor(pathname);
+  // Inside a Label OS org shell (/o/<slug>) the hubs come from the org; on
+  // the producer dashboard they are the producer's own, exactly as before
+  // (navGroupsFor('producer', …) is NAV_GROUPS itself). Producer-only chrome
+  // — search, the bell, store attention, session tempo, storefront, settings
+  // and profile — calls producer-only routes, so a member who is not the
+  // producer gets none of it and none of its requests. The producer hubs
+  // show only in the producer org the viewer owns: those links open the
+  // viewer's own dashboard, which is that org only when it is theirs.
+  const shell = useOrgShell();
+  const producerChrome = !shell || shell.viewerIsProducer;
+  const hubs = shell
+    ? navGroupsFor(shell.org.kind, new Set(shell.capabilities), {
+        slug: shell.org.slug,
+        viewerIsProducer: shell.viewerIsProducer && shell.role === 'owner',
+      })
+    : navGroupsFor('producer', null);
+  const drawerGroups = !shell ? ALL_GROUPS : producerChrome ? [...hubs, ACCOUNT_GROUP] : hubs;
+  const group = shell ? activeGroupIn(hubs, pathname) : activeGroupFor(pathname);
+  const homeHref = producerChrome ? '/library' : `/o/${shell.org.slug}`;
 
   // ── Notifications ──────────────────────────────────────────────
   const [notifs, setNotifs] = useState<Notification[]>([]);
@@ -157,21 +177,24 @@ export function TopBar() {
   };
 
   useEffect(() => {
+    if (!producerChrome) return;
     const id = window.setTimeout(() => {
       void fetchNotifs();
       void fetchAttention();
     }, 0);
     return () => window.clearTimeout(id);
-  }, []);
+  }, [producerChrome]);
   // 60-second polling fallback in case the realtime subscription doesn't fire
   // (e.g. the notifications table isn't in the realtime publication yet).
   useEffect(() => {
+    if (!producerChrome) return;
     const id = setInterval(fetchNotifs, 60_000);
     return () => clearInterval(id);
-  }, []);
+  }, [producerChrome]);
 
   useRealtimeTable({
     table: 'notifications',
+    enabled: producerChrome,
     onChange: fetchNotifs,
   });
 
@@ -214,7 +237,7 @@ export function TopBar() {
               rather than covered: a wide wordmark cropped to fill loses its
               ends, and this is the one place the mark has to stay legible at
               24px. */}
-          <Link href="/library" className="flex items-center gap-2.5 group shrink-0">
+          <Link href={homeHref} className="flex items-center gap-2.5 group shrink-0">
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -232,20 +255,24 @@ export function TopBar() {
             </span>
           </Link>
 
+          {/* Organization switcher (Label OS). Renders nothing with the flag
+              off or when the user has only one place to be. */}
+          <OrgSwitcher />
+
           {/* Primary hubs — each opens its surfaces as a dropdown, so every
               destination is one click from a single row. This is what replaced
               the permanent second row of sub-tabs. */}
           <nav className="hidden md:flex items-center gap-1 flex-1">
-            {NAV_GROUPS.map((g) => (
-              <HubMenu key={g.key} group={g} active={group.key === g.key} pathname={pathname} />
+            {hubs.map((g) => (
+              <HubMenu key={g.key} group={g} active={group?.key === g.key} pathname={pathname} />
             ))}
           </nav>
 
           {/* Spacer on mobile so the right cluster hugs the edge */}
           <div className="flex-1 md:hidden" />
 
-          {/* Search (⌘K) — desktop */}
-          <button
+          {/* Search (⌘K) — desktop. /api/search is producer-only. */}
+          {producerChrome && (<button
             onClick={() => openPalette(true)}
             className="hidden md:flex items-center gap-2 w-48 lg:w-56 bg-white/[0.04] border border-white/10 rounded-md py-1.5 px-3 text-[11px] text-white/60 hover:border-white/20 hover:text-white transition-colors shrink-0"
             title="Search (⌘K)"
@@ -253,30 +280,30 @@ export function TopBar() {
             <Search size={14} />
             <span className="flex-1 text-left">Search</span>
             <kbd className="text-[9px] font-mono border border-white/10 rounded px-1 py-0.5">⌘K</kbd>
-          </button>
+          </button>)}
 
           {/* Session tempo + key. The only always-visible chrome that can host
               it: a second TopBar row is not available (the hub dropdowns
               replaced one), so it is a pill that states the session and opens
               a popover to change it. The pill narrows to its icon on a phone
               rather than disappearing — mobile mirrors web. */}
-          <SessionContextControl />
+          {producerChrome && <SessionContextControl />}
 
           {/* Search icon — mobile (opens ⌘K palette) */}
-          <button
+          {producerChrome && (<button
             onClick={() => openPalette(true)}
             className="tap md:hidden w-10 h-10 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors"
             aria-label="Search"
           >
             <Search size={19} />
-          </button>
+          </button>)}
 
           {/* Notifications — the panel was `absolute`, alone among the app's
               overlays, so it clipped inside any ancestor with overflow or a
               backdrop-blur stacking context. `ui/Popover` portals to <body>,
               positions with viewport rect coords, clamps to the screen, and
               already closes on Escape and outside click. */}
-          <Popover
+          {producerChrome && (<Popover
             width={320}
             align="right"
             open={notifOpen}
@@ -387,10 +414,10 @@ export function TopBar() {
                   </button>
                 )}
               </div>
-          </Popover>
+          </Popover>)}
 
           {/* View public storefront */}
-          <Link
+          {producerChrome && (<Link
             href="/store"
             target="_blank"
             rel="noopener noreferrer"
@@ -399,10 +426,10 @@ export function TopBar() {
             className="tap hidden md:flex w-9 h-9 rounded-full items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.04] transition-colors shrink-0"
           >
             <Store size={17} />
-          </Link>
+          </Link>)}
 
           {/* Settings */}
-          <Link
+          {producerChrome && (<Link
             href="/settings"
             aria-label="Open settings"
             title="Settings"
@@ -415,7 +442,7 @@ export function TopBar() {
             )}
           >
             <Settings size={17} />
-          </Link>
+          </Link>)}
 
           {/* Mobile menu — on the right, because that is the edge the drawer
               slides in from. A left-hand control opening a right-hand panel
@@ -429,7 +456,7 @@ export function TopBar() {
           </button>
 
           {/* Profile */}
-          <Link
+          {producerChrome && (<Link
             href="/profile"
             aria-label="Creator profile"
             title="Profile"
@@ -442,7 +469,7 @@ export function TopBar() {
             )}
           >
             <User size={16} className={isItemActive('/profile', pathname) ? 'text-white' : 'text-white/60'} />
-          </Link>
+          </Link>)}
         </div>
 
       </header>
@@ -480,7 +507,7 @@ export function TopBar() {
               </button>
             </div>
             <nav className="flex-1 px-3 py-4 overflow-y-auto">
-              {ALL_GROUPS.map((g) => (
+              {drawerGroups.map((g) => (
                 <div key={g.key} className="mb-4 last:mb-0">
                   <p className="px-3 mb-1.5 text-[9px] font-mono uppercase tracking-[0.2em] text-white/50 flex items-center gap-1.5">
                     <g.icon size={14} />

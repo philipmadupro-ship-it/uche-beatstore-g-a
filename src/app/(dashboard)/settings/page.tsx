@@ -16,6 +16,7 @@ import { ErasureRequestSchema } from '@/lib/contracts';
 import { DefaultArtworkCard } from '@/components/settings/DefaultArtworkCard';
 import { TagColorsCard } from '@/components/settings/TagColorsCard';
 import { DesktopNotificationsRow } from '@/components/settings/DesktopNotificationsRow';
+import { OrgsSettingsCard } from '@/components/labelos/OrgsSettingsCard';
 
 interface TeamMember {
   user_id: string;
@@ -215,6 +216,9 @@ export default function SettingsPage() {
               </Card>
             </Link>
           </section>
+
+          {/* Label OS organizations — nothing at all while the flag is off. */}
+          <OrgsSettingsCard />
 
           {/* Team */}
           <section>
