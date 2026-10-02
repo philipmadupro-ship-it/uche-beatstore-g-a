@@ -8,7 +8,7 @@
 
 import { selectIn } from '@/lib/db/chunked-in';
 import { isMissingSchema } from '@/lib/artists/workspace-load';
-import { mergeLinks, type LinkRelation, type LinkTrack, type LinkedItem } from './links';
+import { mergeLinks, type LinkRelation, type LinkTrack, type LinkedItem, type StoredRelation } from './links';
 import { currentSongBeats, writeSongBeats } from './song-beats-store';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -89,4 +89,37 @@ export async function removeLink(admin: Admin, userId: string, trackId: string, 
   }
   const { error } = await admin.from('track_links').delete().eq('from_track_id', from).eq('to_track_id', to).eq('user_id', userId);
   if (error && !isMissingSchema(error)) throw error;
+}
+
+/**
+ * The org twin of `addLink` (LABEL-14): link two tracks of ONE organization,
+ * from the song (`from`) to its material (`to`) — "to is from's <relation>".
+ * For the service role inside /api/org routes, which have already checked
+ * the caller's access to the song; this checks that both tracks are rows of
+ * `orgId` (migration 141's trigger refuses a cross-org pair as well).
+ * Positions count every link of the song, whoever wrote it — unlike the
+ * producer's, they are not filtered by user. `actorId` is the row's
+ * `user_id` (NOT NULL), which 141's guards keep from granting any read.
+ */
+export async function addOrgLink(
+  admin: Admin,
+  opts: { orgId: string; actorId: string; fromId: string; toId: string; relation: StoredRelation },
+): Promise<void> {
+  const { orgId, actorId, fromId, toId, relation } = opts;
+  if (fromId === toId) throw new Error('A track cannot be linked to itself');
+  const both = await admin.from('tracks').select('id').in('id', [fromId, toId]).eq('org_id', orgId);
+  if (both.error) throw both.error;
+  if (((both.data ?? []) as unknown[]).length !== 2) throw new Error('Both tracks must belong to the organization');
+  const existing = await admin.from('track_links').select('position').eq('from_track_id', fromId);
+  if (existing.error) {
+    if (isMissingSchema(existing.error)) throw new TrackLinksNotReadyError('133');
+    throw existing.error;
+  }
+  const position = ((existing.data ?? []) as Array<{ position: number }>).reduce((m, r) => Math.max(m, r.position + 1), 0);
+  const { error } = await admin.from('track_links')
+    .upsert({ from_track_id: fromId, to_track_id: toId, user_id: actorId, relation, position }, { onConflict: 'from_track_id,to_track_id' });
+  if (error) {
+    if (isMissingSchema(error)) throw new TrackLinksNotReadyError('133');
+    throw error;
+  }
 }
